@@ -177,6 +177,7 @@ pub struct IrcChannel {
     pub saltbox: Option<Arc<ChaChaBox>>,
     pub moderators: Vec<PublicKey>,
     pub mod_secret_key: Option<SecretKey>,
+    pub mod_commands: Vec<String>,
 }
 
 /// IRC contact definition

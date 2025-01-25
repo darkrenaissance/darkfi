@@ -188,6 +188,7 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
             saltbox: None,
             moderators: vec![],
             mod_secret_key: None,
+            mod_commands: vec![],
         };
 
         if let Some(topic) = items.get("topic") {
@@ -234,6 +235,20 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
                 };
 
                 chan.moderators.push(public_key);
+            }
+        }
+
+        if let Some(mod_commands) = items.get("mod_commands") {
+            let Some(mod_commands) = mod_commands.as_array() else {
+                return Err(ParseFailed("mod_commands not an array"))
+            };
+
+            for command in mod_commands {
+                let Some(cmd) = command.as_str() else {
+                    return Err(ParseFailed("mod_commands elemtents not a string"))
+                };
+
+                chan.mod_commands.push(cmd.to_uppercase());
             }
         }
 

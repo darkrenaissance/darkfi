@@ -32,7 +32,7 @@ use darkfi::{
 use darkfi_sdk::crypto::schnorr::SchnorrPublic;
 use darkfi_serial::{deserialize, serialize_async};
 use futures::FutureExt;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -560,7 +560,6 @@ impl Client {
                 break
             }
         }
-        drop(channels);
 
         if !valid {
             return true
@@ -568,12 +567,12 @@ impl Client {
 
         // Ignore unimplemented commands
         // TODO: add rest commands here and ensure each one is tested
-        // TODO: Perhaps this could also be configurable. Like what
-        // moderation actions we allow per channel.
         let command = modmsg.command.to_uppercase().to_string();
-        if !["TOPIC"].contains(&command.as_str()) {
+        info!("mod commands: {:?}", channel.mod_commands);
+        if !channel.mod_commands.contains(&command) {
             return true
         }
+        drop(channels);
 
         // Handle command params lines individually
         for line in modmsg.params.lines() {

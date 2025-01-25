@@ -312,6 +312,7 @@ impl Client {
                     saltbox: None,
                     moderators: vec![],
                     mod_secret_key: None,
+                    mod_commands: vec![],
                 };
                 server_channels.insert(channel.clone(), chan);
             }
