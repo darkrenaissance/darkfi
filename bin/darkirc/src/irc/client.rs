@@ -32,7 +32,7 @@ use darkfi::{
 use darkfi_sdk::crypto::schnorr::SchnorrPublic;
 use darkfi_serial::{deserialize, serialize_async};
 use futures::FutureExt;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -568,7 +568,6 @@ impl Client {
         // Ignore unimplemented commands
         // TODO: add rest commands here and ensure each one is tested
         let command = modmsg.command.to_uppercase().to_string();
-        info!("mod commands: {:?}", channel.mod_commands);
         if !channel.mod_commands.contains(&command) {
             return true
         }
