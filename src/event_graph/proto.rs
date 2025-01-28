@@ -570,8 +570,19 @@ impl ProtocolEventGraph {
     /// To calculate the sleep time, we use the RATELIMIT_SAMPLE_* values.
     /// For example RATELIMIT_SAMPLE_IDX = 10, RATELIMIT_SAMPLE_SLEEP = 1000
     /// means that when N = 10, then sleep for 1000 ms.
-    /// If RATELIMIT_MIN_COUNT = 6, then when N = 14, then sleep for 2000 ms since
-    /// 14 - 6 = 8 is double 10 - 6 = 4.
+    ///
+    /// Let RATELIMIT_MIN_COUNT = 6, then here's a table of sleep times:
+    ///
+    /// | Count | Sleep Time / ms |
+    /// |-------|-----------------|
+    /// | 0     | 0               |
+    /// | 4     | 0               |
+    /// | 6     | 0               |
+    /// | 10    | 1000            |
+    /// | 14    | 2000            |
+    /// | 18    | 3000            |
+    ///
+    /// So we use the sample to calculate a straight line from RATELIMIT_MIN_COUNT.
     async fn broadcast_rate_limiter(self: Arc<Self>) -> Result<()> {
         let mut ratelimit = MovingWindow::new(RATELIMIT_EXPIRY_TIME);
 
