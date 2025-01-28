@@ -537,6 +537,9 @@ pub enum Error {
     #[error("DAG sync failed")]
     DagSyncFailed,
 
+    #[error("Malicious flood detected")]
+    MaliciousFlood,
+
     // =========
     // Catch-all
     // =========

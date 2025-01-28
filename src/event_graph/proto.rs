@@ -17,10 +17,10 @@
  */
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
-        Arc,
+        Arc, Mutex as SyncMutex,
     },
 };
 
@@ -29,11 +29,16 @@ use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
-use crate::{impl_p2p_message, net::*, Error, Result};
+use crate::{impl_p2p_message, net::*, util::time::NanoTimestamp, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
 const MALICIOUS_THRESHOLD: usize = 5;
+
+/// Global limit of messages per window
+const WINDOW_MAXSIZE: usize = 200;
+/// Rolling length of the window
+const WINDOW_EXPIRY_TIME: NanoTimestamp = NanoTimestamp(60);
 
 /// P2P protocol implementation for the Event Graph.
 pub struct ProtocolEventGraph {
@@ -55,6 +60,8 @@ pub struct ProtocolEventGraph {
     malicious_count: AtomicUsize,
     /// P2P jobs manager pointer
     jobsman: ProtocolJobsManagerPtr,
+    /// Rolling window of event timestamps on this channel
+    bantimes: SyncMutex<VecDeque<NanoTimestamp>>,
 }
 
 /// A P2P message representing publishing an event on the network
@@ -122,6 +129,7 @@ impl ProtocolEventGraph {
             _tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
             jobsman: ProtocolJobsManager::new("ProtocolEventGraph", channel.clone()),
+            bantimes: SyncMutex::new(VecDeque::new()),
         }))
     }
 
@@ -176,6 +184,30 @@ impl ProtocolEventGraph {
                     "Event {} is already known", event_id,
                 );
                 continue
+            }
+
+            // There's a new unique event.
+            // Apply ban logic to stop network floods.
+            let is_malicious = {
+                let mut bantimes = self.bantimes.lock().unwrap();
+
+                // Clean out expired timestamps from the window.
+                while let Some(ts) = bantimes.front() {
+                    if ts.elapsed().unwrap() < WINDOW_EXPIRY_TIME {
+                        break
+                    }
+                    let _ = bantimes.pop_front();
+                }
+
+                // Add new timestamp
+                bantimes.push_back(NanoTimestamp::current_time());
+
+                bantimes.len() > WINDOW_MAXSIZE
+            };
+            if is_malicious {
+                self.channel.ban().await;
+                // This error is actually unused. We could return Ok here too.
+                return Err(Error::MaliciousFlood)
             }
 
             // We received an event. Check if we already have it in our DAG.
