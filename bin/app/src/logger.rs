@@ -186,10 +186,15 @@ pub fn setup_logging() {
     // https://gist.github.com/jb-alvarado/6e223936446bb88cd9a93e7028fc2c4f
     let mut loggers: Vec<Box<dyn SharedLogger>> = vec![];
 
-    let cfg = ConfigBuilder::new().build();
+    let mut cfg = ConfigBuilder::new();
 
     #[cfg(feature = "enable-filelog")]
     {
+        let mut cfg = cfg.clone();
+        cfg.add_filter_ignore_str("sled");
+        cfg.add_filter_ignore_str("rustls");
+        let cfg = cfg.build();
+
         let log_file = FileRotate::new(
             logfile_path(),
             AppendCount::new(0),
@@ -198,9 +203,11 @@ pub fn setup_logging() {
             #[cfg(unix)]
             None,
         );
-        let file_logger = WriteLogger::new(LevelFilter::Trace, cfg.clone(), log_file);
+        let file_logger = WriteLogger::new(LevelFilter::Trace, cfg, log_file);
         loggers.push(file_logger);
     }
+
+    let cfg = cfg.build();
 
     #[cfg(target_os = "android")]
     {
