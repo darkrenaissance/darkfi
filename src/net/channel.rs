@@ -406,7 +406,7 @@ impl Channel {
                         );
 
                         if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
-                            self.ban(self.address()).await;
+                            self.ban().await;
                         }
 
                         return Err(Error::ChannelStopped)
@@ -418,37 +418,37 @@ impl Channel {
     }
 
     /// Ban a malicious peer and stop the channel.
-    pub async fn ban(&self, peer: &Url) {
+    pub async fn ban(&self) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
-        debug!(target: "net::channel::ban()", "Peer: {:?}", peer);
+        debug!(target: "net::channel::ban()", "Peer: {:?}", self.address());
 
         // Just store the hostname if this is an inbound session.
         // This will block all ports from this peer by setting
         // `hosts.block_all_ports()` to true.
         let peer = {
             if self.session_type_id() & SESSION_INBOUND != 0 {
-                if peer.host().is_none() {
-                    error!("[P2P] ban() caught Url without host: {:?}", peer);
+                if self.address().host().is_none() {
+                    error!("[P2P] ban() caught Url without host: {:?}", self.address());
                     return
                 }
 
                 // An inbound Tor connection can't really be banned :)
                 #[cfg(feature = "p2p-tor")]
-                if (peer.scheme() == "tor" || peer.scheme() == "tor+tls") &&
-                    self.p2p().hosts().is_local_host(peer)
+                if (self.address().scheme() == "tor" || self.address().scheme() == "tor+tls") &&
+                    self.p2p().hosts().is_local_host(self.address())
                 {
                     return
                 }
 
-                if peer.scheme() == "unix" {
+                if self.address().scheme() == "unix" {
                     return
                 }
 
-                let mut addr = peer.clone();
+                let mut addr = self.address().clone();
                 addr.set_port(None).unwrap();
                 addr
             } else {
-                peer.clone()
+                self.address().clone()
             }
         };
 
