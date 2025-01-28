@@ -38,10 +38,10 @@ const MALICIOUS_THRESHOLD: usize = 5;
 /// Global limit of messages per window
 const WINDOW_MAXSIZE: usize = 200;
 /// Rolling length of the window
-const WINDOW_EXPIRY_TIME: NanoTimestamp = NanoTimestamp(60);
+const WINDOW_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(60);
 
 /// Rolling length of the window
-const RATELIMIT_EXPIRY_TIME: NanoTimestamp = NanoTimestamp(10);
+const RATELIMIT_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(10);
 /// Ratelimit kicks in above this count
 const RATELIMIT_MIN_COUNT: usize = 6;
 /// Sample point used to calculate sleep time when ratelimit is active

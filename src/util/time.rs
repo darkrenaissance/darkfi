@@ -112,6 +112,10 @@ impl NanoTimestamp {
         self.0
     }
 
+    pub const fn from_secs(secs: u128) -> Self {
+        Self(secs * 1_000_000_000)
+    }
+
     pub fn current_time() -> Self {
         Self(UNIX_EPOCH.elapsed().unwrap().as_nanos())
     }
