@@ -146,7 +146,7 @@ mod desktop {
                 }
             }
             for muted in MUTED_TARGETS {
-                if target.starts_with(muted) {
+                if target.starts_with(muted) && metadata.level() > LevelFilter::Info {
                     return false
                 }
             }

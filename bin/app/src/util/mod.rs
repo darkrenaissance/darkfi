@@ -34,6 +34,7 @@ pub fn min_f32(x: f32, y: f32) -> f32 {
     }
 }
 
+/// Use src/util/time.rs Timestamp instead of this.
 pub fn unixtime() -> u64 {
     let timest = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
     assert!(timest < std::u64::MAX as u128);
