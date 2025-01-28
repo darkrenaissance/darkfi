@@ -47,6 +47,7 @@
   - [DAO](arch/dao.md)
   - [DEX](arch/dex.md)
   - [Wallet](arch/wallet.md)
+  - [Chat](arch/chat.md)
 - [zkas](zkas/index.md)
   - [Writing ZK Proofs](zkas/writing-zk-proofs.md)
   - [Bincode](zkas/bincode.md)
