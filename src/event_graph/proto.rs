@@ -561,6 +561,17 @@ impl ProtocolEventGraph {
     /// We need to rate limit message propagation so malicious nodes don't get us banned
     /// for flooding. We do that by aggregating messages here into a queue then apply
     /// rate limit logic before broadcasting.
+    ///
+    /// The rate limit logic is this:
+    ///
+    /// * If the count is less then RATELIMIT_MIN_COUNT then do nothing.
+    /// * Otherwise sleep for `sleep_time` ms.
+    ///
+    /// To calculate the sleep time, we use the RATELIMIT_SAMPLE_* values.
+    /// For example RATELIMIT_SAMPLE_IDX = 10, RATELIMIT_SAMPLE_SLEEP = 1000
+    /// means that when N = 10, then sleep for 1000 ms.
+    /// If RATELIMIT_MIN_COUNT = 6, then when N = 14, then sleep for 2000 ms since
+    /// 14 - 6 = 8 is double 10 - 6 = 4.
     async fn broadcast_rate_limiter(self: Arc<Self>) -> Result<()> {
         let mut ratelimit = MovingWindow::new(RATELIMIT_EXPIRY_TIME);
 
