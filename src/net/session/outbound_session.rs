@@ -366,7 +366,7 @@ impl Slot {
                     addr, slot
                 );
 
-                // At this point we failed to connect. We'll downgrade this peer now.
+                // Peer disconnected during the registry process. We'll downgrade this peer now.
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey)?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
