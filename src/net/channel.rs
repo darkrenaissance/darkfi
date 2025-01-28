@@ -381,18 +381,36 @@ impl Channel {
             // Send result to our publishers
             match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
-                // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
-                    warn!(
-                    target: "net::channel::main_receive_loop()",
-                    "MissingDispatcher for command={}, channel={:?}",
-                    command, self
-                    );
-                    if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
-                        self.ban(self.address()).await;
-                    }
+                    // If we're getting messages without dispatchers, it's spam.
+                    // We therefore ban this channel if:
+                    //
+                    // 1) This channel is NOT part of a refine session.
+                    //
+                    // It's possible that nodes can send messages without
+                    // dispatchers during the refinery process. If that happens
+                    // we simply ignore it. Otherwise, it's spam.
+                    //
+                    // 2) BanPolicy is set to Strict.
+                    //
+                    // We only ban if the BanPolicy is set to Strict, which is
+                    // the default setting for most nodes. The exception to
+                    // this is a seed node like Lilith which has BanPolicy::Relaxed
+                    // since it regularly forms connections with nodes sending
+                    // messages it does not have dispatchers for.
+                    if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
+                        warn!(
+                        target: "net::channel::main_receive_loop()",
+                        "MissingDispatcher for command={}, channel={:?}",
+                        command, self
+                        );
 
-                    return Err(Error::ChannelStopped)
+                        if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
+                            self.ban(self.address()).await;
+                        }
+
+                        return Err(Error::ChannelStopped)
+                    }
                 }
                 Err(_) => unreachable!("You added a new error in notify()"),
             }
