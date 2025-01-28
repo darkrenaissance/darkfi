@@ -66,8 +66,8 @@ use super::{
 // Avoid updating too much makes scrolling smoother.
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatview", $($arg)*); } }
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatedit", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatedit", $($arg)*); } }
 
 fn is_all_whitespace(glyphs: &[Glyph]) -> bool {
     for glyph in glyphs {
@@ -1131,9 +1131,15 @@ impl ChatEdit {
     ) -> bool {
         t!("handle_shortcut({:?}, {:?})", key, mods);
 
+        #[cfg(not(target_os = "macos"))]
+        let modkey_pressed = mods.ctrl;
+
+        #[cfg(target_os = "macos")]
+        let modkey_pressed = mods.logo;
+
         match key {
             'a' => {
-                if mods.ctrl {
+                if modkey_pressed {
                     {
                         let mut text_wrap = self.text_wrap.lock();
                         let rendered = text_wrap.get_render();
@@ -1157,7 +1163,7 @@ impl ChatEdit {
                 }
             }
             'v' => {
-                if mods.ctrl {
+                if modkey_pressed {
                     let mut clip = Clipboard::new();
                     if let Some(text) = clip.get() {
                         self.insert_text(&text, atom).await;
@@ -1997,7 +2003,7 @@ impl UIObject for ChatEdit {
 
         let atom = &mut PropertyAtomicGuard::new();
 
-        if mods.ctrl || mods.alt {
+        if mods.ctrl || mods.alt || mods.logo {
             if repeat {
                 return false
             }

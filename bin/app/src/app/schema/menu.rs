@@ -306,7 +306,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         // Create shortcut
         let channel_id = i + 1;
         let node = create_shortcut(&format!("channel_shortcut_{channel_id}"));
+        #[cfg(not(target_os = "macos"))]
         let key = format!("alt+{channel_id}");
+        #[cfg(target_os = "macos")]
+        let key = format!("logo+{channel_id}");
         node.set_property_str(atom, Role::App, "key", key).unwrap();
         node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
 

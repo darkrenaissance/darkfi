@@ -316,7 +316,9 @@ pub async fn make(
     let node = create_shortcut("back_shortcut");
     #[cfg(target_os = "android")]
     node.set_property_str(atom, Role::App, "key", "back").unwrap();
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "macos")]
+    node.set_property_str(atom, Role::App, "key", "logo+left").unwrap();
+    #[cfg(all(not(target_os = "android"), not(target_os = "macos")))]
     node.set_property_str(atom, Role::App, "key", "alt+left").unwrap();
     // Not sure what was eating my keys. This is a workaround.
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
