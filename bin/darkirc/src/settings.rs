@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use crypto_box::PublicKey;
+use crypto_box::{ChaChaBox, PublicKey};
 use darkfi::{Error::ParseFailed, Result};
 use log::info;
 
@@ -132,17 +132,21 @@ pub fn list_configured_contacts(data: &toml::Value) -> Result<HashMap<String, Pu
 }
 
 /// Parse configured contacts from a TOML map.
+/// If contacts exist and our secret key is valid, also return its saltbox.
 ///
 /// ```toml
 /// [contact."anon"]
 /// dm_chacha_public = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, IrcContact>> {
+#[allow(clippy::type_complexity)]
+pub fn parse_configured_contacts(
+    data: &toml::Value,
+) -> Result<(HashMap<String, IrcContact>, Option<Arc<ChaChaBox>>)> {
     let mut ret = HashMap::new();
 
     let contacts = list_configured_contacts(data)?;
     if contacts.is_empty() {
-        return Ok(ret);
+        return Ok((ret, None));
     }
     let Some(secret) = parse_dm_chacha_secret(data)? else {
         return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
@@ -158,7 +162,7 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
         ret.insert(name.to_string(), IrcContact { saltbox });
     }
 
-    Ok(ret)
+    Ok((ret, Some(Arc::new(crypto_box::ChaChaBox::new(&secret.public_key(), &secret)))))
 }
 
 /// Parse a TOML string for any configured channels and return

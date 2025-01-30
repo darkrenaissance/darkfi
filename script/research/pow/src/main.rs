@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  * Copyright (C) 2014-2023 The Monero Project (Under MIT license)
  *
  * This program is free software: you can redistribute it and/or modify

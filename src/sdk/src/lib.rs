@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -52,5 +52,6 @@ pub use tx::ContractCall;
 pub mod util;
 
 #[macro_use]
+#[cfg(feature = "wasm")]
 /// WASM API functions
 pub mod wasm;

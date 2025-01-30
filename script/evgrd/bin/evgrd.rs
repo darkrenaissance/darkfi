@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -76,11 +76,11 @@ struct Args {
     /// JSON-RPC server listen address
     json_rpc_listen: Url,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/evgrd_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/evgrd_db")]
     /// Datastore (DB) path
     datastore: String,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_evgrd_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_evgrd_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
 

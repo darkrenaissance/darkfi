@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,7 +20,7 @@ use std::{any::Any, collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, error, warn};
+use log::{debug, error};
 use rand::{rngs::OsRng, Rng};
 use smol::{io::AsyncReadExt, lock::Mutex};
 
@@ -290,11 +290,6 @@ impl MessageSubsystem {
         reader: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,
     ) -> Result<()> {
         let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
-            warn!(
-                target: "net::message_publisher::notify",
-                "message_publisher::notify: Command '{}' did not find a dispatcher",
-                command,
-            );
             return Err(Error::MissingDispatcher)
         };
 

@@ -24,7 +24,7 @@ Meeting schedule:
 | [Two Cheers for Anarchism][14] - Chapter 2, starting at 'Fragment 7', all of Chapter 4			      | 11th of December, 2024  | James C. Scott                     |
 | Rescheduled                                                                                                         | 25th of December, 2024  |                                    |
 | [Will to Power][15] - Extracts (see PDF)                                                                            | 8th of January, 2025    | Friedrich Nietzsche                |
-| Open for submissions                                                                                                | 22nd of January, 2025   |                                    |
+| Post Capitalist Desire, Lecture 1 - [from 1:11:30 to 2:42:00 on Youtube][16] or pages 35 to 78 in [the book][17]    | 22nd of January, 2025   | Mark Fisher                        |
 
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
 
@@ -43,3 +43,5 @@ Feel free to propose a text for a future meeting by sharing it in #philosophy.
 [13]: https://sci-hub.se/https://doi.org/10.2307/25513014
 [14]: https://libgen.is/book/index.php?md5=8CCB39685697A9F94D9256078BC757AE
 [15]: https://xeno.tools/uploads/dionysus_eternal_return.pdf
+[16]: https://www.youtube.com/watch?v=fCEjtjkrDng&t=4289s
+[17]: https://www.google.co.uk/books/edition/_/ruPtDwAAQBAJ?hl=en

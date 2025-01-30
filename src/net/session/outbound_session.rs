@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -366,7 +366,7 @@ impl Slot {
                     addr, slot
                 );
 
-                // At this point we failed to connect. We'll downgrade this peer now.
+                // Peer disconnected during the registry process. We'll downgrade this peer now.
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey)?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
@@ -538,10 +538,9 @@ impl PeerDiscoveryBase for PeerDiscovery {
             }
 
             if current_attempt >= 4 {
-                debug!("current attempt: {}", current_attempt);
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] [PEER DISCOVERY] Sleeping and trying again..."
+                    "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
 
                 dnetev!(self, OutboundPeerDiscovery, {

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -59,6 +59,19 @@ impl RequestHandler<()> for Explorerd {
             "blocks.get_block_by_hash" => self.blocks_get_block_by_hash(req.id, req.params).await,
 
             // =====================
+            // Contract methods
+            // =====================
+            "contracts.get_native_contracts" => {
+                self.contracts_get_native_contracts(req.id, req.params).await
+            }
+            "contracts.get_contract_source_code_paths" => {
+                self.contracts_get_contract_source_code_paths(req.id, req.params).await
+            }
+            "contracts.get_contract_source" => {
+                self.contracts_get_contract_source(req.id, req.params).await
+            }
+
+            // =====================
             // Transactions methods
             // =====================
             "transactions.get_transactions_by_header_hash" => {
@@ -73,6 +86,9 @@ impl RequestHandler<()> for Explorerd {
             // =====================
             "statistics.get_basic_statistics" => {
                 self.statistics_get_basic_statistics(req.id, req.params).await
+            }
+            "statistics.get_metric_statistics" => {
+                self.statistics_get_metric_statistics(req.id, req.params).await
             }
 
             // TODO: add any other useful methods

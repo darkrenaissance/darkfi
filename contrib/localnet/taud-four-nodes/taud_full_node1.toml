@@ -8,7 +8,7 @@ rpc_listen="tcp://127.0.0.1:23341"
 datastore = "taud1"
 
 ## Sets DB logs replay datastore path
-#replay_datastore = "~/.local/darkfi/replayed_taud_db"
+#replay_datastore = "~/.local/share/darkfi/replayed_taud_db"
 
 ## Run in replay mode to store Sled DB instructions
 ## (for eventgraph debugging tool)

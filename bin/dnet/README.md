@@ -35,7 +35,7 @@ Then install the requirements:
 Run dnet:
 
 ```shell
-% python main.py
+% python dnet
 ```
 
 You will need to reactivate the venv in your current terminal session
@@ -51,7 +51,7 @@ If you don't require a venv, install the requirements and run dnet as follows:
 
 ```shell
 % pip install -r requirements.txt
-% python main.py
+% python dnet
 ```
 
 ## Config

@@ -1,6 +1,6 @@
 # This file is part of DarkFi (https://dark.fi)
 #
-# Copyright (C) 2020-2024 Dyne.org foundation
+# Copyright (C) 2020-2025 Dyne.org foundation
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,7 +22,7 @@ import asyncio
 class JsonRpc:
 
     async def start(self, server, port):
-        reader, writer = await asyncio.open_connection(server, port, limit=1024 * 1024)
+        reader, writer = await asyncio.open_connection(server, port, limit=1024 ** 3)
         self.reader = reader
         self.writer = writer
 

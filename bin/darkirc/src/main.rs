@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -59,6 +59,12 @@ mod rpc;
 /// Settings utilities
 mod settings;
 
+fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
+    error!("panic occurred: {panic_info}");
+    error!("{}", std::backtrace::Backtrace::force_capture().to_string());
+    std::process::abort()
+}
+
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "darkirc", about = cli_desc!())]
@@ -89,11 +95,11 @@ struct Args {
     /// Optional TLS certificate key file path if `irc_listen` uses TLS
     irc_tls_secret: Option<String>,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/darkirc_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_darkirc_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
 
@@ -174,6 +180,9 @@ impl DarkIrc {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
+    // Abort the application on panic right away
+    std::panic::set_hook(Box::new(panic_hook));
+
     if args.gen_chacha_keypair {
         let secret = crypto_box::SecretKey::generate(&mut OsRng);
         let public = secret.public_key();

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -58,11 +58,11 @@ struct Args {
     pub net: SettingsOpt,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.local/darkfi/genev_db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/genev_db")]
     pub datastore: String,
 
     /// Replay logs (DB) path
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_genev_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_genev_db")]
     replay_datastore: String,
 
     /// Flag to store Sled DB instructions

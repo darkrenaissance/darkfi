@@ -12,10 +12,10 @@ autojoin = [
 ## P2P network settings
 [net]
 ## Path to the P2P datastore
-datastore = "~/.local/darkfi/darkirc"
+datastore = "~/.local/share/darkfi/darkirc"
 
 ## Path to a configured hostlist for saving known peers
-hostlist = "~/.local/darkfi/darkirc/p2p_hostlist.tsv"
+hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
 
 ## connection settings
 outbound_connect_timeout = 60

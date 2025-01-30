@@ -1,7 +1,7 @@
 <!--
  This file is part of DarkFi (https://dark.fi)
 
- Copyright (C) 2020-2024 Dyne.org foundation
+ Copyright (C) 2020-2025 Dyne.org foundation
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU Affero General Public License as
@@ -22,34 +22,37 @@
 
 {% block content %}
 
-    <div class="container-fluid pl-5 pb-5 pr-5 title-block" style="margin-top:90px;">
-	    <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Block {{ block[0] }}</h1>
-	</div>
+<div class="content-container">
 
-    <div class="row m-0 border-secondary border-top">
-        <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <ul>
-                <li>Version: {{ block[1] }}</li>
-                <li>Previous: <a href="../block/{{ block[2] }}">{{ block[2] }}</a></li>
-                <li>Height: {{ block[3] }}</li>
-                <li>Timestamp: {{ block[4] }}</li>
-                <li>Nonce: {{ block[5] }}</li>
-                <li>Root: {{ block[6] }}</li>
-                <li>Signature: {{ block[7] }}</li>
-            </ul>
-        </div>
+    <!-- Block Details Header -->
+    <div class="content-header" style="padding-bottom: 8px">
+        <h2 class="content-section-header">Block Details</h2>
+        <div class="">{{ block[0] }}</div>
     </div>
 
-    <div class="row m-0 border-secondary border-top">
-        <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Transactions</h2>
-            <ul>
-	            {% for transaction in transactions %}
-                    <li><a href="../transaction/{{ transaction[0] }}">{{ transaction[0] }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
+    <!-- Block Details -->
+    <ul>
+        <li><strong>Version:</strong> {{ block[1] }}</li>
+        <li><strong>Previous:</strong> <a href="../block/{{ block[2] }}">{{ block[2] }}</a></li>
+        <li><strong>Height:</strong> {{ block[3] }}</li>
+        <li><strong>Timestamp:</strong> {{ block[4] }}</li>
+        <li><strong>Nonce:</strong> {{ block[5] }}</li>
+        <li><strong>Root:</strong> {{ block[6] }}</li>
+        <li><strong>Signature:</strong> {{ block[7] }}</li>
+    </ul>
+
+    <!-- Page Content Divider -->
+    <hr class="content-divider"/>
+
+    <!-- Block Transactions -->
+    <div class="content-section" style="padding-top: 12px">
+        <h2 class="content-section-header">Block Transactions</h2>
+        <ul>
+            {% for transaction in transactions %}
+            <li><a href="../transaction/{{ transaction[0] }}">{{ transaction[0] }}</a></li>
+            {% endfor %}
+        </ul>
     </div>
-    
+</div>
 {% endblock %}
 

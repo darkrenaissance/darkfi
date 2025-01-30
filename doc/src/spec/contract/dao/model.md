@@ -13,20 +13,31 @@ The DAO contains the main parameters that define DAO operation:
   come from multiple token holders.
 * Quorum $Q$ specifies the absolute minimum number of tokens required for
   before a proposal can be accepted.
+* Early exec quorum $EEQ$ specifies the absolute minimum number of tokens
+  required for before a proposal can be considered as strongly accepted.
 * The approval ratio $A^\%$ is a tuple that specifies the minimum theshold
   of affirmative yes votes for a proposal to become accepted.
-* The public key $PK$ serves a dual role for both encrypted notes, and as
-  a key to authorize accepted proposals to be executed.
-  This key may be shared widely with all DAO members or within a privileged
-  group.
+* Notes public key $NPK$ controls who can view encrypted notes.
+* Proposer public key $pPK$ controls who can mint proposals.
+* Proposals public key $PPK$ controls who can view the proposals.
+* Votes public key $VPK$ controls who can view votes.
+* Executor public key $EPK$ controls who can execute proposals.
+* Early executor public key $EEPK$ controls who can execute proposals that
+  are strongly accepted.
 
 Define the DAO params
 $$ \begin{aligned}
   \t{Params}_\t{DAO}.L &∈ ℕ₆₄ \\
   \t{Params}_\t{DAO}.Q &∈ ℕ₆₄ \\
+  \t{Params}_\t{DAO}.EEQ &∈ ℕ₆₄ \\
   \t{Params}_\t{DAO}.A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
   \t{Params}_\t{DAO}.τ &∈ 𝔽ₚ \\
-  \t{Params}_\t{DAO}.\t{PK} &∈ ℙₚ
+  \t{Params}_\t{DAO}.\t{NPK} &∈ ℙₚ \\
+  \t{Params}_\t{DAO}.\t{pPK} &∈ ℙₚ \\
+  \t{Params}_\t{DAO}.\t{PPK} &∈ ℙₚ \\
+  \t{Params}_\t{DAO}.\t{VPK} &∈ ℙₚ \\
+  \t{Params}_\t{DAO}.\t{EPK} &∈ ℙₚ \\
+  \t{Params}_\t{DAO}.\t{EEPK} &∈ ℙₚ
 \end{aligned} $$
 where the approval ratio $\t{Approval}^\% = (q, d)$ defines the equivalence
 class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q₁}{d₁}] \~ [\frac{q₂}{d₂}]$.
@@ -36,7 +47,22 @@ class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q
 ```
 
 $$ \t{Bulla}_\t{DAO} : \t{Params}_\t{DAO} × 𝔽ₚ → 𝔽ₚ $$
-$$ \t{Bulla}_\t{DAO}(p, b_\t{DAO}) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.τ, \mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), b_\t{DAO}) $$
+$$ \begin{aligned}
+\t{Bulla}_\t{DAO}(p, b_\t{DAO}) = \t{Bulla}( \\
+ℕ₆₄2𝔽ₚ(p.L), \\
+ℕ₆₄2𝔽ₚ(p.Q), \\
+ℕ₆₄2𝔽ₚ(p.EEQ), \\
+ℕ₆₄2𝔽ₚ(p.A^\%), \\
+p.τ, \\
+\mathcal{X}(p.\t{NPK}), \mathcal{Y}(p.\t{NPK}), \\
+\mathcal{X}(p.\t{pPK}), \mathcal{Y}(p.\t{pPK}), \\
+\mathcal{X}(p.\t{PPK}), \mathcal{Y}(p.\t{PPK}), \\
+\mathcal{X}(p.\t{VPK}), \mathcal{Y}(p.\t{VPK}), \\
+\mathcal{X}(p.\t{EPK}), \mathcal{Y}(p.\t{EPK}), \\
+\mathcal{X}(p.\t{EEPK}), \mathcal{Y}(p.\t{EEPK}), \\
+b_\t{DAO} \\
+)
+\end{aligned} $$
 
 ## Proposals
 

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * Copyright (C) 2021 Webb Technologies Inc.
  * Copyright (c) zkMove Authors
@@ -75,6 +75,7 @@ mod test;
 pub mod util;
 pub use util::Poseidon;
 
+#[cfg(feature = "wasm")]
 pub mod wasmdb;
 
 // Bit size for Fp (and Fq)

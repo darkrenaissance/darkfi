@@ -1,7 +1,7 @@
 <!--
  This file is part of DarkFi (https://dark.fi)
 
- Copyright (C) 2020-2024 Dyne.org foundation
+ Copyright (C) 2020-2025 Dyne.org foundation
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU Affero General Public License as
@@ -23,43 +23,48 @@
 <head>
     <title>DarkFi &ndash; {% block title %}{% endblock %}</title>
 
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename= 'img/icon.png') }}" />
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename= 'img/icon.png') }}"/>
 
     <!-- Latest compiled and minified CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename= 'bootstrap.min.css') }}">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename= 'style.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename= 'style.css') }}"/>
 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
-<body style="background-color:#090909">
-    <nav class="navbar navbar-expand-md fixed-top navbar-dark tedt border-bottom border-secondary">
+<body>
+
+<div class="page-container">
+    <nav class="navbar navbar-expand-md navbar-dark tedt border-bottom border-secondary">
         <a class="navbar-brand" href="https://dark.fi/">
-            <img src="{{ url_for('static', filename= 'img/darkfi.svg') }}" style="height:35px;"/>
+            <img src="{{ url_for('static', filename= 'img/darkfi.svg') }}" style="height:40px;"/>
         </a>
 
-        <div class="collapse navbar-collapse nav justify-content-end" id="collapsibleNavbar" style="height:35px;">
+        <div class="collapse navbar-collapse nav justify-content-end" id="collapsibleNavbar" style="height:40px;">
             <ul class="navbar-nav">
                 <li class="nav-item">
                     <a class="nav-link text-light" href="/">Explorer</a>
                 </li>
 
                 <!--Twitter-->
-                <li class="nav-item" style="padding-left:10px;">                
+                <li class="nav-item" style="padding-left:10px;">
                     <div class="icon-sm">
                         <a href="https://twitter.com/DarkFiSquad" class="">
                             <svg version="1.1" id="Calque_1" xmlns="http://www.w3.org/2000/svg"
                                  xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-                                 viewBox="0 0 100 100" style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
+                                 viewBox="0 0 100 100"
+                                 style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
                                  xml:space="preserve">
                                 <style type="text/css">
-                                    .st0{fill:#3a3a3a;}
+                                    .st0 {
+                                        fill: #3a3a3a;
+                                    }
                                 </style>
                                 <g id="layer1" transform="translate(-539.17946,-568.85777)">
-                                    <path id="path3611" class="st0" 
-                                        d="M570.9,659c37.3,0,57.7-30.9,57.7-57.7c0-0.9,0-1.8-0.1-2.6c4-2.9,7.4-6.4,10.1-10.5
+                                    <path id="path3611" class="st0"
+                                          d="M570.9,659c37.3,0,57.7-30.9,57.7-57.7c0-0.9,0-1.8-0.1-2.6c4-2.9,7.4-6.4,10.1-10.5
                                            c-3.6,1.6-7.5,2.7-11.6,3.2c4.2-2.5,7.4-6.5,8.9-11.2c-3.9,2.3-8.3,4-12.9,4.9c-3.7-3.9
                                            -9-6.4-14.8-6.4c-11.2,0-20.3,9.1-20.3,20.3c0,1.6,0.2,3.1,0.5,4.6c-16.8-0.8-31.8-8.9
                                            -41.8-21.2c-1.7,3-2.7,6.5-2.7,10.2c0,7,3.6,13.2,9,16.9c-3.3-0.1-6.5-1-9.2-2.5c0,0.1,0,0.2,0,
@@ -80,14 +85,18 @@
                                  viewBox="0 0 100 100" style="enable-background:new 0 0 100 100;"
                                  xml:space="preserve">
                                 <style type="text/css">
-                                    .st0{fill:#3A3A3A;}
+                                    .st0 {
+                                        fill: #3A3A3A;
+                                    }
                                 </style>
                                 <g id="g370484" transform="matrix(0.06551432,0,0,0.06551432,-2.232417,-1.431776)">
                                     <g>
-                                        <path id="path6733-5_00000147220371580420933290000015044290908562073483_" class="st0"
+                                        <path id="path6733-5_00000147220371580420933290000015044290908562073483_"
+                                              class="st0"
                                               d="M797.5,506.6c-2.6,0-4.7,1.6-4.7,3.6c0,0.2,0,0.4,0.1,0.6l253.7,1037.5c104.2-35.5,
                                                  265.5-150.8,346-256.8l-591-783.2C800.8,507.2,799.2,506.6,797.5,506.6z"/>
-                                        <path id="path360787_00000175324937253379690650000018049397027717501353_" class="st0"
+                                        <path id="path360787_00000175324937253379690650000018049397027717501353_"
+                                              class="st0"
                                               d="M797.3,59C375.7,59,34.1,400.6,34.1,822.1c0,143.4,40.4,283.8,
                                                 116.5,405.3l636.3-822.6c4.6-5.9,16.1-5.9,20.6,0l636.3,822.6c76.2-121.5,
                                                 116.6-262,116.6-405.4C1560.5,400.6,1218.8,59,797.3,59L797.3,59z"/>
@@ -104,10 +113,13 @@
                         <a href="https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html" class="">
                             <svg version="1.1" id="Calque_1" xmlns="http://www.w3.org/2000/svg"
                                  xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-                                 viewBox="0 0 100 100" style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
+                                 viewBox="0 0 100 100"
+                                 style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
                                  xml:space="preserve">
                                 <style type="text/css">
-                                    .st0{fill:#3a3a3a;}
+                                    .st0 {
+                                        fill: #3a3a3a;
+                                    }
                                 </style>
                                 <path class="st0" d="M0,0v100h100V0H0z M16.2,30c0-2,1.2-3.6,4.5-3.6c3.4,0,4.5,1.5,4.5,3.6v1.5c0,2-1.2,3.6-4.5,3.6
                                                     c-3.4,0-4.5-1.6-4.5-3.6V30z M32.3,64.8H8.6v-5.9H17V44.3H8.6v-5.9h15.9v20.5h7.8V64.8z M63.1,45.4h-5.6c-3.7,0-5.7,2.5-5.7,5.7v7.8
@@ -118,17 +130,20 @@
                         </a>
                     </div>
                 </li>
-                
+
                 <!--Telegram-->
                 <li class="nav-item" style="padding-left:10px; padding-right:10px;">
                     <div class="icon-sm">
                         <a href="https://t.me/darkfichat" class="">
                             <svg version="1.1" id="Calque_1" xmlns="http://www.w3.org/2000/svg"
                                  xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-                                 viewBox="0 0 100 100" style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
+                                 viewBox="0 0 100 100"
+                                 style="enable-background:new 0 0 100 100; max-width:30px; min-width:15px;"
                                  xml:space="preserve">
                                 <style type="text/css">
-                                    .st0{fill:#3a3a3a;}
+                                    .st0 {
+                                        fill: #3a3a3a;
+                                    }
                                 </style>
                                 <path class="st0" d="M50,0C22.4,0,0,22.4,0,50s22.4,50,50,50s50-22.4,50-50S77.6,0,50,0z M73.8,32.5c-0.1,2-1.4,9.1-2.5,16.8
                                                     L67.9,72c0,0-0.3,3.3-2.9,3.9c-2.6,0.6-6.5-2-7.2-2.6c-0.6-0.4-10.8-6.9-14.5-10.1c-1-0.9-2.2-2.6,0.1-4.6l15.2-14.5
@@ -144,17 +159,18 @@
         <div class="navbarb">
             <div class="navbar2">
                 <div class="container2 nav-container2">
-                        <input class="checkbox" type="checkbox" name="" id="" />
-                        <div class="hamburger-lines">
-                            <span class="line line1"></span>
-                            <span class="line line2"></span>
-                            <span class="line line3"></span>
-                        </div>
+                    <input class="checkbox" type="checkbox" name="" id=""/>
+                    <div class="hamburger-lines">
+                        <span class="line line1"></span>
+                        <span class="line line2"></span>
+                        <span class="line line3"></span>
+                    </div>
                     <div class="menu-items">
                         <li class="topnav"><a href="/">Explorer</a></li>
                         <li><a href="https://twitter.com/DarkFiSquad">Twitter</a></li>
                         <li><a href="https://codeberg.org/darkrenaissance/darkfi">Codeberg</a></li>
-                        <li><a href="https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html">Darkirc</a></li>
+                        <li><a href="https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html">Darkirc</a>
+                        </li>
                         <li><a href="https://t.me/darkfichat">Telegram</a></li>
                     </div>
                 </div>
@@ -162,9 +178,12 @@
         </div>
     </nav>
 
-    {% block content %}{% endblock %}
+    <div>
+        {% block content %}{% endblock %}
+    </div>
 
     <footer></footer>
+</div>
 
 </body>
 

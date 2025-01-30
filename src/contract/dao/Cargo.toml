@@ -11,17 +11,17 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 blake2b_simd = "1.0.2"
 bs58 = "0.5.1"
-darkfi-sdk = { path = "../../sdk" }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
 darkfi_money_contract = { path = "../money", features = ["no-entrypoint"] }
-thiserror = "1.0.64"
+thiserror = "2.0.11"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
 chacha20poly1305 = { version = "0.10.1", optional = true }
 darkfi = { path = "../../../", features = ["zk", "rpc", "blockchain"], optional = true }
 halo2_proofs = { version = "0.3.0", optional = true }
-log = { version = "0.4.22", optional = true }
+log = { version = "0.4.25", optional = true }
 rand = { version = "0.8.5", optional = true }
 
 # These are used just for the integration tests
@@ -33,6 +33,7 @@ darkfi-contract-test-harness = {path = "../test-harness"}
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["custom"] }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 
 [features]
 default = []

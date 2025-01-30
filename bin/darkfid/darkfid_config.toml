@@ -15,7 +15,7 @@ network = "testnet"
 rpc_listen = "tcp://127.0.0.1:8240"
 
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid/localnet"
+database = "~/.local/share/darkfi/darkfid/localnet"
 
 # Confirmation threshold, denominated by number of blocks
 threshold = 3
@@ -124,7 +124,7 @@ localnet = true
 rpc_listen = "tcp://127.0.0.1:8340"
 
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid/testnet"
+database = "~/.local/share/darkfi/darkfid/testnet"
 
 # Confirmation threshold, denominated by number of blocks
 threshold = 6
@@ -232,7 +232,7 @@ localnet = false
 rpc_listen = "tcp://127.0.0.1:8440"
 
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid/mainnet"
+database = "~/.local/share/darkfi/darkfid/mainnet"
 
 # Confirmation threshold, denominated by number of blocks
 threshold = 11

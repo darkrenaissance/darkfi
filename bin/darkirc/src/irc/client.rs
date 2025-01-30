@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -41,7 +41,7 @@ use smol::{
 };
 
 use super::{
-    server::{IrcServer, MAX_MSG_LEN, MAX_NICK_LEN},
+    server::{IrcServer, MAX_MSG_LEN},
     Msg, NickServ, OldPrivmsg, SERVER_NAME,
 };
 
@@ -237,45 +237,55 @@ impl Client {
                         }
                     };
 
+                    // If successful, potentially decrypt it:
+                    self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
+
                     // We should skip any attempts to contact services from the network.
                     if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
                         continue
                     }
 
-                    // If successful, potentially decrypt it:
-                    self.server.try_decrypt(&mut privmsg).await;
+                    // If the privmsg is not intented for any of the given
+                    // channels or contacts, ignore it
+                    // otherwise add it as a reply and mark it as seen
+                    // in the seen_events tree.
+                    let channels = self.channels.read().await;
+                    let contacts = self.server.contacts.read().await;
+                    if !channels.contains(&privmsg.channel) &&
+                        !contacts.contains_key(&privmsg.channel)
+                    {
+                        continue
+                    }
 
-                    // If we have this channel, or it's a DM, forward it to the client.
-                    // As a DM, we consider something that is <= MAX_NICK_LEN, and does not
-                    // start with the '#' character. With ChaCha, the ciphertext should be
-                    // longer than our MAX_NICK_LEN, so in case it is garbled, it should be
-                    // skipped by this code.
-                    let have_channel = self.channels.read().await.contains(&privmsg.channel);
-                    let msg_for_self = !privmsg.channel.starts_with('#') && privmsg.channel.len() <= MAX_NICK_LEN;
+                    // Add the nickname to the list of nicks on the channel, if it's a channel.
+                    let mut chans_lock = self.server.channels.write().await;
+                    if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+                        chan.nicks.insert(privmsg.nick.clone());
+                    }
+                    drop(chans_lock);
 
-                    if have_channel || msg_for_self {
-                        // Add the nickname to the list of nicks on the channel, if it's a channel.
-                        let mut chans_lock = self.server.channels.write().await;
-                        if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
-                            chan.nicks.insert(privmsg.nick.clone());
+                    // Handle message lines individually
+                    for line in privmsg.msg.lines() {
+                        // Skip empty lines
+                        if line.is_empty() {
+                            continue
                         }
-                        drop(chans_lock);
 
                         // Format the message
-                        let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
+                        let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
 
                         // Send it to the client
-                        let reply = ReplyType::Client((privmsg.nick, msg));
+                        let reply = ReplyType::Client((privmsg.nick.clone(), msg));
                         if let Err(e) = self.reply(&mut writer, &reply).await {
                             error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
                             continue
                         }
+                    }
 
-                        // Mark the message as seen for this USER
-                        if let Err(e) = self.mark_seen(&event_id).await {
-                            error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
-                            return Err(e)
-                        }
+                    // Mark the message as seen for this USER
+                    if let Err(e) = self.mark_seen(&event_id).await {
+                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                        return Err(e)
                     }
                 }
             }

@@ -3,7 +3,7 @@ set -e
 set -x
 
 # Path to `drk` binary
-DRK="../../../drk -vv -c drk.toml"
+DRK="../../../drk -c drk.toml"
 
 while true; do
     if $DRK ping 2> /dev/null; then

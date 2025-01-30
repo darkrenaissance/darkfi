@@ -5,10 +5,10 @@
 #rpc_listen="tcp://127.0.0.1:23330"
 
 ## Datastore Path
-#datastore = "~/.local/darkfi/taud_db"
+#datastore = "~/.local/share/darkfi/taud_db"
 
 ## Sets DB logs replay datastore path
-#replay_datastore = "~/.local/darkfi/replayed_taud_db"
+#replay_datastore = "~/.local/share/darkfi/replayed_taud_db"
 
 ## Run in replay mode to store Sled DB instructions
 ## (for eventgraph debugging tool)
@@ -49,10 +49,10 @@ write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
 # P2P network settings
 [net]
 # Path to the P2P datastore
-p2p_datastore = "~/.local/darkfi/taud"
+p2p_datastore = "~/.local/share/darkfi/taud"
 
 # Path to a configured hostlist for saving known peers
-hostlist = "~/.local/darkfi/taud/hostlist.tsv"
+hostlist = "~/.local/share/darkfi/taud/hostlist.tsv"
 
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:23331", "tcp+tls://[::]:23331"]

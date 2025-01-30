@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -43,7 +43,7 @@ pub struct Privmsg {
 async fn amain() -> Result<()> {
     info!("Instantiating event DAG");
     let ex = std::sync::Arc::new(smol::Executor::new());
-    let datastore = expand_path("~/.local/darkfi/evgrd-test-client")?;
+    let datastore = expand_path("~/.local/share/darkfi/evgrd-test-client")?;
     fs::create_dir_all(&datastore).await?;
     let sled_db = sled::open(datastore)?;
 

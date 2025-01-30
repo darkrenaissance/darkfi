@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,7 @@
  */
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -29,11 +29,57 @@ use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
-use crate::{impl_p2p_message, net::*, Error, Result};
+use crate::{impl_p2p_message, net::*, system::msleep, util::time::NanoTimestamp, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
 const MALICIOUS_THRESHOLD: usize = 5;
+
+/// Global limit of messages per window
+const WINDOW_MAXSIZE: usize = 200;
+/// Rolling length of the window
+const WINDOW_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(60);
+
+/// Rolling length of the window
+const RATELIMIT_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(10);
+/// Ratelimit kicks in above this count
+const RATELIMIT_MIN_COUNT: usize = 6;
+/// Sample point used to calculate sleep time when ratelimit is active
+const RATELIMIT_SAMPLE_IDX: usize = 10;
+/// Sleep for this amount of time when `count == RATE_LIMIT_SAMPLE_IDX`.
+const RATELIMIT_SAMPLE_SLEEP: usize = 1000;
+
+struct MovingWindow {
+    times: VecDeque<NanoTimestamp>,
+    expiry_time: NanoTimestamp,
+}
+
+impl MovingWindow {
+    fn new(expiry_time: NanoTimestamp) -> Self {
+        Self { times: VecDeque::new(), expiry_time }
+    }
+
+    /// Clean out expired timestamps from the window.
+    fn clean(&mut self) {
+        while let Some(ts) = self.times.front() {
+            if ts.elapsed().unwrap() < self.expiry_time {
+                break
+            }
+            let _ = self.times.pop_front();
+        }
+    }
+
+    /// Add new timestamp
+    fn ticktock(&mut self) {
+        self.clean();
+        self.times.push_back(NanoTimestamp::current_time());
+    }
+
+    #[inline]
+    fn count(&self) -> usize {
+        self.times.len()
+    }
+}
 
 /// P2P protocol implementation for the Event Graph.
 pub struct ProtocolEventGraph {
@@ -55,6 +101,11 @@ pub struct ProtocolEventGraph {
     malicious_count: AtomicUsize,
     /// P2P jobs manager pointer
     jobsman: ProtocolJobsManagerPtr,
+    /// To apply the rate-limit, we don't broadcast directly but instead send into the
+    /// sending queue.
+    broadcaster_push: smol::channel::Sender<EventPut>,
+    /// Receive send requests and rate-limit broadcasting them.
+    broadcaster_pull: smol::channel::Receiver<EventPut>,
 }
 
 /// A P2P message representing publishing an event on the network
@@ -89,6 +140,7 @@ impl ProtocolBase for ProtocolEventGraph {
         self.jobsman.clone().spawn(self.clone().handle_event_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_tip_req(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().broadcast_rate_limiter(), ex.clone()).await;
         Ok(())
     }
 
@@ -112,6 +164,8 @@ impl ProtocolEventGraph {
         let tip_req_sub = channel.subscribe_msg::<TipReq>().await?;
         let _tip_rep_sub = channel.subscribe_msg::<TipRep>().await?;
 
+        let (broadcaster_push, broadcaster_pull) = smol::channel::unbounded();
+
         Ok(Arc::new(Self {
             channel: channel.clone(),
             event_graph,
@@ -122,6 +176,8 @@ impl ProtocolEventGraph {
             _tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
             jobsman: ProtocolJobsManager::new("ProtocolEventGraph", channel.clone()),
+            broadcaster_push,
+            broadcaster_pull,
         }))
     }
 
@@ -149,6 +205,9 @@ impl ProtocolEventGraph {
     /// This is triggered whenever someone broadcasts (or relays) a new
     /// event on the network.
     async fn handle_event_put(self: Arc<Self>) -> Result<()> {
+        // Rolling window of event timestamps on this channel
+        let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
+
         loop {
             let event = match self.ev_put_sub.receive().await {
                 Ok(v) => v.0.clone(),
@@ -176,6 +235,15 @@ impl ProtocolEventGraph {
                     "Event {} is already known", event_id,
                 );
                 continue
+            }
+
+            // There's a new unique event.
+            // Apply ban logic to stop network floods.
+            bantimes.ticktock();
+            if bantimes.count() > WINDOW_MAXSIZE {
+                self.channel.ban().await;
+                // This error is actually unused. We could return Ok here too.
+                return Err(Error::MaliciousFlood)
             }
 
             // We received an event. Check if we already have it in our DAG.
@@ -351,11 +419,7 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // Relay the event to other peers.
-            self.event_graph
-                .p2p
-                .broadcast_with_exclude(&EventPut(event), &[self.channel.address().clone()])
-                .await;
+            self.broadcaster_push.send(EventPut(event)).await.expect("push broadcaster closed");
         }
     }
 
@@ -491,6 +555,59 @@ impl ProtocolEventGraph {
             drop(bcast_ids);
 
             self.channel.send(&TipRep(layers)).await?;
+        }
+    }
+
+    /// We need to rate limit message propagation so malicious nodes don't get us banned
+    /// for flooding. We do that by aggregating messages here into a queue then apply
+    /// rate limit logic before broadcasting.
+    ///
+    /// The rate limit logic is this:
+    ///
+    /// * If the count is less then RATELIMIT_MIN_COUNT then do nothing.
+    /// * Otherwise sleep for `sleep_time` ms.
+    ///
+    /// To calculate the sleep time, we use the RATELIMIT_SAMPLE_* values.
+    /// For example RATELIMIT_SAMPLE_IDX = 10, RATELIMIT_SAMPLE_SLEEP = 1000
+    /// means that when N = 10, then sleep for 1000 ms.
+    ///
+    /// Let RATELIMIT_MIN_COUNT = 6, then here's a table of sleep times:
+    ///
+    /// | Count | Sleep Time / ms |
+    /// |-------|-----------------|
+    /// | 0     | 0               |
+    /// | 4     | 0               |
+    /// | 6     | 0               |
+    /// | 10    | 1000            |
+    /// | 14    | 2000            |
+    /// | 18    | 3000            |
+    ///
+    /// So we use the sample to calculate a straight line from RATELIMIT_MIN_COUNT.
+    async fn broadcast_rate_limiter(self: Arc<Self>) -> Result<()> {
+        let mut ratelimit = MovingWindow::new(RATELIMIT_EXPIRY_TIME);
+
+        loop {
+            let event_put = self.broadcaster_pull.recv().await.expect("pull broadcaster closed");
+
+            ratelimit.ticktock();
+            if ratelimit.count() > RATELIMIT_MIN_COUNT {
+                let sleep_time =
+                    ((ratelimit.count() - RATELIMIT_MIN_COUNT) * RATELIMIT_SAMPLE_SLEEP /
+                        (RATELIMIT_SAMPLE_IDX - RATELIMIT_MIN_COUNT)) as u64;
+                debug!(
+                    target: "event_graph::protocol::broadcast_rate_limiter",
+                    "Activated rate limit: sleeping {sleep_time} ms [count={}]",
+                    ratelimit.count()
+                );
+                // Apply the ratelimit
+                msleep(sleep_time).await;
+            }
+
+            // Relay the event to other peers.
+            self.event_graph
+                .p2p
+                .broadcast_with_exclude(&event_put, &[self.channel.address().clone()])
+                .await;
         }
     }
 }

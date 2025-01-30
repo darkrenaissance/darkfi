@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -549,7 +549,7 @@ enum ContractSubcmd {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 struct BlockchainNetwork {
-    #[structopt(long, default_value = "~/.local/darkfi/drk/localnet/wallet.db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/wallet.db")]
     /// Path to wallet database
     wallet_path: String,
 

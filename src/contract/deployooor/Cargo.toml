@@ -9,15 +9,15 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-darkfi-sdk = { path = "../../sdk" }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
-thiserror = "1.0.64"
-wasmparser = "0.219.1"
+thiserror = "2.0.11"
+wasmparser = "0.223.0"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
 darkfi = { path = "../../../", features = ["zk"], optional = true }
-log = { version = "0.4.22", optional = true }
+log = { version = "0.4.25", optional = true }
 rand = { version = "0.8.5", optional = true }
 
 # These are used for integration tests
@@ -29,6 +29,7 @@ smol = "2.0.2"
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["custom"] }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 
 [features]
 default = []

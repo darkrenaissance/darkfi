@@ -1,7 +1,7 @@
 <!--
  This file is part of DarkFi (https://dark.fi)
 
- Copyright (C) 2020-2024 Dyne.org foundation
+ Copyright (C) 2020-2025 Dyne.org foundation
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU Affero General Public License as
@@ -21,48 +21,127 @@
 {% block title %}Explorer{% endblock %}
 
 {% block content %}
+<div class="content-container">
 
-    <div class="container-fluid pl-5 pb-5 pr-5 title-block" style="margin-top:90px;">
-        <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Explore</h1>
-        <div class="search-container">
-            <form action="/search">
-                <input type="text" placeholder="Search for a block or transaction.." name="search_hash">
-            </form>
-      </div>
+    <!-- Explorer Search -->
+    <div class="search-container">
+        <h1>Explore</h1>
+        <form action="/search">
+            <input class="search-input" type="text" placeholder="Search for a block or transaction.." name="search_hash">
+        </form>
     </div>
 
-    <div class="row m-0 border-secondary border-top">
-        <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Latest Blocks</h2>
-           <table style="width:100%;">
-                <tr>
-                    <th>Height</th>
-                    <th>Hash</th>
-                    <th>Timestamp</th>
-                </tr>
-                {% for block in blocks %}
-                    <tr>
-                        <td>{{ block[3] }}</td>
-                        <td><a href="block/{{ block[0] }}">{{ block[0] }}</a></td>
-                        <td>{{ block[4] }}</td>
-                    </tr>
-                {% endfor %}
-            </table>
-        </div>
+    <!--Network Summary -->
+    <div class="content-section" style="padding-bottom: 0px;">
+        <h2 class="content-section-header">Network Summary</h2>
+        <ul>
+            <li>Height: {{ basic_stats[0] }}</li>
+            <li>Epoch: {{ basic_stats[1] }}</li>
+            <li>Last block: <a href="block/{{ basic_stats[2] }}">{{ basic_stats[2] }}</a></li>
+            <li>Total blocks: {{ basic_stats[3] }}</li>
+            <li>Total transactions: {{ basic_stats[4] }}</li>
+        </ul>
     </div>
 
-    <div class="row m-0 border-secondary border-top">
-        <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Statistics</h2>
-            <ul>
-                <li>Height: {{ stats[0] }}</li>
-                <li>Epoch: {{ stats[1] }}</li>
-                <li>Last block: <a href="block/{{ stats[2] }}">{{ stats[2] }}</a></li>
-                <li>Total blocks: {{ stats[3] }}</li>
-                <li>Total transactions: {{ stats[4] }}</li>
-            </ul>
-        </div>
+    <!--Latest Blocks -->
+    <div class="content-section">
+        <h2 class="content-section-header">Latest Blocks</h2>
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Height</th>
+                <th>Hash</th>
+                <th>Timestamp</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for block in blocks %}
+            <tr>
+                <td>{{ block[3] }}</td>
+                <td><a href="block/{{ block[0] }}">{{ block[0] }}</a></td>
+                <td>{{ block[4] }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
-    
+
+    <!--Total Network Gas Consumption -->
+    <div class="content-section">
+        <h2 class="content-section-header">Total Network Gas Consumption</h2>
+        {% if metric_stats %}
+        <table class="table">
+            <thead>
+            <tr>
+                <th></th>
+                <th>Average</th>
+                <th>Minimum</th>
+                <th>Maximum</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Total</td>
+                <td>{{ metric_stats[0] }}</td>
+                <td>{{ metric_stats[1] }}</td>
+                <td>{{ metric_stats[2] }}</td>
+            </tr>
+            <tr>
+                <td>WASM</td>
+                <td>{{ metric_stats[3] }}</td>
+                <td>{{ metric_stats[4] }}</td>
+                <td>{{ metric_stats[5] }}</td>
+            </tr>
+            <tr>
+                <td>ZK Circuits</td>
+                <td>{{ metric_stats[6] }}</td>
+                <td>{{ metric_stats[7] }}</td>
+                <td>{{ metric_stats[8] }}</td>
+            </tr>
+            <tr>
+                <td>Signatures</td>
+                <td>{{ metric_stats[9] }}</td>
+                <td>{{ metric_stats[10] }}</td>
+                <td>{{ metric_stats[11] }}</td>
+            </tr>
+            <tr>
+                <td>Deployments</td>
+                <td>{{ metric_stats[12] }}</td>
+                <td>{{ metric_stats[13] }}</td>
+                <td>{{ metric_stats[14] }}</td>
+            </tr>
+            </tbody>
+        </table>
+        {% else %}
+        Gas consumption details are not available.
+        {% endif %}
+    </div>
+
+    <!--Native Contracts -->
+    <div class="content-section">
+        <h2 class="content-section-header">Native Contracts</h2>
+        <table class="table">
+            <thead>
+            <tr class="table-header">
+                <th class="contract-id">Contract Id</th>
+                <th class="contract-name text-center">Name</th>
+                <th class="contract-description">Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for contract in native_contracts %}
+            <tr class="table-row">
+                <td class="contract-id">
+                    <a href="contract/{{ contract[0] }}?name={{ contract[1]|urlencode }}">{{ contract[0] }}</a>
+                </td>
+                <td class="contract-name text-center">{{ contract[1] }}</td>
+                <td class="contract-description">{{ contract[2] }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
 {% endblock %}
 

@@ -5,29 +5,29 @@
 --   $ drk dao create_dao \
 --       PROPOSER_LIMIT \
 --       QUORUM \
---       APPROVAL_RATIO_BASE \
---       APPROVAL_RATIO_QUOTIENT \
---       GOV_TOKEN_ID > dao.dat
+--       EARLY_EXEC_QUORUM \
+--       APPROVAL_RATIO \
+--       GOV_TOKEN_ID > dao.toml
 --
--- dat.dat contains:
+-- dat.toml contains:
 --
 -- * DAO parameters as listed above
--- * secret key for the DAO
--- * bulla blind
+-- * Secret keys for the DAO
+-- * Bulla blind
 --
 -- We can view the data like so:
 --
---   $ drk dao view < dao.dat
+--   $ drk dao view < dao.toml
 --
--- Now everyone inside the DAO exchanges dao.dat out of band will import
--- it into their wallets.
+-- Now everyone inside the DAO exchanges dao.toml out of band,
+-- will import it into their wallets.
 --
---   $ drk dao import DAO_NAME < dao.dat
+--   $ drk dao import DAO_NAME < dao.toml
 --   Imported DAO ccb8XXX8af6
 --
 -- Where ccb8XXX8af6 is the DAO's name.
 --
--- Next one person will mint it on chain
+-- Next someone that holds all the keys will mint it on chain
 --
 --   $ drk dao mint DAO_NAME > dao_mint_tx
 --   $ drk broadcast < dao_mint_tx
@@ -56,8 +56,9 @@
 --       RECV_PUBKEY
 --
 -- If we don't have enough tokens to meet the proposer_limit threshold
--- then this call will simply fail with an error message. Nothing will
--- be added to the database or sent to the network.
+-- or don't hold the proposer key, then this call will simply fail with
+-- an error message. Nothing will be added to the database or sent to the
+-- network.
 --
 -- Once a proposal has been generated, it can be exported and shared
 -- to other participants.
@@ -73,6 +74,7 @@
 -- # DAO::vote()
 --
 -- You have received a proposal which is active. You can now vote on it.
+-- You will see other votes only if you hold the DAO votes view key.
 --
 --   $ drk dao proposals DAO_NAME
 --   0. f6cae63ced53d02b372206a8d3ed5ac03fde18da306a520285fd56e8d031f6cf

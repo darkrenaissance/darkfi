@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,11 +24,7 @@ use std::sync::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
-use smol::{
-    fs::{self, unix::PermissionsExt},
-    lock::RwLock as AsyncRwLock,
-    stream::StreamExt,
-};
+use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
 use url::Url;
 
 use super::{
@@ -48,6 +44,9 @@ use crate::{
     util::path::expand_path,
     Result,
 };
+
+#[cfg(target_family = "unix")]
+use smol::fs::unix::PermissionsExt;
 
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
@@ -92,6 +91,8 @@ impl P2p {
         if let Some(ref datastore) = settings.p2p_datastore {
             let datastore = expand_path(datastore)?;
             fs::create_dir_all(&datastore).await?;
+            // Windows only has readonly so don't worry about it
+            #[cfg(target_family = "unix")]
             fs::set_permissions(&datastore, PermissionsExt::from_mode(0o700)).await?;
         }
 
@@ -216,6 +217,11 @@ impl P2p {
     /// not report seedsync or refinery connections.
     pub fn is_connected(&self) -> bool {
         !self.hosts().peers().is_empty()
+    }
+
+    /// The number of connected peers. This means channels which are not seed or refine.
+    pub fn peers_count(&self) -> usize {
+        self.hosts().peers().len()
     }
 
     /// Return an atomic pointer to the set network settings

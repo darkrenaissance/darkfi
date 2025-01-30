@@ -22,19 +22,28 @@ Nothing else exists like it.
 
 <u><b>Note</b></u>: `darkirc` follows IRC's [RFC2812](https://www.rfc-editor.org/rfc/rfc2812)
 
-## Installation
+## Building
 
 Follow the instructions in the [README](../../index.html#build) to ensure
 you have all the necessary dependencies. After that, in repo root folder:
 
 ```shell
 % make darkirc
-% # install system wide only if you can make sure there would be no
-% # multiple darkirc versions installed:
-% # sudo make install darkirc 
 ```
 
-## Installation (Android)
+## Installation (Optional)
+
+It is adviced to use `darkirc` directly from the repo root folder.
+Install system wide only if you can make sure there would be no
+multiple darkirc versions installed:
+
+```shell
+% sudo make install darkirc
+```
+
+You have to reinstall `darkirc` on new versions manually.
+
+## Building for Android
 
 This is for Android 64 bit (which is most phones).
 You will compile darkirc on your computer then copy it to your phone
@@ -75,6 +84,20 @@ additionally there is a mirror on telegram @darkfi_darkirc channel.
 You can also message @darkirc_bot with "sub" to avoid doxxing your username.
 Use "unsub" to unsubscribe.
 
+## Network-level privacy
+
+Nodes have knowledge of their peers, including the IP addresses of
+connected hosts. We suggest configuring your instance to use a different
+transport so it is not connected via clearnet.
+
+DarkFi supports the use of pluggable transports, including [Tor](../nodes/tor-guide.md#configure-network-settings)
+and Nym, to provide network-level privacy. As long as there are live seed
+nodes configured to support a Tor or Nym connection, users can connect to
+`darkirc` and benefit from the protections offered by these protocols.
+
+Other approaches include connecting via a cloud server or VPN. Research
+the risks involved in these methods before connecting.
+
 ## Usage (DarkFi Network)
 
 Upon compiling `darkirc` as described above, the preconfigured defaults
@@ -96,7 +119,8 @@ default in `~/.config/darkfi/` you can review and potentially edit. It
 might be useful if you want to add other channels you want to autojoin 
 (like `#philosophy` and `#memes`), or if you want to set a shared 
 secret for some channel in order for it to be encrypted between its 
-participants.
+participants. We strongly suggest to make sure you are using the
+desired network transport before proceeding.
 
 When done, you can run `darkirc` for the second time in order for it to
 connect to the network and start participating in the P2P protocol:
@@ -161,19 +185,6 @@ the changes to reflect, like so:
 ```
 /rehash
 ```
-
-## Network-level privacy
-
-Nodes have knowledge of their peers, including the IP addresses of 
-connected hosts.
-
-DarkFi supports the use of pluggable transports, including Tor and Nym, 
-to provide network-level privacy. As long as there are live seed nodes
-configured to support a Tor or Nym connection, users can connect to 
-`darkirc` and benefit from the protections offered by these protocols.
-
-Other approaches include connecting via a cloud server or VPN. Research 
-the risks involved in these methods before connecting.
 
 ## Usage (Local Deployment)
 

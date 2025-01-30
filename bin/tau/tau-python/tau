@@ -671,7 +671,7 @@ Examples:
         return 0
     elif sys.argv[1] == "export":
         if len(sys.argv) == 2:
-            path = "~/.local/darkfi"
+            path = "~/.local/share/darkfi"
         else:
             path = sys.argv[2]
         if await api.export_to(path, server_name, port):
@@ -679,7 +679,7 @@ Examples:
         return 0
     elif sys.argv[1] == "import":
         if len(sys.argv) == 2:
-            path = "~/.local/darkfi"
+            path = "~/.local/share/darkfi"
         else:
             path = sys.argv[2]
         if await api.import_from(path, server_name, port):

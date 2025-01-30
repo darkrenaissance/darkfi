@@ -14,10 +14,10 @@
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
 ## Sets Datastore Path
-#datastore = "~/.local/darkfi/darkirc/darkirc_db"
+#datastore = "~/.local/share/darkfi/darkirc/darkirc_db"
 
 ## Sets DB logs replay datastore path
-#replay_datastore = "~/.local/darkfi/darkirc/replayed_darkirc_db"
+#replay_datastore = "~/.local/share/darkfi/darkirc/replayed_darkirc_db"
 
 ## Run in replay mode to store Sled DB instructions
 ## (for eventgraph debugging tool)
@@ -48,10 +48,10 @@ autojoin = [
 # P2P network settings
 [net]
 # Path to the P2P datastore
-p2p_datastore = "~/.local/darkfi/darkirc"
+p2p_datastore = "~/.local/share/darkfi/darkirc"
 
 # Path to a configured hostlist for saving known peers
-hostlist = "~/.local/darkfi/darkirc/p2p_hostlist.tsv"
+hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
 
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -68,7 +68,7 @@ impl Timestamp {
 
     /// Add `self` to a given timestamp
     /// Errors on integer overflow.
-    pub fn checked_add(&self, ts: Timestamp) -> Result<Self> {
+    pub fn checked_add(&self, ts: Self) -> Result<Self> {
         if let Some(result) = self.inner().checked_add(ts.inner()) {
             Ok(Self(result))
         } else {
@@ -78,7 +78,7 @@ impl Timestamp {
 
     /// Subtract `self` with a given timestamp
     /// Errors on integer underflow.
-    pub fn checked_sub(&self, ts: Timestamp) -> Result<Self> {
+    pub fn checked_sub(&self, ts: Self) -> Result<Self> {
         if let Some(result) = self.inner().checked_sub(ts.inner()) {
             Ok(Self(result))
         } else {
@@ -108,8 +108,28 @@ impl fmt::Display for Timestamp {
 pub struct NanoTimestamp(pub u128);
 
 impl NanoTimestamp {
+    pub fn inner(&self) -> u128 {
+        self.0
+    }
+
+    pub const fn from_secs(secs: u128) -> Self {
+        Self(secs * 1_000_000_000)
+    }
+
     pub fn current_time() -> Self {
         Self(UNIX_EPOCH.elapsed().unwrap().as_nanos())
+    }
+
+    pub fn elapsed(&self) -> Result<Self> {
+        Self::current_time().checked_sub(*self)
+    }
+
+    pub fn checked_sub(&self, ts: Self) -> Result<Self> {
+        if let Some(result) = self.inner().checked_sub(ts.inner()) {
+            Ok(Self(result))
+        } else {
+            Err(Error::SubtractionUnderflow)
+        }
     }
 }
 impl fmt::Display for NanoTimestamp {

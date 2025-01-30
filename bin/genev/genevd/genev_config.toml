@@ -5,10 +5,10 @@
 #nickname="NICKNAME"
 
 ## Sets Datastore Path
-#datastore = "~/.local/darkfi/genev_db"
+#datastore = "~/.local/share/darkfi/genev_db"
 
 ## Sets DB logs replay datastore path
-#replay_datastore = "~/.local/darkfi/replayed_darkirc_db"
+#replay_datastore = "~/.local/share/darkfi/replayed_darkirc_db"
 
 ## Run in replay mode to store Sled DB instructions
 ## (for eventgraph debugging tool)

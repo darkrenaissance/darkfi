@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -51,7 +51,7 @@ impl Explorerd {
         }
 
         let header_hash = params[0].get::<String>().unwrap();
-        let transactions = match self.db.get_transactions_by_header_hash(header_hash) {
+        let transactions = match self.service.get_transactions_by_header_hash(header_hash) {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_header_hash", "Failed fetching block transactions: {}", e);
@@ -96,7 +96,7 @@ impl Explorerd {
         };
 
         // Retrieve transaction by hash and return result
-        match self.db.get_transaction_by_hash(&tx_hash) {
+        match self.service.get_transaction_by_hash(&tx_hash) {
             Ok(Some(transaction)) => JsonResponse::new(transaction.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {

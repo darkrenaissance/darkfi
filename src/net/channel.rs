@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -28,7 +28,7 @@ use std::{
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
 };
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
@@ -381,14 +381,36 @@ impl Channel {
             // Send result to our publishers
             match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
-                // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
-                    debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
-                    if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
-                        self.ban(self.address()).await;
-                    }
+                    // If we're getting messages without dispatchers, it's spam.
+                    // We therefore ban this channel if:
+                    //
+                    // 1) This channel is NOT part of a refine session.
+                    //
+                    // It's possible that nodes can send messages without
+                    // dispatchers during the refinery process. If that happens
+                    // we simply ignore it. Otherwise, it's spam.
+                    //
+                    // 2) BanPolicy is set to Strict.
+                    //
+                    // We only ban if the BanPolicy is set to Strict, which is
+                    // the default setting for most nodes. The exception to
+                    // this is a seed node like Lilith which has BanPolicy::Relaxed
+                    // since it regularly forms connections with nodes sending
+                    // messages it does not have dispatchers for.
+                    if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
+                        warn!(
+                        target: "net::channel::main_receive_loop()",
+                        "MissingDispatcher for command={}, channel={:?}",
+                        command, self
+                        );
 
-                    return Err(Error::ChannelStopped)
+                        if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
+                            self.ban().await;
+                        }
+
+                        return Err(Error::ChannelStopped)
+                    }
                 }
                 Err(_) => unreachable!("You added a new error in notify()"),
             }
@@ -396,41 +418,42 @@ impl Channel {
     }
 
     /// Ban a malicious peer and stop the channel.
-    pub async fn ban(&self, peer: &Url) {
+    pub async fn ban(&self) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
-        debug!(target: "net::channel::ban()", "Peer: {:?}", peer);
+        debug!(target: "net::channel::ban()", "Peer: {:?}", self.address());
 
         // Just store the hostname if this is an inbound session.
         // This will block all ports from this peer by setting
         // `hosts.block_all_ports()` to true.
         let peer = {
             if self.session_type_id() & SESSION_INBOUND != 0 {
-                if peer.host().is_none() {
-                    error!("[P2P] ban() caught Url without host: {:?}", peer);
+                if self.address().host().is_none() {
+                    error!("[P2P] ban() caught Url without host: {:?}", self.address());
                     return
                 }
 
                 // An inbound Tor connection can't really be banned :)
                 #[cfg(feature = "p2p-tor")]
-                if (peer.scheme() == "tor" || peer.scheme() == "tor+tls") &&
-                    self.p2p().hosts().is_local_host(peer)
+                if (self.address().scheme() == "tor" || self.address().scheme() == "tor+tls") &&
+                    self.p2p().hosts().is_local_host(self.address())
                 {
                     return
                 }
 
-                if peer.scheme() == "unix" {
+                if self.address().scheme() == "unix" {
                     return
                 }
 
-                let mut addr = peer.clone();
+                let mut addr = self.address().clone();
                 addr.set_port(None).unwrap();
                 addr
             } else {
-                peer.clone()
+                self.address().clone()
             }
         };
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        info!(target: "net::channel::ban()", "Blacklisting peer={}", peer);
         self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).unwrap();
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);

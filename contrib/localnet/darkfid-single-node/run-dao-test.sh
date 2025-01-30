@@ -5,12 +5,14 @@ set -x
 # Path to `drk` binary
 DRK="../../../drk -c drk.toml"
 
-# First run the consensus node and the faucet:
+# First run the darkfid node and the miner:
 #
 #   ./clean.sh
+#   ./init-wallet.sh
 #   ./tmux_sessions.sh -vv
 #
-# In another term run the wallet syncing:
+# In another term run the wallet syncing,
+# and wait until some blocks are mined:
 #
 #   ./sync-wallet.sh
 #
@@ -61,8 +63,8 @@ wait_tokens() {
 }
 
 mint_dao() {
-    $DRK dao create 20 10 0.67 MLDY > /tmp/dao.dat
-    $DRK dao import MiladyMakerDAO < /tmp/dao.dat
+    $DRK dao create 20 10 10 0.67 MLDY > /tmp/dao.toml
+    $DRK dao import MiladyMakerDAO < /tmp/dao.toml
     $DRK dao list
     $DRK dao list MiladyMakerDAO
 
@@ -70,19 +72,20 @@ mint_dao() {
 }
 
 wait_dao_mint() {
-    while [ "$($DRK dao list MiladyMakerDAO | grep '^Tx hash: ' | awk '{print $3}')" = None ]; do
+    while [ "$($DRK dao list MiladyMakerDAO | grep '^Transaction hash: ' | awk '{print $3}')" = None ]; do
         sleep 1
     done
 }
 
 fill_treasury() {
-    PUBKEY="$($DRK dao list 1 | grep '^Public key: ' | cut -d ' ' -f3)"
-    BULLA="$($DRK dao list 1 | grep '^Bulla: ' | cut -d' ' -f2)"
-    $DRK transfer 20 WCKD "$PUBKEY" --dao "$BULLA" | tee /tmp/xfer.tx | $DRK broadcast
+    PUBKEY="$($DRK dao list MiladyMakerDAO | grep '^Notes Public key: ' | cut -d ' ' -f4)"
+    SPEND_HOOK="$($DRK dao spend-hook)"
+    BULLA="$($DRK dao list MiladyMakerDAO | grep '^Bulla: ' | cut -d' ' -f2)"
+    $DRK transfer 20 WCKD "$PUBKEY" "$SPEND_HOOK" "$BULLA" | tee /tmp/xfer.tx | $DRK broadcast
 }
 
 dao_balance() {
-    BALANCE=$($DRK dao balance 1 2>/dev/null)
+    BALANCE=$($DRK dao balance MiladyMakerDAO 2>/dev/null)
     # No tokens received at all yet
     if echo "$BALANCE" | grep -q "No unspent balances found"; then
         echo 0
@@ -108,51 +111,44 @@ wait_dao_treasury() {
 
 propose() {
     MY_ADDR=$($DRK wallet --address)
-    $DRK dao balance MiladyMakerDAO
-    $DRK dao propose MiladyMakerDAO "$MY_ADDR" 0.1 WCKD > /tmp/propose.tx
+    PROPOSAL="$($DRK dao propose-transfer MiladyMakerDAO 1 5 WCKD "$MY_ADDR" | cut -d' ' -f3)"
+    $DRK dao proposal "$PROPOSAL" --mint-proposal > /tmp/propose.tx
     $DRK broadcast < /tmp/propose.tx
 }
 
-proposal_status() {
-    PROPOSALS_LEN=$($DRK dao proposals MiladyMakerDAO | wc -l)
-    if [ "$PROPOSALS_LEN" = 0 ]; then
-        echo 0
-    else
-        echo 1
-    fi
-}
-
 wait_proposal() {
-    while [ "$(proposal_status)" = 0 ]; do
+    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    while [ "$($DRK dao proposal $PROPOSAL | grep '^Proposal transaction hash: ' | awk '{print $4}')" = None ]; do
         sleep 1
     done
 }
 
 vote() {
-    PROPOSAL_ID=1
-    $DRK dao vote MiladyMakerDAO "$PROPOSAL_ID" 1 20 > /tmp/dao-vote.tx
+    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    $DRK dao vote "$PROPOSAL" 1 > /tmp/dao-vote.tx
     $DRK broadcast < /tmp/dao-vote.tx
 }
 
-vote_status() {
-	PROPOSAL_ID=1
-    $DRK dao proposal MiladyMakerDAO "$PROPOSAL_ID" | grep -q yes
-    echo $?
-}
-
 wait_vote() {
-    while [ "$(vote_status)" != 0 ]; do
+    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    while [ "$($DRK dao proposal $PROPOSAL | grep '^Current proposal outcome: ' | awk '{print $4}')" != "Approved" ]; do
         sleep 1
     done
 }
 
 do_exec() {
-    PROPOSAL_ID=1
-    $DRK dao exec MiladyMakerDAO "$PROPOSAL_ID" > /tmp/dao-exec.tx
+    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    $DRK dao exec --early $PROPOSAL > /tmp/dao-exec.tx
     $DRK broadcast < /tmp/dao-exec.tx
 }
 
-$DRK wallet --keygen
+wait_exec() {
+    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    while [ "$($DRK dao proposal $PROPOSAL | grep '^Proposal was executed on transaction: ' | awk '{print $6}')" = None ]; do
+        sleep 1
+    done
+}
+
 mint_tokens
 wait_tokens
 mint_dao
@@ -164,3 +160,4 @@ wait_proposal
 vote
 wait_vote
 do_exec
+wait_exec

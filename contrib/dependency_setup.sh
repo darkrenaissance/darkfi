@@ -22,7 +22,7 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libssl-dev libsqlcipher-dev libsqlite3-dev wabt"
+	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libfontconfig1-dev liblzma-dev libssl-dev libsqlcipher-dev libsqlite3-dev wabt"
 	$1 install $apt_deps || return 1
 }
 

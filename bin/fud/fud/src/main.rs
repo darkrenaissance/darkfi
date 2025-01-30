@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2024 Dyne.org foundation
+ * Copyright (C) 2020-2025 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -80,7 +80,7 @@ struct Args {
     /// Set log file path to output daemon logs into
     log: Option<String>,
 
-    #[structopt(long, default_value = "~/.local/share/fud")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/fud")]
     /// Base directory for filesystem storage
     base_dir: String,
 
@@ -174,7 +174,7 @@ impl Fud {
     // Returns the paths to the local chunks of the file, if found/fetched.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result: ["~/.local/share/fud/chunks/fab1...2314", ...], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result: ["~/.local/share/darkfi/fud/chunks/fab1...2314", ...], "id": 42}
     async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
