@@ -28,7 +28,7 @@ args=(
 
     # We forward 22 to 10022 for SSH
     #-net nic -net user,hostname=windowsvm
-    -net nic -net user,hostname=windowsvm,hostfwd=tcp::10146-:22
+    -net nic -net user,hostname=windowsvm,hostfwd=tcp:127.0.0.1:10146-:22
 
     # This fixes the fucked up mouse
     #-device qemu-xhci -device usb-mouse -device usb-tablet

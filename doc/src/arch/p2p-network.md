@@ -304,3 +304,82 @@ user-defined types.
 TODO:
 * implement `ScoringSubsystem`, `AbstractComputer`, and `Controller`.
 
+#### Channel Scoring
+
+We start with a score that keeps track of the resources used. Concretely the
+resources are: CPU, bandwidth, memory, disk space - any computing source.
+But to keep things simple, lets condense these measures into just two:
+work (representing CPU) and bytes (bandwidth/memory). These are primarily
+the main cause of resource starvation anyway (disk space is cheap).
+
+```
+struct ScoreTable {
+    /// CPU
+    work: u32,
+    /// Memory and bandwidth
+    bytes: u32
+}
+```
+
+There is an existing trait `Message`. We add a new trait method that takes
+a message and returns its score:
+
+```
+impl Message for FooMessage {
+    fn score(&self) -> ScoreTable {
+        // calculate the score of this message depending on its data
+    }
+
+    // ...
+}
+```
+
+We store the scores like this:
+
+```
+struct ScoringMetric {
+    scores: VecDeque<(Timestamp, ScoreTable)>,
+}
+
+impl ScoringMetric {
+    fn add(&mut self, score: ScoreTable) {
+        self.scores.push((Timestamp::now(), score));
+    }
+}
+```
+
+The channels then store a `scores: ScoringMetric`. When it receives a
+message then:
+
+1. Call `scores.update()` which does:
+    1. Apply an exponential decay to all the scores.
+    2. Call `scores.pop_front()` for any scores who are below the threshold (they
+       have expired).
+2. Get the score of the received message.
+3. Store the score and timestamp in the vec.
+
+This logic is implemented in a `ScoringMetric` class.
+
+Now summing the vec will give you the cumulative score. Depending on how high
+this score is, we will:
+
+* Throttle the channel's incoming messages before processing them.
+* `channel.ban()`.
+
+#### Protocol Scoring
+
+The same mechanism can also be used by protocols, however mostly we can probably
+just use the channel scoring for most usecases as a good enough approximation.
+However there might be tight edge situations like the current dag sync which
+require more fine grained control.
+
+In which case the protocol will instantiate its own `ScoringMetric` and keep
+track itself including calling ban on the channel.
+
+#### Tracking the Remote
+
+The remote will ban us if we cross the limit. So our channel must also have a
+`scores_remote` which keeps track of *our* score (how the remote sees us).
+If we start getting too high then ease up on the messages to avoid getting
+blacklisted `channel.ban()` called on us.
+
