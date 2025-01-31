@@ -599,18 +599,24 @@ impl Client {
 
     /// `PASS <password>`
     ///
-    /// Used to set a ‘connection password’. If set, the password must
+    /// Used to set a connection `<password>`. If set, the password must
     /// be set before USER/NICK commands.
     pub async fn handle_cmd_pass(&self, args: &str) -> Result<Vec<ReplyType>> {
-        let mut tokens = args.split_ascii_whitespace();
         let nick = self.nickname.read().await.to_string();
-        let Some(password) = tokens.next() else {
+
+        // "the final parameter can be prepended with a (':', 0x3A) character"
+        // <https://modern.ircdocs.horse/#parameters>
+        let Some(i) = args.find(' ') else {
             // self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
                 format!("{} PASS :{}", nick, INVALID_SYNTAX),
             ))])
         };
+        let mut password = &args[i + 1..];
+        if password.starts_with(':') {
+            password = &password[1..];
+        }
 
         if self.server.password == bcrypt_hash_password(password) {
             self.is_pass_set.store(true, SeqCst);
