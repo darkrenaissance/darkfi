@@ -14,7 +14,7 @@ $(cm_{c_2},r_{c_2})=COMM(pk^{COIN}||\tau||v_c||\rho_{c_2})$,
 $\tau$ is the clock current time. \emph{$sn_c$} is the coin's serial number revealed to spend the coin.
 $$sn_c=PRF_{root_{sk}^{COIN}}^{sn}(\rho_c)$$
 $$\rho=\eta^{sk_{sl}^{COIN}}$$
-$\eta$ is is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. $\emph{ptr}$ is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
+$\eta$ is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. $\emph{ptr}$ is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
 
 ## st transactions
 the blockchain view is a chain of blocks, each block $B_j=(tx_{lead},st)$, while st being the merkle tree structure of the validated transactions received through the network, that include transfer, and public transactions.

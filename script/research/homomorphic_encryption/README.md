@@ -42,7 +42,7 @@ $$sn_{c_i}=PRF_{root_{sk_{c_i}^{COIN}}}^{sn}(\rho_{c_i}), \forall_i \in \{1,2\}$
 
 ## homomorphic encryption mechanism
 
-spending the coin by nullifier defined as a poseidon hash of the secret key of the sender, and the serial number generated at random as such $H = PRF^{poseidon}(sk||sn)$ as a a proof of burn.
+spending the coin by nullifier defined as a poseidon hash of the secret key of the sender, and the serial number generated at random as such $H = PRF^{poseidon}(sk||sn)$ as a proof of burn.
 
 and the tx include encrypted note with the receipient public key
 ``` rust
