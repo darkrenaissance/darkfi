@@ -181,7 +181,7 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
-To faciliate this future upgrade, we have made the peer discovery process a generic trait called `PeerDiscoveryBase`. Currently there is only one imeplementation, `PeerDiscovery`, which implements the peer discovery process in outbound sesssion. In the future `PeerDiscoveryBase` can be implemented to make new forms of peer discovery (i.e. subnets vs overlay peer discovery processes).
+To faciliate this future upgrade, we have made the peer discovery process a generic trait called `PeerDiscoveryBase`. Currently there is only one implementation, `PeerDiscovery`, which implements the peer discovery process in outbound sesssion. In the future `PeerDiscoveryBase` can be implemented to make new forms of peer discovery (i.e. subnets vs overlay peer discovery processes).
 
 ## Scoring Subsystem
 
