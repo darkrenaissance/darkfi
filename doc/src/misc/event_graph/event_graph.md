@@ -29,7 +29,7 @@ We always save the tree database so once we restart before next
 rotation we reload the tree and continue from where we left off 
 (previous steps 1 through 4).
 
-We stay in sync while connected by properly handling a new recieved 
+We stay in sync while connected by properly handling a new received 
 event, we insert it into our dag and mark it as seen, this new event 
 will be a new unreferenced event to be referenced by a newer event
 if we for some reason didn't receive the event, we will be requesting 
@@ -71,7 +71,7 @@ event.
     2. Check if we already have the event. also check if we have all of 
     its parents.
     3. request missing parents if any and add them to the DAG.
-    4. if all the checks pass we add the actual recieved event to the DAG.
+    4. if all the checks pass we add the actual received event to the DAG.
     5. Relay the event to other peers.
 
 ## Genesis Event
