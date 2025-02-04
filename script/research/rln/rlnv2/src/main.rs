@@ -36,25 +36,32 @@ struct Account {
     identity_nullifier: pallas::Base,
     identity_trapdoor: pallas::Base,
     identity_leaf_pos: Position,
-    msgid: pallas::Base,
+    user_message_limit: pallas::Base,
 }
 
 impl Account {
     fn register(
         membership_tree: &mut MerkleTree,
-        membership_map: &mut BTreeMap<Position, pallas::Base>,
+        membership_map: &mut BTreeMap<pallas::Base, Position>,
     ) -> Self {
         let identity_nullifier = pallas::Base::random(&mut OsRng);
         let identity_trapdoor = pallas::Base::random(&mut OsRng);
 
         let identity_secret_hash = poseidon_hash([identity_nullifier, identity_trapdoor]);
-        let identity_commitment = poseidon_hash([identity_secret_hash]);
+        let user_message_limit = pallas::Base::from(100);
+        let identity_commitment = poseidon_hash([identity_secret_hash, user_message_limit]);
 
         membership_tree.append(MerkleNode::from(identity_commitment));
         let identity_leaf_pos = membership_tree.mark().unwrap();
-        membership_map.insert(identity_leaf_pos, identity_commitment);
+        membership_map.insert(identity_commitment, identity_leaf_pos);
 
-        Self { identity_nullifier, identity_trapdoor, identity_leaf_pos }
+        Self {
+            identity_nullifier,
+            identity_trapdoor,
+            identity_leaf_pos,
+            // message id < user_message_limit
+            user_message_limit,
+        }
     }
 }
 
@@ -73,12 +80,9 @@ fn main() {
     // as the user registry.
     let mut membership_tree = MerkleTree::new(1);
     // Since bridgetree is append-only, we'll maintain a BTreeMap of all the
-    // identity commitments in their indexes and whenever some idenity is banned
+    // identity commitments and their indexes. Whenever some idenity is banned
     // we'll zero out that leaf and rebuild the bridgetree from the BTreeMap.
     let mut membership_map = BTreeMap::new();
-
-    // The global message limit per-account per-epoch
-    let message_limit = pallas::Base::from(3);
 
     // Per-app identifier
     let rln_identifier = pallas::Base::from(42);
@@ -86,17 +90,8 @@ fn main() {
     // Current epoch
     let epoch = pallas::Base::from(UNIX_EPOCH.elapsed().unwrap().as_secs() as u64);
 
-    // Register three accounts
+    // Register account
     let account0 = Account::register(&mut membership_tree, &mut membership_map);
-    let account0_msgid = pallas::Base::from(0);
-
-    /*
-    let account1 = Account::register(&mut membership_tree, &mut membership_map);
-    let account1_msgid = pallas::Base::from(0);
-
-    let account2 = Account::register(&mut membership_tree, &mut membership_map);
-    let account2_msgid = pallas::Base::from(0);
-    */
 
     // ==========
     // Signalling
@@ -121,12 +116,14 @@ fn main() {
     // =========================
 
     // 1. Construct share:
+    let message_id = pallas::Base::from(1);
     let external_nullifier = poseidon_hash([epoch, rln_identifier]);
     let a_0 = poseidon_hash([account0.identity_nullifier, account0.identity_trapdoor]);
-    let a_1 = poseidon_hash([a_0, external_nullifier, account0_msgid]);
-    let internal_nullifier = poseidon_hash([a_1]);
+    let a_1 = poseidon_hash([a_0, external_nullifier, message_id]);
     let x = hash_message("hello i wanna spam");
     let y = a_0 + x * a_1;
+
+    let internal_nullifier = poseidon_hash([a_1]);
 
     // 2. Create Merkle proof:
     let identity_root = membership_tree.root(0).unwrap();
@@ -139,21 +136,14 @@ fn main() {
         Witness::MerklePath(Value::known(identity_path.clone().try_into().unwrap())),
         Witness::Uint32(Value::known(u64::from(account0.identity_leaf_pos).try_into().unwrap())),
         Witness::Base(Value::known(x)),
-        Witness::Base(Value::known(account0_msgid)),
-        Witness::Base(Value::known(message_limit)),
+        Witness::Base(Value::known(external_nullifier)),
+        Witness::Base(Value::known(message_id)),
+        Witness::Base(Value::known(account0.user_message_limit)),
         Witness::Base(Value::known(epoch)),
-        Witness::Base(Value::known(rln_identifier)),
     ];
 
-    let public_inputs = vec![
-        message_limit,
-        epoch,
-        external_nullifier,
-        internal_nullifier,
-        x,
-        y,
-        identity_root.inner(),
-    ];
+    let public_inputs =
+        vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
 
     print!("[Signal] Creating ZK proof for 0:0...");
     let now = Instant::now();
