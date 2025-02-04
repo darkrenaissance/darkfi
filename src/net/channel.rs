@@ -41,7 +41,7 @@ use super::{
     dnet::{self, dnetev, DnetEvent},
     hosts::HostColor,
     message,
-    message::{SerializedMessage, VersionMessage, MAGIC_BYTES},
+    message::{SerializedMessage, VersionMessage},
     message_publisher::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{
@@ -241,7 +241,8 @@ impl Channel {
         });
 
         trace!(target: "net::channel::send_message()", "Sending magic...");
-        written += MAGIC_BYTES.encode_async(stream).await?;
+        let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
+        written += magic_bytes.encode_async(stream).await?;
         trace!(target: "net::channel::send_message()", "Sent magic");
 
         trace!(target: "net::channel::send_message()", "Sending command...");
@@ -279,7 +280,8 @@ impl Channel {
         stream.read_exact(&mut magic).await?;
 
         trace!(target: "net::channel::read_command()", "Read magic {:?}", magic);
-        if magic != MAGIC_BYTES {
+        let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
+        if magic != magic_bytes {
             error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
             return Err(Error::MalformedPacket)
         }

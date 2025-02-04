@@ -21,8 +21,6 @@ use darkfi_serial::{
 };
 use url::Url;
 
-pub(in crate::net) const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
-
 /// Generic message template.
 pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
     const NAME: &'static str;

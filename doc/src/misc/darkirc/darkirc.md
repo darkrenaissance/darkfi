@@ -406,3 +406,11 @@ seeds = ["tcp+tls://mynet-seed.peer:5645"]
 For hosting the seed node, you can either use the generic seed node called
 'lilith' which is generic, or you can simply just run a normal DarkIRC node
 which has the inbound correctly set.
+
+To make your network distinct, an extra measure is to modify the magic bytes
+used in messages. This means any nodes that do drift into your custom instance
+will be unable to connect anyway.
+
+```
+magic_bytes=[127, 64, 12, 201]
+```

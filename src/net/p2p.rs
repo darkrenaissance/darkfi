@@ -123,7 +123,8 @@ impl P2p {
 
     /// Starts inbound, outbound, and manual sessions.
     pub async fn start(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::p2p::start", "P2P::start() [BEGIN]");
+        debug!(target: "net::p2p::start", "P2P::start() [BEGIN] [magic_bytes={:?}]",
+               self.settings.read().await.magic_bytes.0);
         info!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
 
         // Start the inbound session

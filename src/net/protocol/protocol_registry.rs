@@ -63,7 +63,10 @@ impl ProtocolRegistry {
         for (session_flags, construct) in self.constructors.lock().await.iter() {
             // Skip protocols that are not registered for this session
             if selector_id & session_flags == 0 {
-                debug!(target: "net::protocol_registry", "Skipping {selector_id:#b}, {session_flags:#b}");
+                debug!(
+                    target: "net::protocol_registry",
+                    "Skipping protocol attach [selector_id={selector_id:#b}, session_flags={session_flags:#b}]",
+                );
                 continue
             }
 
