@@ -41,7 +41,6 @@
   - [Bridge](arch/bridge.md)
   - [Tooling](arch/tooling.md)
   - [P2P Network](arch/net/p2p-network.md)
-    - [Tracker](arch/net/tracker.md)
   - [Services](arch/services.md)
   - [Smart Contracts](arch/sc/sc.md)
     - [Transaction lifetime](arch/sc/tx-lifetime.md)
