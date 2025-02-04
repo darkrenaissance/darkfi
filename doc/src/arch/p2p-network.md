@@ -383,3 +383,47 @@ The remote will ban us if we cross the limit. So our channel must also have a
 If we start getting too high then ease up on the messages to avoid getting
 blacklisted `channel.ban()` called on us.
 
+## Hosting Instances
+
+The main thing is that all participating nodes must have a separate clean config
+to the DarkIRC instance that doesn't include seeds or nodes from other networks.
+Otherwise the P2P networks will bleed into each other. You want them to remain
+distinct.
+
+You have two options:
+
+1. The simplest is just setting up a persistent node, and adding a manual
+   connection. This is good when your network is small and you might not have
+   enough nodes for the P2P network to sustain itself.
+2. The proper way is to setup seed nodes that are first queried on startup,
+   and then used to bootstrap the P2P network.
+
+Additionally if you want to separate multiple transports like Tor, you will need
+nodes that bridge between the networks. Or you can just run everything
+completely over Tor.
+
+First make sure the storages are separate in `mynet_config.toml`:
+
+```
+datastore = "~/.local/darkfi/mynet_db"
+
+[net]
+hostlist = "~/.local/darkfi/mynet/hostlist.tsv"
+```
+
+To setup a manual connection:
+
+```
+peers = ["tcp+tls://mynet-manual.peer:16754"]
+```
+
+Also make sure, the seeds are set to either be blank, or use your custom seed
+node:
+
+```
+seeds = ["tcp+tls://mynet-seed.peer:5645"]
+```
+
+For hosting the seed node, you can either use the generic seed node called
+'lilith' which is generic, or you can simply just run a normal DarkIRC node
+which has the inbound correctly set.
