@@ -48,7 +48,7 @@ use crate::{
 mod node;
 use node::create_darkirc;
 mod schema;
-use schema::get_window_scale_filename;
+use schema::{get_window_scale_filename, settings};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
@@ -173,8 +173,7 @@ impl App {
 
         let window = window.setup(|me| Window::new(me, self.render_api.clone())).await;
         self.sg_root.clone().link(window.clone());
-        schema::make(&self, window).await;
-        //schema::test::make(&self, window).await;
+        schema::make(&self, window.clone()).await;
 
         d!("Schema loaded");
 
@@ -186,6 +185,8 @@ impl App {
 
         #[cfg(not(feature = "enable-plugins"))]
         w!("Plugins are disabled in this build");
+
+        settings::make(&self, window).await;
     }
 
     #[cfg(feature = "enable-plugins")]

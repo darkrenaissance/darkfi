@@ -48,12 +48,14 @@ use crate::{
 
 mod chat;
 mod menu;
+pub mod settings;
 pub mod test;
 
 pub const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //pub const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
 
 mod android_ui_consts {
+    pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
@@ -109,6 +111,8 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
+    pub const SETTINGS_ICON_SIZE: f32 = 60.;
+    pub const SETTINGS_LOGO_SCALE: f32 = 25.;
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
@@ -129,6 +133,7 @@ enum ColorScheme {
 pub async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
+    cc.add_const_f32("SETTINGS_ICON_SIZE", NETSTATUS_ICON_SIZE);
 
     let atom = &mut PropertyAtomicGuard::new();
 
@@ -395,6 +400,95 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let net3_node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     netlayer_node.clone().link(net3_node);
+
+    // Navbar Settings Button
+
+    // Layer
+    let settingslayer_node = create_layer("settings_button_layer");
+    let prop = settingslayer_node.get_property("rect").unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE - SETTINGS_ICON_SIZE").unwrap();
+    prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
+    settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let settingslayer_node =
+        settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    window.clone().link(settingslayer_node.clone());
+
+    // Background
+    let node = create_vector_art("settings_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    settingslayer_node.clone().link(node);
+
+    // Button
+    let node = create_button("settings_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let settings = move || {
+        info!(target: "app::chat", "clicked settings");
+        let atom = &mut PropertyAtomicGuard::new();
+
+        // Hide all relevant window children nodes
+        // Messy.
+        //
+        // Some suggestions:
+        //  1. Something closer to a router, that would be a accessible globally,
+        //  which essentially holds a vector of references to SceneNodes
+        //  representing the app navigation history.
+        //  When the user changes the route, it would make invisible (or later remove
+        //  elements from the tree for optimization purposes) the node of the last SceneNodes
+        //  in the vector and all its children, recursively;
+        //  and append a new SceneNode pointer, which is the new "route" chosen by the user,
+        //  and draw it and its children recursively.
+        //  Note that this would implicitly handle nested routes (like
+        //  /window/somewhere1/view1 to /window/somewhere1/view2, if the last element of the
+        //  router currently points to view1 and we call router.goto("./view2")).
+        //  
+        //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
+        let windows = sg_root.clone().lookup_node("/window").unwrap().get_children();
+        let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
+        for node in windows.iter() {
+            if target_substrings.iter().any(|&s| node.name.contains(s)) {
+                if let Err(e) = node.set_property_bool(atom, Role::App, "is_visible", false) {
+                    debug!("Failed to set property 'is_visible' on node: {:?}", e);
+                }
+            }
+        }
+
+        // Show settings
+        let settings_node = sg_root.clone().lookup_node("/window/settings_layer").unwrap();
+        settings_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    };
+
+    let (slot, recvr) = Slot::new("settings_clicked");
+    node.register("click", slot).unwrap();
+    let settings2 = settings.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            settings2();
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+    
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    settingslayer_node.clone().link(node);
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(
         app.render_api.clone(),

@@ -40,8 +40,8 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyAtomicGuard, PropertyStr, Role},
-    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
+    prop::{PropertyAtomicGuard, PropertyStr, PropertyPtr, PropertyType, PropertyValue, Role},
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodePtr, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
@@ -49,7 +49,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::PluginObject;
+use super::{PluginObject, PluginSettings};
 
 const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
@@ -175,12 +175,17 @@ pub struct DarkIrc {
 
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
+
+    settings: PluginSettings,
 }
 
 impl DarkIrc {
     pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
+
+        let mut setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
+        node_ref.clone().link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
@@ -190,6 +195,12 @@ impl DarkIrc {
                 e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
                 return Err(Error::SledDbErr);
             }
+        };
+
+        let setting_tree = db.open_tree("settings")?;
+        let settings = PluginSettings {
+            setting_root,
+            sled_tree: setting_tree,
         };
 
         let mut p2p_settings: NetSettings = Default::default();
@@ -225,7 +236,25 @@ impl DarkIrc {
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
-        let p2p = match P2p::new(p2p_settings, ex.clone()).await {
+        let node_outbound_connect_timeout = settings.add_setting("net.outbound_connect_timeout", PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32)).unwrap();
+        let node_channel_handshake_timeout = settings.add_setting("net.channel_handshake_timeout", PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32)).unwrap();
+        let node_channel_heartbeat_interval = settings.add_setting("net.channel_heartbeat_interval", PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32)).unwrap();
+        let node_outbound_peer_discovery_cooloff_time = settings.add_setting("net.outbound_peer_discovery_cooloff_time", PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32)).unwrap();
+        let node_slot_preference_strict = settings.add_setting("net.slot_preference_strict", PropertyValue::Bool(p2p_settings.slot_preference_strict)).unwrap();
+        let node_transport_mixing = settings.add_setting("net.transport_mixing", PropertyValue::Bool(p2p_settings.transport_mixing)).unwrap();
+        let node_localnet = settings.add_setting("net.localnet", PropertyValue::Bool(p2p_settings.localnet)).unwrap();
+
+        settings.load_settings();
+
+        p2p_settings.outbound_connect_timeout = node_outbound_connect_timeout.get_property_u32("value").unwrap() as u64;
+        p2p_settings.channel_handshake_timeout = node_channel_handshake_timeout.get_property_u32("value").unwrap() as u64;
+        p2p_settings.channel_heartbeat_interval = node_channel_heartbeat_interval.get_property_u32("value").unwrap() as u64;
+        p2p_settings.outbound_peer_discovery_cooloff_time = node_outbound_peer_discovery_cooloff_time.get_property_u32("value").unwrap() as u64;
+        p2p_settings.slot_preference_strict = node_slot_preference_strict.get_property_bool("value").unwrap();
+        p2p_settings.transport_mixing = node_transport_mixing.get_property_bool("value").unwrap();
+        p2p_settings.localnet = node_localnet.get_property_bool("value").unwrap();
+
+        let p2p = match P2p::new(p2p_settings.clone(), ex.clone()).await {
             Ok(p2p) => p2p,
             Err(err) => {
                 e!("Create p2p network failed: {err}!");
@@ -256,7 +285,7 @@ impl DarkIrc {
         }
 
         let self_ = Arc::new(Self {
-            node,
+            node: node.clone(),
             tasks: OnceLock::new(),
 
             p2p,
@@ -265,6 +294,7 @@ impl DarkIrc {
 
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
+            settings,
         });
         Ok(Pimpl::DarkIrc(self_))
     }
@@ -479,6 +509,11 @@ impl DarkIrc {
 
         self.p2p.broadcast(&EventPut(event)).await;
     }
+
+    async fn apply_settings(self_: Arc<Self>) {
+        self_.settings.save_settings();
+        i!("TODO: Apply darkirc settings");
+    }
 }
 
 #[async_trait]
@@ -508,6 +543,11 @@ impl PluginObject for DarkIrc {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
         }
         on_modify.when_change(self.nick.prop(), save_nick);
+
+        // `apply_settings` is triggered if any setting changes
+        for setting_node in self.settings.setting_root.get_children().iter() {
+            on_modify.when_change(setting_node.get_property("value").clone().unwrap(), Self::apply_settings);
+        }
 
         let ev_sub = self.event_graph.event_pub.clone().subscribe().await;
         let ev_task = ex.spawn(self.clone().relay_events(ev_sub));

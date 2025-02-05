@@ -626,12 +626,16 @@ impl EditBox {
     }
 
     async fn insert_char(&self, key: char) {
-        {
+        let text = {
             let mut editable = self.editable.lock().unwrap();
             let mut tmp = [0; 4];
             let key_str = key.encode_utf8(&mut tmp);
             editable.compose(key_str, true);
-        }
+            editable.get_text()
+        };
+
+        let atom = &mut PropertyAtomicGuard::new();
+        self.text.set(atom, text);
 
         self.pause_blinking();
         self.redraw().await;
@@ -691,12 +695,14 @@ impl EditBox {
                 self.delete(0, 1);
                 self.clamp_scroll(atom);
                 self.pause_blinking();
+                self.text.set(atom, self.editable.lock().unwrap().get_text());
                 self.redraw().await;
             }
             KeyCode::Backspace => {
                 self.delete(1, 0);
                 self.clamp_scroll(atom);
                 self.pause_blinking();
+                self.text.set(atom, self.editable.lock().unwrap().get_text());
                 self.redraw().await;
             }
             KeyCode::Home => {
@@ -1273,6 +1279,8 @@ impl UIObject for EditBox {
         // When text has been changed.
         // Cursor and selection might be invalidated.
         async fn reset(self_: Arc<EditBox>) {
+            self_.editable.lock().unwrap().end_compose();
+            self_.editable.lock().unwrap().set_text(self_.text.get(), String::new());
             let atom = &mut PropertyAtomicGuard::new();
             self_.cursor_pos.set(atom, 0);
             self_.selected.clone().set_null(atom, Role::Internal, 0).unwrap();
