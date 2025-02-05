@@ -372,8 +372,25 @@ impl Listener {
 
     pub async fn endpoint(&self) -> Url {
         match &self.variant {
+            ListenerVariant::Tcp(listener) | ListenerVariant::TcpTls(listener) => {
+                let mut endpoint = self.endpoint.clone();
+
+                // Endpoint *must* always have a port set.
+                // This is enforced by the enforce_hostport!() macro in Listener::new().
+                let port = self.endpoint.port().unwrap();
+
+                // `port == 0` means we got the OS to assign a random listen port to us.
+                // Get the port from the listener and modify the endpoint.
+                if port == 0 {
+                    let actual_port = *listener.port.get().unwrap();
+                    endpoint.set_port(Some(actual_port)).unwrap();
+                }
+
+                endpoint
+            }
             #[cfg(feature = "p2p-tor")]
-            ListenerVariant::Tor(listener) => listener.endpoint.lock().await.clone().unwrap(),
+            ListenerVariant::Tor(listener) => listener.endpoint.get().unwrap().clone(),
+            #[allow(unreachable_patterns)]
             _ => self.endpoint.clone(),
         }
     }

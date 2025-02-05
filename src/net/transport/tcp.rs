@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
@@ -26,6 +26,7 @@ use futures::{
 use futures_rustls::{TlsAcceptor, TlsStream};
 use log::debug;
 use smol::{
+    lock::OnceCell,
     net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream},
     Async, Timer,
 };
@@ -144,12 +145,15 @@ impl TcpDialer {
 pub struct TcpListener {
     /// Size of the listen backlog for listen sockets
     backlog: i32,
+    /// When the user puts a port of 0, the OS will assign a random port.
+    /// We get it from the listener so we know what the true endpoint is.
+    pub port: Arc<OnceCell<u16>>,
 }
 
 impl TcpListener {
     /// Instantiate a new [`TcpListener`] with given backlog size.
     pub async fn new(backlog: i32) -> io::Result<Self> {
-        Ok(Self { backlog })
+        Ok(Self { backlog, port: Arc::new(OnceCell::new()) })
     }
 
     /// Internal helper function to create a TCP socket.
@@ -177,7 +181,17 @@ impl TcpListener {
         socket.set_nonblocking(true)?;
 
         let listener = std::net::TcpListener::from(socket);
+        let local_addr = listener.local_addr()?;
         let listener = smol::Async::<std::net::TcpListener>::try_from(listener)?;
+
+        match local_addr {
+            // Ignore ipv4 addrs since they're behind NAT
+            SocketAddr::V4(_) => {}
+            SocketAddr::V6(addr) => {
+                let port = addr.port();
+                self.port.set(port).await.expect("fatal port already set for TcpListener");
+            }
+        }
 
         Ok(SmolTcpListener::from(listener))
     }
