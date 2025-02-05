@@ -1,0 +1,25 @@
+[package]
+name = "rlnd-cli"
+version = "0.4.1"
+description = "CLI-utility to control an rlnd daemon."
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+# Darkfi
+darkfi = {path = "../../../../", features = ["async-sdk", "rpc"]}
+darkfi-sdk = {path = "../../../../src/sdk"}
+darkfi-serial = "0.4.2"
+rlnd = {path = "../rlnd"}
+
+# Misc
+bs58 = "0.5.1"
+clap = {version = "4.4.11", features = ["derive"]}
+prettytable-rs = "0.10.0"
+rand = "0.8.5"
+smol = "2.0.2"
+url = "2.5.4"
