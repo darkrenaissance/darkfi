@@ -99,7 +99,7 @@ impl RlnIdentity {
         event: &Event,
         identity_tree: &MerkleTree,
         identity_pos: Position,
-        proving_key: ProvingKey,
+        proving_key: &ProvingKey,
     ) -> Result<(Proof, Vec<pallas::Base>)> {
         // 1. Construct share
         let epoch = pallas::Base::from(closest_epoch(event.timestamp));
@@ -136,12 +136,13 @@ impl RlnIdentity {
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
         let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
 
-        let proof = Proof::create(&proving_key, &[signal_circuit], &public_inputs, &mut OsRng)?;
+        let proof = Proof::create(proving_key, &[signal_circuit], &public_inputs, &mut OsRng)?;
         Ok((proof, vec![y, internal_nullifier]))
     }
 }
 
 /// Recover a secret from given secret shares
+#[allow(dead_code)]
 pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
     let mut secret = pallas::Base::zero();
     for (j, share_j) in shares.iter().enumerate() {

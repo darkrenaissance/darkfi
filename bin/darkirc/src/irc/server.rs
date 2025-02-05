@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, Cursor},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use darkfi::{
     event_graph::Event,
@@ -90,6 +96,8 @@ pub struct IrcServer {
     pub server_store: sled::Tree,
     /// RLN identity storage
     pub rln_identity_store: sled::Tree,
+    /// RLN Signal VerifyingKey
+    pub rln_signal_vk: VerifyingKey,
 }
 
 impl IrcServer {
@@ -149,25 +157,32 @@ impl IrcServer {
         let rln_identity_store = darkirc.sled.open_tree("rln_identity_store")?;
 
         // Generate RLN proving and verifying keys, if needed
+        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        let rln_signal_circuit =
+            ZkCircuit::new(empty_witnesses(&rln_signal_zkbin)?, &rln_signal_zkbin);
+
         if server_store.get("rlnv2-diff-signal-pk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal ProvingKey");
-            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
-            let provingkey = ProvingKey::build(zkbin.k, &circuit);
+            let provingkey = ProvingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
             let mut buf = vec![];
             provingkey.write(&mut buf)?;
             server_store.insert("rlnv2-diff-signal-pk", buf)?;
         }
 
-        if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
-            let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-signal-vk", buf)?;
-        }
+        let rln_signal_vk = match server_store.get("rlnv2-diff-signal-vk")? {
+            Some(vk) => {
+                let mut reader = Cursor::new(vk);
+                VerifyingKey::read(&mut reader, rln_signal_circuit)?
+            }
+            None => {
+                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+                let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
+                let mut buf = vec![];
+                verifyingkey.write(&mut buf)?;
+                server_store.insert("rlnv2-diff-signal-vk", buf)?;
+                verifyingkey
+            }
+        };
 
         if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
@@ -191,7 +206,7 @@ impl IrcServer {
 
         // Initialize RLN Incremental Merkle tree if necessary
         if server_store.get("rln_identity_tree")?.is_none() {
-            let tree = MerkleTree::new(0);
+            let tree = MerkleTree::new(1);
             server_store.insert("rln_identity_tree", serialize_async(&tree).await)?;
         }
 
@@ -209,6 +224,7 @@ impl IrcServer {
             password,
             server_store,
             rln_identity_store,
+            rln_signal_vk,
         });
 
         // Load any channel/contact configuration.

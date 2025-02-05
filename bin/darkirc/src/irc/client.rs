@@ -34,12 +34,12 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree::Position,
-    crypto::{pasta_prelude::PrimeField, MerkleTree},
+    crypto::{pasta_prelude::PrimeField, poseidon_hash, MerkleTree},
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 use futures::FutureExt;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -52,7 +52,9 @@ use super::{
     server::{IrcServer, MAX_MSG_LEN},
     Msg, NickServ, OldPrivmsg, SERVER_NAME,
 };
-use crate::crypto::rln::{closest_epoch, RlnIdentity, RLN2_SIGNAL_ZKBIN};
+use crate::crypto::rln::{
+    closest_epoch, hash_event, RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN_APP_IDENTIFIER,
+};
 
 const PENALTY_LIMIT: usize = 5;
 
@@ -257,6 +259,49 @@ impl Client {
                             error!("[IRC CLIENT] (multiplex_connection) self.is_seen({}) failed: {}", event_id, e);
                             return Err(e)
                         }
+                    }
+
+                    // If the Event contains an appended blob of data, try to check if it's
+                    // a RLN Signal proof and verify it.
+                    //if false {
+                    let mut verification_failed = false;
+                    #[allow(clippy::never_loop)]
+                    loop {
+                        let (event, blob) = (r.clone(), vec![0,1,2]);
+                        let (proof, public_inputs): (Proof, Vec<pallas::Base>) = match deserialize_async(&blob).await {
+                            Ok(v) => v,
+                            Err(e) => {
+                                // TODO: FIXME: This logic should be better written.
+                                // Right now we don't enforce RLN so we can just fall-through.
+                                //error!("[IRC CLIENT] Failed deserializing event ephemeral data: {}", e);
+                                break
+                            }
+                        };
+
+                        if public_inputs.len() != 2 {
+                            error!("[IRC CLIENT] Received event has the wrong number of public inputs");
+                            verification_failed = true;
+                            break
+                        }
+
+                        info!("[IRC CLIENT] Verifying incoming Event RLN proof");
+                        if self.verify_rln_signal_proof(
+                            &event,
+                            proof,
+                            [public_inputs[0], public_inputs[1]],
+                        ).await.is_err() {
+                            verification_failed = true;
+                            break
+                        }
+
+                        // TODO: Store for secret shares recovery
+                        info!("[IRC CLIENT] RLN verification successful");
+                        break
+                    }
+
+                    if verification_failed {
+                        error!("[IRC CLIENT] Incoming Event proof verification failed");
+                        continue
                     }
 
                     // Try to deserialize the `Event`'s content into a `Privmsg`
@@ -558,6 +603,34 @@ impl Client {
         let mut reader = Cursor::new(proving_key);
         let proving_key = ProvingKey::read(&mut reader, signal_circuit)?;
 
-        rln_identity.create_signal_proof(event, &identity_tree, identity_pos, proving_key)
+        rln_identity.create_signal_proof(event, &identity_tree, identity_pos, &proving_key)
+    }
+
+    /// Abstraction for RLN signal proof verification
+    async fn verify_rln_signal_proof(
+        &self,
+        event: &Event,
+        proof: Proof,
+        public_inputs: [pallas::Base; 2],
+    ) -> Result<()> {
+        let epoch = pallas::Base::from(closest_epoch(event.timestamp));
+        let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
+        let x = hash_event(event);
+        let y = public_inputs[0];
+        let internal_nullifier = public_inputs[1];
+
+        // Fetch the latest commitment Merkle tree
+        let Some(identity_tree) = self.server.server_store.get("rln_identity_tree")? else {
+            return Err(Error::DatabaseError(
+                "RLN Identity tree not found in server store".to_string(),
+            ))
+        };
+        let identity_tree: MerkleTree = deserialize_async(&identity_tree).await?;
+        let identity_root = identity_tree.root(0).unwrap();
+
+        let public_inputs =
+            vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
+
+        Ok(proof.verify(&self.server.rln_signal_vk, &public_inputs)?)
     }
 }
