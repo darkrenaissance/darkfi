@@ -19,13 +19,18 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::UNIX_EPOCH,
 };
 
 use crypto_box::{ChaChaBox, PublicKey};
 use darkfi::{Error::ParseFailed, Result};
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use log::info;
 
-use crate::irc::{IrcChannel, IrcContact};
+use crate::{
+    crypto::rln::{closest_epoch, RlnIdentity},
+    irc::{IrcChannel, IrcContact},
+};
 
 /// Parse configured autojoin channels from a TOML map.
 ///
@@ -163,6 +168,88 @@ pub fn parse_configured_contacts(
     }
 
     Ok((ret, Some(Arc::new(crypto_box::ChaChaBox::new(&secret.public_key(), &secret)))))
+}
+
+/// Parse configured RLN identity from a TOML map.
+///
+/// ```toml
+/// [rln]
+/// nullifier = "6EGKCm3FdSK3fySbjY19pxG49aB34poXhaepsW5NMxFB"
+/// trapdoor = "dCbf5fD2w3K9eYHA2ppgio3ui12tSMZXnEGm8dHS5x6"
+/// user_message_limit = 100
+/// ```
+pub fn parse_rln_identity(data: &toml::Value) -> Result<Option<RlnIdentity>> {
+    let Some(table) = data.as_table() else { return Err(ParseFailed("TOML not a map")) };
+    let Some(rlninfo) = table.get("rln") else { return Ok(None) };
+
+    let Some(nullifier) = rlninfo.get("nullifier") else {
+        return Err(ParseFailed("RLN identity nullifier missing"))
+    };
+
+    let Some(trapdoor) = rlninfo.get("trapdoor") else {
+        return Err(ParseFailed("RLN identity trapdoor missing"))
+    };
+
+    let Some(msglimit) = rlninfo.get("user_message_limit") else {
+        return Err(ParseFailed("RLN user message limit missing"))
+    };
+
+    // Decode
+    let identity_nullifier = if let Some(nullifier) = nullifier.as_str() {
+        let Ok(nullifier_bytes) = bs58::decode(nullifier).into_vec() else {
+            return Err(ParseFailed("RLN nullifier not valid base58"))
+        };
+
+        if nullifier_bytes.len() != 32 {
+            return Err(ParseFailed("RLN nullifier not 32 bytes long"))
+        }
+
+        let Some(identity_nullifier) =
+            pallas::Base::from_repr(nullifier_bytes.try_into().unwrap()).into()
+        else {
+            return Err(ParseFailed("RLN nullifier not a pallas base field element"))
+        };
+
+        identity_nullifier
+    } else {
+        return Err(ParseFailed("RLN nullifier not a string"))
+    };
+
+    let identity_trapdoor = if let Some(trapdoor) = trapdoor.as_str() {
+        let Ok(trapdoor_bytes) = bs58::decode(trapdoor).into_vec() else {
+            return Err(ParseFailed("RLN trapdoor not valid base58"))
+        };
+
+        if trapdoor_bytes.len() != 32 {
+            return Err(ParseFailed("RLN trapdoor not 32 bytes long"))
+        }
+
+        let Some(identity_trapdoor) =
+            pallas::Base::from_repr(trapdoor_bytes.try_into().unwrap()).into()
+        else {
+            return Err(ParseFailed("RLN trapdoor not a pallas base field element"))
+        };
+
+        identity_trapdoor
+    } else {
+        return Err(ParseFailed("RLN trapdoor not a string"))
+    };
+
+    let user_message_limit = if let Some(msglimit) = msglimit.as_float() {
+        msglimit as u64
+    } else {
+        return Err(ParseFailed("RLN user message limit not a number"))
+    };
+
+    Ok(Some(RlnIdentity {
+        nullifier: identity_nullifier,
+        trapdoor: identity_trapdoor,
+        user_message_limit,
+        // TODO: FIXME: We should probably keep track of these rather than
+        // resetting here
+        message_id: 1,
+        last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
+    }))
 }
 
 /// Parse a TOML string for any configured channels and return

@@ -22,13 +22,18 @@ use darkfi::{
     event_graph::Event,
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
+    zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
+    zkas::ZkBinary,
     Error, Result,
 };
+use darkfi_sdk::crypto::MerkleTree;
+use darkfi_serial::serialize_async;
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
 };
 use log::{debug, error, info, warn};
+use sled_overlay::sled;
 use smol::{
     fs,
     lock::{Mutex, RwLock},
@@ -40,8 +45,14 @@ use url::Url;
 
 use super::{client::Client, ChaChaBox, IrcChannel, IrcContact, Priv, Privmsg};
 use crate::{
-    crypto::saltbox,
-    settings::{parse_autojoin_channels, parse_configured_channels, parse_configured_contacts},
+    crypto::{
+        rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
+        saltbox,
+    },
+    settings::{
+        parse_autojoin_channels, parse_configured_channels, parse_configured_contacts,
+        parse_rln_identity,
+    },
     DarkIrc,
 };
 
@@ -67,12 +78,18 @@ pub struct IrcServer {
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     /// Configured IRC contacts
     pub contacts: RwLock<HashMap<String, IrcContact>>,
+    /// Configured RLN identity
+    pub rln_identity: RwLock<Option<RlnIdentity>>,
     /// Saltbox used to encrypt our nick in direct messages
     saltbox: RwLock<Option<Arc<ChaChaBox>>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
     /// IRC server Password
     pub password: String,
+    /// Persistent server storage
+    pub server_store: sled::Tree,
+    /// RLN identity storage
+    pub rln_identity_store: sled::Tree,
 }
 
 impl IrcServer {
@@ -127,6 +144,57 @@ impl IrcServer {
             _ => None,
         };
 
+        // Open persistent dbs
+        let server_store = darkirc.sled.open_tree("server_store")?;
+        let rln_identity_store = darkirc.sled.open_tree("rln_identity_store")?;
+
+        // Generate RLN proving and verifying keys, if needed
+        if server_store.get("rlnv2-diff-signal-pk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal ProvingKey");
+            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
+            let provingkey = ProvingKey::build(zkbin.k, &circuit);
+            let mut buf = vec![];
+            provingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-signal-pk", buf)?;
+        }
+
+        if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
+            let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
+            let mut buf = vec![];
+            verifyingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-signal-vk", buf)?;
+        }
+
+        if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
+            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
+            let provingkey = ProvingKey::build(zkbin.k, &circuit);
+            let mut buf = vec![];
+            provingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-slash-pk", buf)?;
+        }
+
+        if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
+            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
+            let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
+            let mut buf = vec![];
+            verifyingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-slash-vk", buf)?;
+        }
+
+        // Initialize RLN Incremental Merkle tree if necessary
+        if server_store.get("rln_identity_tree")?.is_none() {
+            let tree = MerkleTree::new(0);
+            server_store.insert("rln_identity_tree", serialize_async(&tree).await)?;
+        }
+
         let self_ = Arc::new(Self {
             darkirc,
             config_path,
@@ -136,8 +204,11 @@ impl IrcServer {
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
             saltbox: RwLock::new(None),
+            rln_identity: RwLock::new(None),
             clients: Mutex::new(HashMap::new()),
             password,
+            server_store,
+            rln_identity_store,
         });
 
         // Load any channel/contact configuration.
@@ -166,12 +237,16 @@ impl IrcServer {
         // Parse configured contacts
         let (contacts, saltbox) = parse_configured_contacts(&contents)?;
 
+        // Parse RLN identity
+        let rln_identity = parse_rln_identity(&contents)?;
+
         // FIXME: This will remove clients' joined channels. They need to stay.
         // Only if everything is fine, replace.
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
         *self.saltbox.write().await = saltbox;
+        *self.rln_identity.write().await = rln_identity;
 
         Ok(())
     }

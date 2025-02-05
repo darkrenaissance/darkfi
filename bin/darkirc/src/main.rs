@@ -30,6 +30,7 @@ use darkfi::{
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
+use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 
 use log::{debug, error, info};
 use rand::rngs::OsRng;
@@ -48,10 +49,7 @@ use irc::server::IrcServer;
 
 /// Cryptography utilities
 mod crypto;
-use crypto::bcrypt::bcrypt_hash_password;
-
-// RLN
-//mod rln;
+use crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity};
 
 /// JSON-RPC methods
 mod rpc;
@@ -118,6 +116,10 @@ struct Args {
     /// Recover NaCl public key from a secret key
     #[structopt(long = "get-chacha-pubkey")]
     chacha_secret: Option<String>,
+
+    /// Generate a new RLN identity
+    #[structopt(long)]
+    gen_rln_identity: bool,
 
     /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
@@ -201,6 +203,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("Place this in your config file:\n");
         println!("[channel.\"#yourchannelname\"]");
         println!("secret = \"{}\"", secret);
+        return Ok(())
+    }
+
+    if args.gen_rln_identity {
+        let identity = RlnIdentity::new(&mut OsRng);
+        let nullifier = bs58::encode(identity.nullifier.to_repr()).into_string();
+        let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
+        println!("Place this in your config file:\n");
+        println!("[rln]");
+        println!("nullifier = \"{}\"", nullifier);
+        println!("trapdoor = \"{}\"", trapdoor);
         return Ok(())
     }
 

@@ -1,0 +1,44 @@
+k = 13;
+field = "pallas";
+
+constant "RlnV2_Diff_Signal" {}
+
+witness "RlnV2_Diff_Signal" {
+    Base identity_nullifier,
+    Base identity_trapdoor,
+
+    MerklePath identity_path,
+    Uint32 identity_leaf_pos,
+
+    Base x, # The message hash
+    Base external_nullifier, # Hash(Epoch, RLN identifier)
+
+    Base message_id,
+    Base user_message_limit,
+
+    Base epoch,
+}
+
+circuit "RlnV2_Diff_Signal" {
+    constrain_instance(epoch);
+    constrain_instance(external_nullifier);
+
+    less_than_strict(message_id, user_message_limit);
+
+    # Identity secret hash
+    a_0 = poseidon_hash(identity_nullifier, identity_trapdoor);
+    a_1 = poseidon_hash(a_0, external_nullifier, message_id);
+
+    # y = a_0 + x * a_1
+    x_a_1 = base_mul(x, a_1);
+    y = base_add(a_0, x_a_1);
+    constrain_instance(x);
+    constrain_instance(y);
+
+    internal_nullifier = poseidon_hash(a_1);
+    constrain_instance(internal_nullifier);
+
+    identity_commitment = poseidon_hash(a_0, user_message_limit);
+    root = merkle_root(identity_leaf_pos, identity_path, identity_commitment);
+    constrain_instance(root);
+}

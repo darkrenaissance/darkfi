@@ -23,3 +23,6 @@ pub mod saltbox;
 
 /// bcrypt utilities
 pub mod bcrypt;
+
+/// Rate-Limit nullifiers
+pub mod rln;
