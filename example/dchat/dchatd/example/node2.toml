@@ -4,7 +4,6 @@ verbose = 2
 [net]
 hostlist = "example/node2.tsv"
 inbound = ["tcp://127.0.0.1:10201"]
-accepted_transports = ["tcp"]
 #auto_advertise = true
 external_addrs=["tcp://127.0.0.1:10201"]
 seeds = ["tcp://127.0.0.1:10200"]

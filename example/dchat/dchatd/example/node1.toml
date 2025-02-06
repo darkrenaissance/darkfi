@@ -4,7 +4,6 @@ verbose = 2
 [net]
 hostlist = "example/node1.tsv"
 inbound = ["tcp://127.0.0.1:10202"]
-accepted_transports = ["tcp"]
 external_addrs = ["tcp://127.0.0.1:10202"]
 seeds = ["tcp://127.0.0.1:10200"]
 outbound_connections = 5
