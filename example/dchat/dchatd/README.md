@@ -68,4 +68,10 @@ Or use multitail for colored output:
 multitail -c /tmp/alice.log
 ```
 
+# Example Localnet
 
+```
+./example/seed.sh
+./example/node1.sh
+./example/node2.sh
+```
