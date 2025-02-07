@@ -307,7 +307,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    let spent_gas = return_data.len() + tree_data.len() + (coins_len * 32);
+    let spent_gas = coins_len * 32;
     env.subtract_gas(&mut store, spent_gas as u64);
 
     wasm::entrypoint::SUCCESS
