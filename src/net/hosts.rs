@@ -1505,14 +1505,17 @@ impl Hosts {
     pub async fn external_addrs(&self) -> Vec<Url> {
         let mut external_addrs = self.settings.read().await.external_addrs.clone();
         for ext_addr in &mut external_addrs {
-            let _ = self.patch_external_addr(ext_addr);
+            // We must patch the port first since InboundSession hashmap used to lookup
+            // the port number uses the inbound address.
+            let _ = self.patch_port(ext_addr);
+            let _ = self.patch_auto_addr(ext_addr);
         }
         external_addrs
     }
 
     /// Make a best effort guess from the most frequently reported ipv6 auto address
     /// to set any unspecified ipv6 addrs: `external_addrs = ["tcp://[::]:1365"]`.
-    fn patch_external_addr(&self, ext_addr: &mut Url) -> Option<()> {
+    fn patch_auto_addr(&self, ext_addr: &mut Url) -> Option<()> {
         if ext_addr.scheme() != "tcp" && ext_addr.scheme() != "tcp+tls" {
             return None
         }
@@ -1525,21 +1528,30 @@ impl Hosts {
             return None
         }
 
-        // We should loop over the endpoints from the listeners
-        // But inbound session should be changed so the acceptors and listeners
-        // are accessible.
-        /*
-        let Some(mut port) = inbound.port() else { continue };
-        if port == 0 {
-        }
-        */
-
         // Get our auto-discovered IP
         let auto_addr = self.guess_auto_addr()?;
 
         // Do the actual replacement of the host part of the URL
         ext_addr.set_ip_host(IpAddr::V6(auto_addr)).ok()?;
         Some(())
+    }
+
+    /// If the port number specified is 0, then replace it with whatever the OS has assigned
+    /// as a port for that inbound.
+    fn patch_port(&self, ext_addr: &mut Url) -> Option<()> {
+        // Only patch URLs with port set to 0.
+        if ext_addr.port()? != 0 {
+            return None
+        }
+
+        // TODO:
+        // InboundSession needs a HashMap: Url listen addr -> u16 port numbers.
+        // Lookup the external_addr from InboundSession to get the port number
+        //
+        // ext_addr.set_port(my_new_port_number);
+        //
+
+        None
     }
 }
 
