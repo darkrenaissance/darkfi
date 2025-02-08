@@ -66,9 +66,9 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length read from the memory slice.
+    // Subtract used gas.
     // TODO: There should probably be an additional fee to open a new sled tree.
-    env.subtract_gas(&mut store, ptr_len as u64);
+    env.subtract_gas(&mut store, 1);
 
     // This takes lock of the blockchain overlay reference in the wasm env
     let contracts = &env.blockchain.lock().unwrap().contracts;
@@ -223,8 +223,8 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length read from the memory slice.
-    env.subtract_gas(&mut store, ptr_len as u64);
+    // Subtract used gas. Opening an existing db should be free (i.e. 1 gas unit).
+    env.subtract_gas(&mut store, 1);
 
     // Read memory location that contains the ContractId and DB name
     let memory_view = env.memory_view(&store);
@@ -343,7 +343,9 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length hread from the memory slice.
+    // Subtract used gas. Here we count the bytes written into the database.
+    // TODO: We might want to count only the difference in size if we're replacing
+    // data and the new data is larger.
     env.subtract_gas(&mut store, ptr_len as u64);
 
     // Ensure that it is possible to read from the memory that this function needs
@@ -475,8 +477,8 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length of the looked-up key.
-    env.subtract_gas(&mut store, ptr_len as u64);
+    // Subtract used gas. We make deletion free.
+    env.subtract_gas(&mut store, 1);
 
     // Ensure that it is possible to read from the memory that this function needs
     let memory_view = env.memory_view(&store);
@@ -591,8 +593,8 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length of the looked-up key.
-    env.subtract_gas(&mut store, ptr_len as u64);
+    // Subtract used gas. Reading is free.
+    env.subtract_gas(&mut store, 1);
 
     // Ensure that it is possible to read memory
     let memory_view = env.memory_view(&store);
@@ -728,8 +730,8 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length of the looked-up key.
-    env.subtract_gas(&mut store, ptr_len as u64);
+    // Subtract used gas. Reading is free.
+    env.subtract_gas(&mut store, 1);
 
     // Ensure memory is readable
     let memory_view = env.memory_view(&store);
@@ -833,9 +835,6 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas. Here we count the length read from the memory slice.
-    env.subtract_gas(&mut store, ptr_len as u64);
 
     let memory_view = env.memory_view(&store);
 
