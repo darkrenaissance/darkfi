@@ -81,9 +81,12 @@ impl TorDialer {
                 if let Some(datadir) = &self.datastore {
                     let datadir = expand_path(datadir).unwrap();
 
-                    let config = TorClientConfigBuilder::from_directories(datadir.clone(), datadir)
-                        .build()
-                        .unwrap();
+                    let config = TorClientConfigBuilder::from_directories(
+                        datadir.join("arti-data"),
+                        datadir.join("arti-cache"),
+                    )
+                    .build()
+                    .unwrap();
 
                     TorClient::create_bootstrapped(config).await
                 } else {
