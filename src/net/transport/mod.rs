@@ -370,6 +370,7 @@ impl Listener {
         }
     }
 
+    /// Should only be called after `listen()` in order to behave correctly.
     pub async fn endpoint(&self) -> Url {
         match &self.variant {
             ListenerVariant::Tcp(listener) | ListenerVariant::TcpTls(listener) => {
@@ -382,8 +383,10 @@ impl Listener {
                 // `port == 0` means we got the OS to assign a random listen port to us.
                 // Get the port from the listener and modify the endpoint.
                 if port == 0 {
-                    let actual_port = *listener.port.get().unwrap();
-                    endpoint.set_port(Some(actual_port)).unwrap();
+                    // Was `.listen()` called yet? Otherwise do nothing
+                    if let Some(actual_port) = listener.port.get() {
+                        endpoint.set_port(Some(*actual_port)).unwrap();
+                    }
                 }
 
                 endpoint
