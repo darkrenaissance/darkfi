@@ -226,16 +226,13 @@ impl ProtocolAddress {
             return Ok(())
         }
 
-        let settings = self.settings.read().await;
-        let mut external_addrs = settings.external_addrs.clone();
+        let mut external_addrs = self.settings.read().await.external_addrs.clone();
 
         // Auto-advertise the node's inbound address using the address that
         // was sent to use by the node in the version exchange.
-        for inbound in settings.inbound_addrs.clone() {
-            let Some(inbound) = Self::patch_inbound(&self.channel, inbound) else { continue };
-            external_addrs.push(inbound);
+        for external_addr in &mut external_addrs {
+            let _ = Self::patch_inbound(&self.channel, external_addr);
         }
-        drop(settings);
 
         if external_addrs.is_empty() {
             debug!(
@@ -272,7 +269,7 @@ impl ProtocolAddress {
     /// us by the version exchange.
     ///
     /// Also used by ProtocolSeed.
-    pub(super) fn patch_inbound(channel: &Channel, mut inbound: Url) -> Option<Url> {
+    pub(super) fn patch_inbound(channel: &Channel, inbound: &mut Url) -> Option<()> {
         if inbound.scheme() != "tcp" && inbound.scheme() != "tcp+tls" {
             return None
         }
@@ -307,7 +304,7 @@ impl ProtocolAddress {
             _ => return None,
         };
         inbound.set_host(version.connect_recv_addr.host_str()).ok()?;
-        Some(inbound)
+        Some(())
     }
 }
 

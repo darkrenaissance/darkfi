@@ -63,18 +63,13 @@ impl ProtocolSeed {
             "[START] channel address={}", self.channel.address(),
         );
 
-        let settings = self.settings.read().await;
-        let mut external_addrs = settings.external_addrs.clone();
+        let mut external_addrs = self.settings.read().await.external_addrs.clone();
 
         // Auto-advertise the node's inbound address using the address that
         // was sent to use by the node in the version exchange.
-        for inbound in settings.inbound_addrs.clone() {
-            let Some(inbound) = ProtocolAddress::patch_inbound(&self.channel, inbound) else {
-                continue
-            };
-            external_addrs.push(inbound);
+        for external_addr in &mut external_addrs {
+            let _ = ProtocolAddress::patch_inbound(&self.channel, external_addr);
         }
-        drop(settings);
 
         if external_addrs.is_empty() {
             debug!(
