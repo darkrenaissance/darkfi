@@ -78,3 +78,29 @@ of the guide can be added for future regressions.
 | 38 | Transaction simulate         | explorer simulate-tx                                            | Pass   |
 | 39 | Transaction broadcast        | broadcast                                                       | Pass   |
 | 40 | Transaction attach fee       | attach-fee                                                      | Pass   |
+
+## Transactions fees
+
+This table contains each executed transaction fee in `DRK`.
+
+| Type        | Description                                             | Fee        |
+|-------------|---------------------------------------------------------|------------|
+| Transfer    | Native token transfer with single input and output      | 0.00525303 |
+| Transfer    | Native token transfer with single input and two outputs | 0.00557027 |
+| Transfer    | Native token transfer with two inputs and single output | 0.00570562 |
+| Transfer    | Native token transfer with two inputs and outputs       | 0.00602301 |
+| Token mint  | Custom token mint                                       | 0.00518391 |
+| Transfer    | Custom token transfer with single input and two outputs | 0.00557027 |
+| OTC swap    | Atomic swap between two custom tokens                   | 0.00601657 |
+| DAO mint    | Mint a generated DAO onchain                            | 0.00474321 |
+| Transfer    | Send tokens to a DAO treasury                           | 0.00602301 |
+| DAO propose | Mint a generated DAO transfer proposal onchain          | 0.00574667 |
+| DAO vote    | Vote for a minted DAO transfer proposal                 | 0.00601218 |
+| DAO exec    | Execute (early) a passed DAO transfer proposal          | 0.00988316 |
+| DAO propose | Mint a generated DAO generic proposal onchain           | 0.00574445 |
+| DAO vote    | Vote for a minted DAO generic proposal                  | 0.00601218 |
+| DAO exec    | Execute (early) a passed DAO generic proposal           | 0.00530605 |
+| Token mint  | Custom token mint for a DAO treasury                    | 0.00518391 |
+| DAO propose | Mint a generated DAO to DAO transfer proposal onchain   | 0.00574667 |
+| DAO vote    | Vote for a minted DAO to DAO transfer proposal          | 0.00601218 |
+| DAO exec    | Execute (early) a passed DAO to DAO transfer proposal   | 0.00988316 |

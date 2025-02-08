@@ -226,7 +226,7 @@ instead of transfering some to the DAO, we will mint them
 directly into it:
 
 ```
-$ ./drk token mint MLDY 20 {DAO_PUBLIC_KEY} \
+$ ./drk token mint MLDY 20 {DAO_NOTES_PUBLIC_KEY} \
     {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} > mint_dao_mldy_tx
 $ ./drk broadcast < mint_dao_mldy_tx
 ```
@@ -252,7 +252,7 @@ from the DAO treasury to the new DAO we created:
 
 ```
 $ ./drk dao list WickedDAO
-$ ./drk dao propose-transfer MiladyMakerDAO 1 6.9 MLDY {WICKED_DAO_PUBLIC_KEY} \
+$ ./drk dao propose-transfer MiladyMakerDAO 1 6.9 MLDY {WICKED_DAO_NOTES_PUBLIC_KEY} \
     {DAO_CONTRACT_SPEND_HOOK} {WICKED_DAO_BULLA}
 $ ./drk dao proposal {PROPOSAL_BULLA} --mint-proposal > dao_mldy_transfer_proposal_wckd_mint_tx
 $ ./drk broadcast < dao_mldy_transfer_proposal_wckd_mint_tx

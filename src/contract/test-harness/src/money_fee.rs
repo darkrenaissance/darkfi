@@ -20,6 +20,7 @@ use std::{collections::HashSet, hash::RandomState};
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    validator::fees::compute_fee,
     zk::{halo2::Field, Proof},
     Result,
 };
@@ -56,11 +57,14 @@ impl TestHarness {
     ) -> Result<(Transaction, MoneyFeeParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
+        // Compute fee call required fee
+        let required_fee = compute_fee(&FEE_CALL_GAS);
+
         // Find a compatible OwnCoin
         let coin = wallet
             .unspent_money_coins
             .iter()
-            .find(|x| x.note.token_id == *DARK_TOKEN_ID && x.note.value > FEE_CALL_GAS)
+            .find(|x| x.note.token_id == *DARK_TOKEN_ID && x.note.value > required_fee)
             .unwrap();
 
         // Input and output setup
@@ -72,7 +76,7 @@ impl TestHarness {
 
         let output = FeeCallOutput {
             public_key: wallet.keypair.public,
-            value: coin.note.value - FEE_CALL_GAS,
+            value: coin.note.value - required_fee,
             token_id: coin.note.token_id,
             blind: Blind::random(&mut OsRng),
             spend_hook: FuncId::none(),
@@ -139,7 +143,7 @@ impl TestHarness {
         };
 
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        FEE_CALL_GAS.encode_async(&mut data).await?;
+        required_fee.encode_async(&mut data).await?;
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
@@ -217,8 +221,7 @@ impl TestHarness {
         // First we verify the fee-less transaction to see how much gas it uses for execution
         // and verification.
         let wallet = self.holders.get(holder).unwrap();
-        let mut gas_used = FEE_CALL_GAS;
-        gas_used += wallet
+        let gas_used = wallet
             .validator
             .add_test_transactions(
                 &[tx],
@@ -230,16 +233,20 @@ impl TestHarness {
             .await?
             .0;
 
+        // Compute the required fee
+        let required_fee = compute_fee(&(gas_used + FEE_CALL_GAS));
+
         // Knowing the total gas, we can now find an OwnCoin of enough value
         // so that we can create a valid Money::Fee call.
         let spent_coins: HashSet<&OwnCoin, RandomState> = HashSet::from_iter(spent_coins);
         let mut available_coins = wallet.unspent_money_coins.clone();
-        available_coins.retain(|x| x.note.token_id == *DARK_TOKEN_ID && x.note.value > gas_used);
+        available_coins
+            .retain(|x| x.note.token_id == *DARK_TOKEN_ID && x.note.value > required_fee);
         available_coins.retain(|x| !spent_coins.contains(x));
         assert!(!available_coins.is_empty());
 
         let coin = &available_coins[0];
-        let change_value = coin.note.value - gas_used;
+        let change_value = coin.note.value - required_fee;
 
         // Input and output setup
         let input = FeeCallInput {
@@ -318,7 +325,7 @@ impl TestHarness {
 
         // Encode the contract call
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        gas_used.encode_async(&mut data).await?;
+        required_fee.encode_async(&mut data).await?;
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 

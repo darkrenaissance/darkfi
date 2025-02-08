@@ -31,7 +31,6 @@ use crate::{
     },
     error::TxVerifyFailed,
     tx::Transaction,
-    validator::fees::GasData,
     zk::VerifyingKey,
     Error, Result,
 };
@@ -53,6 +52,7 @@ use verification::{
 
 /// Fee calculation helpers
 pub mod fees;
+use fees::compute_fee;
 
 /// Helper utilities
 pub mod utils;
@@ -130,11 +130,11 @@ impl Validator {
         Ok(state)
     }
 
-    /// Auxiliary function to compute provided transaction's total gas,
+    /// Auxiliary function to compute provided transaction's required fee,
     /// against current best fork.
     /// The function takes a boolean called `verify_fee` to overwrite
     /// the nodes configured `verify_fees` flag.
-    pub async fn calculate_gas(&self, tx: &Transaction, verify_fee: bool) -> Result<GasData> {
+    pub async fn calculate_fee(&self, tx: &Transaction, verify_fee: bool) -> Result<u64> {
         // Grab the best fork to verify against
         let forks = self.consensus.forks.read().await;
         let fork = forks[best_fork_index(&forks)?].full_clone()?;
@@ -164,7 +164,7 @@ impl Validator {
         // Purge new trees
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
-        Ok(verify_result)
+        Ok(compute_fee(&verify_result.total_gas_used()))
     }
 
     /// The node retrieves a transaction, validates its state transition,

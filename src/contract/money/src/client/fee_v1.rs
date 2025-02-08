@@ -39,7 +39,7 @@ use crate::{
 
 /// Fixed gas used by the fee call.
 /// This is the minimum gas any fee-paying transaction will use.
-pub const FEE_CALL_GAS: u64 = 41_000_000;
+pub const FEE_CALL_GAS: u64 = 42_000_000;
 
 /// Private values related to the Fee call
 pub struct FeeCallSecrets {
