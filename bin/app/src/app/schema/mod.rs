@@ -80,6 +80,10 @@ mod ui_consts {
     pub fn get_window_scale_filename() -> PathBuf {
         get_appdata_path().join("window_scale")
     }
+
+    pub fn get_settingsdb_path() -> PathBuf {
+        get_appdata_path().join("settings")
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -98,6 +102,10 @@ mod desktop_paths {
 
     pub fn get_window_scale_filename() -> PathBuf {
         dirs::cache_dir().unwrap().join("darkfi/app/window_scale")
+    }
+
+    pub fn get_settingsdb_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/app/settings")
     }
 }
 
@@ -143,11 +151,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let (slot, recvr) = Slot::new("zoom_out_pressed");
     node.register("shortcut", slot).unwrap();
-    let window_scale = PropertyFloat32::wrap(&window, Role::App, "scale", 0).unwrap();
+    let window_scale = app.sg_root.clone().lookup_node("/setting/scale").unwrap();
     let window_scale2 = window_scale.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let scale = 0.9 * window_scale2.get();
+            let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
 
             let filename = get_window_scale_filename();
             if let Some(parent) = filename.parent() {
@@ -158,7 +166,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             }
 
             let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set(atom, scale);
+            window_scale2.set_property_f32(atom, Role::User, "value", scale);
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -174,7 +182,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let window_scale2 = window_scale.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let scale = 1.1 * window_scale2.get();
+            let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
 
             let filename = get_window_scale_filename();
             if let Some(parent) = filename.parent() {
@@ -185,7 +193,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             }
 
             let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set(atom, scale);
+            window_scale2.set_property_f32(atom, Role::User, "value", scale);
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -201,7 +209,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             let distance: f32 = deserialize(&data).unwrap();
             // Dampen it a little
             let r = (distance - 1.) / 2. + 1.;
-            let scale = r * window_scale.get();
+            let scale = r * window_scale.get_property_f32("value").unwrap();
 
             let filename = get_window_scale_filename();
             if let Some(parent) = filename.parent() {
@@ -212,7 +220,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             }
 
             let atom = &mut PropertyAtomicGuard::new();
-            window_scale.set(atom, scale);
+            window_scale.set_property_f32(atom, Role::User, "value", scale);
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
