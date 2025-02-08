@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
-
 use async_trait::async_trait;
 use log::debug;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
+use std::{sync::Arc, time::UNIX_EPOCH};
+use url::{Host, Url};
 
 use super::{
     super::{
-        channel::ChannelPtr,
+        channel::{Channel, ChannelPtr},
         hosts::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_publisher::MessageSubscription,
@@ -218,8 +218,7 @@ impl ProtocolAddress {
             "[START] channel address={}", self.channel.address(),
         );
 
-        let type_id = self.channel.session_type_id();
-        if type_id != SESSION_OUTBOUND {
+        if self.channel.session_type_id() != SESSION_OUTBOUND {
             debug!(
                 target: "net::protocol_address::send_my_addrs",
                 "Not an outbound session. Stopping",
@@ -227,7 +226,16 @@ impl ProtocolAddress {
             return Ok(())
         }
 
-        let external_addrs = self.settings.read().await.external_addrs.clone();
+        let settings = self.settings.read().await;
+        let mut external_addrs = settings.external_addrs.clone();
+
+        // Auto-advertise the node's inbound address using the address that
+        // was sent to use by the node in the version exchange.
+        for inbound in settings.inbound_addrs.clone() {
+            let Some(inbound) = Self::patch_inbound(&self.channel, inbound) else { continue };
+            external_addrs.push(inbound);
+        }
+        drop(settings);
 
         if external_addrs.is_empty() {
             debug!(
@@ -258,6 +266,48 @@ impl ProtocolAddress {
         );
 
         Ok(())
+    }
+
+    /// If the inbound is an Ipv6 address, then replace it with the ip address reported to
+    /// us by the version exchange.
+    ///
+    /// Also used by ProtocolSeed.
+    pub(super) fn patch_inbound(channel: &Channel, mut inbound: Url) -> Option<Url> {
+        if inbound.scheme() != "tcp" && inbound.scheme() != "tcp+tls" {
+            return None
+        }
+
+        let inbound_host = inbound.host()?;
+        // Is it an Ipv6 listener?
+        match inbound_host {
+            Host::Ipv6(addr) => {
+                // We are only interested if it's localhost
+                if !addr.is_loopback() {
+                    return None
+                }
+            }
+            _ => return None,
+        }
+
+        // We should loop over the endpoints from the listeners
+        // But inbound session should be changed so the acceptors and listeners
+        // are accessible.
+        /*
+        let Some(mut port) = inbound.port() else { continue };
+        if port == 0 {
+        }
+        */
+
+        // Get our auto-discovered IP
+        let version = channel.get_version();
+        let discover_host = version.connect_recv_addr.host()?;
+        // Check the reported address is Ipv6
+        let _ = match discover_host {
+            Host::Ipv6(_) => {}
+            _ => return None,
+        };
+        inbound.set_host(version.connect_recv_addr.host_str()).ok()?;
+        Some(inbound)
     }
 }
 

@@ -3,11 +3,10 @@ verbose = 2
 
 [net]
 hostlist = "example/seed.tsv"
-inbound=["tcp://127.0.0.1:10200"]
-external_addrs=["tcp://127.0.0.1:10200"]
+inbound=["tcp://[::]:10200"]
 allowed_transports = ["tcp"]
 seeds=[]
-outbound_connections = 5
+# no outbounds for seed node
 magic_bytes=[127, 64, 12, 201]
 localnet = true
 

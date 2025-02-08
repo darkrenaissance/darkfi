@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
-
 use async_trait::async_trait;
 use log::debug;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use super::{
     super::{
@@ -31,6 +30,7 @@ use super::{
         p2p::P2pPtr,
         settings::Settings,
     },
+    protocol_address::ProtocolAddress,
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
 use crate::Result;
@@ -63,7 +63,18 @@ impl ProtocolSeed {
             "[START] channel address={}", self.channel.address(),
         );
 
-        let external_addrs = self.settings.read().await.external_addrs.clone();
+        let settings = self.settings.read().await;
+        let mut external_addrs = settings.external_addrs.clone();
+
+        // Auto-advertise the node's inbound address using the address that
+        // was sent to use by the node in the version exchange.
+        for inbound in settings.inbound_addrs.clone() {
+            let Some(inbound) = ProtocolAddress::patch_inbound(&self.channel, inbound) else {
+                continue
+            };
+            external_addrs.push(inbound);
+        }
+        drop(settings);
 
         if external_addrs.is_empty() {
             debug!(

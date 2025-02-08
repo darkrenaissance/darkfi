@@ -32,7 +32,7 @@ use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
-    lock::Mutex,
+    lock::{Mutex as AsyncMutex, OnceCell},
     Executor,
 };
 use url::Url;
@@ -77,9 +77,9 @@ impl ChannelInfo {
 /// Async channel for communication between nodes.
 pub struct Channel {
     /// The reading half of the transport stream
-    reader: Mutex<ReadHalf<Box<dyn PtStream>>>,
+    reader: AsyncMutex<ReadHalf<Box<dyn PtStream>>>,
     /// The writing half of the transport stream
-    writer: Mutex<WriteHalf<Box<dyn PtStream>>>,
+    writer: AsyncMutex<WriteHalf<Box<dyn PtStream>>>,
     /// The message subsystem instance for this channel
     message_subsystem: MessageSubsystem,
     /// Publisher listening for stop signal for closing this channel
@@ -93,7 +93,7 @@ pub struct Channel {
     /// The version message of the node we are connected to.
     /// Some if the version exchange has already occurred, None
     /// otherwise.
-    pub version: Mutex<Option<Arc<VersionMessage>>>,
+    pub version: OnceCell<Arc<VersionMessage>>,
     /// Channel debug info
     pub info: ChannelInfo,
 }
@@ -109,13 +109,12 @@ impl Channel {
         session: SessionWeakPtr,
     ) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
-        let reader = Mutex::new(reader);
-        let writer = Mutex::new(writer);
+        let reader = AsyncMutex::new(reader);
+        let writer = AsyncMutex::new(writer);
 
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let version = Mutex::new(None);
         let start_time = UNIX_EPOCH.elapsed().unwrap().as_secs();
         let info = ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time);
 
@@ -127,7 +126,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
             session,
-            version,
+            version: OnceCell::new(),
             info,
         })
     }
@@ -487,7 +486,11 @@ impl Channel {
     /// Set the VersionMessage of the node this channel is connected
     /// to. Called on receiving a version message in `ProtocolVersion`.
     pub(crate) async fn set_version(&self, version: Arc<VersionMessage>) {
-        *self.version.lock().await = Some(version);
+        self.version.set(version).await.unwrap();
+    }
+    /// Should only be called after the version exchange has been completed.
+    pub fn get_version(&self) -> Arc<VersionMessage> {
+        self.version.get().unwrap().clone()
     }
 
     /// Returns the inner [`MessageSubsystem`] reference
