@@ -39,7 +39,7 @@ use url::Url;
 
 use super::{
     dnet::{self, dnetev, DnetEvent},
-    hosts::HostColor,
+    hosts::{HostColor, HostsPtr},
     message,
     message::{SerializedMessage, VersionMessage},
     message_publisher::{MessageSubscription, MessageSubsystem},
@@ -507,8 +507,13 @@ impl Channel {
         session.type_id()
     }
 
-    pub(in crate::net) fn p2p(&self) -> P2pPtr {
+    #[inline]
+    pub fn p2p(&self) -> P2pPtr {
         self.session().p2p()
+    }
+    #[inline]
+    pub fn hosts(&self) -> HostsPtr {
+        self.p2p().hosts()
     }
 
     fn is_eof_error(err: &Error) -> bool {

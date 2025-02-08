@@ -20,11 +20,10 @@ use async_trait::async_trait;
 use log::debug;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
 use std::{sync::Arc, time::UNIX_EPOCH};
-use url::{Host, Url};
 
 use super::{
     super::{
-        channel::{Channel, ChannelPtr},
+        channel::ChannelPtr,
         hosts::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_publisher::MessageSubscription,
@@ -226,11 +225,7 @@ impl ProtocolAddress {
             return Ok(())
         }
 
-        let mut external_addrs = self.settings.read().await.external_addrs.clone();
-
-        for external_addr in &mut external_addrs {
-            let _ = Self::patch_external_addr(&self.channel, external_addr);
-        }
+        let external_addrs = self.channel.hosts().external_addrs().await;
 
         if external_addrs.is_empty() {
             debug!(
@@ -261,46 +256,6 @@ impl ProtocolAddress {
         );
 
         Ok(())
-    }
-
-    /// If the external_addr is set to `[::]` (unspecified), then replace it with the
-    /// ip address reported to us by the version exchange.
-    ///
-    /// Also used by ProtocolSeed.
-    pub(super) fn patch_external_addr(channel: &Channel, external_addr: &mut Url) -> Option<()> {
-        if external_addr.scheme() != "tcp" && external_addr.scheme() != "tcp+tls" {
-            return None
-        }
-
-        let external_addr_host = external_addr.host()?;
-        // Is it an Ipv6 listener?
-        match external_addr_host {
-            Host::Ipv6(addr) => {
-                // We are only interested if it's [::]
-                if !addr.is_unspecified() {
-                    return None
-                }
-            }
-            _ => return None,
-        }
-
-        // We should loop over the endpoints from the listeners
-        // But inbound session should be changed so the acceptors and listeners
-        // are accessible.
-        /*
-        let Some(mut port) = inbound.port() else { continue };
-        if port == 0 {
-        }
-        */
-
-        // Get our auto-discovered IP
-        let version = channel.get_version();
-        // Check if the returned value in the version exchange is ipv6.
-        // Maybe this outbound is using another transport or ipv4.
-        let _ = version.get_ipv6_addr()?;
-
-        external_addr.set_host(version.connect_recv_addr.host_str()).ok()?;
-        Some(())
     }
 }
 

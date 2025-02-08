@@ -20,10 +20,10 @@ use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     fmt, fs,
     fs::File,
-    net::Ipv6Addr,
+    net::{IpAddr, Ipv6Addr},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex as SyncMutex, RwLock,
@@ -41,7 +41,9 @@ use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
         file::{load_file, save_file},
+        most_frequent_or_any,
         path::expand_path,
+        ringbuffer::RingBuffer,
     },
     Error, Result,
 };
@@ -873,7 +875,7 @@ pub struct Hosts {
     pub(in crate::net) ipv6_available: AtomicBool,
 
     /// Auto self discovered addresses. Used for filtering self connections.
-    auto_self_addrs: SyncMutex<VecDeque<Ipv6Addr>>,
+    auto_self_addrs: SyncMutex<RingBuffer<Ipv6Addr, 20>>,
 
     /// Pointer to configured P2P settings
     settings: Arc<AsyncRwLock<Settings>>,
@@ -890,7 +892,7 @@ impl Hosts {
             disconnect_publisher: Publisher::new(),
             last_connection: SyncMutex::new(Instant::now()),
             ipv6_available: AtomicBool::new(true),
-            auto_self_addrs: SyncMutex::new(VecDeque::new()),
+            auto_self_addrs: SyncMutex::new(RingBuffer::new()),
             settings,
         })
     }
@@ -987,7 +989,7 @@ impl Hosts {
         trace!(target: "net::hosts::check_addrs()", "[START]");
 
         let seeds = self.settings.read().await.seeds.clone();
-        let external_addrs = self.settings.read().await.external_addrs.clone();
+        let external_addrs = self.external_addrs().await;
 
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
@@ -1272,7 +1274,7 @@ impl Hosts {
 
             if !settings.localnet {
                 // Our own external addresses should never enter the hosts set.
-                for ext in &settings.external_addrs {
+                for ext in self.external_addrs().await {
                     if host == ext.host().unwrap() {
                         debug!(
                             target: "net::hosts::filter_addresses",
@@ -1280,22 +1282,6 @@ impl Hosts {
                         );
                         continue 'addr_loop
                     }
-                }
-
-                // Cloning this vec means a linear scan and copy here, so just doing a linear
-                // scan here is faster.
-                let auto_self_addrs = self.auto_self_addrs.lock().unwrap();
-                match host {
-                    Host::Ipv6(host_addr) => {
-                        if auto_self_addrs.contains(&host_addr) {
-                            debug!(
-                                target: "net::hosts::filter_addresses",
-                                "[{}] is our own auto discovered addr. Skipping", addr_,
-                            );
-                            continue 'addr_loop
-                        }
-                    }
-                    _ => {}
                 }
             } else {
                 // On localnet, make sure ours ports don't enter the host set.
@@ -1497,13 +1483,63 @@ impl Hosts {
         Ok(())
     }
 
+    /// Upon version exchange, the node reports our external network address to us.
+    /// Accumulate them here in a ring buffer.
     pub(in crate::net) fn add_auto_addr(&self, addr: Ipv6Addr) {
         let mut auto_addrs = self.auto_self_addrs.lock().unwrap();
-        auto_addrs.push_back(addr);
-        // This is a ringbuf so remove front elements
-        while auto_addrs.len() > 20 {
-            auto_addrs.pop_front().unwrap();
+        auto_addrs.push(addr);
+    }
+
+    /// Pick the most frequent occuring reported external address from other nodes as
+    /// our auto ipv6 address.
+    pub fn guess_auto_addr(&self) -> Option<Ipv6Addr> {
+        let mut auto_addrs = self.auto_self_addrs.lock().unwrap();
+        let items = auto_addrs.make_contiguous();
+        most_frequent_or_any(items)
+    }
+
+    /// The external_addrs is set by the user but we need the actual addresses.
+    /// If the external_addr is set to `[::]` (unspecified), then replace it with the
+    /// the best guess from `guess_auto_addr()`.
+    /// Also if the port is 0, we lookup the port from the `InboundSession`.
+    pub async fn external_addrs(&self) -> Vec<Url> {
+        let mut external_addrs = self.settings.read().await.external_addrs.clone();
+        for ext_addr in &mut external_addrs {
+            let _ = self.patch_external_addr(ext_addr);
         }
+        external_addrs
+    }
+
+    /// Make a best effort guess from the most frequently reported ipv6 auto address
+    /// to set any unspecified ipv6 addrs: `external_addrs = ["tcp://[::]:1365"]`.
+    fn patch_external_addr(&self, ext_addr: &mut Url) -> Option<()> {
+        if ext_addr.scheme() != "tcp" && ext_addr.scheme() != "tcp+tls" {
+            return None
+        }
+
+        let ext_host = ext_addr.host()?;
+        // Is it an Ipv6 listener?
+        let Host::Ipv6(ext_ip) = ext_host else { return None };
+        // We are only interested if it's [::]
+        if !ext_ip.is_unspecified() {
+            return None
+        }
+
+        // We should loop over the endpoints from the listeners
+        // But inbound session should be changed so the acceptors and listeners
+        // are accessible.
+        /*
+        let Some(mut port) = inbound.port() else { continue };
+        if port == 0 {
+        }
+        */
+
+        // Get our auto-discovered IP
+        let auto_addr = self.guess_auto_addr()?;
+
+        // Do the actual replacement of the host part of the URL
+        ext_addr.set_ip_host(IpAddr::V6(auto_addr)).ok()?;
+        Some(())
     }
 }
 

@@ -30,7 +30,6 @@ use super::{
         p2p::P2pPtr,
         settings::Settings,
     },
-    protocol_address::ProtocolAddress,
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
 use crate::Result;
@@ -63,11 +62,7 @@ impl ProtocolSeed {
             "[START] channel address={}", self.channel.address(),
         );
 
-        let mut external_addrs = self.settings.read().await.external_addrs.clone();
-
-        for external_addr in &mut external_addrs {
-            let _ = ProtocolAddress::patch_external_addr(&self.channel, external_addr);
-        }
+        let external_addrs = self.channel.hosts().external_addrs().await;
 
         if external_addrs.is_empty() {
             debug!(
