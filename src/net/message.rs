@@ -19,7 +19,8 @@
 use darkfi_serial::{
     async_trait, serialize_async, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable,
 };
-use url::Url;
+use std::net::Ipv6Addr;
+use url::{Host, Url};
 
 /// Generic message template.
 pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
@@ -105,6 +106,17 @@ pub struct VersionMessage {
     pub features: Vec<(String, u32)>,
 }
 impl_p2p_message!(VersionMessage, "version");
+
+impl VersionMessage {
+    pub(in crate::net) fn get_ipv6_addr(&self) -> Option<Ipv6Addr> {
+        let host = self.connect_recv_addr.host()?;
+        // Check the reported address is Ipv6
+        match host {
+            Host::Ipv6(addr) => Some(addr),
+            _ => None,
+        }
+    }
+}
 
 /// Sends version information to inbound connection.
 /// Response to `VersionMessage`.

@@ -228,10 +228,8 @@ impl ProtocolAddress {
 
         let mut external_addrs = self.settings.read().await.external_addrs.clone();
 
-        // Auto-advertise the node's inbound address using the address that
-        // was sent to use by the node in the version exchange.
         for external_addr in &mut external_addrs {
-            let _ = Self::patch_inbound(&self.channel, external_addr);
+            let _ = Self::patch_external_addr(&self.channel, external_addr);
         }
 
         if external_addrs.is_empty() {
@@ -265,21 +263,21 @@ impl ProtocolAddress {
         Ok(())
     }
 
-    /// If the inbound is an Ipv6 address, then replace it with the ip address reported to
-    /// us by the version exchange.
+    /// If the external_addr is set to `[::]` (unspecified), then replace it with the
+    /// ip address reported to us by the version exchange.
     ///
     /// Also used by ProtocolSeed.
-    pub(super) fn patch_inbound(channel: &Channel, inbound: &mut Url) -> Option<()> {
-        if inbound.scheme() != "tcp" && inbound.scheme() != "tcp+tls" {
+    pub(super) fn patch_external_addr(channel: &Channel, external_addr: &mut Url) -> Option<()> {
+        if external_addr.scheme() != "tcp" && external_addr.scheme() != "tcp+tls" {
             return None
         }
 
-        let inbound_host = inbound.host()?;
+        let external_addr_host = external_addr.host()?;
         // Is it an Ipv6 listener?
-        match inbound_host {
+        match external_addr_host {
             Host::Ipv6(addr) => {
-                // We are only interested if it's localhost
-                if !addr.is_loopback() {
+                // We are only interested if it's [::]
+                if !addr.is_unspecified() {
                     return None
                 }
             }
@@ -297,13 +295,11 @@ impl ProtocolAddress {
 
         // Get our auto-discovered IP
         let version = channel.get_version();
-        let discover_host = version.connect_recv_addr.host()?;
-        // Check the reported address is Ipv6
-        match discover_host {
-            Host::Ipv6(_) => {}
-            _ => return None,
-        };
-        inbound.set_host(version.connect_recv_addr.host_str()).ok()?;
+        // Check if the returned value in the version exchange is ipv6.
+        // Maybe this outbound is using another transport or ipv4.
+        let _ = version.get_ipv6_addr()?;
+
+        external_addr.set_host(version.connect_recv_addr.host_str()).ok()?;
         Some(())
     }
 }

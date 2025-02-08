@@ -65,10 +65,8 @@ impl ProtocolSeed {
 
         let mut external_addrs = self.settings.read().await.external_addrs.clone();
 
-        // Auto-advertise the node's inbound address using the address that
-        // was sent to use by the node in the version exchange.
         for external_addr in &mut external_addrs {
-            let _ = ProtocolAddress::patch_inbound(&self.channel, external_addr);
+            let _ = ProtocolAddress::patch_external_addr(&self.channel, external_addr);
         }
 
         if external_addrs.is_empty() {

@@ -16,21 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashMap,
-    fmt, fs,
-    fs::File,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
-    },
-    time::{Instant, UNIX_EPOCH},
-};
-
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
-use url::Url;
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt, fs,
+    fs::File,
+    net::Ipv6Addr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as SyncMutex, RwLock,
+    },
+    time::{Instant, UNIX_EPOCH},
+};
+use url::{Host, Url};
 
 use super::{
     session::{SESSION_REFINE, SESSION_SEED},
@@ -97,7 +97,7 @@ pub type HostsPtr = Arc<Hosts>;
 /// Keeps track of hosts and their current state. Prevents race conditions
 /// where multiple threads are simultaneously trying to change the state of
 /// a given host.
-pub(in crate::net) type HostRegistry = Mutex<HashMap<Url, HostState>>;
+pub(in crate::net) type HostRegistry = SyncMutex<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
 /// Refine, Move, Connect, Suspend or Connected or Free.
@@ -867,10 +867,13 @@ pub struct Hosts {
     pub(in crate::net) disconnect_publisher: PublisherPtr<Error>,
 
     /// Keeps track of the last time a connection was made.
-    pub(in crate::net) last_connection: Mutex<Instant>,
+    pub(in crate::net) last_connection: SyncMutex<Instant>,
 
     /// Marker for IPv6 availability
     pub(in crate::net) ipv6_available: AtomicBool,
+
+    /// Auto self discovered addresses. Used for filtering self connections.
+    auto_self_addrs: SyncMutex<VecDeque<Ipv6Addr>>,
 
     /// Pointer to configured P2P settings
     settings: Arc<AsyncRwLock<Settings>>,
@@ -880,13 +883,14 @@ impl Hosts {
     /// Create a new hosts list
     pub(in crate::net) fn new(settings: Arc<AsyncRwLock<Settings>>) -> HostsPtr {
         Arc::new(Self {
-            registry: Mutex::new(HashMap::new()),
+            registry: SyncMutex::new(HashMap::new()),
             container: HostContainer::new(),
             store_publisher: Publisher::new(),
             channel_publisher: Publisher::new(),
             disconnect_publisher: Publisher::new(),
-            last_connection: Mutex::new(Instant::now()),
+            last_connection: SyncMutex::new(Instant::now()),
             ipv6_available: AtomicBool::new(true),
+            auto_self_addrs: SyncMutex::new(VecDeque::new()),
             settings,
         })
     }
@@ -1277,6 +1281,22 @@ impl Hosts {
                         continue 'addr_loop
                     }
                 }
+
+                // Cloning this vec means a linear scan and copy here, so just doing a linear
+                // scan here is faster.
+                let auto_self_addrs = self.auto_self_addrs.lock().unwrap();
+                match host {
+                    Host::Ipv6(host_addr) => {
+                        if auto_self_addrs.contains(&host_addr) {
+                            debug!(
+                                target: "net::hosts::filter_addresses",
+                                "[{}] is our own auto discovered addr. Skipping", addr_,
+                            );
+                            continue 'addr_loop
+                        }
+                    }
+                    _ => {}
+                }
             } else {
                 // On localnet, make sure ours ports don't enter the host set.
                 for ext in &settings.external_addrs {
@@ -1475,6 +1495,15 @@ impl Hosts {
         }
 
         Ok(())
+    }
+
+    pub(in crate::net) fn add_auto_addr(&self, addr: Ipv6Addr) {
+        let mut auto_addrs = self.auto_self_addrs.lock().unwrap();
+        auto_addrs.push_back(addr);
+        // This is a ringbuf so remove front elements
+        while auto_addrs.len() > 20 {
+            auto_addrs.pop_front().unwrap();
+        }
     }
 }
 

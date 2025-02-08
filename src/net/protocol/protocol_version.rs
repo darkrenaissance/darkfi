@@ -212,6 +212,10 @@ impl ProtocolVersion {
 
         // Receive version message
         let version = self.version_sub.receive().await?;
+        if let Some(ipv6_addr) = version.get_ipv6_addr() {
+            let hosts = self.channel.p2p().hosts();
+            hosts.add_auto_addr(ipv6_addr);
+        }
         self.channel.set_version(version).await;
 
         // Send verack
