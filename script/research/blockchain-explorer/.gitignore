@@ -2,3 +2,4 @@
 Cargo.lock
 rustfmt.toml
 *_db
+/native_contracts_src
