@@ -181,17 +181,10 @@ impl TcpListener {
         socket.set_nonblocking(true)?;
 
         let listener = std::net::TcpListener::from(socket);
-        let local_addr = listener.local_addr()?;
+        let local_port = listener.local_addr()?.port();
         let listener = smol::Async::<std::net::TcpListener>::try_from(listener)?;
 
-        match local_addr {
-            // Ignore ipv4 addrs since they're behind NAT
-            SocketAddr::V4(_) => {}
-            SocketAddr::V6(addr) => {
-                let port = addr.port();
-                self.port.set(port).await.expect("fatal port already set for TcpListener");
-            }
-        }
+        self.port.set(local_port).await.expect("fatal port already set for TcpListener");
 
         Ok(SmolTcpListener::from(listener))
     }
