@@ -190,7 +190,7 @@ impl PoWModule {
         let (cut_begin, cut_end) = if length <= RETAINED {
             (0, length)
         } else {
-            let cut_begin = (length - RETAINED + 1) / 2;
+            let cut_begin = (length - RETAINED).div_ceil(2);
             (cut_begin, cut_begin + RETAINED)
         };
         // Sanity check

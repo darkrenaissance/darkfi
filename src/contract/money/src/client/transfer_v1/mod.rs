@@ -73,15 +73,15 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>
 /// * `coins`: Set of `OwnCoin` we're given to use in this builder
 /// * `tree`: Merkle tree of coins used to create inclusion proofs
 /// * `output_spend_hook: Optional contract spend hook to use in
-///    the output, not applicable to the change
+///   the output, not applicable to the change
 /// * `output_user_data: Optional user data to use in the output,
-///    not applicable to the change
+///   not applicable to the change
 /// * `mint_zkbin`: `Mint_V1` zkas circuit ZkBinary
 /// * `mint_pk`: Proving key for the `Mint_V1` zk circuit
 /// * `burn_zkbin`: `Burn_V1` zkas circuit ZkBinary
 /// * `burn_pk`: Proving key for the `Burn_V1` zk circuit
 /// * `half_split`: Flag indicating to split the output coin into
-///    two equal halves.
+///   two equal halves.
 ///
 /// Returns a tuple of:
 ///

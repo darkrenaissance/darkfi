@@ -270,7 +270,7 @@ impl Client {
                         let (event, blob) = (r.clone(), vec![0,1,2]);
                         let (proof, public_inputs): (Proof, Vec<pallas::Base>) = match deserialize_async(&blob).await {
                             Ok(v) => v,
-                            Err(e) => {
+                            Err(_) => {
                                 // TODO: FIXME: This logic should be better written.
                                 // Right now we don't enforce RLN so we can just fall-through.
                                 //error!("[IRC CLIENT] Failed deserializing event ephemeral data: {}", e);

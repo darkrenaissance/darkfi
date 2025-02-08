@@ -299,7 +299,7 @@ impl ProtocolAddress {
         let version = channel.get_version();
         let discover_host = version.connect_recv_addr.host()?;
         // Check the reported address is Ipv6
-        let _ = match discover_host {
+        match discover_host {
             Host::Ipv6(_) => {}
             _ => return None,
         };

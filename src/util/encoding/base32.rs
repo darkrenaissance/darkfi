@@ -26,7 +26,7 @@ const ENCODE_STD: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /// Encode a byte slice with the given base32 alphabet into a base32 string.
 pub fn encode(padding: bool, data: &[u8]) -> String {
-    let mut ret = Vec::with_capacity((data.len() + 3) / 4 * 5);
+    let mut ret = Vec::with_capacity(data.len().div_ceil(4) * 5);
 
     for chunk in data.chunks(5) {
         let buf = {
@@ -49,7 +49,7 @@ pub fn encode(padding: bool, data: &[u8]) -> String {
 
     if data.len() % 5 != 0 {
         let len = ret.len();
-        let num_extra = 8 - (data.len() % 5 * 8 + 4) / 5;
+        let num_extra = 8 - (data.len() % 5 * 8).div_ceil(5);
         if padding {
             for i in 1..num_extra + 1 {
                 ret[len - i] = b'=';
@@ -85,7 +85,7 @@ pub fn decode(data: &str) -> Option<Vec<u8>> {
     }
 
     let output_length = unpadded_data_len * 5 / 8;
-    let mut ret = Vec::with_capacity((output_length + 4) / 5 * 5);
+    let mut ret = Vec::with_capacity(output_length.div_ceil(5) * 5);
 
     for chunk in data.chunks(8) {
         let buf = {
