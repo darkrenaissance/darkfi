@@ -12,12 +12,12 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 darkfi = {path = "../../", features = ["toml", "async-daemonize", "rpc"]}
 
 # Misc
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 futures = "0.3.31"
 log = "0.4.25"
 semver = "1.0.25"
 tinyjson = "2.5.1"
-toml = "0.8.19"
+toml = "0.8.20"
 url = "2.5.4"
 
 # Daemon

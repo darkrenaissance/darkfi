@@ -15,7 +15,7 @@ miniquad = { git = "https://github.com/not-fl3/miniquad" }
 #harfbuzz-sys = "0.6.1"
 #harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }
 harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = ["bundled"] }
-freetype-rs = { version = "0.37.0", features = ["bundled"] }
+freetype-rs = { version = "0.38.0", features = ["bundled"] }
 
 image = "0.25.5"
 log = { version = "0.4.25", features = ["release_max_level_info"] }
@@ -42,7 +42,7 @@ url = "2.5.4"
 semver = "1.0.25"
 chrono = "0.4.39"
 async-gen = "0.2.3"
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 blake3 = "1.5.5"
 simplelog = "0.12.2"
 # For log files

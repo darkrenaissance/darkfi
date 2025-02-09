@@ -18,7 +18,7 @@ darkfi-serial = "0.4.2"
 log = "0.4.25"
 
 # JSON-RPC
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 tinyjson = "2.5.1"
 url = "2.5.4"
 

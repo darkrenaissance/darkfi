@@ -23,10 +23,10 @@ log = "0.4.25"
 num-bigint = "0.4.6"
 rand = "0.8.5"
 sled-overlay = "0.1.6"
-toml = "0.8.19"
+toml = "0.8.20"
 
 # JSON-RPC
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 tinyjson = "2.5.1"
 url = "2.5.4"
 
