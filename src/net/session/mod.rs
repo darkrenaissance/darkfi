@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, trace};
+use log::{debug, error, trace};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -79,7 +79,10 @@ pub async fn remove_sub_on_stop(
         );
 
         let last_seen = hosts.fetch_last_seen(addr).unwrap();
-        hosts.move_host(addr, last_seen, HostColor::Grey).unwrap();
+        if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey) {
+            error!(target: "net::session::remove_sub_on_stop()",
+            "Failed to move host {} to Greylist! Err={}", addr.clone(), e);
+        }
     }
 
     // For all sessions that are not refine sessions, mark this addr as
@@ -189,10 +192,8 @@ pub trait Session: Sync {
                     );
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    self.p2p()
-                        .hosts()
-                        .move_host(channel.address(), last_seen, HostColor::Gold)
-                        .unwrap();
+
+                    self.p2p().hosts().move_host(channel.address(), last_seen, HostColor::Gold)?;
                 }
 
                 // Attempt to add channel to registry

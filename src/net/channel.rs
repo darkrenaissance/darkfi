@@ -455,7 +455,14 @@ impl Channel {
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
         info!(target: "net::channel::ban()", "Blacklisting peer={}", peer);
-        self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).unwrap();
+        match self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black) {
+            Ok(()) => {
+                info!(target: "net::channel::ban()", "Peer={} blacklisted successfully", peer);
+            }
+            Err(e) => {
+                warn!(target: "net::channel::ban()", "Could not blacklisted peer={}, err={}", peer, e);
+            }
+        }
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
     }

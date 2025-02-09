@@ -1404,7 +1404,7 @@ impl Hosts {
         Ok(())
     }
 
-    /// A single atomic function for moving hosts between hostlists. Called on the following occasions:
+    /// A single function for moving hosts between hostlists. Called on the following occasions:
     ///
     /// * When we cannot connect to a peer: move to grey, remove from white and gold.
     /// * When a peer disconnects from us: move to grey, remove from white and gold.
@@ -1426,58 +1426,70 @@ impl Hosts {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} destination={:?}",
                addr, destination);
 
-        // This should never panic. Failure indicates a misuse of the HostState API.
-        self.try_register(addr.clone(), HostState::Move).unwrap();
+        match self.try_register(addr.clone(), HostState::Move) {
+            Ok(new_state) => {
+                debug!(target: "net::hosts::move_host()", "Moving addr={} destination={:?}, state={:?}",
+                       addr, destination, new_state);
 
-        match destination {
-            // Downgrade to grey. Remove from white and gold.
-            HostColor::Grey => {
-                self.container.remove_if_exists(HostColor::Gold, addr);
-                self.container.remove_if_exists(HostColor::White, addr);
+                match destination {
+                    // Downgrade to grey. Remove from white and gold.
+                    HostColor::Grey => {
+                        self.container.remove_if_exists(HostColor::Gold, addr);
+                        self.container.remove_if_exists(HostColor::White, addr);
 
-                self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen);
-                self.container.sort_by_last_seen(HostColor::Grey as usize);
-                self.container.resize(HostColor::Grey);
-            }
-
-            // Remove from Greylist, add to Whitelist. Called by the Refinery.
-            HostColor::White => {
-                self.container.remove_if_exists(HostColor::Grey, addr);
-
-                self.container.store_or_update(HostColor::White, addr.clone(), last_seen);
-                self.container.sort_by_last_seen(HostColor::White as usize);
-                self.container.resize(HostColor::White);
-            }
-
-            // Upgrade to gold. Remove from white or grey.
-            HostColor::Gold => {
-                self.container.remove_if_exists(HostColor::Grey, addr);
-                self.container.remove_if_exists(HostColor::White, addr);
-
-                self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen);
-                self.container.sort_by_last_seen(HostColor::Gold as usize);
-            }
-
-            // Move to black. Remove from all other lists.
-            HostColor::Black => {
-                // We ignore UNIX sockets here so we will just work
-                // with stuff that has host_str().
-                if addr.host_str().is_some() {
-                    // Localhost connections should never enter the blacklist
-                    // This however allows any Tor and Nym connections.
-                    if self.is_local_host(addr) {
-                        return Ok(());
+                        self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen);
+                        self.container.sort_by_last_seen(HostColor::Grey as usize);
+                        self.container.resize(HostColor::Grey);
                     }
 
-                    self.container.remove_if_exists(HostColor::Grey, addr);
-                    self.container.remove_if_exists(HostColor::White, addr);
-                    self.container.remove_if_exists(HostColor::Gold, addr);
+                    // Remove from Greylist, add to Whitelist. Called by the Refinery.
+                    HostColor::White => {
+                        self.container.remove_if_exists(HostColor::Grey, addr);
 
-                    self.container.store_or_update(HostColor::Black, addr.clone(), last_seen);
+                        self.container.store_or_update(HostColor::White, addr.clone(), last_seen);
+                        self.container.sort_by_last_seen(HostColor::White as usize);
+                        self.container.resize(HostColor::White);
+                    }
+
+                    // Upgrade to gold. Remove from white or grey.
+                    HostColor::Gold => {
+                        self.container.remove_if_exists(HostColor::Grey, addr);
+                        self.container.remove_if_exists(HostColor::White, addr);
+
+                        self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen);
+                        self.container.sort_by_last_seen(HostColor::Gold as usize);
+                    }
+
+                    // Move to black. Remove from all other lists.
+                    HostColor::Black => {
+                        // We ignore UNIX sockets here so we will just work
+                        // with stuff that has host_str().
+                        if addr.host_str().is_some() {
+                            // Localhost connections should never enter the blacklist
+                            // This however allows any Tor and Nym connections.
+                            if self.is_local_host(addr) {
+                                return Ok(());
+                            }
+
+                            self.container.remove_if_exists(HostColor::Grey, addr);
+                            self.container.remove_if_exists(HostColor::White, addr);
+                            self.container.remove_if_exists(HostColor::Gold, addr);
+
+                            self.container.store_or_update(
+                                HostColor::Black,
+                                addr.clone(),
+                                last_seen,
+                            );
+                        }
+                    }
+
+                    HostColor::Dark => return Err(Error::InvalidHostColor),
                 }
             }
-
-            HostColor::Dark => return Err(Error::InvalidHostColor),
+            Err(e) => {
+                warn!(target: "net::hosts::move_host", "Cannot move host={:?}, err={:?}",
+                    addr.clone(), e);
+            }
         }
 
         Ok(())
