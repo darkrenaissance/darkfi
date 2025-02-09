@@ -328,6 +328,9 @@ impl Slot {
                 }
             };
 
+            // At this point we've managed to connect.
+            let stop_sub = channel.subscribe_stop().await?;
+
             info!(
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Outbound slot #{} connected [{}]",
@@ -340,9 +343,6 @@ impl Slot {
                 channel_id: channel.info.id
             });
 
-            // At this point we've managed to connect.
-
-            let stop_sub = channel.subscribe_stop().await?;
             // Setup new channel
             if let Err(err) =
                 self.session().register_channel(channel.clone(), self.p2p().executor()).await
