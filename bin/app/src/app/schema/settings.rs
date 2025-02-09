@@ -29,14 +29,13 @@ use crate::{
     },
     expr::{self, Compiler},
     prop::{
-        PropertyAtomicGuard, PropertyFloat32, PropertyStr, Property, PropertyValue, Role,
+        Property, PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role
     },
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{
-        Button, EditBox, Layer, ShapeVertex, Text, VectorArt,
-        VectorShape,
-    },
+        Button, EditBox, Layer, OnModify, ShapeVertex, Text, VectorArt, VectorShape
+    }, ExecutorPtr,
 };
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
@@ -121,11 +120,11 @@ impl Setting {
     }
 }
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     let mut cc = Compiler::new();
     cc.add_const_f32("BORDER_RIGHT_SCALE", BORDER_RIGHT_SCALE);
     cc.add_const_f32("X_RATIO", 1./3.);
-    let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
+    let window_scale = PropertyFloat32::wrap(&app.sg_root.clone().lookup_node("/setting/scale").unwrap(), Role::Internal, "value", 0).unwrap();
     let atom = &mut PropertyAtomicGuard::new();
 
     // Main view
@@ -246,6 +245,19 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Create a BTreeMap to store settings
     let mut settings_map: BTreeMap<String, Arc<Setting>> = BTreeMap::new();
 
+    // Get the app settings
+    let app_setting_root = app.sg_root.clone().lookup_node("/setting").unwrap();
+    for setting in app_setting_root.get_children().iter() {
+        let name = ["app", &setting.name.clone()].join(".");
+        settings_map.insert(
+            name.clone(),
+            Arc::new(Setting {
+                name,
+                node: setting.clone(),
+            }),
+        );
+    }
+
     // Get the settings from all plugins
     let sg_root_children = app.sg_root.clone().get_children();
     let plugin_node = sg_root_children.iter().find(|node| node.name == "plugin");
@@ -255,7 +267,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             let setting_root = plugin_children.iter().find(|node| node.name == "setting");
             if let Some(sroot) = setting_root {
                 for setting in sroot.get_children().iter() {
-                    let name = vec![plugin.name.clone(), setting.name.clone()].join(".");
+                    let name = [plugin.name.clone(), setting.name.clone()].join(".");
                     settings_map.insert(
                         name.clone(),
                         Arc::new(Setting {

@@ -184,7 +184,7 @@ impl DarkIrc {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
-        let mut setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
+        let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
         node_ref.clone().link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
@@ -236,23 +236,10 @@ impl DarkIrc {
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
-        let node_outbound_connect_timeout = settings.add_setting("net.outbound_connect_timeout", PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32)).unwrap();
-        let node_channel_handshake_timeout = settings.add_setting("net.channel_handshake_timeout", PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32)).unwrap();
-        let node_channel_heartbeat_interval = settings.add_setting("net.channel_heartbeat_interval", PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32)).unwrap();
-        let node_outbound_peer_discovery_cooloff_time = settings.add_setting("net.outbound_peer_discovery_cooloff_time", PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32)).unwrap();
-        let node_slot_preference_strict = settings.add_setting("net.slot_preference_strict", PropertyValue::Bool(p2p_settings.slot_preference_strict)).unwrap();
-        let node_transport_mixing = settings.add_setting("net.transport_mixing", PropertyValue::Bool(p2p_settings.transport_mixing)).unwrap();
-        let node_localnet = settings.add_setting("net.localnet", PropertyValue::Bool(p2p_settings.localnet)).unwrap();
+        settings.add_p2p_settings(&p2p_settings);
 
         settings.load_settings();
-
-        p2p_settings.outbound_connect_timeout = node_outbound_connect_timeout.get_property_u32("value").unwrap() as u64;
-        p2p_settings.channel_handshake_timeout = node_channel_handshake_timeout.get_property_u32("value").unwrap() as u64;
-        p2p_settings.channel_heartbeat_interval = node_channel_heartbeat_interval.get_property_u32("value").unwrap() as u64;
-        p2p_settings.outbound_peer_discovery_cooloff_time = node_outbound_peer_discovery_cooloff_time.get_property_u32("value").unwrap() as u64;
-        p2p_settings.slot_preference_strict = node_slot_preference_strict.get_property_bool("value").unwrap();
-        p2p_settings.transport_mixing = node_transport_mixing.get_property_bool("value").unwrap();
-        p2p_settings.localnet = node_localnet.get_property_bool("value").unwrap();
+        settings.update_p2p_settings(&mut p2p_settings);
 
         let p2p = match P2p::new(p2p_settings.clone(), ex.clone()).await {
             Ok(p2p) => p2p,
@@ -512,7 +499,10 @@ impl DarkIrc {
 
     async fn apply_settings(self_: Arc<Self>) {
         self_.settings.save_settings();
-        i!("TODO: Apply darkirc settings");
+
+        let p2p_settings = self_.p2p.settings();
+        let mut write_guard = p2p_settings.write().await;
+        self_.settings.update_p2p_settings(&mut write_guard);
     }
 }
 

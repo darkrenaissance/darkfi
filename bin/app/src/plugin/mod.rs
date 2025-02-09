@@ -24,6 +24,8 @@ use crate::ExecutorPtr;
 pub mod darkirc;
 pub use darkirc::{DarkIrc, DarkIrcPtr};
 
+use darkfi::net::Settings as NetSettings;
+
 use sled_overlay::sled;
 use crate::{
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodePtr, SceneNodeWeak},
@@ -38,11 +40,11 @@ pub trait PluginObject {
 }
 
 pub struct PluginSettings {
-    setting_root: SceneNodePtr,
-    sled_tree: sled::Tree,
+    pub setting_root: SceneNodePtr,
+    pub sled_tree: sled::Tree,
 }
 impl PluginSettings {
-    fn add_setting(&self, name: &str, default: PropertyValue) -> Option<SceneNodePtr> {
+    pub fn add_setting(&self, name: &str, default: PropertyValue) -> Option<SceneNodePtr> {
         let atom = &mut PropertyAtomicGuard::new();
         let node = match default {
             PropertyValue::Bool(b) => {
@@ -99,7 +101,7 @@ impl PluginSettings {
     }
 
     // For all settings, copy the value from sled into the setting node's value property
-    fn load_settings(&self) {
+    pub fn load_settings(&self) {
         let atom = &mut PropertyAtomicGuard::new();
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
@@ -151,7 +153,7 @@ impl PluginSettings {
     }
 
     // Save all settings to sled
-    fn save_settings(&self) {
+    pub fn save_settings(&self) {
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
                 continue;
@@ -176,4 +178,42 @@ impl PluginSettings {
             }
         }
     }
+
+    pub fn get_setting(&self, name: &str) -> Option<SceneNodePtr> {
+        self.setting_root.clone().get_children().iter().find(|node| node.typ == SceneNodeType::Setting && node.name == name).cloned()
+    }
+
+    pub fn add_p2p_settings(&self, p2p_settings: &NetSettings) {
+        self.add_setting("net.outbound_connections", PropertyValue::Uint32(p2p_settings.outbound_connections as u32));
+        self.add_setting("net.inbound_connections", PropertyValue::Uint32(p2p_settings.inbound_connections as u32));
+        self.add_setting("net.outbound_connect_timeout", PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32));
+        self.add_setting("net.channel_handshake_timeout", PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32));
+        self.add_setting("net.channel_heartbeat_interval", PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32));
+        self.add_setting("net.outbound_peer_discovery_cooloff_time", PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32));
+        self.add_setting("net.transport_mixing", PropertyValue::Bool(p2p_settings.transport_mixing));
+        self.add_setting("net.localnet", PropertyValue::Bool(p2p_settings.localnet));
+        self.add_setting("net.greylist_refinery_interval", PropertyValue::Uint32(p2p_settings.greylist_refinery_interval as u32));
+        self.add_setting("net.white_connect_percent", PropertyValue::Uint32(p2p_settings.white_connect_percent as u32));
+        self.add_setting("net.gold_connect_count", PropertyValue::Uint32(p2p_settings.gold_connect_count as u32));
+        self.add_setting("net.slot_preference_strict", PropertyValue::Bool(p2p_settings.slot_preference_strict));
+        self.add_setting("net.time_with_no_connections", PropertyValue::Uint32(p2p_settings.time_with_no_connections as u32));
+    }
+
+    // Update a NetSettings from settings in the node tree
+    pub fn update_p2p_settings(&self, p2p_settings: &mut NetSettings) {
+        p2p_settings.outbound_connections = self.get_setting("net.outbound_connections").unwrap().get_property_u32("value").unwrap() as usize;
+        p2p_settings.inbound_connections = self.get_setting("net.inbound_connections").unwrap().get_property_u32("value").unwrap() as usize;
+        p2p_settings.outbound_connect_timeout = self.get_setting("net.outbound_connect_timeout").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.channel_handshake_timeout = self.get_setting("net.channel_handshake_timeout").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.channel_heartbeat_interval = self.get_setting("net.channel_heartbeat_interval").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.outbound_peer_discovery_cooloff_time = self.get_setting("net.outbound_peer_discovery_cooloff_time").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.transport_mixing = self.get_setting("net.transport_mixing").unwrap().get_property_bool("value").unwrap();
+        p2p_settings.localnet = self.get_setting("net.localnet").unwrap().get_property_bool("value").unwrap();
+        p2p_settings.greylist_refinery_interval = self.get_setting("net.greylist_refinery_interval").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.white_connect_percent = self.get_setting("net.white_connect_percent").unwrap().get_property_u32("value").unwrap() as usize;
+        p2p_settings.gold_connect_count = self.get_setting("net.gold_connect_count").unwrap().get_property_u32("value").unwrap() as usize;
+        p2p_settings.slot_preference_strict = self.get_setting("net.slot_preference_strict").unwrap().get_property_bool("value").unwrap();
+        p2p_settings.time_with_no_connections = self.get_setting("net.time_with_no_connections").unwrap().get_property_u32("value").unwrap() as u64;
+    }
+
 }

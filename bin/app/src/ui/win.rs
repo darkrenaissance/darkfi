@@ -53,12 +53,13 @@ pub struct Window {
 }
 
 impl Window {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, setting_root: SceneNodePtr) -> Pimpl {
         t!("Window::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
-        let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
+        let scale_ = PropertyFloat32::wrap(&setting_root.clone().lookup_node("/scale").unwrap(), Role::Internal, "value", 0);
+        let scale = scale_.unwrap();
 
         let self_ = Arc::new(Self { node, tasks: OnceLock::new(), screen_size, scale, render_api });
 
