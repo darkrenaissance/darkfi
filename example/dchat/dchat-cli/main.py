@@ -82,7 +82,7 @@ class JsonRpc:
 
 
 async def main(argv):
-    endpoint = "localhost:51345"
+    endpoint = "localhost:51054"
     for i in range(1, len(argv)):
         if argv[i] == "-e":
             endpoint = argv[i+1]
