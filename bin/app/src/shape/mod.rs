@@ -44,3 +44,9 @@ pub use switch::create_switch;
 
 mod confirm;
 pub use confirm::create_confirm;
+
+mod circle;
+pub use circle::create_circle;
+
+mod logo;
+pub use logo::create_logo;

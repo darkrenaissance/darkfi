@@ -169,8 +169,6 @@ impl App {
             }
         };
 
-        let atom = &mut PropertyAtomicGuard::new();
-
         let mut window = SceneNode3::new("window", SceneNodeType3::Window);
 
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
@@ -180,13 +178,26 @@ impl App {
 
         let setting_root = Arc::new(SceneNode3::new("setting", SceneNodeType3::SettingRoot));
         let settings_tree = db.open_tree("settings").unwrap();
-        let settings = PluginSettings {
+        let settings = Arc::new(PluginSettings {
             setting_root: setting_root.clone(),
             sled_tree: settings_tree,
-        };
+        });
 
         settings.add_setting("scale", PropertyValue::Float32(1.));
         settings.load_settings();
+
+        // Save app settings in sled when they change
+        for setting_node in settings.setting_root.get_children().iter() {
+            let setting_sub = setting_node.get_property("value").unwrap().subscribe_modify();
+            let settings2 = settings.clone();
+            let setting_task = self.ex.spawn(async move {
+                while let Ok(_) = setting_sub.receive().await {
+                    settings2.save_settings();
+                }
+            });
+            self.tasks.lock().unwrap().push(setting_task);
+        }
+
         let window = window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
 
         self.sg_root.clone().link(window.clone());
