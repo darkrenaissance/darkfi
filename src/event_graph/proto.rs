@@ -62,7 +62,12 @@ impl MovingWindow {
     /// Clean out expired timestamps from the window.
     fn clean(&mut self) {
         while let Some(ts) = self.times.front() {
-            if ts.elapsed().unwrap() < self.expiry_time {
+            let Ok(elapsed) = ts.elapsed() else {
+                debug!(target: "event_graph::protocol::MovingWindow::clean()", "Timestamp [{}] is in future. Removing...", ts);
+                let _ = self.times.pop_front();
+                continue
+            };
+            if elapsed < self.expiry_time {
                 break
             }
             let _ = self.times.pop_front();
@@ -609,5 +614,20 @@ impl ProtocolEventGraph {
                 .broadcast_with_exclude(&event_put, &[self.channel.address().clone()])
                 .await;
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::time::UNIX_EPOCH;
+
+    #[test]
+    fn test_eventgraph_moving_window_clean_future() {
+        let mut window = MovingWindow::new(NanoTimestamp::from_secs(60));
+        let future = UNIX_EPOCH.elapsed().unwrap().as_secs() + 100;
+        window.times.push_back(NanoTimestamp::from_secs(future.into()));
+        window.clean();
+        assert_eq!(window.count(), 0);
     }
 }
