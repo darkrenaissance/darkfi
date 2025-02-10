@@ -73,10 +73,10 @@ dev: $(SRC) fonts
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: darkfi-app.apk
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk $(CARGO) quad-apk build $(DEV_FEATURES)
-	-mv $(APK) .
-	adb uninstall darkfi.app
+apk: $(SRC) fonts
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
+	-mv $(DEBUG_APK) .
+	-adb uninstall darkfi.app
 	adb install darkfi-app.apk
 	reset
 	adb logcat -c
