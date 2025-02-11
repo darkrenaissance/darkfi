@@ -66,6 +66,7 @@ impl Token {
     }
 }
 
+#[derive(Clone)]
 pub struct Compiler {
     table: HashMap<String, Token>,
 }

@@ -105,7 +105,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "tx.broadcast" => self.tx_broadcast(req.id, req.params).await,
             "tx.pending" => self.tx_pending(req.id, req.params).await,
             "tx.clean_pending" => self.tx_pending(req.id, req.params).await,
-            "tx.calculate_gas" => self.tx_calculate_gas(req.id, req.params).await,
+            "tx.calculate_fee" => self.tx_calculate_fee(req.id, req.params).await,
 
             // ==============
             // Invalid method

@@ -1,5 +1,8 @@
 .POSIX:
 
+# Cargo binary
+CARGO = cargo +nightly
+
 RELEASE_APK = target/android-artifacts/release/apk/darkfi-app.apk
 DEBUG_APK = target/android-artifacts/debug/apk/darkfi-app.apk
 
@@ -34,23 +37,23 @@ linux-release: build-release
 linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
 win-release: $(SRC) fonts
-	cargo build --release $(RELEASE_FEATURES)
+	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app.exe .
 win-debug: $(SRC) fonts
-	cargo build $(DEBUG_FEATURES)
+	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
 android-release: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk $(CARGO) quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
 android-debug: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk $(CARGO) quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
 build-release: $(SRC) fonts
-	cargo build --release $(RELEASE_FEATURES)
+	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
 build-debug: $(SRC) fonts
-	cargo build $(DEBUG_FEATURES)
+	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
 # Download font data
@@ -66,14 +69,14 @@ NotoColorEmoji.ttf:
 # Developer targets
 
 dev: $(SRC) fonts
-	cargo lbuild $(DEV_FEATURES)
+	$(CARGO) lbuild $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: darkfi-app.apk
+apk: $(SRC) fonts
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
-	-mv $(APK) .
-	adb uninstall darkfi.app
+	-mv $(DEBUG_APK) .
+	-adb uninstall darkfi.app
 	adb install darkfi-app.apk
 	reset
 	adb logcat -c

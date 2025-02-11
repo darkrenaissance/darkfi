@@ -119,6 +119,8 @@ pub enum SceneNodeType {
     Shortcut = 21,
     Gesture = 22,
     EmojiPicker = 23,
+    SettingRoot = 24,
+    Setting = 25,
     PluginRoot = 100,
     Plugin = 101,
 }

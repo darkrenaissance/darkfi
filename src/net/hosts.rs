@@ -16,21 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use log::{debug, error, info, trace, warn};
+use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
+use smol::lock::RwLock as AsyncRwLock;
 use std::{
     collections::HashMap,
     fmt, fs,
     fs::File,
+    net::{IpAddr, Ipv6Addr},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
+        Arc, Mutex as SyncMutex, RwLock,
     },
     time::{Instant, UNIX_EPOCH},
 };
-
-use log::{debug, error, info, trace, warn};
-use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
-use smol::lock::RwLock as AsyncRwLock;
-use url::Url;
+use url::{Host, Url};
 
 use super::{
     session::{SESSION_REFINE, SESSION_SEED},
@@ -41,7 +41,9 @@ use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
         file::{load_file, save_file},
+        most_frequent_or_any,
         path::expand_path,
+        ringbuffer::RingBuffer,
     },
     Error, Result,
 };
@@ -97,7 +99,7 @@ pub type HostsPtr = Arc<Hosts>;
 /// Keeps track of hosts and their current state. Prevents race conditions
 /// where multiple threads are simultaneously trying to change the state of
 /// a given host.
-pub(in crate::net) type HostRegistry = Mutex<HashMap<Url, HostState>>;
+pub(in crate::net) type HostRegistry = SyncMutex<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
 /// Refine, Move, Connect, Suspend or Connected or Free.
@@ -867,10 +869,13 @@ pub struct Hosts {
     pub(in crate::net) disconnect_publisher: PublisherPtr<Error>,
 
     /// Keeps track of the last time a connection was made.
-    pub(in crate::net) last_connection: Mutex<Instant>,
+    pub(in crate::net) last_connection: SyncMutex<Instant>,
 
     /// Marker for IPv6 availability
     pub(in crate::net) ipv6_available: AtomicBool,
+
+    /// Auto self discovered addresses. Used for filtering self connections.
+    auto_self_addrs: SyncMutex<RingBuffer<Ipv6Addr, 20>>,
 
     /// Pointer to configured P2P settings
     settings: Arc<AsyncRwLock<Settings>>,
@@ -880,13 +885,14 @@ impl Hosts {
     /// Create a new hosts list
     pub(in crate::net) fn new(settings: Arc<AsyncRwLock<Settings>>) -> HostsPtr {
         Arc::new(Self {
-            registry: Mutex::new(HashMap::new()),
+            registry: SyncMutex::new(HashMap::new()),
             container: HostContainer::new(),
             store_publisher: Publisher::new(),
             channel_publisher: Publisher::new(),
             disconnect_publisher: Publisher::new(),
-            last_connection: Mutex::new(Instant::now()),
+            last_connection: SyncMutex::new(Instant::now()),
             ipv6_available: AtomicBool::new(true),
+            auto_self_addrs: SyncMutex::new(RingBuffer::new()),
             settings,
         })
     }
@@ -983,7 +989,7 @@ impl Hosts {
         trace!(target: "net::hosts::check_addrs()", "[START]");
 
         let seeds = self.settings.read().await.seeds.clone();
-        let external_addrs = self.settings.read().await.external_addrs.clone();
+        let external_addrs = self.external_addrs().await;
 
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
@@ -1268,7 +1274,7 @@ impl Hosts {
 
             if !settings.localnet {
                 // Our own external addresses should never enter the hosts set.
-                for ext in &settings.external_addrs {
+                for ext in self.external_addrs().await {
                     if host == ext.host().unwrap() {
                         debug!(
                             target: "net::hosts::filter_addresses",
@@ -1398,7 +1404,7 @@ impl Hosts {
         Ok(())
     }
 
-    /// A single atomic function for moving hosts between hostlists. Called on the following occasions:
+    /// A single function for moving hosts between hostlists. Called on the following occasions:
     ///
     /// * When we cannot connect to a peer: move to grey, remove from white and gold.
     /// * When a peer disconnects from us: move to grey, remove from white and gold.
@@ -1420,8 +1426,11 @@ impl Hosts {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} destination={:?}",
                addr, destination);
 
-        // This should never panic. Failure indicates a misuse of the HostState API.
-        self.try_register(addr.clone(), HostState::Move).unwrap();
+        // If we cannot register this address as move, this will simply return here.
+        self.try_register(addr.clone(), HostState::Move)?;
+
+        debug!(target: "net::hosts::move_host()", "Moving addr={} destination={:?}",
+            addr.clone(), destination);
 
         match destination {
             // Downgrade to grey. Remove from white and gold.
@@ -1475,6 +1484,77 @@ impl Hosts {
         }
 
         Ok(())
+    }
+
+    /// Upon version exchange, the node reports our external network address to us.
+    /// Accumulate them here in a ring buffer.
+    pub(in crate::net) fn add_auto_addr(&self, addr: Ipv6Addr) {
+        let mut auto_addrs = self.auto_self_addrs.lock().unwrap();
+        auto_addrs.push(addr);
+    }
+
+    /// Pick the most frequent occuring reported external address from other nodes as
+    /// our auto ipv6 address.
+    pub fn guess_auto_addr(&self) -> Option<Ipv6Addr> {
+        let mut auto_addrs = self.auto_self_addrs.lock().unwrap();
+        let items = auto_addrs.make_contiguous();
+        most_frequent_or_any(items)
+    }
+
+    /// The external_addrs is set by the user but we need the actual addresses.
+    /// If the external_addr is set to `[::]` (unspecified), then replace it with the
+    /// the best guess from `guess_auto_addr()`.
+    /// Also if the port is 0, we lookup the port from the `InboundSession`.
+    pub async fn external_addrs(&self) -> Vec<Url> {
+        let mut external_addrs = self.settings.read().await.external_addrs.clone();
+        for ext_addr in &mut external_addrs {
+            // We must patch the port first since InboundSession hashmap used to lookup
+            // the port number uses the inbound address.
+            let _ = self.patch_port(ext_addr);
+            let _ = self.patch_auto_addr(ext_addr);
+        }
+        external_addrs
+    }
+
+    /// Make a best effort guess from the most frequently reported ipv6 auto address
+    /// to set any unspecified ipv6 addrs: `external_addrs = ["tcp://[::]:1365"]`.
+    fn patch_auto_addr(&self, ext_addr: &mut Url) -> Option<()> {
+        if ext_addr.scheme() != "tcp" && ext_addr.scheme() != "tcp+tls" {
+            return None
+        }
+
+        let ext_host = ext_addr.host()?;
+        // Is it an Ipv6 listener?
+        let Host::Ipv6(ext_ip) = ext_host else { return None };
+        // We are only interested if it's [::]
+        if !ext_ip.is_unspecified() {
+            return None
+        }
+
+        // Get our auto-discovered IP
+        let auto_addr = self.guess_auto_addr()?;
+
+        // Do the actual replacement of the host part of the URL
+        ext_addr.set_ip_host(IpAddr::V6(auto_addr)).ok()?;
+        Some(())
+    }
+
+    /// If the port number specified is 0, then replace it with whatever the OS has assigned
+    /// as a port for that inbound.
+    fn patch_port(&self, ext_addr: &mut Url) -> Option<()> {
+        // Only patch URLs with port set to 0.
+        if ext_addr.port()? != 0 {
+            return None
+        }
+
+        // TODO:
+        // InboundSession needs a HashMap: Url listen addr -> u16 port numbers.
+        // Lookup the external_addr from InboundSession to get the port number
+        //
+        // ext_addr.set_port(my_new_port_number);
+        //
+
+        None
     }
 }
 

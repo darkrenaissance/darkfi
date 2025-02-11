@@ -26,10 +26,11 @@ use darkfi::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr, Subscription},
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
+use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 
 use log::{debug, error, info};
 use rand::rngs::OsRng;
@@ -48,10 +49,7 @@ use irc::server::IrcServer;
 
 /// Cryptography utilities
 mod crypto;
-use crypto::bcrypt::bcrypt_hash_password;
-
-// RLN
-//mod rln;
+use crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity};
 
 /// JSON-RPC methods
 mod rpc;
@@ -118,6 +116,10 @@ struct Args {
     /// Recover NaCl public key from a secret key
     #[structopt(long = "get-chacha-pubkey")]
     chacha_secret: Option<String>,
+
+    /// Generate a new RLN identity
+    #[structopt(long)]
+    gen_rln_identity: bool,
 
     /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
@@ -201,6 +203,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("Place this in your config file:\n");
         println!("[channel.\"#yourchannelname\"]");
         println!("secret = \"{}\"", secret);
+        return Ok(())
+    }
+
+    if args.gen_rln_identity {
+        let identity = RlnIdentity::new(&mut OsRng);
+        let nullifier = bs58::encode(identity.nullifier.to_repr()).into_string();
+        let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
+        println!("Place this in your config file:\n");
+        println!("[rln]");
+        println!("nullifier = \"{}\"", nullifier);
+        println!("trapdoor = \"{}\"", trapdoor);
         return Ok(())
     }
 
@@ -401,32 +414,22 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting P2P network");
     p2p.clone().start().await?;
 
-    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
+    // Initial DAG sync
+    sync_task(&p2p, &event_graph, args.skip_dag_sync).await?;
 
-    loop {
-        if p2p.is_connected() {
-            info!("Got peer connection");
-            // We'll attempt to sync for ever
-            if !args.skip_dag_sync {
-                info!("Syncing event DAG");
-                match event_graph.dag_sync().await {
-                    Ok(()) => break,
-                    Err(e) => {
-                        // TODO: Maybe at this point we should prune or something?
-                        // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({}), retrying in {}s...", e, comms_timeout);
-                        sleep(comms_timeout).await;
-                    }
-                }
-            } else {
-                *event_graph.synced.write().await = true;
-                break
+    // Stoppable task to monitor network and resync on disconnect.
+    let sync_mon_task = StoppableTask::new();
+    sync_mon_task.clone().start(
+        sync_and_monitor(p2p.clone(), event_graph.clone(), args.skip_dag_sync),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
+                Err(e) => error!("Failed sync task: {}", e),
             }
-        } else {
-            info!("Waiting for some P2P connections...");
-            sleep(comms_timeout).await;
-        }
-    }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
@@ -451,4 +454,65 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Shut down successfully");
     Ok(())
+}
+
+/// Async task to monitor network disconnections.
+async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
+    Err(subscription.receive().await)
+}
+
+/// Async task to endlessly try to sync DAG, returns Ok if done.
+async fn sync_task(p2p: &P2pPtr, event_graph: &EventGraphPtr, skip_dag_sync: bool) -> Result<()> {
+    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
+
+    loop {
+        if p2p.is_connected() {
+            info!("Got peer connection");
+            // We'll attempt to sync for ever
+            if !skip_dag_sync {
+                info!("Syncing event DAG");
+                match event_graph.dag_sync().await {
+                    Ok(()) => break,
+                    Err(e) => {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        error!("Failed syncing DAG ({}), retrying in {}s...", e, comms_timeout);
+                        sleep(comms_timeout).await;
+                    }
+                }
+            } else {
+                *event_graph.synced.write().await = true;
+                break;
+            }
+        } else {
+            info!("Waiting for some P2P connections...");
+            sleep(comms_timeout).await;
+        }
+    }
+
+    Ok(())
+}
+
+/// Async task to monitor the network and force resync on disconnections
+async fn sync_and_monitor(
+    p2p: P2pPtr,
+    event_graph: EventGraphPtr,
+    skip_dag_sync: bool,
+) -> Result<()> {
+    loop {
+        let net_subscription = p2p.hosts().subscribe_disconnect().await;
+        let result = monitor_network(&net_subscription).await;
+        net_subscription.unsubscribe().await;
+
+        match result {
+            Ok(_) => return Ok(()),
+            Err(Error::NetworkNotConnected) => {
+                // Sync node again
+                info!("Network disconnection detected, resyncing...");
+                *event_graph.synced.write().await = false;
+                sync_task(&p2p, &event_graph, skip_dag_sync).await?;
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }

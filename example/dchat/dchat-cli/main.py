@@ -16,14 +16,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio, json, random, sys, time
 
-# TODO: this cli is currently unimplemented
-
 class JsonRpc:
 
     async def start(self, server, port):
-        reader, writer = await asyncio.open_connection(server, port)
-        self.reader = reader
-        self.writer = writer
+        try:
+            reader, writer = await asyncio.open_connection(server, port)
+            self.reader = reader
+            self.writer = writer
+        except ConnectionRefusedError:
+            print(f"Error: Connection Refused to '{server}:{port}'")
+            sys.exit(-1)
 
     async def stop(self):
         self.writer.close()
@@ -72,17 +74,62 @@ class JsonRpc:
     async def dnet_subscribe_events(self):
         return await self._subscribe("dnet.subscribe_events", [])
 
+    async def send(self, message):
+        return await self._make_request("send", [message])
+
+    async def recv(self):
+        return await self._make_request("recv", [])
+
 
 async def main(argv):
-    # TODO: Rpc port should be command line flag
-    # e.g. dchat 1066
-    rpc = JsonRpc()
-    while True:
-        try:
-            await rpc.start("localhost", 26660)
+    endpoint = "localhost:51054"
+    for i in range(1, len(argv)):
+        if argv[i] == "-e":
+            endpoint = argv[i+1]
+            del argv[i]
+            del argv[i]
             break
-        except OSError:
-            pass
+
+    if len(argv) == 1 or any(x in ["h", "-h", "--help", "help"] for x in argv):
+        print('''USAGE
+    python main.py [OPTIONS] [SUBCOMMAND]
+
+    OPTIONS:
+        -h, --help      Print help information
+        -e              RPC endpoint [default: localhost:51345]
+
+    SUBCOMMANDS:
+        send        Send a message
+        recv        Receive messages
+        ping        Send ping
+        help        show this help text
+
+    Examples:
+        python main.py -e localhost:52345 send "Hello"
+        python main.py send "Hello World!"
+        python main.py recv
+        python main.py ping
+    ''')
+
+        return 0
+    
+    server, port = endpoint.split(":")
+    rpc = JsonRpc()
+    await rpc.start(server, port)
+
+    if argv[1] == "send":
+        if len(argv) > 2:
+            await rpc.send(argv[2])
+        else:
+            print("Error: send subcommand needs a message")
+
+    elif argv[1] == "recv":
+        await rpc.recv()
+    elif argv[1] == "ping":
+        await rpc.ping()
+    else:
+        print(f"Error: Unknown subcommand : {argv[1]}")
+
     await rpc.stop()
 
 

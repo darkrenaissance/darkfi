@@ -13,7 +13,7 @@ darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc"]}
 darkfi-serial = {version = "0.4.2", features = ["hash"]}
 
 # Misc
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 blake3 = "1.5.5"
 log = "0.4.25"
 tinyjson = "2.5.1"

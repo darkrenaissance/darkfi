@@ -11,7 +11,7 @@ cargo-fuzz = true
 workspace = true
 
 [dependencies]
-libfuzzer-sys = "0.4.8"
+libfuzzer-sys = "0.4.9"
 
 [dependencies.darkfi]
 path = ".."

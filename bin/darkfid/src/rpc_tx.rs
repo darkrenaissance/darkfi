@@ -214,16 +214,16 @@ impl DarkfiNode {
     // Returns the gas value if the transaction is valid, otherwise, a corresponding
     // error.
     //
-    // --> {"jsonrpc": "2.0", "method": "tx.calculate_gas", "params": ["base64encodedTX", "include_fee"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "tx.calculate_fee", "params": ["base64encodedTX", "include_fee"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn tx_calculate_gas(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn tx_calculate_fee(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 2 || !params[0].is_string() || !params[1].is_bool() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         if !*self.validator.synced.read().await {
-            error!(target: "darkfid::rpc::tx_calculate_gas", "Blockchain is not synced");
+            error!(target: "darkfid::rpc::tx_calculate_fee", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
@@ -232,7 +232,7 @@ impl DarkfiNode {
         let tx_bytes = match base64::decode(tx_enc) {
             Some(v) => v,
             None => {
-                error!(target: "darkfid::rpc::tx_calculate_gas", "Failed decoding base64 transaction");
+                error!(target: "darkfid::rpc::tx_calculate_fee", "Failed decoding base64 transaction");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -240,7 +240,7 @@ impl DarkfiNode {
         let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_calculate_gas", "Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_calculate_fee", "Failed deserializing bytes into Transaction: {}", e);
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -249,15 +249,15 @@ impl DarkfiNode {
         let include_fee = params[1].get::<bool>().unwrap();
 
         // Simulate state transition
-        let result = self.validator.calculate_gas(&tx, *include_fee).await;
+        let result = self.validator.calculate_fee(&tx, *include_fee).await;
         if result.is_err() {
             error!(
-                target: "darkfid::rpc::tx_calculate_gas", "Failed to validate state transition: {}",
+                target: "darkfid::rpc::tx_calculate_fee", "Failed to validate state transition: {}",
                 result.err().unwrap()
             );
             return server_error(RpcError::TxGasCalculationFail, id, None)
         };
 
-        JsonResponse::new(JsonValue::Number(result.unwrap().total_gas_used() as f64), id).into()
+        JsonResponse::new(JsonValue::Number(result.unwrap() as f64), id).into()
     }
 }

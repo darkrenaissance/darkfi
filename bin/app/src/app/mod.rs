@@ -34,10 +34,9 @@ use crate::{
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
-    plugin::{self, PluginObject},
+    plugin::{self, PluginObject, PluginSettings},
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
-        Role,
+        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType, PropertyValue, Role
     },
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3, Slot},
     text::TextShaperPtr,
@@ -48,12 +47,13 @@ use crate::{
 mod node;
 use node::create_darkirc;
 mod schema;
-use schema::get_window_scale_filename;
+use schema::{get_settingsdb_path, get_window_scale_filename, settings};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
@@ -157,9 +157,17 @@ impl App {
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
-    pub async fn setup(&self) {
+    pub async fn setup(&self) -> Result<Option<i32>, Error> {
         t!("App::setup()");
-        let atom = &mut PropertyAtomicGuard::new();
+
+        let db_path = get_settingsdb_path();
+        let db = match sled::open(&db_path) {
+            Ok(db) => db,
+            Err(err) => {
+                e!("Sled database '{}' failed to open: {err}!", db_path.display());
+                return Err(Error::SledDbErr);
+            }
+        };
 
         let mut window = SceneNode3::new("window", SceneNodeType3::Window);
 
@@ -167,14 +175,35 @@ impl App {
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
 
-        let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_defaults_f32(vec![1.]).unwrap();
-        window.add_property(prop).unwrap();
 
-        let window = window.setup(|me| Window::new(me, self.render_api.clone())).await;
+        let setting_root = Arc::new(SceneNode3::new("setting", SceneNodeType3::SettingRoot));
+        let settings_tree = db.open_tree("settings").unwrap();
+        let settings = Arc::new(PluginSettings {
+            setting_root: setting_root.clone(),
+            sled_tree: settings_tree,
+        });
+
+        settings.add_setting("scale", PropertyValue::Float32(1.));
+        settings.load_settings();
+
+        // Save app settings in sled when they change
+        for setting_node in settings.setting_root.get_children().iter() {
+            let setting_sub = setting_node.get_property("value").unwrap().subscribe_modify();
+            let settings2 = settings.clone();
+            let setting_task = self.ex.spawn(async move {
+                while let Ok(_) = setting_sub.receive().await {
+                    settings2.save_settings();
+                }
+            });
+            self.tasks.lock().unwrap().push(setting_task);
+        }
+
+        let window = window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
+
         self.sg_root.clone().link(window.clone());
-        schema::make(&self, window).await;
-        //schema::test::make(&self, window).await;
+        self.sg_root.clone().link(setting_root.clone());
+
+        schema::make(&self, window.clone()).await;
 
         d!("Schema loaded");
 
@@ -186,6 +215,10 @@ impl App {
 
         #[cfg(not(feature = "enable-plugins"))]
         w!("Plugins are disabled in this build");
+
+        settings::make(&self, window, self.ex.clone()).await;
+
+        Ok(None)
     }
 
     #[cfg(feature = "enable-plugins")]
@@ -328,12 +361,6 @@ impl App {
         let (screen_width, screen_height) = miniquad::window::screen_size();
         prop.clone().set_f32(atom, Role::App, 0, screen_width);
         prop.clone().set_f32(atom, Role::App, 1, screen_height);
-
-        let mut window_scale = 1.;
-        if let Ok(mut file) = File::open(get_window_scale_filename()) {
-            window_scale = Decodable::decode(&mut file).unwrap();
-        }
-        window_node.set_property_f32(atom, Role::App, "scale", window_scale).unwrap();
 
         drop(atom);
 

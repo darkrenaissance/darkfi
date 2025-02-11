@@ -18,6 +18,7 @@
 
 use darkfi::{
     tx::{ContractCallLeaf, TransactionBuilder},
+    validator::fees::compute_fee,
     zk::halo2::Field,
     Result,
 };
@@ -135,8 +136,7 @@ fn delayed_tx() -> Result<()> {
 
         // First we verify the fee-less transaction to see how much gas it uses for execution
         // and verification.
-        let mut gas_used = FEE_CALL_GAS;
-        gas_used += wallet
+        let gas_used = wallet
             .validator
             .add_test_transactions(
                 &[tx],
@@ -148,8 +148,11 @@ fn delayed_tx() -> Result<()> {
             .await?
             .0;
 
+        // Compute the required fee
+        let required_fee = compute_fee(&(gas_used + FEE_CALL_GAS));
+
         let coin = &output_coins[0];
-        let change_value = coin.note.value - gas_used;
+        let change_value = coin.note.value - required_fee;
 
         // Input and output setup
         let input = FeeCallInput {
@@ -227,7 +230,7 @@ fn delayed_tx() -> Result<()> {
 
         // Encode the contract call
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        gas_used.encode_async(&mut data).await?;
+        required_fee.encode_async(&mut data).await?;
         fee_call_params.encode_async(&mut data).await?;
         let fee_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 

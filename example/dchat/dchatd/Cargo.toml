@@ -28,7 +28,7 @@ structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
 # misc
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 log = "0.4.25"
 url = "2.5.4"
 # ANCHOR_END: dependencies

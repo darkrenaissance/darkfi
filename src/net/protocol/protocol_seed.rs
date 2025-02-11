@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
-
 use async_trait::async_trait;
 use log::debug;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use super::{
     super::{
@@ -63,7 +62,7 @@ impl ProtocolSeed {
             "[START] channel address={}", self.channel.address(),
         );
 
-        let external_addrs = self.settings.read().await.external_addrs.clone();
+        let external_addrs = self.channel.hosts().external_addrs().await;
 
         if external_addrs.is_empty() {
             debug!(

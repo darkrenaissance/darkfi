@@ -41,3 +41,30 @@ pub mod ringbuffer;
 /// This is an insecure PRNG used for simulations and tests.
 #[cfg(feature = "rand")]
 pub mod pcg;
+
+/// Return the most frequent element in vec or just any item.
+pub fn most_frequent_or_any<T: Eq + Clone>(items: &[T]) -> Option<T> {
+    if items.is_empty() {
+        return None;
+    }
+
+    let mut max_count = 0;
+    let mut most_freq = &items[0];
+
+    for i in 0..items.len() {
+        let mut count = 0;
+
+        for j in 0..items.len() {
+            if items[i] == items[j] {
+                count += 1;
+            }
+        }
+
+        if count > max_count {
+            max_count = count;
+            most_freq = &items[i];
+        }
+    }
+
+    Some(most_freq.clone())
+}

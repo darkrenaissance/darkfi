@@ -16,17 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    sync::Arc,
-    time::{Duration, UNIX_EPOCH},
-};
-
 use futures::{
     future::{join_all, select, Either},
     pin_mut,
 };
 use log::{debug, error};
 use smol::{lock::RwLock as AsyncRwLock, Executor, Timer};
+use std::{
+    sync::Arc,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use super::super::{
     channel::ChannelPtr,
@@ -153,8 +152,9 @@ impl ProtocolVersion {
         let settings = self.settings.read().await;
         let node_id = settings.node_id.clone();
         let app_version = settings.app_version.clone();
-        let external_addrs = settings.external_addrs.clone();
         drop(settings);
+
+        let external_addrs = self.channel.hosts().external_addrs().await;
 
         let version = VersionMessage {
             node_id,
@@ -212,6 +212,10 @@ impl ProtocolVersion {
 
         // Receive version message
         let version = self.version_sub.receive().await?;
+        if let Some(ipv6_addr) = version.get_ipv6_addr() {
+            let hosts = self.channel.p2p().hosts();
+            hosts.add_auto_addr(ipv6_addr);
+        }
         self.channel.set_version(version).await;
 
         // Send verack

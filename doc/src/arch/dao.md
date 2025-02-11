@@ -172,7 +172,7 @@ represented as arrows $c₁, …, cₖ$.
 
 When making a proposal, we need to prove ownership of a threshold of coins.
 Likewise for voting. Essentially they are similar problems of proving ownership
-of a coin $c$ that is still valid. As showed above this reduces to the following
+of a coin $c$ that is still valid. As shown above this reduces to the following
 statements:
 
 * Is $c$ in the set of all coins $C$?

@@ -475,17 +475,17 @@ impl Drk {
         Ok(ret)
     }
 
-    /// Queries darkfid for given transaction's gas.
-    pub async fn get_tx_gas(&self, tx: &Transaction, include_fee: bool) -> Result<u64> {
+    /// Queries darkfid for given transaction's required fee.
+    pub async fn get_tx_fee(&self, tx: &Transaction, include_fee: bool) -> Result<u64> {
         let params = JsonValue::Array(vec![
             JsonValue::String(base64::encode(&serialize_async(tx).await)),
             JsonValue::Boolean(include_fee),
         ]);
-        let rep = self.darkfid_daemon_request("tx.calculate_gas", &params).await?;
+        let rep = self.darkfid_daemon_request("tx.calculate_fee", &params).await?;
 
-        let gas = *rep.get::<f64>().unwrap() as u64;
+        let fee = *rep.get::<f64>().unwrap() as u64;
 
-        Ok(gas)
+        Ok(fee)
     }
 
     /// Queries darkfid for current best fork next height.

@@ -40,8 +40,8 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyAtomicGuard, PropertyStr, Role},
-    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
+    prop::{PropertyAtomicGuard, PropertyStr, PropertyPtr, PropertyType, PropertyValue, Role},
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodePtr, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
@@ -49,7 +49,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::PluginObject;
+use super::{PluginObject, PluginSettings};
 
 const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
@@ -175,12 +175,17 @@ pub struct DarkIrc {
 
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
+
+    settings: PluginSettings,
 }
 
 impl DarkIrc {
     pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
+
+        let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
+        node_ref.clone().link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
@@ -190,6 +195,12 @@ impl DarkIrc {
                 e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
                 return Err(Error::SledDbErr);
             }
+        };
+
+        let setting_tree = db.open_tree("settings")?;
+        let settings = PluginSettings {
+            setting_root,
+            sled_tree: setting_tree,
         };
 
         let mut p2p_settings: NetSettings = Default::default();
@@ -225,7 +236,12 @@ impl DarkIrc {
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
-        let p2p = match P2p::new(p2p_settings, ex.clone()).await {
+        settings.add_p2p_settings(&p2p_settings);
+
+        settings.load_settings();
+        settings.update_p2p_settings(&mut p2p_settings);
+
+        let p2p = match P2p::new(p2p_settings.clone(), ex.clone()).await {
             Ok(p2p) => p2p,
             Err(err) => {
                 e!("Create p2p network failed: {err}!");
@@ -256,7 +272,7 @@ impl DarkIrc {
         }
 
         let self_ = Arc::new(Self {
-            node,
+            node: node.clone(),
             tasks: OnceLock::new(),
 
             p2p,
@@ -265,6 +281,7 @@ impl DarkIrc {
 
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
+            settings,
         });
         Ok(Pimpl::DarkIrc(self_))
     }
@@ -479,6 +496,14 @@ impl DarkIrc {
 
         self.p2p.broadcast(&EventPut(event)).await;
     }
+
+    async fn apply_settings(self_: Arc<Self>) {
+        self_.settings.save_settings();
+
+        let p2p_settings = self_.p2p.settings();
+        let mut write_guard = p2p_settings.write().await;
+        self_.settings.update_p2p_settings(&mut write_guard);
+    }
 }
 
 #[async_trait]
@@ -508,6 +533,11 @@ impl PluginObject for DarkIrc {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
         }
         on_modify.when_change(self.nick.prop(), save_nick);
+
+        // `apply_settings` is triggered if any setting changes
+        for setting_node in self.settings.setting_root.get_children().iter() {
+            on_modify.when_change(setting_node.get_property("value").clone().unwrap(), Self::apply_settings);
+        }
 
         let ev_sub = self.event_graph.event_pub.clone().subscribe().await;
         let ev_task = ex.spawn(self.clone().relay_events(ev_sub));

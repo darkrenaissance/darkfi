@@ -34,3 +34,19 @@ mod netlogo2;
 pub use netlogo2::create_netlogo2;
 mod netlogo3;
 pub use netlogo3::create_netlogo3;
+
+mod settings;
+pub use settings::create_settings;
+pub use settings::create_right_border;
+
+mod switch;
+pub use switch::create_switch;
+
+mod confirm;
+pub use confirm::create_confirm;
+
+mod circle;
+pub use circle::create_circle;
+
+mod logo;
+pub use logo::create_logo;

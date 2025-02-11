@@ -50,9 +50,12 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length read from the memory slice.
+    // Subtract used gas.
     // This makes calling the function which returns early have some (small) cost.
-    env.subtract_gas(&mut store, len as u64);
+    env.subtract_gas(&mut store, 1);
+
+    // Subtract written bytes as gas
+    env.subtract_gas(&mut store, 33 /* value_data.len() as u64 */);
 
     let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
@@ -307,7 +310,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    let spent_gas = return_data.len() + tree_data.len() + (coins_len * 32);
+    let spent_gas = coins_len * 32;
     env.subtract_gas(&mut store, spent_gas as u64);
 
     wasm::entrypoint::SUCCESS

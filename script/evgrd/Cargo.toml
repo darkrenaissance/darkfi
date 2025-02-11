@@ -39,7 +39,7 @@ url = "2.5.4"
 smol = "2.0.2"
 
 # evgrd deps
-async-trait = {version = "0.1.85", optional = true}
+async-trait = {version = "0.1.86", optional = true}
 futures = {version = "0.3.31", optional = true}
 semver = {version = "1.0.25", optional = true}
 easy-parallel = {version = "3.3.1", optional = true}

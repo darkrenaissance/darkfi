@@ -297,6 +297,8 @@ pub fn create_editbox(name: &str) -> SceneNode {
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
+
     node
 }
 

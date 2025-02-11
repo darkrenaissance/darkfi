@@ -40,7 +40,7 @@ use crate::{
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
         consensus::{Consensus, Fork, Proposal, GAS_LIMIT_UNPROPOSED_TXS},
-        fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
+        fees::{circuit_gas_use, compute_fee, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
     },
     zk::VerifyingKey,
@@ -738,13 +738,15 @@ pub async fn verify_transaction(
             }
         };
 
-        // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
-        // Check that enough fee has been paid for the used gas in this transaction.
-        if total_gas_used > fee {
+        // Compute the required fee for this transaction
+        let required_fee = compute_fee(&total_gas_used);
+
+        // Check that enough fee has been paid for the used gas in this transaction
+        if required_fee > fee {
             error!(
                 target: "validator::verification::verify_transaction",
                 "[VALIDATOR] Transaction {} has insufficient fee. Required: {}, Paid: {}",
-                tx_hash, total_gas_used, fee,
+                tx_hash, required_fee, fee,
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }

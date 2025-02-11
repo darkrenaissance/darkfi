@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../", features = ["async-daemonize", "bs58", "rpc"]}
+darkfi = {path = "../../", features = ["async-daemonize", "bs58", "rpc", "validator"]}
 darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
 darkfi_dao_contract = {path = "../../src/contract/dao", features = ["no-entrypoint", "client"]}
 darkfi_deployooor_contract = {path = "../../src/contract/deployooor", features = ["no-entrypoint", "client"]}
@@ -27,7 +27,7 @@ prettytable-rs = "0.10.0"
 rand = "0.8.5"
 rodio = {version = "0.20.1", default-features = false, features = ["minimp3"]}
 rusqlite = {version = "0.32.1", features = ["sqlcipher"]}
-toml = "0.8.19"
+toml = "0.8.20"
 url = "2.5.4"
 
 # Daemon

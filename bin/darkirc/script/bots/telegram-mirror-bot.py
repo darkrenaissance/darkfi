@@ -1,48 +1,32 @@
-import asyncio, json, traceback
+import asyncio
+import traceback
 import html.parser
-import telegram
-from telegram import Bot, Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+import irc
+import signal
+from telegram import Bot
+from telegram.constants import MessageLimit
 from io import StringIO
 
 TOKEN = "..."
 TOKEN_TEST = "..."
 
-class IrcBot:
- 
-    async def connect(self, server, port):
-        self._reader, self._writer = await asyncio.open_connection(server, port)
-        self._send("USER tgbridge 0 * :tgbridge")
-        self._send("NICK tgbridge")
-        await self._recv()
-        self._send("CAP REQ :no-history")
-        await self._recv()
-        self._send("CAP END")
+MAX_CHANNEL_LENGTH = 10
+MAX_NICK_LENGTH = 10
+MAX_MESSAGE_LENGTH = MessageLimit.MAX_TEXT_LENGTH - (MAX_CHANNEL_LENGTH + MAX_NICK_LENGTH + 16)
 
-    def _send(self, msg):
-        msg += "\r\n"
-        self._writer.write(msg.encode())
+SERVER = "127.0.0.1"
+PORT = 6645
+CHANNELS = ["#dev","#memes","#philosophy","#markets","#math","#random",]
+BOTNICK = "tgbridge"
 
-    async def _recv(self):
-        message = await self._reader.readline()
-        message = message.decode()
-        return message.removesuffix("\r\n")
+def signal_handler(sig, frame):
+    print("Caught termination signal, cleaning up and exiting...")
+    ircc.disconnect(SERVER, PORT)
+    print("Shut down successfully")
+    exit(0)
 
-    async def get_message(self):
-        while True:
-            line = await self._recv()
-            print(f"Received line: {line}")
-            tokens = line.split(" ")
-            if len(tokens) < 2 or tokens[1] != "PRIVMSG":
-                continue
-
-            assert tokens[0][0] == ":"
-            username = tokens[0].split("!")[0][1:]
-            channel = tokens[2]
-
-            message = ":".join(line.split(":")[2:])
-
-            return (username, channel, message)
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 class HTMLTextExtractor(html.parser.HTMLParser):
     def __init__(self):
@@ -69,51 +53,70 @@ def append_log(channel, username, message):
     with open(f"/srv/http/log/all.txt", "a") as fd:
         fd.write(f"{channel} <{username}> {message}\n")
 
+
+ircc = irc.IRC()
+ircc.connect(SERVER, PORT, CHANNELS, BOTNICK)
+
 async def main():
-    irc = IrcBot()
-    await irc.connect("localhost", 6667)
-
     while True:
-        nick, channel, message = await irc.get_message()
-
-        if message.lower() == "test":
+        text = ircc.get_response()
+        if not len(text) > 0:
             continue
-        if nick == "testbot":
-            continue
+        text_list = text.split(' ')
+        nick = text_list[0].split('!')[0][1:]
+        if text_list[1] == "PRIVMSG":
+            channel = text_list[2]
+            message = ' '.join(text_list[3:])
+            # remove the prefix
+            message = message[1:]
+            # ignore test msgs
+            if message.lower() == "test" or message.lower() == "echo":
+                continue
+            if nick == "testbot":
+                continue
 
-        # Strip all HTML tags
-        #message = html_to_text(message)
-        message = message.replace("<", "&lt;")
-        message = message.replace(">", "&gt;")
-        # Limit line lengths
-        message = message[:300]
+            # Strip all HTML tags
+            channel = channel.replace("<", "&lt;")
+            channel = channel.replace(">", "&gt;")
+            nick = nick.replace("<", "&lt;")
+            nick = nick.replace(">", "&gt;")
+            message = message.replace("<", "&lt;")
+            message = message.replace(">", "&gt;")
+    
+            # https://www.irchelp.org/protocol/ctcpspec.html
+            #
+            # "This is used by losers on IRC to simulate 'role playing' games"
+            # "Presumably other users on the channel are suitably impressed."
+            if message.find("ACTION") == 1:
+                message = nick + message[7:]
+                nick = "*"
 
-        # Left pad nickname
-        nick = nick.replace("<", "&lt;")
-        nick = nick.replace(">", "&gt;")
-        nick = nick.rjust(12)
+            append_log(channel, nick, message)
 
-        # Limit line lengths
-        message = message[:300]
-        msg = f"<code>{channel} {nick} |</code> {message}"
+            # Pad and left/right justify channel and nickname
+            channel = channel[:MAX_CHANNEL_LENGTH].ljust(MAX_CHANNEL_LENGTH)
+            nick = nick[:MAX_NICK_LENGTH].rjust(MAX_NICK_LENGTH)
 
-        append_log(channel, nick, message)
+            # Send messages to Telegram in chunks
+            while len(message) > 0:
+                string_to_telegram = f"<code>{channel} {nick} |</code> {message[:MAX_MESSAGE_LENGTH]}"
 
-        # Keep retrying until the fucker is sent
-        while True:
-            try:
-                async with Bot(TOKEN) as bot:
-                    await bot.send_message("@darkfi_darkirc", msg,
-                                           parse_mode="HTML",
-                                           disable_notification=True,
-                                           disable_web_page_preview=True)
-                break
-            #except telegram.error.BadRequest:
-            #    pass
-            except:
-                print(channel, msg)
-                print(traceback.format_exc())
-                await asyncio.sleep(3)
+                # Keep retrying until the fucker is sent
+                while True:
+                    try:
+                        async with Bot(TOKEN) as bot:
+                            await bot.send_message("@darkfi_darkirc", string_to_telegram,
+                                                parse_mode="HTML",
+                                                disable_notification=True,
+                                                disable_web_page_preview=True)
+                        break
+                    #except telegram.error.BadRequest:
+                    #    pass
+                    except:
+                        print(channel, string_to_telegram)
+                        print(traceback.format_exc())
+                        await asyncio.sleep(3)
+
+                message = message[MAX_MESSAGE_LENGTH:]
 
 asyncio.run(main())
-

@@ -55,6 +55,9 @@ pub struct Settings {
     /// Seed nodes to connect to for peer discovery and/or adversising our
     /// own external addresses
     pub seeds: Vec<Url>,
+    /// Magic bytes should be unique per P2P network.
+    /// Avoid bleeding of networks.
+    pub magic_bytes: MagicBytes,
     /// Application version, used for convenient protocol matching
     pub app_version: semver::Version,
     /// Whitelisted network transports for outbound connections
@@ -115,6 +118,7 @@ impl Default for Settings {
             node_id: String::new(),
             inbound_addrs: vec![],
             external_addrs: vec![],
+            magic_bytes: Default::default(),
             peers: vec![],
             seeds: vec![],
             app_version,
@@ -144,6 +148,16 @@ impl Default for Settings {
 // The following is used so we can have P2P settings configurable
 // from TOML files.
 
+/// Distinguishes distinct P2P networks
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct MagicBytes(pub [u8; 4]);
+
+impl Default for MagicBytes {
+    fn default() -> Self {
+        Self([0xd9, 0xef, 0xb6, 0x7d])
+    }
+}
+
 /// Defines the network settings.
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
@@ -160,6 +174,12 @@ pub struct SettingsOpt {
     /// Inbound connection slots number
     #[structopt(long = "inbound-slots")]
     pub inbound_connections: Option<usize>,
+
+    #[serde(default)]
+    #[structopt(skip)]
+    /// Magic bytes used to distinguish P2P distinct networks and
+    /// avoid nodes bleeding due to user config error.
+    pub magic_bytes: MagicBytes,
 
     /// P2P external addresses node advertises so other peers can
     /// reach us and connect to us, as long as inbound addresses
@@ -275,6 +295,7 @@ impl From<SettingsOpt> for Settings {
             node_id: opt.node_id,
             inbound_addrs: opt.inbound,
             external_addrs: opt.external_addrs,
+            magic_bytes: opt.magic_bytes,
             peers: opt.peers,
             seeds: opt.seeds,
             app_version: def.app_version,

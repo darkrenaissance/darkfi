@@ -64,6 +64,8 @@ class SceneNodeType:
     CHAT_EDIT = 18
     IMAGE = 18
     BUTTON = 19
+    SETTING_ROOT = 24
+    SETTING = 25
 
 class PropertyType:
     NULL = 0

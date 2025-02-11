@@ -190,7 +190,7 @@ pub async fn make(
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     is_first_time: bool,
 ) {
-    let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
+    let window_scale = PropertyFloat32::wrap(&app.sg_root.clone().lookup_node("/setting/scale").unwrap(), Role::Internal, "value", 0).unwrap();
     let atom = &mut PropertyAtomicGuard::new();
 
     let mut cc = Compiler::new();

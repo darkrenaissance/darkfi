@@ -36,7 +36,7 @@ use futures::{
 };
 use log::{debug, error, info, warn};
 use smol::{
-    lock::{Mutex, OnceCell},
+    lock::{Mutex as AsyncMutex, OnceCell},
     Timer,
 };
 use tor_cell::relaycell::msg::Connected;
@@ -81,9 +81,12 @@ impl TorDialer {
                 if let Some(datadir) = &self.datastore {
                     let datadir = expand_path(datadir).unwrap();
 
-                    let config = TorClientConfigBuilder::from_directories(datadir.clone(), datadir)
-                        .build()
-                        .unwrap();
+                    let config = TorClientConfigBuilder::from_directories(
+                        datadir.join("arti-data"),
+                        datadir.join("arti-cache"),
+                    )
+                    .build()
+                    .unwrap();
 
                     TorClient::create_bootstrapped(config).await
                 } else {
@@ -154,13 +157,13 @@ impl TorDialer {
 #[derive(Clone, Debug)]
 pub struct TorListener {
     datastore: Option<String>,
-    pub endpoint: Arc<Mutex<Option<Url>>>,
+    pub endpoint: Arc<OnceCell<Url>>,
 }
 
 impl TorListener {
     /// Instantiate a new [`TorListener`]
     pub async fn new(datastore: Option<String>) -> io::Result<Self> {
-        Ok(Self { datastore, endpoint: Arc::new(Mutex::new(None)) })
+        Ok(Self { datastore, endpoint: Arc::new(OnceCell::new()) })
     }
 
     /// Internal listen function
@@ -224,14 +227,14 @@ impl TorListener {
             onion_service.onion_name().unwrap(), port,
         );
 
-        *self.endpoint.lock().await = Some(
-            Url::parse(&format!("tor://{}:{}", onion_service.onion_name().unwrap(), port)).unwrap(),
-        );
+        let endpoint =
+            Url::parse(&format!("tor://{}:{}", onion_service.onion_name().unwrap(), port)).unwrap();
+        self.endpoint.set(endpoint).await.expect("fatal endpoint already set for TorListener");
 
         Ok(TorListenerIntern {
             port,
             _onion_service: onion_service,
-            rendreq_stream: Mutex::new(Box::pin(rendreq_stream)),
+            rendreq_stream: AsyncMutex::new(Box::pin(rendreq_stream)),
         })
     }
 }
@@ -241,7 +244,7 @@ pub struct TorListenerIntern {
     port: u16,
     _onion_service: Arc<RunningOnionService>,
     //rendreq_stream: Mutex<BoxStream<'a, RendRequest>>,
-    rendreq_stream: Mutex<Pin<Box<dyn Stream<Item = RendRequest> + Send>>>,
+    rendreq_stream: AsyncMutex<Pin<Box<dyn Stream<Item = RendRequest> + Send>>>,
 }
 
 unsafe impl Sync for TorListenerIntern {}

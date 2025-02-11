@@ -1738,7 +1738,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 drk.stop_rpc_client().await
             }
 
-            DaoSubcmd::ProposalImport {} => {
+            DaoSubcmd::ProposalImport => {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
                 let Some(bytes) = base64::decode(buf.trim()) else {

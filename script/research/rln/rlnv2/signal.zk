@@ -11,26 +11,23 @@ witness "RlnSignal" {
     Uint32 identity_leaf_pos,
 
     Base x, # The message hash
-    Base message_id,
-    Base message_limit,
+    Base external_nullifier, # Hash(Epoch, RLN identifier)
 
-    # These are public
+    Base message_id,
+    Base user_message_limit,
+
     Base epoch,
-    Base rln_identifier,
 }
 
 circuit "RlnSignal" {
-    constrain_instance(message_limit);
     constrain_instance(epoch);
-
-    external_nullifier = poseidon_hash(epoch, rln_identifier);
     constrain_instance(external_nullifier);
 
+    less_than_strict(message_id, user_message_limit);
+
+    # Identity secret hash
     a_0 = poseidon_hash(identity_nullifier, identity_trapdoor);
     a_1 = poseidon_hash(a_0, external_nullifier, message_id);
-
-    internal_nullifier = poseidon_hash(a_1);
-    constrain_instance(internal_nullifier);
 
     # y = a_0 + x * a_1
     x_a_1 = base_mul(x, a_1);
@@ -38,7 +35,10 @@ circuit "RlnSignal" {
     constrain_instance(x);
     constrain_instance(y);
 
-    identity_commitment = poseidon_hash(a_0);
+    internal_nullifier = poseidon_hash(a_1);
+    constrain_instance(internal_nullifier);
+
+    identity_commitment = poseidon_hash(a_0, user_message_limit);
     root = merkle_root(identity_leaf_pos, identity_path, identity_commitment);
     constrain_instance(root);
 }

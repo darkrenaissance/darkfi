@@ -1,0 +1,12 @@
+rpc_listen="tcp://127.0.0.1:10300"
+verbose = 2
+
+[net]
+hostlist = "example/seed.tsv"
+inbound=["tcp://[::]:10200"]
+allowed_transports = ["tcp"]
+seeds=[]
+# no outbounds for seed node
+magic_bytes=[127, 64, 12, 201]
+localnet = true
+

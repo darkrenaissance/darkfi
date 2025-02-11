@@ -1,0 +1,39 @@
+[package]
+name = "rlnd"
+version = "0.4.1"
+description = "DarkFi RLN state management daemon."
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+# Darkfi
+darkfi = {path = "../../../../", features = ["async-daemonize", "async-sdk", "rpc", "sled-overlay"]}
+darkfi-sdk = {path = "../../../../src/sdk"}
+darkfi-serial = "0.4.2"
+
+# Misc
+bs58 = "0.5.1"
+log = "0.4.25"
+sled-overlay = "0.1.6"
+
+# JSON-RPC
+async-trait = "0.1.86"
+tinyjson = "2.5.1"
+url = "2.5.4"
+
+# Daemon
+async-std = {version = "1.13.0", features = ["attributes"]}
+easy-parallel = "3.3.1"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.17"
+simplelog = "0.12.2"
+smol = "2.0.2"
+
+# Argument parsing
+serde = {version = "1.0.217", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.1"

@@ -17,7 +17,3 @@ blake3 = "1.5.5"
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
-
-[lints]
-workspace = true
-

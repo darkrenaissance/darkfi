@@ -25,6 +25,7 @@ use rusqlite::types::Value;
 
 use darkfi::{
     tx::Transaction,
+    validator::fees::compute_fee,
     zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses, Proof},
     zkas::ZkBinary,
     Error, Result,
@@ -1182,14 +1183,14 @@ impl Drk {
         fee_zkbin: &ZkBinary,
         spent_coins: Option<&[OwnCoin]>,
     ) -> Result<(ContractCall, Vec<Proof>, Vec<SecretKey>)> {
-        // First we verify the fee-less transaction to see how much gas it uses for execution
+        // First we verify the fee-less transaction to see how much fee it requires for execution
         // and verification.
-        let gas_used = FEE_CALL_GAS + self.get_tx_gas(tx, false).await?;
+        let required_fee = compute_fee(&FEE_CALL_GAS) + self.get_tx_fee(tx, false).await?;
 
         // Knowing the total gas, we can now find an OwnCoin of enough value
         // so that we can create a valid Money::Fee call.
         let mut available_coins = self.get_token_coins(&DARK_TOKEN_ID).await?;
-        available_coins.retain(|x| x.note.value > gas_used);
+        available_coins.retain(|x| x.note.value > required_fee);
         if let Some(spent_coins) = spent_coins {
             available_coins.retain(|x| !spent_coins.contains(x));
         }
@@ -1198,7 +1199,7 @@ impl Drk {
         }
 
         let coin = &available_coins[0];
-        let change_value = coin.note.value - gas_used;
+        let change_value = coin.note.value - required_fee;
 
         // Input and output setup
         let input = FeeCallInput {
@@ -1275,7 +1276,7 @@ impl Drk {
 
         // Encode the contract call
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        gas_used.encode_async(&mut data).await?;
+        required_fee.encode_async(&mut data).await?;
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 

@@ -1,0 +1,19 @@
+## rlnd configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Path to the database directory
+database = "~/.local/share/darkfi/rlnd"
+
+# Private JSON-RPC listen URL
+private_rpc_listen = "tcp://127.0.0.1:25637"
+
+# Publicly exposed JSON-RPC listen URL
+public_rpc_listen = "tcp://127.0.0.1:25638"
+
+# darkirc JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:26660"

@@ -55,8 +55,5 @@ pub fn try_decrypt(salt_box: &ChaChaBox, ciphertext: &[u8]) -> Option<Vec<u8>> {
         return None
     }
 
-    match salt_box.decrypt((&ciphertext[0..24]).into(), &ciphertext[24..]) {
-        Ok(v) => Some(v),
-        Err(_) => None,
-    }
+    salt_box.decrypt((&ciphertext[0..24]).into(), &ciphertext[24..]).ok()
 }

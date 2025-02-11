@@ -1,0 +1,13 @@
+rpc_listen="tcp://127.0.0.1:10301"
+verbose = 2
+
+[net]
+hostlist = "example/node2.tsv"
+inbound = ["tcp://[::]:10201"]
+allowed_transports = ["tcp"]
+external_addrs=["tcp://[::1]:10201"]
+seeds = ["tcp://[::1]:10200"]
+outbound_connections = 5
+magic_bytes = [127, 64, 12, 201]
+localnet = true
+

@@ -27,14 +27,14 @@ libc = "0.2.169"
 sled-overlay = "0.1.6"
 
 # TLS
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 futures = "0.3.31"
 futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"]}
 rustls-pemfile = "2.2.0"
 
 # Crypto
 blake3 = "1.5.5"
-bcrypt = "0.16.0"
+bcrypt = "0.17.0"
 crypto_box = {version = "0.9.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
 
@@ -44,7 +44,7 @@ url = "2.5.4"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.19"
+toml = "0.8.20"
 semver = "1.0.25"
 
 # Daemon

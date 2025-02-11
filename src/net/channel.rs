@@ -32,16 +32,16 @@ use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
-    lock::Mutex,
+    lock::{Mutex as AsyncMutex, OnceCell},
     Executor,
 };
 use url::Url;
 
 use super::{
     dnet::{self, dnetev, DnetEvent},
-    hosts::HostColor,
+    hosts::{HostColor, HostsPtr},
     message,
-    message::{SerializedMessage, VersionMessage, MAGIC_BYTES},
+    message::{SerializedMessage, VersionMessage},
     message_publisher::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{
@@ -77,9 +77,9 @@ impl ChannelInfo {
 /// Async channel for communication between nodes.
 pub struct Channel {
     /// The reading half of the transport stream
-    reader: Mutex<ReadHalf<Box<dyn PtStream>>>,
+    reader: AsyncMutex<ReadHalf<Box<dyn PtStream>>>,
     /// The writing half of the transport stream
-    writer: Mutex<WriteHalf<Box<dyn PtStream>>>,
+    writer: AsyncMutex<WriteHalf<Box<dyn PtStream>>>,
     /// The message subsystem instance for this channel
     message_subsystem: MessageSubsystem,
     /// Publisher listening for stop signal for closing this channel
@@ -93,7 +93,7 @@ pub struct Channel {
     /// The version message of the node we are connected to.
     /// Some if the version exchange has already occurred, None
     /// otherwise.
-    pub version: Mutex<Option<Arc<VersionMessage>>>,
+    pub version: OnceCell<Arc<VersionMessage>>,
     /// Channel debug info
     pub info: ChannelInfo,
 }
@@ -109,13 +109,12 @@ impl Channel {
         session: SessionWeakPtr,
     ) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
-        let reader = Mutex::new(reader);
-        let writer = Mutex::new(writer);
+        let reader = AsyncMutex::new(reader);
+        let writer = AsyncMutex::new(writer);
 
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let version = Mutex::new(None);
         let start_time = UNIX_EPOCH.elapsed().unwrap().as_secs();
         let info = ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time);
 
@@ -127,7 +126,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
             session,
-            version,
+            version: OnceCell::new(),
             info,
         })
     }
@@ -241,7 +240,8 @@ impl Channel {
         });
 
         trace!(target: "net::channel::send_message()", "Sending magic...");
-        written += MAGIC_BYTES.encode_async(stream).await?;
+        let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
+        written += magic_bytes.encode_async(stream).await?;
         trace!(target: "net::channel::send_message()", "Sent magic");
 
         trace!(target: "net::channel::send_message()", "Sending command...");
@@ -279,7 +279,8 @@ impl Channel {
         stream.read_exact(&mut magic).await?;
 
         trace!(target: "net::channel::read_command()", "Read magic {:?}", magic);
-        if magic != MAGIC_BYTES {
+        let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
+        if magic != magic_bytes {
             error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
             return Err(Error::MalformedPacket)
         }
@@ -454,7 +455,14 @@ impl Channel {
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
         info!(target: "net::channel::ban()", "Blacklisting peer={}", peer);
-        self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).unwrap();
+        match self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black) {
+            Ok(()) => {
+                info!(target: "net::channel::ban()", "Peer={} blacklisted successfully", peer);
+            }
+            Err(e) => {
+                warn!(target: "net::channel::ban()", "Could not blacklisted peer={}, err={}", peer, e);
+            }
+        }
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
     }
@@ -485,7 +493,11 @@ impl Channel {
     /// Set the VersionMessage of the node this channel is connected
     /// to. Called on receiving a version message in `ProtocolVersion`.
     pub(crate) async fn set_version(&self, version: Arc<VersionMessage>) {
-        *self.version.lock().await = Some(version);
+        self.version.set(version).await.unwrap();
+    }
+    /// Should only be called after the version exchange has been completed.
+    pub fn get_version(&self) -> Arc<VersionMessage> {
+        self.version.get().unwrap().clone()
     }
 
     /// Returns the inner [`MessageSubsystem`] reference
@@ -502,8 +514,13 @@ impl Channel {
         session.type_id()
     }
 
-    pub(in crate::net) fn p2p(&self) -> P2pPtr {
+    #[inline]
+    pub fn p2p(&self) -> P2pPtr {
         self.session().p2p()
+    }
+    #[inline]
+    pub fn hosts(&self) -> HostsPtr {
+        self.p2p().hosts()
     }
 
     fn is_eof_error(err: &Error) -> bool {

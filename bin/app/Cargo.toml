@@ -42,7 +42,7 @@ url = "2.5.4"
 semver = "1.0.25"
 chrono = "0.4.39"
 async-gen = "0.2.3"
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 blake3 = "1.5.5"
 simplelog = "0.12.2"
 # For log files
