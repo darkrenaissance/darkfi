@@ -24,6 +24,7 @@ darkfi = { path = "../../../", features = [
     "rpc",
 ] }
 
+darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
 darkfi-serial = "0.4.2"
 
 # Event Graph DB
@@ -33,7 +34,6 @@ sled-overlay = "0.1.6"
 blake3 = "1.5.5"
 crypto_box = { version = "0.9.1", features = ["std", "chacha20"] }
 rand = "0.8.5"
-ring = "0.17.8"
 
 # Encoding and parsing
 bs58 = "0.5.1"
