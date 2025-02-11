@@ -186,7 +186,7 @@ fn start_p2p<'a>(
     let ex = p2p_ptr.clone().executor.clone();
     let start_p2p_fut = start_p2p_and_wait(w8_time, p2p_ptr.clone());
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        smol::future::block_on(ex.run(start_p2p_fut));
+        ex.run(start_p2p_fut).await;
         Ok(())
     })
 }
@@ -230,7 +230,7 @@ fn stop_p2p<'a>(
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
     let ex = p2p_ptr.executor.clone();
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        smol::future::block_on(ex.run(stop_p2p_and_wait(w8_time, p2p_ptr.clone())));
+        ex.run(stop_p2p_and_wait(w8_time, p2p_ptr.clone())).await;
         Ok(())
     })
 }
@@ -251,7 +251,7 @@ fn broadcast_p2p<'a>(
     let ex = p2p_ptr.executor.clone();
     let event: event_graph::Event = event_py.borrow().deref().0.clone();
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        smol::future::block_on(ex.run(broadcast_and_wait(w8_time, p2p_ptr.clone(), event.clone())));
+        ex.run(broadcast_and_wait(w8_time, p2p_ptr.clone(), event.clone())).await;
         Ok(())
     })
 }

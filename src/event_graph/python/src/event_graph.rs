@@ -17,7 +17,7 @@
  */
 
 use super::{p2p::P2pPtr, sled::SledDb};
-use darkfi::{event_graph, event_graph::event, net};
+use darkfi::{event_graph, event_graph::event, net, Error};
 use pyo3::{
     prelude::PyModule,
     pyclass, pyfunction, pymethods,
@@ -37,6 +37,7 @@ pub struct EventGraph(pub event_graph::EventGraph);
 
 #[pyfunction]
 fn new_event_graph<'a>(
+    py: Python<'a>,
     p2p: &P2pPtr,
     sled_db: &SledDb,
     datastore: PathBuf,
@@ -49,21 +50,23 @@ fn new_event_graph<'a>(
     // because lifetime has no meaning in python which is
     // a reference-counted language
     let ex = Arc::new(Executor::new());
-    let dag_tree_name_bind = dag_tree_name.clone();
     let p2p_ptr: net::P2pPtr = p2p.0.clone();
     let sled_db_bind: sled::Db = sled_db.0.clone();
-    let event_graph = event_graph::EventGraph::new(
-        p2p_ptr,
-        sled_db_bind,
-        datastore,
-        replay_mode,
-        &*dag_tree_name_bind,
-        days_rotation,
-        ex.clone(),
-    );
-
-    let eg_res: Result<Arc<event_graph::EventGraph>, darkfi::Error> =
-        smol::future::block_on(ex.run(event_graph)); //event_graph.await;
+    let eg_res: Result<Arc<event_graph::EventGraph>, Error> =
+        pyo3_async_runtimes::async_std::run(py, async move {
+            let event_graph = event_graph::EventGraph::new(
+                p2p_ptr,
+                sled_db_bind,
+                datastore,
+                replay_mode,
+                &*dag_tree_name,
+                days_rotation,
+                ex.clone(),
+            );
+            let eg_res = ex.run(event_graph).await;
+            Ok(eg_res)
+        })
+        .unwrap();
     let eg: Arc<event_graph::EventGraph> = eg_res.unwrap();
     //note! pyclass implements IntoPy<PyObject> for EventGraphPtr
     let eg_pyclass: EventGraphPtr = EventGraphPtr(eg);
@@ -113,7 +116,7 @@ async fn dag_insert_wait(
     events_native: Vec<event::Event>,
 ) -> Vec<blake3::Hash> {
     let fut = eg_ptr.dag_insert(&events_native[..]);
-    let ids_res: Result<Vec<blake3::Hash>, darkfi::Error> = fut.await;
+    let ids_res: Result<Vec<blake3::Hash>, Error> = fut.await;
     let ids: Vec<blake3::Hash> = ids_res.unwrap();
     async_std::task::sleep(std::time::Duration::from_secs(w8_time)).await;
     ids
@@ -129,18 +132,16 @@ impl EventGraphPtr {
         })
     }
 
-    fn dag_insert<'a>(&'a self, events: Vec<Bound<Event>>) -> PyResult<Vec<Hash>> {
+    fn dag_insert<'a>(&'a self, py: Python<'a>, events: Vec<Bound<Event>>) -> PyResult<Vec<Hash>> {
         let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
         let events_native: Vec<event::Event> =
             events.iter().map(|i| i.borrow().deref().0.clone()).collect();
-        let ids = smol::future::block_on(eg_ptr.p2p.executor.run(dag_insert_wait(
-            5,
-            eg_ptr.clone(),
-            events_native,
-        )));
-        let ids_native: Vec<Hash> = ids.iter().map(|i| Hash(i.clone())).collect();
-        //async_std::task::sleep(std::time::Duration::from_secs(5)).await;
-        Ok(ids_native)
+        pyo3_async_runtimes::async_std::run(py, async move {
+            let ids =
+                eg_ptr.p2p.executor.run(dag_insert_wait(5, eg_ptr.clone(), events_native)).await;
+            let ids_native: Vec<Hash> = ids.iter().map(|i| Hash(i.clone())).collect();
+            Ok(ids_native)
+        })
     }
 
     fn dag_get<'a>(
@@ -151,8 +152,7 @@ impl EventGraphPtr {
         let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
         let event_id: blake3::Hash = event_id_native.borrow().deref().0.clone();
         pyo3_async_runtimes::async_std::future_into_py(py, async move {
-            let event_res: Result<Option<event::Event>, darkfi::Error> =
-                eg_ptr.dag_get(&event_id).await;
+            let event_res: Result<Option<event::Event>, Error> = eg_ptr.dag_get(&event_id).await;
             let event: event::Event = event_res
                 .unwrap()
                 .expect(&format!("expecting event in return with id: {}", event_id).to_string());
@@ -161,11 +161,9 @@ impl EventGraphPtr {
         })
     }
 
-    fn dag_len(&self, _py: Python) -> usize {
+    fn dag_len(&self) -> usize {
         let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
         eg_ptr.dag_len()
-        //TODO impl
-        //0
     }
 
     fn order_events<'a>(&'a self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
