@@ -24,6 +24,7 @@ def get_seed_node(starting_port=STARTING_PORT):
     external_addrs = [seed_addr]
     peers = []
     seeds = []
+    magic_bytes = p2p.MagicBytes(MAGIC_CODE)
     app_version = p2p.new_version(0, 1, 1, '')
     allowed_transports = ['tcp']
     transport_mixing = True
@@ -50,6 +51,7 @@ def get_seed_node(starting_port=STARTING_PORT):
         external_addrs,
         peers,
         seeds,
+        magic_bytes,
         app_version,
         allowed_transports,
         transport_mixing,
@@ -88,6 +90,7 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
         external_addrs = [addrs]
         peers = []
         seeds = [seed_addr]
+        magic_bytes = p2p.MagicBytes(MAGIC_CODE)
         app_version = p2p.new_version(0, 1, 1, '')
         allowed_transports = ['tcp']
         transport_mixing = True
@@ -114,6 +117,7 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
             external_addrs,
             peers,
             seeds,
+            magic_bytes,
             app_version,
             allowed_transports,
             transport_mixing,

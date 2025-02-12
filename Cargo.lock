@@ -2158,12 +2158,12 @@ name = "darkfi-eventgraph-py"
 version = "0.1.0"
 dependencies = [
  "async-std",
- "blake3 1.5.4",
+ "blake3 1.5.5",
  "darkfi",
  "futures",
  "pyo3",
  "pyo3-async-runtimes",
- "semver 1.0.23",
+ "semver 1.0.25",
  "sled-overlay",
  "smol",
  "url",
@@ -5905,7 +5905,7 @@ dependencies = [
  "async-std",
  "futures",
  "once_cell",
- "pin-project-lite 0.2.14",
+ "pin-project-lite 0.2.16",
  "pyo3",
  "pyo3-async-runtimes-macros",
 ]
@@ -5918,7 +5918,7 @@ checksum = "22c26fd8e9fc19f53f0c1e00bf61471de6789f7eb263056f7f944a9cceb5823e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.79",
+ "syn 2.0.98",
 ]
 
 [[package]]

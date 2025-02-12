@@ -63,6 +63,17 @@ impl Url {
     }
 }
 
+#[pyclass]
+struct MagicBytes(pub net::settings::MagicBytes);
+
+#[pymethods]
+impl MagicBytes {
+    #[new]
+    fn new(bytes: [u8; 4]) -> Self {
+        Self(net::settings::MagicBytes(bytes))
+    }
+}
+
 #[pyfunction]
 fn get_strict_banpolicy() -> PyResult<BanPolicy> {
     Ok(BanPolicy::Strict)
@@ -94,6 +105,7 @@ fn new_settings(
     external_addrs: Vec<Bound<Url>>,
     peers: Vec<Bound<Url>>,
     seeds: Vec<Bound<Url>>,
+    magic_bytes: &MagicBytes,
     app_version: &Version,
     allowed_transports: Vec<String>,
     transport_mixing: bool,
@@ -121,6 +133,7 @@ fn new_settings(
         external_addrs: external_addrs.iter().map(|i| i.borrow().deref().0.clone()).collect(),
         peers: peers.iter().map(|i| i.borrow().deref().0.clone()).collect(),
         seeds: seeds.iter().map(|i| i.borrow().deref().0.clone()).collect(),
+        magic_bytes: magic_bytes.0.clone(),
         app_version: app_version.0.clone(),
         allowed_transports,
         transport_mixing,
@@ -288,6 +301,7 @@ pub fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
     submod.add_class::<P2p>()?;
     submod.add_class::<Settings>()?;
     submod.add_class::<Url>()?;
+    submod.add_class::<MagicBytes>()?;
     submod.add_function(wrap_pyfunction!(new_version, &submod)?)?;
     submod.add_function(wrap_pyfunction!(new_settings, &submod)?)?;
     submod.add_function(wrap_pyfunction!(get_strict_banpolicy, &submod)?)?;
