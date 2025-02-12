@@ -42,9 +42,9 @@ nickname = "node3"
 #write_key = ""
 
 [workspace."test"]
-read_key = "DDEza5ifrphkKTvMSP1c8dR5RyUgn1WQHBvnAJKNzDRK"
-write_public_key = "CAX5qCXCTGwqT27ixzdgm4H54kbh2HtrXbzj9odAyjxh"
-write_key = "nGpVmGTNjfvJ9ojqijQwUMsbjrzaqHK5RniGAx9LTJfm49QcGY48RCaJ6riePvtr7xwUCyfvrwjxS8oqnDgpiZhS8KCQrykRYAwuFoHb41PSEMALu"
+read_key = "AXApLyi8id3T1MwKkrgdYZtkpUag5qMmambDHGkdFiY2"
+write_key = "7jvrj4Rxnm1UcAjz5Y1CNFEfZiGMg9F1ekfbbEakkicA"
+write_public_key = "2LW4qXxR5QSybtMeRtX69GdqNWxgAbDVyMT6aWe37MT7"
 
 # P2P network settings
 [net]

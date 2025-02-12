@@ -22,6 +22,7 @@ use std::{
     ffi::CString,
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
+    str::FromStr,
     sync::{Arc, OnceLock},
 };
 
@@ -37,10 +38,6 @@ use futures::{select, FutureExt};
 use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
-use ring::{
-    rand::SystemRandom,
-    signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519},
-};
 use sled_overlay::sled;
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
@@ -62,6 +59,11 @@ use darkfi::{
     Error, Result,
 };
 
+use darkfi_sdk::crypto::{
+    schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+    Keypair, PublicKey,
+};
+
 mod jsonrpc;
 mod settings;
 
@@ -78,17 +80,18 @@ use crate::{
 
 struct Workspace {
     read_key: ChaChaBox,
-    write_key: Option<Ed25519KeyPair>,
-    write_pubkey: UnparsedPublicKey<Vec<u8>>,
+    write_key: Option<darkfi_sdk::crypto::SecretKey>,
+    write_pubkey: PublicKey,
 }
 
 impl Workspace {
     fn new() -> Self {
         let secret_key = SecretKey::generate(&mut OsRng);
+        let keypair = Keypair::default();
         Self {
             read_key: ChaChaBox::new(&secret_key.public_key(), &secret_key),
             write_key: None,
-            write_pubkey: UnparsedPublicKey::new(&ED25519, vec![0]),
+            write_pubkey: keypair.public,
         }
     }
 }
@@ -101,12 +104,12 @@ pub struct EncryptedTask {
 #[derive(SerialEncodable, SerialDecodable)]
 struct SignedTask {
     task: Vec<u8>,
-    signature: Vec<u8>,
+    signature: Signature,
 }
 
 impl SignedTask {
     fn new(task: &TaskInfo, signature: Signature) -> Self {
-        Self { task: serialize(task), signature: signature.as_ref().to_vec() }
+        Self { task: serialize(task), signature }
     }
 }
 
@@ -198,9 +201,10 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
             if let Some(write_pubkey) = write_pubkey.as_str() {
                 if !write_pubkey.is_empty() {
                     info!(target: "taud", "Found configured write_public_key for {} workspace", name);
-                    let write_pubkey = write_pubkey.to_string();
-                    let decoded_write_pubkey = bs58::decode(write_pubkey).into_vec().unwrap();
-                    ws.write_pubkey = UnparsedPublicKey::new(&ED25519, decoded_write_pubkey);
+                    let write_key = PublicKey::from_str(write_pubkey).unwrap();
+                    // let write_pubkey = write_pubkey.to_string();
+                    // let decoded_write_pubkey = bs58::decode(write_pubkey).into_vec().unwrap();
+                    ws.write_pubkey = write_key;
                 }
             } else {
                 return Err(Error::ParseFailed("Workspace write_public_key not a string"))
@@ -214,15 +218,17 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
                 if !write_key.is_empty() {
                     info!(target: "taud", "Found configured write_key for {} workspace", name);
                     let write_key = write_key.to_string();
-                    let pkcs8_bytes = bs58::decode(write_key).into_vec().unwrap();
-                    let ed25519 = match Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()) {
+                    let write_key_bytes = bs58::decode(write_key).into_vec().unwrap();
+                    let secret = match darkfi_sdk::crypto::SecretKey::from_bytes(
+                        write_key_bytes.try_into().unwrap(),
+                    ) {
                         Ok(key) => key,
                         Err(e) => {
                             error!(target: "taud", "Failed parsing write_key: {}", e);
                             return Err(Error::ParseFailed("Failed parsing write_key"))
                         }
                     };
-                    ws.write_key = Some(ed25519);
+                    ws.write_key = Some(secret);
                 }
             } else {
                 return Err(Error::ParseFailed("Workspace write_key not a string"))
@@ -230,7 +236,8 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         }
 
         if let Some(wrt_key) = ws.write_key.as_ref() {
-            if wrt_key.public_key().as_ref() != ws.write_pubkey.as_ref() {
+            let pk = PublicKey::from_secret(*wrt_key);
+            if pk != ws.write_pubkey {
                 error!(target: "taud", "Wrong keypair for {} workspace, the workspace is not added!", name);
                 continue
             }
@@ -359,19 +366,14 @@ async fn on_receive_task(
             continue
         }
 
-        if workspace
+        if !workspace
             .write_pubkey
             .verify(&signed_task.as_ref().unwrap().task, &signed_task.as_ref().unwrap().signature)
-            .is_err()
         {
-            // *verified.lock().await = false;
             error!(target: "taud", "Task is not verified: wrong write_public_key");
             error!(target: "taud", "Task is not saved");
             continue
         }
-        // else {
-        //     *verified.lock().await = true;
-        // }
 
         let mut task: TaskInfo = deserialize(&signed_task.unwrap().task)?;
         info!(target: "taud", "Save the task: ref: {}", task.ref_id);
@@ -473,20 +475,17 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                 continue
             }
 
+            // Encryption
             // Chachabox secret key (read_key) used for encrypting tasks.
             let secret_key = SecretKey::generate(&mut OsRng);
             let encoded = bs58::encode(secret_key.to_bytes());
 
-            // Ed25519 secret key (write_key) used for signing tasks.
-            let rng = SystemRandom::new();
-            let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
-            // openssl genpkey -algorithm ED25519
-            let kp = Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()).unwrap();
-            let sk = bs58::encode(pkcs8_bytes).into_string();
-
-            // Ed25519 public key (write_public_key) used for verifying tasks.
-            let peer_public_key_bytes = kp.public_key().as_ref();
-            let pk = bs58::encode(peer_public_key_bytes).into_string();
+            // Signature
+            // Secret key (write_key) used for signing tasks.
+            let keypair = Keypair::random(&mut OsRng);
+            let sk = format!("{}", keypair.secret);
+            // Public key (write_public_key) used for verifying tasks.
+            let pk = format!("{}", keypair.public);
 
             println!("Please add the following to the config file:");
             println!("[workspace.\"{}\"]", workspace);

@@ -42,9 +42,9 @@
 #write_key = ""
 
 [workspace."darkfi-dev"]
-read_key = "4WhacatfZ314eM4aE2MYDUmDZczKpHwZo2u9zwQRaGhE"
-write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
-#write_key = ""
+read_key = "F63KzWGXgUdEfHcjQ2o4C54qbD4vDik7zjY5pSHQMxv2"
+write_public_key = "7iHFdGxe1DYyBtPLVFb7fXL3Kk495WtwRWaNxhYQTU9x"
+# write_key = ""
 
 # P2P network settings
 [net]
