@@ -86,3 +86,23 @@ git config user.email darkfi@darkfi
 
 Verify it has been set with `cat .git/config`.
 
+### Commit Timestamps
+
+`git` commits contain two timestamps, the `AuthodDate` and the `CommitDate`.
+These timestamps are retrieved from the system and contain the configured
+timezone. If you want to exclude the timezone information from your commits,
+you may create a `git` alias to use:
+
+```
+git config --global alias.utc-commit \
+'!GIT_COMMITTER_DATE="$(date --utc +%Y-%m-%dT%H:%M:%S%z)" git commit --date="$(date --utc +%Y-%m-%dT%H:%M:%S%z)"'
+```
+
+This allows to explictly use `UTC` date on commits by executing:
+
+```
+git utc-commit -m "{Commit message}"
+```
+
+Alternative, you can use the same alias in your shell configuration for
+`git commit` to always use `UTC` date on all your repos commits.
