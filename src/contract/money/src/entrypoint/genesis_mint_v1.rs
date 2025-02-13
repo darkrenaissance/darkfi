@@ -49,18 +49,15 @@ pub(crate) fn money_genesis_mint_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys = vec![params.input.signature_public];
 
-    // Grab the pedersen commitment from the anonymous output
-    let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    // Grab the pedersen commitments from the anonymous outputs
+    for output in &params.outputs {
+        let value_coords = output.value_commit.to_affine().coordinates().unwrap();
 
-    zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-        vec![
-            params.output.coin.inner(),
-            *value_coords.x(),
-            *value_coords.y(),
-            params.output.token_commit,
-        ],
-    ));
+        zk_public_inputs.push((
+            MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+            vec![output.coin.inner(), *value_coords.x(), *value_coords.y(), output.token_commit],
+        ));
+    }
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];
@@ -95,35 +92,56 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
+    // Check outputs exist
+    if params.outputs.is_empty() {
+        msg!("[GenesisMintV1] Error: No outputs in the call");
+        return Err(MoneyError::TransferMissingOutputs.into())
+    }
+
     // Access the necessary databases where there is information to
     // validate this state transition.
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
 
-    // Check that the coin from the output hasn't existed before.
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
-        msg!("[GenesisMintV1] Error: Duplicate coin in output");
-        return Err(MoneyError::DuplicateCoin.into())
+    // Compute the expected token commitment of the outputs
+    let tokcom = poseidon_hash([params.input.token_id.inner(), params.input.token_blind.inner()]);
+
+    // Accumulator for the outputs value commitments. For the commitments to
+    // be valid, the accumulator must reach the input value commitment.
+    let mut valcom_total = pallas::Point::identity();
+
+    // Newly created coins for this call are in the outputs. Here we gather them,
+    // check that they haven't existed before and their token commitment is valid.
+    let mut new_coins = Vec::with_capacity(params.outputs.len());
+    msg!("[GenesisMintV1] Iterating over anonymous outputs");
+    for (i, output) in params.outputs.iter().enumerate() {
+        // Check that the coin has not existed before
+        if new_coins.contains(&output.coin) ||
+            wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
+        {
+            msg!("[GenesisMintV1] Error: Duplicate coin found in output {}", i);
+            return Err(MoneyError::DuplicateCoin.into())
+        }
+
+        // Verify the token commitment is the expected one
+        if tokcom != output.token_commit {
+            msg!("[GenesisMintV1] Error: Token commitment mismatch in output {}", i);
+            return Err(MoneyError::TokenMismatch.into())
+        }
+
+        // Append this new coin to seen coins, and accumulate the value commitment
+        new_coins.push(output.coin);
+        valcom_total += output.value_commit;
     }
 
-    // Verify that the value and token commitments match. In here we just
-    // confirm that the clear input and the anon output have the same
-    // commitments.
-    if pedersen_commitment_u64(params.input.value, params.input.value_blind) !=
-        params.output.value_commit
-    {
-        msg!("[GenesisMintV1] Error: Value commitment mismatch");
+    // If the accumulator doesn't result in the input value commitment, there
+    // is a value mismatch between input and outputs.
+    if valcom_total != pedersen_commitment_u64(params.input.value, params.input.value_blind) {
+        msg!("[GenesisMintV1] Error: Output value commitments do not result in input value commitment");
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind.inner()]) !=
-        params.output.token_commit
-    {
-        msg!("[GenesisMintV1] Error: Token commitment mismatch");
-        return Err(MoneyError::TokenMismatch.into())
-    }
-
-    // Create a state update. We only need the new coin.
-    let update = MoneyGenesisMintUpdateV1 { coin: params.output.coin };
+    // Create a state update. We only need the new coins.
+    let update = MoneyGenesisMintUpdateV1 { coins: new_coins };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::GenesisMintV1 as u8)?;
     update.encode(&mut update_data)?;
@@ -153,17 +171,20 @@ pub(crate) fn money_genesis_mint_process_update_v1(
         &[],
     )?;
 
-    msg!("[GenesisMintV1] Adding new coin to the set");
-    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
+    msg!("[GenesisMintV1] Adding new coins to the set");
+    let mut new_coins = Vec::with_capacity(update.coins.len());
+    for coin in &update.coins {
+        wasm::db::db_set(coins_db, &serialize(coin), &[])?;
+        new_coins.push(MerkleNode::from(coin.inner()));
+    }
 
-    msg!("[GenesisMintV1] Adding new coin to the Merkle tree");
-    let coins = vec![MerkleNode::from(update.coin.inner())];
+    msg!("[GenesisMintV1] Adding new coins to the Merkle tree");
     wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,
         MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &coins,
+        &new_coins,
     )?;
 
     Ok(())

@@ -30,6 +30,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
+        compute_remainder_blind,
         transfer_v1::{proof::create_transfer_mint_proof, TransferCallOutput},
         MoneyNote,
     },
@@ -61,8 +62,8 @@ impl GenesisMintRevealed {
 pub struct GenesisMintCallBuilder {
     /// Caller's public key, corresponding to the one used in the signature
     pub signature_public: PublicKey,
-    /// Amount of tokens we want to mint
-    pub amount: u64,
+    /// Vector containing each output value we want to mint
+    pub amounts: Vec<u64>,
     /// Optional recipient's public key, in case we want to mint to a different address
     pub recipient: Option<PublicKey>,
     /// Optional contract spend hook to use in the output
@@ -78,8 +79,9 @@ pub struct GenesisMintCallBuilder {
 impl GenesisMintCallBuilder {
     pub fn build(&self) -> Result<GenesisMintCallDebris> {
         debug!(target: "contract::money::client::genesis_mint", "Building Money::MintV1 contract call");
-        if self.amount == 0 {
-            return Err(ClientFailed::InvalidAmount(self.amount).into())
+        let value = self.amounts.iter().sum();
+        if value == 0 {
+            return Err(ClientFailed::InvalidAmount(value).into())
         }
 
         // In this call, we will build one clear input and one anonymous output.
@@ -89,63 +91,79 @@ impl GenesisMintCallBuilder {
         // Building the clear input using random blinds
         let value_blind = Blind::random(&mut OsRng);
         let token_blind = Blind::random(&mut OsRng);
-        let coin_blind = Blind::random(&mut OsRng);
-        let c_input = ClearInput {
-            value: self.amount,
+        let input = ClearInput {
+            value,
             token_id,
             value_blind,
             token_blind,
             signature_public: self.signature_public,
         };
 
-        // Grab the spend hook and user data to use in the output
+        // Grab the public key, spend hook and user data to use in the outputs
+        let public_key = self.recipient.unwrap_or(self.signature_public);
         let spend_hook = self.spend_hook.unwrap_or(FuncId::none());
         let user_data = self.user_data.unwrap_or(pallas::Base::ZERO);
 
-        // Building the anonymous output
-        let output = TransferCallOutput {
-            public_key: self.recipient.unwrap_or(self.signature_public),
-            value: self.amount,
-            token_id,
-            spend_hook,
-            user_data,
-            blind: Blind::random(&mut OsRng),
-        };
+        // Building the anonymous outputs
+        let input_blinds = vec![value_blind];
+        let mut output_blinds = Vec::with_capacity(self.amounts.len());
+        let mut outputs = Vec::with_capacity(self.amounts.len());
+        let mut proofs = Vec::with_capacity(self.amounts.len());
+        for (i, amount) in self.amounts.iter().enumerate() {
+            let value_blind = if i == self.amounts.len() - 1 {
+                compute_remainder_blind(&input_blinds, &output_blinds)
+            } else {
+                Blind::random(&mut OsRng)
+            };
+            output_blinds.push(value_blind);
 
-        debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output");
-        let (proof, public_inputs) = create_transfer_mint_proof(
-            &self.mint_zkbin,
-            &self.mint_pk,
-            &output,
-            value_blind,
-            token_blind,
-            spend_hook,
-            user_data,
-            coin_blind,
-        )?;
+            let output = TransferCallOutput {
+                public_key,
+                value: *amount,
+                token_id,
+                spend_hook,
+                user_data,
+                blind: Blind::random(&mut OsRng),
+            };
 
-        let note = MoneyNote {
-            value: output.value,
-            token_id: output.token_id,
-            spend_hook,
-            user_data,
-            coin_blind,
-            value_blind,
-            token_blind,
-            memo: vec![],
-        };
+            debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output {}", i);
+            let (proof, public_inputs) = create_transfer_mint_proof(
+                &self.mint_zkbin,
+                &self.mint_pk,
+                &output,
+                value_blind,
+                token_blind,
+                spend_hook,
+                user_data,
+                output.blind,
+            )?;
+            proofs.push(proof);
 
-        let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
+            let note = MoneyNote {
+                value: output.value,
+                token_id: output.token_id,
+                spend_hook,
+                user_data,
+                coin_blind: output.blind,
+                value_blind,
+                token_blind,
+                memo: vec![],
+            };
 
-        let c_output = Output {
-            value_commit: public_inputs.value_commit,
-            token_commit: public_inputs.token_commit,
-            coin: public_inputs.coin,
-            note: encrypted_note,
-        };
+            let encrypted_note = AeadEncryptedNote::encrypt(&note, &public_key, &mut OsRng)?;
 
-        let params = MoneyGenesisMintParamsV1 { input: c_input, output: c_output };
-        let debris = GenesisMintCallDebris { params, proofs: vec![proof] };
+            let output = Output {
+                value_commit: public_inputs.value_commit,
+                token_commit: public_inputs.token_commit,
+                coin: public_inputs.coin,
+                note: encrypted_note,
+            };
+
+            outputs.push(output);
+        }
+
+        let params = MoneyGenesisMintParamsV1 { input, outputs };
+        let debris = GenesisMintCallDebris { params, proofs };
         Ok(debris)
     }
 }

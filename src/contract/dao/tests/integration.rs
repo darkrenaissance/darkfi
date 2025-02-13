@@ -52,7 +52,7 @@ const ALICE_GOV_SUPPLY: u64 = 100_000_000;
 const BOB_GOV_SUPPLY: u64 = 100_000_000;
 const CHARLIE_GOV_SUPPLY: u64 = 100_000_000;
 // DRK token, the treasury token, supply
-const DRK_TOKEN_SUPPLY: u64 = 1_000_000_000;
+const DRK_TOKEN_SUPPLY: [u64; 1] = [1_000_000_000];
 // DAO parameters configuration
 const PROPOSER_LIMIT: u64 = 100_000_000;
 const QUORUM: u64 = 200_000_000;
@@ -128,7 +128,7 @@ fn integration_test() -> Result<()> {
         let (genesis_mint_tx, genesis_mint_params) = th
             .genesis_mint(
                 &Holder::Dao,
-                DRK_TOKEN_SUPPLY,
+                &DRK_TOKEN_SUPPLY,
                 Some(spend_hook),
                 Some(dao.to_bulla().inner()),
             )
@@ -150,7 +150,7 @@ fn integration_test() -> Result<()> {
         let _dao_tokens = &th.holders.get(&Holder::Dao).unwrap().unspent_money_coins;
         assert!(_dao_tokens.len() == 1);
         assert!(_dao_tokens[0].note.token_id == *DARK_TOKEN_ID);
-        assert!(_dao_tokens[0].note.value == DRK_TOKEN_SUPPLY);
+        assert!(_dao_tokens[0].note.value == DRK_TOKEN_SUPPLY[0]);
 
         current_block_height += 1;
 
@@ -581,7 +581,7 @@ async fn execute_transfer_proposal(
 
     let dao_wallet = th.holders.get(&Holder::Dao).unwrap();
     assert!(
-        dao_wallet.unspent_money_coins[0].note.value == DRK_TOKEN_SUPPLY - dao_treasury_decrease
+        dao_wallet.unspent_money_coins[0].note.value == DRK_TOKEN_SUPPLY[0] - dao_treasury_decrease
     );
     assert!(dao_wallet.unspent_money_coins[0].note.token_id == *DARK_TOKEN_ID);
 
