@@ -379,8 +379,8 @@ impl Validator {
         // Apply confirmed proposals diffs and update PoW module
         let mut module = self.consensus.module.write().await;
         let mut confirmed_txs = vec![];
-        let mut state_diffs_heights = vec![];
-        let mut state_diffs = vec![];
+        let mut state_inverse_diffs_heights = vec![];
+        let mut state_inverse_diffs = vec![];
         info!(target: "validator::confirmation", "Confirming proposals:");
         for (index, proposal) in confirmed_proposals.iter().enumerate() {
             info!(target: "validator::confirmation", "\t{} - {}", proposal, confirmed_blocks[index].header.height);
@@ -388,14 +388,16 @@ impl Validator {
             let next_difficulty = module.next_difficulty()?;
             module.append(confirmed_blocks[index].header.timestamp, &next_difficulty);
             confirmed_txs.extend_from_slice(&confirmed_blocks[index].txs);
-            state_diffs_heights.push(confirmed_blocks[index].header.height);
-            state_diffs.push(diffs[index].clone());
+            state_inverse_diffs_heights.push(confirmed_blocks[index].header.height);
+            state_inverse_diffs.push(diffs[index].inverse());
         }
         drop(module);
         drop(forks);
 
-        // Store the block diffs
-        self.blockchain.blocks.insert_state_diff(&state_diffs_heights, &state_diffs)?;
+        // Store the block inverse diffs
+        self.blockchain
+            .blocks
+            .insert_state_inverse_diff(&state_inverse_diffs_heights, &state_inverse_diffs)?;
 
         // Reset forks starting with the confirmed blocks
         self.consensus.reset_forks(&confirmed_proposals, &confirmed_fork, &confirmed_txs).await?;
@@ -438,9 +440,10 @@ impl Validator {
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
-        // Keep track of all block database state diffs
+        // Keep track of all block database state diffs and their inverse
         let mut diffs_heights = vec![];
         let mut diffs = vec![];
+        let mut inverse_diffs = vec![];
 
         // Validate and insert each block
         for (index, block) in blocks.iter().enumerate() {
@@ -489,16 +492,18 @@ impl Validator {
                 removed_txs.push(tx.clone());
             }
 
-            // Store block database state diff
+            // Store block database state diff and its inverse
             diffs_heights.push(block.header.height);
-            diffs.push(overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?);
+            let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?;
+            inverse_diffs.push(diff.inverse());
+            diffs.push(diff);
         }
 
         debug!(target: "validator::add_checkpoint_blocks", "Applying overlay changes");
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Store the block diffs
-        self.blockchain.blocks.insert_state_diff(&diffs_heights, &diffs)?;
+        self.blockchain.blocks.insert_state_inverse_diff(&diffs_heights, &inverse_diffs)?;
 
         // Remove blocks transactions from pending txs store
         self.blockchain.remove_pending_txs(&removed_txs)?;
@@ -534,9 +539,10 @@ impl Validator {
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
-        // Keep track of all block database state diffs
+        // Keep track of all block database state diffs and their inverse
         let mut diffs_heights = vec![];
         let mut diffs = vec![];
+        let mut inverse_diffs = vec![];
 
         // Validate and insert each block
         for block in blocks {
@@ -588,9 +594,11 @@ impl Validator {
                 removed_txs.push(tx.clone());
             }
 
-            // Store block database state diff
+            // Store block database state diff and its inverse
             diffs_heights.push(block.header.height);
-            diffs.push(overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?);
+            let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?;
+            inverse_diffs.push(diff.inverse());
+            diffs.push(diff);
 
             // Use last inserted block as next iteration previous
             previous = block;
@@ -600,7 +608,7 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Store the block diffs
-        self.blockchain.blocks.insert_state_diff(&diffs_heights, &diffs)?;
+        self.blockchain.blocks.insert_state_inverse_diff(&diffs_heights, &inverse_diffs)?;
 
         // Purge pending erroneous txs since canonical state has been changed
         self.blockchain.remove_pending_txs(&removed_txs)?;

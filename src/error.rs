@@ -368,8 +368,8 @@ pub enum Error {
     #[error("Block difficulty for height number {0} not found in database")]
     BlockDifficultyNotFound(u32),
 
-    #[error("Block state diff for height number {0} not found in database")]
-    BlockStateDiffNotFound(u32),
+    #[error("Block state inverse diff for height number {0} not found in database")]
+    BlockStateInverseDiffNotFound(u32),
 
     #[error("Block {0} contains 0 transactions")]
     BlockContainsNoTransactions(String),

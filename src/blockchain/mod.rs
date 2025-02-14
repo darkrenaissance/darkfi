@@ -28,7 +28,7 @@ use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 pub mod block_store;
 pub use block_store::{
     Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreOverlay, SLED_BLOCK_DIFFICULTY_TREE,
-    SLED_BLOCK_ORDER_TREE, SLED_BLOCK_STATE_DIFF_TREE, SLED_BLOCK_TREE,
+    SLED_BLOCK_ORDER_TREE, SLED_BLOCK_STATE_INVERSE_DIFF_TREE, SLED_BLOCK_TREE,
 };
 
 /// Header definition and storage implementation
@@ -366,9 +366,10 @@ impl Blockchain {
             return Ok(())
         }
 
-        // Grab all state diffs until requested height going backwards
+        // Grab all state inverse diffs until requested height,
+        // going backwards.
         let heights: Vec<u32> = (height + 1..=last).rev().collect();
-        let diffs = self.blocks.get_state_diff(&heights, true)?;
+        let inverse_diffs = self.blocks.get_state_inverse_diff(&heights, true)?;
 
         // Create an overlay to apply the reverse diffs
         let overlay = BlockchainOverlay::new(self)?;
@@ -376,9 +377,9 @@ impl Blockchain {
         // Apply the inverse diffs sequence
         let overlay_lock = overlay.lock().unwrap();
         let mut lock = overlay_lock.overlay.lock().unwrap();
-        for diff in diffs {
+        for inverse_diff in inverse_diffs {
             // Since we used strict retrieval it's safe to unwrap here
-            let inverse_diff = diff.unwrap().inverse();
+            let inverse_diff = inverse_diff.unwrap();
             lock.add_diff(&inverse_diff)?;
             lock.apply_diff(&inverse_diff)?;
             self.sled_db.flush()?;
@@ -418,7 +419,7 @@ impl BlockchainOverlay {
             SLED_BLOCK_TREE,
             SLED_BLOCK_ORDER_TREE,
             SLED_BLOCK_DIFFICULTY_TREE,
-            SLED_BLOCK_STATE_DIFF_TREE,
+            SLED_BLOCK_STATE_INVERSE_DIFF_TREE,
             SLED_HEADER_TREE,
             SLED_SYNC_HEADER_TREE,
             SLED_TX_TREE,

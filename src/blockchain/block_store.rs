@@ -238,7 +238,7 @@ impl BlockDifficulty {
 pub const SLED_BLOCK_TREE: &[u8] = b"_blocks";
 pub const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 pub const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
-pub const SLED_BLOCK_STATE_DIFF_TREE: &[u8] = b"_block_state_diff";
+pub const SLED_BLOCK_STATE_INVERSE_DIFF_TREE: &[u8] = b"_block_state_inverse_diff";
 
 /// The `BlockStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's blocks information.
@@ -255,10 +255,10 @@ pub struct BlockStore {
     /// blockchain's blocks, where the key is the block height number,
     /// and the value is the blocks' hash.
     pub difficulty: sled::Tree,
-    /// The `sled` tree storing each blocks' full database state changes,
-    /// where the key is the block height number, and the value is the
-    /// serialized database diff.
-    pub state_diff: sled::Tree,
+    /// The `sled` tree storing each blocks' full database state inverse
+    /// changes, where the key is the block height number, and the value
+    /// is the serialized database inverse diff.
+    pub state_inverse_diff: sled::Tree,
 }
 
 impl BlockStore {
@@ -267,8 +267,8 @@ impl BlockStore {
         let main = db.open_tree(SLED_BLOCK_TREE)?;
         let order = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
         let difficulty = db.open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
-        let state_diff = db.open_tree(SLED_BLOCK_STATE_DIFF_TREE)?;
-        Ok(Self { main, order, difficulty, state_diff })
+        let state_inverse_diff = db.open_tree(SLED_BLOCK_STATE_INVERSE_DIFF_TREE)?;
+        Ok(Self { main, order, difficulty, state_inverse_diff })
     }
 
     /// Insert a slice of [`Block`] into the store's main tree.
@@ -294,15 +294,15 @@ impl BlockStore {
         Ok(())
     }
 
-    /// Insert a slice of `u32` and block diffs into the store's
-    /// database diffs tree.
-    pub fn insert_state_diff(
+    /// Insert a slice of `u32` and block inverse diffs into the
+    /// store's database inverse diffs tree.
+    pub fn insert_state_inverse_diff(
         &self,
         heights: &[u32],
         diffs: &[SledDbOverlayStateDiff],
     ) -> Result<()> {
-        let batch = self.insert_batch_state_diff(heights, diffs);
-        self.state_diff.apply_batch(batch)?;
+        let batch = self.insert_batch_state_inverse_diff(heights, diffs);
+        self.state_inverse_diff.apply_batch(batch)?;
         Ok(())
     }
 
@@ -351,11 +351,11 @@ impl BlockStore {
         batch
     }
 
-    /// Generate the sled batch corresponding to an insert to the database diffs
-    /// tree, so caller can handle the write operation.
-    /// The block height is used as the key, and the serialized database diff is
-    /// used as value.
-    pub fn insert_batch_state_diff(
+    /// Generate the sled batch corresponding to an insert to the database
+    /// inverse diffs tree, so caller can handle the write operation.
+    /// The block height is used as the key, and the serialized database
+    /// inverse diff is used as value.
+    pub fn insert_batch_state_inverse_diff(
         &self,
         heights: &[u32],
         diffs: &[SledDbOverlayStateDiff],
@@ -453,13 +453,13 @@ impl BlockStore {
         Ok(ret)
     }
 
-    /// Fetch given block height numbers from the store's state diffs tree.
-    /// The resulting vector contains `Option`, which is `Some` if the block
-    /// height number was found in the block database diffs store, and otherwise
-    /// it is `None`, if it has not.
-    /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one block height number was not found.
-    pub fn get_state_diff(
+    /// Fetch given block height numbers from the store's state inverse
+    /// diffs tree. The resulting vector contains `Option`, which is
+    /// `Some` if the block height number was found in the block database
+    /// inverse diffs store, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail
+    /// in case at least one block height number was not found.
+    pub fn get_state_inverse_diff(
         &self,
         heights: &[u32],
         strict: bool,
@@ -467,13 +467,13 @@ impl BlockStore {
         let mut ret = Vec::with_capacity(heights.len());
 
         for height in heights {
-            if let Some(found) = self.state_diff.get(height.to_be_bytes())? {
-                let state_diff = deserialize(&found)?;
-                ret.push(Some(state_diff));
+            if let Some(found) = self.state_inverse_diff.get(height.to_be_bytes())? {
+                let state_inverse_diff = deserialize(&found)?;
+                ret.push(Some(state_inverse_diff));
                 continue
             }
             if strict {
-                return Err(Error::BlockStateDiffNotFound(*height))
+                return Err(Error::BlockStateInverseDiffNotFound(*height))
             }
             ret.push(None);
         }
@@ -663,17 +663,21 @@ impl BlockStore {
         Ok(ret)
     }
 
-    /// Fetch all state diffs after given height. In the iteration, if a state
-    /// diff is not found, the iteration stops and the function returns what
-    /// it has found so far in the store's state diffs tree.
-    pub fn get_state_diffs_after(&self, height: u32) -> Result<Vec<SledDbOverlayStateDiff>> {
+    /// Fetch all state inverse diffs after given height. In the iteration,
+    /// if a state inverse diff is not found, the iteration stops and the
+    /// function returns what it has found so far in the store's state
+    /// inverse diffs tree.
+    pub fn get_state_inverse_diffs_after(
+        &self,
+        height: u32,
+    ) -> Result<Vec<SledDbOverlayStateDiff>> {
         let mut ret = vec![];
 
         let mut key = height;
-        while let Some(found) = self.state_diff.get_gt(key.to_be_bytes())? {
-            let (height, state_diff) = parse_u32_key_record(found)?;
+        while let Some(found) = self.state_inverse_diff.get_gt(key.to_be_bytes())? {
+            let (height, state_inverse_diff) = parse_u32_key_record(found)?;
             key = height;
-            ret.push(state_diff);
+            ret.push(state_inverse_diff);
         }
 
         Ok(ret)
@@ -698,7 +702,7 @@ impl BlockStoreOverlay {
         overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_STATE_DIFF_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_STATE_INVERSE_DIFF_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
