@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_TX_CALLS","MIN_TX_CALLS"],"macro":["zip"],"struct":["ContractCallLeaf","Transaction","TransactionBuilder"]};
