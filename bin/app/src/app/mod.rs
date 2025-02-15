@@ -36,7 +36,8 @@ use crate::{
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
     plugin::{self, PluginObject, PluginSettings},
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType, PropertyValue, Role
+        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
+        PropertyValue, Role,
     },
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3, Slot},
     text::TextShaperPtr,
@@ -175,7 +176,6 @@ impl App {
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
 
-
         let setting_root = Arc::new(SceneNode3::new("setting", SceneNodeType3::SettingRoot));
         let settings_tree = db.open_tree("settings").unwrap();
         let settings = Arc::new(PluginSettings {
@@ -198,7 +198,8 @@ impl App {
             self.tasks.lock().unwrap().push(setting_task);
         }
 
-        let window = window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
+        let window =
+            window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
 
         self.sg_root.clone().link(window.clone());
         self.sg_root.clone().link(setting_root.clone());

@@ -40,8 +40,8 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyAtomicGuard, PropertyStr, PropertyPtr, PropertyType, PropertyValue, Role},
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodePtr, SceneNodeWeak},
+    prop::{PropertyAtomicGuard, PropertyPtr, PropertyStr, PropertyType, PropertyValue, Role},
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
@@ -198,10 +198,7 @@ impl DarkIrc {
         };
 
         let setting_tree = db.open_tree("settings")?;
-        let settings = PluginSettings {
-            setting_root,
-            sled_tree: setting_tree,
-        };
+        let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
@@ -536,7 +533,10 @@ impl PluginObject for DarkIrc {
 
         // `apply_settings` is triggered if any setting changes
         for setting_node in self.settings.setting_root.get_children().iter() {
-            on_modify.when_change(setting_node.get_property("value").clone().unwrap(), Self::apply_settings);
+            on_modify.when_change(
+                setting_node.get_property("value").clone().unwrap(),
+                Self::apply_settings,
+            );
         }
 
         let ev_sub = self.event_graph.event_pub.clone().subscribe().await;

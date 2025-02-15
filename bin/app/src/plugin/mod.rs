@@ -26,13 +26,15 @@ pub use darkirc::{DarkIrc, DarkIrcPtr};
 
 use darkfi::net::Settings as NetSettings;
 
-use sled_overlay::sled;
 use crate::{
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodePtr, SceneNodeWeak},
-    prop::{Property, PropertyAtomicGuard, PropertyStr, PropertyPtr, PropertyType, PropertySubType, PropertyValue, Role},
+    prop::{
+        Property, PropertyAtomicGuard, PropertyPtr, PropertyStr, PropertySubType, PropertyType,
+        PropertyValue, Role,
+    },
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
 };
-use std::array::TryFromSliceError;
-use std::string::FromUtf8Error;
+use sled_overlay::sled;
+use std::{array::TryFromSliceError, string::FromUtf8Error};
 
 #[async_trait]
 pub trait PluginObject {
@@ -87,7 +89,7 @@ impl PluginSettings {
                 node.set_property_str(atom, Role::App, "default", s.clone());
                 Some(node)
             }
-            _ => { None }
+            _ => None,
         };
 
         match node {
@@ -96,7 +98,7 @@ impl PluginSettings {
                 self.setting_root.clone().link(node_ptr.clone().into());
                 Some(node_ptr)
             }
-            None => None
+            None => None,
         }
     }
 
@@ -113,16 +115,27 @@ impl PluginSettings {
                 PropertyType::Bool => {
                     let sled_result = self.sled_tree.get(setting_node.name.as_str());
                     if let Ok(Some(sled_value)) = sled_result {
-                        setting_node.set_property_bool(atom, Role::User, "value", sled_value[0] != 0);
+                        setting_node.set_property_bool(
+                            atom,
+                            Role::User,
+                            "value",
+                            sled_value[0] != 0,
+                        );
                     }
                 }
                 PropertyType::Uint32 => {
                     let sled_result = self.sled_tree.get(setting_node.name.as_str());
                     if let Ok(Some(sled_value)) = sled_result {
                         if sled_value.len() == 4 {
-                            let bytes: Result<[u8; 4], TryFromSliceError> = sled_value.as_ref().try_into();
+                            let bytes: Result<[u8; 4], TryFromSliceError> =
+                                sled_value.as_ref().try_into();
                             if let Ok(b) = bytes {
-                                setting_node.set_property_u32(atom, Role::User, "value", u32::from_le_bytes(b));
+                                setting_node.set_property_u32(
+                                    atom,
+                                    Role::User,
+                                    "value",
+                                    u32::from_le_bytes(b),
+                                );
                             }
                         }
                     }
@@ -131,9 +144,15 @@ impl PluginSettings {
                     let sled_result = self.sled_tree.get(setting_node.name.as_str());
                     if let Ok(Some(sled_value)) = sled_result {
                         if sled_value.len() == 4 {
-                            let bytes: Result<[u8; 4], TryFromSliceError> = sled_value.as_ref().try_into();
+                            let bytes: Result<[u8; 4], TryFromSliceError> =
+                                sled_value.as_ref().try_into();
                             if let Ok(b) = bytes {
-                                setting_node.set_property_f32(atom, Role::User, "value", f32::from_le_bytes(b));
+                                setting_node.set_property_f32(
+                                    atom,
+                                    Role::User,
+                                    "value",
+                                    f32::from_le_bytes(b),
+                                );
                             }
                         }
                     }
@@ -141,7 +160,8 @@ impl PluginSettings {
                 PropertyType::Str => {
                     let sled_result = self.sled_tree.get(setting_node.name.as_str());
                     if let Ok(Some(sled_value)) = sled_result {
-                        let string: Result<String, FromUtf8Error> = String::from_utf8(sled_value.to_vec());
+                        let string: Result<String, FromUtf8Error> =
+                            String::from_utf8(sled_value.to_vec());
                         if let Ok(s) = string {
                             setting_node.set_property_str(atom, Role::User, "value", s);
                         }
@@ -163,16 +183,26 @@ impl PluginSettings {
             match value.typ {
                 PropertyType::Bool => {
                     let value_bytes = if value.get_bool(0).unwrap() { 1u8 } else { 0u8 };
-                    self.sled_tree.insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes]));
+                    self.sled_tree
+                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes]));
                 }
                 PropertyType::Uint32 => {
-                    self.sled_tree.insert(setting_node.name.as_str(), sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()));
+                    self.sled_tree.insert(
+                        setting_node.name.as_str(),
+                        sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()),
+                    );
                 }
                 PropertyType::Float32 => {
-                    self.sled_tree.insert(setting_node.name.as_str(), sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()));
+                    self.sled_tree.insert(
+                        setting_node.name.as_str(),
+                        sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()),
+                    );
                 }
                 PropertyType::Str => {
-                    self.sled_tree.insert(setting_node.name.as_str(), sled::IVec::from(value.get_str(0).unwrap().as_bytes()));
+                    self.sled_tree.insert(
+                        setting_node.name.as_str(),
+                        sled::IVec::from(value.get_str(0).unwrap().as_bytes()),
+                    );
                 }
                 _ => {}
             }
@@ -180,40 +210,122 @@ impl PluginSettings {
     }
 
     pub fn get_setting(&self, name: &str) -> Option<SceneNodePtr> {
-        self.setting_root.clone().get_children().iter().find(|node| node.typ == SceneNodeType::Setting && node.name == name).cloned()
+        self.setting_root
+            .clone()
+            .get_children()
+            .iter()
+            .find(|node| node.typ == SceneNodeType::Setting && node.name == name)
+            .cloned()
     }
 
     pub fn add_p2p_settings(&self, p2p_settings: &NetSettings) {
-        self.add_setting("net.outbound_connections", PropertyValue::Uint32(p2p_settings.outbound_connections as u32));
-        self.add_setting("net.inbound_connections", PropertyValue::Uint32(p2p_settings.inbound_connections as u32));
-        self.add_setting("net.outbound_connect_timeout", PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32));
-        self.add_setting("net.channel_handshake_timeout", PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32));
-        self.add_setting("net.channel_heartbeat_interval", PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32));
-        self.add_setting("net.outbound_peer_discovery_cooloff_time", PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32));
-        self.add_setting("net.transport_mixing", PropertyValue::Bool(p2p_settings.transport_mixing));
+        self.add_setting(
+            "net.outbound_connections",
+            PropertyValue::Uint32(p2p_settings.outbound_connections as u32),
+        );
+        self.add_setting(
+            "net.inbound_connections",
+            PropertyValue::Uint32(p2p_settings.inbound_connections as u32),
+        );
+        self.add_setting(
+            "net.outbound_connect_timeout",
+            PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32),
+        );
+        self.add_setting(
+            "net.channel_handshake_timeout",
+            PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32),
+        );
+        self.add_setting(
+            "net.channel_heartbeat_interval",
+            PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32),
+        );
+        self.add_setting(
+            "net.outbound_peer_discovery_cooloff_time",
+            PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32),
+        );
+        self.add_setting(
+            "net.transport_mixing",
+            PropertyValue::Bool(p2p_settings.transport_mixing),
+        );
         self.add_setting("net.localnet", PropertyValue::Bool(p2p_settings.localnet));
-        self.add_setting("net.greylist_refinery_interval", PropertyValue::Uint32(p2p_settings.greylist_refinery_interval as u32));
-        self.add_setting("net.white_connect_percent", PropertyValue::Uint32(p2p_settings.white_connect_percent as u32));
-        self.add_setting("net.gold_connect_count", PropertyValue::Uint32(p2p_settings.gold_connect_count as u32));
-        self.add_setting("net.slot_preference_strict", PropertyValue::Bool(p2p_settings.slot_preference_strict));
-        self.add_setting("net.time_with_no_connections", PropertyValue::Uint32(p2p_settings.time_with_no_connections as u32));
+        self.add_setting(
+            "net.greylist_refinery_interval",
+            PropertyValue::Uint32(p2p_settings.greylist_refinery_interval as u32),
+        );
+        self.add_setting(
+            "net.white_connect_percent",
+            PropertyValue::Uint32(p2p_settings.white_connect_percent as u32),
+        );
+        self.add_setting(
+            "net.gold_connect_count",
+            PropertyValue::Uint32(p2p_settings.gold_connect_count as u32),
+        );
+        self.add_setting(
+            "net.slot_preference_strict",
+            PropertyValue::Bool(p2p_settings.slot_preference_strict),
+        );
+        self.add_setting(
+            "net.time_with_no_connections",
+            PropertyValue::Uint32(p2p_settings.time_with_no_connections as u32),
+        );
     }
 
     // Update a NetSettings from settings in the node tree
     pub fn update_p2p_settings(&self, p2p_settings: &mut NetSettings) {
-        p2p_settings.outbound_connections = self.get_setting("net.outbound_connections").unwrap().get_property_u32("value").unwrap() as usize;
-        p2p_settings.inbound_connections = self.get_setting("net.inbound_connections").unwrap().get_property_u32("value").unwrap() as usize;
-        p2p_settings.outbound_connect_timeout = self.get_setting("net.outbound_connect_timeout").unwrap().get_property_u32("value").unwrap() as u64;
-        p2p_settings.channel_handshake_timeout = self.get_setting("net.channel_handshake_timeout").unwrap().get_property_u32("value").unwrap() as u64;
-        p2p_settings.channel_heartbeat_interval = self.get_setting("net.channel_heartbeat_interval").unwrap().get_property_u32("value").unwrap() as u64;
-        p2p_settings.outbound_peer_discovery_cooloff_time = self.get_setting("net.outbound_peer_discovery_cooloff_time").unwrap().get_property_u32("value").unwrap() as u64;
-        p2p_settings.transport_mixing = self.get_setting("net.transport_mixing").unwrap().get_property_bool("value").unwrap();
-        p2p_settings.localnet = self.get_setting("net.localnet").unwrap().get_property_bool("value").unwrap();
-        p2p_settings.greylist_refinery_interval = self.get_setting("net.greylist_refinery_interval").unwrap().get_property_u32("value").unwrap() as u64;
-        p2p_settings.white_connect_percent = self.get_setting("net.white_connect_percent").unwrap().get_property_u32("value").unwrap() as usize;
-        p2p_settings.gold_connect_count = self.get_setting("net.gold_connect_count").unwrap().get_property_u32("value").unwrap() as usize;
-        p2p_settings.slot_preference_strict = self.get_setting("net.slot_preference_strict").unwrap().get_property_bool("value").unwrap();
-        p2p_settings.time_with_no_connections = self.get_setting("net.time_with_no_connections").unwrap().get_property_u32("value").unwrap() as u64;
+        p2p_settings.outbound_connections = self
+            .get_setting("net.outbound_connections")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as usize;
+        p2p_settings.inbound_connections =
+            self.get_setting("net.inbound_connections").unwrap().get_property_u32("value").unwrap()
+                as usize;
+        p2p_settings.outbound_connect_timeout = self
+            .get_setting("net.outbound_connect_timeout")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
+        p2p_settings.channel_handshake_timeout = self
+            .get_setting("net.channel_handshake_timeout")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
+        p2p_settings.channel_heartbeat_interval = self
+            .get_setting("net.channel_heartbeat_interval")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
+        p2p_settings.outbound_peer_discovery_cooloff_time = self
+            .get_setting("net.outbound_peer_discovery_cooloff_time")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
+        p2p_settings.transport_mixing =
+            self.get_setting("net.transport_mixing").unwrap().get_property_bool("value").unwrap();
+        p2p_settings.localnet =
+            self.get_setting("net.localnet").unwrap().get_property_bool("value").unwrap();
+        p2p_settings.greylist_refinery_interval = self
+            .get_setting("net.greylist_refinery_interval")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
+        p2p_settings.white_connect_percent = self
+            .get_setting("net.white_connect_percent")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as usize;
+        p2p_settings.gold_connect_count =
+            self.get_setting("net.gold_connect_count").unwrap().get_property_u32("value").unwrap()
+                as usize;
+        p2p_settings.slot_preference_strict = self
+            .get_setting("net.slot_preference_strict")
+            .unwrap()
+            .get_property_bool("value")
+            .unwrap();
+        p2p_settings.time_with_no_connections = self
+            .get_setting("net.time_with_no_connections")
+            .unwrap()
+            .get_property_u32("value")
+            .unwrap() as u64;
     }
-
 }

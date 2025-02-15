@@ -36,8 +36,7 @@ mod netlogo3;
 pub use netlogo3::create_netlogo3;
 
 mod settings;
-pub use settings::create_settings;
-pub use settings::create_right_border;
+pub use settings::{create_right_border, create_settings};
 
 mod switch;
 pub use switch::create_switch;
