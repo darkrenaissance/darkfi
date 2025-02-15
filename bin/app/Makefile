@@ -43,10 +43,10 @@ win-debug: $(SRC) fonts
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
 android-release: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk $(CARGO) quad-apk build --release $(RELEASE_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
 android-debug: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk $(CARGO) quad-apk build $(DEBUG_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
 build-release: $(SRC) fonts

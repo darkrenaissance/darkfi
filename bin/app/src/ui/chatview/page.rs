@@ -34,7 +34,7 @@ use crate::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
         GraphicsEventPublisherPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
     },
-    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
+    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{SceneNodePtr, SceneNodeWeak},
@@ -281,7 +281,7 @@ impl PrivMessage {
             glyph_rect.x += off_x;
             glyph_rect.y -= off_y;
 
-            let color = match section {
+            let mut color = match section {
                 0 => nick_color,
                 _ => {
                     if self.confirmed {
@@ -295,6 +295,10 @@ impl PrivMessage {
             //if debug_render {
             //    mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             //}
+
+            if glyph.sprite.has_color {
+                color = COLOR_WHITE;
+            }
 
             mesh.draw_box(&glyph_rect, color, uv_rect);
 
