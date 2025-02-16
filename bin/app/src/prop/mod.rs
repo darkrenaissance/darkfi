@@ -84,7 +84,7 @@ pub enum Role {
     Ignored = 3,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue {
     Unset,
     Null,
@@ -371,7 +371,7 @@ impl Property {
         self.on_modify.notify((role, ModifyAction::Clear));
     }
 
-    fn set_raw_value(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
+    pub fn set_raw_value(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
             return Err(Error::PropertyWrongType)
         }
@@ -537,6 +537,18 @@ impl Property {
             vals[i] = PropertyValue::SExpr(Arc::new(val));
         }
         atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
+    }
+
+    pub fn set_f32_vec(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<f32>,
+    ) -> Result<()> {
+        for (i, &val) in val.iter().enumerate() {
+            self.clone().set_f32(atom, role, i, val)?;
+        }
         Ok(())
     }
 

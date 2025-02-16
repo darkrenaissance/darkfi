@@ -288,6 +288,16 @@ impl SceneNode {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(atom, role, 0, val)
     }
 
+    pub fn set_property_f32_vec(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: Vec<f32>,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32_vec(atom, role, val)
+    }
+
     pub fn add_signal<S: Into<String>>(
         &mut self,
         name: S,

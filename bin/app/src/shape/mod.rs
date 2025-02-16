@@ -49,3 +49,6 @@ pub use circle::create_circle;
 
 mod logo;
 pub use logo::create_logo;
+
+mod reset;
+pub use reset::create_reset;
