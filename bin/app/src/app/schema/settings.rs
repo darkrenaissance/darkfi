@@ -16,39 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::net::settings;
-use sled_overlay::sled;
-
-
 use crate::{
     app::{
-        node::{
-            create_button, create_editbox,
-            create_layer, create_text, create_vector_art,
-        },
+        node::{create_button, create_editbox, create_layer, create_text, create_vector_art},
         App,
     },
     expr::{self, Compiler},
-    prop::{
-        Property, PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role
-    },
+    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{
-        Button, EditBox, Layer, OnModify, ShapeVertex, Text, VectorArt, VectorShape
-    }, ExecutorPtr,
+    ui::{Button, EditBox, Layer, ShapeVertex, Text, VectorArt, VectorShape},
+    ExecutorPtr,
 };
 
-use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
+use super::{ColorScheme, COLOR_SCHEME};
 
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
     pub const SETTING_LABEL_BASELINE: f32 = 82.;
-    pub const SUBTITLE_LABEL_FONTSIZE: f32 = 36.;
     pub const SETTING_LABEL_FONTSIZE: f32 = 24.;
     pub const SETTING_EDIT_FONTSIZE: f32 = 24.;
     pub const SETTING_TITLE_X: f32 = 150.;
@@ -85,7 +76,6 @@ mod ui_consts {
     pub const SETTING_LABEL_X: f32 = 20.;
     pub const SETTING_LABEL_LINESPACE: f32 = 60.;
     pub const SETTING_LABEL_BASELINE: f32 = 37.;
-    pub const SUBTITLE_LABEL_FONTSIZE: f32 = 16.;
     pub const SETTING_LABEL_FONTSIZE: f32 = 14.;
     pub const SETTING_EDIT_FONTSIZE: f32 = 14.;
     pub const SETTING_TITLE_X: f32 = 100.;
@@ -131,14 +121,30 @@ impl Setting {
     fn get_value(&self) -> PropertyValue {
         self.node.get_property("value").unwrap().get_value(0).ok().unwrap()
     }
+    fn get_default(&self) -> PropertyValue {
+        self.node.get_property("default").unwrap().get_value(0).ok().unwrap()
+    }
+    fn is_default(&self) -> bool {
+        self.get_value() == self.get_default()
+    }
+    fn reset(&self) {
+        let prop = self.node.get_property("value").unwrap();
+        prop.set_raw_value(Role::App, 0, self.get_default()).unwrap();
+    }
 }
 
-pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
+pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
     let mut cc = Compiler::new();
     cc.add_const_f32("BORDER_RIGHT_SCALE", BORDER_RIGHT_SCALE);
     cc.add_const_f32("SEARCH_PADDING_X", SEARCH_PADDING_X);
-    cc.add_const_f32("X_RATIO", 1./2.);
-    let window_scale = PropertyFloat32::wrap(&app.sg_root.clone().lookup_node("/setting/scale").unwrap(), Role::Internal, "value", 0).unwrap();
+    cc.add_const_f32("X_RATIO", 1. / 2.);
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.clone().lookup_node("/setting/scale").unwrap(),
+        Role::Internal,
+        "value",
+        0,
+    )
+    .unwrap();
     let atom = &mut PropertyAtomicGuard::new();
 
     // Main view
@@ -210,7 +216,6 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
-
     let node = create_button("back_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -254,7 +259,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node.clone());
-    
+
     // Label: "SETTINGS" title
     let node = create_text("settings_label_fontsize");
     let prop = node.get_property("rect").unwrap();
@@ -266,19 +271,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     node.set_property_f32(atom, Role::App, "baseline", SETTING_TITLE_BASELINE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", SETTING_TITLE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "SETTINGS").unwrap();
-    //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -293,7 +286,6 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         })
         .await;
     layer_node.clone().link(node);
-
 
     // Search Bar Background
     let node = create_vector_art("emoji_picker_bg");
@@ -328,20 +320,11 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     let prop = editbox_node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, SEARCH_PADDING_X).unwrap();
     prop.clone().set_expr(atom, Role::App, 1, cc.compile("60 + 20").unwrap()).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, cc.compile("w - SEARCH_PADDING_X*2").unwrap()).unwrap();
+    prop.clone()
+        .set_expr(atom, Role::App, 2, cc.compile("w - SEARCH_PADDING_X*2").unwrap())
+        .unwrap();
     prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
-    let prop = editbox_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    editbox_node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
     let prop = editbox_node.get_property("cursor_color").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
@@ -351,18 +334,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     editbox_node.set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT).unwrap();
-    let prop = editbox_node.get_property("hi_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 0.5).unwrap();
-    }
+    editbox_node
+        .set_property_f32_vec(atom, Role::App, "hi_bg_color", vec![0.5, 0.5, 0.5, 1.])
+        .unwrap();
     let prop = editbox_node.get_property("selected").unwrap();
     prop.clone().set_null(atom, Role::App, 0).unwrap();
     prop.clone().set_null(atom, Role::App, 1).unwrap();
@@ -376,7 +350,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     let node = create_vector_art("search_icon");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE + SETTING_LABEL_LINESPACE/2.).unwrap();
+    prop.clone()
+        .set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE + SETTING_LABEL_LINESPACE / 2.)
+        .unwrap();
     prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 0.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -397,18 +373,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     node.set_property_f32(atom, Role::App, "baseline", 16.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "SEARCH...").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 0.45).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 0.45]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -435,18 +400,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     node.set_property_f32(atom, Role::App, "baseline", 16.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.94).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    node.set_property_f32_vec(atom, Role::App, "text_color", vec![0., 0.94, 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -463,10 +417,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     layer_node.clone().link(node);
 
     let sg_root3 = app.sg_root.clone();
-    let mut cc2 = cc.clone();
     let search = move || {
         let atom = &mut PropertyAtomicGuard::new();
-        
+
         let path = "/window/settings_layer/search_input";
         let node = sg_root3.clone().lookup_node(path.to_string()).unwrap();
         let search_string = node.get_property_str("text").unwrap();
@@ -479,7 +432,6 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         } else {
             let _ = search_label_node.set_property_f32(atom, Role::App, "font_size", 16.);
         }
-
 
         let path = "/window/settings_layer/settings";
         let node = sg_root3.clone().lookup_node(path.to_string()).unwrap();
@@ -517,7 +469,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     // Handle searching
     let search_text = editbox_node.get_property("text").unwrap();
     let search_text_sub = search_text.subscribe_modify();
-    let mut search2 = search.clone();
+    let search2 = search.clone();
     let listen_search_text = app.ex.spawn(async move {
         while let Ok(_) = search_text_sub.receive().await {
             search2();
@@ -585,7 +537,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 60.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, cc.compile("w  * 100").unwrap()).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE/3.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE / 3.5).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -596,8 +548,8 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
     let (color1, color2) = match COLOR_SCHEME {
-            ColorScheme::DarkMode => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
-            ColorScheme::PaperLight => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
+        ColorScheme::DarkMode => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
+        ColorScheme::PaperLight => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
     };
 
     let mut verts = vec![
@@ -629,13 +581,7 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     let app_setting_root = app.sg_root.clone().lookup_node("/setting").unwrap();
     for setting in app_setting_root.get_children().iter() {
         let name = ["app", &setting.name.clone()].join(".");
-        settings_map.insert(
-            name.clone(),
-            Arc::new(Setting {
-                name,
-                node: setting.clone(),
-            }),
-        );
+        settings_map.insert(name.clone(), Arc::new(Setting { name, node: setting.clone() }));
     }
 
     // Get the settings from all plugins
@@ -648,13 +594,8 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             if let Some(sroot) = setting_root {
                 for setting in sroot.get_children().iter() {
                     let name = [plugin.name.clone(), setting.name.clone()].join(".");
-                    settings_map.insert(
-                        name.clone(),
-                        Arc::new(Setting {
-                            name,
-                            node: setting.clone(),
-                        }),
-                    );
+                    settings_map
+                        .insert(name.clone(), Arc::new(Setting { name, node: setting.clone() }));
                 }
             }
         }
@@ -673,12 +614,13 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
     prop.clone().set_f32(atom, Role::App, 3, 0.).unwrap();
     settings_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settings_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let settings_layer_node =
-        settings_layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    let settings_layer_node = settings_layer_node
+        .setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone()))
+        .await;
     layer_node.clone().link(settings_layer_node.clone());
 
     // Iterate over the map and process each setting
-    for (key, setting) in settings_map {
+    for setting in settings_map.values() {
         let setting_clone = setting.clone();
         let setting_name = setting_clone.name.clone();
         let is_bool = matches!(setting_clone.get_value(), PropertyValue::Bool(_));
@@ -695,8 +637,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
         setting_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         setting_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let setting_layer_node =
-            setting_layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        let setting_layer_node = setting_layer_node
+            .setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone()))
+            .await;
         settings_layer_node.clone().link(setting_layer_node.clone());
 
         // Background Label
@@ -704,7 +647,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         let prop = node.get_property("rect").unwrap();
         prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
         prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, cc.compile("w  * X_RATIO - BORDER_RIGHT_SCALE").unwrap()).unwrap();
+        prop.clone()
+            .set_expr(atom, Role::App, 2, cc.compile("w  * X_RATIO - BORDER_RIGHT_SCALE").unwrap())
+            .unwrap();
         prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
@@ -737,20 +682,41 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             [0.15, 0.2, 0.19, 1.],
         );
 
-        let node =
-            node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .await;
         setting_layer_node.clone().link(node);
 
         if is_bool {
             // Background Value: Bool FALSE
             let node = create_vector_art("value_bg_bool_false");
             let prop = node.get_property("rect").unwrap();
-            prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-            node.set_property_bool(atom, Role::App, "is_visible", matches!(setting_clone.get_value(), PropertyValue::Bool(false))).unwrap();
+            node.set_property_bool(
+                atom,
+                Role::App,
+                "is_visible",
+                matches!(setting_clone.get_value(), PropertyValue::Bool(false)),
+            )
+            .unwrap();
 
             let mut shape = VectorShape::new();
 
@@ -760,9 +726,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
             let (color1, color2) = match COLOR_SCHEME {
-                    //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-                    ColorScheme::DarkMode => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
-                    ColorScheme::PaperLight => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
+                //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
+                ColorScheme::DarkMode => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
+                ColorScheme::PaperLight => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
             };
 
             let mut verts = vec![
@@ -783,20 +749,40 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 [0.15, 0.2, 0.19, 1.],
             );
 
-            let node =
-                node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+            let node = node
+                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .await;
             setting_layer_node.clone().link(node);
-        
 
             // Background Value: Bool TRUE
             let node = create_vector_art("value_bg_bool_true");
             let prop = node.get_property("rect").unwrap();
-            prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-            node.set_property_bool(atom, Role::App, "is_visible", matches!(setting_clone.get_value(), PropertyValue::Bool(true))).unwrap();
+            node.set_property_bool(
+                atom,
+                Role::App,
+                "is_visible",
+                matches!(setting_clone.get_value(), PropertyValue::Bool(true)),
+            )
+            .unwrap();
 
             let mut shape = VectorShape::new();
 
@@ -806,9 +792,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
             let (color1, color2) = match COLOR_SCHEME {
-                    //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-                    ColorScheme::DarkMode => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
-                    ColorScheme::PaperLight => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
+                //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
+                ColorScheme::DarkMode => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
+                ColorScheme::PaperLight => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
             };
 
             let mut verts = vec![
@@ -829,16 +815,31 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 [0.15, 0.2, 0.19, 1.],
             );
 
-            let node =
-                node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+            let node = node
+                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .await;
             setting_layer_node.clone().link(node);
         } else {
             // Background Value
             let node = create_vector_art("value_bg");
             let prop = node.get_property("rect").unwrap();
-            prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -874,12 +875,11 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 [0.15, 0.2, 0.19, 1.],
             );
 
-            let node =
-                node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+            let node = node
+                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .await;
             setting_layer_node.clone().link(node);
         }
-
-
 
         // Label Key
         let label_value_node = create_text("key_label");
@@ -889,20 +889,21 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap()).unwrap();
         prop.clone().set_f32(atom, Role::App, 3, 100.).unwrap();
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-        label_value_node.set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE).unwrap();
-        label_value_node.set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE).unwrap();
+        label_value_node
+            .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
+            .unwrap();
+        label_value_node
+            .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
+            .unwrap();
         label_value_node.set_property_str(atom, Role::App, "text", setting_name.clone()).unwrap();
-        let prop = label_value_node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.clone().set_f32(atom, Role::App, 0, 0.65).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 0.87).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 0.83).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else if COLOR_SCHEME == ColorScheme::PaperLight {
-            prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+        if setting.is_default() {
+            label_value_node
+                .set_property_f32_vec(atom, Role::App, "text_color", vec![0.65, 0.87, 0.83, 1.])
+                .unwrap();
+        } else {
+            label_value_node
+                .set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.])
+                .unwrap();
         }
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
@@ -924,45 +925,29 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
         editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
         let prop = editbox_node.get_property("rect").unwrap();
-        prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap()).unwrap();
+        prop.clone()
+            .set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap())
+            .unwrap();
         prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap()).unwrap();
+        prop.clone()
+            .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap())
+            .unwrap();
         prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "font_size", SETTING_EDIT_FONTSIZE).unwrap();
-        let prop = editbox_node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.clone().set_f32(atom, Role::App, 0, 0.7).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 0.7).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 0.7).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else if COLOR_SCHEME == ColorScheme::PaperLight {
-            prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-        }
-        let prop = editbox_node.get_property("cursor_color").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "cursor_ascent", CURSOR_ASCENT).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
         editbox_node.set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT).unwrap();
-        let prop = editbox_node.get_property("hi_bg_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else if COLOR_SCHEME == ColorScheme::PaperLight {
-            prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-            prop.clone().set_f32(atom, Role::App, 3, 0.5).unwrap();
-        }
+        editbox_node
+            .set_property_f32_vec(atom, Role::App, "text_color", vec![0.7, 0.7, 0.7, 1.])
+            .unwrap();
+        editbox_node
+            .set_property_f32_vec(atom, Role::App, "cursor_color", vec![0.5, 0.5, 0.5, 1.])
+            .unwrap();
+        editbox_node
+            .set_property_f32_vec(atom, Role::App, "hi_bg_color", vec![0.5, 0.5, 0.5, 1.])
+            .unwrap();
         let prop = editbox_node.get_property("selected").unwrap();
         prop.clone().set_null(atom, Role::App, 0).unwrap();
         prop.clone().set_null(atom, Role::App, 1).unwrap();
@@ -978,12 +963,19 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             let (slot, recvr) = Slot::new("setting_enter_pressed");
             editbox_node.register("enter_pressed", slot).unwrap();
             let setting2 = setting.clone();
-            let sg_root2 = app.sg_root.clone();
+            let sg_root2 = setting_layer_node.clone();
             let active_setting2 = active_setting.clone();
             let editz_text2 = editz_text.clone();
             let listen_enter = app.ex.spawn(async move {
                 while let Ok(_) = recvr.recv().await {
-                    update_setting(setting2.clone(), sg_root2.clone(), active_setting2.clone(), editz_text2.clone()).await;
+                    update_setting(
+                        setting2.clone(),
+                        sg_root2.clone(),
+                        active_setting2.clone(),
+                        editz_text2.clone(),
+                    )
+                    .await;
+                    refresh_setting(setting2.clone(), sg_root2.clone());
                 }
             });
             app.tasks.lock().unwrap().push(listen_enter);
@@ -1010,61 +1002,109 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
         };
 
         if !is_active_setting {
-
             if is_bool {
-
                 // Bool circle: FALSE
                 let node = create_vector_art("bool_icon_bg_false");
                 let prop = node.get_property("rect").unwrap();
-                prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(
+                        atom,
+                        Role::App,
+                        0,
+                        cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap(),
+                    )
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
                 prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
                 prop.clone().set_f32(atom, Role::App, 3, 0.).unwrap();
                 node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                node.set_property_bool(atom, Role::App, "is_visible", matches!(setting_clone.get_value(), PropertyValue::Bool(false))).unwrap();
+                node.set_property_bool(
+                    atom,
+                    Role::App,
+                    "is_visible",
+                    matches!(setting_clone.get_value(), PropertyValue::Bool(false)),
+                )
+                .unwrap();
 
                 let shape = shape::create_circle([0.9, 0.4, 0.4, 0.7]).scaled(5.);
-                let node =
-                    node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+                let node = node
+                    .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                    .await;
                 setting_layer_node.clone().link(node);
 
                 // Bool circle: TRUE
                 let node = create_vector_art("bool_icon_bg_true");
                 let prop = node.get_property("rect").unwrap();
-                prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(
+                        atom,
+                        Role::App,
+                        0,
+                        cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap(),
+                    )
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
                 prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
                 prop.clone().set_f32(atom, Role::App, 3, 0.).unwrap();
                 node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                node.set_property_bool(atom, Role::App, "is_visible", matches!(setting_clone.get_value(), PropertyValue::Bool(true))).unwrap();
+                node.set_property_bool(
+                    atom,
+                    Role::App,
+                    "is_visible",
+                    matches!(setting_clone.get_value(), PropertyValue::Bool(true)),
+                )
+                .unwrap();
 
                 let shape = shape::create_circle([0., 0.94, 1., 1.]).scaled(5.);
-                let node =
-                    node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+                let node = node
+                    .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                    .await;
                 setting_layer_node.clone().link(node);
 
                 // Label showing the setting's current value
                 let value_node = create_text("value_label");
                 let prop = value_node.get_property("rect").unwrap();
-                prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 20 + 6").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(
+                        atom,
+                        Role::App,
+                        0,
+                        cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 20 + 6").unwrap(),
+                    )
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-                prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap())
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                value_node.set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE).unwrap();
-                value_node.set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE).unwrap();
-                value_node.set_property_str(atom, Role::App, "text", setting_clone.value_as_string()).unwrap();
-                let prop = value_node.get_property("text_color").unwrap();
+                value_node
+                    .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
+                    .unwrap();
+                value_node
+                    .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
+                    .unwrap();
+                value_node
+                    .set_property_str(atom, Role::App, "text", setting_clone.value_as_string())
+                    .unwrap();
                 if matches!(setting_clone.get_value(), PropertyValue::Bool(false)) {
-                    prop.clone().set_f32(atom, Role::App, 0, 0.9).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 0.4).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 0.4).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                    value_node
+                        .set_property_f32_vec(
+                            atom,
+                            Role::App,
+                            "text_color",
+                            vec![0.9, 0.4, 0.4, 1.],
+                        )
+                        .unwrap();
                 } else {
-                    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 0.94).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                    value_node
+                        .set_property_f32_vec(
+                            atom,
+                            Role::App,
+                            "text_color",
+                            vec![0.0, 0.94, 1., 1.],
+                        )
+                        .unwrap();
                 }
                 value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
@@ -1080,32 +1120,36 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                     })
                     .await;
                 setting_layer_node.clone().link(node);
-
             } else {
-
                 // Label showing the setting's current value
                 let value_node = create_text("value_label");
                 let prop = value_node.get_property("rect").unwrap();
-                prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(
+                        atom,
+                        Role::App,
+                        0,
+                        cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                    )
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-                prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap()).unwrap();
+                prop.clone()
+                    .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap())
+                    .unwrap();
                 prop.clone().set_f32(atom, Role::App, 3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                value_node.set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE).unwrap();
-                value_node.set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE).unwrap();
-                value_node.set_property_str(atom, Role::App, "text", setting_clone.value_as_string()).unwrap();
-                let prop = value_node.get_property("text_color").unwrap();
-                if COLOR_SCHEME == ColorScheme::DarkMode {
-                    prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-                } else if COLOR_SCHEME == ColorScheme::PaperLight {
-                    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-                }
+                value_node
+                    .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
+                    .unwrap();
+                value_node
+                    .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
+                    .unwrap();
+                value_node
+                    .set_property_str(atom, Role::App, "text", setting_clone.value_as_string())
+                    .unwrap();
+                value_node
+                    .set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.])
+                    .unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
                 let node = value_node
@@ -1122,21 +1166,23 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 setting_layer_node.clone().link(node);
             }
 
-
-
             // A wide button useful to select the current setting
             let node = create_button("selector_btn");
             node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
             let prop = node.get_property("rect").unwrap();
             prop.clone().set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO").unwrap()).unwrap();
             prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.clone().set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO)").unwrap()).unwrap();
+            prop.clone()
+                .set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO)").unwrap())
+                .unwrap();
             prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
 
-            let sg_root = app.sg_root.clone();
+            let sg_root2 = app.sg_root.clone();
+            let setting_clone2 = setting_clone.clone();
+            let setting_root2 = setting_layer_node.clone();
             let select = move || {
                 let atom = &mut PropertyAtomicGuard::new();
-                let sg_root = sg_root.clone();
+                let sg_root = sg_root2.clone();
                 let mut lock = cloned_active_setting.lock().unwrap();
 
                 let path = "/window/settings_layer/search_input";
@@ -1145,148 +1191,187 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
                 let was_active = if let Some(s) = lock.as_ref() {
-                    let _was_active = s.name == setting_clone.clone().name;
+                    let path = format!("/window/settings_layer/settings/{}", &s.name);
+                    let old_node = sg_root.clone().lookup_node(&path).unwrap();
 
-                    // Hide the selected setting value label (set its text empty)
+                    let _was_active = s.name == setting_clone2.clone().name;
+
+                    // Show the selected setting value label
                     // of the selected setting, if there's one
-                    let path = format!("/window/settings_layer/settings/{}/value_label", &s.name);
-                    let node = sg_root.clone().lookup_node(&path).unwrap();
+                    let node = old_node.clone().lookup_node("/value_label").unwrap();
                     let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
                     text.set(atom, &s.value_as_string());
 
-                    // Hide the selected setting value label (set its text empty)
+                    // Hide the selected setting editbox
                     // of the selected setting, if there's one
                     if !_was_active {
-                        let path = format!("/window/settings_layer/settings/{}/value_editbox", &s.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
+                        let node = old_node.clone().lookup_node("/value_editbox").unwrap();
                         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
                         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
                         node.set_property_f32(atom, Role::App, "font_size", 0.).unwrap();
                         node.set_property_str(atom, Role::App, "text", "").unwrap();
                     }
-                    
-                    // Hide confirm button
+
+                    // Hide conftrm button
                     // (Bool settings don't have a confirm button so we have to check for it to
                     // not panic)
-                    let is_bool = matches!(lock.clone().unwrap().get_value(), PropertyValue::Bool(_));
+                    let is_bool =
+                        matches!(lock.clone().unwrap().get_value(), PropertyValue::Bool(_));
                     if !is_bool {
-                        let path = format!("/window/settings_layer/settings/{}/confirm_btn_bg", &s.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+                        old_node
+                            .clone()
+                            .lookup_node("/confirm_btn_bg")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", false)
+                            .unwrap();
                     }
-
 
                     _was_active
                 } else {
                     false
                 };
 
-                // Update what setting active_setting points to 
-                *lock = Some(setting_clone.clone());
+                // Update what setting active_setting points to
+                *lock = Some(setting_clone2.clone());
                 debug!("active setting set to: {}", lock.clone().unwrap().name);
 
-                let is_bool = matches!(lock.clone().unwrap().get_value(), PropertyValue::Bool(_));
                 if is_bool {
-                    // Hide the setting value label (set its text empty) 
-                    let label_path = format!("/window/settings_layer/settings/{}/value_label", &setting_clone.name);
-                    let editbox = sg_root.clone().lookup_node(&label_path).unwrap();
+                    // Hide the setting value label (set its text empty)
+                    let editbox = setting_root2.clone().lookup_node("/value_label").unwrap();
                     let label_text = PropertyStr::wrap(&editbox, Role::App, "text", 0).unwrap();
-                    let value = &lock.clone().unwrap().get_value();
 
-                        let path = format!("/window/settings_layer/settings/{}/value_bg_bool_true", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", false);
+                    let value = setting_clone2.get_value();
 
-                        let path = format!("/window/settings_layer/settings/{}/value_bg_bool_false", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", false);
-
-                        let path = format!("/window/settings_layer/settings/{}/bool_icon_bg_true", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", false);
-
-                        let path = format!("/window/settings_layer/settings/{}/bool_icon_bg_false", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", false);
-
+                    setting_root2
+                        .clone()
+                        .lookup_node("/value_bg_bool_true")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_visible", false)
+                        .unwrap();
+                    setting_root2
+                        .clone()
+                        .lookup_node("/value_bg_bool_false")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_visible", false)
+                        .unwrap();
+                    setting_root2
+                        .clone()
+                        .lookup_node("/bool_icon_bg_true")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_visible", false)
+                        .unwrap();
+                    setting_root2
+                        .clone()
+                        .lookup_node("/bool_icon_bg_false")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_visible", false)
+                        .unwrap();
 
                     if matches!(value, PropertyValue::Bool(false)) {
-                        &lock.clone().unwrap().node.set_property_bool(atom, Role::User, "value", true);
+                        setting_clone2
+                            .node
+                            .set_property_bool(atom, Role::User, "value", true)
+                            .unwrap();
                         label_text.set(atom, "TRUE");
 
-                        let path = format!("/window/settings_layer/settings/{}/value_bg_bool_true", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", true);
+                        setting_root2
+                            .clone()
+                            .lookup_node("/value_bg_bool_true")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", true)
+                            .unwrap();
+                        setting_root2
+                            .clone()
+                            .lookup_node("/bool_icon_bg_true")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", true)
+                            .unwrap();
 
-                        let path = format!("/window/settings_layer/settings/{}/bool_icon_bg_true", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", true);
-
-                        let path = format!("/window/settings_layer/settings/{}/value_label", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let prop = node.get_property("text_color").unwrap();
-                        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 1, 0.94).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                        let node = setting_root2.clone().lookup_node("/value_label").unwrap();
+                        node.set_property_f32_vec(
+                            atom,
+                            Role::App,
+                            "text_color",
+                            vec![0., 0.94, 1., 1.],
+                        )
+                        .unwrap();
                     } else {
-                        &lock.clone().unwrap().node.set_property_bool(atom, Role::User, "value", false);
+                        setting_clone2
+                            .node
+                            .set_property_bool(atom, Role::User, "value", false)
+                            .unwrap();
                         label_text.set(atom, "FALSE");
 
-                        let path = format!("/window/settings_layer/settings/{}/value_bg_bool_false", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", true);
+                        setting_root2
+                            .clone()
+                            .lookup_node("/value_bg_bool_false")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", true)
+                            .unwrap();
+                        setting_root2
+                            .clone()
+                            .lookup_node("/bool_icon_bg_false")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", true)
+                            .unwrap();
 
-                        let path = format!("/window/settings_layer/settings/{}/bool_icon_bg_false", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let _ = node.set_property_bool(atom, Role::App, "is_visible", true);
-
-                        let path = format!("/window/settings_layer/settings/{}/value_label", &setting_clone.name);
-                        let node = sg_root.clone().lookup_node(&path).unwrap();
-                        let prop = node.get_property("text_color").unwrap();
-                        prop.clone().set_f32(atom, Role::App, 0, 0.9).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 1, 0.4).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 2, 0.4).unwrap();
-                        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                        let node = setting_root2.clone().lookup_node("/value_label").unwrap();
+                        node.set_property_f32_vec(
+                            atom,
+                            Role::App,
+                            "text_color",
+                            vec![0.9, 0.4, 0.4, 1.],
+                        )
+                        .unwrap();
                     }
                 } else {
-                    // Hide the setting value label (set its text empty) 
+                    // Hide the setting value label (set its text empty)
                     // TODO?: Visilibity property on labels
-                    let label_path = format!("/window/settings_layer/settings/{}/value_label", &setting_clone.name);
-                    let editbox = sg_root.clone().lookup_node(&label_path).unwrap();
+                    let editbox = setting_root2.clone().lookup_node("/value_label").unwrap();
                     let label_text = PropertyStr::wrap(&editbox, Role::App, "text", 0).unwrap();
                     label_text.set(atom, "");
 
                     // Show the editbox
-                    let path = format!("/window/settings_layer/settings/{}/value_editbox", &setting_clone.name);
-                    let node = sg_root.clone().lookup_node(&path).unwrap();
+                    let node = setting_root2.clone().lookup_node("/value_editbox").unwrap();
                     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
                     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
                     node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
                     if !was_active {
-                        node.set_property_str(atom, Role::App, "text", setting_clone.value_as_string()).unwrap();
+                        node.set_property_str(
+                            atom,
+                            Role::App,
+                            "text",
+                            setting_clone2.value_as_string(),
+                        )
+                        .unwrap();
                     }
 
                     // Show confirm button
-                    let path = format!("/window/settings_layer/settings/{}/confirm_btn_bg", &setting_clone.name);
-                    let node = sg_root.clone().lookup_node(&path).unwrap();
-                    let _ = node.set_property_bool(atom, Role::App, "is_visible", true);
-
+                    setting_root2
+                        .clone()
+                        .lookup_node("/confirm_btn_bg")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_visible", true)
+                        .unwrap();
                 }
+
+                refresh_setting(setting_clone2.clone(), setting_root2.clone());
             };
 
-            let (slot, recvr) = Slot::new("back_clicked");
-            node.register("click", slot).unwrap();
-            let select2 = select.clone();
-            let listen_click = app.ex.spawn(async move {
-                while let Ok(_) = recvr.recv().await {
-                    select2();
-                }
-            });
-            app.tasks.lock().unwrap().push(listen_click);
+            {
+                let (slot, recvr) = Slot::new("select_clicked");
+                node.register("click", slot).unwrap();
+                let select2 = select.clone();
+                let listen_click = app.ex.spawn(async move {
+                    while let Ok(_) = recvr.recv().await {
+                        select2();
+                    }
+                });
+                app.tasks.lock().unwrap().push(listen_click);
 
-            let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
-            setting_layer_node.clone().link(node.clone());
+                let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+                setting_layer_node.clone().link(node.clone());
+            }
         }
 
         if is_bool {
@@ -1300,8 +1385,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
             let shape = shape::create_switch([0., 0.94, 1., 1.]).scaled(10.);
-            let node =
-                node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+            let node = node
+                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .await;
             setting_layer_node.clone().link(node);
         } else {
             // Confirm button
@@ -1315,8 +1401,9 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
             node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 
             let shape = shape::create_confirm([0., 0.94, 1., 1.]).scaled(10.);
-            let node =
-                node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+            let node = node
+                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .await;
             setting_layer_node.clone().link(node.clone());
 
             let node = create_button("confirm_btn");
@@ -1336,37 +1423,131 @@ pub async fn make(app: &App, window: SceneNodePtr, ex: ExecutorPtr) {
                 let (slot, recvr) = Slot::new("confirm_clicked");
                 node.register("click", slot).unwrap();
                 let setting2 = setting.clone();
-                let sg_root2 = app.sg_root.clone();
+                let sg_root2 = setting_layer_node.clone();
                 let active_setting2 = active_setting.clone();
                 let editz_text2 = editz_text.clone();
                 let listen_click = app.ex.spawn(async move {
                     while let Ok(_) = recvr.recv().await {
                         info!("confirm clicked");
-                        update_setting(setting2.clone(), sg_root2.clone(), active_setting2.clone(), editz_text2.clone()).await;
+                        update_setting(
+                            setting2.clone(),
+                            sg_root2.clone(),
+                            active_setting2.clone(),
+                            editz_text2.clone(),
+                        )
+                        .await;
+                        refresh_setting(setting2.clone(), sg_root2.clone());
                     }
                 });
                 app.tasks.lock().unwrap().push(listen_click);
             }
+        }
+
+        // Reset icon
+        let node = create_vector_art("reset_btn_bg");
+        let prop = node.get_property("rect").unwrap();
+        prop.clone().set_expr(atom, Role::App, 0, cc.compile("w - 100").unwrap()).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 0.).unwrap();
+        node.set_property_bool(atom, Role::App, "is_visible", !setting.is_default()).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+
+        let shape = shape::create_reset([0., 0.94, 1., 1.]).scaled(15.);
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .await;
+        setting_layer_node.clone().link(node);
+
+        let node = create_button("reset_btn");
+        node.set_property_bool(atom, Role::App, "is_active", !setting.is_default()).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.clone().set_expr(atom, Role::App, 0, cc.compile("w - 115").unwrap()).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 50.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+        let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+        setting_layer_node.clone().link(node.clone());
+
+        // Handle reset button click
+        {
+            let (slot, recvr) = Slot::new("reset_clicked");
+            node.register("click", slot).unwrap();
+            let setting2 = setting.clone();
+            let sg_root2 = setting_layer_node.clone();
+            let active_setting2 = active_setting.clone();
+            let editz_text2 = editz_text.clone();
+            let listen_click = app.ex.spawn(async move {
+                while let Ok(_) = recvr.recv().await {
+                    info!("reset clicked");
+                    setting2.reset();
+
+                    let atom = &mut PropertyAtomicGuard::new();
+
+                    // Show the selected setting value label (set its text empty)
+                    // of the selected setting, if there's one
+                    let node = sg_root2.clone().lookup_node("/value_label").unwrap();
+                    let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+                    text.set(atom, setting2.value_as_string());
+
+                    let node = sg_root2.clone().lookup_node("/value_editbox").unwrap();
+                    node.set_property_str(atom, Role::App, "text", setting2.value_as_string())
+                        .unwrap();
+
+                    update_setting(
+                        setting2.clone(),
+                        sg_root2.clone(),
+                        active_setting2.clone(),
+                        editz_text2.clone(),
+                    )
+                    .await;
+                    refresh_setting(setting2.clone(), sg_root2.clone());
+                }
+            });
+            app.tasks.lock().unwrap().push(listen_click);
         }
     }
 
     let settings_node = app.sg_root.clone().lookup_node("/window/settings_layer").unwrap();
     settings_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 
-    let path = "/window/settings_layer/settings";
-    let node = app.sg_root.clone().lookup_node(path.to_string()).unwrap();
+    // Searchbar results count
+    let node = app.sg_root.clone().lookup_node("/window/settings_layer/settings").unwrap();
     let counter_text = node.get_children().len().to_string();
-    let path = "/window/settings_layer/search_count";
-    let node = app.sg_root.clone().lookup_node(path.to_string()).unwrap();
-    let _ = node.set_property_str(atom, Role::App, "text", &counter_text).unwrap();
+    let node = app.sg_root.clone().lookup_node("/window/settings_layer/search_count").unwrap();
+    node.set_property_str(atom, Role::App, "text", &counter_text).unwrap();
 }
 
-async fn update_setting(setting: Arc<Setting>, sg_root: SceneNodePtr, active_setting: Arc<Mutex<Option<Arc<Setting>>>>, editz_text: PropertyStr) {
+fn refresh_setting(setting: Arc<Setting>, sn: SceneNodePtr) {
     let atom = &mut PropertyAtomicGuard::new();
-    let setting_name = &setting.clone().name;
+    let is_bool = matches!(setting.get_value(), PropertyValue::Bool(_));
 
-    let path = format!("/window/settings_layer/settings/{}/value_editbox", setting_name);
-    if let Some(node) = sg_root.clone().lookup_node(path) {
+    let node = sn.clone().lookup_node("/key_label").unwrap();
+    if setting.clone().is_default() {
+        node.set_property_f32_vec(atom, Role::App, "text_color", vec![0.65, 0.87, 0.83, 1.])
+            .unwrap();
+    } else {
+        node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
+    }
+
+    let node = sn.clone().lookup_node("/reset_btn_bg").unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", !setting.clone().is_default()).unwrap();
+    let node = sn.clone().lookup_node("/reset_btn").unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", !is_bool && !setting.clone().is_default())
+        .unwrap();
+}
+
+async fn update_setting(
+    setting: Arc<Setting>,
+    sn: SceneNodePtr,
+    active_setting: Arc<Mutex<Option<Arc<Setting>>>>,
+    editz_text: PropertyStr,
+) {
+    let atom = &mut PropertyAtomicGuard::new();
+
+    if let Some(node) = sn.clone().lookup_node("/value_editbox") {
         node.set_property_f32(atom, Role::App, "font_size", 0.).unwrap();
         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
@@ -1377,50 +1558,44 @@ async fn update_setting(setting: Arc<Setting>, sg_root: SceneNodePtr, active_set
             let value_str = editz_text.get();
             let parsed = value_str.parse::<u32>();
             if let Ok(value) = parsed {
-                let path = format!("/window/settings_layer/settings/{}/value_label", setting_name);
-                if let Some(node) = sg_root.clone().lookup_node(path) {
+                if let Some(node) = sn.clone().lookup_node("/value_label") {
                     node.set_property_str(atom, Role::App, "text", value_str).unwrap();
                 }
-                let path = format!("/window/settings_layer/settings/{}/confirm_btn_bg", setting_name);
-                if let Some(node) = sg_root.clone().lookup_node(path) {
+                if let Some(node) = sn.clone().lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
-                setting.node.set_property_u32(atom, Role::User, "value", value);
+                setting.node.set_property_u32(atom, Role::User, "value", value).unwrap();
                 let mut active_setting_value = active_setting.lock().unwrap();
                 *active_setting_value = None;
             }
-        },
+        }
         PropertyValue::Float32(_) => {
             let value_str = editz_text.get();
             let parsed = value_str.parse::<f32>();
             if let Ok(value) = parsed {
-                let path = format!("/window/settings_layer/settings/{}/value_label", setting_name);
-                if let Some(node) = sg_root.clone().lookup_node(path) {
+                if let Some(node) = sn.clone().lookup_node("/value_label") {
                     node.set_property_str(atom, Role::App, "text", value_str).unwrap();
                 }
-                let path = format!("/window/settings_layer/settings/{}/confirm_btn_bg", setting_name);
-                if let Some(node) = sg_root.clone().lookup_node(path) {
+                if let Some(node) = sn.clone().lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
-                setting.node.set_property_f32(atom, Role::User, "value", value);
+                setting.node.set_property_f32(atom, Role::User, "value", value).unwrap();
                 let mut active_setting_value = active_setting.lock().unwrap();
                 *active_setting_value = None;
             }
-        },
+        }
         PropertyValue::Str(_) => {
             let value_str = editz_text.get();
-            let path = format!("/window/settings_layer/settings/{}/value_label", setting_name);
-            if let Some(node) = sg_root.clone().lookup_node(path) {
+            if let Some(node) = sn.clone().lookup_node("/value_label") {
                 node.set_property_str(atom, Role::App, "text", &value_str).unwrap();
             }
-            let path = format!("/window/settings_layer/{}/confirm_btn_bg", setting_name);
-            if let Some(node) = sg_root.clone().lookup_node(path) {
+            if let Some(node) = sn.clone().lookup_node("/confirm_btn_bg") {
                 node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
-            setting.node.set_property_str(atom, Role::User, "value", value_str);
+            setting.node.set_property_str(atom, Role::User, "value", value_str).unwrap();
             let mut active_setting_value = active_setting.lock().unwrap();
             *active_setting_value = None;
-        },
-        _ => {},
+        }
+        _ => {}
     };
 }

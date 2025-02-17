@@ -42,7 +42,7 @@ impl TestHarness {
     pub async fn genesis_mint(
         &mut self,
         holder: &Holder,
-        amount: u64,
+        amounts: &[u64],
         spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
@@ -53,7 +53,7 @@ impl TestHarness {
         // Build the contract call
         let builder = GenesisMintCallBuilder {
             signature_public: wallet.keypair.public,
-            amount,
+            amounts: amounts.to_vec(),
             recipient: None,
             spend_hook,
             user_data,
@@ -96,22 +96,28 @@ impl TestHarness {
             return Ok(vec![])
         }
 
-        wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
+        // Iterate over call outputs to find any new OwnCoins
+        let mut found_owncoins = vec![];
+        for output in &params.outputs {
+            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
 
-        let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-            return Ok(vec![])
-        };
+            // Attempt to decrypt the output note to see if this is a coin for the holder.
+            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                continue
+            };
 
-        let owncoin = OwnCoin {
-            coin: params.output.coin,
-            note: note.clone(),
-            secret: wallet.keypair.secret,
-            leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-        };
+            let owncoin = OwnCoin {
+                coin: output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
 
-        debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-        wallet.unspent_money_coins.push(owncoin.clone());
+            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+            wallet.unspent_money_coins.push(owncoin.clone());
+            found_owncoins.push(owncoin);
+        }
 
-        Ok(vec![owncoin])
+        Ok(found_owncoins)
     }
 }

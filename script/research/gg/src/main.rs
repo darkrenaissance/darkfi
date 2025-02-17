@@ -75,8 +75,8 @@ enum Subcmd {
     /// Generate a Darkfi genesis transaction using the secret
     /// key from  stdin
     GenerateTx {
-        /// Amount to mint for this genesis transaction
-        amount: String,
+        /// Amounts to mint for this genesis transaction
+        amounts: Vec<String>,
 
         #[arg(short, long)]
         /// Optional recipient's public key, in case we want to mint to a different address
@@ -92,7 +92,7 @@ enum Subcmd {
     },
 }
 
-/// Auxiliary function to read a bs58 genesis block from stdin
+/// Auxiliary function to read a base64 genesis block from stdin
 async fn read_block() -> Result<BlockInfo> {
     println!("Reading genesis block from stdin...");
     let mut buf = String::new();
@@ -169,16 +169,19 @@ async fn main() -> Result<()> {
             println!("Genesis block {hash} verified successfully!");
         }
 
-        Subcmd::GenerateTx { amount, recipient, spend_hook, user_data } => {
+        Subcmd::GenerateTx { amounts, recipient, spend_hook, user_data } => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
             let signature_secret = SecretKey::from_str(buf.trim())?;
 
-            if let Err(e) = f64::from_str(&amount) {
-                eprintln!("Invalid amount: {e:?}");
-                exit(2);
+            let mut coin_amounts = vec![];
+            for amount in amounts {
+                if let Err(e) = f64::from_str(&amount) {
+                    eprintln!("Invalid amount: {e:?}");
+                    exit(2);
+                }
+                coin_amounts.push(decode_base10(&amount, 8, true)?);
             }
-            let amount = decode_base10(&amount, 8, true)?;
 
             let recipient = match recipient {
                 Some(r) => match PublicKey::from_str(&r) {
@@ -244,7 +247,7 @@ async fn main() -> Result<()> {
             // Build the contract call
             let builder = GenesisMintCallBuilder {
                 signature_public: PublicKey::from_secret(signature_secret),
-                amount,
+                amounts: coin_amounts,
                 recipient,
                 spend_hook,
                 user_data,

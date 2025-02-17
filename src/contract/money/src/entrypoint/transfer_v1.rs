@@ -149,12 +149,18 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let smt_store = SmtWasmDbStorage::new(nullifiers_db);
     let smt = SmtWasmFp::new(smt_store, hasher, &EMPTY_NODES_FP);
 
+    // Grab the expected token commitment. In the basic transfer,
+    // we only allow the same token type to be transfered. For
+    // exchanging, we use another functionality of this contract
+    // called `OtcSwap`.
+    let tokcom = params.outputs[0].token_commit;
+
     // ===================================
     // Perform the actual state transition
     // ===================================
 
     // For anonymous inputs, we must also gather all the new nullifiers
-    // that are introduced.
+    // that are introduced, and verify their token commitments.
     let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
     msg!("[TransferV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
@@ -169,8 +175,14 @@ pub(crate) fn money_transfer_process_instruction_v1(
         if new_nullifiers.contains(&input.nullifier) ||
             smt.get_leaf(&input.nullifier.inner()) != empty_leaf
         {
-            msg!("[TransferV1] Error: Duplicate nullifier found (input {})", i);
+            msg!("[TransferV1] Error: Duplicate nullifier found in input {}", i);
             return Err(MoneyError::DuplicateNullifier.into())
+        }
+
+        // Verify the token commitment is the expected one
+        if tokcom != input.token_commit {
+            msg!("[TransferV1] Error: Token commitment mismatch in input {}", i);
+            return Err(MoneyError::TokenMismatch.into())
         }
 
         // Append this new nullifier to seen nullifiers, and accumulate the value commitment
@@ -179,7 +191,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
     }
 
     // Newly created coins for this call are in the outputs. Here we gather them,
-    // and we also check that they haven't existed before.
+    // check that they haven't existed before and their token commitment is valid.
     let mut new_coins = Vec::with_capacity(params.outputs.len());
     msg!("[TransferV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
@@ -188,6 +200,12 @@ pub(crate) fn money_transfer_process_instruction_v1(
         {
             msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
+        }
+
+        // Verify the token commitment is the expected one
+        if tokcom != output.token_commit {
+            msg!("[TransferV1] Error: Token commitment mismatch in output {}", i);
+            return Err(MoneyError::TokenMismatch.into())
         }
 
         // Append this new coin to seen coins, and subtract the value commitment
@@ -200,20 +218,6 @@ pub(crate) fn money_transfer_process_instruction_v1(
     if valcom_total != pallas::Point::identity() {
         msg!("[TransferV1] Error: Value commitments do not result in identity");
         return Err(MoneyError::ValueMismatch.into())
-    }
-
-    // We also need to verify that all token commitments are the same.
-    // In the basic transfer, we only allow the same token type to be
-    // transferred. For exchanging we use another functionality of this
-    // contract called `OtcSwap`.
-    let tokcom = params.outputs[0].token_commit;
-
-    let failed_tokcom = params.inputs.iter().any(|x| x.token_commit != tokcom) ||
-        params.outputs.iter().any(|x| x.token_commit != tokcom);
-
-    if failed_tokcom {
-        msg!("[TransferV1] Error: Token commitments do not match");
-        return Err(MoneyError::TokenMismatch.into())
     }
 
     // At this point the state transition has passed, so we create a state update
@@ -247,18 +251,19 @@ pub(crate) fn money_transfer_process_update_v1(
     )?;
 
     msg!("[TransferV1] Adding new coins to the set");
+    let mut new_coins = Vec::with_capacity(update.coins.len());
     for coin in &update.coins {
         wasm::db::db_set(coins_db, &serialize(coin), &[])?;
+        new_coins.push(MerkleNode::from(coin.inner()));
     }
 
     msg!("[TransferV1] Adding new coins to the Merkle tree");
-    let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
     wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,
         MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &coins,
+        &new_coins,
     )?;
 
     Ok(())

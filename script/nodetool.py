@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
 # This file is part of DarkFi (https://dark.fi)
 #
 # Copyright (C) 2020-2025 Dyne.org foundation
@@ -15,6 +16,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import asyncio, json, random, sys, time
 
 class JsonRpc:

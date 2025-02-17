@@ -367,10 +367,11 @@ async fn handle_reorg(
     peer_fork.targets_rank = last_difficulty.ranks.targets_rank.clone();
     peer_fork.hashes_rank = last_difficulty.ranks.hashes_rank.clone();
 
-    // Grab all state diffs after last common height and add their inverse to the fork
-    let diffs = validator.blockchain.blocks.get_state_diffs_after(last_common_height)?;
-    for diff in diffs.iter().rev() {
-        peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(&diff.inverse())?;
+    // Grab all state inverse diffs after last common height, and add them to the fork
+    let inverse_diffs =
+        validator.blockchain.blocks.get_state_inverse_diffs_after(last_common_height)?;
+    for inverse_diff in inverse_diffs.iter().rev() {
+        peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)?;
     }
 
     // Retrieve the proposals of the hashes sequence, in batches

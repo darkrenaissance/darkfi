@@ -38,8 +38,8 @@ fn genesis_mint() -> Result<()> {
         const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
 
         // Some numbers we want to assert
-        const ALICE_INITIAL: u64 = 100;
-        const BOB_INITIAL: u64 = 200;
+        const ALICE_INITIAL: [u64; 1] = [100];
+        const BOB_INITIAL: [u64; 2] = [100, 100];
 
         // Block height to verify against
         let current_block_height = 0;
@@ -51,7 +51,7 @@ fn genesis_mint() -> Result<()> {
         info!(target: "money", "[Alice] Building genesis mint tx");
         info!(target: "money", "[Alice] ========================");
         let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Alice, ALICE_INITIAL, None, None).await?;
+            th.genesis_mint(&Holder::Alice, &ALICE_INITIAL, None, None).await?;
 
         info!(target: "money", "[Malicious] =============================================");
         info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis block");
@@ -87,7 +87,7 @@ fn genesis_mint() -> Result<()> {
         info!(target: "money", "[Bob] Building genesis mint tx");
         info!(target: "money", "[Bob] ========================");
         let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Bob, BOB_INITIAL, None, None).await?;
+            th.genesis_mint(&Holder::Bob, &BOB_INITIAL, None, None).await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] =============================");
@@ -108,7 +108,10 @@ fn genesis_mint() -> Result<()> {
         let alice_owncoins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
         let bob_owncoins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
         assert!(alice_owncoins.len() == 1);
-        assert!(bob_owncoins.len() == 1);
+        assert!(alice_owncoins[0].note.value == ALICE_INITIAL[0]);
+        assert!(bob_owncoins.len() == 2);
+        assert!(bob_owncoins[0].note.value == BOB_INITIAL[0]);
+        assert!(bob_owncoins[1].note.value == BOB_INITIAL[1]);
 
         // Thanks for reading
         Ok(())

@@ -110,16 +110,19 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
         let glyph = &self.glyphs[self.i];
         let sprite = &glyph.sprite;
 
+        // current_x/y is scaled real coords
+        // but the returned rect is unscaled
+
         let rect = if sprite.has_fixed_sizes {
             // Downscale by height
             let w = (sprite.bmp_width as f32 * EMOJI_SCALE_FACT * self.font_size) /
                 sprite.bmp_height as f32;
             let h = EMOJI_SCALE_FACT * self.font_size;
 
-            let x = self.current_x;
-            let y = self.current_y - EMOJI_PROP_ABOVE_BASELINE * h;
+            let x = self.current_x / self.window_scale;
+            let y = self.current_y / self.window_scale - (EMOJI_PROP_ABOVE_BASELINE * h);
 
-            self.current_x += w;
+            self.current_x += w * self.window_scale;
 
             Rectangle { x, y, w, h }
         } else {
@@ -136,10 +139,9 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
             self.current_x += x_advance;
             self.current_y += y_advance;
 
-            Rectangle { x, y, w, h }
+            // Downscale back again
+            Rectangle { x, y, w, h } / self.window_scale
         };
-
-        let mut rect = rect / self.window_scale;
 
         self.i += 1;
         Some(rect)

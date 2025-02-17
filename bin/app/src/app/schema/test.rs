@@ -62,7 +62,13 @@ use ui_consts::*;
 pub async fn make(app: &App, window: SceneNodePtr) {
     let atom = &mut PropertyAtomicGuard::new();
 
-    let window_scale = PropertyFloat32::wrap(&app.sg_root.clone().lookup_node("/setting/scale").unwrap(), Role::Internal, "value", 0).unwrap();
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.clone().lookup_node("/setting/scale").unwrap(),
+        Role::Internal,
+        "value",
+        0,
+    )
+    .unwrap();
 
     let mut cc = Compiler::new();
 

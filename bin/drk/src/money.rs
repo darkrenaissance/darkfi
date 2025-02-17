@@ -767,8 +767,10 @@ impl Drk {
             MoneyFunction::GenesisMintV1 => {
                 println!("[parse_money_call] Found Money::GenesisMintV1 call");
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push(params.output.coin);
-                notes.push(params.output.note);
+                for output in params.outputs {
+                    coins.push(output.coin);
+                    notes.push(output.note);
+                }
             }
             MoneyFunction::PoWRewardV1 => {
                 println!("[parse_money_call] Found Money::PoWRewardV1 call");

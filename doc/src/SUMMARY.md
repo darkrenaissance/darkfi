@@ -27,6 +27,7 @@
 
 - [Development](dev/dev.md)
   - [Contribute](dev/contrib/contrib.md)
+    - [Hiring](dev/contrib/hiring.md)
     - [Using Tor](dev/contrib/tor.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)

@@ -468,7 +468,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         //  Note that this would implicitly handle nested routes (like
         //  /window/somewhere1/view1 to /window/somewhere1/view2, if the last element of the
         //  router currently points to view1 and we call router.goto("./view2")).
-        //  
+        //
         //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
         let windows = sg_root.clone().lookup_node("/window").unwrap().get_children();
         let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
@@ -494,7 +494,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
-    
+
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     settingslayer_node.clone().link(node);
 

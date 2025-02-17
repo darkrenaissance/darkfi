@@ -217,15 +217,15 @@ pub struct MoneyTransferUpdateV1 {
 pub struct MoneyGenesisMintParamsV1 {
     /// Clear input
     pub input: ClearInput,
-    /// Anonymous output
-    pub output: Output,
+    /// Anonymous outputs
+    pub outputs: Vec<Output>,
 }
 
 /// State update for `Money::GenesisMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyGenesisMintUpdateV1 {
-    /// The newly minted coin
-    pub coin: Coin,
+    /// The newly minted coins
+    pub coins: Vec<Coin>,
 }
 
 /// Parameters for `Money::TokenMint`

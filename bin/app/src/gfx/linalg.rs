@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
 pub struct Dimension {
@@ -275,6 +275,15 @@ impl Div<f32> for Rectangle {
 
     fn div(self, scale: f32) -> Self::Output {
         Self { x: self.x / scale, y: self.y / scale, w: self.w / scale, h: self.h / scale }
+    }
+}
+
+impl DivAssign<f32> for Rectangle {
+    fn div_assign(&mut self, scale: f32) {
+        self.x /= scale;
+        self.y /= scale;
+        self.w /= scale;
+        self.h /= scale;
     }
 }
 
