@@ -623,7 +623,9 @@ Examples:
             if (errc := await show_archive_task(arefid, month_ts, server_name, port)) < 0:
                 return errc
         elif len(sys.argv) == 3:
-            if len(sys.argv[2]) == 4:
+            if sys.argv[2] == "all":
+                await show_deactive_tasks(None, workspace, server_name, port)
+            elif len(sys.argv[2]) == 4:
                 month = sys.argv[2]
                 month_ts = lib.util.month_to_unix(month)
                 await show_deactive_tasks(month_ts, workspace, server_name, port)
