@@ -67,8 +67,9 @@ async def add_task(task_args, server_name, port):
     except KeyError:
         pass
 
-    if await api.add_task(task, server_name, port):
-        return title
+    ref = await api.add_task(task, server_name, port)
+    if ref:
+        return ref, title
     else:
         print("You don't have write access")
         exit(-1)
@@ -585,9 +586,9 @@ Examples:
         return 0
     elif sys.argv[1] == "add":
         task_args = sys.argv[2:]
-        title = await add_task(task_args, server_name, port)
+        ref, title = await add_task(task_args, server_name, port)
         if title:
-            print(f"Created task ({find_free_id(free_ids)}) '{title}'.")
+            print(f"Created task ({find_free_id(free_ids)}) ({ref[:7]}) '{title}'.")
         return 0
     elif sys.argv[1] == "archive":
         if len(sys.argv) == 4:

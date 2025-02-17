@@ -339,7 +339,7 @@ impl JsonRpcInterface {
         new_task.set_tags(&tags);
 
         self.notify_queue_sender.send(new_task.clone()).await.map_err(Error::from)?;
-        Ok(JsonValue::Boolean(true))
+        Ok(new_task.ref_id.clone().into())
     }
 
     // RPCAPI:
