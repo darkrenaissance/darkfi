@@ -1,0 +1,34 @@
+[package]
+name = "darkfi-eventgraph-py"
+version = "0.1.0"
+edition = "2021"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+
+[lib]
+name = "darkfi_eventgraph_py"
+crate-type = ["cdylib"]
+doc = false
+
+[dependencies]
+darkfi = { path = "../../..", features = ["net", "event-graph"] }
+#darkfi-sdk = {path = "../../sdk"}
+sled-overlay = {version = "0.1.4"}
+
+smol = {version = "2.0.2"}
+url = {version = "2.5.2", features = ["serde"]}
+futures = {version = "0.3.31"}
+
+#pyo3 = {version = "0.20.0"}
+#pyo3-asyncio = {version = "0.20.0", features = ["attributes", "async-std-runtime"]}
+pyo3 = { version = "0.22.6", features = ["experimental-async"]}
+pyo3-async-runtimes = { version = "0.22", features = ["attributes", "async-std-runtime"] }
+async-std = "1.13"
+semver = "1.0"
+blake3 = {version = "1.5.4", features = ["rayon"]}
+
+
+[lints]
+workspace = true
