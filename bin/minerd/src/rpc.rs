@@ -115,6 +115,7 @@ impl MinerNode {
             error!(target: "minerd::rpc", "Failed mining block {} with error: {}", block_hash, e);
             return server_error(RpcError::MiningFailed, id, None)
         }
+        info!(target: "minerd::rpc", "Mined block {} with nonce: {}", block_hash, block.header.nonce);
 
         // Return block nonce
         JsonResponse::new(JsonValue::Number(block.header.nonce as f64), id).into()
@@ -124,7 +125,7 @@ impl MinerNode {
     async fn abort_pending(&self, id: u16) -> Option<JsonResult> {
         // Check if a pending request is being processed
         info!(target: "minerd::rpc", "Checking if a pending request is being processed...");
-        if self.stop_signal.receiver_count() == 0 {
+        if self.stop_signal.receiver_count() <= 1 {
             info!(target: "minerd::rpc", "No pending requests!");
             return None
         }
