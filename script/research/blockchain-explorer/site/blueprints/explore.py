@@ -50,8 +50,8 @@ async def index():
     # Determine if metrics exist
     has_metrics = metric_stats and isinstance(metric_stats, list)
 
-    # Get the latest metric statistics or set to None if none are found
-    latest_metric_stats = metric_stats[-1] if has_metrics else None
+    # Get the latest metric statistics or return empty metrics
+    latest_metric_stats = metric_stats[-1] if has_metrics else [0] * 15
 
     # Retrieve the native contracts
     native_contracts = await rpc.get_native_contracts()
