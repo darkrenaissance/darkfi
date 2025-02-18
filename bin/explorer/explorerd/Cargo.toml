@@ -1,13 +1,11 @@
 [package]
-name = "blockchain-explorer"
+name = "explorerd"
 version = "0.4.1"
 description = "Daemon to listen for new blocks from darkfid and store them in an easily accessible format for further usage."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
-
-[workspace]
 
 [dependencies]
 # Darkfi
@@ -43,7 +41,3 @@ tar = "0.4.43"
 
 # Testing
 tempdir = "0.3.7"
-
-[patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}

@@ -40,7 +40,7 @@ use crate::{
 #[async_trait]
 impl RequestHandler<()> for Explorerd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        debug!(target: "blockchain-explorer::rpc", "--> {}", req.stringify().unwrap());
+        debug!(target: "explorerd::rpc", "--> {}", req.stringify().unwrap());
 
         match req.method.as_str() {
             // =====================
@@ -113,9 +113,9 @@ impl Explorerd {
     // --> {"jsonrpc": "2.0", "method": "ping_darkfid", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn ping_darkfid(&self, id: u16, _params: JsonValue) -> JsonResult {
-        debug!(target: "blockchain-explorer::rpc::ping_darkfid", "Pinging darkfid daemon...");
+        debug!(target: "explorerd::rpc::ping_darkfid", "Pinging darkfid daemon...");
         if let Err(e) = self.darkfid_daemon_request("ping", &JsonValue::Array(vec![])).await {
-            error!(target: "blockchain-explorer::rpc::ping_darkfid", "Failed to ping darkfid daemon: {}", e);
+            error!(target: "explorerd::rpc::ping_darkfid", "Failed to ping darkfid daemon: {}", e);
             return server_error(RpcError::PingFailed, id, None)
         }
         JsonResponse::new(JsonValue::Boolean(true), id).into()
@@ -127,13 +127,13 @@ impl Explorerd {
         method: &str,
         params: &JsonValue,
     ) -> Result<JsonValue> {
-        debug!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Executing request {} with params: {:?}", method, params);
+        debug!(target: "explorerd::rpc::darkfid_daemon_request", "Executing request {} with params: {:?}", method, params);
         let latency = Instant::now();
         let req = JsonRequest::new(method, params.clone());
         let rep = self.rpc_client.request(req).await?;
         let latency = latency.elapsed();
-        trace!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Got reply: {:?}", rep);
-        debug!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Latency: {:?}", latency);
+        trace!(target: "explorerd::rpc::darkfid_daemon_request", "Got reply: {:?}", rep);
+        debug!(target: "explorerd::rpc::darkfid_daemon_request", "Latency: {:?}", latency);
         Ok(rep)
     }
 }

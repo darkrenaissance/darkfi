@@ -1,4 +1,4 @@
-## blockchain-explorer configuration file
+## explorerd configuration file
 ##
 ## Please make sure you go through all the settings so you can configure
 ## your daemon properly.
@@ -10,7 +10,7 @@
 rpc_listen = "tcp://127.0.0.1:14567"
 
 # Path to daemon database
-db_path = "~/.local/share/darkfi/blockchain-explorer/daemon.db"
+db_path = "~/.local/share/darkfi/explorerd/daemon.db"
 
 # Password for the daemon database
 db_pass = "changeme"

@@ -54,7 +54,7 @@ impl Explorerd {
         let transactions = match self.service.get_transactions_by_header_hash(header_hash) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_header_hash", "Failed fetching block transactions: {}", e);
+                error!(target: "explorerd::rpc_transactions::transactions_get_transaction_by_header_hash", "Failed fetching block transactions: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -100,7 +100,7 @@ impl Explorerd {
             Ok(Some(transaction)) => JsonResponse::new(transaction.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_hash", "Failed fetching transaction: {}", e);
+                error!(target: "explorerd::rpc_transactions::transactions_get_transaction_by_hash", "Failed fetching transaction: {}", e);
                 JsonError::new(InternalError, None, id).into()
             }
         }

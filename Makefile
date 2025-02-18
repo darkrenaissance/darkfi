@@ -30,7 +30,8 @@ BINS = \
 	genevd \
 	lilith \
 	taud \
-	vanityaddr
+	vanityaddr \
+	explorerd
 
 all: $(BINS)
 
@@ -119,6 +120,13 @@ vanityaddr:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
+explorerd:
+	$(MAKE) -C bin/explorer/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
 # -- END OF BINS --
 
 fmt:
@@ -176,6 +184,7 @@ clean:
 	$(MAKE) -C bin/lilith clean
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean
+	$(MAKE) -C bin/explorer/explorerd
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release
 	rm -f $(PROOFS_BIN)
 

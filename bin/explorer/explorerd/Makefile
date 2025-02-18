@@ -19,13 +19,12 @@ SRC = \
 
 BIN = $(shell grep '^name = ' Cargo.toml | sed 1q | cut -d' ' -f3 | tr -d '"')
 
-all: $(BIN) bundle_contracts_src
+all: $(BIN)
 
-$(BIN): $(SRC)
+$(BIN): $(SRC) bundle_contracts_src
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package $@
-	# TODO: Update target path to darkfi project workspace once explorer is transitioned to bin
-	cp -f target/$(RUST_TARGET)/release/$@ $@
-	cp -f target/$(RUST_TARGET)/release/$@ ../../../$@
+	cp -f ../../../target/$(RUST_TARGET)/release/$@ $@
+	cp -f ../../../target/$(RUST_TARGET)/release/$@ ../../../$@
 
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)

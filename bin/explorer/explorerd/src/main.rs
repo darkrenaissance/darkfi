@@ -82,8 +82,8 @@ mod metrics_store;
 /// Database store functionality related to contract metadata
 mod contract_meta_store;
 
-const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
-const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");
+const CONFIG_FILE: &str = "explorerd_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../explorerd_config.toml");
 
 // Load the contract source archives to bootstrap them on explorer startup
 lazy_static! {
@@ -107,7 +107,7 @@ lazy_static! {
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
-#[structopt(name = "blockchain-explorer", about = cli_desc!())]
+#[structopt(name = "explorerd", about = cli_desc!())]
 struct Args {
     #[structopt(short, long)]
     /// Configuration file to use
@@ -117,7 +117,7 @@ struct Args {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "~/.local/share/darkfi/blockchain-explorer/daemon.db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/explorerd/daemon.db")]
     /// Path to daemon database
     db_path: String,
 
@@ -232,7 +232,7 @@ impl ExplorerService {
     /// transactions up to the reset height, ensuring consistency. Returns a result indicating
     /// success or an error if the operation fails.
     pub fn reset_explorer_state(&self, height: u32) -> Result<()> {
-        debug!(target: "blockchain-explorer::reset_explorer_state", "Resetting explorer state to height: {height}");
+        debug!(target: "explorerd::reset_explorer_state", "Resetting explorer state to height: {height}");
 
         // Check if a genesis block reset or to a specific height
         match height {
@@ -240,18 +240,18 @@ impl ExplorerService {
             0 => {
                 self.reset_blocks()?;
                 self.reset_transactions()?;
-                debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset explorer state to accept a new genesis block");
+                debug!(target: "explorerd::reset_explorer_state", "Successfully reset explorer state to accept a new genesis block");
             }
             // Reset for all other heights
             _ => {
                 self.reset_to_height(height)?;
-                debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset blocks to height: {height}");
+                debug!(target: "explorerd::reset_explorer_state", "Successfully reset blocks to height: {height}");
             }
         }
 
         // Reset gas metrics to the specified height to reflect the updated blockchain state
         self.db.metrics_store.reset_gas_metrics(height)?;
-        debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset metrics store to height: {height}");
+        debug!(target: "explorerd::reset_explorer_state", "Successfully reset metrics store to height: {height}");
 
         Ok(())
     }
@@ -279,7 +279,7 @@ impl ExplorerDb {
         let blockchain = Blockchain::new(&sled_db)?;
         let metrics_store = MetricsStore::new(&sled_db)?;
         let contract_meta_store = ContractMetaStore::new(&sled_db)?;
-        info!(target: "blockchain-explorer", "Initialized explorer database {}: block count: {}, tx count: {}", db_path.display(), blockchain.len(), blockchain.txs_len());
+        info!(target: "explorerd", "Initialized explorer database {}: block count: {}, tx count: {}", db_path.display(), blockchain.len(), blockchain.txs_len());
         Ok(Self { sled_db, blockchain, metrics_store, contract_meta_store })
     }
 }
@@ -307,7 +307,7 @@ impl Explorerd {
     async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
         // Initialize rpc client
         let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
-        info!(target: "blockchain-explorer", "Created rpc client: {:?}", endpoint);
+        info!(target: "explorerd", "Created rpc client: {:?}", endpoint);
 
         // Create explorer service
         let service = ExplorerService::new(db_path)?;
@@ -321,13 +321,13 @@ impl Explorerd {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
-    info!(target: "blockchain-explorer", "Initializing DarkFi blockchain explorer node...");
+    info!(target: "explorerd", "Initializing DarkFi blockchain explorer node...");
     let explorer = Explorerd::new(args.db_path, args.endpoint.clone(), ex.clone()).await?;
     let explorer = Arc::new(explorer);
-    info!(target: "blockchain-explorer", "Node initialized successfully!");
+    info!(target: "explorerd", "Node initialized successfully!");
 
     // JSON-RPC server
-    info!(target: "blockchain-explorer", "Starting JSON-RPC server");
+    info!(target: "explorerd", "Starting JSON-RPC server");
     // Here we create a task variable so we can manually close the task later.
     let rpc_task = StoppableTask::new();
     let explorer_ = explorer.clone();
@@ -336,7 +336,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,
-                Err(e) => error!(target: "blockchain-explorer", "Failed starting sync JSON-RPC server: {}", e),
+                Err(e) => {
+                    error!(target: "explorerd", "Failed starting sync JSON-RPC server: {}", e)
+                }
             }
         },
         Error::RpcServerStopped,
@@ -344,21 +346,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     );
 
     // Sync blocks
-    info!(target: "blockchain-explorer", "Syncing blocks from darkfid...");
+    info!(target: "explorerd", "Syncing blocks from darkfid...");
     if let Err(e) = explorer.sync_blocks(args.reset).await {
         let error_message = format!("Error syncing blocks: {:?}", e);
-        error!(target: "blockchain-explorer", "{error_message}");
+        error!(target: "explorerd", "{error_message}");
         return Err(Error::DatabaseError(error_message));
     }
 
     // Subscribe blocks
-    info!(target: "blockchain-explorer", "Subscribing to new blocks...");
+    info!(target: "explorerd", "Subscribing to new blocks...");
     let (subscriber_task, listener_task) =
         match subscribe_blocks(explorer.clone(), args.endpoint, ex.clone()).await {
             Ok(pair) => pair,
             Err(e) => {
                 let error_message = format!("Error setting up blocks subscriber: {:?}", e);
-                error!(target: "blockchain-explorer", "{error_message}");
+                error!(target: "explorerd", "{error_message}");
                 return Err(Error::DatabaseError(error_message));
             }
         };
@@ -366,18 +368,18 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!(target: "blockchain-explorer", "Caught termination signal, cleaning up and exiting...");
+    info!(target: "explorerd", "Caught termination signal, cleaning up and exiting...");
 
-    info!(target: "blockchain-explorer", "Stopping JSON-RPC server...");
+    info!(target: "explorerd", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
-    info!(target: "blockchain-explorer", "Stopping darkfid listener...");
+    info!(target: "explorerd", "Stopping darkfid listener...");
     listener_task.stop().await;
 
-    info!(target: "blockchain-explorer", "Stopping darkfid subscriber...");
+    info!(target: "explorerd", "Stopping darkfid subscriber...");
     subscriber_task.stop().await;
 
-    info!(target: "blockchain-explorer", "Stopping JSON-RPC client...");
+    info!(target: "explorerd", "Stopping JSON-RPC client...");
     explorer.rpc_client.stop().await;
 
     Ok(())

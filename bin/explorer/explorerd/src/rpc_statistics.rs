@@ -54,7 +54,7 @@ impl Explorerd {
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {
                 error!(
-                    target: "blockchain-explorer::rpc_statistics::statistics_get_basic_statistics",
+                    target: "explorerd::rpc_statistics::statistics_get_basic_statistics",
                     "Failed fetching basic statistics: {}", e
                 );
                 JsonError::new(InternalError, None, id).into()
@@ -84,7 +84,7 @@ impl Explorerd {
         let metrics = match self.service.get_metrics_statistics().await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_statistics::statistics_get_metric_statistics", "Failed fetching metric statistics: {}", e);
+                error!(target: "explorerd::rpc_statistics::statistics_get_metric_statistics", "Failed fetching metric statistics: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -120,7 +120,7 @@ impl Explorerd {
         let metrics = match self.service.get_latest_metrics_statistics().await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_statistics::statistics_get_latest_metric_statistics", "Failed fetching metric statistics: {}", e);
+                error!(target: "explorerd::rpc_statistics::statistics_get_latest_metric_statistics", "Failed fetching metric statistics: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };

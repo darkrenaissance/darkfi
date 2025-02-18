@@ -84,8 +84,8 @@ impl Explorerd {
         // Declare a mutable variable to track the current sync height while processing blocks
         let mut current_height = last_synced_height;
 
-        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {current_height}");
-        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_darkfid_height} - {last_darkfid_hash}");
+        info!(target: "explorerd::rpc_blocks::sync_blocks", "Requested to sync from block number: {current_height}");
+        info!(target: "explorerd::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_darkfid_height} - {last_darkfid_hash}");
 
         // A reorg is detected if the hash of the last synced block differs from the hash of the last confirmed block,
         // unless the reset flag is set or the current height is 0
@@ -96,13 +96,13 @@ impl Explorerd {
         if reset {
             self.service.reset_explorer_state(0)?;
             current_height = 0;
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Successfully reset explorer database based on set reset parameter");
+            info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully reset explorer database based on set reset parameter");
         } else if reorg_detected {
             current_height =
                 self.process_sync_blocks_reorg(last_synced_height, last_darkfid_height).await?;
             // Log only if a reorg occurred
             if current_height != last_synced_height {
-                info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height}");
+                info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height}");
             }
             // Prepare to sync the next block after reorg
             current_height += 1;
@@ -134,13 +134,13 @@ impl Explorerd {
                 ))
             };
 
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Synced block {current_height}");
+            info!(target: "explorerd::rpc_blocks::sync_blocks", "Synced block {current_height}");
 
             // Increment the current height to sync the next block
             current_height += 1;
         }
 
-        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Completed sync, total number of explorer blocks: {}", self.service.db.blockchain.blocks.len());
+        info!(target: "explorerd::rpc_blocks::sync_blocks", "Completed sync, total number of explorer blocks: {}", self.service.db.blockchain.blocks.len());
 
         Ok(())
     }
@@ -164,7 +164,7 @@ impl Explorerd {
     ) -> Result<u32> {
         // Log reorg detection in the case that explorer height is greater or equal to height of darkfi node
         if last_synced_height >= last_darkfid_height {
-            info!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg",
+            info!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg",
                 "Reorg detected with heights: explorer.{last_synced_height} >= darkfid.{last_darkfid_height}");
         }
 
@@ -173,7 +173,7 @@ impl Explorerd {
         // Search for an explorer block that matches a darkfi node block
         while cur_height > 0 {
             let synced_block = self.service.get_block_by_height(cur_height)?;
-            debug!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg", "Searching for common block: {}", cur_height);
+            debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Searching for common block: {}", cur_height);
 
             // Check if we found a synced block for current height being searched
             if let Some(synced_block) = synced_block {
@@ -185,14 +185,14 @@ impl Explorerd {
                             // If hashes match but the cur_height differs from the last synced height, reset the explorer state
                             if cur_height != last_synced_height {
                                 self.service.reset_explorer_state(cur_height)?;
-                                debug!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg", "Successfully completed reorg to height: {cur_height}");
+                                debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Successfully completed reorg to height: {cur_height}");
                             }
                             break;
                         } else {
                             // Log reorg detection with height and header hash mismatch details
                             if cur_height == last_synced_height {
                                 info!(
-                                    target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg",
+                                    target: "explorerd::rpc_blocks::process_sync_blocks_reorg",
                                     "Reorg detected at height {}: explorer.{} != darkfid.{}",
                                     cur_height,
                                     synced_block.header_hash,
@@ -254,7 +254,7 @@ impl Explorerd {
         let blocks_result = match self.service.get_last_n(n) {
             Ok(blocks) => blocks,
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_blocks::blocks_get_last_n_blocks", "Failed fetching blocks: {}", e);
+                error!(target: "explorerd::rpc_blocks::blocks_get_last_n_blocks", "Failed fetching blocks: {}", e);
                 return JsonError::new(InternalError, None, id).into();
             }
         };
@@ -310,7 +310,7 @@ impl Explorerd {
         let blocks_result = match self.service.get_by_range(start, end) {
             Ok(blocks) => blocks,
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_blocks::blocks_get_blocks_in_height_range", "Failed fetching blocks: {}", e);
+                error!(target: "explorerd::rpc_blocks::blocks_get_blocks_in_height_range", "Failed fetching blocks: {}", e);
                 return JsonError::new(InternalError, None, id).into();
             }
         };
@@ -354,7 +354,7 @@ impl Explorerd {
             Ok(Some(block)) => JsonResponse::new(block.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {
-                error!(target: "blockchain-explorer::rpc_blocks", "Failed fetching block: {:?}", e);
+                error!(target: "explorerd::rpc_blocks", "Failed fetching block: {:?}", e);
                 JsonError::new(InternalError, None, id).into()
             }
         }
@@ -401,16 +401,16 @@ pub async fn subscribe_blocks(
 
     // Check if there is a mismatch, throwing an error to prevent operating in a potentially inconsistent state
     if blocks_mismatch {
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks",
+        warn!(target: "explorerd::rpc_blocks::subscribe_blocks",
         "Warning: Last synced block is not the last confirmed block: \
         last_darkfid_height={last_darkfid_height}, last_synced_height={height}, last_darkfid_hash={last_darkfid_hash}, last_synced_hash={hash}");
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
+        warn!(target: "explorerd::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
         return Err(Error::DatabaseError(
             "[subscribe_blocks] Blockchain not fully synced".to_string(),
         ));
     }
 
-    info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Subscribing to receive notifications of incoming blocks");
+    info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Subscribing to receive notifications of incoming blocks");
     let publisher = Publisher::new();
     let subscription = publisher.clone().subscribe().await;
     let _ex = ex.clone();
@@ -426,14 +426,14 @@ pub async fn subscribe_blocks(
         |res| async move {
             match res {
                 Ok(()) => { /* Do nothing */ }
-                Err(e) => error!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "[subscribe_blocks] JSON-RPC server error: {e:?}"),
+                Err(e) => error!(target: "explorerd::rpc_blocks::subscribe_blocks", "[subscribe_blocks] JSON-RPC server error: {e:?}"),
             }
         },
         Error::RpcServerStopped,
         ex.clone(),
     );
-    info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Detached subscription to background");
-    info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "All is good. Waiting for block notifications...");
+    info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Detached subscription to background");
+    info!(target: "explorerd::rpc_blocks::subscribe_blocks", "All is good. Waiting for block notifications...");
 
     let listener_task = StoppableTask::new();
     listener_task.clone().start(
@@ -442,7 +442,7 @@ pub async fn subscribe_blocks(
             loop {
                 match subscription.receive().await {
                     JsonResult::Notification(n) => {
-                        debug!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Got Block notification from darkfid subscription");
+                        debug!(target: "explorerd::rpc_blocks::subscribe_blocks", "Got Block notification from darkfid subscription");
                         if n.method != "blockchain.subscribe_blocks" {
                             return Err(Error::UnexpectedJsonRpc(format!(
                                 "Got foreign notification from darkfid: {}",
@@ -475,16 +475,16 @@ pub async fn subscribe_blocks(
                                     )))
                                 },
                             };
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Block Notification: {}", darkfid_block.hash().to_string());
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "=======================================");
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Block Notification: {}", darkfid_block.hash().to_string());
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "=======================================");
 
                             // Store darkfi node block height for later use
                             let darkfid_block_height = darkfid_block.header.height;
 
                             // Check if we need to perform a reorg due to mismatch in block heights
                             if darkfid_block_height <= height {
-                                info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks",
+                                info!(target: "explorerd::rpc_blocks::subscribe_blocks",
                                     "Reorg detected with heights: darkfid.{darkfid_block_height} <= explorer.{height}");
 
                                 // Calculate the reset height
@@ -492,7 +492,7 @@ pub async fn subscribe_blocks(
 
                                 // Execute the reorg by resetting the explorer state to reset height
                                 explorer.service.reset_explorer_state(reset_height)?;
-                                info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height}");
+                                info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height}");
                             }
 
                             if let Err(e) = explorer.service.put_block(&darkfid_block).await {
@@ -501,7 +501,7 @@ pub async fn subscribe_blocks(
                                 )))
                             }
 
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {}", darkfid_block.header.height );
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {}", darkfid_block.header.height );
 
                             // Process the next block
                             height = darkfid_block.header.height;
@@ -525,7 +525,7 @@ pub async fn subscribe_blocks(
         |res| async move {
             match res {
                 Ok(()) => { /* Do nothing */ }
-                Err(e) => error!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "[subscribe_blocks] JSON-RPC server error: {e:?}"),
+                Err(e) => error!(target: "explorerd::rpc_blocks::subscribe_blocks", "[subscribe_blocks] JSON-RPC server error: {e:?}"),
             }
         },
         Error::RpcServerStopped,

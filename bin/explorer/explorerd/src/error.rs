@@ -53,7 +53,7 @@ pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
 /// and returning a [`DatabaseError`].
 pub fn handle_database_error(target: &str, message: &str, error: impl std::fmt::Debug) -> Error {
     let error_message = format!("{}: {:?}", message, error);
-    let formatted_target = format!("blockchain-explorer:: {target}");
+    let formatted_target = format!("explorerd:: {target}");
     error!(target: &formatted_target, "{}", error_message);
     Error::DatabaseError(error_message)
 }

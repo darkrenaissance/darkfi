@@ -96,7 +96,7 @@ impl ExplorerService {
             let tree = db.open_tree(tree_name)?;
             tree.clear()?;
             let tree_name_str = std::str::from_utf8(tree_name)?;
-            debug!(target: "blockchain-explorer::blocks", "Successfully reset block tree: {tree_name_str}");
+            debug!(target: "explorerd::blocks", "Successfully reset block tree: {tree_name_str}");
         }
 
         Ok(())
@@ -136,7 +136,7 @@ impl ExplorerService {
         // Add the block and commit the changes to persist it
         let _ = blockchain_overlay.lock().unwrap().add_block(block)?;
         blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
-        debug!(target: "blockchain_explorer::blocks::put_block", "Added block {:?}", block);
+        debug!(target: "explorerd::blocks::put_block", "Added block {:?}", block);
 
         Ok(())
     }
@@ -247,7 +247,7 @@ impl ExplorerService {
         let block_store = &self.db.blockchain.blocks;
         let tx_store = &self.db.blockchain.transactions;
 
-        debug!(target: "blockchain_explorer::blocks::reset_to_height", "Resetting to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
+        debug!(target: "explorerd::blocks::reset_to_height", "Resetting to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
 
         // Get the last block height
         let (last_block_height, _) = block_store.get_last().map_err(|e| {
@@ -258,7 +258,7 @@ impl ExplorerService {
 
         // Skip resetting blocks if `reset_height` is greater than or equal to `last_block_height`
         if reset_height >= last_block_height {
-            warn!(target: "blockchain_explorer::blocks::reset_to_height",
+            warn!(target: "explorerd::blocks::reset_to_height",
                     "Nothing to reset because reset_height is greater than or equal to last_block_height: {reset_height} >= {last_block_height}");
             return Ok(());
         }
@@ -299,7 +299,7 @@ impl ExplorerService {
                         block_order.remove(&height_key).map_err(ConflictableTransactionError::Abort)?;
                     }
 
-                    debug!(target: "blockchain_explorer::blocks::reset_to_height", "Removed block at height: {height}");
+                    debug!(target: "explorerd::blocks::reset_to_height", "Removed block at height: {height}");
                 }
 
                 // Iterate through the transaction hashes, removing the related transactions
@@ -308,7 +308,7 @@ impl ExplorerService {
                     tx_main.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
                     // Remove transaction from the `location` tree
                     tx_location.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
-                    debug!(target: "blockchain_explorer::blocks::reset_to_height", "Removed transaction ({tx_count}): {tx_hash}");
+                    debug!(target: "explorerd::blocks::reset_to_height", "Removed transaction ({tx_count}): {tx_hash}");
                 }
 
                 Ok(())
@@ -317,7 +317,7 @@ impl ExplorerService {
                 Error::DatabaseError(format!("[reset_to_height]: Resetting height failed: {e:?}"))
             });
 
-        debug!(target: "blockchain_explorer::blocks::reset_to_height", "Successfully reset to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
+        debug!(target: "explorerd::blocks::reset_to_height", "Successfully reset to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
 
         tx_result
     }

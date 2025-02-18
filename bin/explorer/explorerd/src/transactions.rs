@@ -98,7 +98,7 @@ impl ExplorerService {
             let tree = &self.db.blockchain.sled_db.open_tree(tree_name)?;
             tree.clear()?;
             let tree_name_str = std::str::from_utf8(tree_name)?;
-            debug!(target: "blockchain-explorer::blocks", "Successfully reset transaction tree: {tree_name_str}");
+            debug!(target: "explorerd::blocks", "Successfully reset transaction tree: {tree_name_str}");
         }
 
         Ok(())

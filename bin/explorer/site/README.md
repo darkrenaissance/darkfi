@@ -18,19 +18,20 @@ First we start a `darkfid` localnet:
 
 It is advised to shutdown the `minerd` daemon after couple of blocks, to not waste resources.
 
-Update the `blockchain-explorer` configuration to the localnet `darkfid` JSON-RPC endpoint
-and start a the daemon:
+Update the `explorerd` configuration to the localnet `darkfid` JSON-RPC endpoint
+and start the daemon:
 
 ```
-% cd script/research/blockchain-explorer
-% cargo +nightly run --release --all-features
+% cd bin/explorer/explorerd
+% make install
+% explorerd -c explored_config.toml  
 ```
 
 Then we enter the site folder and we generate a new python virtual environment,
 source it and install required dependencies:
 
 ```
-% cd script/research/blockchain-explorer/site
+% cd bin/explorer/site
 % python -m venv venv
 % source venv/bin/activate
 % pip install -r requirements.txt
