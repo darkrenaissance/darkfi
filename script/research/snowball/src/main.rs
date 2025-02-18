@@ -90,7 +90,7 @@ struct Message {
 impl Message {
     fn id(&self) -> blake3::Hash {
         let mut hasher = blake3::Hasher::new();
-        self.timestamp.encode(&mut hasher).unwrap();
+        self.timestamp.inner().encode(&mut hasher).unwrap();
         self.content.encode(&mut hasher).unwrap();
         for reference in &self.references {
             reference.as_bytes().encode(&mut hasher).unwrap();
@@ -202,7 +202,7 @@ impl SnowballNode {
         for (message, &vote_count) in self.message_votes.iter() {
             let is_better = match vote_count.cmp(&max_count) {
                 Ordering::Greater => true,
-                Ordering::Equal => match message.timestamp.0.cmp(&max_timestamp.0) {
+                Ordering::Equal => match message.timestamp.cmp(&max_timestamp) {
                     Ordering::Less => true,
                     Ordering::Equal => {
                         let message_target = BigUint::from_bytes_be(message.id().as_bytes());
