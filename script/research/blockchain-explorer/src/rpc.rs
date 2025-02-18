@@ -19,7 +19,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, trace};
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 
@@ -132,7 +132,7 @@ impl Explorerd {
         let req = JsonRequest::new(method, params.clone());
         let rep = self.rpc_client.request(req).await?;
         let latency = latency.elapsed();
-        debug!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Got reply: {:?}", rep);
+        trace!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Got reply: {:?}", rep);
         debug!(target: "blockchain-explorer::rpc::darkfid_daemon_request", "Latency: {:?}", latency);
         Ok(rep)
     }
