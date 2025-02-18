@@ -82,6 +82,10 @@ async def main(argv):
         except OSError:
             pass
     response = await rpc._make_request("p2p.get_info", [])
+    if "error" in response:
+        print("Error: ", response["error"])
+        await rpc.stop()
+        return
     info = response["result"]
     channels = info["channels"]
     channel_lookup = {}
