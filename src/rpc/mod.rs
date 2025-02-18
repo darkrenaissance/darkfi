@@ -39,3 +39,6 @@ pub mod p2p_method;
 
 /// Json helper methods and types
 pub mod util;
+
+/// JSON-RPC settings
+pub mod settings;
