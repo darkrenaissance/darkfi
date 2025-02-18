@@ -16,7 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
+use log::error;
+
+use darkfi::{
+    rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult},
+    Error,
+};
 
 /// Custom RPC errors available for blockchain explorer.
 /// Please sort them sensefully.
@@ -42,4 +47,14 @@ pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
     }
 
     JsonError::new(ServerError(code), Some(default_msg), id).into()
+}
+
+/// Handles a database error by formatting the output, logging it with target-specific context,
+/// and returning a [`DatabaseError`].
+#[allow(dead_code)] // TODO: Remove once code that uses this function is rebased into master
+pub fn handle_database_error(target: &str, message: &str, error: impl std::fmt::Debug) -> Error {
+    let error_message = format!("{}: {:?}", message, error);
+    let formatted_target = format!("blockchain-explorer:: {target}");
+    error!(target: &formatted_target, "{}", error_message);
+    Error::DatabaseError(error_message)
 }
