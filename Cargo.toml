@@ -125,7 +125,7 @@ wasmer-middlewares = {version = "5.0.5-rc1", optional = true}
 sled-overlay = {version = "0.1.6", optional = true}
 
 # Miner
-randomx = {git = "https://github.com/darkrenaissance/RandomX", optional = true}
+randomx = {git = "https://codeberg.org/darkrenaissance/RandomX", optional = true}
 
 [dev-dependencies]
 clap = {version = "4.4.11", features = ["derive"]}
