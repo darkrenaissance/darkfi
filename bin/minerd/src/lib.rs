@@ -23,10 +23,12 @@ use smol::{
     channel::{Receiver, Sender},
     lock::Mutex,
 };
-use url::Url;
 
 use darkfi::{
-    rpc::server::{listen_and_serve, RequestHandler},
+    rpc::{
+        server::{listen_and_serve, RequestHandler},
+        settings::RpcSettings,
+    },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -92,13 +94,13 @@ impl Minerd {
     }
 
     /// Start the DarkFi mining daemon in the given executor, using the provided JSON-RPC listen url.
-    pub fn start(&self, executor: &ExecutorPtr, rpc_listen: &Url) {
+    pub fn start(&self, executor: &ExecutorPtr, rpc_settings: &RpcSettings) {
         info!(target: "minerd::Minerd::start", "Starting mining daemon...");
 
         // Start the JSON-RPC task
         let node_ = self.node.clone();
         self.rpc_task.clone().start(
-            listen_and_serve(rpc_listen.clone(), self.node.clone(), None, executor.clone()),
+            listen_and_serve(rpc_settings.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => node_.stop_connections().await,
@@ -134,6 +136,10 @@ impl Minerd {
     }
 }
 
+
+#[cfg(test)]
+use url::Url;
+
 #[test]
 /// Test the programmatic control of `Minerd`.
 ///
@@ -160,7 +166,10 @@ fn minerd_programmatic_control() -> Result<()> {
 
     // Daemon configuration
     let threads = 4;
-    let rpc_listen = Url::parse("tcp://127.0.0.1:28467")?;
+    let rpc_settings = RpcSettings {
+        listen: Url::parse("tcp://127.0.0.1:28467")?,
+        ..RpcSettings::default()
+    };
 
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());
@@ -186,14 +195,14 @@ fn minerd_programmatic_control() -> Result<()> {
                 let daemon = Minerd::init(threads);
 
                 // Start it
-                daemon.start(&ex, &rpc_listen);
+                daemon.start(&ex, &rpc_settings);
 
                 // Generate a JSON-RPC client to send mining jobs
                 let mut rpc_client =
-                    darkfi::rpc::client::RpcClient::new(rpc_listen.clone(), ex.clone()).await;
+                    darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone()).await;
                 while rpc_client.is_err() {
                     rpc_client =
-                        darkfi::rpc::client::RpcClient::new(rpc_listen.clone(), ex.clone()).await;
+                        darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone()).await;
                 }
                 let rpc_client = rpc_client.unwrap();
 
@@ -212,7 +221,7 @@ fn minerd_programmatic_control() -> Result<()> {
                 rpc_client.stop().await;
 
                 // Start it again
-                daemon.start(&ex, &rpc_listen);
+                daemon.start(&ex, &rpc_settings);
 
                 // Stop it
                 daemon.stop().await.unwrap();

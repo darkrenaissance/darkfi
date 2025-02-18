@@ -21,9 +21,8 @@ use std::sync::Arc;
 use log::info;
 use smol::{stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
-use url::Url;
 
-use darkfi::{async_daemonize, cli_desc, Result};
+use darkfi::{async_daemonize, cli_desc, rpc::settings::RpcSettingsOpt, Result};
 
 use minerd::Minerd;
 
@@ -38,9 +37,8 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:28467")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
+    #[structopt(flatten)]
+    pub rpc: RpcSettingsOpt,
 
     #[structopt(short, long, default_value = "4")]
     /// PoW miner number of threads to use
@@ -59,7 +57,7 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "minerd", "Starting DarkFi Mining Daemon...");
     let daemon = Minerd::init(args.threads);
-    daemon.start(&ex, &args.rpc_listen);
+    daemon.start(&ex, &args.rpc.into());
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;

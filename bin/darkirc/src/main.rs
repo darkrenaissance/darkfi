@@ -25,6 +25,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
+        settings::{RpcSettingsOpt, RpcSettings},
     },
     system::{sleep, StoppableTask, StoppableTaskPtr, Subscription},
     util::path::{expand_path, get_config_path},
@@ -78,10 +79,6 @@ struct Args {
     #[structopt(long)]
     /// Set log file output
     log: Option<String>,
-
-    #[structopt(long, default_value = "tcp://127.0.0.1:26660")]
-    /// RPC server listen address
-    rpc_listen: Url,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:6667")]
     /// IRC server listen address
@@ -140,6 +137,10 @@ struct Args {
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
+
+    /// JSON-RPC settings
+    #[structopt(flatten)]
+    rpc: RpcSettingsOpt,
 }
 
 pub struct DarkIrc {
@@ -362,6 +363,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting JSON-RPC server");
+    let rpc_settings: RpcSettings = args.rpc.into();
     let darkirc = Arc::new(DarkIrc::new(
         p2p.clone(),
         sled_db.clone(),
@@ -373,7 +375,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let darkirc_ = Arc::clone(&darkirc);
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, darkirc.clone(), None, ex.clone()),
+        listen_and_serve(rpc_settings, darkirc.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => darkirc_.stop_connections().await,

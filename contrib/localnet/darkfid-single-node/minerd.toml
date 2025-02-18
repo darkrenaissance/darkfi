@@ -6,8 +6,13 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
+# PoW miner number of threads to use
+#threads = 4
+
+# JSON-RPC settings
+[rpc]
 # JSON-RPC listen URL
 rpc_listen = "tcp://127.0.0.1:48467"
 
-# PoW miner number of threads to use
-#threads = 4
+# Disabled RPC methods
+#rpc_disabled_methods = []

@@ -43,6 +43,7 @@ use darkfi::{
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
+        settings::{RpcSettings, RpcSettingsOpt},
     },
     system::{sleep, StoppableTask, StoppableTaskPtr},
     util::path::get_config_path,
@@ -56,9 +57,8 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 #[serde(default)]
 #[structopt(name = "lilith", about = cli_desc!())]
 struct Args {
-    #[structopt(long, default_value = "tcp://127.0.0.1:18927")]
-    /// JSON-RPC listen URL
-    pub rpc_listen: Url,
+    #[structopt(flatten)]
+    pub rpc: RpcSettingsOpt,
 
     #[structopt(short, long)]
     /// Configuration file to use
@@ -423,11 +423,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // JSON-RPC server
-    info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let rpc_settings: RpcSettings = args.rpc.into();
+    info!(target: "lilith", "Starting JSON-RPC server on {}", rpc_settings.listen);
     let lilith_ = lilith.clone();
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, lilith.clone(), None, ex.clone()),
+        listen_and_serve(rpc_settings, lilith.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => lilith_.stop_connections().await,

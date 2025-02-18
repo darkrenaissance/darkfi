@@ -37,6 +37,7 @@ use darkfi::{
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettingsOpt
     },
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
@@ -60,9 +61,9 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:9540")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
+    /// JSON-RPC settings
+    #[structopt(flatten)]
+    rpc: RpcSettingsOpt,
 
     #[structopt(long)]
     /// P2P accept addresses (repeatable flag)
@@ -300,7 +301,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // JSON-RPC server
     info!("Starting JSON-RPC server");
     let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, dhtd.clone(), _ex)).detach();
+    ex.spawn(listen_and_serve(args.rpc.into(), dhtd.clone(), _ex)).detach();
 
     info!("Starting sync P2P network");
     p2p.clone().start(ex.clone()).await?;

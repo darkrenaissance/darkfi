@@ -28,6 +28,7 @@ use darkfi::{
     blockchain::BlockInfo,
     cli_desc,
     net::settings::SettingsOpt,
+    rpc::settings::RpcSettingsOpt,
     util::{
         encoding::base64,
         path::{expand_path, get_config_path},
@@ -78,10 +79,6 @@ struct Args {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 pub struct BlockchainNetwork {
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
-
     #[structopt(long, default_value = "~/.local/share/darkfi/darkfid/localnet")]
     /// Path to blockchain database
     database: String,
@@ -94,9 +91,9 @@ pub struct BlockchainNetwork {
     /// minerd JSON-RPC endpoint
     minerd_endpoint: Option<Url>,
 
-    #[structopt(long)]
-    /// Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
-    mm_rpc_listen: Option<Url>,
+    #[structopt(skip)]
+    /// Optional JSON-RPC settings for p2pool merge mining requests
+    mm_rpc: Option<RpcSettingsOpt>,
 
     #[structopt(long, default_value = "10")]
     /// PoW block production target, in seconds
@@ -145,6 +142,10 @@ pub struct BlockchainNetwork {
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
+
+    /// JSON-RPC settings
+    #[structopt(flatten)]
+    rpc: RpcSettingsOpt,
 }
 
 async_daemonize!(realmain);
@@ -230,7 +231,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         bootstrap,
     };
     daemon
-        .start(&ex, &blockchain_config.rpc_listen, &blockchain_config.mm_rpc_listen, &config)
+        .start(&ex, &blockchain_config.rpc.into(), &blockchain_config.mm_rpc.map(|mm_rpc_opts| mm_rpc_opts.into()), &config)
         .await?;
 
     // Signal handling for graceful termination.

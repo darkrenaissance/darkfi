@@ -18,7 +18,9 @@
 
 use std::sync::Arc;
 
-use darkfi::{net::Settings, validator::utils::best_fork_index, Result};
+use darkfi::{
+    net::Settings, rpc::settings::RpcSettings, validator::utils::best_fork_index, Result,
+};
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
@@ -249,7 +251,10 @@ fn darkfid_programmatic_control() -> Result<()> {
     let sled_db = sled_overlay::sled::Config::new().temporary(true).open()?;
     let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks()?;
     darkfi_contract_test_harness::vks::inject(&sled_db, &vks)?;
-    let rpc_listen = Url::parse("tcp://127.0.0.1:8240")?;
+    let rpc_settings = RpcSettings {
+        listen: Url::parse("tcp://127.0.0.1:8240")?,
+        ..RpcSettings::default()
+    };
 
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());
@@ -271,13 +276,13 @@ fn darkfid_programmatic_control() -> Result<()> {
                 .unwrap();
 
                 // Start it
-                daemon.start(&ex, &rpc_listen, &None, &consensus_config).await.unwrap();
+                daemon.start(&ex, &rpc_settings, &None, &consensus_config).await.unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();
 
                 // Start it again
-                daemon.start(&ex, &rpc_listen, &None, &consensus_config).await.unwrap();
+                daemon.start(&ex, &rpc_settings, &None, &consensus_config).await.unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();

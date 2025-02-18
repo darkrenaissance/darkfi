@@ -1,6 +1,3 @@
-## JSON-RPC listen URL
-rpc_listen="tcp://127.0.0.1:8888"
-
 ## IRC listen URL
 irc_listen="tcp://127.0.0.1:22020"
 
@@ -20,6 +17,14 @@ autojoin = ["#dev"]
 #log = "/tmp/darkirc0.log"
 # Set log level. 1 is info (default), 2 is debug, 3 is trace
 #verbose = 2
+
+## JSON-RPC settings
+[rpc]
+## JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8888"
+
+## Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
 
 ## P2P net settings
 [net]

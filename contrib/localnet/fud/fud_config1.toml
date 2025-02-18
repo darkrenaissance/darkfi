@@ -9,9 +9,6 @@
 # Path to the contents directory
 folder = "fud1"
 
-# JSON-RPC listen URL
-rpc_listen = "tls://127.0.0.1:13340"
-
 # P2P accept address
 p2p_accept = ["tls://127.0.0.1:13341"]
 
@@ -35,3 +32,11 @@ localnet = true
 
 # Enable channel log
 channel_log = true
+
+# JSON-RPC settings
+[rpc]
+# JSON-RPC listen URL
+rpc_listen = "tls://127.0.0.1:13340"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []

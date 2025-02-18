@@ -20,7 +20,6 @@
 use log::{debug, error, info};
 use smol::{lock::Mutex, stream::StreamExt};
 use std::{collections::HashSet, sync::Arc};
-use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc, net,
@@ -28,6 +27,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
+        settings::{RpcSettings, RpcSettingsOpt},
     },
     system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
@@ -54,9 +54,8 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../dchatd_config.toml");
 #[serde(default)]
 #[structopt(name = "dchat", about = cli_desc!())]
 struct Args {
-    #[structopt(long, default_value = "tcp://127.0.0.1:51054")]
-    /// RPC server listen address
-    rpc_listen: Url,
+    #[structopt(flatten)]
+    pub rpc: RpcSettingsOpt,
 
     #[structopt(short, long)]
     /// Configuration file to use
@@ -128,7 +127,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // ANCHOR_end: dnet
 
     // ANCHOR: rpc
-    info!("Starting JSON-RPC server on port {}", args.rpc_listen);
+    let rpc_settings: RpcSettings = args.rpc.into();
+    info!("Starting JSON-RPC server on port {}", rpc_settings.listen);
     let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
     let rpc_connections = Mutex::new(HashSet::new());
     let dchat = Arc::new(Dchat::new(p2p.clone(), msgs.clone(), rpc_connections, dnet_sub));
@@ -136,7 +136,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, dchat.clone(), None, ex.clone()),
+        listen_and_serve(rpc_settings, dchat.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => dchat.stop_connections().await,

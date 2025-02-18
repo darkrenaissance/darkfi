@@ -91,7 +91,6 @@ impl RequestHandler<()> for JsonRpcInterface {
             "deg.subscribe_events" => return self.deg_subscribe_events(req.id, req.params).await,
             "eventgraph.get_info" => return self.eg_get_info(req.id, req.params).await,
 
-            // TODO: make this optional
             "p2p.get_info" => return self.p2p_get_info(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };

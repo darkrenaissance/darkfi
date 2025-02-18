@@ -25,6 +25,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettingsOpt,
     },
     system::{sleep, StoppableTask},
     util::path::expand_path,
@@ -34,7 +35,6 @@ use log::{debug, error, info};
 use sled_overlay::sled;
 use smol::{fs, lock::RwLock, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
-use url::Url;
 
 mod rpc;
 use rpc::JsonRpcInterface;
@@ -50,9 +50,8 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:28880")]
-    pub rpc_listen: Url,
+    #[structopt(flatten)]
+    pub rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
     pub net: SettingsOpt,
@@ -252,7 +251,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let rpc_task = StoppableTask::new();
     let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
-        listen_and_serve(settings.rpc_listen, rpc_interface, None, executor.clone()),
+        listen_and_serve(settings.rpc.into(), rpc_interface, None, executor.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,

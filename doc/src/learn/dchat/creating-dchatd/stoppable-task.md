@@ -66,7 +66,8 @@ Next, we invoke `JSON-RPC` in the main function of `dchatd`, wielding
 `StoppableTask` to start a `JSON-RPC` server and wait for a stop signal as follows:
 
 ```rust
-    info!("Starting JSON-RPC server on port {}", args.rpc_listen);
+    let rpc_settings: RpcSettings = args.rpc.into();
+    info!("Starting JSON-RPC server on port {}", rpc_settings.listen);
     let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
     let rpc_connections = Mutex::new(HashSet::new());
     let dchat = Arc::new(Dchat::new(p2p.clone(), msgs.clone(), rpc_connections));
@@ -74,7 +75,7 @@ Next, we invoke `JSON-RPC` in the main function of `dchatd`, wielding
 
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, dchat.clone(), None, ex.clone()),
+        listen_and_serve(rpc_settings, dchat.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => dchat.stop_connections().await,
@@ -100,12 +101,12 @@ Notice that when we start the `StoppableTask` using
 `rpc.task.clone().start`, we also pass a method called `listen_and_serve`.
 `listen_and_serve` is a method defined in DarkFi's [rpc
 module](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc/server.rs).
-It starts a JSON-RPC server that is bound to the provided accept address
+It starts a JSON-RPC server that is bound to the provided rpc settings
 and uses our previously implemented `RequestHandler` to handle incoming
 requests.
 
 The async block uses the `move` keyword to takes ownership of
-the `accept_addr` and `RequestHandler` values and pass them into
+the `settings` and `RequestHandler` values and pass them into
 `listen_and_serve`.
 
 We have enabled JSON-RPC.

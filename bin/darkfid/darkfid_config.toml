@@ -11,9 +11,6 @@ network = "testnet"
 
 # Localnet blockchain network configuration
 [network_config."localnet"]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8240"
-
 # Path to the blockchain database directory
 database = "~/.local/share/darkfi/darkfid/localnet"
 
@@ -22,9 +19,6 @@ threshold = 3
 
 # minerd JSON-RPC endpoint
 minerd_endpoint = "tcp://127.0.0.1:28467"
-
-# Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
-#mm_rpc_listen = "http+tcp://127.0.0.1:8241"
 
 # PoW block production target, in seconds
 pow_target = 10
@@ -60,6 +54,22 @@ skip_fees = false
 
 # Garbage collection task transactions batch size
 txs_batch_size = 50
+
+## Localnet JSON-RPC settings
+[network_config."localnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8240"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
+#[network_config."localnet".mm_rpc]
+# JSON-RPC listen URL (merge mining)
+#rpc_listen = "http+tcp://127.0.0.1:8241"
+
+# Disabled RPC methods (merge mining)
+#rpc_disabled_methods = []
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
@@ -120,9 +130,6 @@ localnet = true
 
 # Testnet blockchain network configuration
 [network_config."testnet"]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8340"
-
 # Path to the blockchain database directory
 database = "~/.local/share/darkfi/darkfid/testnet"
 
@@ -131,9 +138,6 @@ threshold = 6
 
 # minerd JSON-RPC endpoint
 #minerd_endpoint = "tcp://127.0.0.1:28467"
-
-# Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
-#mm_rpc_listen = "http+tcp://127.0.0.1:8241"
 
 # PoW block production target, in seconds
 pow_target = 90
@@ -164,6 +168,22 @@ skip_fees = false
 
 # Garbage collection task transactions batch size
 txs_batch_size = 50
+
+## Testnet JSON-RPC settings
+[network_config."testnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8340"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+## Testnet JSON-RPC settings for p2pool merge mining requests (optional)
+#[network_config."testnet".mm_rpc]
+# JSON-RPC listen URL (merge mining)
+#rpc_listen = "http+tcp://127.0.0.1:8341"
+
+# Disabled RPC methods (merge mining)
+#rpc_disabled_methods = []
 
 ## Testnet P2P network settings
 [network_config."testnet".net]
@@ -228,9 +248,6 @@ localnet = false
 
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8440"
-
 # Path to the blockchain database directory
 database = "~/.local/share/darkfi/darkfid/mainnet"
 
@@ -239,9 +256,6 @@ threshold = 11
 
 # minerd JSON-RPC endpoint
 #minerd_endpoint = "tcp://127.0.0.1:28467"
-
-# Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
-#mm_rpc_listen = "http+tcp://127.0.0.1:8241"
 
 # PoW block production target, in seconds
 pow_target = 90
@@ -272,6 +286,22 @@ skip_fees = false
 
 # Garbage collection task transactions batch size
 txs_batch_size = 50
+
+## Mainnet JSON-RPC settings
+[network_config."mainnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8440"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+## Mainnet JSON-RPC settings for p2pool merge mining requests (optional)
+#[network_config."mainnet".mm_rpc]
+# JSON-RPC listen URL (merge mining)
+#rpc_listen = "http+tcp://127.0.0.1:8441"
+
+# Disabled RPC methods (merge mining)
+#rpc_disabled_methods = []
 
 ## Mainnet P2P network settings
 [network_config."mainnet".net]

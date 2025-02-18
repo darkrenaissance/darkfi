@@ -43,7 +43,6 @@ impl RequestHandler<()> for Daemon {
             "ping" => self.pong(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            // TODO: Make this optional
             "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
 
             "deg.switch" => self.deg_switch(req.id, req.params).await,

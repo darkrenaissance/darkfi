@@ -3,7 +3,8 @@
 To start receiving `JSON-RPC` requests, we'll need to configure a
 `JSON-RPC` accept address.
 
-We'll add a `rpc_listen` address to our `Args` struct. It will look
+We'll add a `rpc` struct ([RpcSettingsOpt](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc/settings.rs))
+containing a `rpc_listen` address to our `Args` struct. It will look
 like this:
 
 ```rust
@@ -17,8 +18,12 @@ config at `../dchatd_config.toml` as follows:
 ```toml
 # dchat toml
 
+[rpc]
 ## RPC listen address. 
-rpc_listen =["tcp://127.0.0.1:51054"]
+rpc_listen = "tcp://127.0.0.1:51054"
+
+## Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
 
 [net]
 ## P2P accept addresses Required for inbound nodes.

@@ -9,9 +9,6 @@
 # Path to the contents directory
 #folder = "~/.config/darkfi/fud"
 
-# JSON-RPC listen URL
-#rpc_listen = "tcp://127.0.0.1:13336"
-
 # P2P accept addresses
 #p2p_accept = ["tls://127.0.0.1:13337"]
 
@@ -35,3 +32,11 @@ seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
 
 # Enable channel log
 #channel_log = false
+
+# JSON-RPC settings
+[rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:13336"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []

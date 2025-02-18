@@ -44,6 +44,7 @@ use darkfi::{
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::{listen_and_serve, RequestHandler},
+        settings::{RpcSettings, RpcSettingsOpt},
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
@@ -68,10 +69,6 @@ struct Args {
     /// Increase verbosity (-vvv supported)
     verbose: u8,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:13336")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
-
     #[structopt(short, long)]
     /// Configuration file to use
     config: Option<String>,
@@ -87,6 +84,10 @@ struct Args {
     #[structopt(flatten)]
     /// Network settings
     net: SettingsOpt,
+
+    #[structopt(flatten)]
+    /// JSON-RPC settings
+    rpc: RpcSettingsOpt,
 }
 
 pub struct Fud {
@@ -585,11 +586,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!(target: "fud", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let rpc_settings: RpcSettings = args.rpc.into();
+    info!(target: "fud", "Starting JSON-RPC server on {}", rpc_settings.listen);
     let rpc_task = StoppableTask::new();
     let fud_ = fud.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, fud.clone(), None, ex.clone()),
+        listen_and_serve(rpc_settings, fud.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => fud_.stop_connections().await,

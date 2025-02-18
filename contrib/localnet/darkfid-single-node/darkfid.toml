@@ -11,9 +11,6 @@ network = "localnet"
 
 # Localnet blockchain network configuration
 [network_config."localnet"]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:48240"
-
 # Path to the blockchain database directory
 database = "darkfid"
 
@@ -22,9 +19,6 @@ threshold = 1
 
 # minerd JSON-RPC endpoint
 minerd_endpoint = "tcp://127.0.0.1:48467"
-
-# Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
-#mm_rpc_listen = "http+tcp://127.0.0.1:8241"
 
 # PoW block production target, in seconds
 pow_target = 10
@@ -57,6 +51,22 @@ skip_fees = false
 
 # Optional bootstrap timestamp
 #bootstrap = 1718807405
+
+## Localnet JSON-RPC settings
+[network_config."localnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:48240"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
+#[network_config."localnet".mm_rpc]
+# JSON-RPC listen URL (merge mining)
+#rpc_listen = "http+tcp://127.0.0.1:8241"
+
+# Disabled RPC methods (merge mining)
+#rpc_disabled_methods = []
 
 ## Localnet P2P network settings
 [network_config."localnet".net]

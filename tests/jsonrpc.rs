@@ -33,6 +33,7 @@ use darkfi::{
         client::RpcClient,
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettings,
     },
     system::{msleep, StoppableTask, StoppableTaskPtr},
     Error, Result,
@@ -100,7 +101,10 @@ fn jsonrpc_reqrep() -> Result<()> {
         // Find an available port
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let sockaddr = listener.local_addr()?;
-        let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+        let rpc_settings = RpcSettings {
+            listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+            ..RpcSettings::default()
+        };
         drop(listener);
 
         let rpcsrv = Arc::new(RpcSrv {
@@ -111,7 +115,7 @@ fn jsonrpc_reqrep() -> Result<()> {
 
         let rpc_task = StoppableTask::new();
         rpc_task.clone().start(
-            listen_and_serve(endpoint.clone(), rpcsrv.clone(), None, executor.clone()),
+            listen_and_serve(rpc_settings.clone(), rpcsrv.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
@@ -124,7 +128,7 @@ fn jsonrpc_reqrep() -> Result<()> {
 
         msleep(500).await;
 
-        let client = RpcClient::new(endpoint, executor.clone()).await?;
+        let client = RpcClient::new(rpc_settings.listen, executor.clone()).await?;
         let req = JsonRequest::new("ping", vec![].into());
         let rep = client.request(req).await?;
 
@@ -150,7 +154,10 @@ fn http_jsonrpc_reqrep() -> Result<()> {
         // Find an available port
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let sockaddr = listener.local_addr()?;
-        let endpoint = Url::parse(&format!("http+tcp://127.0.0.1:{}", sockaddr.port()))?;
+        let rpc_settings = RpcSettings {
+            listen: Url::parse(&format!("http+tcp://127.0.0.1:{}", sockaddr.port()))?,
+            ..RpcSettings::default()
+        };
         drop(listener);
 
         let rpcsrv = Arc::new(RpcSrv {
@@ -161,7 +168,7 @@ fn http_jsonrpc_reqrep() -> Result<()> {
 
         let rpc_task = StoppableTask::new();
         rpc_task.clone().start(
-            listen_and_serve(endpoint.clone(), rpcsrv.clone(), None, executor.clone()),
+            listen_and_serve(rpc_settings.clone(), rpcsrv.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
@@ -174,7 +181,7 @@ fn http_jsonrpc_reqrep() -> Result<()> {
 
         msleep(500).await;
 
-        let client = RpcClient::new(endpoint, executor.clone()).await?;
+        let client = RpcClient::new(rpc_settings.listen, executor.clone()).await?;
         let req = JsonRequest::new("ping", vec![].into());
         let rep = client.request(req).await?;
 

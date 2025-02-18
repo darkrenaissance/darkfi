@@ -2,3 +2,6 @@
 datastore = "~/.local/share/darkfi/evgrd"
 hostlist = "~/.local/share/darkfi/evgrd/p2p_hostlist.tsv"
 
+[rpc]
+rpc_listen = "tcp://127.0.0.1:26690"
+rpc_disabled_methods = ["p2p.get_info"]

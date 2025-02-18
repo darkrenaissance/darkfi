@@ -6,8 +6,13 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
+## JSON-RPC settings
+[rpc]
 # JSON-RPC listen URL
-#rpc_listen = "tcp://127.0.0.1:18927"
+rpc_listen = "tcp://127.0.0.1:18927"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
 
 ## Per-network settings
 #[network."darkfid_sync_v4"]

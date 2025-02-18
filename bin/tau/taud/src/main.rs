@@ -689,7 +689,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(settings.rpc_listen, rpc_interface.clone(), None, executor.clone()),
+        listen_and_serve(settings.rpc.into(), rpc_interface.clone(), None, executor.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface.stop_connections().await,

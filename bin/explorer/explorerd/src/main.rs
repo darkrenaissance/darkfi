@@ -37,6 +37,7 @@ use darkfi::{
     rpc::{
         client::RpcClient,
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettingsOpt
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
@@ -113,9 +114,9 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:14567")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
+    /// JSON-RPC settings
+    #[structopt(flatten)]
+    rpc: RpcSettingsOpt,
 
     #[structopt(long, default_value = "~/.local/share/darkfi/explorerd/daemon.db")]
     /// Path to daemon database
@@ -332,7 +333,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let rpc_task = StoppableTask::new();
     let explorer_ = explorer.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, explorer.clone(), None, ex.clone()),
+        listen_and_serve(args.rpc.into(), explorer.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,

@@ -11,9 +11,6 @@ network = "localnet"
 
 # Localnet blockchain network configuration
 [network_config."localnet"]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:48240"
-
 # Path to the blockchain database directory
 database = "darkfid0"
 
@@ -51,6 +48,14 @@ skip_fees = false
 
 # Optional bootstrap timestamp
 #bootstrap = 1712581283
+
+## Localnet JSON-RPC settings
+[network_config."localnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:48240"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
 
 ## Localnet P2P network settings
 [network_config."localnet".net]

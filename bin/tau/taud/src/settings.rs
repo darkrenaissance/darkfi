@@ -18,9 +18,11 @@
 
 use structopt::StructOpt;
 use structopt_toml::{serde::Deserialize, StructOptToml};
-use url::Url;
 
-use darkfi::net::settings::SettingsOpt;
+use darkfi::{
+    net::settings::SettingsOpt,
+    rpc::settings::RpcSettingsOpt,
+};
 
 pub const CONFIG_FILE: &str = "taud_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../taud_config.toml");
@@ -34,10 +36,6 @@ pub struct Args {
     #[structopt(long)]
     pub config: Option<String>,
 
-    /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:23330")]
-    pub rpc_listen: Url,
-
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.local/share/darkfi/taud_db")]
     pub datastore: String,
@@ -49,6 +47,9 @@ pub struct Args {
     /// Flag to store Sled DB instructions
     #[structopt(long)]
     pub replay_mode: bool,
+
+    #[structopt(flatten)]
+    pub rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
     pub net: SettingsOpt,

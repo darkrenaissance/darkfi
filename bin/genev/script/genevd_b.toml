@@ -1,11 +1,16 @@
-## JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:28871"
-
 ## Sets Datastore Path
 datastore = "/tmp/genev_test/datastore/node2"
 
 ## Current display name
 #nickname="NICKNAME"
+
+## JSON-RPC settings
+[rpc]
+## JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:28871"
+
+## Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
 
 ## net settings
 [net]

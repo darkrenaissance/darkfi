@@ -30,6 +30,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettings,
     },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -186,8 +187,8 @@ impl Darkfid {
     pub async fn start(
         &self,
         executor: &ExecutorPtr,
-        rpc_listen: &Url,
-        mm_rpc_listen: &Option<Url>,
+        rpc_settings: &RpcSettings,
+        mm_rpc_settings: &Option<RpcSettings>,
         config: &ConsensusInitTaskConfig,
     ) -> Result<()> {
         info!(target: "darkfid::Darkfid::start", "Starting Darkfi daemon...");
@@ -227,7 +228,7 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::start", "Starting JSON-RPC server");
         let node_ = self.node.clone();
         self.rpc_task.clone().start(
-            listen_and_serve::<DefaultRpcHandler>(rpc_listen.clone(), self.node.clone(), None, executor.clone()),
+            listen_and_serve::<DefaultRpcHandler>(rpc_settings.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::stop_connections(&node_).await,
@@ -239,11 +240,11 @@ impl Darkfid {
         );
 
         // Start the HTTP JSON-RPC task
-        if let Some(url) = mm_rpc_listen {
+        if let Some(mm_rpc) = mm_rpc_settings {
             info!(target: "darkfid::Darkfid::start", "Starting HTTP JSON-RPC server");
             let node_ = self.node.clone();
             self.mm_rpc_task.clone().start(
-                listen_and_serve::<MmRpcHandler>(url.clone(), self.node.clone(), None, executor.clone()),
+                listen_and_serve::<MmRpcHandler>(mm_rpc.clone(), self.node.clone(), None, executor.clone()),
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<MmRpcHandler>>::stop_connections(&node_).await,

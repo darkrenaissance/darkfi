@@ -6,9 +6,6 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:14567"
-
 # Path to daemon database
 db_path = "~/.local/share/darkfi/explorerd/daemon.db"
 
@@ -17,3 +14,11 @@ db_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:8340"
+
+# JSON-RPC settings
+[rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:14567"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []

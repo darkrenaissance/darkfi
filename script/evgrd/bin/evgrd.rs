@@ -31,6 +31,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
+        settings::RpcSettingsOpt,
     },
     system::{sleep, StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
@@ -72,10 +73,6 @@ struct Args {
     /// RPC server listen address
     daemon_listen: Vec<Url>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:26690")]
-    /// JSON-RPC server listen address
-    json_rpc_listen: Url,
-
     #[structopt(short, long, default_value = "~/.local/share/darkfi/evgrd_db")]
     /// Datastore (DB) path
     datastore: String,
@@ -103,6 +100,10 @@ struct Args {
     /// P2P network settings
     #[structopt(flatten)]
     net: NetSettingsOpt,
+
+    /// JSON-RPC settings
+    #[structopt(flatten)]
+    rpc: RpcSettingsOpt,
 }
 
 pub struct Daemon {
@@ -368,7 +369,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let daemon_ = daemon.clone();
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.json_rpc_listen, daemon.clone(), None, ex.clone()),
+        listen_and_serve(args.rpc.into(), daemon.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => daemon_.stop_connections().await,

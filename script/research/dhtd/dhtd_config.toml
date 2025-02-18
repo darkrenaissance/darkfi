@@ -6,9 +6,6 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# JSON-RPC listen URL
-#rpc_listen = "tcp://127.0.0.1:9540"
-
 # P2P accept addresses
 #p2p_accept = ["tls://127.0.0.1:9541"]
 
@@ -23,3 +20,11 @@
 
 # Peers to connect to
 #peer = []
+
+## JSON-RPC settings
+[rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:9540"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
