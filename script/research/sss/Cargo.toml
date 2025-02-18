@@ -10,7 +10,3 @@ edition = "2021"
 [dependencies]
 pasta_curves = "0.5.1"
 rand = "0.8.5"
-
-[lints]
-workspace = true
-
