@@ -87,7 +87,7 @@ struct BlockHeader {
     /// This value changes arbitrarily with mining.
     nonce: pallas::Base,
     /// The hash of the previous block in the blockchain
-    previous_hash: blake2b_simd::Hash,
+    previous_hash: [u8; HASH_LEN],
     /// The block timestamp
     timestamp: u64,
     /// Merkle tree of the transactions contained in this block
@@ -154,7 +154,7 @@ fn median(v: &mut Vec<u64>) -> u64 {
 
 /// Verify a block's timestamp is valid and matches certain criteria.
 fn check_block_timestamp(block: &Block, timestamps: &mut Vec<u64>) -> bool {
-    if block.header.timestamp > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
+    if block.header.timestamp > Timestamp::current_time().inner() + BLOCK_FUTURE_TIME_LIMIT {
         return false
     }
 
@@ -221,11 +221,14 @@ fn next_difficulty(
 
 fn main() -> Result<()> {
     // Construct the genesis block
+    let mut previous_hash = [0u8; HASH_LEN];
+    previous_hash.copy_from_slice(GENESIS_HASH.as_bytes());
+
     let mut genesis_block = Block {
         header: BlockHeader {
             nonce: pallas::Base::ZERO,
-            previous_hash: *GENESIS_HASH,
-            timestamp: Timestamp::current_time().0,
+            previous_hash,
+            timestamp: Timestamp::current_time().inner(),
             txtree: MerkleTree::new(1),
         },
         txs: vec![],
@@ -277,11 +280,13 @@ fn main() -> Result<()> {
         let dataset = Arc::new(RandomXDataset::new(flags, powinput.as_bytes(), N_THREADS).unwrap());
 
         // The miner creates a block
+        let mut previous_hash = [0u8; HASH_LEN];
+        previous_hash.copy_from_slice(cur_block.hash()?.as_bytes());
         let mut miner_block = Block {
             header: BlockHeader {
                 nonce: pallas::Base::ZERO,
-                previous_hash: cur_block.hash()?,
-                timestamp: Timestamp::current_time().0,
+                previous_hash,
+                timestamp: Timestamp::current_time().inner(),
                 txtree: MerkleTree::new(1),
             },
             txs: vec![],

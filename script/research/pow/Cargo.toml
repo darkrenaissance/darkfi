@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 randomx = {git = "https://codeberg.org/darkrenaissance/RandomX"}
-darkfi-serial = {path = "../../../src/serial"}
+darkfi-serial = {version = "0.4.2", features = ["async", "crypto"]}
 darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
 darkfi = {path = "../../../", features = ["util", "async-serial"]}
 
