@@ -23,7 +23,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use log::{error, info};
+use log::{debug, error, info};
 use rpc_blocks::subscribe_blocks;
 use sled_overlay::sled;
 use smol::{lock::Mutex, stream::StreamExt};
@@ -225,6 +225,36 @@ impl ExplorerService {
 
         Ok(())
     }
+
+    /// Resets the explorer state to the specified height. If a genesis block height is provided,
+    /// all blocks and transactions are purged from the database. Otherwise, the state is reverted
+    /// to the given height. The explorer metrics are updated to reflect the updated blocks and
+    /// transactions up to the reset height, ensuring consistency. Returns a result indicating
+    /// success or an error if the operation fails.
+    pub fn reset_explorer_state(&self, height: u32) -> Result<()> {
+        debug!(target: "blockchain-explorer::reset_explorer_state", "Resetting explorer state to height: {height}");
+
+        // Check if a genesis block reset or to a specific height
+        match height {
+            // Reset for genesis height 0, purge blocks and transactions
+            0 => {
+                self.reset_blocks()?;
+                self.reset_transactions()?;
+                debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset explorer state to accept a new genesis block");
+            }
+            // Reset for all other heights
+            _ => {
+                self.reset_to_height(height)?;
+                debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset blocks to height: {height}");
+            }
+        }
+
+        // Reset gas metrics to the specified height to reflect the updated blockchain state
+        self.db.metrics_store.reset_gas_metrics(height)?;
+        debug!(target: "blockchain-explorer::reset_explorer_state", "Successfully reset metrics store to height: {height}");
+
+        Ok(())
+    }
 }
 
 /// Represents the explorer database backed by a `sled` database connection, responsible for maintaining
@@ -249,8 +279,7 @@ impl ExplorerDb {
         let blockchain = Blockchain::new(&sled_db)?;
         let metrics_store = MetricsStore::new(&sled_db)?;
         let contract_meta_store = ContractMetaStore::new(&sled_db)?;
-
-        info!(target: "blockchain-explorer", "Initialized explorer database {}, block count: {}", db_path.display(), blockchain.len());
+        info!(target: "blockchain-explorer", "Initialized explorer database {}: block count: {}, tx count: {}", db_path.display(), blockchain.len(), blockchain.txs_len());
         Ok(Self { sled_db, blockchain, metrics_store, contract_meta_store })
     }
 }

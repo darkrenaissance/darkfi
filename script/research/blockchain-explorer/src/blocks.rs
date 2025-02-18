@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, info};
+use log::{debug, warn};
+use sled_overlay::sled::{transaction::ConflictableTransactionError, Transactional};
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -27,7 +28,7 @@ use darkfi::{
     util::time::Timestamp,
     Error, Result,
 };
-use darkfi_sdk::crypto::schnorr::Signature;
+use darkfi_sdk::{crypto::schnorr::Signature, tx::TransactionHash};
 
 use crate::ExplorerService;
 
@@ -95,7 +96,7 @@ impl ExplorerService {
             let tree = db.open_tree(tree_name)?;
             tree.clear()?;
             let tree_name_str = std::str::from_utf8(tree_name)?;
-            info!(target: "blockchain-explorer::blocks", "Successfully reset block tree: {tree_name_str}");
+            debug!(target: "blockchain-explorer::blocks", "Successfully reset block tree: {tree_name_str}");
         }
 
         Ok(())
@@ -167,10 +168,22 @@ impl ExplorerService {
 
         // Fetch block by hash and handle encountered errors
         match self.db.blockchain.get_blocks_by_hash(&[header_hash]) {
-            Ok(blocks) => Ok(Some(BlockRecord::from(&blocks[0]))),
+            Ok(blocks) => Ok(blocks.first().map(BlockRecord::from)),
             Err(Error::BlockNotFound(_)) => Ok(None),
             Err(e) => Err(Error::DatabaseError(format!(
                 "[get_block_by_hash] Block retrieval failed: {e:?}"
+            ))),
+        }
+    }
+
+    /// Fetch a block given its height from the database.
+    pub fn get_block_by_height(&self, height: u32) -> Result<Option<BlockRecord>> {
+        // Fetch block by height and handle encountered errors
+        match self.db.blockchain.get_blocks_by_heights(&[height]) {
+            Ok(blocks) => Ok(blocks.first().map(BlockRecord::from)),
+            Err(Error::BlockNotFound(_)) => Ok(None),
+            Err(e) => Err(Error::DatabaseError(format!(
+                "[get_block_by_height] Block retrieval failed: {e:?}"
             ))),
         }
     }
@@ -217,5 +230,95 @@ impl ExplorerService {
         let block_records: Vec<BlockRecord> = blocks_result.iter().map(BlockRecord::from).collect();
 
         Ok(block_records)
+    }
+
+    /// Resets the [`ExplorerDb::blockchain::blocks`] and [`ExplorerDb::blockchain::transactions`]
+    /// trees to a specified height by removing entries above the `reset_height`, returning a result
+    /// that indicates success or failure.
+    ///
+    /// The function retrieves the last explorer block and iteratively rolls back entries
+    /// in the [`BlockStore::main`], [`BlockStore::order`], and [`BlockStore::difficulty`] trees
+    /// to the specified `reset_height`. It also resets the [`TxStore::main`] and
+    /// [`TxStore::location`] trees to reflect the transaction state at the given height.
+    ///
+    /// This operation is performed atomically using a sled transaction applied across the affected sled
+    /// trees, ensuring consistency and avoiding partial updates.
+    pub fn reset_to_height(&self, reset_height: u32) -> Result<()> {
+        let block_store = &self.db.blockchain.blocks;
+        let tx_store = &self.db.blockchain.transactions;
+
+        debug!(target: "blockchain_explorer::blocks::reset_to_height", "Resetting to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
+
+        // Get the last block height
+        let (last_block_height, _) = block_store.get_last().map_err(|e| {
+            Error::DatabaseError(format!(
+                "[reset_to_height]: Failed to get the last block height: {e:?}"
+            ))
+        })?;
+
+        // Skip resetting blocks if `reset_height` is greater than or equal to `last_block_height`
+        if reset_height >= last_block_height {
+            warn!(target: "blockchain_explorer::blocks::reset_to_height",
+                    "Nothing to reset because reset_height is greater than or equal to last_block_height: {reset_height} >= {last_block_height}");
+            return Ok(());
+        }
+
+        // Get the associated block infos in order to obtain transactions to reset
+        let block_infos_to_reset =
+            &self.db.blockchain.get_by_range(reset_height, last_block_height).map_err(|e| {
+                Error::DatabaseError(format!(
+                    "[reset_to_height]: Failed to get the transaction hashes to reset: {e:?}"
+                ))
+            })?;
+
+        // Collect the transaction hashes from the blocks that need resetting
+        let txs_hashes_to_reset: Vec<TransactionHash> = block_infos_to_reset
+            .iter()
+            .flat_map(|block_info| block_info.txs.iter().map(|tx| tx.hash()))
+            .collect();
+
+        // Perform the reset operation atomically using a sled transaction
+        let tx_result = (&block_store.main, &block_store.order, &block_store.difficulty, &tx_store.main, &tx_store.location)
+            .transaction(|(block_main, block_order, block_difficulty, tx_main, tx_location)| {
+                // Traverse the block heights in reverse, removing each block up to (but not including) reset_height
+                for height in (reset_height + 1..=last_block_height).rev() {
+                    let height_key = height.to_be_bytes();
+
+                    // Fetch block from `order` tree to obtain the block hash needed to remove blocks from `main` tree
+                    let order_header_hash = block_order.get(height_key).map_err(ConflictableTransactionError::Abort)?;
+
+                    if let Some(header_hash) = order_header_hash {
+
+                        // Remove block from the `main` tree
+                        block_main.remove(&header_hash).map_err(ConflictableTransactionError::Abort)?;
+
+                        // Remove block from the `difficulty` tree
+                        block_difficulty.remove(&height_key).map_err(ConflictableTransactionError::Abort)?;
+
+                        // Remove block from the `order` tree
+                        block_order.remove(&height_key).map_err(ConflictableTransactionError::Abort)?;
+                    }
+
+                    debug!(target: "blockchain_explorer::blocks::reset_to_height", "Removed block at height: {height}");
+                }
+
+                // Iterate through the transaction hashes, removing the related transactions
+                for (tx_count, tx_hash) in txs_hashes_to_reset.iter().enumerate() {
+                    // Remove transaction from the `main` tree
+                    tx_main.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
+                    // Remove transaction from the `location` tree
+                    tx_location.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
+                    debug!(target: "blockchain_explorer::blocks::reset_to_height", "Removed transaction ({tx_count}): {tx_hash}");
+                }
+
+                Ok(())
+            })
+            .map_err(|e| {
+                Error::DatabaseError(format!("[reset_to_height]: Resetting height failed: {e:?}"))
+            });
+
+        debug!(target: "blockchain_explorer::blocks::reset_to_height", "Successfully reset to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
+
+        tx_result
     }
 }

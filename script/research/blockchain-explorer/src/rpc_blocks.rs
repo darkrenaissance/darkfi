@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -37,11 +37,11 @@ use darkfi::{
 };
 use darkfi_serial::deserialize_async;
 
-use crate::Explorerd;
+use crate::{error::handle_database_error, Explorerd};
 
 impl Explorerd {
     // Queries darkfid for a block with given height.
-    async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
+    async fn get_darkfid_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let params = self
             .darkfid_daemon_request(
                 "blockchain.get_block",
@@ -54,64 +54,176 @@ impl Explorerd {
         Ok(block)
     }
 
-    /// Syncs the blockchain starting from the last synced block.
-    /// If reset flag is provided, all tables are reset, and start syncing from beginning.
+    /// Synchronizes blocks between the explorer and a Darkfi blockchain node, ensuring
+    /// the database remains consistent by syncing any missing or outdated blocks.
+    ///
+    /// If provided `reset` is true, the explorer's blockchain-related and metric sled trees are purged
+    /// and syncing starts from the genesis block. The function also handles reorgs by re-aligning the
+    /// explorer state to the correct height when blocks are outdated. Returns a result indicating
+    /// success or failure.
+    ///
+    /// Reorg handling is delegated to the [`Self::process_sync_blocks_reorg`] function, whose
+    /// documentation provides more details on the reorg process during block syncing.
     pub async fn sync_blocks(&self, reset: bool) -> Result<()> {
-        // Grab last synced block height
-        let mut height = match self.service.last_block() {
-            Ok(Some((height, _))) => height,
-            Ok(None) => 0,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[sync_blocks] Retrieving last synced block failed: {:?}",
-                    e
-                )));
+        // Grab last synced block height from the explorer's database.
+        let last_synced_block = self.service.last_block().map_err(|e| {
+            handle_database_error(
+                "rpc_blocks::sync_blocks",
+                "[sync_blocks] Retrieving last synced block failed",
+                e,
+            )
+        })?;
+
+        // Grab the last confirmed block height and hash from the darkfi node
+        let (last_darkfid_height, last_darkfid_hash) = self.get_last_confirmed_block().await?;
+
+        // Initialize the current height to sync from, starting from genesis block if last sync block does not exist
+        let (last_synced_height, last_synced_hash) = last_synced_block
+            .map_or((0, "".to_string()), |(height, header_hash)| (height, header_hash));
+
+        // Declare a mutable variable to track the current sync height while processing blocks
+        let mut current_height = last_synced_height;
+
+        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {current_height}");
+        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_darkfid_height} - {last_darkfid_hash}");
+
+        // A reorg is detected if the hash of the last synced block differs from the hash of the last confirmed block,
+        // unless the reset flag is set or the current height is 0
+        let reorg_detected = last_synced_hash != last_darkfid_hash && !reset && current_height != 0;
+
+        // If the reset flag is set, reset the explorer state and start syncing from the genesis block height.
+        // Otherwise, handle reorgs if detected, or proceed to the next block if not at the genesis height.
+        if reset {
+            self.service.reset_explorer_state(0)?;
+            current_height = 0;
+            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Successfully reset explorer database based on set reset parameter");
+        } else if reorg_detected {
+            current_height =
+                self.process_sync_blocks_reorg(last_synced_height, last_darkfid_height).await?;
+            // Log only if a reorg occurred
+            if current_height != last_synced_height {
+                info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height}");
             }
-        };
-        // If last synced block is genesis (0) or reset flag
-        // has been provided we reset, otherwise continue with
-        // the next block height
-        if height == 0 || reset {
-            self.service.reset_blocks()?;
-            height = 0;
-        } else {
-            height += 1;
-        };
-
-        loop {
-            // Grab last confirmed block
-            let (last_height, last_hash) = self.get_last_confirmed_block().await?;
-
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {height}");
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_height} - {last_hash}");
-
-            // Already synced last confirmed block
-            if height > last_height {
-                return Ok(())
-            }
-
-            while height <= last_height {
-                let block = match self.get_block_by_height(height).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let error_message =
-                            format!("[sync_blocks] RPC client request failed: {:?}", e);
-                        error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
-                        return Err(Error::DatabaseError(error_message));
-                    }
-                };
-
-                if let Err(e) = self.service.put_block(&block).await {
-                    let error_message = format!("[sync_blocks] Put block failed: {:?}", e);
-                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
-                    return Err(Error::DatabaseError(error_message));
-                };
-
-                info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Synced block {height}");
-
-                height += 1;
-            }
+            // Prepare to sync the next block after reorg
+            current_height += 1;
+        } else if current_height != 0 {
+            // Resume syncing from the block after the last synced height
+            current_height += 1;
         }
+
+        // Sync blocks until the explorer is up to date with the last confirmed block
+        while current_height <= last_darkfid_height {
+            // Retrieve the block from darkfi node by height
+            let block = match self.get_darkfid_block_by_height(current_height).await {
+                Ok(r) => r,
+                Err(e) => {
+                    return Err(handle_database_error(
+                        "rpc_blocks::sync_blocks",
+                        "[sync_blocks] RPC client request failed",
+                        e,
+                    ))
+                }
+            };
+
+            // Store the retrieved block in the explorer's database
+            if let Err(e) = self.service.put_block(&block).await {
+                return Err(handle_database_error(
+                    "rpc_blocks::sync_blocks",
+                    "[sync_blocks] Put block failed",
+                    e,
+                ))
+            };
+
+            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Synced block {current_height}");
+
+            // Increment the current height to sync the next block
+            current_height += 1;
+        }
+
+        info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Completed sync, total number of explorer blocks: {}", self.service.db.blockchain.blocks.len());
+
+        Ok(())
+    }
+
+    /// Handles blockchain reorganizations (reorgs) during the explorer node's startup synchronization
+    /// with Darkfi nodes, ensuring the explorer provides a consistent and accurate view of the blockchain.
+    ///
+    /// A reorg occurs when the blocks stored by the blockchain nodes diverge from those stored by the explorer.
+    /// This function resolves inconsistencies by identifying the point of divergence, searching backward through
+    /// block heights, and comparing block hashes between the explorer database and the blockchain node. Once a
+    /// common block height is found, the explorer is re-aligned to that height.
+    ///
+    /// If no common block can be found, the explorer resets to the "genesis height," removing all blocks,
+    /// transactions, and metrics from its database to resynchronize with the canonical chain from the nodes.
+    ///
+    /// Returns the last height at which the explorer's state was successfully re-aligned with the blockchain.
+    async fn process_sync_blocks_reorg(
+        &self,
+        last_synced_height: u32,
+        last_darkfid_height: u32,
+    ) -> Result<u32> {
+        // Log reorg detection in the case that explorer height is greater or equal to height of darkfi node
+        if last_synced_height >= last_darkfid_height {
+            info!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg",
+                "Reorg detected with heights: explorer.{last_synced_height} >= darkfid.{last_darkfid_height}");
+        }
+
+        // Declare a mutable variable to track the current height while searching for a common block
+        let mut cur_height = last_synced_height;
+        // Search for an explorer block that matches a darkfi node block
+        while cur_height > 0 {
+            let synced_block = self.service.get_block_by_height(cur_height)?;
+            debug!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg", "Searching for common block: {}", cur_height);
+
+            // Check if we found a synced block for current height being searched
+            if let Some(synced_block) = synced_block {
+                // Fetch the block from darkfi node to check for a match
+                match self.get_darkfid_block_by_height(cur_height).await {
+                    Ok(darkfid_block) => {
+                        // If hashes match, we've found the point of divergence
+                        if synced_block.header_hash == darkfid_block.hash().to_string() {
+                            // If hashes match but the cur_height differs from the last synced height, reset the explorer state
+                            if cur_height != last_synced_height {
+                                self.service.reset_explorer_state(cur_height)?;
+                                debug!(target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg", "Successfully completed reorg to height: {cur_height}");
+                            }
+                            break;
+                        } else {
+                            // Log reorg detection with height and header hash mismatch details
+                            if cur_height == last_synced_height {
+                                info!(
+                                    target: "blockchain-explorer::rpc_blocks::process_sync_blocks_reorg",
+                                    "Reorg detected at height {}: explorer.{} != darkfid.{}",
+                                    cur_height,
+                                    synced_block.header_hash,
+                                    darkfid_block.hash().to_string()
+                                );
+                            }
+                        }
+                    }
+                    // Continue searching for blocks that do not exist on darkfi nodes
+                    Err(Error::JsonRpcError((-32121, _))) => (),
+                    Err(e) => {
+                        return Err(handle_database_error(
+                            "rpc_blocks::process_sync_blocks_reorg",
+                            "[process_sync_blocks_reorg] RPC client request failed",
+                            e,
+                        ))
+                    }
+                }
+            }
+
+            // Move to previous block to search for a match
+            cur_height = cur_height.saturating_sub(1);
+        }
+
+        // Check if genesis block reorg is needed
+        if cur_height == 0 {
+            self.service.reset_explorer_state(0)?;
+        }
+
+        // Return the last height we reorged to
+        Ok(cur_height)
     }
 
     // RPCAPI:
@@ -269,12 +381,12 @@ pub async fn subscribe_blocks(
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<(StoppableTaskPtr, StoppableTaskPtr)> {
     // Grab last confirmed block
-    let (last_confirmed, _) = explorer.get_last_confirmed_block().await?;
+    let (last_darkfid_height, last_darkfid_hash) = explorer.get_last_confirmed_block().await?;
 
     // Grab last synced block
-    let last_synced = match explorer.service.last_block() {
-        Ok(Some((height, _))) => height,
-        Ok(None) => 0,
+    let (mut height, hash) = match explorer.service.last_block() {
+        Ok(Some((height, hash))) => (height, hash),
+        Ok(None) => (0, "".to_string()),
         Err(e) => {
             return Err(Error::DatabaseError(format!(
                 "[subscribe_blocks] Retrieving last synced block failed: {e:?}"
@@ -282,12 +394,20 @@ pub async fn subscribe_blocks(
         }
     };
 
-    if last_confirmed != last_synced {
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last confirmed block.");
+    // Evaluates whether there is a mismatch between the last confirmed block and the last synced block
+    let blocks_mismatch = (last_darkfid_height != height || last_darkfid_hash != hash) &&
+        last_darkfid_height != 0 &&
+        height != 0;
+
+    // Check if there is a mismatch, throwing an error to prevent operating in a potentially inconsistent state
+    if blocks_mismatch {
+        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks",
+        "Warning: Last synced block is not the last confirmed block: \
+        last_darkfid_height={last_darkfid_height}, last_synced_height={height}, last_darkfid_hash={last_darkfid_hash}, last_synced_hash={hash}");
         warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
         return Err(Error::DatabaseError(
             "[subscribe_blocks] Blockchain not fully synced".to_string(),
-        ))
+        ));
     }
 
     info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Subscribing to receive notifications of incoming blocks");
@@ -322,7 +442,7 @@ pub async fn subscribe_blocks(
             loop {
                 match subscription.receive().await {
                     JsonResult::Notification(n) => {
-                        info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Got Block notification from darkfid subscription");
+                        debug!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Got Block notification from darkfid subscription");
                         if n.method != "blockchain.subscribe_blocks" {
                             return Err(Error::UnexpectedJsonRpc(format!(
                                 "Got foreign notification from darkfid: {}",
@@ -347,7 +467,7 @@ pub async fn subscribe_blocks(
                             let param = param.get::<String>().unwrap();
                             let bytes = base64::decode(param).unwrap();
 
-                            let block_data: BlockInfo = match deserialize_async(&bytes).await {
+                            let darkfid_block: BlockInfo = match deserialize_async(&bytes).await {
                                 Ok(b) => b,
                                 Err(e) => {
                                     return Err(Error::UnexpectedJsonRpc(format!(
@@ -355,17 +475,36 @@ pub async fn subscribe_blocks(
                                     )))
                                 },
                             };
-                            let header_hash = block_data.hash().to_string();
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Block header: {header_hash}");
+                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Block Notification: {}", darkfid_block.hash().to_string());
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
 
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storing block...");
-                            if let Err(e) = explorer.service.put_block(&block_data).await {
+                            // Store darkfi node block height for later use
+                            let darkfid_block_height = darkfid_block.header.height;
+
+                            // Check if we need to perform a reorg due to mismatch in block heights
+                            if darkfid_block_height <= height {
+                                info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks",
+                                    "Reorg detected with heights: darkfid.{darkfid_block_height} <= explorer.{height}");
+
+                                // Calculate the reset height
+                                let reset_height = darkfid_block_height.saturating_sub(1);
+
+                                // Execute the reorg by resetting the explorer state to reset height
+                                explorer.service.reset_explorer_state(reset_height)?;
+                                info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height}");
+                            }
+
+                            if let Err(e) = explorer.service.put_block(&darkfid_block).await {
                                 return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Put block failed: {e:?}"
                                 )))
                             }
+
+                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {}", darkfid_block.header.height );
+
+                            // Process the next block
+                            height = darkfid_block.header.height;
                         }
                     }
 

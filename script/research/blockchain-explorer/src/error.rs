@@ -51,7 +51,6 @@ pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
 
 /// Handles a database error by formatting the output, logging it with target-specific context,
 /// and returning a [`DatabaseError`].
-#[allow(dead_code)] // TODO: Remove once code that uses this function is rebased into master
 pub fn handle_database_error(target: &str, message: &str, error: impl std::fmt::Debug) -> Error {
     let error_message = format!("{}: {:?}", message, error);
     let formatted_target = format!("blockchain-explorer:: {target}");

@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use log::{debug, error, info};
+use log::{debug, error};
 use smol::io::Cursor;
 use tinyjson::JsonValue;
 
@@ -98,7 +98,7 @@ impl ExplorerService {
             let tree = &self.db.blockchain.sled_db.open_tree(tree_name)?;
             tree.clear()?;
             let tree_name_str = std::str::from_utf8(tree_name)?;
-            info!(target: "blockchain-explorer::blocks", "Successfully reset transaction tree: {tree_name_str}");
+            debug!(target: "blockchain-explorer::blocks", "Successfully reset transaction tree: {tree_name_str}");
         }
 
         Ok(())
