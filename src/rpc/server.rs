@@ -33,6 +33,7 @@ use super::{
         INIT_BUF_SIZE,
     },
     jsonrpc::*,
+    settings::RpcSettings,
 };
 use crate::{
     net::transport::{Listener, PtListener, PtStream},
@@ -83,10 +84,17 @@ async fn handle_request<T>(
     rh: Arc<impl RequestHandler<T> + 'static>,
     ex: Arc<smol::Executor<'_>>,
     tasks: Arc<Mutex<HashSet<Arc<StoppableTask>>>>,
-    use_http: bool,
+    settings: RpcSettings,
     req: JsonRequest,
 ) -> Result<()> {
-    let rep = rh.handle_request(req).await;
+    // Handle disabled RPC methods
+    let rep = if settings.is_method_disabled(&req.method) {
+        debug!(target: "rpc::server", "RPC method {} is disabled", req.method);
+        JsonError::new(ErrorCode::MethodNotFound, None, req.id).into()
+    } else {
+        rh.handle_request(req).await
+    };
+
     match rep {
         JsonResult::Subscriber(subscriber) => {
             let task = StoppableTask::new();
@@ -113,7 +121,7 @@ async fn handle_request<T>(
                         let mut writer_lock = writer_.lock().await;
 
                         #[allow(clippy::collapsible_else_if)]
-                        if use_http {
+                        if settings.use_http() {
                             if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
                                 return Err(e.into())
@@ -147,7 +155,7 @@ async fn handle_request<T>(
             // Write the response
             debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
             let mut writer_lock = writer.lock().await;
-            if use_http {
+            if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &reply.into()).await?;
             } else {
                 write_to_stream(&mut writer_lock, &reply.into()).await?;
@@ -176,7 +184,7 @@ async fn handle_request<T>(
 
                         let mut writer_lock = writer_.lock().await;
                         #[allow(clippy::collapsible_else_if)]
-                        if use_http {
+                        if settings.use_http() {
                             if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
                                 drop(writer_lock);
@@ -214,7 +222,7 @@ async fn handle_request<T>(
         JsonResult::Response(ref v) => {
             debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
             let mut writer_lock = writer.lock().await;
-            if use_http {
+            if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &rep).await?;
             } else {
                 write_to_stream(&mut writer_lock, &rep).await?;
@@ -225,7 +233,7 @@ async fn handle_request<T>(
         JsonResult::Error(ref v) => {
             debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
             let mut writer_lock = writer.lock().await;
-            if use_http {
+            if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &rep).await?;
             } else {
                 write_to_stream(&mut writer_lock, &rep).await?;
@@ -246,7 +254,7 @@ pub async fn accept<'a, T: 'a>(
     addr: Url,
     rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
-    use_http: bool,
+    settings: RpcSettings,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     // If there's a connection limit set, we will refuse connections
@@ -268,7 +276,7 @@ pub async fn accept<'a, T: 'a>(
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
         let mut reader_lock = reader.lock().await;
-        if use_http {
+        if settings.use_http() {
             let _ = http_read_from_stream_request(&mut reader_lock, &mut buf).await?;
         } else {
             let _ = read_from_stream(&mut reader_lock, &mut buf).await?;
@@ -327,7 +335,7 @@ pub async fn accept<'a, T: 'a>(
                 rh.clone(),
                 ex.clone(),
                 tasks.clone(),
-                use_http,
+                settings.clone(),
                 req,
             ),
             move |_| async move {
@@ -352,7 +360,7 @@ async fn run_accept_loop<'a, T: 'a>(
     listener: Box<dyn PtListener>,
     rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
-    use_http: bool,
+    settings: RpcSettings,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     loop {
@@ -369,7 +377,7 @@ async fn run_accept_loop<'a, T: 'a>(
                 let task_ = task.clone();
                 let ex_ = ex.clone();
                 task.clone().start(
-                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, use_http, ex_),
+                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, settings.clone(), ex_),
                     |_| async move {
                         info!(target: "rpc::server", "[RPC] Closed conn from {}", url);
                         rh_.clone().unmark_connection(task_.clone()).await;
@@ -422,23 +430,22 @@ async fn run_accept_loop<'a, T: 'a>(
 /// The supported network schemes can be prefixed with `http+` to serve
 /// JSON-RPC over HTTP/1.1.
 pub async fn listen_and_serve<'a, T: 'a>(
-    accept_url: Url,
+    settings: RpcSettings,
     rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     // Figure out if we're using HTTP and rewrite the URL accordingly.
-    let mut listen_url = accept_url.clone();
-    if accept_url.scheme().starts_with("http+") {
-        let scheme = accept_url.scheme().strip_prefix("http+").unwrap();
-        let url_str = accept_url.as_str().replace(accept_url.scheme(), scheme);
+    let mut listen_url = settings.listen.clone();
+    if settings.listen.scheme().starts_with("http+") {
+        let scheme = settings.listen.scheme().strip_prefix("http+").unwrap();
+        let url_str = settings.listen.as_str().replace(settings.listen.scheme(), scheme);
         listen_url = url_str.parse()?;
     }
 
     let listener = Listener::new(listen_url, None).await?.listen().await?;
 
-    let use_http = accept_url.scheme().starts_with("http+");
-    run_accept_loop(listener, rh, conn_limit, use_http, ex.clone()).await
+    run_accept_loop(listener, rh, conn_limit, settings, ex.clone()).await
 }
 
 #[cfg(test)]
@@ -478,7 +485,10 @@ mod tests {
             // Find an available port
             let listener = TcpListener::bind("127.0.0.1:0").await?;
             let sockaddr = listener.local_addr()?;
-            let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+            let settings = RpcSettings {
+                listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+                disabled_methods: vec![],
+            };
             drop(listener);
 
             let rpc_server = Arc::new(RpcServer { rpc_connections: Mutex::new(HashSet::new()) });
@@ -486,7 +496,7 @@ mod tests {
 
             let server_task = StoppableTask::new();
             server_task.clone().start(
-                listen_and_serve(endpoint.clone(), rpc_server.clone(), None, executor.clone()),
+                listen_and_serve(settings.clone(), rpc_server.clone(), None, executor.clone()),
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => {
@@ -503,17 +513,17 @@ mod tests {
             msleep(500).await;
 
             // Connect a client
-            let rpc_client0 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            let rpc_client0 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 1);
 
             // Connect another client
-            let rpc_client1 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            let rpc_client1 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 2);
 
             // And another one
-            let _rpc_client2 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            let _rpc_client2 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 3);
 
@@ -529,7 +539,7 @@ mod tests {
 
             // The Listener should be stopped when we stop the server task.
             server_task.stop().await;
-            assert!(RpcClient::new(endpoint, executor.clone()).await.is_err());
+            assert!(RpcClient::new(settings.listen, executor.clone()).await.is_err());
 
             // After the server is stopped, the connections tasks should also be stopped
             assert!(rpc_server.active_connections().await == 0);
