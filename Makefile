@@ -127,45 +127,48 @@ explorerd:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
+explorerd_bundle_contracts_src: contracts
+	$(MAKE) -C bin/explorer/explorerd bundle_contracts_src
+
 # -- END OF BINS --
 
 fmt:
 	$(CARGO) fmt --all
 
 # cargo install cargo-hack
-check: contracts $(PROOFS_BIN)
+check: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --target=$(RUST_TARGET) \
 		--release --feature-powerset --workspace
 
-clippy: contracts $(PROOFS_BIN)
+clippy: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests
 
-fix: contracts $(PROOFS_BIN)
+fix: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests --fix --allow-dirty
 
-rustdoc: contracts $(PROOFS_BIN)
+rustdoc: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --target=$(RUST_TARGET) \
 		--release --all-features --workspace --document-private-items --no-deps
 
-test: contracts $(PROOFS_BIN)
+test: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --all-features --workspace
 
-bench-zk-from-json: contracts $(PROOFS_BIN)
+bench-zk-from-json: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--bench zk_from_json --all-features --workspace \
 		-- --save-baseline master
 
-bench: contracts $(PROOFS_BIN)
+bench: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--all-features --workspace \
 		-- --save-baseline master
 
-coverage: contracts $(PROOFS_BIN)
+coverage: explorerd_bundle_contracts_src $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) llvm-cov --target=$(RUST_TARGET) \
 		--release --all-features --workspace --html
 
@@ -184,11 +187,11 @@ clean:
 	$(MAKE) -C bin/lilith clean
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean
-	$(MAKE) -C bin/explorer/explorerd
+	$(MAKE) -C bin/explorer/explorerd clean
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release
 	rm -f $(PROOFS_BIN)
 
 distclean: clean
 	rm -rf target
 
-.PHONY: all $(BINS) fmt check clippy fix rustdoc test bench-zk-from-json bench coverage clean distclean
+.PHONY: all $(BINS) explorerd_bundle_contracts_src fmt check clippy fix rustdoc test bench-zk-from-json bench coverage clean distclean
