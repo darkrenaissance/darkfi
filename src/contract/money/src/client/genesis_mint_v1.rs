@@ -26,7 +26,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use log::debug;
-use rand::rngs::OsRng;
+use rand::{prelude::SliceRandom, rngs::OsRng};
 
 use crate::{
     client::{
@@ -104,13 +104,17 @@ impl GenesisMintCallBuilder {
         let spend_hook = self.spend_hook.unwrap_or(FuncId::none());
         let user_data = self.user_data.unwrap_or(pallas::Base::ZERO);
 
+        // Shuffle the amounts vector so our outputs are not in order
+        let mut amounts = self.amounts.clone();
+        amounts.shuffle(&mut OsRng);
+
         // Building the anonymous outputs
         let input_blinds = vec![value_blind];
-        let mut output_blinds = Vec::with_capacity(self.amounts.len());
-        let mut outputs = Vec::with_capacity(self.amounts.len());
-        let mut proofs = Vec::with_capacity(self.amounts.len());
-        for (i, amount) in self.amounts.iter().enumerate() {
-            let value_blind = if i == self.amounts.len() - 1 {
+        let mut output_blinds = Vec::with_capacity(amounts.len());
+        let mut outputs = Vec::with_capacity(amounts.len());
+        let mut proofs = Vec::with_capacity(amounts.len());
+        for (i, amount) in amounts.iter().enumerate() {
+            let value_blind = if i == amounts.len() - 1 {
                 compute_remainder_blind(&input_blinds, &output_blinds)
             } else {
                 Blind::random(&mut OsRng)

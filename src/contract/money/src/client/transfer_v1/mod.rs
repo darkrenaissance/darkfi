@@ -22,7 +22,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use log::{debug, error};
-use rand::rngs::OsRng;
+use rand::{prelude::SliceRandom, rngs::OsRng};
 
 use crate::{
     client::OwnCoin,
@@ -135,6 +135,10 @@ pub fn make_transfer_call(
     let mut outputs = vec![];
 
     let (spent_coins, change_value) = select_coins(coins, value)?;
+    if spent_coins.is_empty() {
+        error!(target: "contract::money::client::transfer", "Error: No coins selected");
+        return Err(ClientFailed::VerifyError(MoneyError::TransferMissingInputs.to_string()).into())
+    }
 
     for coin in spent_coins.iter() {
         let input = TransferCallInput {
@@ -148,27 +152,24 @@ pub fn make_transfer_call(
 
     // Check if we should split the output into two equal halves
     if half_split {
-        // Integer division is safe here as we are dividing by a constant.
-        #[allow(clippy::integer_division)]
+        // Cumpute each half value. If the value is odd,
+        // the remainder(1) will be appended to the second half.
         let mut half = value / 2;
 
-        // Add the first half
-        outputs.push(TransferCallOutput {
-            public_key: recipient,
-            value: half,
-            token_id,
-            spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
-            user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
-            blind: Blind::random(&mut OsRng),
-        });
-
-        // Handle the case where value is odd. If so, division by 2 will truncate the amount.
-        // e.g. in integer division, 3 / 2 == 1.
-        // Arithmetic side effects are safe here: no risk of overflow or panic.
-        #[allow(clippy::arithmetic_side_effects)]
-        if value % 2 != 0 {
-            half += 1;
+        // Add the first half, if its not zero
+        if half != 0 {
+            outputs.push(TransferCallOutput {
+                public_key: recipient,
+                value: half,
+                token_id,
+                spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
+                user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
+                blind: Blind::random(&mut OsRng),
+            });
         }
+
+        // Append the remainder and add the second half
+        half += value % 2;
         outputs.push(TransferCallOutput {
             public_key: recipient,
             value: half,
@@ -199,10 +200,8 @@ pub fn make_transfer_call(
         });
     }
 
-    if inputs.is_empty() {
-        error!(target: "contract::money::client::transfer", "Error: No inputs selected");
-        return Err(ClientFailed::VerifyError(MoneyError::TransferMissingInputs.to_string()).into())
-    }
+    // Shuffle the outputs
+    outputs.shuffle(&mut OsRng);
 
     let xfer_builder = TransferCallBuilder {
         clear_inputs: vec![],
