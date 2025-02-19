@@ -194,4 +194,5 @@ clean:
 distclean: clean
 	rm -rf target
 
-.PHONY: all $(BINS) explorerd_bundle_contracts_src fmt check clippy fix rustdoc test bench-zk-from-json bench coverage clean distclean
+.PHONY: all $(BINS) explorerd_bundle_contracts_src fmt check clippy fix rustdoc \
+	test bench-zk-from-json bench coverage clean distclean
