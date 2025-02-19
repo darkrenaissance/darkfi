@@ -104,8 +104,10 @@ impl Explorerd {
             if current_height != last_synced_height {
                 info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height}");
             }
-            // Prepare to sync the next block after reorg
-            current_height += 1;
+            // Prepare to sync the next block after reorg if not from genesis height
+            if current_height != 0 {
+                current_height += 1;
+            }
         } else if current_height != 0 {
             // Resume syncing from the block after the last synced height
             current_height += 1;
