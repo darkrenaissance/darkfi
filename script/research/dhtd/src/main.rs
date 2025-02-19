@@ -61,8 +61,8 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    /// JSON-RPC settings
     #[structopt(flatten)]
+    /// JSON-RPC settings
     rpc: RpcSettingsOpt,
 
     #[structopt(long)]

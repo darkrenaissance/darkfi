@@ -23,7 +23,7 @@ config at `../dchatd_config.toml` as follows:
 rpc_listen = "tcp://127.0.0.1:51054"
 
 ## Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = ["p2p.get_info"]
 
 [net]
 ## P2P accept addresses Required for inbound nodes.

@@ -58,11 +58,12 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 #[structopt(name = "lilith", about = cli_desc!())]
 struct Args {
     #[structopt(flatten)]
-    pub rpc: RpcSettingsOpt,
+    /// JSON-RPC settings
+    rpc: RpcSettingsOpt,
 
     #[structopt(short, long)]
     /// Configuration file to use
-    pub config: Option<String>,
+    config: Option<String>,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -70,7 +71,7 @@ struct Args {
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
-    pub verbose: u8,
+    verbose: u8,
 
     #[structopt(long, default_value = "120")]
     /// Interval after which to check whitelist peers

@@ -55,7 +55,8 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../dchatd_config.toml");
 #[structopt(name = "dchat", about = cli_desc!())]
 struct Args {
     #[structopt(flatten)]
-    pub rpc: RpcSettingsOpt,
+    /// JSON-RPC settings
+    rpc: RpcSettingsOpt,
 
     #[structopt(short, long)]
     /// Configuration file to use
@@ -69,8 +70,8 @@ struct Args {
     /// Increase verbosity (-vvv supported)
     verbose: u8,
 
-    /// P2P network settings
     #[structopt(flatten)]
+    /// P2P network settings
     net: SettingsOpt,
 }
 // ANCHOR_END: args

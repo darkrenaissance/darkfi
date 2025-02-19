@@ -38,7 +38,8 @@ struct Args {
     config: Option<String>,
 
     #[structopt(flatten)]
-    pub rpc: RpcSettingsOpt,
+    /// JSON-RPC settings
+    rpc: RpcSettingsOpt,
 
     #[structopt(short, long, default_value = "4")]
     /// PoW miner number of threads to use

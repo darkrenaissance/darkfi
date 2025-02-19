@@ -251,10 +251,8 @@ fn darkfid_programmatic_control() -> Result<()> {
     let sled_db = sled_overlay::sled::Config::new().temporary(true).open()?;
     let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks()?;
     darkfi_contract_test_harness::vks::inject(&sled_db, &vks)?;
-    let rpc_settings = RpcSettings {
-        listen: Url::parse("tcp://127.0.0.1:8240")?,
-        ..RpcSettings::default()
-    };
+    let rpc_settings =
+        RpcSettings { listen: Url::parse("tcp://127.0.0.1:8240")?, ..RpcSettings::default() };
 
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());

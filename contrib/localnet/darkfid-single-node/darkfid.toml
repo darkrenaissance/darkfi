@@ -58,7 +58,7 @@ skip_fees = false
 rpc_listen = "tcp://127.0.0.1:48240"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = ["p2p.get_info"]
 
 ## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."localnet".mm_rpc]

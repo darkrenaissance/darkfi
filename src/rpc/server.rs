@@ -377,7 +377,15 @@ async fn run_accept_loop<'a, T: 'a>(
                 let task_ = task.clone();
                 let ex_ = ex.clone();
                 task.clone().start(
-                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, settings.clone(), ex_),
+                    accept(
+                        reader,
+                        writer,
+                        url.clone(),
+                        rh.clone(),
+                        conn_limit,
+                        settings.clone(),
+                        ex_,
+                    ),
                     |_| async move {
                         info!(target: "rpc::server", "[RPC] Closed conn from {}", url);
                         rh_.clone().unmark_connection(task_.clone()).await;

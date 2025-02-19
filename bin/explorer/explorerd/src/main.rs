@@ -37,7 +37,7 @@ use darkfi::{
     rpc::{
         client::RpcClient,
         server::{listen_and_serve, RequestHandler},
-        settings::RpcSettingsOpt
+        settings::RpcSettingsOpt,
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
@@ -114,8 +114,8 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    /// JSON-RPC settings
     #[structopt(flatten)]
+    /// JSON-RPC settings
     rpc: RpcSettingsOpt,
 
     #[structopt(long, default_value = "~/.local/share/darkfi/explorerd/daemon.db")]

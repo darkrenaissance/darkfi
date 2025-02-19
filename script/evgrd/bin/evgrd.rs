@@ -81,28 +81,28 @@ struct Args {
     /// Replay logs (DB) path
     replay_datastore: String,
 
-    /// Flag to store Sled DB instructions
     #[structopt(long)]
+    /// Flag to store Sled DB instructions
     replay_mode: bool,
 
-    /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
+    /// Flag to skip syncing the DAG (no history)
     skip_dag_sync: bool,
 
-    /// Number of attempts to sync the DAG.
     #[structopt(long, default_value = "5")]
+    /// Number of attempts to sync the DAG
     sync_attempts: u8,
 
-    /// Number of seconds to wait before trying again if sync fails.
     #[structopt(long, default_value = "15")]
+    /// Number of seconds to wait before trying again if sync fails
     sync_timeout: u8,
 
-    /// P2P network settings
     #[structopt(flatten)]
+    /// P2P network settings
     net: NetSettingsOpt,
 
-    /// JSON-RPC settings
     #[structopt(flatten)]
+    /// JSON-RPC settings
     rpc: RpcSettingsOpt,
 }
 

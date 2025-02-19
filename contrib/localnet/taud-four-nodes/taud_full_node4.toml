@@ -49,7 +49,7 @@ write_public_key = "2LW4qXxR5QSybtMeRtX69GdqNWxgAbDVyMT6aWe37MT7"
 rpc_listen = "tcp://127.0.0.1:23344"
 
 ## Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = ["p2p.get_info"]
 
 # P2P network settings
 [net]

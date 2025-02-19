@@ -24,7 +24,7 @@ autojoin = ["#dev"]
 rpc_listen = "tcp://127.0.0.1:8888"
 
 ## Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = ["p2p.get_info"]
 
 ## P2P net settings
 [net]

@@ -51,21 +51,23 @@ struct Args {
     config: Option<String>,
 
     #[structopt(flatten)]
-    pub rpc: RpcSettingsOpt,
+    /// JSON-RPC settings
+    rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
-    pub net: SettingsOpt,
+    /// P2P network settings
+    net: SettingsOpt,
 
-    /// Sets Datastore Path
     #[structopt(long, default_value = "~/.local/share/darkfi/genev_db")]
-    pub datastore: String,
+    /// Sets Datastore Path
+    datastore: String,
 
-    /// Replay logs (DB) path
     #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_genev_db")]
+    /// Replay logs (DB) path
     replay_datastore: String,
 
-    /// Flag to store Sled DB instructions
     #[structopt(long)]
+    /// Flag to store Sled DB instructions
     replay_mode: bool,
 
     #[structopt(short, long)]
@@ -73,7 +75,8 @@ struct Args {
     log: Option<String>,
 
     #[structopt(long)]
-    pub skip_dag_sync: bool,
+    /// Flag to skip syncing the DAG (no history)
+    skip_dag_sync: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)

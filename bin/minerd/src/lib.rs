@@ -136,7 +136,6 @@ impl Minerd {
     }
 }
 
-
 #[cfg(test)]
 use url::Url;
 
@@ -166,10 +165,8 @@ fn minerd_programmatic_control() -> Result<()> {
 
     // Daemon configuration
     let threads = 4;
-    let rpc_settings = RpcSettings {
-        listen: Url::parse("tcp://127.0.0.1:28467")?,
-        ..RpcSettings::default()
-    };
+    let rpc_settings =
+        RpcSettings { listen: Url::parse("tcp://127.0.0.1:28467")?, ..RpcSettings::default() };
 
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());
@@ -199,10 +196,14 @@ fn minerd_programmatic_control() -> Result<()> {
 
                 // Generate a JSON-RPC client to send mining jobs
                 let mut rpc_client =
-                    darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone()).await;
+                    darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone())
+                        .await;
                 while rpc_client.is_err() {
-                    rpc_client =
-                        darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone()).await;
+                    rpc_client = darkfi::rpc::client::RpcClient::new(
+                        rpc_settings.listen.clone(),
+                        ex.clone(),
+                    )
+                    .await;
                 }
                 let rpc_client = rpc_client.unwrap();
 

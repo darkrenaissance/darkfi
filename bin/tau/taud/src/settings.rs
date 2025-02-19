@@ -19,10 +19,7 @@
 use structopt::StructOpt;
 use structopt_toml::{serde::Deserialize, StructOptToml};
 
-use darkfi::{
-    net::settings::SettingsOpt,
-    rpc::settings::RpcSettingsOpt,
-};
+use darkfi::{net::settings::SettingsOpt, rpc::settings::RpcSettingsOpt};
 
 pub const CONFIG_FILE: &str = "taud_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../taud_config.toml");
@@ -32,66 +29,69 @@ pub const CONFIG_FILE_CONTENTS: &str = include_str!("../taud_config.toml");
 #[serde(default)]
 #[structopt(name = "taud")]
 pub struct Args {
-    /// Sets a custom config file
     #[structopt(long)]
+    /// Sets a custom config file
     pub config: Option<String>,
 
-    /// Sets Datastore Path
     #[structopt(long, default_value = "~/.local/share/darkfi/taud_db")]
+    /// Sets Datastore Path
     pub datastore: String,
 
-    /// Replay logs (DB) path
     #[structopt(long, default_value = "~/.local/share/darkfi/replayed_taud_db")]
+    /// Replay logs (DB) path
     pub replay_datastore: String,
 
-    /// Flag to store Sled DB instructions
     #[structopt(long)]
+    /// Flag to store Sled DB instructions
     pub replay_mode: bool,
 
     #[structopt(flatten)]
+    /// JSON-RPC settings
     pub rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
+    /// P2P network settings
     pub net: SettingsOpt,
 
-    /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity
     pub verbose: u8,
 
-    /// Generate a new workspace
     #[structopt(long)]
+    /// Generate a new workspace
     pub generate: bool,
 
-    /// Secret Key To Encrypt/Decrypt tasks
     #[structopt(long)]
+    /// Secret Key To Encrypt/Decrypt tasks
     pub workspaces: Vec<String>,
 
-    /// Write access key
     #[structopt(long)]
+    /// Write access key
     pub write: Option<String>,
 
-    /// Password
     #[structopt(long)]
+    /// Password
     pub password: Option<String>,
 
-    ///  Clean all the local data in datastore path
-    /// (BE CAREFUL) Check the datastore path in the config file before running this
     #[structopt(long)]
+    /// Clean all the local data in datastore path
+    /// (BE CAREFUL) Check the datastore path in the config file before running this
     pub refresh: bool,
 
-    /// Current display name    
     #[structopt(long)]
+    /// Current display name
     pub nickname: Option<String>,
 
     #[structopt(long)]
+    /// Flag to skip syncing the DAG (no history)
     pub skip_dag_sync: bool,
 
-    /// Named pipe path
     #[structopt(long, default_value = "/tmp/tau_pipe")]
+    /// Named pipe path
     pub pipe_path: String,
 
-    // Whether to pipe notifications or not
     #[structopt(long)]
+    // Whether to pipe notifications or not
     pub piped: bool,
 
     #[structopt(short, long)]

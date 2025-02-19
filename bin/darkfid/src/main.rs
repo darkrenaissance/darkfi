@@ -74,10 +74,10 @@ struct Args {
     verbose: u8,
 }
 
-/// Defines a blockchain network configuration.
-/// Default values correspond to a local network.
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
+/// Defines a blockchain network configuration.
+/// Default values correspond to a local network.
 pub struct BlockchainNetwork {
     #[structopt(long, default_value = "~/.local/share/darkfi/darkfid/localnet")]
     /// Path to blockchain database
@@ -139,12 +139,12 @@ pub struct BlockchainNetwork {
     /// Garbage collection task transactions batch size
     txs_batch_size: Option<usize>,
 
-    /// P2P network settings
     #[structopt(flatten)]
+    /// P2P network settings
     net: SettingsOpt,
 
-    /// JSON-RPC settings
     #[structopt(flatten)]
+    /// JSON-RPC settings
     rpc: RpcSettingsOpt,
 }
 
@@ -231,7 +231,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         bootstrap,
     };
     daemon
-        .start(&ex, &blockchain_config.rpc.into(), &blockchain_config.mm_rpc.map(|mm_rpc_opts| mm_rpc_opts.into()), &config)
+        .start(
+            &ex,
+            &blockchain_config.rpc.into(),
+            &blockchain_config.mm_rpc.map(|mm_rpc_opts| mm_rpc_opts.into()),
+            &config,
+        )
         .await?;
 
     // Signal handling for graceful termination.

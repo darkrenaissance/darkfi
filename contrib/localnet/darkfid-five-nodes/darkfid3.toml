@@ -55,7 +55,7 @@ skip_fees = false
 rpc_listen = "tcp://127.0.0.1:48540"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = ["p2p.get_info"]
 
 ## Localnet P2P network settings
 [network_config."localnet".net]

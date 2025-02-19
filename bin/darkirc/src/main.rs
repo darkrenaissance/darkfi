@@ -25,7 +25,7 @@ use darkfi::{
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
-        settings::{RpcSettingsOpt, RpcSettings},
+        settings::{RpcSettings, RpcSettingsOpt},
     },
     system::{sleep, StoppableTask, StoppableTaskPtr, Subscription},
     util::path::{expand_path, get_config_path},
@@ -98,48 +98,48 @@ struct Args {
     /// Replay logs (DB) path
     replay_datastore: String,
 
-    /// Flag to store Sled DB instructions
     #[structopt(long)]
+    /// Flag to store Sled DB instructions
     replay_mode: bool,
 
-    /// Generate a new NaCl keypair and exit
     #[structopt(long)]
+    /// Generate a new NaCl keypair and exit
     gen_chacha_keypair: bool,
 
-    /// Generate a new encrypted channel NaCl secret and exit
     #[structopt(long)]
+    /// Generate a new encrypted channel NaCl secret and exit
     gen_channel_secret: bool,
 
-    /// Recover NaCl public key from a secret key
     #[structopt(long = "get-chacha-pubkey")]
+    /// Recover NaCl public key from a secret key
     chacha_secret: Option<String>,
 
-    /// Generate a new RLN identity
     #[structopt(long)]
+    /// Generate a new RLN identity
     gen_rln_identity: bool,
 
-    /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
+    /// Flag to skip syncing the DAG (no history)
     skip_dag_sync: bool,
 
+    #[structopt(long)]
     /// IRC Password (Encrypted with bcrypt-2b)
-    #[structopt(long)]
-    pub password: Option<String>,
+    password: Option<String>,
 
-    /// Encrypt a given password for the IRC server connection
     #[structopt(long)]
+    /// Encrypt a given password for the IRC server connection
     encrypt_password: bool,
 
-    /// List configured contacts.
     #[structopt(long)]
+    /// List configured contacts.
     list_contacts: bool,
 
-    /// P2P network settings
     #[structopt(flatten)]
+    /// P2P network settings
     net: SettingsOpt,
 
-    /// JSON-RPC settings
     #[structopt(flatten)]
+    /// JSON-RPC settings
     rpc: RpcSettingsOpt,
 }
 

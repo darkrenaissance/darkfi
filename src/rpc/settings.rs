@@ -36,10 +36,7 @@ impl RpcSettings {
 
 impl Default for RpcSettings {
     fn default() -> Self {
-        Self {
-            listen: Url::parse("tcp://127.0.0.1:22222").unwrap(),
-            disabled_methods: vec![],
-        }
+        Self { listen: Url::parse("tcp://127.0.0.1:22222").unwrap(), disabled_methods: vec![] }
     }
 }
 
