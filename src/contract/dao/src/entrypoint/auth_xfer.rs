@@ -29,7 +29,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, Encodable};
 
 use crate::{
     error::DaoError,
@@ -222,7 +222,5 @@ pub(crate) fn dao_authxfer_process_instruction(
     // We do not need to check the amounts, since sum(input values) == sum(output values)
     // otherwise the money::transfer() call is invalid.
 
-    let mut update_data = vec![];
-    update_data.write_u8(DaoFunction::AuthMoneyTransfer as u8)?;
-    Ok(update_data)
+    Ok(vec![])
 }

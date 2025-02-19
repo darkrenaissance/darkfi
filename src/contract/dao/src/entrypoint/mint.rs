@@ -24,13 +24,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::DaoError,
     model::{DaoMintParams, DaoMintUpdate},
-    DaoFunction, DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS,
-    DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
+    DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_INFO_TREE,
+    DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
     DAO_CONTRACT_ZKAS_DAO_MINT_NS,
 };
 
@@ -83,7 +83,6 @@ pub(crate) fn dao_mint_process_instruction(
     // Create state update
     let update = DaoMintUpdate { dao_bulla: params.dao_bulla };
     let mut update_data = vec![];
-    update_data.write_u8(DaoFunction::Mint as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

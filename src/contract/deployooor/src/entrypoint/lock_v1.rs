@@ -24,12 +24,12 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::DeployError,
     model::{LockParamsV1, LockUpdateV1},
-    DeployFunction, DEPLOY_CONTRACT_LOCK_TREE,
+    DEPLOY_CONTRACT_LOCK_TREE,
 };
 
 /// `get_metadata` function for `Deploy::LockV1`
@@ -82,7 +82,6 @@ pub(crate) fn lock_process_instruction_v1(
 
     let update = LockUpdateV1 { contract_id };
     let mut update_data = vec![];
-    update_data.write_u8(DeployFunction::LockV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

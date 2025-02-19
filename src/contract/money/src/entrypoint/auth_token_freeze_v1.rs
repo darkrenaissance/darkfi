@@ -24,12 +24,12 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenFreezeUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::AuthTokenFreezeV1`
@@ -84,7 +84,6 @@ pub(crate) fn money_auth_token_freeze_process_instruction_v1(
     // Create a state update. We only need the new coin.
     let update = MoneyAuthTokenFreezeUpdateV1 { token_id: params.token_id };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::AuthTokenFreezeV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

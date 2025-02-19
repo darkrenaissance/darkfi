@@ -24,13 +24,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyGenesisMintParamsV1, MoneyGenesisMintUpdateV1, DARK_TOKEN_ID},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -143,7 +143,6 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     // Create a state update. We only need the new coins.
     let update = MoneyGenesisMintUpdateV1 { coins: new_coins };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::GenesisMintV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

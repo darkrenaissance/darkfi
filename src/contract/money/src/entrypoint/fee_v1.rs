@@ -32,16 +32,15 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyFeeParamsV1, MoneyFeeUpdateV1, DARK_TOKEN_ID},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
-    MONEY_CONTRACT_ZKAS_FEE_NS_V1,
+    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 
 /// `get_metadata` function for `Money::FeeV1`
@@ -191,7 +190,6 @@ pub(crate) fn money_fee_process_instruction_v1(
         fee: paid_fee,
     };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::FeeV1 as u8)?;
     update.encode(&mut update_data)?;
     // and return it
     Ok(update_data)

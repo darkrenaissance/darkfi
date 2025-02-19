@@ -25,16 +25,15 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1, DARK_TOKEN_ID},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::PoWRewardV1`
@@ -157,7 +156,6 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     let update =
         MoneyPoWRewardUpdateV1 { coin: params.output.coin, height: verifying_block_height };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::PoWRewardV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

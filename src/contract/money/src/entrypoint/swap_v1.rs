@@ -31,14 +31,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use super::transfer_v1::{money_transfer_get_metadata_v1, money_transfer_process_update_v1};
 use crate::{
     error::MoneyError,
     model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 
 /// `get_metadata` function for `Money::OtcSwapV1`
@@ -148,12 +147,8 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // Create a state update. We also use `MoneyTransferUpdateV1` because
     // they're essentially the same thing, just with a different transition
     // ruleset.
-    // FIXME: The function should not actually be written here. It should
-    //        be prepended by the host to enforce correctness. The host can
-    //        simply copy it from the payload.
     let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::OtcSwapV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

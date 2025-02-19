@@ -24,12 +24,12 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::AuthTokenMintV1`
@@ -79,7 +79,6 @@ pub(crate) fn money_auth_token_mint_process_instruction_v1(
     // Create a state update.
     let update = MoneyAuthTokenMintUpdateV1 {};
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::AuthTokenMintV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

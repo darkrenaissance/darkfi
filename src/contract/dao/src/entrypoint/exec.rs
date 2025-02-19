@@ -24,13 +24,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata, VecAuthCallCommit},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+    DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
     DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 
@@ -143,7 +143,6 @@ pub(crate) fn dao_exec_process_instruction(
     // Create state update
     let update = DaoExecUpdate { proposal_bulla: params.proposal_bulla };
     let mut update_data = vec![];
-    update_data.write_u8(DaoFunction::Exec as u8)?;
     update.encode(&mut update_data)?;
     Ok(update_data)
 }

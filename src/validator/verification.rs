@@ -412,9 +412,11 @@ pub async fn verify_producer_transaction(
     sig_table.push(sig_pub);
 
     // After getting the metadata, we run the "exec" function with the same runtime
-    // and the same payload.
+    // and the same payload. We keep the returned state update in a buffer, prefixed
+    // by the call function ID, enforcing the state update function in the contract.
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"exec\" call");
-    let state_update = runtime.exec(&payload)?;
+    let mut state_update = vec![call.data.data[0]];
+    state_update.append(&mut runtime.exec(&payload)?);
     debug!(target: "validator::verification::verify_producer_transaction", "Successfully executed \"exec\" call");
 
     // If that was successful, we apply the state update in the ephemeral overlay.
@@ -511,9 +513,11 @@ async fn apply_producer_transaction(
     let signature_public_key = *sig_pub.last().unwrap();
 
     // After getting the metadata, we run the "exec" function with the same runtime
-    // and the same payload.
+    // and the same payload. We keep the returned state update in a buffer, prefixed
+    // by the call function ID, enforcing the state update function in the contract.
     debug!(target: "validator::verification::apply_producer_transaction", "Executing \"exec\" call");
-    let state_update = runtime.exec(&payload)?;
+    let mut state_update = vec![call.data.data[0]];
+    state_update.append(&mut runtime.exec(&payload)?);
     debug!(target: "validator::verification::apply_producer_transaction", "Successfully executed \"exec\" call");
 
     // If that was successful, we apply the state update in the ephemeral overlay.
@@ -586,26 +590,25 @@ pub async fn verify_transaction(
         }
     }
 
+    // Write the transaction calls payload data
+    let mut payload = vec![];
+    tx.calls.encode_async(&mut payload).await?;
+
     // We'll also take note of all the circuits in a Vec so we can calculate their verification cost.
     let mut circuits_to_verify = vec![];
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
+        debug!(target: "validator::verification::verify_transaction", "Executing contract call {}", idx);
+
         // Transaction must not contain a Pow reward call
         if call.data.is_money_pow_reward() {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
 
-        debug!(target: "validator::verification::verify_transaction", "Executing contract call {}", idx);
-
-        // Write the actual payload data
-        let mut payload = vec![];
-        tx.calls.encode_async(&mut payload).await?;
-
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
-
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
@@ -661,9 +664,11 @@ pub async fn verify_transaction(
         sig_table.push(sig_pub);
 
         // After getting the metadata, we run the "exec" function with the same runtime
-        // and the same payload.
+        // and the same payload. We keep the returned state update in a buffer, prefixed
+        // by the call function ID, enforcing the state update function in the contract.
         debug!(target: "validator::verification::verify_transaction", "Executing \"exec\" call");
-        let state_update = runtime.exec(&payload)?;
+        let mut state_update = vec![call.data.data[0]];
+        state_update.append(&mut runtime.exec(&payload)?);
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"exec\" call");
 
         // If that was successful, we apply the state update in the ephemeral overlay.
@@ -808,13 +813,13 @@ async fn apply_transaction(
     let tx_hash = tx.hash();
     debug!(target: "validator::verification::apply_transaction", "Applying transaction {}", tx_hash);
 
+    // Write the transaction calls payload data
+    let mut payload = vec![];
+    tx.calls.encode_async(&mut payload).await?;
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         debug!(target: "validator::verification::apply_transaction", "Executing contract call {}", idx);
-
-        // Write the actual payload data
-        let mut payload = vec![];
-        tx.calls.encode_async(&mut payload).await?;
 
         debug!(target: "validator::verification::apply_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
@@ -828,9 +833,11 @@ async fn apply_transaction(
             idx as u8,
         )?;
 
-        // Run the "exec" function
+        // Run the "exec" function. We keep the returned state update in a buffer, prefixed
+        // by the call function ID, enforcing the state update function in the contract.
         debug!(target: "validator::verification::apply_transaction", "Executing \"exec\" call");
-        let state_update = runtime.exec(&payload)?;
+        let mut state_update = vec![call.data.data[0]];
+        state_update.append(&mut runtime.exec(&payload)?);
         debug!(target: "validator::verification::apply_transaction", "Successfully executed \"exec\" call");
 
         // If that was successful, we apply the state update in the ephemeral overlay

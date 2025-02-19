@@ -24,13 +24,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
+    DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 
@@ -170,7 +170,6 @@ pub(crate) fn dao_vote_process_instruction(
         DaoVoteUpdate { proposal_bulla: params.proposal_bulla, proposal_metadata, vote_nullifiers };
 
     let mut update_data = vec![];
-    update_data.write_u8(DaoFunction::Vote as u8)?;
     update.encode(&mut update_data)?;
     Ok(update_data)
 }

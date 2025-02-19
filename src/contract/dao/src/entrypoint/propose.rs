@@ -30,13 +30,13 @@ use darkfi_sdk::{
     tx::TransactionHash,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
-    DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
+    DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
     PROPOSAL_SNAPSHOT_CUTOFF_LIMIT,
 };
@@ -219,7 +219,6 @@ pub(crate) fn dao_propose_process_instruction(
     let update =
         DaoProposeUpdate { proposal_bulla: params.proposal_bulla, snapshot_coins, snapshot_nulls };
     let mut update_data = vec![];
-    update_data.write_u8(DaoFunction::Propose as u8)?;
     update.encode(&mut update_data)?;
     Ok(update_data)
 }

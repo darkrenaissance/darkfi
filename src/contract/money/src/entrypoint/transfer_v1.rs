@@ -31,13 +31,13 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
     model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -223,7 +223,6 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // At this point the state transition has passed, so we create a state update
     let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::TransferV1 as u8)?;
     update.encode(&mut update_data)?;
     // and return it
     Ok(update_data)

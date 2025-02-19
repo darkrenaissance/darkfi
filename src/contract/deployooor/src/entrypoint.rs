@@ -100,7 +100,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// This function attempts to write a given state update provided the previous
 /// steps of the contract call execution were all successful. It's the last in
 /// line, and assumes that the transaction/call was successful. The payload
-/// given to the function is the update data retrieved from `process_instruction()`.
+/// given to the function is the update data retrieved from `process_instruction()`,
+/// prefixed with the contract function.
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match DeployFunction::try_from(update_data[0])? {
         DeployFunction::DeployV1 => {
