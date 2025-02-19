@@ -70,7 +70,7 @@ impl Drk {
         }
         .to_func_id();
 
-        // Grab the mint autority key public coordinates
+        // Grab the mint authority key public coordinates
         let (mint_auth_x, mint_auth_y) = PublicKey::from_secret(mint_authority).xy();
 
         // Generate the token attributes

@@ -24,8 +24,11 @@ use std::{
 
 use arg::Args;
 use darkfi::{util::cli::ProgressInc, ANSI_LOGO};
-use darkfi_money_contract::model::TokenId;
-use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey};
+use darkfi_money_contract::{model::TokenId, MoneyFunction};
+use darkfi_sdk::crypto::{
+    contract_id::MONEY_CONTRACT_ID, poseidon_hash, BaseBlind, ContractId, FuncRef, PublicKey,
+    SecretKey,
+};
 use rand::rngs::OsRng;
 use rayon::iter::ParallelIterator;
 
@@ -58,6 +61,7 @@ struct DrkAddr {
 struct DrkToken {
     pub token_id: TokenId,
     pub secret: SecretKey,
+    pub blind: BaseBlind,
 }
 
 struct DrkContract {
@@ -101,9 +105,25 @@ impl Prefixable for DrkAddr {
 
 impl Prefixable for DrkToken {
     fn new() -> Self {
+        // Generate the mint authority secret key and blind
         let secret = SecretKey::random(&mut OsRng);
-        let token_id = TokenId::derive(secret);
-        Self { token_id, secret }
+        let blind = BaseBlind::random(&mut OsRng);
+
+        // Create the Auth FuncID
+        let func_id = FuncRef {
+            contract_id: *MONEY_CONTRACT_ID,
+            func_code: MoneyFunction::AuthTokenMintV1 as u8,
+        }
+        .to_func_id();
+
+        // Grab the mint authority user data
+        let (auth_x, auth_y) = PublicKey::from_secret(secret).xy();
+        let user_data = poseidon_hash([auth_x, auth_y]);
+
+        // Derive the Token ID
+        let token_id = TokenId::derive_from(func_id.inner(), user_data, blind.inner());
+
+        Self { token_id, secret, blind }
     }
 
     fn to_string(&self) -> String {
@@ -217,8 +237,8 @@ fn main() -> ExitCode {
             progress_.finish_and_clear();
 
             println!(
-                "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
-                tid.token_id, attempts, tid.secret,
+                "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\",\"blind\":\"{}\"}}",
+                tid.token_id, attempts, tid.secret, tid.blind
             );
         }
 

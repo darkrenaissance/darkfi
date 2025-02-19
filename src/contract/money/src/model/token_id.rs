@@ -29,7 +29,7 @@ use lazy_static::lazy_static;
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
 
-use super::{poseidon_hash, PublicKey, SecretKey};
+use super::poseidon_hash;
 
 lazy_static! {
     // Is this even needed? Not used elsewhere except here.
@@ -47,24 +47,8 @@ lazy_static! {
 pub struct TokenId(pallas::Base);
 
 impl TokenId {
-    /// Derives a `TokenId` from a `SecretKey` (mint authority)
-    // TODO: this got deprected from DEP 0003, but why? ain't that mean
-    // we don't allow users to hold mint keys with their secret?
-    //#[deprecated]
-    pub fn derive(mint_authority: SecretKey) -> Self {
-        let public_key = PublicKey::from_secret(mint_authority);
-        Self::derive_public(public_key)
-    }
-
-    /// Derives a `TokenId` from a `PublicKey`
-    // TODO: this got deprected from DEP 0003, but why? ain't that mean
-    // we don't allow users to hold mint keys with their secret?
-    //#[deprecated]
-    pub fn derive_public(public_key: PublicKey) -> Self {
-        let (x, y) = public_key.xy();
-        Self::derive_from(*TOKEN_ID_PREFIX, x, y)
-    }
-
+    /// Derives a `TokenId` from provided function id,
+    /// user data and blind.
     pub fn derive_from(
         func_id: pallas::Base,
         user_data: pallas::Base,
