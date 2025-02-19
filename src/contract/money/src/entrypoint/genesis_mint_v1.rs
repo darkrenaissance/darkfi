@@ -142,10 +142,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
 
     // Create a state update. We only need the new coins.
     let update = MoneyGenesisMintUpdateV1 { coins: new_coins };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::GenesisMintV1`

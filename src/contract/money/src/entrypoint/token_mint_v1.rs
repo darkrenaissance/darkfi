@@ -100,10 +100,7 @@ pub(crate) fn money_token_mint_process_instruction_v1(
 
     // Create a state update. We only need the new coin.
     let update = MoneyTokenMintUpdateV1 { coin: params.coin };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::TokenMintV1`

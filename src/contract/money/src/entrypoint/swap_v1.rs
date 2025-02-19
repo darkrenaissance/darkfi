@@ -31,7 +31,7 @@ use darkfi_sdk::{
     pasta::pallas,
     wasm, ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable};
+use darkfi_serial::{deserialize, serialize};
 
 use super::transfer_v1::{money_transfer_get_metadata_v1, money_transfer_process_update_v1};
 use crate::{
@@ -148,10 +148,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // they're essentially the same thing, just with a different transition
     // ruleset.
     let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::OtcSwapV1`

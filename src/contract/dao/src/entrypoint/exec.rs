@@ -142,9 +142,7 @@ pub(crate) fn dao_exec_process_instruction(
 
     // Create state update
     let update = DaoExecUpdate { proposal_bulla: params.proposal_bulla };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Dao::Exec`

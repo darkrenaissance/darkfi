@@ -168,10 +168,7 @@ pub(crate) fn dao_vote_process_instruction(
     // Create state update
     let update =
         DaoVoteUpdate { proposal_bulla: params.proposal_bulla, proposal_metadata, vote_nullifiers };
-
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Dao::Vote`

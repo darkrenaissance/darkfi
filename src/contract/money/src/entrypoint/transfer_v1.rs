@@ -222,10 +222,8 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
     // At this point the state transition has passed, so we create a state update
     let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
     // and return it
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::TransferV1`

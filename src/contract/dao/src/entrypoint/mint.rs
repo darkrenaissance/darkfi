@@ -82,10 +82,7 @@ pub(crate) fn dao_mint_process_instruction(
 
     // Create state update
     let update = DaoMintUpdate { dao_bulla: params.dao_bulla };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Dao::Mint`

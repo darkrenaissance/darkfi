@@ -218,9 +218,7 @@ pub(crate) fn dao_propose_process_instruction(
     // Create state update
     let update =
         DaoProposeUpdate { proposal_bulla: params.proposal_bulla, snapshot_coins, snapshot_nulls };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Dao::Propose`

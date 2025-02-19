@@ -78,10 +78,7 @@ pub(crate) fn money_auth_token_mint_process_instruction_v1(
 
     // Create a state update.
     let update = MoneyAuthTokenMintUpdateV1 {};
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::AuthTokenMintV1`

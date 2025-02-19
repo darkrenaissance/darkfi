@@ -83,10 +83,7 @@ pub(crate) fn money_auth_token_freeze_process_instruction_v1(
 
     // Create a state update. We only need the new coin.
     let update = MoneyAuthTokenFreezeUpdateV1 { token_id: params.token_id };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::AuthTokenFreezeV1`

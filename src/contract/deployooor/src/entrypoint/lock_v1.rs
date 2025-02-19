@@ -81,10 +81,7 @@ pub(crate) fn lock_process_instruction_v1(
     }
 
     let update = LockUpdateV1 { contract_id };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Deploy::LockV1`

@@ -189,10 +189,8 @@ pub(crate) fn money_fee_process_instruction_v1(
         height: verifying_block_height,
         fee: paid_fee,
     };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
     // and return it
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Money::FeeV1`

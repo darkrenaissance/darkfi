@@ -142,9 +142,7 @@ pub(crate) fn deploy_process_instruction_v1(
     }
 
     let update = DeployUpdateV1 { contract_id };
-    let mut update_data = vec![];
-    update.encode(&mut update_data)?;
-    Ok(update_data)
+    Ok(serialize(&update))
 }
 
 /// `process_update` function for `Deploy::DeployV1`
