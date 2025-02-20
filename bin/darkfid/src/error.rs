@@ -34,6 +34,8 @@ pub enum RpcError {
 
     // Contract-related errors
     ContractZkasDbNotFound = -32200,
+    ContractStateNotFound = -32201,
+    ContractStateKeyNotFound = -32202,
 
     // Misc errors
     PingFailed = -32300,
@@ -51,6 +53,8 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         RpcError::ParseError => "Parse error",
         // Contract-related errors
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
+        RpcError::ContractStateNotFound => "Records not found for given contract state",
+        RpcError::ContractStateKeyNotFound => "Value not found for given contract state key",
         // Misc errors
         RpcError::PingFailed => "Miner daemon ping error",
     };

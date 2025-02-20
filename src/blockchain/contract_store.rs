@@ -16,7 +16,7 @@ r* This program is distributed in the hope that it will be useful,
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
+use std::{collections::BTreeMap, io::Cursor};
 
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
@@ -206,6 +206,52 @@ impl ContractStore {
         }
 
         Ok(contracts)
+    }
+
+    /// Retrieve provided key value bytes from a contract's zkas sled tree.
+    pub fn get_state_tree_value(
+        &self,
+        db: &sled::Db,
+        contract_id: &ContractId,
+        tree_name: &str,
+        key: &[u8],
+    ) -> Result<Vec<u8>> {
+        debug!(target: "blockchain::contractstore", "Looking up state tree value for {}:{}", contract_id, tree_name);
+
+        // Grab the state tree
+        let state_tree = self.lookup(db, contract_id, tree_name)?;
+
+        // Grab the key value
+        match state_tree.get(key)? {
+            Some(value) => Ok(value.to_vec()),
+            None => Err(Error::DatabaseError(format!(
+                "State tree {}:{} doesn't contain key: {:?}",
+                contract_id, tree_name, key
+            ))),
+        }
+    }
+
+    /// Retrieve all records from a contract's zkas sled tree, as a `BTreeMap`.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_state_tree_records(
+        &self,
+        db: &sled::Db,
+        contract_id: &ContractId,
+        tree_name: &str,
+    ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>> {
+        debug!(target: "blockchain::contractstore", "Looking up state tree records for {}:{}", contract_id, tree_name);
+
+        // Grab the state tree
+        let state_tree = self.lookup(db, contract_id, tree_name)?;
+
+        // Retrieve its records
+        let mut ret = BTreeMap::new();
+        for record in state_tree.iter() {
+            let (key, value) = record.unwrap();
+            ret.insert(key.to_vec(), value.to_vec());
+        }
+
+        Ok(ret)
     }
 }
 

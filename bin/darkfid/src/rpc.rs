@@ -93,6 +93,8 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "blockchain.best_fork_next_block_height" => self.blockchain_best_fork_next_block_height(req.id, req.params).await,
             "blockchain.block_target" => self.blockchain_block_target(req.id, req.params).await,
             "blockchain.lookup_zkas" => self.blockchain_lookup_zkas(req.id, req.params).await,
+            "blockchain.get_contract_state" => self.blockchain_get_contract_state(req.id, req.params).await,
+            "blockchain.get_contract_state_key" => self.blockchain_get_contract_state_key(req.id, req.params).await,
             "blockchain.subscribe_blocks" => self.blockchain_subscribe_blocks(req.id, req.params).await,
             "blockchain.subscribe_txs" =>  self.blockchain_subscribe_txs(req.id, req.params).await,
             "blockchain.subscribe_proposals" => self.blockchain_subscribe_proposals(req.id, req.params).await,

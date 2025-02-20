@@ -90,7 +90,7 @@ impl DarkfiNode {
     // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
     pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 {
+        if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -257,7 +257,7 @@ impl DarkfiNode {
     //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/dev/darkfi/zkas/decoder/struct.ZkBinary.html)
     //   object
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["6Ef42L1KLZXBoxBuCDto7coi9DA2D2SRtegNqNU4sd74"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["Foo", "ABCD..."], ["Bar", "EFGH..."]], "id": 1}
     pub async fn blockchain_lookup_zkas(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
@@ -312,5 +312,111 @@ impl DarkfiNode {
         }
 
         JsonResponse::new(JsonValue::Array(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the blockchain database for a given contract state records.
+    // Returns the records value raw bytes as a `BTreeMap`.
+    //
+    // **Params:**
+    // * `array[0]`: base58-encoded contract ID string
+    // * `array[1]`: Contract tree name string
+    //
+    // **Returns:**
+    // * Records serialized `BTreeMap` encoded with base64
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_contract_state", "params": ["BZHK...", "tree"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    pub async fn blockchain_get_contract_state(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let contract_id = params[0].get::<String>().unwrap();
+        let contract_id = match ContractId::from_str(contract_id) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Error decoding string to ContractId: {}", e);
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+        };
+
+        let tree_name = params[1].get::<String>().unwrap();
+
+        match self.validator.blockchain.contracts.get_state_tree_records(
+            &self.validator.blockchain.sled_db,
+            &contract_id,
+            tree_name,
+        ) {
+            Ok(records) => JsonResponse::new(
+                JsonValue::String(base64::encode(&serialize_async(&records).await)),
+                id,
+            )
+            .into(),
+            Err(e) => {
+                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Failed fetching contract state records: {}", e);
+                server_error(RpcError::ContractStateNotFound, id, None)
+            }
+        }
+    }
+
+    // RPCAPI:
+    // Queries the blockchain database for a given contract state key raw bytes.
+    // Returns the record value raw bytes.
+    //
+    // **Params:**
+    // * `array[0]`: base58-encoded contract ID string
+    // * `array[1]`: Contract tree name string
+    // * `array[2]`: Key raw bytes, encoded with base64
+    //
+    // **Returns:**
+    // * Record value raw bytes encoded with base64
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_contract_state_key", "params": ["BZHK...", "tree", "ABCD..."], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    pub async fn blockchain_get_contract_state_key(
+        &self,
+        id: u16,
+        params: JsonValue,
+    ) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 3 ||
+            !params[0].is_string() ||
+            !params[1].is_string() ||
+            !params[2].is_string()
+        {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let contract_id = params[0].get::<String>().unwrap();
+        let contract_id = match ContractId::from_str(contract_id) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Error decoding string to ContractId: {}", e);
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+        };
+
+        let tree_name = params[1].get::<String>().unwrap();
+
+        let key_enc = params[2].get::<String>().unwrap().trim();
+        let Some(key) = base64::decode(key_enc) else {
+            error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Failed decoding base64 key");
+            return server_error(RpcError::ParseError, id, None)
+        };
+
+        match self.validator.blockchain.contracts.get_state_tree_value(
+            &self.validator.blockchain.sled_db,
+            &contract_id,
+            tree_name,
+            &key,
+        ) {
+            Ok(value) => JsonResponse::new(JsonValue::String(base64::encode(&value)), id).into(),
+            Err(e) => {
+                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Failed fetching contract state key value: {}", e);
+                server_error(RpcError::ContractStateKeyNotFound, id, None)
+            }
+        }
     }
 }
