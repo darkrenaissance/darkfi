@@ -90,10 +90,8 @@ impl ContractStore {
     ) -> Result<sled::Tree> {
         debug!(target: "blockchain::contractstore", "Looking up state tree for {}:{}", contract_id, tree_name);
 
-        let contract_id_bytes = serialize(contract_id);
-        let ptr = contract_id.hash_state_id(tree_name);
-
         // A guard to make sure we went through init()
+        let contract_id_bytes = serialize(contract_id);
         if !self.state.contains_key(&contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
@@ -103,6 +101,7 @@ impl ContractStore {
 
         // We assume the tree has been created already, so it should be listed
         // in this array. If not, that's an error.
+        let ptr = contract_id.hash_state_id(tree_name);
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
@@ -122,10 +121,8 @@ impl ContractStore {
     pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
         debug!(target: "blockchain::contractstore", "Removing state tree for {}:{}", contract_id, tree_name);
 
-        let contract_id_bytes = serialize(contract_id);
-        let ptr = contract_id.hash_state_id(tree_name);
-
         // A guard to make sure we went through init()
+        let contract_id_bytes = serialize(contract_id);
         if !self.state.contains_key(&contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
@@ -135,6 +132,7 @@ impl ContractStore {
 
         // We assume the tree has been created already, so it should be listed
         // in this array. If not, that's an error.
+        let ptr = contract_id.hash_state_id(tree_name);
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
@@ -258,13 +256,11 @@ impl ContractStoreOverlay {
     /// returned.
     pub fn init(&self, contract_id: &ContractId, tree_name: &str) -> Result<[u8; 32]> {
         debug!(target: "blockchain::contractstoreoverlay", "Initializing state overlay tree for {}:{}", contract_id, tree_name);
-
-        let contract_id_bytes = serialize(contract_id);
-        let ptr = contract_id.hash_state_id(tree_name);
         let mut lock = self.0.lock().unwrap();
 
         // See if there are existing state trees.
         // If not, just start with an empty vector.
+        let contract_id_bytes = serialize(contract_id);
         let mut state_pointers: Vec<[u8; 32]> =
             if lock.contains_key(SLED_CONTRACTS_TREE, &contract_id_bytes)? {
                 let bytes = lock.get(SLED_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
@@ -274,6 +270,7 @@ impl ContractStoreOverlay {
             };
 
         // If the db was never initialized, it should not be in here.
+        let ptr = contract_id.hash_state_id(tree_name);
         if state_pointers.contains(&ptr) {
             return Err(Error::ContractAlreadyInitialized)
         }
@@ -292,12 +289,10 @@ impl ContractStoreOverlay {
     /// return an error.
     pub fn lookup(&self, contract_id: &ContractId, tree_name: &str) -> Result<[u8; 32]> {
         debug!(target: "blockchain::contractstoreoverlay", "Looking up state tree for {}:{}", contract_id, tree_name);
-
-        let contract_id_bytes = serialize(contract_id);
-        let ptr = contract_id.hash_state_id(tree_name);
         let mut lock = self.0.lock().unwrap();
 
         // A guard to make sure we went through init()
+        let contract_id_bytes = serialize(contract_id);
         if !lock.contains_key(SLED_CONTRACTS_TREE, &contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
@@ -307,6 +302,7 @@ impl ContractStoreOverlay {
 
         // We assume the tree has been created already, so it should be listed
         // in this array. If not, that's an error.
+        let ptr = contract_id.hash_state_id(tree_name);
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
