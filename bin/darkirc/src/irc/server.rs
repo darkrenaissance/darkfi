@@ -248,7 +248,7 @@ impl IrcServer {
         let autojoin = parse_autojoin_channels(&contents)?;
 
         // Parse configured channels
-        let channels = parse_configured_channels(&contents)?;
+        let configured_channels = parse_configured_channels(&contents)?;
 
         // Parse configured contacts
         let (contacts, saltbox) = parse_configured_contacts(&contents)?;
@@ -256,7 +256,16 @@ impl IrcServer {
         // Parse RLN identity
         let rln_identity = parse_rln_identity(&contents)?;
 
-        // FIXME: This will remove clients' joined channels. They need to stay.
+        // Persist unconfigured channels (joined from client, or autojoined without config)
+        let channels = {
+            let old_channels = self.channels.read().await.clone();
+            let unconfigured_channels: HashMap<String, IrcChannel> = old_channels
+                .into_iter()
+                .filter(|(chan_str, _)| !configured_channels.contains_key(chan_str))
+                .collect();
+            configured_channels.into_iter().chain(unconfigured_channels).collect()
+        };
+
         // Only if everything is fine, replace.
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
