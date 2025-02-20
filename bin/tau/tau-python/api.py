@@ -78,8 +78,7 @@ async def fetch_archive_task(task_refid, month_ts, server_name, port):
     return await query("fetch_archive_task", [task_refid, str(month_ts)], server_name, int(port))
 
 async def add_task_comment(refid, comment, server_name, port):
-    await query("set_comment", [refid, comment], server_name, int(port))
-    return True
+    return await query("set_comment", [refid, comment], server_name, int(port))
 
 async def export_to(path, server_name, port):
     return await query("export", [path], server_name, int(port))

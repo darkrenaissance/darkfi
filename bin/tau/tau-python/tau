@@ -460,7 +460,8 @@ async def comment(refid, args, server_name, port):
         exit(-1)
 
     if not await api.add_task_comment(refid, comment, server_name, port):
-        return -1
+        print("You don't have write access")
+        exit(-1)
 
     # Two json rpcs back to back cause Unexpected EOF error
     time.sleep(0.1)
