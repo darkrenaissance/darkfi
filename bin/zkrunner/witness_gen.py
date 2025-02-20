@@ -22,7 +22,7 @@ Here we generate them for opcodes.zk
 This reflects /darkfi/tests/zkvm_opcodes.rs
 """
 import json
-from darkfi_sdk.pasta import Ep, Fp, Fq, nullifier_k, EpAffine, mod_r_p
+from darkfi_sdk.pasta import Ep, Fp, Fq, nullifier_k, EpAffine, fp_mod_fv
 from darkfi_sdk.crypto import poseidon_hash, pedersen_commitment_u64
 from darkfi_sdk.merkle import MerkleTree
 
@@ -56,16 +56,16 @@ path = tree.witness(leaf_pos, 0)
 
 # Elliptic curve multiplication
 ephem_secret = Fp.random()
-pubkey = Ep.from_affine(nullifier_k()) * mod_r_p(ephem_secret)
+pubkey = Ep.from_affine(nullifier_k()) * fp_mod_fv(ephem_secret)
 
-ephem_public = pubkey * mod_r_p(ephem_secret)
+ephem_public = pubkey * fp_mod_fv(ephem_secret)
 ephem_x, ephem_y = EpAffine.from_projective(ephem_public).coordinates()
 
 value_commit = pedersen_commitment_u64(value, value_blind)
 value_coords = EpAffine.from_projective(value_commit).coordinates()
 d = poseidon_hash([Fp.one(), blind, value_coords[0], value_coords[1]])
 
-public = Ep.from_affine(nullifier_k()) * mod_r_p(secret)
+public = Ep.from_affine(nullifier_k()) * fp_mod_fv(secret)
 pub_x, pub_y = EpAffine.from_projective(public).coordinates()
 
 # Create the object representing the JSON witnesses file.
