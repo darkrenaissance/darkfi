@@ -408,7 +408,7 @@ impl EventGraph {
                         {
                             debug!(
                                 target: "event_graph::dag_sync()",
-                                "Found upper missing parent event{}", upper_parent,
+                                "Found upper missing parent event {}", upper_parent,
                             );
                             missing_parents.insert(*upper_parent);
                         }

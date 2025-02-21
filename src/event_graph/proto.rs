@@ -390,7 +390,7 @@ impl ProtocolEventGraph {
                             {
                                 debug!(
                                     target: "event_graph::protocol::handle_event_put()",
-                                    "Found upper missing parent event{}", upper_parent,
+                                    "Found upper missing parent event {}", upper_parent,
                                 );
                                 missing_parents.insert(*upper_parent);
                             }
