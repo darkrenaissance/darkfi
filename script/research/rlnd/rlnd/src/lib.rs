@@ -23,7 +23,10 @@ use smol::lock::Mutex;
 use url::Url;
 
 use darkfi::{
-    rpc::server::{listen_and_serve, RequestHandler},
+    rpc::{
+        server::{listen_and_serve, RequestHandler},
+        settings::RpcSettings,
+    },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -108,12 +111,12 @@ impl Rlnd {
     }
 
     /// Start the DarkFi RLN state management daemon in the given executor, using the provided
-    /// JSON-RPC listen urls.
+    /// JSON-RPC configurations.
     pub async fn start(
         &self,
         executor: &ExecutorPtr,
-        private_rpc_listen: &Url,
-        public_rpc_listen: &Url,
+        private_rpc_settings: &RpcSettings,
+        public_rpc_settings: &RpcSettings,
     ) -> Result<()> {
         info!(target: "rlnd::Rlnd::start", "Starting Darkfi RLN state management daemon...");
 
@@ -127,7 +130,7 @@ impl Rlnd {
         info!(target: "rlnd::Rlnd::start", "Starting private JSON-RPC server");
         let node_ = self.node.clone();
         self.private_rpc_task.clone().start(
-            listen_and_serve::<PrivateRpcHandler>(private_rpc_listen.clone(), self.node.clone(), None, executor.clone()),
+            listen_and_serve::<PrivateRpcHandler>(private_rpc_settings.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <RlnNode as RequestHandler<PrivateRpcHandler>>::stop_connections(&node_).await,
@@ -142,7 +145,7 @@ impl Rlnd {
         info!(target: "rlnd::Rlnd::start", "Starting publicly exposed JSON-RPC server");
         let node_ = self.node.clone();
         self.public_rpc_task.clone().start(
-            listen_and_serve::<PublicRpcHandler>(public_rpc_listen.clone(), self.node.clone(), None, executor.clone()),
+            listen_and_serve::<PublicRpcHandler>(public_rpc_settings.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <RlnNode as RequestHandler<PublicRpcHandler>>::stop_connections(&node_).await,

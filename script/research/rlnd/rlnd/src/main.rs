@@ -23,7 +23,7 @@ use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
-use darkfi::{async_daemonize, cli_desc, Result};
+use darkfi::{async_daemonize, cli_desc, rpc::settings::RpcSettingsOpt, Result};
 
 use rlnd::Rlnd;
 
@@ -42,13 +42,13 @@ struct Args {
     /// Path to the database directory
     database: String,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:25637")]
-    /// Private JSON-RPC listen URL
-    private_rpc_listen: Url,
+    #[structopt(flatten)]
+    /// Private JSON-RPC settings
+    private_rpc: RpcSettingsOpt,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:25638")]
-    /// Publicly exposed JSON-RPC listen URL
-    public_rpc_listen: Url,
+    #[structopt(flatten)]
+    /// Publicly exposed JSON-RPC settings
+    public_rpc: RpcSettingsOpt,
 
     #[structopt(short, long, default_value = "tcp://127.0.0.1:26660")]
     /// darkirc JSON-RPC endpoint
@@ -71,7 +71,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let daemon = Rlnd::init(&args.database, &args.endpoint, &ex).await?;
 
     // Start the daemon
-    daemon.start(&ex, &args.private_rpc_listen, &args.public_rpc_listen).await?;
+    daemon.start(&ex, &args.private_rpc.into(), &args.public_rpc.into()).await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
