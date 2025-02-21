@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt, time::UNIX_EPOCH};
+use std::{
+    fmt,
+    time::{Duration, UNIX_EPOCH},
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -316,9 +319,64 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
     }
 }
 
+/// Formats a `Duration` into a user-friendly format using days, hours, minutes, and seconds,
+/// and returns the formatted string.
+///
+/// Durations less than one minute include fractional seconds with nanosecond precision (up to 9 decimal places),
+/// while durations of one minute or longer display as whole seconds, rounded to the nearest second.
+///
+/// The output format includes the following components:
+/// - `{days}d` for days
+/// - `{hours}h` for hours
+/// - `{minutes}m` for minutes
+/// - `{seconds}s` for seconds
+///
+/// When all components are non-zero, the format appears as:
+/// ```plaintext
+/// {days}d {hours}h {minutes}m {seconds}s
+/// ```
+pub fn fmt_duration(duration: Duration) -> String {
+    let total_secs = duration.as_secs_f64();
+
+    // Calculate each time component
+    let days = (total_secs / 86400.0).floor() as u64;
+    let hours = ((total_secs % 86400.0) / 3600.0).floor() as u64;
+    let minutes = ((total_secs % 3600.0) / 60.0).floor() as u64;
+
+    // Calculate fractional seconds (rounding to nanosecond precision)
+    let seconds = (total_secs % 60.0 * 1_000_000_000.0).round() / 1_000_000_000.0;
+
+    let mut parts = Vec::new();
+
+    // Include non-zero components for dys, hours and minutes
+    if days > 0 {
+        parts.push(format!("{}d", days));
+    }
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+
+    // Include seconds if they are non-zero or if all other components are zero (i.e., 0s)
+    if seconds > 0.0 || (days == 0 && hours == 0 && minutes == 0) {
+        // For durations shorter than 1 minute, include fractional seconds up to 9 decimal places
+        if days == 0 && hours == 0 && minutes == 0 && seconds.fract() != 0.0 {
+            parts.push(format!("{:.9}s", seconds));
+        } else {
+            // Otherwise, include rounded whole seconds
+            parts.push(format!("{}s", seconds.round() as u64));
+        }
+    }
+
+    parts.join(" ")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DateTime, Timestamp};
+    use super::{fmt_duration, DateTime, Timestamp};
+    use std::time::Duration;
 
     #[test]
     fn check_ts_add_overflow() {
@@ -398,5 +456,44 @@ mod tests {
             let result = DateTime::from_timestamp_str(timestamp_str);
             assert!(result.is_err(), "Expected error for invalid timestamp '{}'", timestamp_str);
         }
+    }
+    #[test]
+    /// Tests the `fmt_duration` function to ensure it correctly formats durations.
+    pub fn test_fmt_duration() {
+        // Zero duration (edge case)
+        let duration = Duration::new(0, 0);
+        assert_eq!(fmt_duration(duration), "0s");
+
+        // Small durations with fractional seconds
+        let duration = Duration::new(0, 987654321);
+        assert_eq!(fmt_duration(duration), "0.987654321s");
+
+        // Exactly 1 second
+        let duration = Duration::new(1, 0);
+        assert_eq!(fmt_duration(duration), "1s");
+
+        // Exactly 59.987654321 seconds (just under a minute)
+        let duration = Duration::new(59, 987654321);
+        assert_eq!(fmt_duration(duration), "59.987654321s");
+
+        // Exactly 1 minute
+        let duration = Duration::new(60, 0);
+        assert_eq!(fmt_duration(duration), "1m");
+
+        // 1 minute and 1 second
+        let duration = Duration::new(61, 0);
+        assert_eq!(fmt_duration(duration), "1m 1s");
+
+        // 1 hour
+        let duration = Duration::new(3600, 0);
+        assert_eq!(fmt_duration(duration), "1h");
+
+        // 1 hour, 15 minutes, and 37 seconds
+        let duration = Duration::new(4537, 0);
+        assert_eq!(fmt_duration(duration), "1h 15m 37s");
+
+        // Large duration with rounded seconds
+        let duration = Duration::new((12 * 86400) + (11 * 3600) + (59 * 60) + 59, 0);
+        assert_eq!(fmt_duration(duration), "12d 11h 59m 59s");
     }
 }
