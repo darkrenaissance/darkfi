@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use log::{debug, error, info, warn};
 use tinyjson::JsonValue;
@@ -32,7 +32,7 @@ use darkfi::{
         },
     },
     system::{Publisher, StoppableTask, StoppableTaskPtr},
-    util::encoding::base64,
+    util::{encoding::base64, time::fmt_duration},
     Error, Result,
 };
 use darkfi_serial::deserialize_async;
@@ -98,12 +98,18 @@ impl Explorerd {
             current_height = 0;
             info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully reset explorer database based on set reset parameter");
         } else if reorg_detected {
+            // Record the start time to measure the duration of potential reorg
+            let start_reorg_time = Instant::now();
+
+            // Process reorg
             current_height =
                 self.process_sync_blocks_reorg(last_synced_height, last_darkfid_height).await?;
-            // Log only if a reorg occurred
+
+            // Log only if a reorg occurred (i.e., the explorer wasn't merely catching up to Darkfi node blocks)
             if current_height != last_synced_height {
-                info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height}");
+                info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
             }
+
             // Prepare to sync the next block after reorg if not from genesis height
             if current_height != 0 {
                 current_height += 1;
@@ -113,8 +119,16 @@ impl Explorerd {
             current_height += 1;
         }
 
+        // Record the sync start time to measure the total block sync duration
+        let sync_start_time = Instant::now();
+        // Track the number of blocks synced for reporting
+        let mut blocks_synced = 0;
+
         // Sync blocks until the explorer is up to date with the last confirmed block
         while current_height <= last_darkfid_height {
+            // Record the start time to measure the duration it took to sync the block
+            let block_sync_start = Instant::now();
+
             // Retrieve the block from darkfi node by height
             let block = match self.get_darkfid_block_by_height(current_height).await {
                 Ok(r) => r,
@@ -136,13 +150,26 @@ impl Explorerd {
                 ))
             };
 
-            info!(target: "explorerd::rpc_blocks::sync_blocks", "Synced block {current_height}");
+            // TODO: Change to debug
+            info!(
+                target: "explorerd::rpc_blocks::sync_blocks",
+                "Synced block {current_height} [{}]",
+                fmt_duration(block_sync_start.elapsed())
+            );
 
             // Increment the current height to sync the next block
             current_height += 1;
+            // Increment the count of successfully synced blocks
+            blocks_synced += 1;
         }
 
-        info!(target: "explorerd::rpc_blocks::sync_blocks", "Completed sync, total number of explorer blocks: {}", self.service.db.blockchain.blocks.len());
+        info!(
+            target: "explorerd::rpc_blocks::sync_blocks",
+            "Successfully synced {} blocks: explorer blocks total {} [{}]",
+            blocks_synced,
+            self.service.db.blockchain.blocks.len(),
+            fmt_duration(sync_start_time.elapsed()),
+        );
 
         Ok(())
     }
@@ -492,10 +519,17 @@ pub async fn subscribe_blocks(
                                 // Calculate the reset height
                                 let reset_height = darkfid_block_height.saturating_sub(1);
 
+                                // Record the start time to measure the duration of the reorg
+                                let start_reorg_time = Instant::now();
+
                                 // Execute the reorg by resetting the explorer state to reset height
                                 explorer.service.reset_explorer_state(reset_height)?;
-                                info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height}");
+                                info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
                             }
+
+
+                            // Record the start time to measure the duration to store the block
+                            let start_reorg_time = Instant::now();
 
                             if let Err(e) = explorer.service.put_block(&darkfid_block).await {
                                 return Err(Error::DatabaseError(format!(
@@ -503,7 +537,7 @@ pub async fn subscribe_blocks(
                                 )))
                             }
 
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {}", darkfid_block.header.height );
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {} [{}]", darkfid_block.header.height, fmt_duration(start_reorg_time.elapsed()));
 
                             // Process the next block
                             height = darkfid_block.header.height;
