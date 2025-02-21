@@ -1,0 +1,78 @@
+## damd configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# JSON-RPC settings
+[rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:34780"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+# P2P network settings
+[net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/damd"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/damd/p2p_hostlist.tsv"
+
+# P2P accept addresses the instance listens on for inbound connections
+#inbound = ["tcp+tls://0.0.0.0:34781"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+#external_addrs = []
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = []
+
+# Whitelisted network transports for outbound connections
+#allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Inbound connections slots number, this many active inbound connections
+# will be allowed. (This does not include manual or outbound connections)
+#inbound_connections = 8
+
+## White connection percent
+# gold_connect_count = 2
+
+## White connection percent
+# white_connect_percent = 70
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = false
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5

@@ -1,0 +1,20 @@
+[package]
+name = "dam-cli"
+version = "0.4.1"
+description = "CLI-utility to control a Denial-of-service Analysis Multitool daemon."
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+# Darkfi
+darkfi = {path = "../../../../", features = ["async-sdk", "rpc"]}
+darkfi-serial = "0.4.2"
+
+# Misc
+clap = {version = "4.4.11", features = ["derive"]}
+smol = "2.0.2"
+url = "2.5.4"
