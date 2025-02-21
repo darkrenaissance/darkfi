@@ -150,8 +150,7 @@ impl Explorerd {
                 ))
             };
 
-            // TODO: Change to debug
-            info!(
+            debug!(
                 target: "explorerd::rpc_blocks::sync_blocks",
                 "Synced block {current_height} [{}]",
                 fmt_duration(block_sync_start.elapsed())
