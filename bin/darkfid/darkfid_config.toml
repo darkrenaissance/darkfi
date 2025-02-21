@@ -73,8 +73,14 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/darkfid/localnet"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
+
 # P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:8242"]
+#inbound = ["tcp+tls://0.0.0.0:8242"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
@@ -187,9 +193,15 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Testnet P2P network settings
 [network_config."testnet".net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/darkfid/testnet"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/darkfid/testnet/p2p_hostlist.tsv"
+
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tcp+tls://0.0.0.0:8342"]
+#inbound = ["tcp+tls://0.0.0.0:8342"]
 # IPv6 version:
 #inbound = ["tcp+tls://[::]:8342"]
 # Combined:
@@ -305,9 +317,15 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Mainnet P2P network settings
 [network_config."mainnet".net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/darkfid/mainnet"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/darkfid/mainnet/p2p_hostlist.tsv"
+
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tcp+tls://0.0.0.0:8442"]
+#inbound = ["tcp+tls://0.0.0.0:8442"]
 # IPv6 version:
 #inbound = ["tcp+tls://[::]:8442"]
 # Combined:

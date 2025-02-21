@@ -181,7 +181,7 @@ impl DarkfiNode {
 
     // RPCAPI:
     // Initializes a subscription to p2p dnet events.
-    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
     // new network events to the subscriber.
     //
     // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
