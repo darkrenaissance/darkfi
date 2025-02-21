@@ -46,6 +46,8 @@ pub type MinerNodePtr = Arc<MinerNode>;
 pub struct MinerNode {
     /// PoW miner number of threads to use
     threads: usize,
+    /// Stop mining at this height
+    stop_at_height: u32,
     /// Sender to stop miner threads
     sender: Sender<()>,
     /// Receiver to stop miner threads
@@ -55,8 +57,19 @@ pub struct MinerNode {
 }
 
 impl MinerNode {
-    pub fn new(threads: usize, sender: Sender<()>, stop_signal: Receiver<()>) -> MinerNodePtr {
-        Arc::new(Self { threads, sender, stop_signal, rpc_connections: Mutex::new(HashSet::new()) })
+    pub fn new(
+        threads: usize,
+        stop_at_height: u32,
+        sender: Sender<()>,
+        stop_signal: Receiver<()>,
+    ) -> MinerNodePtr {
+        Arc::new(Self {
+            threads,
+            stop_at_height,
+            sender,
+            stop_signal,
+            rpc_connections: Mutex::new(HashSet::new()),
+        })
     }
 }
 
@@ -76,14 +89,14 @@ impl Minerd {
     ///
     /// Corresponding communication channels are setup to generate a new `MinerNode`,
     /// and a new task is generated to handle the JSON-RPC API.
-    pub fn init(threads: usize) -> MinerdPtr {
+    pub fn init(threads: usize, stop_at_height: u32) -> MinerdPtr {
         info!(target: "minerd::Minerd::init", "Initializing a new mining daemon...");
 
         // Initialize the smol channels to send signal between the threads
         let (sender, stop_signal) = smol::channel::bounded(1);
 
         // Generate the node
-        let node = MinerNode::new(threads, sender, stop_signal);
+        let node = MinerNode::new(threads, stop_at_height, sender, stop_signal);
 
         // Generate the JSON-RPC task
         let rpc_task = StoppableTask::new();
@@ -189,7 +202,7 @@ fn minerd_programmatic_control() -> Result<()> {
         .finish(|| {
             smol::block_on(async {
                 // Initialize a daemon
-                let daemon = Minerd::init(threads);
+                let daemon = Minerd::init(threads, 0);
 
                 // Start it
                 daemon.start(&ex, &rpc_settings);

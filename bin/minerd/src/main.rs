@@ -45,6 +45,10 @@ struct Args {
     /// PoW miner number of threads to use
     threads: usize,
 
+    #[structopt(long, default_value = "0")]
+    /// Refuse mining at given height (0 mines forever)
+    stop_at_height: u32,
+
     #[structopt(short, long)]
     /// Set log file to ouput into
     log: Option<String>,
@@ -57,7 +61,7 @@ struct Args {
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "minerd", "Starting DarkFi Mining Daemon...");
-    let daemon = Minerd::init(args.threads);
+    let daemon = Minerd::init(args.threads, args.stop_at_height);
     daemon.start(&ex, &args.rpc.into());
 
     // Signal handling for graceful termination.

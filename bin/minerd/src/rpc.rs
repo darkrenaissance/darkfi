@@ -104,6 +104,12 @@ impl MinerNode {
         let block_hash = block.hash();
         info!(target: "minerd::rpc", "Received request to mine block {} for target: {}", block_hash, target);
 
+        // If we have a requested mining height, we'll keep dropping here.
+        if self.stop_at_height > 0 && block.header.height >= self.stop_at_height {
+            info!(target: "minerd::rpc", "Reached requested mining height {}", self.stop_at_height);
+            return server_error(RpcError::MiningFailed, id, None)
+        }
+
         // Check if another request is being processed
         if let Some(e) = self.abort_pending(id).await {
             return e
