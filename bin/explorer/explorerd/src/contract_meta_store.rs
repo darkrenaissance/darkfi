@@ -18,7 +18,7 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use log::{debug, info};
+use log::debug;
 use sled_overlay::{sled, SledDbOverlay};
 
 use darkfi::{blockchain::SledDbOverlayPtr, Error, Result};
@@ -221,7 +221,7 @@ impl ContractMetadataStoreOverlay {
                 key.as_bytes(),
                 source_file.content.as_bytes(),
             )?;
-            info!(target: "explorerd::contract_meta_store::insert_source", "Inserted contract source for path {}", key);
+            debug!(target: "explorerd::contract_meta_store::insert_source", "Inserted contract source for path {}", key);
         }
 
         // Commit the changes
@@ -286,7 +286,7 @@ impl ContractMetadataStoreOverlay {
                 contract_id.to_string().as_bytes(),
                 &serialized_metadata,
             )?;
-            info!(target: "explorerd::contract_meta_store::insert_metadata",
+            debug!(target: "explorerd::contract_meta_store::insert_metadata",
                 "Inserted contract metadata for contract_id {}: {metadata:?}", contract_id.to_string());
         }
 

@@ -195,7 +195,7 @@ impl ExplorerService {
 
             // Add source code into the `ContractMetaStore`
             self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
-            info!("Loaded contract source for contract {}", contract_id_str.to_string());
+            info!(target: "explorerd: load_native_contract_sources", "Successfully loaded contract source for native contract {}", contract_id_str.to_string());
         }
         Ok(())
     }
@@ -223,6 +223,7 @@ impl ExplorerService {
 
         // Load contract metadata into the `ContractMetaStore`
         self.db.contract_meta_store.insert_metadata(&contract_ids, &metadatas)?;
+        info!(target: "explorerd: load_native_contract_metadata", "Successfully loaded metadat for native contracts");
 
         Ok(())
     }
