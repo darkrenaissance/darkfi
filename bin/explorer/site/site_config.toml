@@ -17,20 +17,20 @@
 
 # Localnet Configuration
 [localnet]
-EXPLORER_RPC_URL = "127.0.0.1"
-EXPLORER_RPC_PORT = 14567
+explorer_rpc_url = "127.0.0.1"
+explorer_rpc_port = 14567
 
-# Devnet Configuration
+# devnet configuration
 [devnet]
-EXPLORER_RPC_URL = "TODO"
-EXPLORER_RPC_PORT = "TODO"
+explorer_rpc_url = "TODO"
+explorer_rpc_port = "TODO"
 
-# Testnet Configuration
+# testnet configuration
 [testnet]
-EXPLORER_RPC_URL = "TODO"
-EXPLORER_RPC_PORT = "TODO"
+explorer_rpc_url = "TODO"
+explorer_rpc_port = "TODO"
 
-# Mainnet Configuration
+# mainnet configuration
 [mainnet]
-EXPLORER_RPC_URL = "TODO"
-EXPLORER_RPC_PORT = "TODO"
+explorer_rpc_url = "TODO"
+explorer_rpc_port = "TODO"

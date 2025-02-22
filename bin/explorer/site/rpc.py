@@ -78,7 +78,7 @@ async def query(method, params):
      returning the result of the query or raising an error if the request fails.
     """
     # Create the channel to send RPC request
-    channel = await create_channel(current_app.config['EXPLORER_RPC_URL'], current_app.config['EXPLORER_RPC_PORT'])
+    channel = await create_channel(current_app.config['explorer_rpc_url'], current_app.config['explorer_rpc_port'])
 
     # Prepare request
     request = {

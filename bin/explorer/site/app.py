@@ -110,7 +110,7 @@ def load_toml_config(app, env="localnet", config_path="site_config.toml"):
 
     # Load the environment specific configurations into the Flask app's config object
     for key, value in config[env].items():
-        app.config[key.upper()] = value
+        app.config[key] = value
 
     # Print the loaded configuration for debugging or confirmation purposes
     print("\n" + "=" * 40)
@@ -118,7 +118,7 @@ def load_toml_config(app, env="localnet", config_path="site_config.toml"):
     print("=" * 40)
 
     for key in config[env]:
-        print(f"{key.upper()} = {app.config[key.upper()]}")
+        print(f"{key} = {app.config[key]}")
 
     print("=" * 40 + "\n")
 
