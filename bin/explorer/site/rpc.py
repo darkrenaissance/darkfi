@@ -25,11 +25,7 @@ and handle responses from the server.
 
 import asyncio, json, random
 
-from flask import abort
-
-# DarkFi explorer daemon JSON-RPC configuration
-URL = "127.0.0.1"
-PORT = 14567
+from flask import abort, current_app
 
 class Channel:
     """Class representing the channel with the JSON-RPC server."""
@@ -82,7 +78,7 @@ async def query(method, params):
      returning the result of the query or raising an error if the request fails.
     """
     # Create the channel to send RPC request
-    channel = await create_channel(URL, PORT)
+    channel = await create_channel(current_app.config['EXPLORER_RPC_URL'], current_app.config['EXPLORER_RPC_PORT'])
 
     # Prepare request
     request = {
