@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_receive_proposal"],"struct":["ProposalMessage","ProtocolProposalHandler"],"type":["ProtocolProposalHandlerPtr"]};
