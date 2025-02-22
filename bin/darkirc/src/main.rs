@@ -191,10 +191,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let public = secret.public_key();
         let secret = bs58::encode(secret.to_bytes()).into_string();
         let public = bs58::encode(public.to_bytes()).into_string();
-        println!("Place this in your config file:\n");
-        println!("[crypto]");
-        println!("#dm_chacha_public = \"{}\"", public);
+
+        println!(
+            "Place this in your config file under your contact, you can reuse this key for multiple contacts\n"
+        );
+        println!("[contact.\"satoshi\"]");
+        println!("dm_chacha_public = \"YOUR_CONTACT_PUBLIC_KEY\"");
         println!("dm_chacha_secret = \"{}\"", secret);
+        println!("#my_dm_chacha_public = \"{}\"", public);
         return Ok(())
     }
 
@@ -251,7 +255,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         // Parse configured contacts
         let contacts = list_configured_contacts(&contents)?;
 
-        for (name, public_key) in contacts {
+        for (name, (public_key, _)) in contacts {
             println!("{}: {}", name, bs58::encode(public_key.as_bytes()).into_string())
         }
         return Ok(())

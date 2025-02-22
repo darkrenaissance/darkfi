@@ -158,16 +158,20 @@ topic = "LunarDAO talk"
 ## You can generate a keypair with: darkirc --gen-chacha-keypair
 ## and replace the secret key below with the generated one.
 ## **You should never share this secret key with anyone**
-#[crypto]
-#dm_chacha_secret = "AKfyoKxnHb8smqP2zt9BVvXkcN7pm9GnqqyuYRmxmWtR"
 
 ## This is where you put other people's public keys. The format is:
 ## [contact."nickname"]. "nickname" can be anything you want.
 ## This is how they will appear in your IRC client when they send you a DM.
+## set their public key to dm_chacha_public and
+## set your secret key to dm_chacha_secret
+## you can set a separate secret key for each contact
+
 ##
 ## Example (set as many as you want):
 #[contact."satoshi"]
 #dm_chacha_public = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
+#dm_chacha_secret = "A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC"
 #
 #[contact."anon"]
 #dm_chacha_public = "7iTddcopP2pkvszFjbFUr7MwTcMSKZkYP6zUan22pxfX"
+#dm_chacha_secret = "E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr"

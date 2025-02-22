@@ -49,7 +49,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, ChaChaBox, IrcChannel, IrcContact, Priv, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -86,8 +86,6 @@ pub struct IrcServer {
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     /// Configured RLN identity
     pub rln_identity: RwLock<Option<RlnIdentity>>,
-    /// Saltbox used to encrypt our nick in direct messages
-    saltbox: RwLock<Option<Arc<ChaChaBox>>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
     /// IRC server Password
@@ -218,7 +216,6 @@ impl IrcServer {
             autojoin: RwLock::new(Vec::new()),
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
-            saltbox: RwLock::new(None),
             rln_identity: RwLock::new(None),
             clients: Mutex::new(HashMap::new()),
             password,
@@ -251,7 +248,7 @@ impl IrcServer {
         let configured_channels = parse_configured_channels(&contents)?;
 
         // Parse configured contacts
-        let (contacts, saltbox) = parse_configured_contacts(&contents)?;
+        let contacts = parse_configured_contacts(&contents)?;
 
         // Parse RLN identity
         let rln_identity = parse_rln_identity(&contents)?;
@@ -270,7 +267,6 @@ impl IrcServer {
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
-        *self.saltbox.write().await = saltbox;
         *self.rln_identity.write().await = rln_identity;
 
         Ok(())
@@ -401,20 +397,15 @@ impl IrcServer {
         };
 
         if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
-            if let Some(saltbox) = &contact.saltbox {
-                // We will use dummy channel and nick values of MAX_NICK_LEN,
-                // since they are not used, so all encrypted messages look the same.
-                *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
-                // We will encrypt the dummy nick value using our own self saltbox,
-                // so we can identify our messages. We can safely unwrap here since
-                // we know that if contacts exist, our self saltbox does as well.
-                *privmsg.nick() = saltbox::encrypt(
-                    self.saltbox.read().await.as_ref().unwrap(),
-                    &[0x00; MAX_NICK_LEN],
-                );
-                *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
-                debug!("Successfully encrypted message for {}", name);
-            }
+            let (saltbox, self_saltbox) = &contact.saltboxes;
+            // We will use dummy channel and nick values of MAX_NICK_LEN,
+            // since they are not used, so all encrypted messages look the same.
+            *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+            // We will encrypt the dummy nick value using our own self saltbox,
+            // so we can identify our messages.
+            *privmsg.nick() = saltbox::encrypt(self_saltbox, &[0x00; MAX_NICK_LEN]);
+            *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
+            debug!("Successfully encrypted message for {}", name);
         };
     }
 
@@ -466,21 +457,15 @@ impl IrcServer {
         }
 
         for (name, contact) in self.contacts.read().await.iter() {
-            let Some(saltbox) = &contact.saltbox else { continue };
+            let (saltbox, self_saltbox) = &contact.saltboxes;
 
             if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
                 continue
             };
 
             // Since everyone encrypts the dummy nick value with their self saltbox,
-            // we try to decrypt using our, to identify our messages. We can safely
-            // unwrap here since we know that if contacts exist, our self saltbox does as well.
-            let nick = if saltbox::try_decrypt(
-                self.saltbox.read().await.as_ref().unwrap(),
-                &nick_ciphertext,
-            )
-            .is_some()
-            {
+            // we try to decrypt using our, to identify our messages.
+            let nick = if saltbox::try_decrypt(self_saltbox, &nick_ciphertext).is_some() {
                 String::from(self_nickname)
             } else {
                 name.to_string()
