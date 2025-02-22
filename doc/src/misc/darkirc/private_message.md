@@ -17,11 +17,12 @@ Generate a keypair using the following command:
 This will generate a Public Key and a Private Key.
 
 Save the Private key safely & add it to the `darkirc_config.toml` 
-file under [crypto] as shown below.
-
+file under your contact. you can reuse this secret key for multiple
+contacts
 ```toml
-[crypto]
-dm_chacha_secret = “your_private_key_goes_here”
+[contact.“satoshi”]
+dm_chacha_public = “your_contact_public_key_goes_here”
+dm_chacha_secret = “your_private_key_for_the_contact_goes_here”
 ```
 
 To share your Public Key with a user over `darkirc` you can use one of the 
@@ -48,12 +49,14 @@ Alice would add bob to her contact list in her own config file:
 ```toml
 [contact.”bob”]
 dm_chacha_public = “D6UzKA6qCG5Mep16i6pJYkUCQcnp46E1jPBsUhyJiXhb”
+dm_chacha_secret = “A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC”
 ```
 
 And Bob would do the same:
 ```toml
 [contact.”alice”]
 dm_chacha_public = “9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g”
+dm_chacha_secret = “E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr”
 ```
 
 Lets see an Example where 'alice' sends “Hi” message to 'bob' using 
