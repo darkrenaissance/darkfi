@@ -33,6 +33,8 @@ from blueprints.block import block_bp
 from blueprints.contract import contract_bp
 from blueprints.transaction import transaction_bp
 
+import log
+
 def create_app():
     """
     Creates and configures the DarkFi explorer Flask application.
@@ -47,6 +49,9 @@ def create_app():
     # Load the app TOML configuration
     env = os.getenv("FLASK_ENV", "localnet")
     load_toml_config(app, env)
+
+    # Setup logger
+    log.setup_logger(app, env)
 
     # Register Blueprints
     app.register_blueprint(explore_bp)
@@ -71,12 +76,18 @@ def create_app():
     @app.errorhandler(500)
     def internal_server_error(e):
         """
-        Handles 500 errors by rendering a custom 500 error page when an internal server error occurs,
-        returning a rendered template along with a 500 status code.
+        Handles 500 errors by logging the error and returning the app's 500 error page.
+
+        This function logs the error with its stack trace, file name, and line number
+        to help with debugging. It then renders the '500.html' template and returns it
+        along with a 500 HTTP status code.
 
         Args:
             e: The error object associated with the 500 error.
         """
+        # Log the error
+        app.error_logger.exception("An unexpected error occurred")
+
         # Render the custom 500 error page
         return render_template('500.html'), 500
 

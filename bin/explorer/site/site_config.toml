@@ -19,18 +19,22 @@
 [localnet]
 explorer_rpc_url = "127.0.0.1"
 explorer_rpc_port = 14567
+log_path = "."
 
 # devnet configuration
 [devnet]
 explorer_rpc_url = "TODO"
 explorer_rpc_port = "TODO"
+log_path = "TODO"
 
 # testnet configuration
 [testnet]
 explorer_rpc_url = "TODO"
 explorer_rpc_port = "TODO"
+log_path = "TODO"
 
 # mainnet configuration
 [mainnet]
 explorer_rpc_url = "TODO"
 explorer_rpc_port = "TODO"
+log_path = "TODO"
