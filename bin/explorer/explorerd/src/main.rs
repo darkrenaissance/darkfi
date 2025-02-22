@@ -309,7 +309,7 @@ impl Explorerd {
     async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
         // Initialize rpc client
         let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
-        info!(target: "explorerd", "Created rpc client: {:?}", endpoint);
+        info!(target: "explorerd", "Connected to Darkfi node: {}", endpoint.to_string().trim_end_matches('/'));
 
         // Create explorer service
         let service = ExplorerService::new(db_path)?;
@@ -329,12 +329,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "explorerd", "Node initialized successfully!");
 
     // JSON-RPC server
-    info!(target: "explorerd", "Starting JSON-RPC server");
     // Here we create a task variable so we can manually close the task later.
     let rpc_task = StoppableTask::new();
     let explorer_ = explorer.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc.into(), explorer.clone(), None, ex.clone()),
+        listen_and_serve(args.rpc.clone().into(), explorer.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,
@@ -346,6 +345,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Error::RpcServerStopped,
         ex.clone(),
     );
+    info!(target: "explorerd", "Started JSON-RPC server: {}", args.rpc.rpc_listen.to_string().trim_end_matches("/"));
 
     // Sync blocks
     info!(target: "explorerd", "Syncing blocks from darkfid...");
