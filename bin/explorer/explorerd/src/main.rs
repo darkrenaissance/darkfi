@@ -24,7 +24,6 @@ use std::{
 
 use lazy_static::lazy_static;
 use log::{debug, error, info};
-use rpc_blocks::subscribe_blocks;
 use sled_overlay::sled;
 use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -37,19 +36,20 @@ use darkfi::{
     rpc::{
         client::RpcClient,
         server::{listen_and_serve, RequestHandler},
-        settings::RpcSettingsOpt,
     },
     system::{StoppableTask, StoppableTaskPtr},
-    util::path::expand_path,
+    util::path::{expand_path, get_config_path},
     validator::utils::deploy_native_contracts,
     Error, Result,
 };
 use darkfi_sdk::crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 use crate::{
+    config::ExplorerNetworkConfig,
     contract_meta_store::{ContractMetaData, ContractMetaStore},
     contracts::untar_source,
     metrics_store::MetricsStore,
+    rpc_blocks::subscribe_blocks,
 };
 
 /// Crate errors
@@ -83,6 +83,9 @@ mod metrics_store;
 /// Database store functionality related to contract metadata
 mod contract_meta_store;
 
+/// Configuration management across multiple networks (localnet, testnet, mainnet)
+mod config;
+
 const CONFIG_FILE: &str = "explorerd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../explorerd_config.toml");
 
@@ -114,24 +117,16 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(flatten)]
-    /// JSON-RPC settings
-    rpc: RpcSettingsOpt,
-
-    #[structopt(long, default_value = "~/.local/share/darkfi/explorerd/daemon.db")]
-    /// Path to daemon database
-    db_path: String,
+    #[structopt(short, long, default_value = "testnet")]
+    /// Explorer network (localnet, testnet, mainnet)
+    network: String,
 
     #[structopt(long)]
     /// Reset the database and start syncing from first block
     reset: bool,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
-    /// darkfid JSON-RPC endpoint
-    endpoint: Url,
-
     #[structopt(short, long)]
-    /// Set log file to output into
+    /// Set log file to output to
     log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
@@ -324,7 +319,16 @@ impl Explorerd {
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "explorerd", "Initializing DarkFi blockchain explorer node...");
-    let explorer = Explorerd::new(args.db_path, args.endpoint.clone(), ex.clone()).await?;
+
+    // Resolve the configuration path
+    let config_path = get_config_path(args.config.clone(), CONFIG_FILE)?;
+
+    // Get explorer network configuration
+    let config: ExplorerNetworkConfig = (&config_path, &args.network).try_into()?;
+
+    // Initialize the explorer daemon instance
+    let explorer =
+        Explorerd::new(config.database.clone(), config.endpoint.clone(), ex.clone()).await?;
     let explorer = Arc::new(explorer);
     info!(target: "explorerd", "Node initialized successfully!");
 
@@ -333,7 +337,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let rpc_task = StoppableTask::new();
     let explorer_ = explorer.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc.clone().into(), explorer.clone(), None, ex.clone()),
+        listen_and_serve(config.rpc.clone().into(), explorer.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,
@@ -345,7 +349,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Error::RpcServerStopped,
         ex.clone(),
     );
-    info!(target: "explorerd", "Started JSON-RPC server: {}", args.rpc.rpc_listen.to_string().trim_end_matches("/"));
+    info!(target: "explorerd", "Started JSON-RPC server: {}", config.rpc.rpc_listen.to_string().trim_end_matches("/"));
 
     // Sync blocks
     info!(target: "explorerd", "Syncing blocks from darkfid...");
@@ -358,7 +362,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Subscribe blocks
     info!(target: "explorerd", "Subscribing to new blocks...");
     let (subscriber_task, listener_task) =
-        match subscribe_blocks(explorer.clone(), args.endpoint, ex.clone()).await {
+        match subscribe_blocks(explorer.clone(), config.endpoint.clone(), ex.clone()).await {
             Ok(pair) => pair,
             Err(e) => {
                 let error_message = format!("Error setting up blocks subscriber: {:?}", e);

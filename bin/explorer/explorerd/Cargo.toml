@@ -9,10 +9,9 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../../", features = ["async-daemonize", "validator"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "validator", "rpc"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = "0.4.2"
-drk = {path = "../../../bin/drk"}
 
 # JSON-RPC
 async-trait = "0.1.86"
@@ -38,6 +37,7 @@ sled-overlay = "0.1.6"
 log = "0.4.25"
 lazy_static = "1.5.0"
 tar = "0.4.43"
+toml = "0.8.20"
 
 # Testing
 tempdir = "0.3.7"
