@@ -91,6 +91,15 @@ def create_app():
         # Render the custom 500 error page
         return render_template('500.html'), 500
 
+    # Log that we started the site
+    app.logger.info("=" * 60)
+    app.logger.info("Started Explorer Site")
+    app.logger.info("=" * 60)
+    app.logger.info(f"Network: {env}")
+    app.logger.info(f"Explorer Node Endpoint: {app.config['explorer_rpc_url']}:{app.config['explorer_rpc_port']}")
+    app.logger.info(f"Log Path: {app.config['log_path']}")
+    app.logger.info("=" * 60)
+
     return app
 
 def load_toml_config(app, env="localnet", config_path="site_config.toml"):
@@ -119,18 +128,6 @@ def load_toml_config(app, env="localnet", config_path="site_config.toml"):
     if env not in config:
         raise KeyError(f"Environment '{env}' not found in {config_path}")
 
-    # Load the environment specific configurations into the Flask app's config object
+    # Load the environment specific configurations into app.config
     for key, value in config[env].items():
         app.config[key] = value
-
-    # Print the loaded configuration for debugging or confirmation purposes
-    print("\n" + "=" * 40)
-    print("Loaded Explorer Site Configuration")
-    print("=" * 40)
-
-    for key in config[env]:
-        print(f"{key} = {app.config[key]}")
-
-    print("=" * 40 + "\n")
-
-
