@@ -9,14 +9,14 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-arg = {git = "https://github.com/parazyd/arg"}
-bs58 = "0.5.1"
-ctrlc = "3.4.5"
-darkfi = {path = "../../", features = ["util"]}
-darkfi-sdk = {path = "../../src/sdk"}
-darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
-rand = "0.8.5"
-rayon = "1.10.0"
+arg = { workspace = true }
+bs58 = { workspace = true }
+ctrlc = { workspace = true }
+darkfi = { workspace = true, features = ["util"] }
+darkfi-sdk = { workspace = true }
+darkfi_money_contract = { workspace = true, features = ["no-entrypoint", "client"] }
+rand = { workspace = true }
+rayon = { workspace = true }
 
 [lints]
 workspace = true
