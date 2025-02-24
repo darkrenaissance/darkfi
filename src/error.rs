@@ -475,6 +475,9 @@ pub enum Error {
     #[error("Invalid config file detected")]
     ConfigInvalid,
 
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
     #[error("Failed decoding bincode: {0}")]
     ZkasDecoderError(String),
 
