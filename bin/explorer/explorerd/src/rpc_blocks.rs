@@ -84,8 +84,8 @@ impl Explorerd {
         // Declare a mutable variable to track the current sync height while processing blocks
         let mut current_height = last_synced_height;
 
-        info!(target: "explorerd::rpc_blocks::sync_blocks", "Requested to sync from block number: {current_height}");
-        info!(target: "explorerd::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_darkfid_height} - {last_darkfid_hash}");
+        info!(target: "explorerd::rpc_blocks::sync_blocks", "Syncing from block number: {current_height}");
+        info!(target: "explorerd::rpc_blocks::sync_blocks", "Last confirmed darkfid block: {last_darkfid_height} - {last_darkfid_hash}");
 
         // A reorg is detected if the hash of the last synced block differs from the hash of the last confirmed block,
         // unless the reset flag is set or the current height is 0
@@ -96,7 +96,7 @@ impl Explorerd {
         if reset {
             self.service.reset_explorer_state(0)?;
             current_height = 0;
-            info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully reset explorer database based on set reset parameter");
+            info!(target: "explorerd::rpc_blocks::sync_blocks", "Reset explorer database based on set reset parameter");
         } else if reorg_detected {
             // Record the start time to measure the duration of potential reorg
             let start_reorg_time = Instant::now();
@@ -107,7 +107,7 @@ impl Explorerd {
 
             // Log only if a reorg occurred (i.e., the explorer wasn't merely catching up to Darkfi node blocks)
             if current_height != last_synced_height {
-                info!(target: "explorerd::rpc_blocks::sync_blocks", "Successfully completed reorg to height: {current_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
+                info!(target: "explorerd::rpc_blocks::sync_blocks", "Completed reorg to height: {current_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
             }
 
             // Prepare to sync the next block after reorg if not from genesis height
@@ -164,7 +164,7 @@ impl Explorerd {
 
         info!(
             target: "explorerd::rpc_blocks::sync_blocks",
-            "Successfully synced {} blocks: explorer blocks total {} [{}]",
+            "Synced {} blocks: explorer blocks total {} [{}]",
             blocks_synced,
             self.service.db.blockchain.blocks.len(),
             fmt_duration(sync_start_time.elapsed()),
@@ -213,7 +213,7 @@ impl Explorerd {
                             // If hashes match but the cur_height differs from the last synced height, reset the explorer state
                             if cur_height != last_synced_height {
                                 self.service.reset_explorer_state(cur_height)?;
-                                debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Successfully completed reorg to height: {cur_height}");
+                                debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Completed reorg to height: {cur_height}");
                             }
                             break;
                         } else {
@@ -461,7 +461,6 @@ pub async fn subscribe_blocks(
         ex.clone(),
     );
     info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Detached subscription to background");
-    info!(target: "explorerd::rpc_blocks::subscribe_blocks", "All is good. Waiting for block notifications...");
 
     let listener_task = StoppableTask::new();
     listener_task.clone().start(
@@ -503,9 +502,9 @@ pub async fn subscribe_blocks(
                                     )))
                                 },
                             };
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "=======================================");
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Block Notification: {}", darkfid_block.hash().to_string());
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "=======================================");
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "========================================================================================");
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "| Block Notification: {} |", darkfid_block.hash().to_string());
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "========================================================================================");
 
                             // Store darkfi node block height for later use
                             let darkfid_block_height = darkfid_block.header.height;
@@ -523,7 +522,7 @@ pub async fn subscribe_blocks(
 
                                 // Execute the reorg by resetting the explorer state to reset height
                                 explorer.service.reset_explorer_state(reset_height)?;
-                                info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully completed reorg to height: {reset_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
+                                info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Completed reorg to height: {reset_height} [{}]", fmt_duration(start_reorg_time.elapsed()));
                             }
 
 
@@ -536,7 +535,7 @@ pub async fn subscribe_blocks(
                                 )))
                             }
 
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Successfully stored new block at height: {} [{}]", darkfid_block.header.height, fmt_duration(start_reorg_time.elapsed()));
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "Stored new block at height: {} [{}]", darkfid_block.header.height, fmt_duration(start_reorg_time.elapsed()));
 
                             // Process the next block
                             height = darkfid_block.header.height;

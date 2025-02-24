@@ -16,16 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-    sync::Arc,
-};
-
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use sled_overlay::sled;
 use smol::{lock::Mutex, stream::StreamExt};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    str::FromStr,
+    sync::Arc,
+};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -190,7 +190,7 @@ impl ExplorerService {
 
             // Add source code into the `ContractMetaStore`
             self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
-            info!(target: "explorerd: load_native_contract_sources", "Successfully loaded contract source for native contract {}", contract_id_str.to_string());
+            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {}", contract_id_str.to_string());
         }
         Ok(())
     }
@@ -218,7 +218,7 @@ impl ExplorerService {
 
         // Load contract metadata into the `ContractMetaStore`
         self.db.contract_meta_store.insert_metadata(&contract_ids, &metadatas)?;
-        info!(target: "explorerd: load_native_contract_metadata", "Successfully loaded metadat for native contracts");
+        info!(target: "explorerd: load_native_contract_metadata", "Loaded metadata for native contracts");
 
         Ok(())
     }
@@ -237,18 +237,18 @@ impl ExplorerService {
             0 => {
                 self.reset_blocks()?;
                 self.reset_transactions()?;
-                debug!(target: "explorerd::reset_explorer_state", "Successfully reset explorer state to accept a new genesis block");
+                debug!(target: "explorerd::reset_explorer_state", "Reset explorer state to accept a new genesis block");
             }
             // Reset for all other heights
             _ => {
                 self.reset_to_height(height)?;
-                debug!(target: "explorerd::reset_explorer_state", "Successfully reset blocks to height: {height}");
+                debug!(target: "explorerd::reset_explorer_state", "Reset blocks to height: {height}");
             }
         }
 
         // Reset gas metrics to the specified height to reflect the updated blockchain state
         self.db.metrics_store.reset_gas_metrics(height)?;
-        debug!(target: "explorerd::reset_explorer_state", "Successfully reset metrics store to height: {height}");
+        debug!(target: "explorerd::reset_explorer_state", "Reset metrics store to height: {height}");
 
         Ok(())
     }
@@ -371,6 +371,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
         };
 
+    log_started_banner(explorer.clone(), &config, &args, &config_path);
+    info!(target: "explorerd::", "All is good. Waiting for block notifications...");
+
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
@@ -389,4 +392,26 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     explorer.rpc_client.stop().await;
 
     Ok(())
+}
+
+/// Logs a banner displaying the startup details of the DarkFi Explorer Node.
+fn log_started_banner(
+    explorer: Arc<Explorerd>,
+    config: &ExplorerNetworkConfig,
+    args: &Args,
+    config_path: &Path,
+) {
+    info!(target: "explorerd", "========================================================================================");
+    info!(target: "explorerd", "                   Started DarkFi Explorer Node                                        ");
+    info!(target: "explorerd", "========================================================================================");
+    info!(target: "explorerd", "  - Network: {}", args.network);
+    info!(target: "explorerd", "  - JSON-RPC Endpoint: {}", config.rpc.rpc_listen.to_string().trim_end_matches("/"));
+    info!(target: "explorerd", "  - Database: {}", config.database);
+    info!(target: "explorerd", "  - Configuration: {}", config_path.to_str().unwrap_or("Error: configuration path not found!"));
+    info!(target: "explorerd", "  - Reset Blocks: {}", if args.reset { "Yes" } else { "No" });
+    info!(target: "explorerd", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    info!(target: "explorerd", "  - Synced Blocks: {}", explorer.service.db.blockchain.len());
+    info!(target: "explorerd", "  - Synced Transactions: {}", explorer.service.db.blockchain.len());
+    info!(target: "explorerd", "  - Connected Darkfi Node: {}", config.endpoint.to_string().trim_end_matches("/"));
+    info!(target: "explorerd", "========================================================================================");
 }
