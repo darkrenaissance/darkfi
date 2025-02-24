@@ -19,22 +19,16 @@
 [localnet]
 explorer_rpc_url = "127.0.0.1"
 explorer_rpc_port = 14567
-log_path = "."
+log_path = "~/.local/share/darkfi/explorer_site/localnet"
 
-# devnet configuration
-[devnet]
-explorer_rpc_url = "TODO"
-explorer_rpc_port = "TODO"
-log_path = "TODO"
-
-# testnet configuration
+# Testnet configuration
 [testnet]
-explorer_rpc_url = "TODO"
-explorer_rpc_port = "TODO"
-log_path = "TODO"
+explorer_rpc_url = "127.0.0.1"
+explorer_rpc_port = 14667
+log_path = "~/.local/share/darkfi/explorer_site/testnet"
 
-# mainnet configuration
+# Mainnet configuration
 [mainnet]
-explorer_rpc_url = "TODO"
-explorer_rpc_port = "TODO"
-log_path = "TODO"
+explorer_rpc_url = "127.0.0.1"
+explorer_rpc_port = 14767
+log_path = "~/.local/share/darkfi/explorer_site/mainnet"
