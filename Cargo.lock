@@ -3110,7 +3110,6 @@ dependencies = [
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
- "drk",
  "easy-parallel",
  "lazy_static",
  "log",
@@ -3125,6 +3124,7 @@ dependencies = [
  "tar",
  "tempdir",
  "tinyjson",
+ "toml 0.8.20",
  "url",
 ]
 
