@@ -17,49 +17,44 @@ name = "taud"
 path = "src/main.rs"
 
 [dependencies]
-darkfi = { path = "../../../", features = [
-    "bs58",
-    "async-daemonize",
-    "event-graph",
-    "rpc",
-] }
+darkfi = { workspace = true, features = ["bs58", "async-daemonize", "event-graph", "rpc"] }
 
-darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
-darkfi-serial = "0.4.2"
+darkfi-sdk = { workspace = true, features = ["async"] }
+darkfi-serial = { workspace = true }
 
 # Event Graph DB
-sled-overlay = "0.1.6"
+sled-overlay = { workspace = true }
 
 # Crypto
-blake3 = "1.6.0"
-crypto_box = { version = "0.9.1", features = ["std", "chacha20"] }
-rand = "0.8.5"
+blake3 = { workspace = true }
+crypto_box = { workspace = true, features = ["std", "chacha20"] }
+rand = { workspace = true }
 
 # Encoding and parsing
-bs58 = "0.5.1"
-toml = "0.8.20"
+bs58 = { workspace = true }
+toml = { workspace = true }
 
 # Misc
-async-trait = "0.1.86"
-chrono = "0.4.39"
-futures = "0.3.31"
-libc = "0.2.170"
-log = "0.4.26"
-thiserror = "2.0.11"
-tinyjson = "2.5.1"
-url = "2.5.4"
+async-trait = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+libc = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tinyjson = { workspace = true }
+url = { workspace = true }
 
 # Daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # Argument parsing
-serde = { version = "1.0.218", features = ["derive"] }
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 [lints]
 workspace = true

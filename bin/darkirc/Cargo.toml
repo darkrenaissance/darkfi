@@ -18,46 +18,46 @@ name = "darkirc"
 path = "src/main.rs"
 
 [dependencies]
-darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "rpc", "zk"]}
-darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
-darkfi-serial = {version = "0.4.2", features = ["async"]}
-libc = "0.2.170"
+darkfi = { workspace = true, features = ["async-daemonize", "event-graph", "rpc", "zk"] }
+darkfi-sdk = { workspace = true, features = ["async"] }
+darkfi-serial = { workspace = true, features = ["async"] }
+libc = { workspace = true }
 
 # Event Graph DB
-sled-overlay = "0.1.6"
+sled-overlay = { workspace = true }
 
 # TLS
-async-trait = "0.1.86"
-futures = "0.3.31"
-futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"]}
-rustls-pemfile = "2.2.0"
+async-trait = { workspace = true }
+futures = { workspace = true }
+futures-rustls = { workspace = true, features = ["logging", "tls12", "ring"] }
+rustls-pemfile = { workspace = true }
 
 # Crypto
-blake3 = "1.6.0"
-bcrypt = "0.17.0"
-crypto_box = {version = "0.9.1", features = ["std", "chacha20"]}
-rand = "0.8.5"
+blake3 = { workspace = true }
+bcrypt = { workspace = true }
+crypto_box = { workspace = true, features = ["std", "chacha20"] }
+rand = { workspace = true }
 
 # Misc
-log = "0.4.26"
-url = "2.5.4"
+log = { workspace = true }
+url = { workspace = true }
 
 # Encoding and parsing
-bs58 = "0.5.1"
-toml = "0.8.20"
-semver = "1.0.25"
+bs58 = { workspace = true }
+toml = { workspace = true }
+semver = { workspace = true }
 
 # Daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 # See https://github.com/rust-mobile/android-rs-glue/issues/193
 [target.aarch64-linux-android.dependencies]
