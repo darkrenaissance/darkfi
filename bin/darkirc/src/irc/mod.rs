@@ -136,7 +136,9 @@ pub struct IrcChannel {
 /// IRC contact definition
 #[derive(Clone)]
 pub struct IrcContact {
-    /// the first one is the saltbox created with our contact pub key
-    /// the second one is the saltbox created with our own pub key
-    pub saltboxes: (Arc<ChaChaBox>, Arc<ChaChaBox>),
+    /// Saltbox created for our contact public key
+    pub saltbox: Arc<ChaChaBox>,
+    /// Saltbox used to encrypt our nick in direct messages,
+    /// created for our own public key.
+    pub self_saltbox: Arc<ChaChaBox>,
 }

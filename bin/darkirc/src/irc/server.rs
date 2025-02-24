@@ -397,14 +397,13 @@ impl IrcServer {
         };
 
         if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
-            let (saltbox, self_saltbox) = &contact.saltboxes;
             // We will use dummy channel and nick values of MAX_NICK_LEN,
             // since they are not used, so all encrypted messages look the same.
-            *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+            *privmsg.channel() = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
             // We will encrypt the dummy nick value using our own self saltbox,
             // so we can identify our messages.
-            *privmsg.nick() = saltbox::encrypt(self_saltbox, &[0x00; MAX_NICK_LEN]);
-            *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
+            *privmsg.nick() = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+            *privmsg.msg() = saltbox::encrypt(&contact.saltbox, privmsg.msg().as_bytes());
             debug!("Successfully encrypted message for {}", name);
         };
     }
@@ -457,21 +456,19 @@ impl IrcServer {
         }
 
         for (name, contact) in self.contacts.read().await.iter() {
-            let (saltbox, self_saltbox) = &contact.saltboxes;
-
-            if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
+            if saltbox::try_decrypt(&contact.saltbox, &channel_ciphertext).is_none() {
                 continue
             };
 
             // Since everyone encrypts the dummy nick value with their self saltbox,
             // we try to decrypt using our, to identify our messages.
-            let nick = if saltbox::try_decrypt(self_saltbox, &nick_ciphertext).is_some() {
+            let nick = if saltbox::try_decrypt(&contact.self_saltbox, &nick_ciphertext).is_some() {
                 String::from(self_nickname)
             } else {
                 name.to_string()
             };
 
-            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+            let Some(msg_dec) = saltbox::try_decrypt(&contact.saltbox, &msg_ciphertext) else {
                 warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt message ciphertext for contact: {name}");
                 continue
             };

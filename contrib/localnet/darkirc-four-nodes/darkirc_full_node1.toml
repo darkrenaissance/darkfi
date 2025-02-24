@@ -52,5 +52,5 @@ secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
 
 [contact."node2"]
 dm_chacha_public = "ACaVU2uf4n2cheRHFP7RB9PASLweBJNdp5QJ4PGwVz67"
-dm_chacha_secret = "Bwdhe48rKsqFwGUquQSSGZZS5NQP1szrdJUhyDE77Br6"
+my_dm_chacha_secret = "Bwdhe48rKsqFwGUquQSSGZZS5NQP1szrdJUhyDE77Br6"
 #my_dm_chacha_public = "BmUo88RJ5TyR7gUWnr6Mk7tqZE5xPuCqJdJV8KWzsagh"

@@ -17,12 +17,12 @@ Generate a keypair using the following command:
 This will generate a Public Key and a Private Key.
 
 Save the Private key safely & add it to the `darkirc_config.toml` 
-file under your contact. you can reuse this secret key for multiple
-contacts
+file under your contact(s). You may reuse this keypair for multiple
+contacts, or generate a new one each time.
 ```toml
 [contact.“satoshi”]
-dm_chacha_public = “your_contact_public_key_goes_here”
-dm_chacha_secret = “your_private_key_for_the_contact_goes_here”
+dm_chacha_public = “the_contact_public_key_goes_here”
+my_dm_chacha_secret = “your_private_key_for_this_contact_goes_here”
 ```
 
 To share your Public Key with a user over `darkirc` you can use one of the 
@@ -42,45 +42,45 @@ See the [example darkirc_config.toml](https://codeberg.org/darkrenaissance/darkf
 ## Example
 Lets start by configuring our contacts list in the generated 
 `darkirc_config.toml` file (you can also refer to the examples written 
-in the comments of the toml file), let's assume alice and bob want to
+in the comments of the toml file), let's assume Alice and Bob want to
 privately chat after they have each other's public keys:
 
 Alice would add bob to her contact list in her own config file:
 ```toml
-[contact.”bob”]
+[contact.”Bob”]
 dm_chacha_public = “D6UzKA6qCG5Mep16i6pJYkUCQcnp46E1jPBsUhyJiXhb”
-dm_chacha_secret = “A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC”
+my_dm_chacha_secret = “A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC”
 ```
 
 And Bob would do the same:
 ```toml
-[contact.”alice”]
+[contact.”Alice”]
 dm_chacha_public = “9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g”
-dm_chacha_secret = “E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr”
+my_dm_chacha_secret = “E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr”
 ```
 
-Lets see an Example where 'alice' sends “Hi” message to 'bob' using 
+Lets see an Example where 'Alice' sends “Hi” message to 'Bob' using 
 the /msg command
 ```
-/msg bob Hi
+/msg Bob Hi
 ```
 
 <u>Note for Weechat Client Users:</u>\
 When you private message someone as shown above, the buffer will not 
 pop in weechat client until you receive a reply from that person.
 
-For example here 'alice' will not see any new buffer on her irc interface for 
-the recent message which she just send to 'bob' until 'bob' replies,
-but 'bob' will get a buffer shown on his irc client with the message 'Hi'.
+For example here 'Alice' will not see any new buffer on her irc interface for 
+the recent message which she just send to 'Bob' until 'Bob' replies,
+but 'Bob' will get a buffer shown on his irc client with the message 'Hi'.
 
-Reply from 'bob' to 'alice' 
+Reply from 'Bob' to 'Alice'
 ```
 /msg alice welcome!
 ```
 
 Or instead of `/msg` command, you can use:
 ```
-/query bob hello
+/query Bob hello
 ```
 This works exactly the same as `/msg` except it will open a new buffer 
 with Bob in your client regardless of sending a msg or not.

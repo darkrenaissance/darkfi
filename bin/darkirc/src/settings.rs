@@ -100,40 +100,40 @@ pub fn list_configured_contacts(
             return Err(ParseFailed("Duplicate contact found"))
         }
 
-        // parse the secret key for that specific contact
-        let Some(contact_secret) = items.get("dm_chacha_secret") else {
-            return Err(ParseFailed("Invalid contact configuration dm_chacha_secret missing. \
+        // Parse the secret key for that specific contact
+        let Some(my_secret) = items.get("my_dm_chacha_secret") else {
+            return Err(ParseFailed("Invalid contact configuration my_dm_chacha_secret missing. \
             You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
         };
 
-        let Some(contact_secret_str) = contact_secret.as_str() else {
-            return Err(ParseFailed("dm_chacha_secret not a string"))
+        let Some(my_secret_str) = my_secret.as_str() else {
+            return Err(ParseFailed("my_dm_chacha_secret not a string"))
         };
 
-        let Ok(contact_secret_bytes) = bs58::decode(contact_secret_str).into_vec() else {
-            return Err(ParseFailed("dm_chacha_secret not valid base58"))
+        let Ok(my_secret_bytes) = bs58::decode(my_secret_str).into_vec() else {
+            return Err(ParseFailed("my_dm_chacha_secret not valid base58"))
         };
 
-        if contact_secret_bytes.len() != 32 {
-            return Err(ParseFailed("dm_chacha_secret not 32 bytes long"))
+        if my_secret_bytes.len() != 32 {
+            return Err(ParseFailed("my_dm_chacha_secret not 32 bytes long"))
         }
 
-        let contact_secret_bytes: [u8; 32] = contact_secret_bytes.try_into().unwrap();
+        let my_secret_bytes: [u8; 32] = my_secret_bytes.try_into().unwrap();
 
-        let contact_secret = crypto_box::SecretKey::from(contact_secret_bytes);
+        let my_secret = crypto_box::SecretKey::from(my_secret_bytes);
 
-        ret.insert(name.to_string(), (public, contact_secret));
+        ret.insert(name.to_string(), (public, my_secret));
     }
 
     Ok(ret)
 }
 
 /// Parse configured contacts from a TOML map.
-/// If contacts exist and our secret key is valid, also return its saltbox.
 ///
 /// ```toml
 /// [contact."anon"]
 /// dm_chacha_public = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// my_dm_chacha_secret = "A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC"
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, IrcContact>> {
@@ -144,18 +144,18 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
         return Ok(ret);
     }
 
-    for (name, (public, contact_secret)) in contacts {
+    for (name, (public, my_secret)) in contacts {
         let saltbox: Arc<crypto_box::ChaChaBox> =
-            Arc::new(crypto_box::ChaChaBox::new(&public, &contact_secret));
+            Arc::new(crypto_box::ChaChaBox::new(&public, &my_secret));
         let self_saltbox: Arc<crypto_box::ChaChaBox> =
-            Arc::new(crypto_box::ChaChaBox::new(&contact_secret.public_key(), &contact_secret));
+            Arc::new(crypto_box::ChaChaBox::new(&my_secret.public_key(), &my_secret));
 
         if ret.contains_key(&name) {
             return Err(ParseFailed("Duplicate contact found"))
         }
 
         info!("Instantiated ChaChaBox for contact \"{}\"", name);
-        ret.insert(name.to_string(), IrcContact { saltboxes: (saltbox, self_saltbox) });
+        ret.insert(name.to_string(), IrcContact { saltbox, self_saltbox });
     }
 
     Ok(ret)

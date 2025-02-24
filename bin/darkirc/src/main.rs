@@ -193,11 +193,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let public = bs58::encode(public.to_bytes()).into_string();
 
         println!(
-            "Place this in your config file under your contact, you can reuse this key for multiple contacts\n"
+            "Place this in your config file under your contact, you can reuse this keypair for multiple contacts\n"
         );
         println!("[contact.\"satoshi\"]");
         println!("dm_chacha_public = \"YOUR_CONTACT_PUBLIC_KEY\"");
-        println!("dm_chacha_secret = \"{}\"", secret);
+        println!("my_dm_chacha_secret = \"{}\"", secret);
         println!("#my_dm_chacha_public = \"{}\"", public);
         return Ok(())
     }
@@ -255,8 +255,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         // Parse configured contacts
         let contacts = list_configured_contacts(&contents)?;
 
-        for (name, (public_key, _)) in contacts {
-            println!("{}: {}", name, bs58::encode(public_key.as_bytes()).into_string())
+        for (name, (public_key, my_secret_key)) in contacts {
+            let public_key = bs58::encode(public_key.to_bytes()).into_string();
+            let my_public_key = my_secret_key.public_key();
+            let my_secret_key = bs58::encode(my_secret_key.to_bytes()).into_string();
+            let my_public_key = bs58::encode(my_public_key.to_bytes()).into_string();
+            println!("{name}: {public_key} using key {my_secret_key}({my_public_key})")
         }
         return Ok(())
     }

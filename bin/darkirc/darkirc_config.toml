@@ -146,32 +146,37 @@ topic = "LunarDAO talk"
 ## ================
 ##
 ## In this section we configure our contacts and people we want to
-## have encrypted DMs with. Your contacts' public keys should be
-## retrieved manually. Whenever this is changed, you can send a
-## SIGHUP signal to the running darkirc instance to reload these.
+## have encrypted DMs with. Whenever something in the configuration
+## is changed, you can send a SIGHUP signal to the running darkirc
+## instance to reload these.
 ##
-## The secret key used to decrypt direct messages sent to your public
-## key (the counterpart to this secret key).
-## It is also recommended to paste the public key here as a comment in
-## order to be able to easily reference it for sharing.
+## The format is:
+## [contact."nickname"]
+## dm_chacha_public = "{the_contact_public_key}"
+## my_dm_chacha_secret = "{your_secret_key_for_this_contact}"
 ##
-## You can generate a keypair with: darkirc --gen-chacha-keypair
-## and replace the secret key below with the generated one.
-## **You should never share this secret key with anyone**
-
-## This is where you put other people's public keys. The format is:
-## [contact."nickname"]. "nickname" can be anything you want.
-## This is how they will appear in your IRC client when they send you a DM.
-## set their public key to dm_chacha_public and
-## set your secret key to dm_chacha_secret
-## you can set a separate secret key for each contact
-
+## "nickname" can be anything you want. This is how they will appear
+## in your IRC client when they send you a DM.
 ##
-## Example (set as many as you want):
+## "dm_chacha_public" is the contacts' public key, which should be
+## retrieved manually.
+##
+## "my_dm_chacha_secret" is the secret key used to decrypt direct
+## messages sent to the public key (the counterpart to this secret key)
+## you set for this contact. It is recommended to paste the public key
+## here as a comment in order to be able to easily reference it for
+## sharing. You can generate a keypair to use for a contact with:
+## ./darkirc --gen-chacha-keypair
+## Replace the secret key in the contact configuration with the
+## generated one. You can generate and set a separate secret key for
+## each contact, or reuse the same one in multiple contacts.
+## **You should never share secret keys with anyone**
+##
+## Examples (set as many as you want):
 #[contact."satoshi"]
 #dm_chacha_public = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
-#dm_chacha_secret = "A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC"
+#my_dm_chacha_secret = "A3mLrq4aW9UkFVY4zCfR2aLdEEWVUdH4u8v4o2dgi4kC"
 #
 #[contact."anon"]
 #dm_chacha_public = "7iTddcopP2pkvszFjbFUr7MwTcMSKZkYP6zUan22pxfX"
-#dm_chacha_secret = "E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr"
+#my_dm_chacha_secret = "E229CzXev335cxhHiJyuzSapz7HMfNzf6ipbginFTvtr"
