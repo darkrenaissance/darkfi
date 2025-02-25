@@ -16,8 +16,8 @@ async-std = {version = "1.13.0", features = ["attributes"]}
 
 # Misc
 clap = {version = "4.4.11", features = ["derive"]}
-log = "0.4.25"
-serde_json = "1.0.138"
+log = "0.4.26"
+serde_json = "1.0.139"
 simplelog = "0.12.2"
 url = "2.5.4"
 

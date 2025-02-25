@@ -29,10 +29,10 @@ darkfi-serial = {version = "0.4.2", features = ["async"]}
 sled-overlay = "0.1.6"
 
 # Crypto
-blake3 = "1.5.5"
+blake3 = "1.6.0"
 
 # Misc
-log = "0.4.25"
+log = "0.4.26"
 url = "2.5.4"
 
 # Daemon
@@ -46,7 +46,7 @@ easy-parallel = {version = "3.3.1", optional = true}
 signal-hook-async-std = {version = "0.2.2", optional = true}
 signal-hook = {version = "0.3.17", optional = true}
 simplelog = {version = "0.12.2", optional = true}
-serde = {version = "1.0.217", features = ["derive"], optional = true}
+serde = {version = "1.0.218", features = ["derive"], optional = true}
 structopt = {version = "0.3.26", optional = true}
 structopt-toml = {version = "0.5.1", optional = true}
 

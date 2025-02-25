@@ -53,8 +53,8 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.169"
-log = "0.4.25"
+libc = "0.2.170"
+log = "0.4.26"
 thiserror = "2.0.11"
 
 # async-runtime
@@ -85,7 +85,7 @@ x509-parser = {version = "0.17.0", features = ["validate", "verify"], optional =
 
 # Encoding
 bs58 = {version = "0.5.1", optional = true}
-serde = {version = "1.0.217", features = ["derive"], optional = true}
+serde = {version = "1.0.218", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
 httparse = {version = "1.10.0", optional = true}
 semver = {version = "1.0.25", optional = true}
@@ -111,7 +111,7 @@ regex = {version = "1.11.1", optional = true}
 
 # Crypto
 rand = {version = "0.8.5", optional = true}
-blake3 = {version = "1.5.5", features = ["rayon"], optional = true}
+blake3 = {version = "1.6.0", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 halo2_proofs = {version = "0.3.0", features = ["circuit-params"], optional = true}
 halo2_gadgets = {version = "0.3.1", features = ["circuit-params"], optional = true}

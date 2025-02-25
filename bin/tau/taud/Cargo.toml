@@ -31,7 +31,7 @@ darkfi-serial = "0.4.2"
 sled-overlay = "0.1.6"
 
 # Crypto
-blake3 = "1.5.5"
+blake3 = "1.6.0"
 crypto_box = { version = "0.9.1", features = ["std", "chacha20"] }
 rand = "0.8.5"
 
@@ -43,8 +43,8 @@ toml = "0.8.20"
 async-trait = "0.1.86"
 chrono = "0.4.39"
 futures = "0.3.31"
-libc = "0.2.169"
-log = "0.4.25"
+libc = "0.2.170"
+log = "0.4.26"
 thiserror = "2.0.11"
 tinyjson = "2.5.1"
 url = "2.5.4"
@@ -57,7 +57,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = { version = "1.0.217", features = ["derive"] }
+serde = { version = "1.0.218", features = ["derive"] }
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

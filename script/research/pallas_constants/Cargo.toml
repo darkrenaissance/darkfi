@@ -10,7 +10,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.96"
 darkfi = {path = "../../../", features = ["blockchain"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 

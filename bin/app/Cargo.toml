@@ -18,7 +18,7 @@ harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = 
 freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
 image = "0.25.5"
-log = { version = "0.4.25", features = ["release_max_level_info"] }
+log = { version = "0.4.26", features = ["release_max_level_info"] }
 glam = "0.29.2"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
@@ -43,7 +43,7 @@ semver = "1.0.25"
 chrono = "0.4.39"
 async-gen = "0.2.3"
 async-trait = "0.1.86"
-blake3 = "1.5.5"
+blake3 = "1.6.0"
 simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"

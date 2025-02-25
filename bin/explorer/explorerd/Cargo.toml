@@ -26,7 +26,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.217", features = ["derive"]}
+serde = {version = "1.0.218", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
@@ -34,9 +34,9 @@ structopt-toml = "0.5.1"
 sled-overlay = "0.1.6"
 
 # Misc
-log = "0.4.25"
+log = "0.4.26"
 lazy_static = "1.5.0"
-tar = "0.4.43"
+tar = "0.4.44"
 toml = "0.8.20"
 
 # Testing

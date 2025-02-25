@@ -2259,7 +2259,7 @@ dependencies = [
  "rand 0.8.5",
  "smol",
  "thiserror 2.0.11",
- "wasmparser 0.223.1",
+ "wasmparser 0.226.0",
 ]
 
 [[package]]
@@ -9562,26 +9562,15 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.223.1"
+version = "0.226.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "664b980991ed9a8c834eb528a8979ab1109edcf52dc05dd5751e2cc3fb31035d"
+checksum = "bc28600dcb2ba68d7e5f1c3ba4195c2bddc918c0243fd702d0b6dbd05689b681"
 dependencies = [
  "bitflags 2.8.0",
  "hashbrown 0.15.2",
  "indexmap 2.7.1",
  "semver 1.0.25",
  "serde",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.226.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc28600dcb2ba68d7e5f1c3ba4195c2bddc918c0243fd702d0b6dbd05689b681"
-dependencies = [
- "bitflags 2.8.0",
- "indexmap 2.7.1",
- "semver 1.0.25",
 ]
 
 [[package]]
