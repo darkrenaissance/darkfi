@@ -118,9 +118,9 @@ halo2_gadgets = {version = "0.3.1", features = ["circuit-params"], optional = tr
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
-wasmer = {version = "5.0.5-rc1", optional = true}
-wasmer-compiler-singlepass = {version = "5.0.5-rc1", optional = true}
-wasmer-middlewares = {version = "5.0.5-rc1", optional = true}
+wasmer = {version = "6.0.0-alpha.1", features = ["singlepass"], optional = true}
+wasmer-compiler-singlepass = {version = "6.0.0-alpha.1", optional = true}
+wasmer-middlewares = {version = "6.0.0-alpha.1", optional = true}
 
 # Blockchain store
 sled-overlay = {version = "0.1.6", optional = true}

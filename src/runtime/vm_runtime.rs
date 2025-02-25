@@ -25,8 +25,8 @@ use darkfi_sdk::{crypto::ContractId, tx::TransactionHash, wasm, AsHex};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
-    imports, wasmparser::Operator, AsStoreMut, AsStoreRef, CompilerConfig, Function, FunctionEnv,
-    Instance, Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
+    imports, sys::CompilerConfig, wasmparser::Operator, AsStoreMut, AsStoreRef, Function,
+    FunctionEnv, Instance, Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
