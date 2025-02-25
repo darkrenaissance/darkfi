@@ -81,6 +81,8 @@ impl Connector {
                 endpoint.set_scheme("nym")?;
             } else if transports.contains(&"nym+tls".to_string()) && scheme == "tcp+tls" {
                 endpoint.set_scheme("nym+tls")?;
+            } else if transports.contains(&"socks5+tls".to_string()) && scheme == "tcp+tls" {
+                endpoint.set_scheme("socks5+tls")?;
             }
         }
 
