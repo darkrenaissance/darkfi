@@ -78,6 +78,9 @@ pub enum DialerVariant {
 
     /// SOCKS5 proxy
     Socks5(socks5::Socks5Dialer),
+
+    /// SOCKS5 proxy with TLS
+    Socks5Tls(socks5::Socks5Dialer),
 }
 
 /// Listener variants
@@ -200,6 +203,14 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            "socks5+tls" => {
+                // Build a SOCKS5 dialer with TLS encapsulation
+                enforce_hostport!(endpoint);
+                let variant = socks5::Socks5Dialer::new(&endpoint).await?;
+                let variant = DialerVariant::Socks5Tls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
             x => {
                 error!("[P2P] Requested unsupported transport: {}", x);
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
@@ -269,6 +280,13 @@ impl Dialer {
 
             DialerVariant::Socks5(dialer) => {
                 let stream = dialer.do_dial().await?;
+                Ok(Box::new(stream))
+            }
+
+            DialerVariant::Socks5Tls(dialer) => {
+                let stream = dialer.do_dial().await?;
+                let tlsupgrade = tls::TlsUpgrade::new().await;
+                let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
         }
