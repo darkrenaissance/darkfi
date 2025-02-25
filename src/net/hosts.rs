@@ -444,6 +444,8 @@ impl HostContainer {
         mix_transport!("tor+tls", "tcp+tls");
         mix_transport!("nym", "tcp");
         mix_transport!("nym+tls", "tcp+tls");
+        mix_transport!("socks5", "tcp");
+        mix_transport!("socks5+tls", "tcp+tls");
 
         // And now the actual requested transports
         for (addr, last_seen) in self.fetch_with_schemes(index, transports, None) {
