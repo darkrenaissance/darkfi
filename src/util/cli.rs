@@ -241,7 +241,8 @@ macro_rules! async_daemonize {
                 ])?;
                 let handle = signals.handle();
                 let sighup_pub = darkfi::system::Publisher::new();
-                let signals_task = ex.spawn(handle_signals(signals, term_tx, sighup_pub.clone()));
+                let signals_task =
+                    ex.spawn(handle_signals(signals, term_tx, sighup_pub.clone(), ex.clone()));
 
                 Ok((Self { term_rx, handle, sighup_pub }, signals_task))
             }
@@ -257,11 +258,25 @@ macro_rules! async_daemonize {
             }
         }
 
+        /// Auxiliary task to handle SIGINT for forceful process abort
+        async fn handle_abort(mut signals: signal_hook_async_std::Signals) {
+            let mut n_sigint = 0;
+            while let Some(signal) = signals.next().await {
+                n_sigint += 1;
+                if n_sigint == 2 {
+                    print!("\r");
+                    info!("Aborting. Good luck.");
+                    std::process::abort();
+                }
+            }
+        }
+
         /// Auxiliary task to handle SIGHUP, SIGTERM, SIGINT and SIGQUIT signals
         async fn handle_signals(
             mut signals: signal_hook_async_std::Signals,
             term_tx: smol::channel::Sender<()>,
             publisher: darkfi::system::PublisherPtr<Args>,
+            ex: std::sync::Arc<smol::Executor<'static>>,
         ) -> Result<()> {
             while let Some(signal) = signals.next().await {
                 match signal {
@@ -280,9 +295,17 @@ macro_rules! async_daemonize {
                         }
                         publisher.notify(args.unwrap()).await;
                     }
-                    signal_hook::consts::SIGTERM |
-                    signal_hook::consts::SIGINT |
-                    signal_hook::consts::SIGQUIT => {
+                    signal_hook::consts::SIGINT => {
+                        // Spawn a new background task to listen for more SIGINT.
+                        // This lets us forcefully abort the process if necessary.
+                        let signals =
+                            signal_hook_async_std::Signals::new([signal_hook::consts::SIGINT])?;
+                        let handle = signals.handle();
+                        ex.spawn(handle_abort(signals)).detach();
+
+                        term_tx.send(()).await?;
+                    }
+                    signal_hook::consts::SIGTERM | signal_hook::consts::SIGQUIT => {
                         term_tx.send(()).await?;
                     }
 
