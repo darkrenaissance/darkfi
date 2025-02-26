@@ -50,6 +50,7 @@ use darkfi_sdk::{
     tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
+use log::info;
 
 use drk::{
     cli_util::{
