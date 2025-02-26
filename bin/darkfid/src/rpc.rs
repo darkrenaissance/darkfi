@@ -19,7 +19,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 use url::Url;
@@ -52,18 +52,26 @@ pub struct MmRpcHandler;
 pub struct MinerRpcClient {
     endpoint: Url,
     ex: ExecutorPtr,
-    client: RpcChadClient,
+    client: Option<RpcChadClient>,
 }
 
 impl MinerRpcClient {
-    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Result<Self> {
-        let client = RpcChadClient::new(endpoint.clone(), ex.clone()).await?;
-        Ok(Self { endpoint, ex, client })
+    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Self {
+        let client = match RpcChadClient::new(endpoint.clone(), ex.clone()).await {
+            Ok(c) => Some(c),
+            Err(_) => {
+                warn!(target: "darkfid::Darkfid::init", "Failed to initialize miner daemon rpc client, will try later");
+                None
+            }
+        };
+        Self { endpoint, ex, client }
     }
 
     /// Stop the client.
     pub async fn stop(&self) {
-        self.client.stop().await
+        if let Some(ref client) = self.client {
+            client.stop().await
+        }
     }
 }
 
@@ -227,7 +235,8 @@ impl DarkfiNode {
         let latency = Instant::now();
         let req = JsonRequest::new(method, params.clone());
         let lock = rpc_client.lock().await;
-        let rep = lock.client.request(req).await?;
+        let Some(ref client) = lock.client else { return Err(Error::RpcClientStopped) };
+        let rep = client.request(req).await?;
         drop(lock);
         let latency = latency.elapsed();
         debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {:?}", rep);
@@ -265,7 +274,7 @@ impl DarkfiNode {
                 };
                 info!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Connection re-established!");
                 // Set the new client as the daemon one
-                rpc_client.client = client;
+                rpc_client.client = Some(client);
                 break;
             }
         }

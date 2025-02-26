@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -158,11 +158,7 @@ impl Darkfid {
         // Initialize JSON-RPC client to perform requests to minerd
         let rpc_client = match minerd_endpoint {
             Some(endpoint) => {
-                let Ok(rpc_client) = MinerRpcClient::new(endpoint.clone(), ex.clone()).await else {
-                    error!(target: "darkfid::Darkfid::init", "Failed to initialize miner daemon rpc client, check if minerd is running");
-                    return Err(Error::RpcClientStopped)
-                };
-                Some(Mutex::new(rpc_client))
+                Some(Mutex::new(MinerRpcClient::new(endpoint.clone(), ex.clone()).await))
             }
             None => None,
         };
@@ -196,8 +192,7 @@ impl Darkfid {
         // Pinging minerd daemon to verify it listens
         if self.node.rpc_client.is_some() {
             if let Err(e) = self.node.ping_miner_daemon().await {
-                error!(target: "darkfid::Darkfid::start", "Failed to ping miner daemon: {}", e);
-                return Err(Error::RpcClientStopped)
+                warn!(target: "darkfid::Darkfid::start", "Failed to ping miner daemon: {}", e);
             }
         }
 
