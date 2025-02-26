@@ -18,6 +18,9 @@ witness.json
 /bin/minerd/minerd
 /minerd
 
+/bin/explorer/explorerd/explorerd
+/explorerd
+
 /bin/darkfi-mmproxy/darkfi-mmproxy
 /darkfi-mmproxy
 
