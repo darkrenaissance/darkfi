@@ -21,12 +21,13 @@ Meeting schedule:
 | [Ganienkeh Manifesto][10]                                                                                           | 30th of October, 2024   | [Mohawk Nation][11]                |
 | Rescheduled                                                                                                         | 13th of November, 2024  |                                    |
 | [A New Nationalism for the New Ireland][12]/[Complimentary Reading - Solutions to the Northern Ireland Problem][13] | 27th of November, 2024  | Desmond Fennell                    |
-| [Two Cheers for Anarchism][14] - Chapter 2, starting at 'Fragment 7', all of Chapter 4			      | 11th of December, 2024  | James C. Scott                     |
+| [Two Cheers for Anarchism][14] - Chapter 2, starting at 'Fragment 7', all of Chapter 4			                  | 11th of December, 2024  | James C. Scott                     |
 | Rescheduled                                                                                                         | 25th of December, 2024  |                                    |
 | [Will to Power][15] - Extracts (see PDF)                                                                            | 8th of January, 2025    | Friedrich Nietzsche                |
 | Post Capitalist Desire, Lecture 1 - [from 1:11:30 to 2:42:00 on Youtube][16] or pages 35 to 78 in [the book][17]    | 22nd of January, 2025   | Mark Fisher                        |
 | [Algorithmic Sovereignty][18] Core reading: Chapter 1 & 2                                                           | 5th of February, 2025   | Jaromil                            |
 | [Economic Consequences of Organized Violence][19]                                                                   | 19th of February, 2025  | Frederick Lane                     |
+| [Assassination Politics][20]                                                                                        | 12th of March, 2025     | [Jim Bell][21]                     |
 
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
 
@@ -49,3 +50,5 @@ Feel free to propose a text for a future meeting by sharing it in #philosophy.
 [17]: https://www.google.co.uk/books/edition/_/ruPtDwAAQBAJ?hl=en
 [18]: https://algosov.org
 [19]: https://sci-hub.se/https://doi.org/10.1017/S0022050700107612
+[20]: https://cryptome.org/ap.htm
+[21]: https://en.wikipedia.org/wiki/Jim_Bell
