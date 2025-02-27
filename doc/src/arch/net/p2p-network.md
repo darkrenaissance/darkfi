@@ -18,7 +18,7 @@ Connections are then wrapped in a `Channel` abstraction which allows
 protocols to be attached. See `src/net/protocol/` and run `fd protocol` for custom
 application specific network protocols. Also see the follow tutorial:
 
-* [Understanding Protocols](../learn/dchat/creating-dchatd/protocols.md)
+* [Understanding Protocols](../../learn/dchat/creating-dchatd/protocols.md)
 
 ## Outbound Session
 
