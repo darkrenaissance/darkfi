@@ -382,9 +382,9 @@ impl Channel {
             // Send result to our publishers
             match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
-                Err(Error::MissingDispatcher) => {
-                    // If we're getting messages without dispatchers, it's spam.
-                    // We therefore ban this channel if:
+                Err(Error::MissingDispatcher) | Err(Error::MessageInvalid) => {
+                    // If we're getting messages without dispatchers or its invalid,
+                    // it's spam. We therefore ban this channel if:
                     //
                     // 1) This channel is NOT part of a refine session.
                     //

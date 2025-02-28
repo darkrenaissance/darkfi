@@ -116,27 +116,27 @@ pub struct ProtocolEventGraph {
 /// A P2P message representing publishing an event on the network
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventPut(pub Event);
-impl_p2p_message!(EventPut, "EventGraph::EventPut");
+impl_p2p_message!(EventPut, "EventGraph::EventPut", 0);
 
 /// A P2P message representing an event request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventReq(pub Vec<blake3::Hash>);
-impl_p2p_message!(EventReq, "EventGraph::EventReq");
+impl_p2p_message!(EventReq, "EventGraph::EventReq", 0);
 
 /// A P2P message representing an event reply
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventRep(pub Vec<Event>);
-impl_p2p_message!(EventRep, "EventGraph::EventRep");
+impl_p2p_message!(EventRep, "EventGraph::EventRep", 0);
 
 /// A P2P message representing a request for a peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct TipReq {}
-impl_p2p_message!(TipReq, "EventGraph::TipReq");
+impl_p2p_message!(TipReq, "EventGraph::TipReq", 0);
 
 /// A P2P message representing a reply for the peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct TipRep(pub BTreeMap<u64, HashSet<blake3::Hash>>);
-impl_p2p_message!(TipRep, "EventGraph::TipRep");
+impl_p2p_message!(TipRep, "EventGraph::TipRep", 0);
 
 #[async_trait]
 impl ProtocolBase for ProtocolEventGraph {

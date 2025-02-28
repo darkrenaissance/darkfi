@@ -44,7 +44,7 @@ pub struct Bar {
     pub message: String,
 }
 
-impl_p2p_message!(Bar, "bar");
+impl_p2p_message!(Bar, "bar", 0);
 
 /// Atomic pointer to the `ProtocolBar` handler.
 pub type ProtocolBarHandlerPtr = Arc<ProtocolBarHandler>;

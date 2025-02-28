@@ -26,7 +26,7 @@ hostlist = "damd0/p2p_hostlist.tsv"
 inbound = ["tcp+tls://0.0.0.0:44781"]
 
 # Peer nodes to manually connect to
-peers = ["tcp+tls://0.0.0.0:44881"]
+peers = []
 
 # Whitelisted network transports for outbound connections
 allowed_transports = ["tcp+tls"]

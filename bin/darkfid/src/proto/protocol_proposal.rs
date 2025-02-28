@@ -46,7 +46,7 @@ use crate::task::handle_unknown_proposal;
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ProposalMessage(pub Proposal);
 
-impl_p2p_message!(ProposalMessage, "proposal");
+impl_p2p_message!(ProposalMessage, "proposal", 0);
 
 /// Atomic pointer to the `ProtocolProposal` handler.
 pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;

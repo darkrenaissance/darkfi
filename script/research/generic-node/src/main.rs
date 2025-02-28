@@ -71,25 +71,25 @@ struct Args {
 struct GenericStringMessage {
     msg: String,
 }
-impl_p2p_message!(GenericStringMessage, "generic_string_message");
+impl_p2p_message!(GenericStringMessage, "generic_string_message", 0);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericNumberMessage {
     num: u64,
 }
-impl_p2p_message!(GenericNumberMessage, "generic_number_message");
+impl_p2p_message!(GenericNumberMessage, "generic_number_message", 0);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericRequestMessage {
     msg: String,
 }
-impl_p2p_message!(GenericRequestMessage, "generic_request_message");
+impl_p2p_message!(GenericRequestMessage, "generic_request_message", 0);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericResponseMessage {
     msg: String,
 }
-impl_p2p_message!(GenericResponseMessage, "generic_response_message");
+impl_p2p_message!(GenericResponseMessage, "generic_response_message", 0);
 
 /// Generic daemon structure
 struct Genericd {

@@ -30,5 +30,5 @@ pub struct DchatMsg {
     pub msg: String,
 }
 
-impl_p2p_message!(DchatMsg, "DchatMsg");
+impl_p2p_message!(DchatMsg, "DchatMsg", 0);
 // ANCHOR_END: msg

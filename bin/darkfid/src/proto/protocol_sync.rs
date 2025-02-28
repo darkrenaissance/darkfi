@@ -49,7 +49,7 @@ pub struct TipRequest {
     pub tip: HeaderHash,
 }
 
-impl_p2p_message!(TipRequest, "tiprequest");
+impl_p2p_message!(TipRequest, "tiprequest", 0);
 
 /// Structure representing the response to `TipRequest`,
 /// containing a boolean flag to indicate if we are synced,
@@ -64,7 +64,7 @@ pub struct TipResponse {
     pub hash: Option<HeaderHash>,
 }
 
-impl_p2p_message!(TipResponse, "tipresponse");
+impl_p2p_message!(TipResponse, "tipresponse", 0);
 
 /// Structure represening a request to ask a node for up to `BATCH` headers before
 /// the provided header height.
@@ -74,7 +74,7 @@ pub struct HeaderSyncRequest {
     pub height: u32,
 }
 
-impl_p2p_message!(HeaderSyncRequest, "headersyncrequest");
+impl_p2p_message!(HeaderSyncRequest, "headersyncrequest", 0);
 
 /// Structure representing the response to `HeaderSyncRequest`,
 /// containing up to `BATCH` headers before the requested block height.
@@ -84,7 +84,7 @@ pub struct HeaderSyncResponse {
     pub headers: Vec<Header>,
 }
 
-impl_p2p_message!(HeaderSyncResponse, "headersyncresponse");
+impl_p2p_message!(HeaderSyncResponse, "headersyncresponse", 0);
 
 /// Structure represening a request to ask a node for up to`BATCH` blocks
 /// of provided headers.
@@ -94,7 +94,7 @@ pub struct SyncRequest {
     pub headers: Vec<HeaderHash>,
 }
 
-impl_p2p_message!(SyncRequest, "syncrequest");
+impl_p2p_message!(SyncRequest, "syncrequest", 0);
 
 /// Structure representing the response to `SyncRequest`,
 /// containing up to `BATCH` blocks after the requested block height.
@@ -104,7 +104,7 @@ pub struct SyncResponse {
     pub blocks: Vec<BlockInfo>,
 }
 
-impl_p2p_message!(SyncResponse, "syncresponse");
+impl_p2p_message!(SyncResponse, "syncresponse", 0);
 
 /// Structure represening a request to ask a node a fork sequence.
 /// If we include a specific fork tip, they have to return its sequence,
@@ -119,7 +119,7 @@ pub struct ForkSyncRequest {
     pub fork_tip: Option<HeaderHash>,
 }
 
-impl_p2p_message!(ForkSyncRequest, "forksyncrequest");
+impl_p2p_message!(ForkSyncRequest, "forksyncrequest", 0);
 
 /// Structure representing the response to `ForkSyncRequest`,
 /// containing the requested fork sequence.
@@ -129,7 +129,7 @@ pub struct ForkSyncResponse {
     pub proposals: Vec<Proposal>,
 }
 
-impl_p2p_message!(ForkSyncResponse, "forksyncresponse");
+impl_p2p_message!(ForkSyncResponse, "forksyncresponse", 0);
 
 /// Structure represening a request to ask a node a fork header for the
 /// requested height. The fork is identified by the provided header hash.
@@ -141,7 +141,7 @@ pub struct ForkHeaderHashRequest {
     pub fork_header: HeaderHash,
 }
 
-impl_p2p_message!(ForkHeaderHashRequest, "forkheaderhashrequest");
+impl_p2p_message!(ForkHeaderHashRequest, "forkheaderhashrequest", 0);
 
 /// Structure representing the response to `ForkHeaderHashRequest`,
 /// containing the requested fork header hash, if it was found.
@@ -151,7 +151,7 @@ pub struct ForkHeaderHashResponse {
     pub fork_header: Option<HeaderHash>,
 }
 
-impl_p2p_message!(ForkHeaderHashResponse, "forkheaderhashresponse");
+impl_p2p_message!(ForkHeaderHashResponse, "forkheaderhashresponse", 0);
 
 /// Structure represening a request to ask a node for up to `BATCH`
 /// fork headers for provided header hashes.  The fork is identified
@@ -164,7 +164,7 @@ pub struct ForkHeadersRequest {
     pub fork_header: HeaderHash,
 }
 
-impl_p2p_message!(ForkHeadersRequest, "forkheadersrequest");
+impl_p2p_message!(ForkHeadersRequest, "forkheadersrequest", 0);
 
 /// Structure representing the response to `ForkHeadersRequest`,
 /// containing up to `BATCH` fork headers.
@@ -174,7 +174,7 @@ pub struct ForkHeadersResponse {
     pub headers: Vec<Header>,
 }
 
-impl_p2p_message!(ForkHeadersResponse, "forkheadersresponse");
+impl_p2p_message!(ForkHeadersResponse, "forkheadersresponse", 0);
 
 /// Structure represening a request to ask a node for up to `BATCH`
 /// fork proposals for provided header hashes.  The fork is identified
@@ -187,7 +187,7 @@ pub struct ForkProposalsRequest {
     pub fork_header: HeaderHash,
 }
 
-impl_p2p_message!(ForkProposalsRequest, "forkproposalsrequest");
+impl_p2p_message!(ForkProposalsRequest, "forkproposalsrequest", 0);
 
 /// Structure representing the response to `ForkProposalsRequest`,
 /// containing up to `BATCH` fork headers.
@@ -197,7 +197,7 @@ pub struct ForkProposalsResponse {
     pub proposals: Vec<Proposal>,
 }
 
-impl_p2p_message!(ForkProposalsResponse, "forkproposalsresponse");
+impl_p2p_message!(ForkProposalsResponse, "forkproposalsresponse", 0);
 
 /// Atomic pointer to the `ProtocolSync` handler.
 pub type ProtocolSyncHandlerPtr = Arc<ProtocolSyncHandler>;

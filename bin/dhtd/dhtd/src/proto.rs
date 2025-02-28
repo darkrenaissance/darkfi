@@ -53,7 +53,7 @@ pub struct ChunkRequest {
     pub hash: blake3::Hash,
 }
 
-impl_p2p_message!(ChunkRequest, "dhtchunkrequest");
+impl_p2p_message!(ChunkRequest, "dhtchunkrequest", 0);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ChunkReply {
@@ -61,14 +61,14 @@ pub struct ChunkReply {
     pub data: Vec<u8>,
 }
 
-impl_p2p_message!(ChunkReply, "dhtchunkreply");
+impl_p2p_message!(ChunkReply, "dhtchunkreply", 0);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileRequest {
     pub hash: blake3::Hash,
 }
 
-impl_p2p_message!(FileRequest, "dhtfilerequest");
+impl_p2p_message!(FileRequest, "dhtfilerequest", 0);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileReply {
@@ -76,7 +76,7 @@ pub struct FileReply {
     pub chunks: Vec<blake3::Hash>,
 }
 
-impl_p2p_message!(FileReply, "dhtfilereply");
+impl_p2p_message!(FileReply, "dhtfilereply", 0);
 
 impl ProtocolDht {
     #[allow(dead_code)]

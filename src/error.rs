@@ -155,6 +155,9 @@ pub enum Error {
     #[error("Missing P2P message dispatcher")]
     MissingDispatcher,
 
+    #[error("P2P message is invalid")]
+    MessageInvalid,
+
     #[cfg(feature = "arti-client")]
     #[error(transparent)]
     ArtiError(#[from] arti_client::Error),

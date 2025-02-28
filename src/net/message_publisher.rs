@@ -178,7 +178,10 @@ impl<M: Message> MessageSubscription<M> {
 /// Generic interface for the message dispatcher.
 #[async_trait]
 trait MessageDispatcherInterface: Send + Sync {
-    async fn trigger(&self, stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>);
+    async fn trigger(
+        &self,
+        stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,
+    ) -> Result<()>;
 
     async fn trigger_error(&self, err: Error);
 
@@ -194,37 +197,50 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     ///
     /// We extract the message length from the stream and use `take()`
     /// to allocate an appropiately sized buffer as a basic DDOS protection.
-    async fn trigger(&self, stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>) {
-        match VarInt::decode_async(stream).await {
-            Ok(int) => {
-                // TODO: check the message length does not exceed some bound.
-                let len = int.0;
-                let mut take = stream.take(len);
-
-                // Deserialize stream into type, send down the pipes.
-                match M::decode_async(&mut take).await {
-                    Ok(payload) => {
-                        let message = Ok(Arc::new(payload));
-                        self._trigger_all(message).await
-                    }
-
-                    Err(err) => {
-                        error!(
-                            target: "net::message_publisher::trigger()",
-                            "Unable to decode data. Dropping...: {}",
-                            err,
-                        );
-                    }
-                }
-            }
+    async fn trigger(
+        &self,
+        stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,
+    ) -> Result<()> {
+        // Parse message length
+        let length = match VarInt::decode_async(stream).await {
+            Ok(int) => int.0,
             Err(err) => {
                 error!(
                     target: "net::message_publisher::trigger()",
                     "Unable to decode VarInt. Dropping...: {}",
                     err,
                 );
+                return Err(Error::MessageInvalid)
             }
+        };
+
+        // Check the message length does not exceed set limit
+        if M::MAX_BYTES > 0 && length > M::MAX_BYTES {
+            error!(
+                target: "net::message_publisher::trigger()",
+                "Message length ({}) exceeds configured limit ({}). Dropping...",
+                length, M::MAX_BYTES,
+            );
+            return Err(Error::MessageInvalid)
         }
+
+        // Deserialize stream into type
+        let mut take = stream.take(length);
+        let message = match M::decode_async(&mut take).await {
+            Ok(payload) => Ok(Arc::new(payload)),
+            Err(err) => {
+                error!(
+                    target: "net::message_publisher::trigger()",
+                    "Unable to decode data. Dropping...: {}",
+                    err,
+                );
+                return Err(Error::MessageInvalid)
+            }
+        };
+
+        // Send down the pipes
+        self._trigger_all(message).await;
+        Ok(())
     }
 
     /// Internal function that sends an error message to all subscriber channels.
@@ -293,8 +309,7 @@ impl MessageSubsystem {
             return Err(Error::MissingDispatcher)
         };
 
-        dispatcher.trigger(reader).await;
-        Ok(())
+        dispatcher.trigger(reader).await
     }
 
     /// Concurrently transmits an error message across dispatchers.

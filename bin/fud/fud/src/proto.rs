@@ -41,14 +41,14 @@ pub struct FudFilePut {
     pub file_hash: blake3::Hash,
     pub chunk_hashes: Vec<blake3::Hash>,
 }
-impl_p2p_message!(FudFilePut, "FudFilePut");
+impl_p2p_message!(FudFilePut, "FudFilePut", 0);
 
 /// Message representing a new chunk on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkPut {
     pub chunk_hash: blake3::Hash,
 }
-impl_p2p_message!(FudChunkPut, "FudChunkPut");
+impl_p2p_message!(FudChunkPut, "FudChunkPut", 0);
 
 /// Message representing a new route for a file on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -57,7 +57,7 @@ pub struct FudFileRoute {
     pub chunk_hashes: Vec<blake3::Hash>,
     pub peer: Url,
 }
-impl_p2p_message!(FudFileRoute, "FudFileRoute");
+impl_p2p_message!(FudFileRoute, "FudFileRoute", 0);
 
 /// Message representing a new route for a chunk on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -65,28 +65,28 @@ pub struct FudChunkRoute {
     pub chunk_hash: blake3::Hash,
     pub peer: Url,
 }
-impl_p2p_message!(FudChunkRoute, "FudChunkRoute");
+impl_p2p_message!(FudChunkRoute, "FudChunkRoute", 0);
 
 /// Message representing a file request from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileRequest {
     pub file_hash: blake3::Hash,
 }
-impl_p2p_message!(FudFileRequest, "FudFileRequest");
+impl_p2p_message!(FudFileRequest, "FudFileRequest", 0);
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileReply {
     pub chunk_hashes: Vec<blake3::Hash>,
 }
-impl_p2p_message!(FudFileReply, "FudFileReply");
+impl_p2p_message!(FudFileReply, "FudFileReply", 0);
 
 /// Message representing a chunk request from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkRequest {
     pub chunk_hash: blake3::Hash,
 }
-impl_p2p_message!(FudChunkRequest, "FudChunkRequest");
+impl_p2p_message!(FudChunkRequest, "FudChunkRequest", 0);
 
 /// Message representing a chunk reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -94,17 +94,17 @@ pub struct FudChunkReply {
     // TODO: This sould be a chunk-sized array, but then we need padding?
     pub chunk: Vec<u8>,
 }
-impl_p2p_message!(FudChunkReply, "FudChunkReply");
+impl_p2p_message!(FudChunkReply, "FudChunkReply", 0);
 
 /// Message representing a chunk reply when a file is not found
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileNotFound;
-impl_p2p_message!(FudFileNotFound, "FudFileNotFound");
+impl_p2p_message!(FudFileNotFound, "FudFileNotFound", 0);
 
 /// Message representing a chunk reply when a chunk is not found
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkNotFound;
-impl_p2p_message!(FudChunkNotFound, "FudChunkNotFound");
+impl_p2p_message!(FudChunkNotFound, "FudChunkNotFound", 0);
 
 /// P2P protocol implementation for fud.
 pub struct ProtocolFud {

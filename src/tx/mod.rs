@@ -233,7 +233,7 @@ impl std::fmt::Debug for Transaction {
 use crate::net::Message;
 
 #[cfg(feature = "net")]
-crate::impl_p2p_message!(Transaction, "tx");
+crate::impl_p2p_message!(Transaction, "tx", 0);
 
 /// Calls tree bounds definitions
 // TODO: increase min to 2 when fees are implement
