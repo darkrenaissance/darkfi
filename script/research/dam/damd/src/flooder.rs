@@ -60,7 +60,7 @@ impl DamFlooder {
     }
 
     /// Start the Denial-of-service Analysis Multitool flooder.
-    pub async fn start(&self, subscribers: &HashMap<&'static str, JsonSubscriber>) {
+    pub async fn start(&self, subscribers: &HashMap<&'static str, JsonSubscriber>, limit: u32) {
         info!(
             target: "damd::flooder::DamFlooder::start",
             "Starting the Denial-of-service Analysis Multitool flooder..."
@@ -80,7 +80,7 @@ impl DamFlooder {
         for peer in self.p2p.hosts().channels() {
             let task = StoppableTask::new();
             task.clone().start(
-                flood_foo(self.p2p.settings().read().await.outbound_connect_timeout, peer, subscribers.get("attack_foo").unwrap().clone()),
+                flood_foo(self.p2p.settings().read().await.outbound_connect_timeout, peer, subscribers.get("attack_foo").unwrap().clone(), limit),
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -96,7 +96,7 @@ impl DamFlooder {
         // Spawn a task for `Bar` messages to broadcast to everyone
         let task = StoppableTask::new();
         task.clone().start(
-            flood_bar(self.p2p.clone(), subscribers.get("attack_bar").unwrap().clone()),
+            flood_bar(self.p2p.clone(), subscribers.get("attack_bar").unwrap().clone(), limit),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -142,7 +142,12 @@ impl DamFlooder {
 }
 
 /// Background flooder function for `ProtocolFoo`.
-async fn flood_foo(comms_timeout: u64, peer: ChannelPtr, subscriber: JsonSubscriber) -> Result<()> {
+async fn flood_foo(
+    comms_timeout: u64,
+    peer: ChannelPtr,
+    subscriber: JsonSubscriber,
+    limit: u32,
+) -> Result<()> {
     debug!(target: "damd::flooder::flood_foo", "START");
     // Communication setup
     let Ok(response_sub) = peer.subscribe_msg::<FooResponse>().await else {
@@ -182,11 +187,18 @@ async fn flood_foo(comms_timeout: u64, peer: ChannelPtr, subscriber: JsonSubscri
         info!(target: "damd::flooder::flood_foo", "{notification}");
         subscriber.notify(vec![JsonValue::String(notification)].into()).await;
         message_index += 1;
+
+        // Check limit
+        if limit != 0 && message_index > limit {
+            debug!(target: "damd::flooder::flood_foo", "STOP");
+            info!(target: "damd::flooder::flood_foo", "Flood limit reached!");
+            return Ok(())
+        }
     }
 }
 
 /// Background flooder function for `ProtocolBar`.
-async fn flood_bar(p2p: P2pPtr, subscriber: JsonSubscriber) -> Result<()> {
+async fn flood_bar(p2p: P2pPtr, subscriber: JsonSubscriber, limit: u32) -> Result<()> {
     debug!(target: "damd::flooder::flood_bar", "START");
 
     // Flood the network, if we are connected to peers
@@ -199,6 +211,13 @@ async fn flood_bar(p2p: P2pPtr, subscriber: JsonSubscriber) -> Result<()> {
         subscriber.notify(vec![JsonValue::String(notification)].into()).await;
         p2p.broadcast(&Bar { message }).await;
         message_index += 1;
+
+        // Check limit
+        if limit != 0 && message_index > limit {
+            debug!(target: "damd::flooder::flood_bar", "STOP");
+            info!(target: "damd::flooder::flood_foo", "Flood limit reached!");
+            return Ok(())
+        }
     }
 
     debug!(target: "damd::flooder::flood_bar", "STOP");

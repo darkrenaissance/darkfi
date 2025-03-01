@@ -26,7 +26,7 @@ use darkfi::{
     net::P2pPtr,
     rpc::{
         jsonrpc::{
-            ErrorCode::{InvalidParams, MethodNotFound},
+            ErrorCode::{InvalidParams, MethodNotFound, ParseError},
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
         p2p_method::HandlerP2p,
@@ -179,19 +179,25 @@ impl DamNode {
     // Activate or deactivate damd flooder.
     // By sending `true`, flooder will be activated, and by sending `false` flooder
     // will be deactivated. Returns `true` on success.
+    // A limit can be passed, defining after how many messages the flooder will
+    // stop. If its 0, flooder will keep going.
     //
-    // --> {"jsonrpc": "2.0", "method": "flood", "params": [true], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "flood", "params": [true, "100"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn flood_switch(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_bool() {
+        if params.len() != 2 || !params[0].is_bool() || !params[1].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         let switch = params[0].get::<bool>().unwrap();
+        let limit = match params[1].get::<String>().unwrap().parse::<u32>() {
+            Ok(v) => v,
+            Err(_) => return JsonError::new(ParseError, None, id).into(),
+        };
 
         if *switch {
-            self.flooder.start(&self.subscribers).await;
+            self.flooder.start(&self.subscribers, limit).await;
         } else {
             self.flooder.stop().await;
         }

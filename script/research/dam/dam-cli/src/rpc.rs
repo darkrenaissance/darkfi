@@ -27,6 +27,7 @@ use darkfi::{
     system::{ExecutorPtr, Publisher, StoppableTask},
     Error, Result,
 };
+use log::{error, info};
 use url::Url;
 
 use crate::DamCli;
@@ -34,12 +35,12 @@ use crate::DamCli;
 impl DamCli {
     /// Auxiliary function to ping configured damd daemon for liveness.
     pub async fn ping(&self) -> Result<()> {
-        println!("Executing ping request to damd...");
+        info!("Executing ping request to damd...");
         let latency = Instant::now();
         let rep = self.damd_daemon_request("ping", &JsonValue::Array(vec![])).await?;
         let latency = latency.elapsed();
-        println!("Got reply: {rep:?}");
-        println!("Latency: {latency:?}");
+        info!("Got reply: {rep:?}");
+        info!("Latency: {latency:?}");
         Ok(())
     }
 
@@ -52,7 +53,7 @@ impl DamCli {
 
     /// Subscribes to damd's JSON-RPC notification endpoints.
     pub async fn subscribe(&self, endpoint: &str, method: &str, ex: &ExecutorPtr) -> Result<()> {
-        println!("Subscribing to receive notifications for: {method}");
+        info!("Subscribing to receive notifications for: {method}");
         let endpoint = Url::parse(endpoint)?;
         let _method = String::from(method);
         let publisher = Publisher::new();
@@ -70,7 +71,7 @@ impl DamCli {
                 match res {
                     Ok(()) => { /* Do nothing */ }
                     Err(e) => {
-                        eprintln!("[subscribe] JSON-RPC server error: {e:?}");
+                        error!("[subscribe] JSON-RPC server error: {e:?}");
                         publisher
                             .notify(JsonResult::Error(JsonError::new(
                                 ErrorCode::InternalError,
@@ -84,13 +85,13 @@ impl DamCli {
             Error::RpcServerStopped,
             ex.clone(),
         );
-        println!("Detached subscription to background");
-        println!("All is good. Waiting for new notifications...");
+        info!("Detached subscription to background");
+        info!("All is good. Waiting for new notifications...");
 
         let e = loop {
             match subscription.receive().await {
                 JsonResult::Notification(n) => {
-                    println!("Got notification from subscription");
+                    info!("Got notification from subscription");
                     if n.method != method {
                         break Error::UnexpectedJsonRpc(format!(
                             "Got foreign notification from damd: {}",

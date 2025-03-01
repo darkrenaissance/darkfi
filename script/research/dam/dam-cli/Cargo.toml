@@ -16,5 +16,7 @@ darkfi-serial = "0.4.2"
 
 # Misc
 clap = {version = "4.4.11", features = ["derive"]}
+log = "0.4.26"
+simplelog = "0.12.2"
 smol = "2.0.2"
 url = "2.5.4"

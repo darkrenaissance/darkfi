@@ -28,7 +28,7 @@ sleep 1
 tmux new-window -t $session -n "flood"
 tmux send-keys -t $session "$DAMD_CLI0 subscribe protocols.subscribe_foo" Enter
 tmux split-window -t $session -v -l 20%
-tmux send-keys -t $session "$DAMD_CLI1 flood"
+tmux send-keys -t $session "$DAMD_CLI1 flood 10"
 tmux select-pane -t 0
 tmux split-window -t $session -h
 tmux send-keys -t $session "$DAMD_CLI1 subscribe protocols.subscribe_attack_foo" Enter

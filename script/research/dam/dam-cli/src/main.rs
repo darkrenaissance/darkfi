@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 use darkfi::{cli_desc, rpc::util::JsonValue, Result};
+use simplelog::{Config, LevelFilter, SimpleLogger};
 use smol::Executor;
 
 use dam_cli::DamCli;
@@ -48,13 +49,19 @@ enum Subcmd {
     },
 
     /// Signal damd to execute a flooding attack against the network
-    Flood,
+    Flood {
+        /// Optional flood messages count limit
+        limit: Option<u32>,
+    },
 
     /// Signal damd to stop an ongoing flooding attack
     StopFlood,
 }
 
 fn main() -> Result<()> {
+    // Setup terminal logger
+    let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
+
     // Initialize an executor
     let executor = Arc::new(Executor::new());
     let ex = executor.clone();
@@ -73,11 +80,15 @@ fn main() -> Result<()> {
                 dam_cli.subscribe(&args.endpoint, &method, &ex).await?;
             }
 
-            Subcmd::Flood => {
+            Subcmd::Flood { limit } => {
+                let limit = match limit {
+                    Some(l) => JsonValue::String(format!("{l}")),
+                    None => JsonValue::String(String::from("0")),
+                };
                 dam_cli
                     .damd_daemon_request(
                         "flood.switch",
-                        &JsonValue::Array(vec![JsonValue::Boolean(true)]),
+                        &JsonValue::Array(vec![JsonValue::Boolean(true), limit]),
                     )
                     .await?;
             }
@@ -86,7 +97,10 @@ fn main() -> Result<()> {
                 dam_cli
                     .damd_daemon_request(
                         "flood.switch",
-                        &JsonValue::Array(vec![JsonValue::Boolean(false)]),
+                        &JsonValue::Array(vec![
+                            JsonValue::Boolean(false),
+                            JsonValue::String(String::from("0")),
+                        ]),
                     )
                     .await?;
             }
