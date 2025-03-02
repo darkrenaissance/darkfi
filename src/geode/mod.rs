@@ -61,9 +61,11 @@ use std::{collections::HashSet, path::PathBuf};
 use futures::AsyncRead;
 use log::{debug, info, warn};
 use smol::{
-    fs,
-    fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, Cursor, SeekFrom},
+    fs::{self, File, OpenOptions},
+    io::{
+        self, AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, Cursor,
+        SeekFrom,
+    },
     stream::StreamExt,
 };
 
@@ -109,6 +111,23 @@ pub struct Geode {
     files_path: PathBuf,
     /// Path to the filesystem directory where file chunks are stored
     chunks_path: PathBuf,
+}
+
+pub async fn read_until_filled(
+    mut stream: impl AsyncRead + Unpin,
+    buffer: &mut [u8],
+) -> io::Result<usize> {
+    let mut total_bytes_read = 0;
+
+    while total_bytes_read < buffer.len() {
+        let bytes_read = stream.read(&mut buffer[total_bytes_read..]).await?;
+        if bytes_read == 0 {
+            break; // EOF reached
+        }
+        total_bytes_read += bytes_read;
+    }
+
+    Ok(total_bytes_read)
 }
 
 impl Geode {
@@ -183,7 +202,7 @@ impl Geode {
             };
 
             // Perform consistency check
-            let Ok(bytes_read) = chunk_fd.read(&mut buf).await else {
+            let Ok(bytes_read) = read_until_filled(&mut chunk_fd, &mut buf).await else {
                 deleted_chunk_paths.insert(chunk_path);
                 deleted_chunks.insert(chunk_hash);
                 buf = [0u8; MAX_CHUNK_SIZE];
@@ -269,7 +288,8 @@ impl Geode {
         let mut chunk_hashes = vec![];
         let mut buf = [0u8; MAX_CHUNK_SIZE];
 
-        while let Ok(bytes_read) = stream.read(&mut buf).await {
+        loop {
+            let bytes_read = read_until_filled(&mut stream, &mut buf).await?;
             if bytes_read == 0 {
                 break
             }
@@ -285,11 +305,11 @@ impl Geode {
             // reading from disk.
             let mut chunk_path = self.chunks_path.clone();
             chunk_path.push(chunk_hash.to_hex().as_str());
-            let mut chunk_fd =
+            let chunk_fd =
                 OpenOptions::new().read(true).write(true).create(true).open(&chunk_path).await?;
 
             let mut fs_buf = [0u8; MAX_CHUNK_SIZE];
-            let fs_bytes_read = chunk_fd.read(&mut fs_buf).await?;
+            let fs_bytes_read = read_until_filled(chunk_fd, &mut fs_buf).await?;
             let fs_chunk_slice = &fs_buf[..fs_bytes_read];
             let fs_chunk_hash = blake3::hash(fs_chunk_slice);
 
@@ -300,9 +320,16 @@ impl Geode {
                     chunk_path,
                 );
                 // Here the chunk is broken, so we'll truncate and write the new one.
+                let mut chunk_fd = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(&chunk_path)
+                    .await?;
                 chunk_fd.set_len(0).await?;
                 chunk_fd.seek(SeekFrom::Start(0)).await?;
                 chunk_fd.write_all(chunk_slice).await?;
+                chunk_fd.flush().await?;
             } else {
                 debug!(
                     target: "geode::insert()",
@@ -325,6 +352,8 @@ impl Geode {
             file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
         }
 
+        file_fd.flush().await?;
+
         Ok((file_hash, chunk_hashes))
     }
 
@@ -344,6 +373,7 @@ impl Geode {
         for ch in chunk_hashes {
             file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
         }
+        file_fd.flush().await?;
 
         Ok(())
     }
@@ -356,7 +386,7 @@ impl Geode {
         let mut cursor = Cursor::new(&stream);
         let mut chunk = [0u8; MAX_CHUNK_SIZE];
 
-        let bytes_read = cursor.read(&mut chunk).await?;
+        let bytes_read = read_until_filled(&mut cursor, &mut chunk).await?;
         let chunk_slice = &chunk[..bytes_read];
         let chunk_hash = blake3::hash(chunk_slice);
 
@@ -364,6 +394,7 @@ impl Geode {
         chunk_path.push(chunk_hash.to_hex().as_str());
         let mut chunk_fd = File::create(&chunk_path).await?;
         chunk_fd.write_all(chunk_slice).await?;
+        chunk_fd.flush().await?;
 
         Ok(chunk_hash)
     }
@@ -393,7 +424,7 @@ impl Geode {
         let mut chunked_file = ChunkedFile::new(&chunk_hashes);
 
         // Iterate over chunks and find which chunks we have available locally.
-        let mut buf = [0u8; MAX_CHUNK_SIZE];
+        let mut buf = vec![];
         for (chunk_hash, chunk_path) in chunked_file.0.iter_mut() {
             let mut c_path = self.chunks_path.clone();
             c_path.push(chunk_hash.to_hex().as_str());
@@ -405,17 +436,17 @@ impl Geode {
 
             // Perform chunk consistency check
             let mut chunk_fd = File::open(&c_path).await?;
-            let bytes_read = chunk_fd.read(&mut buf).await?;
+            let bytes_read = chunk_fd.read_to_end(&mut buf).await?;
             let chunk_slice = &buf[..bytes_read];
             let hashed_chunk = blake3::hash(chunk_slice);
             if &hashed_chunk != chunk_hash {
                 // The chunk is corrupted/inconsistent. Garbage collection should run.
-                buf = [0u8; MAX_CHUNK_SIZE];
+                buf = vec![];
                 continue
             }
 
             *chunk_path = Some(c_path);
-            buf = [0u8; MAX_CHUNK_SIZE];
+            buf = vec![];
         }
 
         Ok(chunked_file)
@@ -434,9 +465,9 @@ impl Geode {
         }
 
         // Perform chunk consistency check
-        let mut buf = [0u8; MAX_CHUNK_SIZE];
+        let mut buf = vec![];
         let mut chunk_fd = File::open(&chunk_path).await?;
-        let bytes_read = chunk_fd.read(&mut buf).await?;
+        let bytes_read = chunk_fd.read_to_end(&mut buf).await?;
         let chunk_slice = &buf[..bytes_read];
         let hashed_chunk = blake3::hash(chunk_slice);
         if &hashed_chunk != chunk_hash {

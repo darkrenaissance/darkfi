@@ -38,11 +38,15 @@ use darkfi::{
     async_daemonize, cli_desc,
     geode::Geode,
     net::{
-        self, connector::Connector, protocol::ProtocolVersion, session::Session,
-        settings::SettingsOpt, P2p, P2pPtr,
+        connector::Connector,
+        protocol::ProtocolVersion,
+        session::{Session, SESSION_DEFAULT},
+        settings::SettingsOpt,
+        P2p, P2pPtr,
     },
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
+        p2p_method::HandlerP2p,
         server::{listen_and_serve, RequestHandler},
         settings::{RpcSettings, RpcSettingsOpt},
     },
@@ -102,10 +106,17 @@ pub struct Fud {
 
     file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+    file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
+    file_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
     chunk_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     chunk_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+    chunk_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
+    chunk_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
 
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+
+    /// dnet JSON-RPC subscriber
+    dnet_sub: JsonSubscriber,
 }
 
 #[async_trait]
@@ -117,7 +128,9 @@ impl RequestHandler<()> for Fud {
             "put" => self.put(req.id, req.params).await,
             "get" => self.get(req.id, req.params).await,
 
-            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
+            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -194,7 +207,7 @@ impl Fud {
                 info!("Requested file {} not found in Geode, triggering fetch", file_hash);
                 self.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
                 info!("Waiting for background file fetch task...");
-                let (i_file_hash, status) = self.file_fetch_rx.recv().await.unwrap();
+                let (i_file_hash, status) = self.file_fetch_end_rx.recv().await.unwrap();
                 match status {
                     Ok(()) => {
                         let ch_file = self.geode.get(&file_hash).await.unwrap();
@@ -244,18 +257,17 @@ impl Fud {
 
         for chunk in missing_chunks {
             self.chunk_fetch_tx.send((chunk, Ok(()))).await.unwrap();
-            let (i_chunk_hash, status) = self.chunk_fetch_rx.recv().await.unwrap();
+            let (i_chunk_hash, status) = self.chunk_fetch_end_rx.recv().await.unwrap();
 
             match status {
                 Ok(()) => {
                     let m = FudChunkPut { chunk_hash: i_chunk_hash };
                     self.p2p.broadcast(&m).await;
-                    break
                 }
                 Err(Error::GeodeChunkRouteNotFound) => continue,
 
                 Err(e) => panic!("{}", e),
-            }
+            };
         }
 
         let chunked_file = match self.geode.get(&file_hash).await {
@@ -296,12 +308,34 @@ impl Fud {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.p2p.dnet_enable().await;
+            self.p2p.dnet_enable();
         } else {
-            self.p2p.dnet_disable().await;
+            self.p2p.dnet_disable();
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `fud` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_sub.clone().into()
+    }
+}
+
+impl HandlerP2p for Fud {
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.clone()
     }
 }
 
@@ -319,7 +353,10 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
 
         if peers.is_none() {
             warn!("File {} not in routing table, cannot fetch", file_hash);
-            fud.file_fetch_tx.send((file_hash, Err(Error::GeodeFileRouteNotFound))).await.unwrap();
+            fud.file_fetch_end_tx
+                .send((file_hash, Err(Error::GeodeFileRouteNotFound)))
+                .await
+                .unwrap();
             continue
         }
 
@@ -335,12 +372,8 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
             let connector = Connector::new(fud.p2p.settings(), session_weak);
             match connector.connect(peer).await {
                 Ok((url, channel)) => {
-                    let proto_ver = ProtocolVersion::new(
-                        channel.clone(),
-                        fud.p2p.settings().clone(),
-                        fud.p2p.hosts().clone(),
-                    )
-                    .await;
+                    let proto_ver =
+                        ProtocolVersion::new(channel.clone(), fud.p2p.settings().clone()).await;
 
                     let handshake_task = session_out.perform_handshake_protocols(
                         proto_ver,
@@ -357,6 +390,8 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
                         continue
                     }
 
+                    let msg_subsystem = channel.message_subsystem();
+                    msg_subsystem.add_dispatch::<FudFileReply>().await;
                     let msg_subscriber = channel.subscribe_msg::<FudFileReply>().await.unwrap();
                     let request = FudFileRequest { file_hash };
 
@@ -400,12 +435,15 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
 
         if !found {
             warn!("Did not manage to fetch {} file metadata", file_hash);
-            fud.file_fetch_tx.send((file_hash, Err(Error::GeodeFileRouteNotFound))).await.unwrap();
+            fud.file_fetch_end_tx
+                .send((file_hash, Err(Error::GeodeFileRouteNotFound)))
+                .await
+                .unwrap();
             continue
         }
 
         info!("Successfully fetched {} file metadata", file_hash);
-        fud.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
+        fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
     }
 }
 
@@ -423,7 +461,7 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
 
         if peers.is_none() {
             warn!("Chunk {} not in routing table, cannot fetch", chunk_hash);
-            fud.chunk_fetch_tx
+            fud.chunk_fetch_end_tx
                 .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
                 .await
                 .unwrap();
@@ -442,12 +480,8 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
             let connector = Connector::new(fud.p2p.settings(), session_weak);
             match connector.connect(peer).await {
                 Ok((url, channel)) => {
-                    let proto_ver = ProtocolVersion::new(
-                        channel.clone(),
-                        fud.p2p.settings().clone(),
-                        fud.p2p.hosts().clone(),
-                    )
-                    .await;
+                    let proto_ver =
+                        ProtocolVersion::new(channel.clone(), fud.p2p.settings().clone()).await;
 
                     let handshake_task = session_out.perform_handshake_protocols(
                         proto_ver,
@@ -464,6 +498,8 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
                         continue
                     }
 
+                    let msg_subsystem = channel.message_subsystem();
+                    msg_subsystem.add_dispatch::<FudChunkReply>().await;
                     let msg_subscriber = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
                     let request = FudChunkRequest { chunk_hash };
 
@@ -516,7 +552,7 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
 
         if !found {
             warn!("Did not manage to fetch {} chunk", chunk_hash);
-            fud.chunk_fetch_tx
+            fud.chunk_fetch_end_tx
                 .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
                 .await
                 .unwrap();
@@ -524,7 +560,7 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
         }
 
         info!("Successfully fetched {} chunk", chunk_hash);
-        fud.chunk_fetch_tx.send((chunk_hash, Ok(()))).await.unwrap();
+        fud.chunk_fetch_end_tx.send((chunk_hash, Ok(()))).await.unwrap();
     }
 }
 
@@ -541,11 +577,37 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let geode = Geode::new(&basedir).await?;
 
     info!("Instantiating P2P network");
-    let p2p = P2p::new(args.net.into(), ex.clone()).await;
+    let p2p = P2p::new(args.net.into(), ex.clone()).await?;
+
+    info!("Starting dnet subs task");
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let dnet_sub_ = dnet_sub.clone();
+    let p2p_ = p2p.clone();
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
+            let dnet_sub = p2p_.dnet_subscribe().await;
+            loop {
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                dnet_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     // Daemon instantiation
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
+    let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
     let (chunk_fetch_tx, chunk_fetch_rx) = smol::channel::unbounded();
+    let (chunk_fetch_end_tx, chunk_fetch_end_rx) = smol::channel::unbounded();
     let fud = Arc::new(Fud {
         metadata_router,
         chunks_router,
@@ -553,9 +615,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         geode,
         file_fetch_tx,
         file_fetch_rx,
+        file_fetch_end_tx,
+        file_fetch_end_rx,
         chunk_fetch_tx,
         chunk_fetch_rx,
+        chunk_fetch_end_tx,
+        chunk_fetch_end_rx,
         rpc_connections: Mutex::new(HashSet::new()),
+        dnet_sub,
     });
 
     info!(target: "fud", "Starting fetch file task");
@@ -606,7 +673,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let registry = p2p.protocol_registry();
     let fud_ = fud.clone();
     registry
-        .register(net::SESSION_NET, move |channel, p2p| {
+        .register(SESSION_DEFAULT, move |channel, p2p| {
             let fud_ = fud_.clone();
             async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
         })

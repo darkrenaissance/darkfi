@@ -7,31 +7,7 @@
 ## uncommenting, or by using the command-line.
 
 # Path to the contents directory
-#folder = "~/.config/darkfi/fud"
-
-# P2P accept addresses
-#p2p_accept = ["tls://127.0.0.1:13337"]
-
-# P2P external addresses
-#p2p_external = ["tls://127.0.0.1:13337"]
-
-# Connection slots
-#slots = 8
-
-# Seed nodes to connect to
-seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
-
-# Peers to connect to
-#peers = []
-
-# Prefered transports for outbound connections
-#transports = ["tls", "tcp"]
-
-# Enable localnet hosts
-#localnet = false
-
-# Enable channel log
-#channel_log = false
+base_dir = "~/.local/share/darkfi/fud"
 
 # JSON-RPC settings
 [rpc]
@@ -39,4 +15,58 @@ seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
 rpc_listen = "tcp://127.0.0.1:13336"
 
 # Disabled RPC methods
-#rpc_disabled_methods = []
+rpc_disabled_methods = ["p2p.get_info"]
+
+# P2P network settings
+[net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/fud"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
+
+## P2P accept addresses
+# inbound = ["tcp://0.0.0.0:13337"]
+
+## Outbound connection slots
+# outbound_connections = 8
+
+## Inbound connection slots
+#inbound_connections = 8
+
+## White connection percent
+# gold_connect_count = 2
+
+## White connection percent
+# white_connect_percent = 70
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["tcp+tls://my.resolveable.address:26661"]
+
+## Seed nodes to connect to
+seeds = [
+    #"tcp+tls://lilith0.dark.fi:5262",
+    #"tcp+tls://lilith1.dark.fi:5262",
+    #"tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
+    #"tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
+]
+
+## Manual peers to connect to
+#peers = []
+
+# Whitelisted transports for outbound connections
+allowed_transports = ["tcp", "tcp+tls"]
+#allowed_transports = ["tor"]
+#allowed_transports = ["tor", "tor+tls"]
+
+# Enable transport mixing
+# Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
+# By default this is not allowed.
+transport_mixing = false
+
+# Nodes to avoid interacting with for the duration of the program, in the
+# format ["host", ["scheme", "scheme"], [port, port]].
+# If scheme is left empty it will default to "tcp+tls".
+# If ports are left empty all ports from this peer will be blocked.
+#blacklist = [["example.com", ["tcp"], [8551, 23331]]]

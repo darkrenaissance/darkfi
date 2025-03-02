@@ -20,7 +20,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use darkfi::{
-    geode::MAX_CHUNK_SIZE,
+    geode::{read_until_filled, MAX_CHUNK_SIZE},
     impl_p2p_message,
     net::{
         metering::{DEFAULT_METERING_CONFIGURATION, MeteringConfiguration},
@@ -31,7 +31,7 @@ use darkfi::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::{debug, error};
-use smol::{fs::File, io::AsyncReadExt, Executor};
+use smol::{fs::File, Executor};
 use url::Url;
 
 use super::Fud;
@@ -282,6 +282,13 @@ impl ProtocolFud {
                     metadata_lock.insert(fud_file.file_hash, peers);
                 }
             }
+
+            let excluded_peers: Vec<Url> = metadata_lock
+                .get(&fud_file.file_hash)
+                .unwrap_or(&HashSet::new())
+                .iter()
+                .cloned()
+                .collect();
             drop(metadata_lock);
 
             let mut chunks_lock = self.fud.chunks_router.write().await;
@@ -310,7 +317,8 @@ impl ProtocolFud {
             self.p2p
                 .broadcast_with_exclude(
                     &route,
-                    &[self.channel.address().clone(), fud_file.peer.clone()],
+                    &[vec![self.channel.address().clone(), fud_file.peer.clone()], excluded_peers]
+                        .concat(),
                 )
                 .await;
         }
@@ -344,6 +352,12 @@ impl ProtocolFud {
                     chunks_lock.insert(fud_chunk.chunk_hash, peers);
                 }
             }
+            let excluded_peers: Vec<Url> = chunks_lock
+                .get(&fud_chunk.chunk_hash)
+                .unwrap_or(&HashSet::new())
+                .iter()
+                .cloned()
+                .collect();
             drop(chunks_lock);
 
             // Relay this knowledge of the new route
@@ -353,7 +367,8 @@ impl ProtocolFud {
             self.p2p
                 .broadcast_with_exclude(
                     &route,
-                    &[self.channel.address().clone(), fud_chunk.peer.clone()],
+                    &[vec![self.channel.address().clone(), fud_chunk.peer.clone()], excluded_peers]
+                        .concat(),
                 )
                 .await;
         }
@@ -434,9 +449,9 @@ impl ProtocolFud {
 
             // The consistency should already be checked in Geode, so we're
             // fine not checking and unwrapping here.
-            let mut buf = [0u8; MAX_CHUNK_SIZE];
+            let mut buf = vec![0u8; MAX_CHUNK_SIZE];
             let mut chunk_fd = File::open(&chunk_path).await.unwrap();
-            let bytes_read = chunk_fd.read(&mut buf).await.unwrap();
+            let bytes_read = read_until_filled(&mut chunk_fd, &mut buf).await.unwrap();
             let chunk_slice = &buf[..bytes_read];
 
             let reply = FudChunkReply { chunk: chunk_slice.to_vec() };

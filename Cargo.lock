@@ -3377,10 +3377,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "fu"
+version = "0.4.1"
+dependencies = [
+ "clap 4.5.31",
+ "darkfi",
+ "log",
+ "simplelog",
+ "smol",
+ "url",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
+
+[[package]]
+name = "fud"
+version = "0.4.1"
+dependencies = [
+ "async-trait",
+ "blake3 1.6.0",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "serde",
+ "signal-hook",
+ "signal-hook-async-std",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "tinyjson",
+ "url",
+]
 
 [[package]]
 name = "funty"

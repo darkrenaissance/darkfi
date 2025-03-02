@@ -31,9 +31,9 @@ OPTIONS:
         --transports <transports>...        Prefered transports for outbound connections (repeatable flag)
 ```
 
-On first execution, daemon will create default config file ~/.config/darkfi/fud_config.toml.
+On first execution, daemon will create default config file ~/.config/darkfi/fud/fud_config.toml.
 Configuration must be verified and application should be configured accordingly.
-Additionaly, default content folder will be created at ~/.config/darkfi/fud.
+Additionaly, default content folder will be created at ~/.local/share/darkfi/fud.
 
 Run fud as follows:
 
@@ -42,7 +42,7 @@ Run fud as follows:
 13:23:04 [INFO] Starting JSON-RPC server
 13:23:04 [INFO] Starting sync P2P network
 13:23:04 [WARN] Skipping seed sync process since no seeds are configured.
-13:23:04 [INFO] Initializing fud dht state for folder: "/home/x/.config/darkfi/fud"
+13:23:04 [INFO] Initializing fud dht state for folder: "/home/x/.local/share/darkfi/fud"
 13:23:04 [INFO] Not configured for accepting incoming connections.
 13:23:04 [INFO] JSON-RPC listener bound to tcp://127.0.0.1:13337
 13:23:04 [INFO] Entry: seedd_config.toml

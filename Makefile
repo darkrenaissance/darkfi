@@ -31,7 +31,9 @@ BINS = \
 	lilith \
 	taud \
 	vanityaddr \
-	explorerd
+	explorerd \
+	fud \
+	fu
 
 all: $(BINS)
 
@@ -129,6 +131,20 @@ explorerd:
 
 explorerd_bundle_contracts_src: contracts
 	$(MAKE) -C bin/explorer/explorerd bundle_contracts_src
+
+fud:
+	$(MAKE) -C bin/fud/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
+fu:
+	$(MAKE) -C bin/fud/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 # -- END OF BINS --
 
