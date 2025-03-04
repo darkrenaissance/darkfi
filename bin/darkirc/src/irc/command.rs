@@ -959,6 +959,9 @@ impl Client {
 
     /// Internal function that scans the DAG and returns events for
     /// given channels. Will return empty if no_history CAP is requested.
+    // N.b. the handling of "live messages" is implemented
+    // <file:./client.rs::r = self.incoming.receive().fuse() => {>
+    // for which the logic for delivery should be kept in sync
     async fn get_history(&self, channels: &HashSet<String>) -> Result<Vec<ReplyType>> {
         if channels.is_empty() || *self.caps.read().await.get("no-history").unwrap() {
             return Ok(vec![])
@@ -992,14 +995,16 @@ impl Client {
             // Potentially decrypt the privmsg
             self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
 
-            // If the privmsg is intented for any of the given
-            // channels, contacts or oursleves, add it as a reply and
+            // We should skip any attempts to contact services from the network.
+            if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
+                continue
+            }
+
+            // If the PRIVMSG is intended for any of the given
+            // channels or contacts, add it as a reply and
             // mark it as seen in the seen_events tree.
             let contacts = self.server.contacts.read().await;
-            if !channels.contains(&privmsg.channel) &&
-                !contacts.contains_key(&privmsg.channel) &&
-                !contacts.contains_key(&privmsg.nick)
-            {
+            if !channels.contains(&privmsg.channel) && !contacts.contains_key(&privmsg.channel) {
                 continue
             }
 
@@ -1008,8 +1013,21 @@ impl Client {
                 chan.nicks.insert(privmsg.nick.clone());
             }
 
-            let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
-            replies.push(ReplyType::Client((privmsg.nick, msg)));
+            // Handle message lines individually
+            for line in privmsg.msg.lines() {
+                // Skip empty lines
+                if line.is_empty() {
+                    continue;
+                }
+
+                // Format the message
+                let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+
+                // Send it to the client
+                replies.push(ReplyType::Client((privmsg.nick.clone(), msg)));
+            }
+
+            // Mark the message as seen for this USER
             if let Err(e) = self.mark_seen(&event_id).await {
                 error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
                 return Err(e)

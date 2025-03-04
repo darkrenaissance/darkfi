@@ -250,6 +250,11 @@ impl Client {
                 }
 
                 // Process message from the network. These should only be PRIVMSG.
+                //
+                // N.b. handling "historical messages", i.e. outstanding messages
+                // which have occured when darkirc is offline are handled in
+                // <file:./command.rs::async fn get_history(&self, channels: &HashSet<String>) -> Result<Vec<ReplyType>> {>
+                // for which the logic for delivery should be kept in sync
                 r = self.incoming.receive().fuse() => {
                     // We will skip this if it's our own message.
                     let event_id = r.id();
