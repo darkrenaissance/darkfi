@@ -106,18 +106,18 @@ impl FromStr for MerkleNode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = match bs58::decode(s).into_vec() {
             Ok(v) => v,
-            Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            Err(e) => return Err(io::Error::other(e)),
         };
 
         if bytes.len() != 32 {
-            return Err(io::Error::new(io::ErrorKind::Other, "Length of decoded bytes is not 32"))
+            return Err(io::Error::other("Length of decoded bytes is not 32"))
         }
 
         if let Some(merkle_node) = Self::from_bytes(bytes.try_into().unwrap()) {
             return Ok(merkle_node)
         }
 
-        Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for MerkleNode"))
+        Err(io::Error::other("Invalid bytes for MerkleNode"))
     }
 }
 

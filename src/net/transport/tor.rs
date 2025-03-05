@@ -98,10 +98,7 @@ impl TorDialer {
             Ok(client) => client,
             Err(e) => {
                 warn!("{}", e.report());
-                return Err(io::Error::new(
-                    ErrorKind::Other,
-                    "Internal Tor error, see logged warning",
-                ))
+                return Err(io::Error::other("Internal Tor error, see logged warning"))
             }
         };
 
@@ -123,10 +120,7 @@ impl TorDialer {
 
                     Either::Left((Err(e), _)) => {
                         warn!("{}", e.report());
-                        Err(io::Error::new(
-                            ErrorKind::Other,
-                            "Internal Tor error, see logged warning",
-                        ))
+                        Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
 
                     Either::Right((_, _)) => Err(io::ErrorKind::TimedOut.into()),
@@ -142,10 +136,7 @@ impl TorDialer {
                         // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
                         // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
                         warn!("{}", e.report());
-                        Err(io::Error::new(
-                            ErrorKind::Other,
-                            "Internal Tor error, see logged warning",
-                        ))
+                        Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
                 }
             }
@@ -190,10 +181,7 @@ impl TorListener {
             Ok(client) => client,
             Err(e) => {
                 warn!("{}", e.report());
-                return Err(io::Error::new(
-                    ErrorKind::Other,
-                    "Internal Tor error, see logged warning",
-                ))
+                return Err(io::Error::other("Internal Tor error, see logged warning"))
             }
         };
 
@@ -206,7 +194,7 @@ impl TorListener {
                     target: "net::tor::do_listen",
                     "[P2P] Failed to create OnionServiceConfig: {}", e,
                 );
-                return Err(io::Error::new(ErrorKind::Other, "Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"))
             }
         };
 
@@ -217,7 +205,7 @@ impl TorListener {
                     target: "net::tor::do_listen",
                     "[P2P] Failed to launch Onion Service: {}", e,
                 );
-                return Err(io::Error::new(ErrorKind::Other, "Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"))
             }
         };
 
@@ -292,7 +280,7 @@ impl PtListener for TorListenerIntern {
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor StreamRequest: {}", e,
                 );
-                return Err(io::Error::new(ErrorKind::Other, "Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"))
             }
         };
 
