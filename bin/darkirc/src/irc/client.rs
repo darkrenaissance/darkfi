@@ -164,6 +164,12 @@ impl Client {
             futures::select! {
                 // Process message from the IRC client
                 r = reader.read_line(&mut line).fuse() => {
+                    // If client closed unexpectedly, we disconnect.
+                    if let Ok(0) = r {
+                        error!("[IRC CLIENT] Read failed for {}: Client disconnected", self.addr);
+                        self.incoming.unsubscribe().await;
+                        return Err(Error::ChannelStopped)
+                    }
                     // If something failed during reading, we disconnect.
                     if let Err(e) = r {
                         error!("[IRC CLIENT] Read failed for {}: {}", self.addr, e);
