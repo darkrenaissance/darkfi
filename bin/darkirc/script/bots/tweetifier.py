@@ -25,7 +25,8 @@ signal.signal(signal.SIGINT, signal_handler)
 while True:
     text = ircc.get_response().strip()
     if not len(text) > 0:
-        continue
+        print("Error: disconnected from server")
+        exit(-1)
     print(text)
     text_list = text.split(' ')
     if text_list[1] == "PRIVMSG":

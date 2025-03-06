@@ -15,7 +15,7 @@ MAX_NICK_LENGTH = 10
 MAX_MESSAGE_LENGTH = MessageLimit.MAX_TEXT_LENGTH - (MAX_CHANNEL_LENGTH + MAX_NICK_LENGTH + 16)
 
 SERVER = "127.0.0.1"
-PORT = 6645
+PORT = 22025
 CHANNELS = ["#dev","#memes","#philosophy","#markets","#math","#random",]
 BOTNICK = "tgbridge"
 
@@ -60,8 +60,11 @@ ircc.connect(SERVER, PORT, CHANNELS, BOTNICK)
 async def main():
     while True:
         text = ircc.get_response()
+        # print("loop")
+        print("text: " + text)
         if not len(text) > 0:
-            continue
+            print("Error: disconnected from server")
+            exit(-1)
         text_list = text.split(' ')
         nick = text_list[0].split('!')[0][1:]
         if text_list[1] == "PRIVMSG":
@@ -91,7 +94,7 @@ async def main():
                 message = nick + message[7:]
                 nick = "*"
 
-            append_log(channel, nick, message)
+            # append_log(channel, nick, message)
 
             # Pad and left/right justify channel and nickname
             channel = channel[:MAX_CHANNEL_LENGTH].ljust(MAX_CHANNEL_LENGTH)
@@ -101,21 +104,22 @@ async def main():
             while len(message) > 0:
                 string_to_telegram = f"<code>{channel} {nick} |</code> {message[:MAX_MESSAGE_LENGTH]}"
 
-                # Keep retrying until the fucker is sent
-                while True:
-                    try:
-                        async with Bot(TOKEN) as bot:
-                            await bot.send_message("@darkfi_darkirc", string_to_telegram,
-                                                parse_mode="HTML",
-                                                disable_notification=True,
-                                                disable_web_page_preview=True)
-                        break
-                    #except telegram.error.BadRequest:
-                    #    pass
-                    except:
-                        print(channel, string_to_telegram)
-                        print(traceback.format_exc())
-                        await asyncio.sleep(3)
+                print("tele: " + string_to_telegram)
+                # # Keep retrying until the fucker is sent
+                # while True:
+                #     try:
+                #         async with Bot(TOKEN) as bot:
+                #             await bot.send_message("@darkfi_darkirc", string_to_telegram,
+                #                                 parse_mode="HTML",
+                #                                 disable_notification=True,
+                #                                 disable_web_page_preview=True)
+                #         break
+                #     #except telegram.error.BadRequest:
+                #     #    pass
+                #     except:
+                #         print(channel, string_to_telegram)
+                #         print(traceback.format_exc())
+                #         await asyncio.sleep(3)
 
                 message = message[MAX_MESSAGE_LENGTH:]
 

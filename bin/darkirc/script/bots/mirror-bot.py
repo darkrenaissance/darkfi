@@ -48,7 +48,8 @@ signal.signal(signal.SIGINT, signal_handler)
 while True:
     darkirc_text = darkirc.get_response()
     if not len(darkirc_text.strip()) > 0:
-        continue
+        print("Error: disconnected from server")
+        exit(-1)
     
     print(darkirc_text)
     text_list = darkirc_text.split(' ')
