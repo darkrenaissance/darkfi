@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::HashMap,
     fmt,
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
@@ -43,6 +44,7 @@ use super::{
     message,
     message::{SerializedMessage, VersionMessage},
     message_publisher::{MessageSubscription, MessageSubsystem},
+    metering::{MeteringConfiguration, MeteringQueue},
     p2p::P2pPtr,
     session::{
         Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_REFINE,
@@ -51,7 +53,7 @@ use super::{
 };
 use crate::{
     net::BanPolicy,
-    system::{Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     util::time::NanoTimestamp,
     Error, Result,
 };
@@ -96,6 +98,9 @@ pub struct Channel {
     pub version: OnceCell<Arc<VersionMessage>>,
     /// Channel debug info
     pub info: ChannelInfo,
+    /// Map holding a `MeteringQueue` for each [`Message`] to perform
+    /// rate limiting of propagation towards the stream.
+    metering_map: AsyncMutex<HashMap<String, MeteringQueue>>,
 }
 
 impl Channel {
@@ -117,6 +122,7 @@ impl Channel {
 
         let start_time = UNIX_EPOCH.elapsed().unwrap().as_secs();
         let info = ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time);
+        let metering_map = AsyncMutex::new(HashMap::new());
 
         Arc::new(Self {
             reader,
@@ -128,6 +134,7 @@ impl Channel {
             session,
             version: OnceCell::new(),
             info,
+            metering_map,
         })
     }
 
@@ -189,18 +196,60 @@ impl Channel {
     /// into a `SerializedMessage` and then calls `send_serialized` to send it.
     /// Returns an error if something goes wrong.
     pub async fn send<M: message::Message>(&self, message: &M) -> Result<()> {
-        self.send_serialized(&SerializedMessage::new(message).await).await
+        self.send_serialized(
+            &SerializedMessage::new(message).await,
+            &M::METERING_SCORE,
+            &M::METERING_CONFIGURATION,
+        )
+        .await
     }
 
     /// Sends the encoded payload of provided `SerializedMessage` across the channel.
-    /// Calls `send_message` that creates a new payload and sends it over the
-    /// network transport as a packet. Returns an error if something goes wrong.
-    pub async fn send_serialized(&self, message: &SerializedMessage) -> Result<()> {
+    ///
+    /// We first check if we should apply some throttling, based on the provided
+    /// `Message` configuration. We always sleep 2x times more that the exepted one,
+    /// so we don't flood the peer.
+    /// Then, calls `send_message` that creates a new payload and sends it over the
+    /// network transport as a packet.
+    /// Returns an error if something goes wrong.
+    pub async fn send_serialized(
+        &self,
+        message: &SerializedMessage,
+        metering_score: &u64,
+        metering_config: &MeteringConfiguration,
+    ) -> Result<()> {
         debug!(
              target: "net::channel::send()", "[START] command={} {:?}",
              message.command, self,
         );
 
+        // Check if we need to initialize a `MeteringQueue`
+        // for this specific `Message`.
+        let mut lock = self.metering_map.lock().await;
+        if !lock.contains_key(&message.command) {
+            lock.insert(message.command.clone(), MeteringQueue::new(metering_config.clone()));
+        }
+
+        // Insert metering information and grab potential sleep time.
+        // It's safe to unwrap here since we initialized the value
+        // previously.
+        let queue = lock.get_mut(&message.command).unwrap();
+        queue.push(metering_score);
+        let sleep_time = queue.sleep_time();
+        drop(lock);
+
+        // Check if we need to sleep
+        if let Some(sleep_time) = sleep_time {
+            let sleep_time = 2 * sleep_time;
+            warn!(
+                target: "net::channel::send()",
+                "[P2P] Channel rate limit is active, sleeping before sending for: {} (ms)",
+                sleep_time,
+            );
+            msleep(sleep_time).await;
+        }
+
+        // Check if the channel is stopped, so we can abort
         if self.is_stopped() {
             return Err(Error::ChannelStopped)
         }
@@ -382,7 +431,9 @@ impl Channel {
             // Send result to our publishers
             match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
-                Err(Error::MissingDispatcher) | Err(Error::MessageInvalid) => {
+                Err(Error::MissingDispatcher) |
+                Err(Error::MessageInvalid) |
+                Err(Error::MeteringLimitExceeded) => {
                     // If we're getting messages without dispatchers or its invalid,
                     // it's spam. We therefore ban this channel if:
                     //
@@ -402,7 +453,7 @@ impl Channel {
                     if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
                         warn!(
                         target: "net::channel::main_receive_loop()",
-                        "MissingDispatcher for command={}, channel={:?}",
+                        "MissingDispatcher|MessageInvalid|MeteringLimitExcheeded for command={}, channel={:?}",
                         command, self
                         );
 

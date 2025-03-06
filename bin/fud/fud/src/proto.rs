@@ -23,6 +23,7 @@ use darkfi::{
     geode::MAX_CHUNK_SIZE,
     impl_p2p_message,
     net::{
+        metering::{DEFAULT_METERING_CONFIGURATION, MeteringConfiguration},
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
@@ -41,14 +42,14 @@ pub struct FudFilePut {
     pub file_hash: blake3::Hash,
     pub chunk_hashes: Vec<blake3::Hash>,
 }
-impl_p2p_message!(FudFilePut, "FudFilePut", 0);
+impl_p2p_message!(FudFilePut, "FudFilePut", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a new chunk on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkPut {
     pub chunk_hash: blake3::Hash,
 }
-impl_p2p_message!(FudChunkPut, "FudChunkPut", 0);
+impl_p2p_message!(FudChunkPut, "FudChunkPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a new route for a file on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -57,7 +58,7 @@ pub struct FudFileRoute {
     pub chunk_hashes: Vec<blake3::Hash>,
     pub peer: Url,
 }
-impl_p2p_message!(FudFileRoute, "FudFileRoute", 0);
+impl_p2p_message!(FudFileRoute, "FudFileRoute", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a new route for a chunk on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -65,28 +66,28 @@ pub struct FudChunkRoute {
     pub chunk_hash: blake3::Hash,
     pub peer: Url,
 }
-impl_p2p_message!(FudChunkRoute, "FudChunkRoute", 0);
+impl_p2p_message!(FudChunkRoute, "FudChunkRoute", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a file request from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileRequest {
     pub file_hash: blake3::Hash,
 }
-impl_p2p_message!(FudFileRequest, "FudFileRequest", 0);
+impl_p2p_message!(FudFileRequest, "FudFileRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileReply {
     pub chunk_hashes: Vec<blake3::Hash>,
 }
-impl_p2p_message!(FudFileReply, "FudFileReply", 0);
+impl_p2p_message!(FudFileReply, "FudFileReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a chunk request from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkRequest {
     pub chunk_hash: blake3::Hash,
 }
-impl_p2p_message!(FudChunkRequest, "FudChunkRequest", 0);
+impl_p2p_message!(FudChunkRequest, "FudChunkRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a chunk reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -94,17 +95,17 @@ pub struct FudChunkReply {
     // TODO: This sould be a chunk-sized array, but then we need padding?
     pub chunk: Vec<u8>,
 }
-impl_p2p_message!(FudChunkReply, "FudChunkReply", 0);
+impl_p2p_message!(FudChunkReply, "FudChunkReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a chunk reply when a file is not found
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFileNotFound;
-impl_p2p_message!(FudFileNotFound, "FudFileNotFound", 0);
+impl_p2p_message!(FudFileNotFound, "FudFileNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a chunk reply when a chunk is not found
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudChunkNotFound;
-impl_p2p_message!(FudChunkNotFound, "FudChunkNotFound", 0);
+impl_p2p_message!(FudChunkNotFound, "FudChunkNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// P2P protocol implementation for fud.
 pub struct ProtocolFud {

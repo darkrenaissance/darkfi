@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::net::Ipv6Addr;
+
 use darkfi_serial::{
     async_trait, serialize_async, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable,
 };
-use std::net::Ipv6Addr;
 use url::{Host, Url};
+
+use crate::net::metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION};
 
 /// Generic message template.
 pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
@@ -28,6 +31,12 @@ pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
     /// Message bytes vector length limit.
     /// Set to 0 for no limit.
     const MAX_BYTES: u64;
+    /// Message metering score value.
+    /// Set to 0 for no impact in metering.
+    const METERING_SCORE: u64;
+    /// Message metering configuration for rate limit.
+    /// Use `MeteringConfiguration::default()` for no limit.
+    const METERING_CONFIGURATION: MeteringConfiguration;
 }
 
 /// Generic serialized message template.
@@ -44,10 +53,12 @@ impl SerializedMessage {
 
 #[macro_export]
 macro_rules! impl_p2p_message {
-    ($st:ty, $nm:expr, $mb:expr) => {
+    ($st:ty, $nm:expr, $mb:expr, $ms:expr, $mc:expr) => {
         impl Message for $st {
             const NAME: &'static str = $nm;
             const MAX_BYTES: u64 = $mb;
+            const METERING_SCORE: u64 = $ms;
+            const METERING_CONFIGURATION: MeteringConfiguration = $mc;
         }
     };
 }
@@ -57,14 +68,14 @@ macro_rules! impl_p2p_message {
 pub struct PingMessage {
     pub nonce: u16,
 }
-impl_p2p_message!(PingMessage, "ping", 0);
+impl_p2p_message!(PingMessage, "ping", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Inbound keepalive message.
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PongMessage {
     pub nonce: u16,
 }
-impl_p2p_message!(PongMessage, "pong", 0);
+impl_p2p_message!(PongMessage, "pong", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Requests address of outbound connecction.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -77,7 +88,7 @@ pub struct GetAddrsMessage {
     /// Preferred addresses transports
     pub transports: Vec<String>,
 }
-impl_p2p_message!(GetAddrsMessage, "getaddr", 0);
+impl_p2p_message!(GetAddrsMessage, "getaddr", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Sends address information to inbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -85,7 +96,7 @@ pub struct AddrsMessage {
     pub addrs: Vec<(Url, u64)>,
 }
 
-impl_p2p_message!(AddrsMessage, "addr", 0);
+impl_p2p_message!(AddrsMessage, "addr", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Requests version information of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -109,7 +120,7 @@ pub struct VersionMessage {
     /// to be enabled for this connection
     pub features: Vec<(String, u32)>,
 }
-impl_p2p_message!(VersionMessage, "version", 0);
+impl_p2p_message!(VersionMessage, "version", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 impl VersionMessage {
     pub(in crate::net) fn get_ipv6_addr(&self) -> Option<Ipv6Addr> {
@@ -129,4 +140,4 @@ pub struct VerackMessage {
     /// App version
     pub app_version: semver::Version,
 }
-impl_p2p_message!(VerackMessage, "verack", 0);
+impl_p2p_message!(VerackMessage, "verack", 0, 0, DEFAULT_METERING_CONFIGURATION);

@@ -26,6 +26,7 @@ use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use darkfi::{
     async_daemonize, cli_desc, impl_p2p_message,
     net::{
+        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
         protocol::protocol_generic::{
             ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
         },
@@ -71,25 +72,49 @@ struct Args {
 struct GenericStringMessage {
     msg: String,
 }
-impl_p2p_message!(GenericStringMessage, "generic_string_message", 0);
+impl_p2p_message!(
+    GenericStringMessage,
+    "generic_string_message",
+    0,
+    0,
+    DEFAULT_METERING_CONFIGURATION
+);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericNumberMessage {
     num: u64,
 }
-impl_p2p_message!(GenericNumberMessage, "generic_number_message", 0);
+impl_p2p_message!(
+    GenericNumberMessage,
+    "generic_number_message",
+    0,
+    0,
+    DEFAULT_METERING_CONFIGURATION
+);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericRequestMessage {
     msg: String,
 }
-impl_p2p_message!(GenericRequestMessage, "generic_request_message", 0);
+impl_p2p_message!(
+    GenericRequestMessage,
+    "generic_request_message",
+    0,
+    0,
+    DEFAULT_METERING_CONFIGURATION
+);
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 struct GenericResponseMessage {
     msg: String,
 }
-impl_p2p_message!(GenericResponseMessage, "generic_response_message", 0);
+impl_p2p_message!(
+    GenericResponseMessage,
+    "generic_response_message",
+    0,
+    0,
+    DEFAULT_METERING_CONFIGURATION
+);
 
 /// Generic daemon structure
 struct Genericd {

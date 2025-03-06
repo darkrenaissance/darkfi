@@ -29,7 +29,17 @@ use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
-use crate::{impl_p2p_message, net::*, system::msleep, util::time::NanoTimestamp, Error, Result};
+use crate::{
+    impl_p2p_message,
+    net::{
+        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        ChannelPtr, Message, MessageSubscription, ProtocolBase, ProtocolBasePtr,
+        ProtocolJobsManager, ProtocolJobsManagerPtr,
+    },
+    system::msleep,
+    util::time::NanoTimestamp,
+    Error, Result,
+};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
@@ -116,27 +126,27 @@ pub struct ProtocolEventGraph {
 /// A P2P message representing publishing an event on the network
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventPut(pub Event);
-impl_p2p_message!(EventPut, "EventGraph::EventPut", 0);
+impl_p2p_message!(EventPut, "EventGraph::EventPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing an event request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventReq(pub Vec<blake3::Hash>);
-impl_p2p_message!(EventReq, "EventGraph::EventReq", 0);
+impl_p2p_message!(EventReq, "EventGraph::EventReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing an event reply
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct EventRep(pub Vec<Event>);
-impl_p2p_message!(EventRep, "EventGraph::EventRep", 0);
+impl_p2p_message!(EventRep, "EventGraph::EventRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing a request for a peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct TipReq {}
-impl_p2p_message!(TipReq, "EventGraph::TipReq", 0);
+impl_p2p_message!(TipReq, "EventGraph::TipReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing a reply for the peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct TipRep(pub BTreeMap<u64, HashSet<blake3::Hash>>);
-impl_p2p_message!(TipRep, "EventGraph::TipRep", 0);
+impl_p2p_message!(TipRep, "EventGraph::TipRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 #[async_trait]
 impl ProtocolBase for ProtocolEventGraph {

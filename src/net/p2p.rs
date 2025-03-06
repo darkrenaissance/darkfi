@@ -195,23 +195,12 @@ impl P2p {
             return
         }
 
+        // Serialize the provided message
         let message = SerializedMessage::new(message).await;
-        let futures = FuturesUnordered::new();
 
-        for channel in channel_list {
-            futures.push(channel.send_serialized(&message).map_err(|e| {
-                error!(
-                    target: "net::p2p::broadcast()",
-                    "[P2P] Broadcasting message to {} failed: {}",
-                    channel.address(), e
-                );
-                // If the channel is stopped then it should automatically die
-                // and the session will remove it from p2p.
-                assert!(channel.is_stopped());
-            }));
-        }
-
-        let _results: Vec<_> = futures.collect().await;
+        // Spawn a detached task to actually send the message to the channels,
+        // so we don't block wiating channels that are rate limited.
+        self.executor.spawn(broadcast_serialized_to::<M>(message, channel_list.to_vec())).detach();
     }
 
     /// Check whether this node has connections to any peers. This method will
@@ -296,4 +285,31 @@ impl P2p {
     pub fn get_channel(&self, id: u32) -> Option<ChannelPtr> {
         self.hosts.get_channel(id)
     }
+}
+
+/// Auxiliary function to broadcast a serialized message concurrently to all given peers.
+async fn broadcast_serialized_to<M: Message>(
+    message: SerializedMessage,
+    channel_list: Vec<ChannelPtr>,
+) {
+    let futures = FuturesUnordered::new();
+
+    for channel in &channel_list {
+        futures.push(
+            channel
+                .send_serialized(&message, &M::METERING_SCORE, &M::METERING_CONFIGURATION)
+                .map_err(|e| {
+                    error!(
+                        target: "net::p2p::broadcast()",
+                        "[P2P] Broadcasting message to {} failed: {}",
+                        channel.address(), e
+                    );
+                    // If the channel is stopped then it should automatically die
+                    // and the session will remove it from p2p.
+                    assert!(channel.is_stopped());
+                }),
+        );
+    }
+
+    let _results: Vec<_> = futures.collect().await;
 }

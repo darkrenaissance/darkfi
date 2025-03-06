@@ -25,26 +25,43 @@ use rand::{rngs::OsRng, Rng};
 use smol::{io::AsyncReadExt, lock::Mutex};
 
 use super::message::Message;
-use crate::{net::transport::PtStream, system::timeout::timeout, Error, Result};
+use crate::{
+    net::{metering::MeteringQueue, transport::PtStream},
+    system::{msleep, timeout::timeout},
+    Error, Result,
+};
 use darkfi_serial::{AsyncDecodable, VarInt};
 
 /// 64-bit identifier for message subscription.
 pub type MessageSubscriptionId = u64;
 type MessageResult<M> = Result<Arc<M>>;
 
+/// Dispatcher subscriptions HashMap type.
+type DispatcherSubscriptionsMap<M> =
+    Mutex<HashMap<MessageSubscriptionId, smol::channel::Sender<(MessageResult<M>, Option<u64>)>>>;
+
 /// A dispatcher that is unique to every [`Message`].
+///
 /// Maintains a list of subscriptions to a unique Message
 /// type and handles sending messages across these
 /// subscriptions.
+///
+/// Additionally, holds a `MeteringQueue` using the
+/// [`Message`] configuration to perform rate limiting
+/// of propagation towards the subscriptions.
 #[derive(Debug)]
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<HashMap<MessageSubscriptionId, smol::channel::Sender<MessageResult<M>>>>,
+    subs: DispatcherSubscriptionsMap<M>,
+    metering_queue: Mutex<MeteringQueue>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
     /// Create a new message dispatcher
     fn new() -> Self {
-        Self { subs: Mutex::new(HashMap::new()) }
+        Self {
+            subs: Mutex::new(HashMap::new()),
+            metering_queue: Mutex::new(MeteringQueue::new(M::METERING_CONFIGURATION)),
+        }
     }
 
     /// Create a random ID.
@@ -84,11 +101,18 @@ impl<M: Message> MessageDispatcher<M> {
     async fn _trigger_all(&self, message: MessageResult<M>) {
         let mut subs = self.subs.lock().await;
 
+        let msg_result_type = if message.is_ok() { "Ok" } else { "Err" };
         debug!(
             target: "net::message_publisher::_trigger_all()", "START msg={}({}), subs={}",
-            if message.is_ok() { "Ok" } else {"Err"},
+            msg_result_type,
             M::NAME, subs.len(),
         );
+
+        // Insert metering information and grab potential sleep time
+        let mut queue = self.metering_queue.lock().await;
+        queue.push(&M::METERING_SCORE);
+        let sleep_time = queue.sleep_time();
+        drop(queue);
 
         let mut futures = FuturesUnordered::new();
         let mut garbage_ids = vec![];
@@ -99,7 +123,7 @@ impl<M: Message> MessageDispatcher<M> {
             let sub = sub.clone();
             let message = message.clone();
             futures.push(async move {
-                match sub.send(message).await {
+                match sub.send((message, sleep_time)).await {
                     Ok(res) => Ok((sub_id, res)),
                     Err(err) => Err((sub_id, err)),
                 }
@@ -120,7 +144,7 @@ impl<M: Message> MessageDispatcher<M> {
 
         debug!(
             target: "net::message_publisher::_trigger_all()", "END msg={}({}), subs={}",
-            if message.is_ok() { "Ok" } else { "Err" },
+            msg_result_type,
             M::NAME, subs.len(),
         );
     }
@@ -131,17 +155,28 @@ impl<M: Message> MessageDispatcher<M> {
 #[derive(Debug)]
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionId,
-    recv_queue: smol::channel::Receiver<MessageResult<M>>,
+    recv_queue: smol::channel::Receiver<(MessageResult<M>, Option<u64>)>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
 impl<M: Message> MessageSubscription<M> {
     /// Start receiving messages.
+    /// Sender also provides with a sleep time,
+    /// in case rate limit has started.
     pub async fn receive(&self) -> MessageResult<M> {
-        match self.recv_queue.recv().await {
-            Ok(message) => message,
+        let (message, sleep_time) = match self.recv_queue.recv().await {
+            Ok(pair) => pair,
             Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {}", e),
+        };
+
+        // Check if we need to sleep
+        if message.is_ok() {
+            if let Some(sleep_time) = sleep_time {
+                msleep(sleep_time).await;
+            }
         }
+
+        message
     }
 
     /// Start receiving messages with timeout.
@@ -150,12 +185,22 @@ impl<M: Message> MessageSubscription<M> {
         let Ok(res) = timeout(dur, self.recv_queue.recv()).await else {
             return Err(Error::ConnectTimeout)
         };
-        match res {
-            Ok(message) => message,
+
+        let (message, sleep_time) = match res {
+            Ok(pair) => pair,
             Err(e) => {
                 panic!("MessageSubscription::receive_with_timeout(): recv_queue failed! {}", e)
             }
+        };
+
+        // Check if we need to sleep
+        if message.is_ok() {
+            if let Some(sleep_time) = sleep_time {
+                msleep(sleep_time).await;
+            }
         }
+
+        message
     }
 
     /// Cleans existing items from the receiver channel.
@@ -184,6 +229,8 @@ trait MessageDispatcherInterface: Send + Sync {
     ) -> Result<()>;
 
     async fn trigger_error(&self, err: Error);
+
+    async fn metering_score(&self) -> u64;
 
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
@@ -248,6 +295,14 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         self._trigger_all(Err(err)).await;
     }
 
+    /// Internal function to retrieve metering queue current total score,
+    /// after prunning expired metering information.
+    async fn metering_score(&self) -> u64 {
+        let mut lock = self.metering_queue.lock().await;
+        lock.clean();
+        lock.total()
+    }
+
     /// Converts to `Any` trait. Enables the dynamic modification of static types.
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
@@ -255,22 +310,34 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 }
 
 /// Generic publish/subscribe class that maintains a list of dispatchers.
+///
 /// Dispatchers transmit messages to subscribers and are specific to one
 /// message type.
+///
+/// Additionally, holds a global metering limit, which is the sum of each
+/// dispatcher `MeteringQueue` threshold, to drop the connection if passed.
 #[derive(Default)]
 pub struct MessageSubsystem {
     dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
+    metering_limit: Mutex<u64>,
 }
 
 impl MessageSubsystem {
     /// Create a new message subsystem.
     pub fn new() -> Self {
-        Self { dispatchers: Mutex::new(HashMap::new()) }
+        Self { dispatchers: Mutex::new(HashMap::new()), metering_limit: Mutex::new(0) }
     }
 
     /// Add a new dispatcher for specified [`Message`].
     pub async fn add_dispatch<M: Message>(&self) {
-        self.dispatchers.lock().await.insert(M::NAME, Arc::new(MessageDispatcher::<M>::new()));
+        // First lock the dispatchers
+        let mut lock = self.dispatchers.lock().await;
+
+        // Update the metering limit
+        *self.metering_limit.lock().await += M::METERING_CONFIGURATION.threshold;
+
+        // Insert the new dispatcher
+        lock.insert(M::NAME, Arc::new(MessageDispatcher::<M>::new()));
     }
 
     /// Subscribes to a [`Message`]. Using the Message name, the method
@@ -305,11 +372,32 @@ impl MessageSubsystem {
         command: &str,
         reader: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,
     ) -> Result<()> {
-        let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
-            return Err(Error::MissingDispatcher)
-        };
+        // Iterate over dispatchers and keep track of their current
+        // metering score
+        let mut found = false;
+        let mut total_score = 0;
+        for (name, dispatcher) in self.dispatchers.lock().await.iter() {
+            // If dispatcher is the command one, trasmit the message
+            if name == &command {
+                dispatcher.trigger(reader).await?;
+                found = true;
+            }
 
-        dispatcher.trigger(reader).await
+            // Grab its total score
+            total_score += dispatcher.metering_score().await;
+        }
+
+        // Check if dispatcher was found
+        if !found {
+            return Err(Error::MissingDispatcher)
+        }
+
+        // Check if we are over the global metering limit
+        if total_score > *self.metering_limit.lock().await {
+            return Err(Error::MeteringLimitExceeded)
+        }
+
+        Ok(())
     }
 
     /// Concurrently transmits an error message across dispatchers.

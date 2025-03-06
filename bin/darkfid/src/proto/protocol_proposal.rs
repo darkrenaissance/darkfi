@@ -26,6 +26,7 @@ use tinyjson::JsonValue;
 use darkfi::{
     impl_p2p_message,
     net::{
+        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
         protocol::protocol_generic::{
             ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
         },
@@ -46,7 +47,7 @@ use crate::task::handle_unknown_proposal;
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ProposalMessage(pub Proposal);
 
-impl_p2p_message!(ProposalMessage, "proposal", 0);
+impl_p2p_message!(ProposalMessage, "proposal", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Atomic pointer to the `ProtocolProposal` handler.
 pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;

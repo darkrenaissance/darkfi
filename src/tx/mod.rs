@@ -230,10 +230,13 @@ impl std::fmt::Debug for Transaction {
 }
 
 #[cfg(feature = "net")]
-use crate::net::Message;
+use crate::net::{
+    metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+    Message,
+};
 
 #[cfg(feature = "net")]
-crate::impl_p2p_message!(Transaction, "tx", 0);
+crate::impl_p2p_message!(Transaction, "tx", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Calls tree bounds definitions
 // TODO: increase min to 2 when fees are implement

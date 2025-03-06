@@ -25,6 +25,7 @@ use tinyjson::JsonValue;
 use darkfi::{
     impl_p2p_message,
     net::{
+        metering::MeteringConfiguration,
         protocol::protocol_generic::{
             ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
         },
@@ -33,6 +34,7 @@ use darkfi::{
     },
     rpc::jsonrpc::JsonSubscriber,
     system::ExecutorPtr,
+    util::time::NanoTimestamp,
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -44,7 +46,13 @@ pub struct FooRequest {
     pub message: String,
 }
 
-impl_p2p_message!(FooRequest, "foorequest", 0);
+impl_p2p_message!(
+    FooRequest,
+    "foorequest",
+    0,
+    0,
+    MeteringConfiguration { threshold: 0, sleep_step: 0, expiry_time: NanoTimestamp::from_secs(0) }
+);
 
 /// Structure representing the response to `FooRequest`.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -53,7 +61,13 @@ pub struct FooResponse {
     pub code: u8,
 }
 
-impl_p2p_message!(FooResponse, "fooresponse", 0);
+impl_p2p_message!(
+    FooResponse,
+    "fooresponse",
+    0,
+    0,
+    MeteringConfiguration { threshold: 0, sleep_step: 0, expiry_time: NanoTimestamp::from_secs(0) }
+);
 
 /// Atomic pointer to the `ProtocolFoo` handler.
 pub type ProtocolFooHandlerPtr = Arc<ProtocolFooHandler>;

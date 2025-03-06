@@ -24,6 +24,7 @@ use darkfi::{
     dht2::net_hashmap::{NetHashMapInsert, NetHashMapRemove},
     impl_p2p_message,
     net::{
+        metering::{DEFAULT_METERING_CONFIGURATION, MeteringConfiguration},
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
@@ -53,7 +54,7 @@ pub struct ChunkRequest {
     pub hash: blake3::Hash,
 }
 
-impl_p2p_message!(ChunkRequest, "dhtchunkrequest", 0);
+impl_p2p_message!(ChunkRequest, "dhtchunkrequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ChunkReply {
@@ -61,14 +62,14 @@ pub struct ChunkReply {
     pub data: Vec<u8>,
 }
 
-impl_p2p_message!(ChunkReply, "dhtchunkreply", 0);
+impl_p2p_message!(ChunkReply, "dhtchunkreply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileRequest {
     pub hash: blake3::Hash,
 }
 
-impl_p2p_message!(FileRequest, "dhtfilerequest", 0);
+impl_p2p_message!(FileRequest, "dhtfilerequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileReply {
@@ -76,7 +77,7 @@ pub struct FileReply {
     pub chunks: Vec<blake3::Hash>,
 }
 
-impl_p2p_message!(FileReply, "dhtfilereply", 0);
+impl_p2p_message!(FileReply, "dhtfilereply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 impl ProtocolDht {
     #[allow(dead_code)]

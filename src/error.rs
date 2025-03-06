@@ -158,6 +158,9 @@ pub enum Error {
     #[error("P2P message is invalid")]
     MessageInvalid,
 
+    #[error("P2P message subsystem over metering limit")]
+    MeteringLimitExceeded,
+
     #[cfg(feature = "arti-client")]
     #[error(transparent)]
     ArtiError(#[from] arti_client::Error),
