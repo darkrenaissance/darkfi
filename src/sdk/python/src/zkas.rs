@@ -341,8 +341,16 @@ impl MockProver {
         Self(prover)
     }
 
-    fn verify(&self) {
-        self.0.assert_satisfied();
+    fn verify(&self) -> PyResult<bool> {
+        match self.0.verify() {
+            Ok(_) => Ok(true),
+            Err(errs) => {
+                for err in errs {
+                    eprintln!("Error: Verify Failure: {:#?}", err);
+                }
+                Ok(false)
+            }
+        }
     }
 }
 
