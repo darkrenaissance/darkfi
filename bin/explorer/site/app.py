@@ -46,12 +46,15 @@ def create_app():
     """
     app = Flask(__name__)
 
+    # Retrieve and store network
+    network = os.getenv("FLASK_ENV", "localnet")
+    app.config['NETWORK'] = network
+
     # Load the app TOML configuration
-    env = os.getenv("FLASK_ENV", "localnet")
-    load_toml_config(app, env)
+    load_toml_config(app, network)
 
     # Setup logger
-    log.setup_logger(app, env)
+    log.setup_logger(app, network)
 
     # Register Blueprints
     app.register_blueprint(explore_bp)
@@ -95,20 +98,20 @@ def create_app():
     app.logger.info("=" * 60)
     app.logger.info("Started Explorer Site")
     app.logger.info("=" * 60)
-    app.logger.info(f"Network: {env}")
+    app.logger.info(f"Network: {network}")
     app.logger.info(f"Explorer Node Endpoint: {app.config['explorer_rpc_url']}:{app.config['explorer_rpc_port']}")
     app.logger.info(f"Log Path: {app.config['log_path']}")
     app.logger.info("=" * 60)
 
     return app
 
-def load_toml_config(app, env="localnet", config_path="site_config.toml"):
+def load_toml_config(app, network="localnet", config_path="site_config.toml"):
     """
     Loads environment-specific key-value pairs from a TOML configuration file into `app.config`.
 
     Args:
         app (Flask): The Flask application.
-        env (str): The name of the environment section to load (default is "localnet").
+        network (str): The name of the network section to load (default is "localnet").
         config_path (str): The path to the TOML configuration file.
 
     Raises:
@@ -124,10 +127,10 @@ def load_toml_config(app, env="localnet", config_path="site_config.toml"):
     with open(config_path, "rb") as f:
         config = tomli.load(f)
 
-    # Ensure the specified environment section exists in the configuration
-    if env not in config:
-        raise KeyError(f"Environment '{env}' not found in {config_path}")
+    # Ensure the specified network section exists in the configuration
+    if network not in config:
+        raise KeyError(f"Network '{network}' not found in {config_path}")
 
     # Load the environment specific configurations into app.config
-    for key, value in config[env].items():
+    for key, value in config[network].items():
         app.config[key] = value
