@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["EMPTY_ROOTS","MerkleNode","UNCOMMITTED_ORCHARD"],"type":["MerkleTree"]};
