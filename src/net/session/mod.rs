@@ -78,10 +78,20 @@ pub async fn remove_sub_on_stop(
             "Downgrading {}", addr,
         );
 
-        let last_seen = hosts.fetch_last_seen(addr).unwrap();
-        if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey) {
-            error!(target: "net::session::remove_sub_on_stop()",
+        // If the host we are downgrading has been moved to blacklist,
+        // fetch_last_seen(addr) can return None. We simply print an
+        // error in this case.
+        match hosts.fetch_last_seen(addr) {
+            Some(last_seen) => {
+                if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey) {
+                    error!(target: "net::session::remove_sub_on_stop()",
             "Failed to move host {} to Greylist! Err={}", addr.clone(), e);
+                }
+            }
+            None => {
+                error!(target: "net::session::remove_sub_on_stop()",
+               "Failed to fetch last seen for {}", addr);
+            }
         }
     }
 
