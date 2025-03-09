@@ -15,12 +15,15 @@ darkfi-serial = {version = "0.4.2", features = ["hash"]}
 # Misc
 async-trait = "0.1.86"
 blake3 = "1.6.0"
+rand = "0.8.5"
 log = "0.4.26"
 tinyjson = "2.5.1"
 url = "2.5.4"
+num-bigint = "0.4.6"
 
 # Daemon
 easy-parallel = "3.3.1"
+futures = "0.3.31"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"

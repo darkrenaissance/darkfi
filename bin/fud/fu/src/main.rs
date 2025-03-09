@@ -19,7 +19,7 @@
 use clap::{Parser, Subcommand};
 use log::info;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
 use darkfi::{
@@ -49,8 +49,10 @@ struct Args {
 enum Subcmd {
     /// Retrieve provided file name from the fud network
     Get {
-        /// File name
+        /// File hash
         file: String,
+        /// File name
+        name: Option<String>,
     },
 
     /// Put a file onto the fud network
@@ -58,6 +60,12 @@ enum Subcmd {
         /// File name
         file: String,
     },
+
+    /// Get the current node buckets
+    ListBuckets {},
+
+    /// Get the router state
+    ListSeeders {},
 }
 
 struct Fu {
@@ -69,61 +77,11 @@ impl Fu {
         self.rpc_client.stop().await;
     }
 
-    // async fn list(&self) -> Result<()> {
-    //     let req = JsonRequest::new("list", JsonValue::Array(vec![]));
-    //     let rep = self.rpc_client.request(req).await?;
-    //
-    //     // Extract response
-    //     let content: Vec<JsonValue> = rep[0].clone().try_into().unwrap();
-    //     let new: Vec<JsonValue> = rep[1].clone().try_into().unwrap();
-    //     let deleted: Vec<JsonValue> = rep[2].clone().try_into().unwrap();
-    //
-    //     // Print info
-    //     info!("----------Content-------------");
-    //     if content.is_empty() {
-    //         info!("No file records exists in DHT.");
-    //     } else {
-    //         for name in content {
-    //             info!("\t{}", String::try_from(name).unwrap());
-    //         }
-    //     }
-    //     info!("------------------------------");
-    //
-    //     info!("----------New files-----------");
-    //     if new.is_empty() {
-    //         info!("No new files to import.");
-    //     } else {
-    //         for name in new {
-    //             info!("\t{}", String::try_from(name).unwrap());
-    //         }
-    //     }
-    //     info!("------------------------------");
-    //
-    //     info!("----------Removed keys--------");
-    //     if deleted.is_empty() {
-    //         info!("No keys were removed.");
-    //     } else {
-    //         for key in deleted {
-    //             info!("\t{}", String::try_from(key).unwrap());
-    //         }
-    //     }
-    //     info!("------------------------------");
-    //
-    //     Ok(())
-    // }
-    //
-    // async fn sync(&self) -> Result<()> {
-    //     let req = JsonRequest::new("sync", JsonValue::Array(vec![]));
-    //     self.rpc_client.request(req).await?;
-    //     info!("Daemon synced successfully!");
-    //     Ok(())
-    // }
-
-    async fn get(&self, file: String) -> Result<()> {
-        let req = JsonRequest::new("get", JsonValue::Array(vec![JsonValue::String(file)]));
+    async fn get(&self, file_hash: String, file_name: Option<String>) -> Result<()> {
+        let req = JsonRequest::new("get", JsonValue::Array(vec![JsonValue::String(file_hash), JsonValue::String(file_name.unwrap_or_default())]));
         let rep = self.rpc_client.request(req).await?;
-        let path = rep.stringify().unwrap();
-        info!("File waits you at: {}", path);
+        let path: String = rep.try_into().unwrap();
+        println!("{}", path);
         Ok(())
     }
 
@@ -137,6 +95,55 @@ impl Fu {
             }
             _ => Err(Error::ParseFailed("File ID is not a string")),
         }
+    }
+
+    async fn list_buckets(&self) -> Result<()> {
+        let req = JsonRequest::new("list_buckets", JsonValue::Array(vec![]));
+        let rep = self.rpc_client.request(req).await?;
+        let buckets: Vec<JsonValue> = rep.try_into().unwrap();
+        for (bucket_i, bucket) in buckets.into_iter().enumerate() {
+            let nodes: Vec<JsonValue> = bucket.try_into().unwrap();
+            if nodes.len() == 0 {
+                continue
+            }
+
+            println!("Bucket {}", bucket_i);
+            for n in nodes.clone() {
+                let node: Vec<JsonValue> = n.try_into().unwrap();
+                let node_id: JsonValue = node[0].clone();
+                let addresses: Vec<JsonValue> = node[1].clone().try_into().unwrap();
+                let mut addrs: Vec<String> = vec![];
+                for addr in addresses {
+                    addrs.push(addr.try_into().unwrap())
+                }
+                println!("\t{}: {}", node_id.stringify().unwrap(), addrs.join(", "));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn list_seeders(&self) -> Result<()> {
+        let req = JsonRequest::new("list_seeders", JsonValue::Array(vec![]));
+        let rep = self.rpc_client.request(req).await?;
+
+        let files: HashMap<String, JsonValue> = rep["seeders"].clone().try_into().unwrap();
+
+        println!("Seeders:");
+        if files.is_empty() {
+            println!("No records");
+        } else {
+            for (file_hash, node_ids) in files {
+                println!("{}", file_hash);
+                let node_ids: Vec<JsonValue> = node_ids.try_into().unwrap();
+                for node_id in node_ids {
+                    let node_id: String = node_id.try_into().unwrap();
+                    println!("\t{}", node_id);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -156,8 +163,10 @@ fn main() -> Result<()> {
             match args.command {
                 // Subcmd::List => fu.list().await,
                 // Subcmd::Sync => fu.sync().await,
-                Subcmd::Get { file } => fu.get(file).await,
+                Subcmd::Get { file, name } => fu.get(file, name).await,
                 Subcmd::Put { file } => fu.put(file).await,
+                Subcmd::ListBuckets { } => fu.list_buckets().await,
+                Subcmd::ListSeeders { } => fu.list_seeders().await,
             }?;
 
             fu.close_connection().await;
