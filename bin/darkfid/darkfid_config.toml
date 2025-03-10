@@ -99,6 +99,9 @@ hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
 
+# Socks5 proxy
+#socks5_proxy = "socks5://127.0.0.1:9050"
+
 # Outbound connection slots number, this many connections will be
 # attempted. (This does not include manual connections)
 #outbound_connections = 8
@@ -229,6 +232,9 @@ allowed_transports = ["tcp+tls"]
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
 
+# Socks5 proxy
+#socks5_proxy = "socks5://127.0.0.1:9050"
+
 # Outbound connection slots number, this many connections will be
 # attempted. (This does not include manual connections)
 outbound_connections = 8
@@ -352,6 +358,9 @@ allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
+
+# Socks5 proxy
+#socks5_proxy = "socks5://127.0.0.1:9050"
 
 # Outbound connection slots number, this many connections will be
 # attempted. (This does not include manual connections)
