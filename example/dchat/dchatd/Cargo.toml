@@ -11,26 +11,26 @@ edition = "2021"
 # ANCHOR: dependencies
 [dependencies]
 # ANCHOR: darkfi
-darkfi = {path = "../../../", features = ["toml", "async-daemonize", "rpc"]}
-darkfi-serial = "0.4.2"
+darkfi = { workspace = true, features = ["toml", "async-daemonize", "rpc"] }
+darkfi-serial = { workspace = true }
 # ANCHOR_END: darkfi
 
 # daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # arg parsing
-serde = {version = "1.0.218", features = ["derive"]}
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 # misc
-async-trait = "0.1.86"
-log = "0.4.26"
-url = "2.5.4"
+async-trait = { workspace = true }
+log = { workspace = true }
+url = { workspace = true }
 # ANCHOR_END: dependencies
 
 [lints]
