@@ -420,6 +420,7 @@ impl HostContainer {
         color: HostColor,
         transports: &[String],
         transport_mixing: bool,
+        socks5_proxy: Url,
     ) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_addrs()", "[START] {:?}", color);
         let mut hosts = vec![];
@@ -440,12 +441,35 @@ impl HostContainer {
             };
         }
 
+        macro_rules! mix_socks5_transport {
+            ($a:expr, $b:expr) => {
+                if transports.contains(&$a.to_string()) && transport_mixing {
+                    let mut a_to_b = self.fetch_with_schemes(index, &[$b.to_string()], None);
+                    for (addr, last_seen) in a_to_b.iter_mut() {
+                        addr.set_path(&format!(
+                            "{}:{}",
+                            addr.host().unwrap(),
+                            addr.port().unwrap()
+                        ));
+                        addr.set_host(socks5_proxy.host_str()).unwrap();
+                        addr.set_port(socks5_proxy.port()).unwrap();
+                        addr.set_username(socks5_proxy.username()).unwrap();
+                        addr.set_password(socks5_proxy.password()).unwrap();
+                        addr.set_scheme($a).unwrap();
+                        hosts.push((addr.clone(), last_seen.clone()));
+                    }
+                }
+            };
+        }
+
         mix_transport!("tor", "tcp");
         mix_transport!("tor+tls", "tcp+tls");
         mix_transport!("nym", "tcp");
         mix_transport!("nym+tls", "tcp+tls");
-        mix_transport!("socks5", "tcp");
-        mix_transport!("socks5+tls", "tcp+tls");
+        mix_socks5_transport!("socks5", "tcp");
+        mix_socks5_transport!("socks5+tls", "tcp+tls");
+        mix_socks5_transport!("socks5", "tor");
+        mix_socks5_transport!("socks5+tls", "tor+tls");
 
         // And now the actual requested transports
         for (addr, last_seen) in self.fetch_with_schemes(index, transports, None) {
@@ -1351,7 +1375,15 @@ impl Hosts {
                 let day = 86400;
                 self.container.refresh(HostColor::Dark, day);
 
-                continue
+                // If transport mixing is disabled or Socks5 transport is not allowed we will not connect to this host
+                if !settings.transport_mixing ||
+                    !settings
+                        .allowed_transports
+                        .iter()
+                        .any(|t| t == "socks5" || t == "socks5+tls")
+                {
+                    continue;
+                }
             }
 
             // Reject this peer if it's already stored on the Gold, White or Grey list.
