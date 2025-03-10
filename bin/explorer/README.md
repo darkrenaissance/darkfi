@@ -4,20 +4,19 @@ The DarkFi Blockchain Explorer facilitates the exploration of chain data and int
 
 ## Table of Contents
 1. [Key Features](#key-features)
-2. [Quick Start Guide](#quick-start-guide)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-    - [Running on Localnet](#running-on-localnet)
+2. [Network Status](#network-status)
+3. [Prerequisites](#prerequisites)
+4. [Quick Start Guide](#quick-start-guide)
 
-3. [Explorer Components](#explorer-components)
+5. [Explorer Components](#explorer-components)
     - [Explorer Nodes](#explorer-nodes)
     - [Explorer Site](#explorer-site)
 
-4. [Configuration](#configuration)
+6. [Configuration](#configuration)
     - [Configuration Files](#configuration-files)
     - [Supported Networks](#supported-networks)
 
-5. [Feature Details](#feature-details)
+7. [Feature Details](#feature-details)
     - [Home Page Overview](#home-page-overview)
     - [Block and Transaction Exploration](#block-and-transaction-exploration)
     - [Gas Analytics](#gas-analytics)
@@ -32,49 +31,63 @@ The DarkFi Blockchain Explorer facilitates the exploration of chain data and int
 - **Native Contract Source Code Access**: Review the implementation details of native contract source code for improved transparency.
 - **Search Blocks and Transactions**: Locate specific blocks or transactions using search.
 
-## Quick Start Guide
+## Network Status
 
-### Prerequisites
+The testnet and mainnet configurations serve as placeholders in preparation for their respective launch. When starting environment with these environment configurations , the site will connect to an Explorer Node that point to their respective darkfid networks, but currently only display the network's genesis block.
+
+In addition, testnet and mainnet configurations are currently using development servers for the site and work is ongoing for production-like setups.
+
+## Prerequisites
 Before you begin, ensure you have the following installed and configured:
 - **Rust 1.86 or later**: For building and running the explorer daemon (`explorerd`).
-- **Python 3.12**: Required for running the Flask-based Explorer Site (`site`).
-- **Darkfid**: Installed and configured with a fully provisioned `darkfid_configuration.toml`.
-- **Minerd**: Installed with a corresponding `minerd_configuration.toml` for setups where Darkfid is configured with a miner JSON-RPC endpoint, but the configured miner is not running on the desired network.
+- **Make**: To start and stop explorer environments using make
+- **Python 3.12**: Required for running the Explorer Site (`site`).
+- **Darkfid**: Required for running DarkFi blockchain nodes on respective networks. The make commands build the binary from source code in `../darkfid` (if not already built in project root) and apply the appropriate network configuration.
+- **Minerd**: Needed for setups where Darkfid is configured with a miner JSON-RPC endpoint, but the configured miner is not running on the desired network. The make commands build the binary from source code in `../minerd` (if not already built in project root) and apply the appropriate network configuration.
 
-### Installation
-1. **Explorer Daemon**:
-   To install the explorer daemon (`explorerd`), follow the instructions in the [explorerd/README.md](explorerd/README.md). The daemon is essential for syncing blockchain data and ensuring the Explorer stays consistent with the configured DarkFi blockchain environment.
-2. **Explorer Site**:
-   To install and set up the web UI for the Explorer, refer to the instructions in the [site/README.md](site/README.md). The website connects with the explorer daemon to provide blockchain data, gas analytics, and contract source code to users in real time.
+## Quick Start Guide
 
-### Running on Localnet
-Once all components are installed, follow these steps to run the Explorer on localnet.
-1. **Run Miner Node**:
-``` bash
-   minerd
+Run the following to get explorer environments running, including explorer nodes and site to view blocks on the respective Darkfid configured networks. These commands will automatically install dependencies, configure your environment, and start all necessary components.
+
+### Start Localnet Explorer Environment
+
+```sh
+# Launch an explorer environment using the localnet configuration  
+make start-localnet
 ```
-2. **Run Darkfi Node**:
 
-``` bash
-   darkfid --network localnet
-```
-3. **Run Explorer Node**:
-``` bash
-   explorerd --network localnet
-```
-4.**Launch the Explorer Site**:
-``` bash
-   FLASK_ENV=localnet python -m flask run
-```
-5. **Explore the Blockchain**:
-   Open a web browser and navigate to `http://localhost:5000` to view blockchain data and analytics.
+### Start Testnet Explorer Environment
 
+```sh
+# Launch an explorer environment using the latest testnet configuration 
+make start-testnet
+```
 
-> **Note**: To switch between networks, replace `localnet` with `testnet` or `mainnet` in the commands above:
-> 
-> - For `testnet`, use `--network testnet`, `FLASK_ENV=testnet`
->- For `mainnet`, use `--network mainnet`, `FLASK_ENV=mainnet`
->
+### Start Mainnet Explorer Environment
+
+```sh
+# Launch an explorer environment using the latest mainnet configuration 
+make start-mainnet
+```
+
+> Once started, navigate to http://127.0.0.1:5000 in your browser to access the explorer interface.
+
+### Stopping the Explorer Environment
+
+#### Ctrl-C
+To stop the environment, press the keyboard combination Ctrl-C and wait for all components to stop.
+
+#### Make Command
+You can also stop the environment using Make:
+```sh
+# Stop the running explorer environment (nodes and site)
+make stop
+```
+
+### Getting Help
+```shell
+make help
+```
 
 ## Explorer Components
 
