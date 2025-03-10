@@ -63,6 +63,24 @@ outbound_connections = 8
 transport_mixing = false
 ```
 
+#### Socks5 proxy node settings
+If we want to route all our connections through the SOCKS5 proxy provided by Tor, we can enable the Socks5 proxy 
+transport in our settings.
+
+When using Whonix, this configuration helps prevent the 'Tor over Tor' issue.
+Ensure that the socks5_proxy field is correctly set, if your Socks5 proxy is running on a different 
+host or port.
+
+<u><b>Note</b></u>: With this setup, our node will connect to both Tor and clearnet nodes through the Socks5 proxy.
+```toml
+## Whitelisted transports for outbound connections
+allowed_transports = ["socks5", "socks5+tls"]
+## Enable transport mixing
+transport_mixing = true
+## Socks5 proxy
+socks5_proxy = "socks5://127.0.0.1:9050"
+```
+
 ### Inbound node settings
 
 With these settings your node becomes a Tor inbound node. The `inbound` 
