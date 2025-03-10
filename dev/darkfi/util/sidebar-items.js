@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["most_frequent_or_any"],"mod":["cli","encoding","file","parse","path","pcg","ringbuffer","time"]};
