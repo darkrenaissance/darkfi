@@ -9,24 +9,70 @@ The Explorer Site is a python based web application that serves as the user inte
 - **Gas Analytics**: Access detailed gas usage metrics across the blockchain and per-transaction basis.
 - **Contract Source Code Navigation**: Inspect native contract source code implementations directly.
 
-## Getting Started
+## Network Status
 
-### Prerequisites
+The testnet and mainnet configurations serve as placeholders in preparation for their respective launch. When starting the site using these environment configurations, the site will connect to an Explorer Node that point to their respective darkfid networks, but currently only display the network's genesis block.
+
+In addition, testnet and mainnet configurations are currently using development servers and work is ongoing for production-like setups.
+
+## Prerequisites
 - Python 3.12
-- Additional dependencies listed in `requirements.txt`
+- Make
+- Explorerd - Explorer node must be installed and running for the network configuration you are running the site against. See [Explorerd README](../explorerd/README.md) for more details.
+
+## Quick-Start Guide
+
+Run the following to get the explorer site running using pre-configured networks that will automatically install dependencies, configure your environment, and start the site server. Please make sure that explorerd is running for the site configuration that you are launching.
+
+### Start Localnet Site
+
+```sh
+# Launch site using the localnet explorer node configuration  
+make start-localnet
+```
+
+### Start Testnet Site
+
+```sh
+# Launch site using the latest testnet explorer node configuration 
+make start-testnet
+```
+
+### Start Mainnet Site
+
+```sh
+# Launch site using the latest mainnet explorer node configuration 
+make start-mainnet
+```
+
+> Once started, navigate to http://127.0.0.1:5000 in your browser to navigate the site.
+
+### Stopping the Site
+
+```sh
+# Stop the running explorer site
+make stop
+```
+
+### Getting Help
+```shell
+make help
+```
+
+## Detailed Guide
 
 ### Installation
 
 Install dependencies:
-```bash
-pip install -r requirements.txt
+```sh
+make install
 ```
 
-## Configuration
+### Configuration
 
 The application uses a TOML configuration file to manage different environment settings located at [Site Config](site_config.toml).
 
-### Example Configuration
+#### Example Configuration
 
 Below is an example configuration for `localnet`.
 
@@ -42,7 +88,7 @@ explorer_rpc_port = 14567
 log_path = "~/.local/share/darkfi/explorer_site/localnet"
 ```
 
-### Pre-Configured Networks
+#### Pre-Configured Networks
 
 The Explorer Site supports the following pre-configured `explorerd` environments out of the box.
 - **`localnet`**: An environment for testing and running `explorerd` locally.
@@ -53,11 +99,11 @@ The Explorer Site supports the following pre-configured `explorerd` environments
 
 Each network environment corresponds to a pre-configured explorerd configuration defined in [Explorerd Config](../explorerd/explorerd_config.toml).
 
-### Custom Configurations
+#### Custom Configurations
 
 The Explorer Site supports custom configurations to connect to an Explorer Node, whether running locally on the same machine or remotely on a different network. Proper alignment between the Explorer Site and Explorer Node configurations is essential to ensure the site displays blockchain data.
 
-#### Connecting to a Remote Explorer Node
+##### Connecting to a Remote Explorer Node
 
 To enable a remote setup, such as for designers testing their UI design, the Explorer Site can be configured to connect to a remote Explorer Node.
 
@@ -75,7 +121,7 @@ explorer_rpc_port = 80
 
 Replace `remote-explorer-node.com` with the domain of your remote node and adjust the port as needed for your specific setup.
 
-#### Connecting to a Local Explorer Node
+##### Connecting to a Local Explorer Node
 
 When running the Explorer Node and Site on the same machine with a custom configuration, make sure the RPC URL and port in `site_config.toml` match the `rpc_listen` settings in `explorerd_config.toml` to establish connectivity with the node.
 
@@ -88,7 +134,7 @@ When running the Explorer Node and Site on the same machine with a custom config
   explorer_rpc_url = "127.0.0.1"
   explorer_rpc_port = 14567
   ```
-  
+
 - **`explorerd_config.toml`**:
 
   ```toml
@@ -96,23 +142,24 @@ When running the Explorer Node and Site on the same machine with a custom config
   rpc_listen = "tcp://127.0.0.1:14567"
   ```
 
-## Running the Application
+### Running the Application
 
 Launch the application using the Flask server:
 
-```bash
+```sh
 FLASK_ENV=<environment> python -m flask run
 ```
 
 Where `<environment>` can be:
 - `localnet` - To run locally.
 - `testnet` - For testing environment.
+- `mainnet` - For mainnet environment.
 
-## Logging
+### Logging
 
 The Explorer Site provides logs that can be inspected to resolve issues and understand runtime behavior. The logging behavior adapts based on the environment setting. In `localnet`, logs are written to both console and files to assist with development and debugging, while `testnet` uses standard file handlers for log files only. For production use, `mainnet` employs rotating file handlers that maintain logs.
 
-### Log Locations
+#### Log Locations
 
 The log files are stored in environment-specific directories:
 
@@ -122,7 +169,7 @@ The log files are stored in environment-specific directories:
 | Testnet | `~/.local/share/darkfi/explorer_site/testnet` |
 | Mainnet | `~/.local/share/darkfi/explorer_site/mainnet` |
 
-### Log Output
+#### Log Output
 
 The logging system maintains two log files in each environment directory:
 
@@ -131,9 +178,9 @@ The logging system maintains two log files in each environment directory:
 | `app.log` | Application logs and HTTP requests |
 | `error.log` | Application errors |
 
-### Log Level Configuration
+#### Log Level Configuration
 
 The logging level can be set using the `LOG_LEVEL` environment variable:
-```bash
+```sh
 LOG_LEVEL=DEBUG FLASK_ENV=localnet python -m flask run
 ```
