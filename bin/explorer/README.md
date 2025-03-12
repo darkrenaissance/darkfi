@@ -42,6 +42,7 @@ Before you begin, ensure you have the following installed and configured:
 - **Rust 1.86 or later**: For building and running the explorer daemon (`explorerd`).
 - **Make**: To start and stop explorer environments using make
 - **Python 3.12**: Required for running the Explorer Site (`site`).
+- **Darkfi Project Dependencies**: Dependencies required to compile the Darkfi code. For more details, see [Darkfi Build Dependencies](../../README.md#build).
 - **Darkfid**: Required for running DarkFi blockchain nodes on respective networks. The make commands build the binary from source code in `../darkfid` (if not already built in project root) and apply the appropriate network configuration.
 - **Minerd**: Needed for setups where Darkfid is configured with a miner JSON-RPC endpoint, but the configured miner is not running on the desired network. The make commands build the binary from source code in `../minerd` (if not already built in project root) and apply the appropriate network configuration.
 
