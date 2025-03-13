@@ -138,10 +138,11 @@ check-minerd:
 stop:
 	@if [ -f PIDs.txt ]; then \
 		while read PID; do \
-			kill $$PID 2>/dev/null || echo "Unable to kill PID $$PID"; \
+			if ps -p $$PID > /dev/null 2>&1; then \
+				kill -15 $$PID 2>/dev/null; sleep 5; ps -p $$PID > /dev/null 2>&1 && kill -9 $$PID 2>/dev/null; \
+			fi; \
 		done < PIDs.txt; \
 		rm -f PIDs.txt; \
-		sleep 5; \
 		echo "Stopped explorer node environment"; \
 	else \
 		if [ "$(suppress_not_running)" != "1" ]; then \
