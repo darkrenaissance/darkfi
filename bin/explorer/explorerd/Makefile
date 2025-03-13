@@ -71,14 +71,25 @@ uninstall:
 
 # Bundle native contract sources and their ZK proofs
 bundle_contracts_src:
-	@mkdir -p $(CURDIR)/native_contracts_src
-	@(cd ../../../src && \
-		tar -cf $(CURDIR)/native_contracts_src/deployooor_contract_src.tar -C contract/deployooor/src --transform 's,^./,,' . && \
-		tar -cf $(CURDIR)/native_contracts_src/dao_contract_src.tar -C contract/dao/src --transform 's,^./,,' . 2>/dev/null && \
-		find contract/dao/proof -name '*.zk' -exec tar -rf $(CURDIR)/native_contracts_src/dao_contract_src.tar --transform 's,^.*proof/,proof/,' {} + && \
-		tar -cf $(CURDIR)/native_contracts_src/money_contract_src.tar -C contract/money/src --transform 's,^./,,' . && \
-		find contract/money/proof -name '*.zk' -exec tar -rf $(CURDIR)/native_contracts_src/money_contract_src.tar --transform 's,^.*proof/,proof/,' {} + \
-	)
+	@PROJECT_ROOT=$$(pwd)/$(PROJECT_ROOT); \
+	CONTRACT_SRC_DIR="$$PROJECT_ROOT/src/contract"; \
+	CONTRACTS="deployooor money dao"; \
+	set -e; \
+	mkdir -p native_contracts_src/tmp; \
+	trap "rm -rf native_contracts_src/tmp" 0 1 2 15; \
+	for contract in $$CONTRACTS; do \
+		mkdir -p native_contracts_src/tmp/$$contract; \
+        cp -R "$$CONTRACT_SRC_DIR/$$contract/src/"* "native_contracts_src/tmp/$$contract"; \
+		if [ -d "$$CONTRACT_SRC_DIR/$$contract/proof" ]; then \
+			mkdir -p native_contracts_src/tmp/$$contract/proof; \
+			find "$$CONTRACT_SRC_DIR/$$contract/proof" -type f ! -name '*.bin' -exec cp \{\} native_contracts_src/tmp/$$contract/proof/ \; ; \
+			if find "native_contracts_src/tmp/$$contract/proof" -name '*.json' | grep -q .; then \
+                mkdir -p "native_contracts_src/tmp/$$contract/proof/witness"; \
+                mv native_contracts_src/tmp/$$contract/proof/*.json "native_contracts_src/tmp/$$contract/proof/witness"; \
+            fi; \
+		fi; \
+		(cd native_contracts_src/tmp/$$contract && tar --format=pax -cf ../../$${contract}_contract_src.tar *); \
+	done;
 
 # Start explorer on darkfid localnet
 start-localnet: check-minerd
