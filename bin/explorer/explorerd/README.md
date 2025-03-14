@@ -18,11 +18,13 @@ The `explorerd` is designed to handle real-world blockchain events, such as reor
 The testnet and mainnet configurations serve as placeholders in preparation for their respective launch. When starting daemons with these configurations, each node will connect to their respective darkfid network, but currently only sync the network's genesis block. Once the DarkFi blockchain testnet and mainnet are fully available, the explorer daemon will sync blocks beyond genesis for these networks.
 
 ## Prerequisites
+Before you begin, ensure you have the following installed and configured:
+- **Rust 1.86 or later**: Required for building components written in Rust (like `darkfid`, `minerd`, `explorerd`).
+- **Darkfi Project Dependencies**: System dependencies required to compile DarkFi code (see [Darkfi Build Dependencies](../../../README.md#build)).
+- **Darkfid**: Runs DarkFi blockchain nodes on respective networks.
+- **Minerd**: Mines blocks and is required if Darkfid is configured with a miner JSON-RPC endpoint and the associated miner isn’t running.
 
-- **Rust 1.86.0 or later**: For building and running the explorer daemon (`explorerd`).
-- **Darkfi Project Dependencies**: Dependencies required to compile the Darkfi code. For more details, see [Darkfi Build Dependencies](../../../README.md#build).
-- **Darkfid**: Required for running DarkFi blockchain nodes on respective networks. The make commands build the binary from source code in `../../darkfid` (if not already built in project root) and apply the appropriate network configuration.
-- **Minerd**: Needed for setups where Darkfid is configured with a miner JSON-RPC endpoint, but the configured miner is not running on the desired network. The make commands build the binary from source code in `../../minerd` (if not already built in project root) and apply the appropriate network configuration.
+> **Note** When using the `make` commands in the [Quick Start Guide](#quick-start-guide), Darkfid and Minerd are automatically built when needed.
 
 ## Quick-Start Guide
 
