@@ -64,7 +64,7 @@ impl Connector {
 
         let settings = self.settings.read().await;
         let transports = settings.allowed_transports.clone();
-        let transport_mixing = settings.transport_mixing;
+        let mixed_transports = settings.mixed_transports.clone();
         let datastore = settings.p2p_datastore.clone();
         let outbound_connect_timeout = settings.outbound_connect_timeout;
         let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
@@ -74,8 +74,26 @@ impl Connector {
         let mut endpoint = url.clone();
         let scheme = endpoint.scheme();
 
-        if !transports.contains(&scheme.to_string()) && transport_mixing {
-            if transports.contains(&"tor".to_string()) && scheme == "tcp" {
+        if mixed_transports.contains(&scheme.to_string()) {
+            if transports.contains(&"socks5".to_string()) && (scheme == "tcp" || scheme == "tor") {
+                endpoint = tor_socks5_proxy;
+                endpoint.set_path(&format!(
+                    "{}:{}",
+                    endpoint.host().unwrap(),
+                    endpoint.port().unwrap()
+                ));
+                endpoint.set_scheme("socks5")?;
+            } else if transports.contains(&"socks5+tls".to_string()) &&
+                (scheme == "tcp+tls" || scheme == "tor+tls")
+            {
+                endpoint = tor_socks5_proxy;
+                endpoint.set_path(&format!(
+                    "{}:{}",
+                    endpoint.host().unwrap(),
+                    endpoint.port().unwrap()
+                ));
+                endpoint.set_scheme("socks5+tls")?;
+            } else if transports.contains(&"tor".to_string()) && scheme == "tcp" {
                 endpoint.set_scheme("tor")?;
             } else if transports.contains(&"tor+tls".to_string()) && scheme == "tcp+tls" {
                 endpoint.set_scheme("tor+tls")?;
@@ -83,32 +101,6 @@ impl Connector {
                 endpoint.set_scheme("nym")?;
             } else if transports.contains(&"nym+tls".to_string()) && scheme == "tcp+tls" {
                 endpoint.set_scheme("nym+tls")?;
-            } else if transports.contains(&"socks5".to_string()) &&
-                (scheme == "tcp" || scheme == "tor")
-            {
-                endpoint.set_path(&format!(
-                    "{}:{}",
-                    endpoint.host().unwrap(),
-                    endpoint.port().unwrap()
-                ));
-                endpoint.set_host(tor_socks5_proxy.host_str())?;
-                endpoint.set_port(tor_socks5_proxy.port())?;
-                endpoint.set_username(tor_socks5_proxy.username())?;
-                endpoint.set_password(tor_socks5_proxy.password())?;
-                endpoint.set_scheme("socks5")?;
-            } else if transports.contains(&"socks5+tls".to_string()) &&
-                (scheme == "tcp+tls" || scheme == "tor+tls")
-            {
-                endpoint.set_path(&format!(
-                    "{}:{}",
-                    endpoint.host().unwrap(),
-                    endpoint.port().unwrap()
-                ));
-                endpoint.set_host(tor_socks5_proxy.host_str())?;
-                endpoint.set_port(tor_socks5_proxy.port())?;
-                endpoint.set_username(tor_socks5_proxy.username())?;
-                endpoint.set_password(tor_socks5_proxy.password())?;
-                endpoint.set_scheme("socks5+tls")?;
             }
         }
 

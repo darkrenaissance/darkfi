@@ -52,7 +52,7 @@ pub struct Settings {
     pub external_addrs: Vec<Url>,
     /// Peer nodes to manually connect to
     pub peers: Vec<Url>,
-    /// Seed nodes to connect to for peer discovery and/or adversising our
+    /// Seed nodes to connect to for peer discovery and/or advertising our
     /// own external addresses
     pub seeds: Vec<Url>,
     /// Magic bytes should be unique per P2P network.
@@ -62,8 +62,18 @@ pub struct Settings {
     pub app_version: semver::Version,
     /// Whitelisted network transports for outbound connections
     pub allowed_transports: Vec<String>,
-    /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-    pub transport_mixing: bool,
+    /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls)
+    /// When transport is added to this list the corresponding transport
+    /// in allowed_transports is used to connect to the node.
+    /// Supported mixing scenarios include
+    /// allowed_transport | mixed_transport
+    ///        tor        |     tcp
+    ///       tor+tls     |    tcp+tls
+    ///       socks5      |      tor
+    ///       socks5      |      tcp
+    ///      socks5+tls   |    tor+tls
+    ///      socks5+tls   |    tcp+tls
+    pub mixed_transports: Vec<String>,
     /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
     /// and transport mixing is enabled
     pub tor_socks5_proxy: Url,
@@ -128,7 +138,7 @@ impl Default for Settings {
             seeds: vec![],
             app_version,
             allowed_transports: vec!["tcp+tls".to_string()],
-            transport_mixing: false,
+            mixed_transports: vec![],
             tor_socks5_proxy: Url::parse("socks5://127.0.0.1:9050").unwrap(),
             i2p_socks5_proxy: Url::parse("socks5://127.0.0.1:4447").unwrap(),
             outbound_connections: 8,
@@ -228,9 +238,20 @@ pub struct SettingsOpt {
     #[structopt(long = "transports")]
     pub allowed_transports: Option<Vec<String>>,
 
-    /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-    #[structopt(long)]
-    pub transport_mixing: Option<bool>,
+    /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls)
+    /// When transport is added to this list the corresponding transport
+    /// in allowed_transports is used to connect to the node.
+    /// Supported mixing scenarios include
+    /// allowed_transport | mixed_transport
+    ///        tor        |     tcp
+    ///       tor+tls     |    tcp+tls
+    ///       socks5      |      tor
+    ///       socks5      |      tcp
+    ///      socks5+tls   |    tor+tls
+    ///      socks5+tls   |    tcp+tls
+    #[serde(default)]
+    #[structopt(long = "mixed-transports")]
+    pub mixed_transports: Option<Vec<String>>,
 
     /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
     /// and transport mixing is enabled
@@ -316,7 +337,7 @@ impl From<SettingsOpt> for Settings {
             seeds: opt.seeds,
             app_version: def.app_version,
             allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
-            transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
+            mixed_transports: opt.mixed_transports.unwrap_or(def.mixed_transports),
             tor_socks5_proxy: opt.tor_socks5_proxy.unwrap_or(def.tor_socks5_proxy),
             i2p_socks5_proxy: opt.i2p_socks5_proxy.unwrap_or(def.i2p_socks5_proxy),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
