@@ -67,8 +67,8 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
-## Enable transport mixing
-transport_mixing = false
+## Transports to be mixed
+mixed_transports = []
 ```
 
 ### Fully anonymous Tor-enabled node
@@ -110,8 +110,8 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
-## Enable transport mixing
-transport_mixing = false
+## Transports to be mixed
+mixed_transports = []
 ```
 
 ### Fully anonymous I2p-enabled node
@@ -197,8 +197,8 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
-## Enable transport mixing
-transport_mixing = true
+## Transports to be mixed
+mixed_transports = ["tcp+tls", "tcp"]
 
 ## I2p Socks5 proxy
 i2p_socks5_proxy = "socks5://127.0.0.1:4447"

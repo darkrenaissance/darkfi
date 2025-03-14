@@ -59,8 +59,8 @@ seeds = [
 ## Outbound connection slots
 outbound_connections = 8
 
-## Enable transport mixing
-transport_mixing = false
+## Transports to be mixed
+mixed_transports = []
 ```
 
 #### Socks5 proxy node settings
@@ -74,12 +74,13 @@ host or port.
 <u><b>Note</b></u>: With this setup, our node will connect to both Tor and clearnet nodes through the Socks5 proxy.
 ```toml
 ## Whitelisted transports for outbound connections
-allowed_transports = ["socks5", "socks5+tls"]
-## Enable transport mixing
-transport_mixing = true
-## Tor socks5 proxy
+allowed_transports = ["socks5", "socks5+tls", "tcp+tls", "tor"]
+## Transports to be mixed
+mixed_transports = ["tor", "tcp+tls"]
+## Tor Socks5 proxy
 tor_socks5_proxy = "socks5://127.0.0.1:9050"
 ```
+If you prefer to connect only to `tor` nodes, remove `tcp+tls` from both allowed and mixed transports.
 
 ### Inbound node settings
 
