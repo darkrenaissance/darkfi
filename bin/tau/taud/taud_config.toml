@@ -95,10 +95,9 @@ allowed_transports = ["tcp+tls"]
 #allowed_transports = ["tor"]
 #allowed_transports = ["tor", "tor+tls"]
 
-# Enable transport mixing
-# Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
-# By default this is not allowed.
-transport_mixing = false
+# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
+# if tcp is added to mixed_transports and tor is added to allowed_transports)
+mixed_transports = []
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
