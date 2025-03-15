@@ -14,13 +14,13 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-darkfi = {path = "../../../", features = ["zk", "zkas"]}
-darkfi-sdk = {path = "../"}
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = "0.3.1"
-plotters = "0.3.7"
-pyo3 = {version = "0.22.6", features = ["gil-refs"]}
-rand = "0.8.5"
+darkfi = { workspace = true, features = ["zk", "zkas"] }
+darkfi-sdk = { workspace = true }
+halo2_proofs = { workspace = true, features = ["dev-graph", "sanity-checks"] }
+halo2_gadgets = { workspace = true }
+plotters = { workspace = true }
+pyo3 = { workspace = true, features = ["gil-refs"] }
+rand = { workspace = true }
 
 [lints]
 workspace = true
