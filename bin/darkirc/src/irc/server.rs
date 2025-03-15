@@ -49,7 +49,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Modmsg, Priv, Privmsg};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -477,6 +477,81 @@ impl IrcServer {
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
             debug!("Successfully decrypted message from {name}");
+            return
+        }
+    }
+
+    /// Try encrypting a given `Modmsg` if there is such a channel.
+    pub async fn try_encrypt_modmsg(&self, modmsg: &mut Modmsg) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(&modmsg.channel) {
+            if let Some(saltbox) = &channel.saltbox {
+                // We will use a dummy channel value of MAX_NICK_LEN,
+                // since its not used, so all encrypted messages look the same.
+                modmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                // We will pad the command to MAX_NICK_LEN so they all look the same
+                modmsg.command = saltbox::encrypt(saltbox, &Self::pad(&modmsg.command));
+                modmsg.params = saltbox::encrypt(saltbox, modmsg.params.as_bytes());
+                modmsg.signature = saltbox::encrypt(saltbox, &modmsg.signature).into();
+                debug!("Successfully encrypted moderation command for {}", name);
+            }
+        };
+    }
+
+    /// Try decrypting a given potentially encrypted `Modmsg` object.
+    pub async fn try_decrypt_modmsg(&self, modmsg: &mut Modmsg) {
+        // If all fields have base58, then we can consider decrypting.
+        let channel_ciphertext = match bs58::decode(&modmsg.channel).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let command_ciphertext = match bs58::decode(&modmsg.command).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let params_ciphertext = match bs58::decode(&modmsg.params).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let signature_ciphertext = match bs58::decode(&modmsg.signature).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        // Now go through all 4 ciphertexts. We'll use intermediate buffers
+        // for decryption, iff all passes, we will return a modified
+        // (i.e. decrypted) modmsg, otherwise we return the original.
+        for (name, channel) in self.channels.read().await.iter() {
+            let Some(saltbox) = &channel.saltbox else { continue };
+
+            if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
+                continue
+            };
+
+            let Some(mut command_dec) = saltbox::try_decrypt(saltbox, &command_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt_modmsg", "Could not decrypt command ciphertext for channel: {name}");
+                continue
+            };
+
+            let Some(params_dec) = saltbox::try_decrypt(saltbox, &params_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt_modmsg", "Could not decrypt params ciphertext for channel: {name}");
+                continue
+            };
+
+            let Some(signature_dec) = saltbox::try_decrypt(saltbox, &signature_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt_modmsg", "Could not decrypt signature ciphertext for channel: {name}");
+                continue
+            };
+
+            Self::unpad(&mut command_dec);
+
+            modmsg.channel = name.to_string();
+            modmsg.command = String::from_utf8_lossy(&command_dec).into();
+            modmsg.params = String::from_utf8_lossy(&params_dec).into();
+            modmsg.signature = signature_dec;
+            debug!("Successfully decrypted moderation command for {}", name);
             return
         }
     }

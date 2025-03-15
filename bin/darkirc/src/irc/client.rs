@@ -34,10 +34,10 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree::Position,
-    crypto::{pasta_prelude::PrimeField, poseidon_hash, MerkleTree},
+    crypto::{pasta_prelude::PrimeField, poseidon_hash, schnorr::SchnorrPublic, MerkleTree},
     pasta::pallas,
 };
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::{deserialize, deserialize_async, serialize_async};
 use futures::FutureExt;
 use log::{debug, error, info, warn};
 use sled_overlay::sled;
@@ -50,7 +50,7 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
-    Msg, NickServ, OldPrivmsg, SERVER_NAME,
+    Modmsg, Msg, NickServ, OldPrivmsg, Privmsg, SERVER_NAME,
 };
 use crate::crypto::rln::{
     closest_epoch, hash_event, RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN_APP_IDENTIFIER,
@@ -315,65 +315,24 @@ impl Client {
                         continue
                     }
 
-                    // Try to deserialize the `Event`'s content into a `Privmsg`
-                    let mut privmsg = match Msg::deserialize(r.content()).await {
-                        Ok(Msg::V1(old_msg)) => old_msg.into_new(),
-                        Ok(Msg::V2(new_msg)) => new_msg,
+                    // Try to deserialize the `Event`'s content and handle it
+                    // based on its type.
+                    let skip = match Msg::deserialize(r.content()).await {
+                        Ok(Msg::V1(old_msg)) => self.handle_privmsg(old_msg.into_new(), &mut writer).await,
+                        Ok(Msg::V2(new_msg)) => self.handle_privmsg(new_msg, &mut writer).await,
+                        Ok(Msg::Mod(mod_msg)) => self.handle_modmsg(mod_msg, &mut writer).await,
                         Err(e) => {
-                            error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {e}");
-                            continue
+                            error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
+                            true
                         }
                     };
 
-                    // If successful, potentially decrypt it:
-                    self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
-
-                    // We should skip any attempts to contact services from the network.
-                    if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
-                        continue
-                    }
-
-                    // If the privmsg is not intented for any of the given
-                    // channels or contacts, ignore it
-                    // otherwise add it as a reply and mark it as seen
-                    // in the seen_events tree.
-                    let channels = self.channels.read().await;
-                    let contacts = self.server.contacts.read().await;
-                    if !channels.contains(&privmsg.channel) &&
-                        !contacts.contains_key(&privmsg.channel)
-                    {
-                        continue
-                    }
-
-                    // Add the nickname to the list of nicks on the channel, if it's a channel.
-                    let mut chans_lock = self.server.channels.write().await;
-                    if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
-                        chan.nicks.insert(privmsg.nick.clone());
-                    }
-                    drop(chans_lock);
-
-                    // Handle message lines individually
-                    for line in privmsg.msg.lines() {
-                        // Skip empty lines
-                        if line.is_empty() {
-                            continue
+                    // Mark the message as seen for this USER if we didn't skip it
+                    if !skip {
+                        if let Err(e) = self.mark_seen(&event_id).await {
+                            error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                            return Err(e)
                         }
-
-                        // Format the message
-                        let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
-
-                        // Send it to the client
-                        let reply = ReplyType::Client((privmsg.nick.clone(), msg));
-                        if let Err(e) = self.reply(&mut writer, &reply).await {
-                            error!("[IRC CLIENT] Failed writing PRIVMSG to client: {e}");
-                            continue
-                        }
-                    }
-
-                    // Mark the message as seen for this USER
-                    if let Err(e) = self.mark_seen(&event_id).await {
-                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
-                        return Err(e)
                     }
                 }
             }
@@ -409,7 +368,7 @@ impl Client {
         &self,
         line: &str,
         writer: &mut W,
-        args_queue: &mut VecDeque<String>,
+        args_queue: &mut VecDeque<(String, String)>,
     ) -> Result<Option<Vec<Event>>>
     where
         W: AsyncWrite + Unpin,
@@ -495,12 +454,14 @@ impl Client {
         // NOTE: This is not the most performant way to do this, probably not even
         // TODO: the best place to do it. Patches welcome. It's also a bit fragile
         // since we assume that `handle_cmd_privmsg()` won't return any replies.
-        if cmd.as_str() == "PRIVMSG" && replies.is_empty() {
+        // TODO: add rest moderation commands here and ensure each one is tested
+        let cmd_str = cmd.as_str();
+        if (cmd_str == "PRIVMSG" && replies.is_empty()) || cmd_str == "TOPIC" {
             // If the DAG is not synced yet, queue client lines
             // Once synced, send queued lines and continue as normal
             if !*self.server.darkirc.event_graph.synced.read().await {
                 debug!("DAG is still syncing, queuing and skipping...");
-                args_queue.push_back(args);
+                args_queue.push_back((cmd, args));
                 return Ok(None)
             }
 
@@ -508,14 +469,35 @@ impl Client {
             let mut pending_events = vec![];
             if !args_queue.is_empty() {
                 for _ in 0..args_queue.len() {
-                    let args = args_queue.pop_front().unwrap();
-                    pending_events.push(self.privmsg_to_event(args).await);
+                    let (args_cmd, args) = args_queue.pop_front().unwrap();
+                    // Grab the event based on the command
+                    let event = match args_cmd.as_str() {
+                        "PRIVMSG" => self.privmsg_to_event(args).await,
+                        "TOPIC" => {
+                            let Some(e) = self.topic_to_event(args).await else {
+                                continue;
+                            };
+                            e
+                        }
+                        _ => continue,
+                    };
+
+                    pending_events.push(event);
                 }
                 return Ok(Some(pending_events))
             }
 
             // If queue is empty, create an event and return it
-            let event = self.privmsg_to_event(args).await;
+            let event = match cmd_str {
+                "PRIVMSG" => self.privmsg_to_event(args).await,
+                "TOPIC" => {
+                    let Some(e) = self.topic_to_event(args).await else {
+                        return Ok(None);
+                    };
+                    e
+                }
+                _ => return Ok(None),
+            };
 
             return Ok(Some(vec![event]))
         }
@@ -546,6 +528,157 @@ impl Client {
 
         // Build a DAG event and return it.
         Event::new(serialize_async(&privmsg).await, &self.server.darkirc.event_graph).await
+    }
+
+    // Internal helper function that creates an Event from TOPIC arguments.
+    async fn topic_to_event(&self, args: String) -> Option<Event> {
+        let channel_name = args.split_ascii_whitespace().next().unwrap().to_string();
+
+        // Check if we have moderation key for this channel
+        let channels = self.server.channels.read().await;
+        let Some(channel) = channels.get(&channel_name) else {
+            drop(channels);
+            return None
+        };
+        let Some(mod_secret_key) = channel.mod_secret_key else {
+            drop(channels);
+            return None
+        };
+        drop(channels);
+
+        let topic_offset = args.find(':').unwrap() + 1;
+        let (_, topic) = args.split_at(topic_offset);
+
+        // Truncate topic longer than MAX_MSG_LEN
+        let topic = if topic.len() > MAX_MSG_LEN { topic.split_at(MAX_MSG_LEN).0 } else { topic };
+
+        // Create the Modmsg
+        let mut modmsg =
+            Modmsg::new(channel_name, String::from("TOPIC"), String::from(topic), &mod_secret_key);
+
+        // Encrypt the Modmsg if an encryption method is available
+        self.server.try_encrypt_modmsg(&mut modmsg).await;
+
+        // Build a DAG event and return it
+        Some(Event::new(serialize_async(&modmsg).await, &self.server.darkirc.event_graph).await)
+    }
+
+    /// Process provided `Privmsg`.
+    /// Returns bool flag indicating if the message should be skipped.
+    async fn handle_privmsg<W>(&self, mut privmsg: Privmsg, writer: &mut W) -> bool
+    where
+        W: AsyncWrite + Unpin,
+    {
+        // Potentially decrypt it:
+        self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
+
+        // We should skip any attempts to contact services from the network.
+        if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
+            return true
+        }
+
+        // If the privmsg is not intented for any of the given
+        // channels or contacts, ignore it.
+        let channels = self.channels.read().await;
+        let contacts = self.server.contacts.read().await;
+        if !channels.contains(&privmsg.channel) && !contacts.contains_key(&privmsg.channel) {
+            return true
+        }
+
+        // Add the nickname to the list of nicks on the channel, if it's a channel.
+        let mut chans_lock = self.server.channels.write().await;
+        if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+            chan.nicks.insert(privmsg.nick.clone());
+        }
+        drop(chans_lock);
+
+        // Handle message lines individually
+        for line in privmsg.msg.lines() {
+            // Skip empty lines
+            if line.is_empty() {
+                continue
+            }
+
+            // Format the message
+            let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+
+            // Send it to the client
+            let reply = ReplyType::Client((privmsg.nick.clone(), msg));
+            if let Err(e) = self.reply(writer, &reply).await {
+                error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
+                continue
+            }
+        }
+
+        false
+    }
+
+    /// Process provided `Modmsg`.
+    /// Returns bool flag indicating if the message should be skipped.
+    async fn handle_modmsg<W>(&self, mut modmsg: Modmsg, writer: &mut W) -> bool
+    where
+        W: AsyncWrite + Unpin,
+    {
+        // Potentially decrypt it:
+        self.server.try_decrypt_modmsg(&mut modmsg).await;
+
+        // If the modmsg is not intented for any of the given
+        // channels, ignore it.
+        if !self.channels.read().await.contains(&modmsg.channel) {
+            return true
+        };
+        let channels = self.server.channels.read().await;
+        let Some(channel) = channels.get(&modmsg.channel) else {
+            drop(channels);
+            return true
+        };
+
+        // Check message signature corresponds to a configured moderator
+        // for this channel
+        let Ok(signature) = deserialize(&modmsg.signature) else {
+            drop(channels);
+            return true
+        };
+
+        let mut valid = false;
+        for moderator in &channel.moderators {
+            if moderator.verify(&modmsg.hash(), &signature) {
+                valid = true;
+                break
+            }
+        }
+
+        if !valid {
+            return true
+        }
+
+        // Ignore unimplemented commands
+        // TODO: add rest commands here and ensure each one is tested
+        let command = modmsg.command.to_uppercase().to_string();
+        if !channel.mod_commands.contains(&command) {
+            return true
+        }
+        drop(channels);
+
+        // Handle command params lines individually
+        for line in modmsg.params.lines() {
+            // Skip empty lines
+            if line.is_empty() {
+                continue
+            }
+
+            // Format the message
+            let msg = format!("{} {} :{}", command, modmsg.channel, line);
+
+            // Send it to the client
+            let reply = ReplyType::Client((String::from("moderator"), msg));
+            if let Err(e) = self.reply(writer, &reply).await {
+                error!("[IRC CLIENT] Failed writing {} to client: {}", command, e);
+                continue
+            }
+        }
+
+        false
     }
 
     /// Atomically mark a message as seen for this client.

@@ -114,6 +114,10 @@ struct Args {
     /// Generate a new encrypted channel NaCl secret and exit
     gen_channel_secret: bool,
 
+    /// Generate a new channel moderator keypair and exit
+    #[structopt(long)]
+    gen_channel_mod_keypair: bool,
+
     #[structopt(long = "get-chacha-pubkey")]
     /// Recover NaCl public key from a secret key
     chacha_secret: Option<String>,
@@ -224,6 +228,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("nullifier = \"{nullifier}\"");
         println!("trapdoor = \"{trapdoor}\"");
         return Ok(());
+    }
+
+    if args.gen_channel_mod_keypair {
+        let moderator_keypair = darkfi_sdk::crypto::Keypair::random(&mut OsRng);
+        println!("Place this in your config file:\n");
+        println!("[channel.\"#yourchannelname\"]");
+        println!("mod_secret_key = \"{}\"", moderator_keypair.secret);
+        println!("#mod_mublic_key = \"{}\"", moderator_keypair.public);
+        println!("\nDon't forget to add your public key in the channel moderators vector like:\n");
+        println!("moderators = [\"{}\"]", moderator_keypair.public);
+        return Ok(())
     }
 
     if let Some(chacha_secret) = args.chacha_secret {

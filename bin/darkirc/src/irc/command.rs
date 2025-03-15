@@ -52,13 +52,16 @@
 use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
+
+use darkfi_sdk::crypto::schnorr::SchnorrPublic;
+use darkfi_serial::deserialize;
 use log::{error, info};
 
 use super::{
     client::{Client, ReplyType},
     rpl::*,
     server::MAX_NICK_LEN,
-    IrcChannel, Msg, SERVER_NAME,
+    IrcChannel, Modmsg, Msg, Privmsg, SERVER_NAME,
 };
 use crate::crypto::bcrypt::bcrypt_hash_password;
 
@@ -281,6 +284,9 @@ impl Client {
                     topic: String::new(),
                     nicks: HashSet::from([nick.clone()]),
                     saltbox: None,
+                    moderators: vec![],
+                    mod_secret_key: None,
+                    mod_commands: vec![],
                 };
                 server_channels.insert(channel.clone(), chan);
             }
@@ -712,7 +718,11 @@ impl Client {
         }
 
         // If there's a topic, we'll set it, otherwise return the set topic.
-        let Some(topic) = tokens.next() else {
+        let full_topic = args.replacen(channel, "", 1);
+        let full_topic = full_topic.trim();
+        let topic = if !full_topic.is_empty() {
+            full_topic
+        } else {
             let topic = self.server.channels.read().await.get(channel).unwrap().topic.clone();
             if topic.is_empty() {
                 return Ok(vec![ReplyType::Server((
@@ -729,7 +739,7 @@ impl Client {
 
         // Set the new topic
         self.server.channels.write().await.get_mut(channel).unwrap().topic =
-            topic.strip_prefix(':').unwrap().to_string();
+            topic.trim().strip_prefix(':').unwrap().to_string();
 
         // Send reply
         let replies = vec![ReplyType::Client((nick, format!("TOPIC {channel} {topic}")))];
@@ -930,55 +940,143 @@ impl Client {
                 }
             }
 
-            // Try to deserialize it. (Here we skip errors)
-            let mut privmsg = match Msg::deserialize(event.content()).await {
-                Ok(Msg::V1(old_msg)) => old_msg.into_new(),
-                Ok(Msg::V2(new_msg)) => new_msg,
-                Err(_) => continue,
+            // Try to deserialize the `Event`'s content and handle it
+            // based on its type. Here we skip errors.
+            let skip = match Msg::deserialize(event.content()).await {
+                Ok(Msg::V1(old_msg)) => {
+                    self.handle_history_privmsg(channels, old_msg.into_new(), &mut replies).await
+                }
+                Ok(Msg::V2(new_msg)) => {
+                    self.handle_history_privmsg(channels, new_msg, &mut replies).await
+                }
+                Ok(Msg::Mod(mod_msg)) => {
+                    self.handle_history_modmsg(channels, mod_msg, &mut replies).await
+                }
+                Err(_) => true,
             };
 
-            // Potentially decrypt the privmsg
-            self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
-
-            // We should skip any attempts to contact services from the network.
-            if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
-                continue
-            }
-
-            // If the PRIVMSG is intended for any of the given
-            // channels or contacts, add it as a reply and
-            // mark it as seen in the seen_events tree.
-            let contacts = self.server.contacts.read().await;
-            if !channels.contains(&privmsg.channel) && !contacts.contains_key(&privmsg.channel) {
-                continue
-            }
-
-            // Insert nicks into channels
-            if let Some(chan) = self.server.channels.write().await.get_mut(&privmsg.channel) {
-                chan.nicks.insert(privmsg.nick.clone());
-            }
-
-            // Handle message lines individually
-            for line in privmsg.msg.lines() {
-                // Skip empty lines
-                if line.is_empty() {
-                    continue;
+            // Mark the message as seen for this USER if we didn't skip it
+            if !skip {
+                if let Err(e) = self.mark_seen(&event_id).await {
+                    error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
+                    return Err(e)
                 }
-
-                // Format the message
-                let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
-
-                // Send it to the client
-                replies.push(ReplyType::Client((privmsg.nick.clone(), msg)));
-            }
-
-            // Mark the message as seen for this USER
-            if let Err(e) = self.mark_seen(&event_id).await {
-                error!("[IRC CLIENT] (get_history) self.mark_seen({event_id}) failed: {e}");
-                return Err(e)
             }
         }
 
         Ok(replies)
+    }
+
+    /// Process provided history `Privmsg`.
+    /// Returns bool flag indicating if the message should be skipped.
+    async fn handle_history_privmsg(
+        &self,
+        channels: &HashSet<String>,
+        mut privmsg: Privmsg,
+        replies: &mut Vec<ReplyType>,
+    ) -> bool {
+        // Potentially decrypt it:
+        self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
+
+        // We should skip any attempts to contact services from the network.
+        if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
+            return true
+        }
+
+        // If the privmsg is not intented for any of the given
+        // channels or contacts, ignore it.
+        let contacts = self.server.contacts.read().await;
+        if !channels.contains(&privmsg.channel) && !contacts.contains_key(&privmsg.channel) {
+            return true
+        }
+
+        // Add the nickname to the list of nicks on the channel, if it's a channel.
+        let mut chans_lock = self.server.channels.write().await;
+        if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+            chan.nicks.insert(privmsg.nick.clone());
+        }
+        drop(chans_lock);
+
+        // Handle message lines individually
+        for line in privmsg.msg.lines() {
+            // Skip empty lines
+            if line.is_empty() {
+                continue
+            }
+
+            // Format the message
+            let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+
+            // Add it to replies
+            replies.push(ReplyType::Client((privmsg.nick.clone(), msg)));
+        }
+
+        false
+    }
+
+    /// Process provided history `Modmsg`.
+    /// Returns bool flag indicating if the message should be skipped.
+    async fn handle_history_modmsg(
+        &self,
+        channels: &HashSet<String>,
+        mut modmsg: Modmsg,
+        replies: &mut Vec<ReplyType>,
+    ) -> bool {
+        // Potentially decrypt it:
+        self.server.try_decrypt_modmsg(&mut modmsg).await;
+
+        // If the modmsg is not intented for any of the given
+        // channels, ignore it.
+        if !channels.contains(&modmsg.channel) {
+            return true
+        }
+        let channels = self.server.channels.read().await;
+        let Some(channel) = channels.get(&modmsg.channel) else {
+            drop(channels);
+            return true
+        };
+
+        // Check message signature corresponds to a configured moderator
+        // for this channel
+        let Ok(signature) = deserialize(&modmsg.signature) else {
+            drop(channels);
+            return true
+        };
+
+        let mut valid = false;
+        for moderator in &channel.moderators {
+            if moderator.verify(&modmsg.hash(), &signature) {
+                valid = true;
+                break
+            }
+        }
+
+        if !valid {
+            return true
+        }
+
+        // Ignore unimplemented commands
+        // TODO: add rest commands here and ensure each one is tested
+        let command = modmsg.command.to_uppercase().to_string();
+        if !channel.mod_commands.contains(&command) {
+            return true
+        }
+        drop(channels);
+
+        // Handle command params lines individually
+        for line in modmsg.params.lines() {
+            // Skip empty lines
+            if line.is_empty() {
+                continue
+            }
+
+            // Format the message
+            let msg = format!("{} {} :{}", command, modmsg.channel, line);
+
+            // Add it to replies
+            replies.push(ReplyType::Client((String::from("moderator"), msg)));
+        }
+
+        false
     }
 }
