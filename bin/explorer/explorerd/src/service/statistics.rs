@@ -21,7 +21,7 @@ use tinyjson::JsonValue;
 use darkfi::{Error, Result};
 use darkfi_sdk::blockchain::block_epoch;
 
-use crate::{metrics_store::GasMetrics, ExplorerService};
+use crate::{service::ExplorerService, store::metrics::GasMetrics};
 
 #[derive(Debug, Clone)]
 /// Structure representing basic statistic extracted from the database.

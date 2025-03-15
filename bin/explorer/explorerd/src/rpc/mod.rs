@@ -37,6 +37,18 @@ use crate::{
     Explorerd,
 };
 
+/// RPC block related requests
+pub mod blocks;
+
+/// RPC handlers for contract-related perations
+pub mod contracts;
+
+/// RPC handlers for blockchain statistics and metrics
+pub mod statistics;
+
+/// RPC handlers for transaction data, lookups, and processing
+pub mod transactions;
+
 #[async_trait]
 impl RequestHandler<()> for Explorerd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {

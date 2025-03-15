@@ -16,17 +16,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Cursor, Read};
+use std::{
+    io::{Cursor, Read},
+    str::FromStr,
+};
 
+use log::info;
 use tar::Archive;
 use tinyjson::JsonValue;
 
-use darkfi::{Error, Result};
+use darkfi::{
+    blockchain::BlockchainOverlay, validator::utils::deploy_native_contracts, Error, Result,
+};
 use darkfi_sdk::crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::deserialize;
 
 use crate::{
-    contract_meta_store::{ContractMetaData, ContractSourceFile},
+    store::{
+        contract_metadata::{ContractMetaData, ContractSourceFile},
+        NATIVE_CONTRACT_SOURCE_ARCHIVES,
+    },
     ExplorerService,
 };
 
@@ -53,7 +62,13 @@ impl ContractRecord {
         ])
     }
 }
+
 impl ExplorerService {
+    /// Fetches the total contract count of all deployed contracts in the explorer database.
+    pub fn get_contract_count(&self) -> usize {
+        self.db.blockchain.contracts.wasm.len()
+    }
+
     /// Retrieves all contracts from the store excluding native contracts (DAO, Deployooor, and Money),
     /// transforming them into `Vec` of [`ContractRecord`]s, and returns the result.
     pub fn get_contracts(&self) -> Result<Vec<ContractRecord>> {
@@ -104,11 +119,6 @@ impl ExplorerService {
         })
     }
 
-    /// Fetches the total contract count of all deployed contracts in the explorer database.
-    pub fn get_contract_count(&self) -> usize {
-        self.db.blockchain.contracts.wasm.len()
-    }
-
     /// Adds source code for a specified [`ContractId`] from a provided tar file (in bytes).
     ///
     /// This function extracts the tar archive from `tar_bytes`, then loads each source file
@@ -138,6 +148,61 @@ impl ExplorerService {
                 "[add_contract_metadata] Upload of contract source code failed: {e:?}"
             ))
         })
+    }
+
+    /// Deploys native contracts required for gas calculation and retrieval.
+    pub async fn deploy_native_contracts(&self) -> Result<()> {
+        let overlay = BlockchainOverlay::new(&self.db.blockchain)?;
+        deploy_native_contracts(&overlay, 10).await?;
+        overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+        Ok(())
+    }
+
+    /// Loads native contract source code into the explorer database by extracting it from tar archives
+    /// created during the explorer build process. The extracted source code is associated with
+    /// the corresponding [`ContractId`] for each loaded contract and stored.
+    pub fn load_native_contract_sources(&self) -> Result<()> {
+        // Iterate each native contract source archive
+        for (contract_id_str, archive_bytes) in NATIVE_CONTRACT_SOURCE_ARCHIVES.iter() {
+            // Untar the native contract source code
+            let source_code = untar_source(archive_bytes)?;
+
+            // Parse contract id into a contract id instance
+            let contract_id = &ContractId::from_str(contract_id_str)?;
+
+            // Add source code into the `ContractMetaStore`
+            self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
+            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {}", contract_id_str.to_string());
+        }
+        Ok(())
+    }
+
+    /// Loads [`ContractMetaData`] for deployed native contracts into the explorer database by adding descriptive
+    /// information (e.g., name and description) used to display contract details.
+    pub fn load_native_contract_metadata(&self) -> Result<()> {
+        let contract_ids = [*MONEY_CONTRACT_ID, *DAO_CONTRACT_ID, *DEPLOYOOOR_CONTRACT_ID];
+
+        // Create pre-defined native contract metadata
+        let metadatas = [
+            ContractMetaData::new(
+                "Money".to_string(),
+                "Facilitates money transfers, atomic swaps, minting, freezing, and staking of consensus tokens".to_string(),
+            ),
+            ContractMetaData::new(
+                "DAO".to_string(),
+                "Provides functionality for Anonymous DAOs".to_string(),
+            ),
+            ContractMetaData::new(
+                "Deployoor".to_string(),
+                "Handles non-native smart contract deployments".to_string(),
+            ),
+        ];
+
+        // Load contract metadata into the `ContractMetaStore`
+        self.db.contract_meta_store.insert_metadata(&contract_ids, &metadatas)?;
+        info!(target: "explorerd: load_native_contract_metadata", "Loaded metadata for native contracts");
+
+        Ok(())
     }
 
     /// Converts a [`ContractId`] into a [`ContractRecord`].
