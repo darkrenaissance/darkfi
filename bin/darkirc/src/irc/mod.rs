@@ -44,11 +44,11 @@ pub(crate) mod rpl;
 /// Hardcoded server name
 const SERVER_NAME: &str = "irc.dark.fi";
 
-pub trait Priv {
-    fn channel(&mut self) -> &mut String;
-    fn nick(&mut self) -> &mut String;
-    fn msg(&mut self) -> &mut String;
-}
+/// Hardcoded current Privmsg version
+const PRIVMSG_VERSION: u8 = 0;
+
+/// Privmsg types
+const PRIVMSG_TYPE_NORMAL: u8 = 0;
 
 /// IRC PRIVMSG (old version)
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -66,6 +66,7 @@ impl OldPrivmsg {
             channel: self.channel.clone(),
             nick: self.nick.clone(),
             msg: self.msg.clone(),
+            signature: vec![],
         }
     }
 }
@@ -78,36 +79,47 @@ pub struct Privmsg {
     pub channel: String,
     pub nick: String,
     pub msg: String,
+    /// Optional signature bytes of the message hash,
+    /// for validating identity.
+    pub signature: Vec<u8>,
 }
 
-impl Priv for OldPrivmsg {
-    fn channel(&mut self) -> &mut String {
-        &mut self.channel
+impl Privmsg {
+    // Generate a new `Privmsg` and sign it if a secret key is provided.
+    pub fn new(
+        msg_type: u8,
+        channel: String,
+        nick: String,
+        msg: String,
+        secret_key: Option<SecretKey>,
+    ) -> Self {
+        let mut message =
+            Self { version: PRIVMSG_VERSION, msg_type, channel, nick, msg, signature: vec![] };
+        if let Some(secret_key) = secret_key {
+            message.signature = serialize(&secret_key.sign(&message.hash()));
+        }
+        message
     }
 
-    fn nick(&mut self) -> &mut String {
-        &mut self.nick
-    }
+    /// Compute the message hash. This hash consist of the blake3::Hash
+    /// of the message `version, `msg_type`, `channel`, `nick` and `msg`.
+    pub fn hash(&self) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
 
-    fn msg(&mut self) -> &mut String {
-        &mut self.msg
+        // Blake3 hasher .update() method never fails.
+        // This call returns a Result due to how the Write trait is specified.
+        // Calling unwrap() here should be safe.
+        self.version.encode(&mut hasher).expect("blake3 hasher");
+        self.msg_type.encode(&mut hasher).expect("blake3 hasher");
+        self.channel.encode(&mut hasher).expect("blake3 hasher");
+        self.nick.encode(&mut hasher).expect("blake3 hasher");
+        self.msg.encode(&mut hasher).expect("blake3 hasher");
+
+        hasher.finalize().into()
     }
 }
 
-impl Priv for Privmsg {
-    fn channel(&mut self) -> &mut String {
-        &mut self.channel
-    }
-
-    fn nick(&mut self) -> &mut String {
-        &mut self.nick
-    }
-
-    fn msg(&mut self) -> &mut String {
-        &mut self.msg
-    }
-}
-
+// TODO: Merge Modmsg into Privmsg and distict them using type.
 /// IRC moderation message.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Modmsg {
@@ -179,6 +191,8 @@ pub struct IrcChannel {
     pub moderators: Vec<PublicKey>,
     pub mod_secret_key: Option<SecretKey>,
     pub mod_commands: Vec<String>,
+    pub allowed_identities: Vec<PublicKey>,
+    pub identity_signature_secret_key: Option<SecretKey>,
 }
 
 /// IRC contact definition
