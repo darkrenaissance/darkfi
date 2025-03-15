@@ -49,7 +49,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Modmsg, Priv, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Modmsg, Privmsg};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -382,28 +382,34 @@ impl IrcServer {
     }
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
-    pub async fn try_encrypt<T: Priv>(&self, privmsg: &mut T) {
-        if let Some((name, channel)) = self.channels.read().await.get_key_value(privmsg.channel()) {
+    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will use a dummy channel value of MAX_NICK_LEN,
                 // since its not used, so all encrypted messages look the same.
-                *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
                 // We will pad the name to MAX_NICK_LEN so they all look the same
-                *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
-                *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
+                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
+                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                // TODO: all signatures should be same size, so if no signature exists,
+                // use a dummy vec of same size so they all look the same.
+                privmsg.signature = saltbox::encrypt(saltbox, &privmsg.signature).into();
                 debug!("Successfully encrypted message for {}", name);
                 return
             }
         };
 
-        if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
+        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
             // We will use dummy channel and nick values of MAX_NICK_LEN,
             // since they are not used, so all encrypted messages look the same.
-            *privmsg.channel() = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
+            privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
             // We will encrypt the dummy nick value using our own self saltbox,
             // so we can identify our messages.
-            *privmsg.nick() = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
-            *privmsg.msg() = saltbox::encrypt(&contact.saltbox, privmsg.msg().as_bytes());
+            privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+            privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
+            // TODO: all signatures should be same size, so if no signature exists,
+            // use a dummy vec of same size so they all look the same.
+            privmsg.signature = saltbox::encrypt(&contact.saltbox, &privmsg.signature).into();
             debug!("Successfully encrypted message for {}", name);
         };
     }
@@ -426,7 +432,12 @@ impl IrcServer {
             Err(_) => return,
         };
 
-        // Now go through all 3 ciphertexts. We'll use intermediate buffers
+        let signature_ciphertext = match bs58::decode(&privmsg.signature).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        // Now go through all 4 ciphertexts. We'll use intermediate buffers
         // for decryption, iff all passes, we will return a modified
         // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
@@ -446,11 +457,18 @@ impl IrcServer {
                 continue
             };
 
+            let Some(signature_dec) = saltbox::try_decrypt(saltbox, &signature_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt signature ciphertext for channel: {name}");
+                continue
+            };
+
             Self::unpad(&mut nick_dec);
+            // TODO: check if signature_dec is the empty/dummy vec
 
             privmsg.channel = name.to_string();
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            privmsg.signature = signature_dec;
             debug!("Successfully decrypted message for {}", name);
             return
         }
@@ -473,9 +491,18 @@ impl IrcServer {
                 continue
             };
 
+            let Some(signature_dec) = saltbox::try_decrypt(&contact.saltbox, &signature_ciphertext)
+            else {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt signature ciphertext for contact: {name}");
+                continue
+            };
+
+            // TODO: check if signature_dec is the empty/dummy vec
+
             privmsg.channel = name.to_string();
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            privmsg.signature = signature_dec;
             debug!("Successfully decrypted message from {}", name);
             return
         }
