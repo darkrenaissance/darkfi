@@ -287,6 +287,8 @@ impl Client {
                     moderators: vec![],
                     mod_secret_key: None,
                     mod_commands: vec![],
+                    allowed_identities: vec![],
+                    identity_signature_secret_key: None,
                 };
                 server_channels.insert(channel.clone(), chan);
             }
@@ -990,9 +992,31 @@ impl Client {
             return true
         }
 
-        // Add the nickname to the list of nicks on the channel, if it's a channel.
         let mut chans_lock = self.server.channels.write().await;
         if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+            // If we have set allowed identities for this channel,
+            // check if message matches any of them.
+            if !chan.allowed_identities.is_empty() {
+                let Ok(signature) = deserialize(&privmsg.signature) else {
+                    drop(chans_lock);
+                    return true
+                };
+                let privmsg_hash = privmsg.hash();
+                let mut valid = false;
+                for allowed_identity in &chan.allowed_identities {
+                    if allowed_identity.verify(&privmsg_hash, &signature) {
+                        valid = true;
+                        break
+                    }
+                }
+
+                if !valid {
+                    drop(chans_lock);
+                    return true
+                }
+            }
+
+            // Add the nickname to the list of nicks on the channel, if it's a channel.
             chan.nicks.insert(privmsg.nick.clone());
         }
         drop(chans_lock);

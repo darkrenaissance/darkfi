@@ -267,6 +267,8 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
             moderators: vec![],
             mod_secret_key: None,
             mod_commands: vec![],
+            allowed_identities: vec![],
+            identity_signature_secret_key: None,
         };
 
         if let Some(topic) = items.get("topic") {
@@ -342,6 +344,38 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
             chan.mod_secret_key = Some(mod_secret_key);
         }
 
+        if let Some(allowed_identities) = items.get("allowed_identities") {
+            let Some(allowed_identities) = allowed_identities.as_array() else {
+                return Err(ParseFailed("allowed_identities not an array"))
+            };
+
+            for allowed_identity in allowed_identities {
+                let Some(public_key) = allowed_identity.as_str() else {
+                    return Err(ParseFailed("allowed identity public key not a string"))
+                };
+
+                let Ok(public_key) = darkfi_sdk::crypto::PublicKey::from_str(public_key) else {
+                    return Err(ParseFailed("allowed identity public key is invalid"))
+                };
+
+                chan.allowed_identities.push(public_key);
+            }
+        }
+
+        if let Some(identity_signature_secret_key) = items.get("identity_signature_secret_key") {
+            let Some(identity_signature_secret_key) = identity_signature_secret_key.as_str() else {
+                return Err(ParseFailed("identity signature secret key not a string"))
+            };
+
+            let Ok(identity_signature_secret_key) =
+                darkfi_sdk::crypto::SecretKey::from_str(identity_signature_secret_key)
+            else {
+                return Err(ParseFailed("identity signature secret key is invalid"))
+            };
+
+            chan.identity_signature_secret_key = Some(identity_signature_secret_key);
+        }
+
         if let Some(moderators) = items.get("moderators") {
             let Some(moderators) = moderators.as_array() else {
                 return Err(ParseFailed("moderators not an array"))
@@ -386,7 +420,39 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
             chan.mod_secret_key = Some(mod_secret_key);
         }
 
-        info!("Configured channel {name}");
+        if let Some(allowed_identities) = items.get("allowed_identities") {
+            let Some(allowed_identities) = allowed_identities.as_array() else {
+                return Err(ParseFailed("allowed_identities not an array"))
+            };
+
+            for allowed_identity in allowed_identities {
+                let Some(public_key) = allowed_identity.as_str() else {
+                    return Err(ParseFailed("allowed identity public key not a string"))
+                };
+
+                let Ok(public_key) = darkfi_sdk::crypto::PublicKey::from_str(public_key) else {
+                    return Err(ParseFailed("allowed identity public key is invalid"))
+                };
+
+                chan.allowed_identities.push(public_key);
+            }
+        }
+
+        if let Some(identity_signature_secret_key) = items.get("identity_signature_secret_key") {
+            let Some(identity_signature_secret_key) = identity_signature_secret_key.as_str() else {
+                return Err(ParseFailed("identity signature secret key not a string"))
+            };
+
+            let Ok(identity_signature_secret_key) =
+                darkfi_sdk::crypto::SecretKey::from_str(identity_signature_secret_key)
+            else {
+                return Err(ParseFailed("identity signature secret key is invalid"))
+            };
+
+            chan.identity_signature_secret_key = Some(identity_signature_secret_key);
+        }
+
+        info!("Configured channel {}", name);
         ret.insert(name.to_string(), chan);
     }
 

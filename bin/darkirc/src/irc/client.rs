@@ -50,10 +50,11 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
-    Modmsg, Msg, NickServ, OldPrivmsg, Privmsg, SERVER_NAME,
+    Modmsg, Msg, NickServ, Privmsg, SERVER_NAME,
 };
-use crate::crypto::rln::{
-    closest_epoch, hash_event, RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN_APP_IDENTIFIER,
+use crate::{
+    crypto::rln::{closest_epoch, hash_event, RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN_APP_IDENTIFIER},
+    irc::PRIVMSG_TYPE_NORMAL,
 };
 
 const PENALTY_LIMIT: usize = 5;
@@ -507,21 +508,29 @@ impl Client {
 
     // Internal helper function that creates an Event from PRIVMSG arguments
     async fn privmsg_to_event(&self, args: String) -> Event {
-        let channel = args.split_ascii_whitespace().next().unwrap().to_string();
+        let channel_name = args.split_ascii_whitespace().next().unwrap().to_string();
         let msg_offset = args.find(':').unwrap() + 1;
         let (_, msg) = args.split_at(msg_offset);
 
         // Truncate messages longer than MAX_MSG_LEN
         let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
 
-        // TODO: This is kept as old version of privmsg, since now we
-        // can deserialize both old and new versions, after some time
-        // this will be replaced with Privmsg (new version)
-        let mut privmsg = OldPrivmsg {
-            channel,
-            nick: self.nickname.read().await.to_string(),
-            msg: msg.to_string(),
+        // Check if we have identity signature key for this channel
+        let channels = self.server.channels.read().await;
+        let identity_signature_secret_key = match channels.get(&channel_name) {
+            Some(channel) => channel.identity_signature_secret_key,
+            None => None,
         };
+        drop(channels);
+
+        // Generate the new `PrivMsg`
+        let mut privmsg = Privmsg::new(
+            PRIVMSG_TYPE_NORMAL,
+            channel_name,
+            self.nickname.read().await.to_string(),
+            msg.to_string(),
+            identity_signature_secret_key,
+        );
 
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;
@@ -585,9 +594,31 @@ impl Client {
             return true
         }
 
-        // Add the nickname to the list of nicks on the channel, if it's a channel.
         let mut chans_lock = self.server.channels.write().await;
         if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+            // If we have set allowed identities for this channel,
+            // check if message matches any of them.
+            if !chan.allowed_identities.is_empty() {
+                let Ok(signature) = deserialize(&privmsg.signature) else {
+                    drop(chans_lock);
+                    return true
+                };
+                let privmsg_hash = privmsg.hash();
+                let mut valid = false;
+                for allowed_identity in &chan.allowed_identities {
+                    if allowed_identity.verify(&privmsg_hash, &signature) {
+                        valid = true;
+                        break
+                    }
+                }
+
+                if !valid {
+                    drop(chans_lock);
+                    return true
+                }
+            }
+
+            // Add the nickname to the list of nicks on the channel, if it's a channel.
             chan.nicks.insert(privmsg.nick.clone());
         }
         drop(chans_lock);

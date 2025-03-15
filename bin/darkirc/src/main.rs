@@ -118,6 +118,10 @@ struct Args {
     #[structopt(long)]
     gen_channel_mod_keypair: bool,
 
+    /// Generate a channel identity signature keypair and exit
+    #[structopt(long)]
+    gen_channel_identity_signature_keypair: bool,
+
     #[structopt(long = "get-chacha-pubkey")]
     /// Recover NaCl public key from a secret key
     chacha_secret: Option<String>,
@@ -235,9 +239,20 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("Place this in your config file:\n");
         println!("[channel.\"#yourchannelname\"]");
         println!("mod_secret_key = \"{}\"", moderator_keypair.secret);
-        println!("#mod_mublic_key = \"{}\"", moderator_keypair.public);
+        println!("#mod_public_key = \"{}\"", moderator_keypair.public);
         println!("\nDon't forget to add your public key in the channel moderators vector like:\n");
         println!("moderators = [\"{}\"]", moderator_keypair.public);
+        return Ok(())
+    }
+
+    if args.gen_channel_identity_signature_keypair {
+        let identity_signature_keypair = darkfi_sdk::crypto::Keypair::random(&mut OsRng);
+        println!("Place this in your config file:\n");
+        println!("[channel.\"#yourchannelname\"]");
+        println!("identity_signature_secret_key = \"{}\"", identity_signature_keypair.secret);
+        println!("#identity_signature_public_key = \"{}\"", identity_signature_keypair.public);
+        println!("\nDon't forget to add your public key in the channel allowed identities vector like:\n");
+        println!("allowed_identities = [\"{}\"]", identity_signature_keypair.public);
         return Ok(())
     }
 
