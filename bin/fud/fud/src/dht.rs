@@ -18,6 +18,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    hash::{Hash, Hasher},
     sync::Arc,
 };
 
@@ -25,6 +26,7 @@ use async_trait::async_trait;
 use darkfi::{
     net::{connector::Connector, session::Session, ChannelPtr, Message, P2pPtr},
     system::{sleep, ExecutorPtr},
+    util::time::Timestamp,
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -34,18 +36,54 @@ use num_bigint::BigUint;
 use smol::lock::RwLock;
 use url::Url;
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
 pub struct DhtNode {
     pub id: blake3::Hash,
     pub addresses: Vec<Url>,
+}
+
+impl Hash for DhtNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl PartialEq for DhtNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 pub struct DhtBucket {
     pub nodes: Vec<DhtNode>,
 }
 
-/// "Router" means: Key -> Set of nodes
-pub type DhtRouter = Arc<RwLock<HashMap<blake3::Hash, HashSet<DhtNode>>>>;
+/// "Router" means: Key -> Set of nodes (+ additional data for each node)
+pub type DhtRouterPtr = Arc<RwLock<HashMap<blake3::Hash, HashSet<DhtRouterItem>>>>;
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
+pub struct DhtRouterItem {
+    pub node: DhtNode,
+    pub timestamp: u64,
+}
+
+impl Hash for DhtRouterItem {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.node.id.hash(state);
+    }
+}
+
+impl PartialEq for DhtRouterItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.node.id == other.node.id
+    }
+}
+
+impl From<DhtNode> for DhtRouterItem {
+    fn from(node: DhtNode) -> Self {
+        DhtRouterItem { node, timestamp: Timestamp::current_time().inner() }
+    }
+}
 
 // TODO: Add a DhtSettings
 pub struct Dht {
@@ -106,7 +144,7 @@ impl Dht {
 
     pub async fn is_bootstrapped(&self) -> bool {
         let bootstrapped = self.bootstrapped.read().await;
-        return *bootstrapped;
+        *bootstrapped
     }
 
     pub async fn set_bootstrapped(&self) {
@@ -129,7 +167,7 @@ impl Dht {
     }
 
     // Sort `nodes`
-    pub fn sort_by_distance(&self, nodes: &mut Vec<DhtNode>, key: &blake3::Hash) {
+    pub fn sort_by_distance(&self, nodes: &mut [DhtNode], key: &blake3::Hash) {
         nodes.sort_by(|a, b| {
             let distance_a = BigUint::from_bytes_be(&self.distance(key, &a.id));
             let distance_b = BigUint::from_bytes_be(&self.distance(key, &b.id));
@@ -179,10 +217,27 @@ impl Dht {
         neighbors
     }
 
+    // Channel ID -> DhtNode
     pub async fn get_node_from_channel(&self, channel_id: u32) -> Option<DhtNode> {
         let node_cache_lock = self.node_cache.clone();
         let node_cache = node_cache_lock.read().await;
         node_cache.get(&channel_id).cloned()
+    }
+
+    // Remove nodes in router that are older than expiry_secs
+    pub async fn prune_router(&self, router: DhtRouterPtr, expiry_secs: u32) {
+        let expiry_timestamp = Timestamp::current_time().inner() - (expiry_secs as u64);
+        let mut router_write = router.write().await;
+
+        let keys: Vec<_> = router_write.keys().cloned().collect();
+
+        for key in keys {
+            let items = router_write.get_mut(&key).unwrap();
+            items.retain(|item| item.timestamp > expiry_timestamp);
+            if items.is_empty() {
+                router_write.remove(&key);
+            }
+        }
     }
 }
 
@@ -204,9 +259,13 @@ pub trait DhtHandler {
         &self,
         key: &blake3::Hash,
         message: &M,
-        router: DhtRouter,
+        router: DhtRouterPtr,
     ) -> Result<()> {
-        self.add_to_router(router.clone(), key, vec![self.dht().node.clone()]).await;
+        if self.dht().node.addresses.is_empty() {
+            return Err(().into()); // TODO
+        }
+
+        self.add_to_router(router.clone(), key, vec![self.dht().node.clone().into()]).await;
         let nodes = self.lookup_nodes(key).await?;
 
         for node in nodes {
@@ -243,9 +302,10 @@ pub trait DhtHandler {
                     node_cache.insert(channel.info.id, n.clone());
                     drop(node_cache);
 
-                    self.add_node(n.clone()).await;
-
-                    let _ = self.on_new_node(&n.clone()).await;
+                    if !n.addresses.is_empty() {
+                        self.add_node(n.clone()).await;
+                        let _ = self.on_new_node(&n.clone()).await;
+                    }
                 }
             }
         }
@@ -269,7 +329,13 @@ pub trait DhtHandler {
 
     // Add a node in the correct bucket
     async fn add_node(&self, node: DhtNode) {
+        // Do not add ourselves to the buckets
         if node.id == self.dht().node.id {
+            return;
+        }
+
+        // Do not add a node to the buckets if it does not have an address
+        if node.addresses.is_empty() {
             return;
         }
 
@@ -446,8 +512,16 @@ pub trait DhtHandler {
     }
 
     // Add nodes as a provider for a key
-    async fn add_to_router(&self, router: DhtRouter, key: &blake3::Hash, nodes: Vec<DhtNode>) {
-        debug!(target: "dht::DhtHandler::add_to_router()", "Inserting {} nodes to key {}", nodes.len(), key);
+    async fn add_to_router(
+        &self,
+        router: DhtRouterPtr,
+        key: &blake3::Hash,
+        router_items: Vec<DhtRouterItem>,
+    ) {
+        let mut router_items = router_items.clone();
+        router_items.retain(|item| !item.node.addresses.is_empty());
+
+        debug!(target: "dht::DhtHandler::add_to_router()", "Inserting {} nodes to key {}", router_items.len(), key);
 
         let mut router_write = router.write().await;
         let key_r = router_write.get_mut(key);
@@ -457,22 +531,22 @@ pub trait DhtHandler {
 
         // Add to router
         if let Some(k) = key_r {
-            k.extend(nodes.clone());
+            k.extend(router_items.clone());
         } else {
             let mut hs = HashSet::new();
-            hs.extend(nodes.clone());
+            hs.extend(router_items.clone());
             router_write.insert(*key, hs);
         }
 
         // Add to router_cache
-        for node in nodes {
-            let keys = router_cache.get_mut(&node.id);
+        for router_item in router_items {
+            let keys = router_cache.get_mut(&router_item.node.id);
             if let Some(k) = keys {
                 k.insert(*key);
             } else {
                 let mut keys = HashSet::new();
                 keys.insert(*key);
-                router_cache.insert(node.id, keys);
+                router_cache.insert(router_item.node.id, keys);
             }
         }
     }

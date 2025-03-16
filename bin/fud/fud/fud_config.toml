@@ -29,10 +29,10 @@ hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 # inbound = ["tcp://0.0.0.0:13337"]
 
 ## Outbound connection slots
-# outbound_connections = 8
+# outbound_connections = 16
 
 ## Inbound connection slots
-#inbound_connections = 8
+#inbound_connections = 16
 
 ## White connection percent
 # gold_connect_count = 2

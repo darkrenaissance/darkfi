@@ -23,7 +23,7 @@ use darkfi::{
     geode::{read_until_filled, MAX_CHUNK_SIZE},
     impl_p2p_message,
     net::{
-        metering::{DEFAULT_METERING_CONFIGURATION, MeteringConfiguration},
+        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
@@ -34,7 +34,7 @@ use log::{debug, error, info};
 use smol::{fs::File, Executor};
 
 use super::Fud;
-use crate::dht::{DhtHandler, DhtNode};
+use crate::dht::{DhtHandler, DhtNode, DhtRouterItem};
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -47,7 +47,7 @@ impl_p2p_message!(FudFileReply, "FudFileReply", 0, 0, DEFAULT_METERING_CONFIGURA
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudAnnounce {
     pub key: blake3::Hash,
-    pub nodes: Vec<DhtNode>,
+    pub seeders: Vec<DhtRouterItem>,
 }
 impl_p2p_message!(FudAnnounce, "FudAnnounce", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -61,22 +61,12 @@ impl_p2p_message!(FudChunkReply, "FudChunkReply", 0, 0, DEFAULT_METERING_CONFIGU
 
 /// Message representing a chunk reply when a file is not found
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudFileNotFound;
-impl_p2p_message!(FudFileNotFound, "FudFileNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
-
-/// Message representing a chunk reply when a chunk is not found
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudChunkNotFound;
-impl_p2p_message!(FudChunkNotFound, "FudChunkNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
-
-/// Message representing a seeders reply when seeders are not found
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudSeedersNotFound;
-impl_p2p_message!(FudSeedersNotFound, "FudSeedersNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
+pub struct FudNotFound;
+impl_p2p_message!(FudNotFound, "FudNotFound", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a ping request on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudPingRequest {}
+pub struct FudPingRequest;
 impl_p2p_message!(FudPingRequest, "FudPingRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a ping reply on the network
@@ -112,12 +102,18 @@ impl_p2p_message!(FudFindNodesReply, "FudFindNodesReply", 0, 0, DEFAULT_METERING
 pub struct FudFindSeedersRequest {
     pub key: blake3::Hash,
 }
-impl_p2p_message!(FudFindSeedersRequest, "FudFindSeedersRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(
+    FudFindSeedersRequest,
+    "FudFindSeedersRequest",
+    0,
+    0,
+    DEFAULT_METERING_CONFIGURATION
+);
 
 /// Message representing a find seeders reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindSeedersReply {
-    pub nodes: Vec<DhtNode>,
+    pub seeders: Vec<DhtRouterItem>,
 }
 impl_p2p_message!(FudFindSeedersReply, "FudFindSeedersReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -218,6 +214,7 @@ impl ProtocolFud {
                     let bytes_read = read_until_filled(&mut chunk_fd, &mut buf).await.unwrap();
                     let chunk_slice = &buf[..bytes_read];
                     let reply = FudChunkReply { chunk: chunk_slice.to_vec() };
+                    info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk");
                     let _ = self.channel.send(&reply).await;
                     continue;
                 }
@@ -233,27 +230,14 @@ impl ProtocolFud {
                     let reply = FudFileReply {
                         chunk_hashes: chunked_file.iter().map(|(chunk, _)| *chunk).collect(),
                     };
+                    info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending file");
                     let _ = self.channel.send(&reply).await;
                     continue;
                 }
             }
 
-            // Peers
-            {
-                let router = self.fud.seeders_router.read().await;
-                let peers = router.get(&request.key);
-
-                if let Some(nodes) = peers {
-                    let reply = FudFindNodesReply { nodes: nodes.clone().into_iter().collect() };
-                    let _ = self.channel.send(&reply).await;
-                    continue;
-                }
-            }
-
-            // Nodes
-            let reply = FudFindNodesReply {
-                nodes: self.fud.dht().find_neighbors(&request.key, self.fud.dht().k).await,
-            };
+            let reply = FudNotFound {};
+            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "We do not have {}", request.key.to_hex().to_string());
             let _ = self.channel.send(&reply).await;
         }
     }
@@ -310,14 +294,14 @@ impl ProtocolFud {
             let peers = router.get(&request.key);
 
             match peers {
-                Some(nodes) => {
+                Some(seeders) => {
                     let _ = self
                         .channel
-                        .send(&FudFindSeedersReply { nodes: nodes.iter().cloned().collect() })
+                        .send(&FudFindSeedersReply { seeders: seeders.iter().cloned().collect() })
                         .await;
                 }
                 None => {
-                    let _ = self.channel.send(&FudSeedersNotFound {}).await;
+                    let _ = self.channel.send(&FudFindSeedersReply { seeders: vec![] }).await;
                 }
             };
         }
@@ -342,9 +326,17 @@ impl ProtocolFud {
                 self.fud.update_node(&node).await;
             }
 
-            self.fud
-                .add_to_router(self.fud.seeders_router.clone(), &request.key, request.nodes.clone())
-                .await;
+            let mut seeders = vec![];
+
+            for seeder in request.seeders.clone() {
+                if seeder.node.addresses.is_empty() {
+                    continue
+                }
+                // TODO: Verify each address
+                seeders.push(seeder);
+            }
+
+            self.fud.add_to_router(self.fud.seeders_router.clone(), &request.key, seeders).await;
         }
     }
 }

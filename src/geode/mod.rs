@@ -105,6 +105,16 @@ impl ChunkedFile {
     pub fn iter(&self) -> core::slice::Iter<'_, (blake3::Hash, Option<PathBuf>)> {
         self.0.iter()
     }
+
+    /// Return the number of chunks.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Return `true` if the chunked file contains no chunk.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// Chunk-based file storage interface.
@@ -505,8 +515,47 @@ impl Geode {
             let bytes_read = chunk_fd.read_to_end(&mut buf).await?;
             let chunk_slice = &buf[..bytes_read];
             file_fd.write(chunk_slice).await?;
+            file_fd.flush().await?;
         }
 
         Ok(file_path)
+    }
+
+    /// List file hashes.
+    pub async fn list_files(&self) -> Result<Vec<blake3::Hash>> {
+        info!(target: "geode::list_files()", "[Geode] Listing files");
+
+        let mut dir = fs::read_dir(&self.files_path).await?;
+
+        let mut file_hashes = vec![];
+
+        while let Some(file) = dir.try_next().await? {
+            let os_file_name = file.file_name();
+            let file_name = os_file_name.to_string_lossy();
+            if let Ok(file_hash) = blake3::Hash::from_hex(file_name.to_string()) {
+                file_hashes.push(file_hash);
+            }
+        }
+
+        Ok(file_hashes)
+    }
+
+    /// List chunk hashes.
+    pub async fn list_chunks(&self) -> Result<Vec<blake3::Hash>> {
+        info!(target: "geode::list_chunks()", "[Geode] Listing chunks");
+
+        let mut dir = fs::read_dir(&self.chunks_path).await?;
+
+        let mut chunk_hashes = vec![];
+
+        while let Some(chunk) = dir.try_next().await? {
+            let os_file_name = chunk.file_name();
+            let file_name = os_file_name.to_string_lossy();
+            if let Ok(chunk_hash) = blake3::Hash::from_hex(file_name.to_string()) {
+                chunk_hashes.push(chunk_hash);
+            }
+        }
+
+        Ok(chunk_hashes)
     }
 }

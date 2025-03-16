@@ -24,37 +24,35 @@ use std::{
 };
 
 use num_bigint::BigUint;
+use tasks::FetchReply;
 
+use crate::rpc::FudEvent;
 use async_trait::async_trait;
-use dht::{Dht, DhtHandler, DhtNode, DhtRouter};
-use futures::{
-    future::{try_select, Either, FutureExt},
-    pin_mut,
-};
+use dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr};
+use futures::{future::FutureExt, pin_mut, select};
 use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, RngCore};
 use smol::{
     channel,
     fs::{File, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
-    lock::{Mutex, MutexGuard, RwLock},
+    lock::{Mutex, RwLock},
     stream::StreamExt,
     Executor,
 };
 use structopt_toml::{structopt::StructOpt, StructOptToml};
-use tinyjson::JsonValue;
 
 use darkfi::{
     async_daemonize, cli_desc,
     geode::Geode,
     net::{session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr},
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
+        jsonrpc::JsonSubscriber,
         p2p_method::HandlerP2p,
         server::{listen_and_serve, RequestHandler},
         settings::{RpcSettings, RpcSettingsOpt},
     },
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
     Error, Result,
 };
@@ -63,11 +61,13 @@ use darkfi::{
 mod proto;
 use proto::{
     FudAnnounce, FudChunkReply, FudFileReply, FudFindNodesReply, FudFindNodesRequest,
-    FudFindRequest, FudFindSeedersReply, FudFindSeedersRequest, FudPingReply, FudPingRequest,
-    ProtocolFud,
+    FudFindRequest, FudFindSeedersReply, FudFindSeedersRequest, FudNotFound, FudPingReply,
+    FudPingRequest, ProtocolFud,
 };
 
 mod dht;
+mod rpc;
+mod tasks;
 
 const CONFIG_FILE: &str = "fud_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../fud_config.toml");
@@ -105,7 +105,7 @@ struct Args {
 
 pub struct Fud {
     /// Key -> Seeders
-    seeders_router: DhtRouter,
+    seeders_router: DhtRouterPtr,
 
     /// Pointer to the P2P network instance
     p2p: P2pPtr,
@@ -116,6 +116,8 @@ pub struct Fud {
     /// The DHT instance
     dht: Arc<Dht>,
 
+    get_tx: channel::Sender<(u16, blake3::Hash, Option<String>, Result<()>)>,
+    get_rx: channel::Receiver<(u16, blake3::Hash, Option<String>, Result<()>)>,
     file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
     file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
@@ -129,497 +131,16 @@ pub struct Fud {
 
     /// dnet JSON-RPC subscriber
     dnet_sub: JsonSubscriber,
-}
 
-#[async_trait]
-impl RequestHandler<()> for Fud {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        return match req.method.as_str() {
-            "ping" => self.pong(req.id, req.params).await,
+    /// Download JSON-RPC subscriber
+    download_sub: JsonSubscriber,
 
-            "put" => self.put(req.id, req.params).await,
-            "get" => self.get(req.id, req.params).await,
-
-            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
-            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
-            "list_buckets" => self.list_buckets(req.id, req.params).await,
-            "list_seeders" => self.list_seeders(req.id, req.params).await,
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-        }
-    }
-
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
-        self.rpc_connections.lock().await
-    }
-}
-
-impl Fud {
-    // RPCAPI:
-    // Put a file onto the network. Takes a local filesystem path as a parameter.
-    // Returns the file hash that serves as a pointer to the uploaded file.
-    //
-    // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
-    async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        let path = params[0].get::<String>().unwrap();
-        let path = match expand_path(path.as_str()) {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
-        };
-
-        // A valid path was passed. Let's see if we can read it, and if so,
-        // add it to Geode.
-        let fd = match File::open(&path).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Failed to open {:?}: {}", path, e);
-                return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-            }
-        };
-
-        let (file_hash, chunk_hashes) = match self.geode.insert(fd).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Failed inserting file {:?} to geode: {}", path, e);
-                return JsonError::new(ErrorCode::InternalError, None, id).into()
-            }
-        };
-
-        // Announce file
-        let self_node = self.dht.node.clone();
-        let fud_announce = FudAnnounce { key: file_hash, nodes: vec![self_node.clone()] };
-        let _ = self.announce(&file_hash, &fud_announce, self.seeders_router.clone()).await;
-
-        // Announce chunks
-        for chunk_hash in chunk_hashes {
-            let fud_announce = FudAnnounce { key: chunk_hash, nodes: vec![self_node.clone()] };
-            let _ = self.announce(&chunk_hash, &fud_announce, self.seeders_router.clone()).await;
-        }
-
-        JsonResponse::new(JsonValue::String(file_hash.to_hex().to_string()), id).into()
-    }
-
-    // RPCAPI:
-    // Fetch a file from the network. Takes a file hash as parameter.
-    // Returns the path to the assembled file, if found/fetched.
-    //
-    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result: "~/.local/share/darkfi/fud/downloads/fab1...2314", "id": 42}
-    async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        let file_name: Option<String> = match params[1].get::<String>() {
-            Some(name) => match name.is_empty() {
-                true => None,
-                false => Some(name.clone()),
-            },
-            None => None,
-        };
-
-        let self_node = self.dht.node.clone();
-
-        let file_hash = match blake3::Hash::from_hex(params[0].get::<String>().unwrap()) {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
-        };
-
-        let chunked_file = match self.geode.get(&file_hash).await {
-            Ok(v) => v,
-            Err(Error::GeodeNeedsGc) => todo!(),
-            Err(Error::GeodeFileNotFound) => {
-                info!("Requested file {} not found in Geode, triggering fetch", file_hash);
-                self.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
-                info!("Waiting for background file fetch task...");
-                let (i_file_hash, status) = self.file_fetch_end_rx.recv().await.unwrap();
-                match status {
-                    Ok(()) => self.geode.get(&i_file_hash).await.unwrap(),
-
-                    Err(Error::GeodeFileRouteNotFound) => {
-                        // TODO: Return FileNotFound error
-                        return JsonError::new(ErrorCode::InternalError, None, id).into()
-                    }
-
-                    Err(e) => panic!("{}", e),
-                }
-            }
-
-            Err(e) => panic!("{}", e),
-        };
-
-        if chunked_file.is_complete() {
-            let fud_announce = FudAnnounce { key: file_hash, nodes: vec![self_node.clone()] };
-            let _ = self.announce(&file_hash, &fud_announce, self.seeders_router.clone()).await;
-
-            return match self.geode.assemble_file(&file_hash, &chunked_file, file_name).await {
-                Ok(file_path) => JsonResponse::new(
-                    JsonValue::String(file_path.to_string_lossy().to_string()),
-                    id,
-                )
-                .into(),
-                Err(_) => JsonError::new(ErrorCode::InternalError, None, id).into(),
-            }
-        }
-
-        // Fetch any missing chunks
-        let mut missing_chunks = vec![];
-        for (chunk, path) in chunked_file.iter() {
-            if path.is_none() {
-                missing_chunks.push(*chunk);
-            }
-        }
-
-        for chunk in missing_chunks {
-            self.chunk_fetch_tx.send((chunk, Ok(()))).await.unwrap();
-            let (i_chunk_hash, status) = self.chunk_fetch_end_rx.recv().await.unwrap();
-
-            match status {
-                Ok(()) => {
-                    let fud_announce =
-                        FudAnnounce { key: i_chunk_hash, nodes: vec![self_node.clone()] };
-                    let _ = self
-                        .announce(&i_chunk_hash, &fud_announce, self.seeders_router.clone())
-                        .await;
-                }
-                Err(Error::GeodeChunkRouteNotFound) => continue,
-
-                Err(e) => panic!("{}", e),
-            };
-        }
-
-        let chunked_file = match self.geode.get(&file_hash).await {
-            Ok(v) => v,
-            Err(e) => panic!("{}", e),
-        };
-
-        if !chunked_file.is_complete() {
-            todo!();
-            // TODO: Return JsonError missing chunks
-        }
-
-        return match self.geode.assemble_file(&file_hash, &chunked_file, file_name).await {
-            Ok(file_path) => {
-                JsonResponse::new(JsonValue::String(file_path.to_string_lossy().to_string()), id)
-                    .into()
-            }
-            Err(_) => JsonError::new(ErrorCode::InternalError, None, id).into(),
-        }
-    }
-
-    // RPCAPI:
-    // Activate or deactivate dnet in the P2P stack.
-    // By sending `true`, dnet will be activated, and by sending `false` dnet
-    // will be deactivated. Returns `true` on success.
-    //
-    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_bool() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        let switch = params[0].get::<bool>().unwrap();
-
-        if *switch {
-            self.p2p.dnet_enable();
-        } else {
-            self.p2p.dnet_disable();
-        }
-
-        JsonResponse::new(JsonValue::Boolean(true), id).into()
-    }
-
-    // RPCAPI:
-    // Initializes a subscription to p2p dnet events.
-    // Once a subscription is established, `fud` will send JSON-RPC notifications of
-    // new network events to the subscriber.
-    //
-    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
-    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        self.dnet_sub.clone().into()
-    }
-
-    // RPCAPI:
-    // Returns the current buckets
-    //
-    // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:13337"]]]], "id": 1}
-    pub async fn list_buckets(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-        let mut buckets = vec![];
-        for bucket in self.dht.buckets.read().await.iter() {
-            let mut nodes = vec![];
-            for node in bucket.nodes.clone() {
-                let mut addresses = vec![];
-                for addr in node.addresses {
-                    addresses.push(JsonValue::String(addr.to_string()));
-                }
-                nodes.push(JsonValue::Array(vec![
-                    JsonValue::String(node.id.to_hex().to_string()),
-                    JsonValue::Array(addresses),
-                ]));
-            }
-            buckets.push(JsonValue::Array(nodes));
-        }
-
-        JsonResponse::new(JsonValue::Array(buckets), id).into()
-    }
-
-    // RPCAPI:
-    // Returns the content of the seeders router
-    //
-    // --> {"jsonrpc": "2.0", "method": "list_routes", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdef": ["ghijkl"]}}, "id": 1}
-    pub async fn list_seeders(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-        let mut seeders_router: HashMap<String, JsonValue> = HashMap::new();
-        for (hash, nodes) in self.seeders_router.read().await.iter() {
-            let mut node_ids = vec![];
-            for node in nodes {
-                node_ids.push(JsonValue::String(node.id.to_hex().to_string()));
-            }
-            seeders_router.insert(hash.to_hex().to_string(), JsonValue::Array(node_ids));
-        }
-        let mut res: HashMap<String, JsonValue> = HashMap::new();
-        res.insert("seeders".to_string(), JsonValue::Object(seeders_router));
-
-        JsonResponse::new(JsonValue::Object(res), id).into()
-    }
+    download_publisher: PublisherPtr<FudEvent>,
 }
 
 impl HandlerP2p for Fud {
     fn p2p(&self) -> P2pPtr {
         self.p2p.clone()
-    }
-}
-
-enum FetchReply {
-    File(FudFileReply),
-    Chunk(FudChunkReply),
-}
-
-/// Fetch a file or chunk from the network
-/// 1. Lookup nodes close to the key
-/// 2. Request seeders for the file/chunk from those nodes
-/// 3. Request the file/chunk from the seeders
-async fn fetch(fud: Arc<Fud>, key: blake3::Hash) -> Option<FetchReply> {
-    let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
-    let closest_nodes = fud.lookup_nodes(&key).await; // 1
-    let mut result: Option<FetchReply> = None;
-    if closest_nodes.is_err() {
-        return None
-    }
-
-    for node in closest_nodes.unwrap() {
-        // 2. Request list of seeders
-        let channel = match fud.get_channel(&node).await {
-            Ok(channel) => channel,
-            Err(e) => {
-                warn!(target: "fud::fetch()", "Could not get a channel for node {}: {}", node.id, e);
-                continue;
-            }
-        };
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<FudFindSeedersReply>().await;
-
-        let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
-            Ok(msg_subscriber) => msg_subscriber,
-            Err(e) => {
-                warn!(target: "fud::fetch()", "Error subscribing to msg: {}", e);
-                continue;
-            }
-        };
-
-        let _ = channel.send(&FudFindSeedersRequest { key }).await;
-
-        let reply = match msg_subscriber.receive_with_timeout(fud.dht().timeout).await {
-            Ok(reply) => reply,
-            Err(e) => {
-                warn!(target: "fud::fetch()", "Error waiting for reply: {}", e);
-                continue;
-            }
-        };
-
-        let mut seeders = reply.nodes.clone();
-        info!(target: "fud::fetch()", "Found seeders for {}: {:?}", key, seeders);
-
-        msg_subscriber.unsubscribe().await;
-
-        // 3. Request the file/chunk from the seeders
-        while let Some(seeder) = seeders.pop() {
-            // Only query a seeder once
-            if queried_seeders.iter().any(|s| *s == seeder.id) {
-                continue;
-            }
-            queried_seeders.insert(seeder.id);
-
-            if let Ok(channel) = fud.get_channel(&seeder).await {
-                let msg_subsystem = channel.message_subsystem();
-                msg_subsystem.add_dispatch::<FudChunkReply>().await;
-                msg_subsystem.add_dispatch::<FudFileReply>().await;
-                let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
-                let msg_subscriber_file = channel.subscribe_msg::<FudFileReply>().await.unwrap();
-
-                let _ = channel.send(&FudFindRequest { key }).await;
-
-                let chunk_recv =
-                    msg_subscriber_chunk.receive_with_timeout(fud.dht().timeout).fuse();
-                let file_recv = msg_subscriber_file.receive_with_timeout(fud.dht().timeout).fuse();
-
-                pin_mut!(chunk_recv, file_recv);
-
-                // Wait for a FudChunkReply or a FudFileReply
-                match try_select(chunk_recv, file_recv).await {
-                    Ok(Either::Left((chunk_reply, _))) => {
-                        info!(target: "fud::fetch()", "Received chunk {} from seeder {:?}", key, seeder.id);
-                        msg_subscriber.unsubscribe().await;
-                        result = Some(FetchReply::Chunk((*chunk_reply).clone()));
-                        break;
-                    }
-                    Ok(Either::Right((file_reply, _))) => {
-                        info!(target: "fud::fetch()", "Received file {} from seeder {:?}", key, seeder.id);
-                        msg_subscriber.unsubscribe().await;
-                        result = Some(FetchReply::File((*file_reply).clone()));
-                        break;
-                    }
-                    Err(e) => {
-                        match e {
-                            Either::Left((chunk_err, _)) => {
-                                warn!(target: "fud::fetch()", "Error waiting for chunk reply: {}", chunk_err);
-                            }
-                            Either::Right((file_err, _)) => {
-                                warn!(target: "fud::fetch()", "Error waiting for file reply: {}", file_err);
-                            }
-                        };
-                        msg_subscriber.unsubscribe().await;
-                        continue;
-                    }
-                };
-            }
-        }
-
-        if result.is_some() {
-            break;
-        }
-    }
-
-    result
-}
-
-/// Background task that receives file fetch requests and tries to
-/// fetch objects from the network using the routing table.
-/// TODO: This can be optimised a lot for connection reuse, etc.
-async fn fetch_file_task(fud: Arc<Fud>, _: Arc<Executor<'_>>) -> Result<()> {
-    info!(target: "fud::fetch_file_task()", "Started background file fetch task");
-    loop {
-        let (file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_file_task()", "Fetching file {}", file_hash);
-
-        let result = fetch(fud.clone(), file_hash).await;
-
-        match result {
-            Some(reply) => {
-                match reply {
-                    FetchReply::File(FudFileReply { chunk_hashes }) => {
-                        if let Err(e) = fud.geode.insert_file(&file_hash, &chunk_hashes).await {
-                            error!("Failed inserting file {} to Geode: {}", file_hash, e);
-                        }
-                        fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
-                    }
-                    // Looked for a file but got a chunk, meaning that file_hash = chunk_hash, the file fits in a single chunk
-                    FetchReply::Chunk(FudChunkReply { chunk }) => {
-                        // TODO: Verify chunk
-                        info!(target: "fud::fetch()", "File fits in a single chunk");
-                        let _ = fud.geode.insert_file(&file_hash, &[file_hash]).await;
-                        match fud.geode.insert_chunk(&chunk).await {
-                            Ok(inserted_hash) => {
-                                if inserted_hash != file_hash {
-                                    warn!("Received chunk does not match requested file");
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed inserting chunk {} to Geode: {}", file_hash, e);
-                            }
-                        };
-                        fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
-                    }
-                }
-            }
-            None => {
-                fud.file_fetch_end_tx
-                    .send((file_hash, Err(Error::GeodeFileRouteNotFound)))
-                    .await
-                    .unwrap();
-            }
-        };
-    }
-}
-
-/// Background task that receives chunk fetch requests and tries to
-/// fetch objects from the network using the routing table.
-/// TODO: This can be optimised a lot for connection reuse, etc.
-async fn fetch_chunk_task(fud: Arc<Fud>, _: Arc<Executor<'_>>) -> Result<()> {
-    info!(target: "fud::fetch_chunk_task()", "Started background chunk fetch task");
-    loop {
-        let (chunk_hash, _) = fud.chunk_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_chunk_task()", "Fetching chunk {}", chunk_hash);
-
-        let result = fetch(fud.clone(), chunk_hash).await;
-
-        match result {
-            Some(reply) => {
-                match reply {
-                    FetchReply::Chunk(FudChunkReply { chunk }) => {
-                        // TODO: Verify chunk
-                        match fud.geode.insert_chunk(&chunk).await {
-                            Ok(inserted_hash) => {
-                                if inserted_hash != chunk_hash {
-                                    warn!("Received chunk does not match requested chunk");
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed inserting chunk {} to Geode: {}", chunk_hash, e);
-                            }
-                        };
-                        fud.chunk_fetch_end_tx.send((chunk_hash, Ok(()))).await.unwrap();
-                    }
-                    _ => {
-                        // Looked for a chunk but got a file instead, not supposed to happen
-                        fud.chunk_fetch_end_tx
-                            .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
-                            .await
-                            .unwrap();
-                    }
-                }
-            }
-            None => {
-                fud.chunk_fetch_end_tx
-                    .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
-                    .await
-                    .unwrap();
-            }
-        };
     }
 }
 
@@ -630,7 +151,7 @@ impl DhtHandler for Fud {
     }
 
     async fn ping(&self, channel: ChannelPtr) -> Result<dht::DhtNode> {
-        debug!(target: "fud::Fud::DhtHandler::ping()", "Sending ping to channel {}", channel.info.id);
+        debug!(target: "fud::DhtHandler::ping()", "Sending ping to channel {}", channel.info.id);
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<FudPingReply>().await;
         let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
@@ -647,7 +168,7 @@ impl DhtHandler for Fud {
 
     // TODO: Optimize this
     async fn on_new_node(&self, node: &DhtNode) -> Result<()> {
-        debug!(target: "fud::Fud::DhtHandler::on_new_node()", "New node {}", node.id);
+        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", node.id);
 
         // If this is the first node we know about, then bootstrap
         if !self.dht().is_bootstrapped().await {
@@ -655,19 +176,22 @@ impl DhtHandler for Fud {
 
             // Lookup our own node id
             let self_node = self.dht().node.clone();
-            debug!(target: "fud::Fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", self_node.id);
+            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", self_node.id);
             let _ = self.lookup_nodes(&self_node.id).await;
         }
 
         // Send keys that are closer to this node than we are
         let self_id = self.dht().node.id;
         let channel = self.get_channel(node).await?;
-        for (key, nodes) in self.seeders_router.read().await.iter() {
+        for (key, seeders) in self.seeders_router.read().await.iter() {
             let node_distance = BigUint::from_bytes_be(&self.dht().distance(key, &node.id));
             let self_distance = BigUint::from_bytes_be(&self.dht().distance(key, &self_id));
             if node_distance <= self_distance {
                 let _ = channel
-                    .send(&FudAnnounce { key: *key, nodes: nodes.iter().cloned().collect() })
+                    .send(&FudAnnounce {
+                        key: *key,
+                        seeders: seeders.clone().into_iter().collect(),
+                    })
                     .await;
             }
         }
@@ -676,7 +200,7 @@ impl DhtHandler for Fud {
     }
 
     async fn fetch_nodes(&self, node: &DhtNode, key: &blake3::Hash) -> Result<Vec<DhtNode>> {
-        debug!(target: "fud::Fud::DhtHandler::fetch_value()", "Fetching nodes close to {} from node {}", key, node.id);
+        debug!(target: "fud::DhtHandler::fetch_value()", "Fetching nodes close to {} from node {}", key, node.id);
 
         let channel = self.get_channel(node).await?;
         let msg_subsystem = channel.message_subsystem();
@@ -691,6 +215,165 @@ impl DhtHandler for Fud {
         msg_subscriber_nodes.unsubscribe().await;
 
         Ok(reply.nodes.clone())
+    }
+}
+
+impl Fud {
+    /// Add ourselves to `seeders_router` for the files and chunks we already have.
+    /// Skipped if we have no external address.
+    async fn init(&self) -> Result<()> {
+        if self.dht().node.clone().addresses.is_empty() {
+            return Ok(());
+        }
+        let self_router_items: Vec<DhtRouterItem> = vec![self.dht().node.clone().into()];
+        let mut hashes = self.geode.list_chunks().await?;
+        hashes.extend(self.geode.list_files().await?);
+
+        for hash in hashes {
+            self.add_to_router(self.seeders_router.clone(), &hash, self_router_items.clone()).await;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch a file or chunk from the network
+    /// 1. Lookup nodes close to the key
+    /// 2. Request seeders for the file/chunk from those nodes
+    /// 3. Request the file/chunk from the seeders
+    async fn fetch(&self, key: blake3::Hash) -> Option<FetchReply> {
+        let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
+        let closest_nodes = self.lookup_nodes(&key).await; // 1
+        let mut result: Option<FetchReply> = None;
+        if closest_nodes.is_err() {
+            return None
+        }
+
+        for node in closest_nodes.unwrap() {
+            // 2. Request list of seeders
+            let channel = match self.get_channel(&node).await {
+                Ok(channel) => channel,
+                Err(e) => {
+                    warn!(target: "fud::fetch()", "Could not get a channel for node {}: {}", node.id, e);
+                    continue;
+                }
+            };
+            let msg_subsystem = channel.message_subsystem();
+            msg_subsystem.add_dispatch::<FudFindSeedersReply>().await;
+
+            let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
+                Ok(msg_subscriber) => msg_subscriber,
+                Err(e) => {
+                    warn!(target: "fud::fetch()", "Error subscribing to msg: {}", e);
+                    continue;
+                }
+            };
+
+            let send_res = channel.send(&FudFindSeedersRequest { key }).await;
+            if let Err(e) = send_res {
+                warn!(target: "fud::fetch()", "Error while sending FudFindSeedersRequest: {}", e);
+                msg_subscriber.unsubscribe().await;
+                continue;
+            }
+
+            let reply = match msg_subscriber.receive_with_timeout(self.dht().timeout).await {
+                Ok(reply) => reply,
+                Err(e) => {
+                    warn!(target: "fud::fetch()", "Error waiting for reply: {}", e);
+                    continue;
+                }
+            };
+
+            let mut seeders = reply.seeders.clone();
+            info!(target: "fud::fetch()", "Found {} seeders for {}", seeders.len(), key);
+
+            msg_subscriber.unsubscribe().await;
+
+            // 3. Request the file/chunk from the seeders
+            while let Some(seeder) = seeders.pop() {
+                // Only query a seeder once
+                if queried_seeders.iter().any(|s| *s == seeder.node.id) {
+                    continue;
+                }
+                queried_seeders.insert(seeder.node.id);
+
+                if let Ok(channel) = self.get_channel(&seeder.node).await {
+                    let msg_subsystem = channel.message_subsystem();
+                    msg_subsystem.add_dispatch::<FudChunkReply>().await;
+                    msg_subsystem.add_dispatch::<FudFileReply>().await;
+                    msg_subsystem.add_dispatch::<FudNotFound>().await;
+                    let msg_subscriber_chunk =
+                        channel.subscribe_msg::<FudChunkReply>().await.unwrap();
+                    let msg_subscriber_file =
+                        channel.subscribe_msg::<FudFileReply>().await.unwrap();
+                    let msg_subscriber_notfound =
+                        channel.subscribe_msg::<FudNotFound>().await.unwrap();
+
+                    let send_res = channel.send(&FudFindRequest { key }).await;
+                    if let Err(e) = send_res {
+                        warn!(target: "fud::fetch()", "Error while sending FudFindRequest: {}", e);
+                        msg_subscriber_chunk.unsubscribe().await;
+                        msg_subscriber_file.unsubscribe().await;
+                        msg_subscriber_notfound.unsubscribe().await;
+                        continue;
+                    }
+
+                    let chunk_recv =
+                        msg_subscriber_chunk.receive_with_timeout(self.dht().timeout).fuse();
+                    let file_recv =
+                        msg_subscriber_file.receive_with_timeout(self.dht().timeout).fuse();
+                    let notfound_recv =
+                        msg_subscriber_notfound.receive_with_timeout(self.dht().timeout).fuse();
+
+                    pin_mut!(chunk_recv, file_recv, notfound_recv);
+
+                    // Wait for a FudChunkReply, FudFileReply, or FudNotFound
+                    select! {
+                        chunk_reply = chunk_recv => {
+                            if let Err(e) = chunk_reply {
+                                warn!(target: "fud::fetch()", "Error waiting for chunk reply: {}", e);
+                                continue;
+                            }
+                            let reply = chunk_reply.unwrap();
+                            info!(target: "fud::fetch()", "Received chunk {} from seeder {}", key, seeder.node.id.to_hex().to_string());
+                            msg_subscriber_chunk.unsubscribe().await;
+                            msg_subscriber_file.unsubscribe().await;
+                            msg_subscriber_notfound.unsubscribe().await;
+                            result = Some(FetchReply::Chunk((*reply).clone()));
+                            break;
+                        }
+                        file_reply = file_recv => {
+                            if let Err(e) = file_reply {
+                                warn!(target: "fud::fetch()", "Error waiting for file reply: {}", e);
+                                continue;
+                            }
+                            let reply = file_reply.unwrap();
+                            info!(target: "fud::fetch()", "Received file {} from seeder {}", key, seeder.node.id.to_hex().to_string());
+                            msg_subscriber_chunk.unsubscribe().await;
+                            msg_subscriber_file.unsubscribe().await;
+                            msg_subscriber_notfound.unsubscribe().await;
+                            result = Some(FetchReply::File((*reply).clone()));
+                            break;
+                        }
+                        notfound_reply = notfound_recv => {
+                            if let Err(e) = notfound_reply {
+                                warn!(target: "fud::fetch()", "Error waiting for NOTFOUND reply: {}", e);
+                                continue;
+                            }
+                            info!(target: "fud::fetch()", "Received NOTFOUND {} from seeder {}", key, seeder.node.id.to_hex().to_string());
+                            msg_subscriber_chunk.unsubscribe().await;
+                            msg_subscriber_file.unsubscribe().await;
+                            msg_subscriber_notfound.unsubscribe().await;
+                        }
+                    };
+                }
+            }
+
+            if result.is_some() {
+                break;
+            }
+        }
+
+        result
     }
 }
 
@@ -720,11 +403,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let external_addrs = p2p.hosts().external_addrs().await;
 
     if external_addrs.is_empty() {
-        error!(
-            target: "fud::realmain",
-            "External addrs not configured. Stopping",
-        );
-        return Ok(())
+        warn!(target: "fud::realmain", "No external addresses, you won't be able to seed")
     }
 
     info!("Starting dnet subs task");
@@ -780,17 +459,21 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Your node ID: {}", node_id_);
 
     // Daemon instantiation
+    let download_sub = JsonSubscriber::new("get");
+    let (get_tx, get_rx) = smol::channel::unbounded();
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
     let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
     let (chunk_fetch_tx, chunk_fetch_rx) = smol::channel::unbounded();
     let (chunk_fetch_end_tx, chunk_fetch_end_rx) = smol::channel::unbounded();
     // TODO: Add DHT settings in the config file
-    let dht = Arc::new(Dht::new(&node_id_, 4, 16, 15, p2p.clone(), ex.clone()).await);
+    let dht = Arc::new(Dht::new(&node_id_, 4, 16, 60, p2p.clone(), ex.clone()).await);
     let fud = Arc::new(Fud {
         seeders_router,
         p2p: p2p.clone(),
         geode,
         dht: dht.clone(),
+        get_tx,
+        get_rx,
         file_fetch_tx,
         file_fetch_rx,
         file_fetch_end_tx,
@@ -801,12 +484,38 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         chunk_fetch_end_rx,
         rpc_connections: Mutex::new(HashSet::new()),
         dnet_sub,
+        download_sub: download_sub.clone(),
+        download_publisher: Publisher::new(),
     });
+    fud.init().await?;
+
+    info!("Starting download subs task");
+    let download_sub_ = download_sub.clone();
+    let fud_ = fud.clone();
+    let download_task = StoppableTask::new();
+    download_task.clone().start(
+        async move {
+            let download_sub = fud_.download_publisher.clone().subscribe().await;
+            loop {
+                let event = download_sub.receive().await;
+                debug!("Got download event: {:?}", event);
+                download_sub_.notify(event.into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     info!(target: "fud", "Starting fetch file task");
     let file_task = StoppableTask::new();
     file_task.clone().start(
-        fetch_file_task(fud.clone(), ex.clone()),
+        tasks::fetch_file_task(fud.clone()),
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -820,11 +529,25 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Starting fetch chunk task");
     let chunk_task = StoppableTask::new();
     chunk_task.clone().start(
-        fetch_chunk_task(fud.clone(), ex.clone()),
+        tasks::fetch_chunk_task(fud.clone()),
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "fud", "Failed starting fetch chunk task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting get task");
+    let get_task_ = StoppableTask::new();
+    get_task_.clone().start(
+        tasks::get_task(fud.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting get task: {}", e),
             }
         },
         Error::DetachedTaskStopped,
@@ -885,6 +608,32 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::DetachedTaskStopped,
         ex.clone(),
     );
+    let prune_task = StoppableTask::new();
+    let fud_ = fud.clone();
+    prune_task.clone().start(
+        async move { tasks::prune_seeders_task(fud_.clone()).await },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting prune seeders task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+    let announce_task = StoppableTask::new();
+    let fud_ = fud.clone();
+    announce_task.clone().start(
+        async move { tasks::announce_seed_task(fud_.clone()).await },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting announce task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
@@ -897,6 +646,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Stopping fetch chunk task...");
     chunk_task.stop().await;
 
+    info!(target: "fud", "Stopping get task...");
+    get_task_.stop().await;
+
     info!(target: "fud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
@@ -906,6 +658,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Stopping DHT tasks");
     dht_channel_task.stop().await;
     dht_disconnect_task.stop().await;
+    prune_task.stop().await;
+    announce_task.stop().await;
 
     info!("Bye!");
     Ok(())

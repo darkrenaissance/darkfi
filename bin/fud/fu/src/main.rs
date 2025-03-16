@@ -17,14 +17,23 @@
  */
 
 use clap::{Parser, Subcommand};
-use log::info;
+use log::error;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    io::{stdout, Write},
+    sync::Arc,
+};
 use url::Url;
 
 use darkfi::{
     cli_desc,
-    rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
+    rpc::{
+        client::RpcClient,
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
+        util::JsonValue,
+    },
+    system::{ExecutorPtr, Publisher, StoppableTask},
     util::cli::{get_log_config, get_log_level},
     Error, Result,
 };
@@ -69,20 +78,132 @@ enum Subcmd {
 }
 
 struct Fu {
-    pub rpc_client: RpcClient,
+    pub rpc_client: Arc<RpcClient>,
 }
 
 impl Fu {
-    async fn close_connection(&self) {
-        self.rpc_client.stop().await;
-    }
+    async fn get(
+        &self,
+        file_hash: String,
+        file_name: Option<String>,
+        ex: ExecutorPtr,
+    ) -> Result<()> {
+        let publisher = Publisher::new();
+        let subscription = Arc::new(publisher.clone().subscribe().await);
+        let subscriber_task = StoppableTask::new();
+        let file_hash_ = file_hash.clone();
+        let publisher_ = publisher.clone();
+        let rpc_client_ = self.rpc_client.clone();
+        subscriber_task.clone().start(
+            async move {
+                let req = JsonRequest::new(
+                    "get",
+                    JsonValue::Array(vec![
+                        JsonValue::String(file_hash_),
+                        JsonValue::String(file_name.unwrap_or_default()),
+                    ]),
+                );
+                rpc_client_.subscribe(req, publisher).await
+            },
+            move |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!("{}", e);
+                        publisher_
+                            .notify(JsonResult::Error(JsonError::new(
+                                ErrorCode::InternalError,
+                                None,
+                                0,
+                            )))
+                            .await;
+                    }
+                }
+            },
+            Error::DetachedTaskStopped,
+            ex,
+        );
 
-    async fn get(&self, file_hash: String, file_name: Option<String>) -> Result<()> {
-        let req = JsonRequest::new("get", JsonValue::Array(vec![JsonValue::String(file_hash), JsonValue::String(file_name.unwrap_or_default())]));
-        let rep = self.rpc_client.request(req).await?;
-        let path: String = rep.try_into().unwrap();
-        println!("{}", path);
-        Ok(())
+        let progress_bar_width = 20;
+        let mut chunks_total = 0;
+        let mut chunks_downloaded = 0;
+
+        let print_progress_bar = |chunks_downloaded: usize, chunks_total: usize| {
+            let completed = (chunks_downloaded as f64 / chunks_total as f64 *
+                progress_bar_width as f64) as usize;
+            let remaining = progress_bar_width - completed;
+            let bar = "=".repeat(completed) + &" ".repeat(remaining);
+            print!("\r[{}] {}/{} chunks", bar, chunks_downloaded, chunks_total);
+            stdout().flush().unwrap();
+        };
+
+        loop {
+            match subscription.receive().await {
+                JsonResult::Notification(n) => {
+                    let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
+                    match params.get("event").unwrap().get::<String>().unwrap().as_str() {
+                        "file_download_completed" => {
+                            let info = params
+                                .get("info")
+                                .unwrap()
+                                .get::<HashMap<String, JsonValue>>()
+                                .unwrap();
+                            chunks_total =
+                                *info.get("chunk_count").unwrap().get::<f64>().unwrap() as usize;
+                            print_progress_bar(chunks_downloaded, chunks_total);
+                        }
+                        "chunk_download_completed" => {
+                            chunks_downloaded += 1;
+                            print_progress_bar(chunks_downloaded, chunks_total);
+                        }
+                        "download_completed" => {
+                            let info = params
+                                .get("info")
+                                .unwrap()
+                                .get::<HashMap<String, JsonValue>>()
+                                .unwrap();
+                            let file_path = info.get("file_path").unwrap().get::<String>().unwrap();
+                            chunks_downloaded = chunks_total;
+                            print_progress_bar(chunks_downloaded, chunks_total);
+                            println!("\nDownload completed:\n{}", file_path);
+                            return Ok(());
+                        }
+                        "file_not_found" => {
+                            return Err(Error::Custom(format!("Could not find file {}", file_hash)));
+                        }
+                        "chunk_not_found" => {
+                            let info = params
+                                .get("info")
+                                .unwrap()
+                                .get::<HashMap<String, JsonValue>>()
+                                .unwrap();
+                            let chunk_hash =
+                                info.get("chunk_hash").unwrap().get::<String>().unwrap();
+                            println!();
+                            return Err(Error::Custom(format!(
+                                "Could not find chunk {}",
+                                chunk_hash
+                            )));
+                        }
+                        "missing_chunks" => {
+                            println!();
+                            return Err(Error::Custom("Missing chunks".to_string()));
+                        }
+                        _ => {}
+                    }
+                }
+
+                JsonResult::Error(e) => {
+                    return Err(Error::UnexpectedJsonRpc(format!("Got error from JSON-RPC: {e:?}")))
+                }
+
+                x => {
+                    return Err(Error::UnexpectedJsonRpc(format!(
+                        "Got unexpected data from JSON-RPC: {x:?}"
+                    )))
+                }
+            }
+        }
     }
 
     async fn put(&self, file: String) -> Result<()> {
@@ -101,11 +222,13 @@ impl Fu {
         let req = JsonRequest::new("list_buckets", JsonValue::Array(vec![]));
         let rep = self.rpc_client.request(req).await?;
         let buckets: Vec<JsonValue> = rep.try_into().unwrap();
+        let mut empty = true;
         for (bucket_i, bucket) in buckets.into_iter().enumerate() {
             let nodes: Vec<JsonValue> = bucket.try_into().unwrap();
-            if nodes.len() == 0 {
+            if nodes.is_empty() {
                 continue
             }
+            empty = false;
 
             println!("Bucket {}", bucket_i);
             for n in nodes.clone() {
@@ -120,6 +243,10 @@ impl Fu {
             }
         }
 
+        if empty {
+            println!("All buckets are empty");
+        }
+
         Ok(())
     }
 
@@ -129,9 +256,8 @@ impl Fu {
 
         let files: HashMap<String, JsonValue> = rep["seeders"].clone().try_into().unwrap();
 
-        println!("Seeders:");
         if files.is_empty() {
-            println!("No records");
+            println!("No known seeders");
         } else {
             for (file_hash, node_ids) in files {
                 println!("{}", file_hash);
@@ -157,19 +283,15 @@ fn main() -> Result<()> {
     let ex = Arc::new(smol::Executor::new());
     smol::block_on(async {
         ex.run(async {
-            let rpc_client = RpcClient::new(args.endpoint, ex.clone()).await?;
+            let rpc_client = Arc::new(RpcClient::new(args.endpoint.clone(), ex.clone()).await?);
             let fu = Fu { rpc_client };
 
             match args.command {
-                // Subcmd::List => fu.list().await,
-                // Subcmd::Sync => fu.sync().await,
-                Subcmd::Get { file, name } => fu.get(file, name).await,
+                Subcmd::Get { file, name } => fu.get(file, name, ex.clone()).await,
                 Subcmd::Put { file } => fu.put(file).await,
-                Subcmd::ListBuckets { } => fu.list_buckets().await,
-                Subcmd::ListSeeders { } => fu.list_seeders().await,
+                Subcmd::ListBuckets {} => fu.list_buckets().await,
+                Subcmd::ListSeeders {} => fu.list_seeders().await,
             }?;
-
-            fu.close_connection().await;
 
             Ok(())
         })
