@@ -82,6 +82,12 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
+
+    #[structopt(short, long)]
+    /// Disable synchronization and connections to `darkfid`, operating solely
+    /// on the local explorer database without attempting to connect or sync.
+    /// If not specified, the application will attempt to connect and sync by default.
+    no_sync: bool,
 }
 
 /// Defines a daemon structure responsible for handling incoming JSON-RPC requests and delegating them
@@ -108,10 +114,13 @@ pub struct Explorerd {
 
 impl Explorerd {
     /// Creates a new `BlockchainExplorer` instance.
-    async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
+    async fn new(
+        db_path: String,
+        darkfid_endpoint: Url,
+        ex: Arc<smol::Executor<'static>>,
+    ) -> Result<Self> {
         // Initialize darkfid rpc client
         let darkfid_client = Arc::new(DarkfidRpcClient::new());
-        info!(target: "explorerd", "Connected to Darkfi node: {}", endpoint.to_string().trim_end_matches('/'));
 
         // Create explorer service
         let service = ExplorerService::new(db_path)?;
@@ -123,7 +132,7 @@ impl Explorerd {
             service,
             rpc_connections: Mutex::new(HashSet::new()),
             darkfid_client,
-            darkfid_endpoint: endpoint,
+            darkfid_endpoint,
             executor: ex,
         })
     }
@@ -170,30 +179,38 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     );
     info!(target: "explorerd", "Started JSON-RPC server: {}", config.rpc.rpc_listen.to_string().trim_end_matches("/"));
 
-    // Connect the darkfid client
-    explorer.connect().await?;
+    // Declare task variables optional in case we are in no-sync mode
+    let mut subscriber_task = None;
+    let mut listener_task = None;
 
-    // Sync blocks
-    info!(target: "explorerd", "Syncing blocks from darkfid...");
-    if let Err(e) = explorer.sync_blocks(args.reset).await {
-        let error_message = format!("Error syncing blocks: {:?}", e);
-        error!(target: "explorerd", "{error_message}");
-        return Err(Error::DatabaseError(error_message));
-    }
+    // Do not sync when in no-sync mode
+    if !args.no_sync {
+        explorer.connect().await?;
 
-    // Subscribe blocks
-    info!(target: "explorerd", "Subscribing to new blocks...");
-    let (subscriber_task, listener_task) =
+        // Sync blocks
+        info!(target: "explorerd", "Syncing blocks from darkfid...");
+        if let Err(e) = explorer.sync_blocks(args.reset).await {
+            let error_message = format!("Error syncing blocks: {:?}", e);
+            error!(target: "explorerd", "{error_message}");
+            return Err(Error::DatabaseError(error_message));
+        }
+
+        // Subscribe blocks
+        info!(target: "explorerd", "Subscribing to new blocks...");
         match subscribe_blocks(explorer.clone(), config.endpoint.clone(), ex.clone()).await {
-            Ok(pair) => pair,
+            Ok((sub_task, lst_task)) => {
+                subscriber_task = Some(sub_task);
+                listener_task = Some(lst_task);
+            }
             Err(e) => {
                 let error_message = format!("Error setting up blocks subscriber: {:?}", e);
                 error!(target: "explorerd", "{error_message}");
                 return Err(Error::DatabaseError(error_message));
             }
         };
+    }
 
-    log_started_banner(explorer.clone(), &config, &args, &config_path);
+    log_started_banner(explorer.clone(), &config, &args, &config_path, args.no_sync);
     info!(target: "explorerd::", "All is good. Waiting for block notifications...");
 
     // Signal handling for graceful termination.
@@ -204,11 +221,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "explorerd", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
-    info!(target: "explorerd", "Stopping darkfid listener...");
-    listener_task.stop().await;
+    // Stop darkfid listener task if it exists
+    if let Some(task) = listener_task {
+        info!(target: "explorerd", "Stopping darkfid listener...");
+        task.stop().await;
+    }
 
-    info!(target: "explorerd", "Stopping darkfid subscriber...");
-    subscriber_task.stop().await;
+    // Stop darkfid subscribe task if it exists
+    if let Some(task) = subscriber_task {
+        info!(target: "explorerd", "Stopping darkfid subscriber...");
+        task.stop().await;
+    }
 
     info!(target: "explorerd", "Stopping JSON-RPC client...");
     let _ = explorer.darkfid_client.stop().await;
@@ -222,18 +245,28 @@ fn log_started_banner(
     config: &ExplorerNetworkConfig,
     args: &Args,
     config_path: &Path,
+    no_sync: bool,
 ) {
+    // Generate the `connected_node` string based on sync mode
+    let connected_node = if no_sync {
+        "Not connected".to_string()
+    } else {
+        config.endpoint.to_string().trim_end_matches('/').to_string()
+    };
+
+    // Log the banner
     info!(target: "explorerd", "========================================================================================");
-    info!(target: "explorerd", "                   Started DarkFi Explorer Node                                        ");
+    info!(target: "explorerd", "                   Started DarkFi Explorer Node{}                                        ",
+        if no_sync { " (No-Sync Mode)" } else { "" });
     info!(target: "explorerd", "========================================================================================");
     info!(target: "explorerd", "  - Network: {}", args.network);
-    info!(target: "explorerd", "  - JSON-RPC Endpoint: {}", config.rpc.rpc_listen.to_string().trim_end_matches("/"));
+    info!(target: "explorerd", "  - JSON-RPC Endpoint: {}", config.rpc.rpc_listen.to_string().trim_end_matches('/'));
     info!(target: "explorerd", "  - Database: {}", config.database);
     info!(target: "explorerd", "  - Configuration: {}", config_path.to_str().unwrap_or("Error: configuration path not found!"));
     info!(target: "explorerd", "  - Reset Blocks: {}", if args.reset { "Yes" } else { "No" });
     info!(target: "explorerd", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     info!(target: "explorerd", "  - Synced Blocks: {}", explorer.service.db.blockchain.len());
     info!(target: "explorerd", "  - Synced Transactions: {}", explorer.service.db.blockchain.len());
-    info!(target: "explorerd", "  - Connected Darkfi Node: {}", config.endpoint.to_string().trim_end_matches("/"));
+    info!(target: "explorerd", "  - Connected Darkfi Node: {}", connected_node);
     info!(target: "explorerd", "========================================================================================");
 }
