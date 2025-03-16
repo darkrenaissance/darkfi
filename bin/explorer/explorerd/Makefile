@@ -132,6 +132,25 @@ start-%: check-darkfid check-explorerd
 		$(call wait_for_explorerd_startup, $$LOG_DIR) \
 	'
 
+# Starts an explorer node in no-sync mode for `localnet`, `testnet`, or `mainnet` networks.
+# In no-sync mode, no connections are made with the Darkfi blockchain network and the explorer
+# relies solely on a local database without attempting synchronization. As with the `start-%`
+# target, inputs are verified, any running nodes are stopped, the log directory is initialized,
+# and the node is started.
+start-no-sync-%: check-contracts check-explorerd
+	@if [ "$*" != "localnet" ] && [ "$*" != "testnet" ] && [ "$*" != "mainnet" ]; then \
+		echo "Error: Unsupported network '$*'. Use 'localnet', 'testnet', or 'mainnet'."; \
+		exit 1; \
+	fi
+	@$(MAKE) stop suppress_not_running=1
+	@echo "Starting explorer node environment (no sync) $*..."
+	@sh -c ' \
+		LOG_DIR=$(LOG_HOME)/$*; \
+		mkdir -p "$$LOG_DIR"; \
+		./$(EXPLORERD_BIN) --log "$$LOG_DIR/explorerd.log" -c $(EXPLORERD_CONFIG) --network $* --no-sync & echo $$! >> PIDs.txt; \
+		$(call wait_for_explorerd_startup, $$LOG_DIR) \
+	'
+
 # Check and build darkfid if it does not exist
 check-darkfid:
 	@if [ ! -f "$(DARKFID_BIN)" ]; then \
@@ -153,6 +172,15 @@ check-minerd:
 		$(MAKE) -C "$(PROJECT_ROOT)" minerd; \
 	fi
 
+# Check and build contracts if they do not exist
+check-contracts:
+	@if [ ! -f "$(PROJECT_ROOT)/src/contract/money/darkfi_money_contract.wasm" ] \
+	  || [ ! -f "$(PROJECT_ROOT)/contract/dao/darkfi_dao_contract.wasm" ] \
+	  || [ ! -f "$(PROJECT_ROOT)/contract/deployooor/darkfi_deployooor_contract.wasm" ]; then \
+		echo "Building contracts..."; \
+		$(MAKE) -C "$(PROJECT_ROOT)" contracts; \
+	fi
+
 # Stop the running network
 # Usage: make stop [suppress_not_running=1]
 stop:
@@ -172,9 +200,13 @@ stop:
 		fi; \
 	fi
 
-# Wait for the network to start from another Makefile
+# Wait for the network to start
 await-startup-%:
 	@$(call wait_for_darkfid_startup,$(LOG_HOME)/$*)
+	@$(call wait_for_explorerd_startup,$(LOG_HOME)/$*)
+
+# Wait for the explorer node environment to start in no-sync mode (skip waiting for darkfid startup)
+await-startup-no-sync-%:
 	@$(call wait_for_explorerd_startup,$(LOG_HOME)/$*)
 
 # Waits for Darkfid to start

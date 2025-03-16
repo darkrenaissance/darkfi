@@ -24,6 +24,18 @@ start-%:
 		while true; do sleep 1; done; \
 	'
 
+# Start no-sync explorer (localnet/testnet/mainnet) without connecting to or syncing with the Darkfi blockchain
+start-no-sync-%:
+	@echo "Starting $* environment (no sync)..."
+	@sh -c ' \
+		trap "echo Interrupt detected; make stop; exit 0" INT; \
+		$(MAKE) -C ./explorerd start-no-sync-$*; \
+		$(MAKE) -C ./explorerd await-startup-no-sync-$*; \
+		$(MAKE) -C ./site start-$*; \
+		echo "Started $* environment in no sync mode. Press Ctrl-C to stop."; \
+		while true; do sleep 1; done; \
+	'
+
 # Stop the running network
 stop:
 	@$(MAKE) -C ./explorerd stop || true; \
