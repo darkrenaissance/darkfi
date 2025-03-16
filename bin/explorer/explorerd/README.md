@@ -51,6 +51,16 @@ make start-testnet
 make start-mainnet
 ```
 
+### Start in No-Sync Mode
+You can run explorerd in a no-sync mode that does not connect to any nodes or sync blocks. This approach is useful if you only need to work with an existing local explorer database, perform tests, or work on the site UI without running blockchain nodes or miners (which can be resource-intensive).
+
+Below is an example of how to launch a no-sync environment for localnet. You can also start testnet or mainnet in the same manner (for example, using `start-no-sync-testnet` or `start-no-sync-mainnet`).
+
+```sh
+# Launch an explorer without connecting to or syncing with any blockchain nodes
+make start-no-sync-localnet
+```
+
 ### Stopping the Node
 
 ```sh
@@ -77,6 +87,7 @@ When a DarkFi Explorer Node successfully starts, users should a startup banner d
 03:31:37 [INFO]   - Connected Darkfi Node: tcp://127.0.0.1:8240
 03:31:37 [INFO] ========================================================================================
 ```
+> **Note** In no-sync mode, you will see “Started DarkFi Explorer Node (No-Sync Mode)” in the banner header, and the “Connected Darkfi Node:” line will show “Not connected”.
 
 ### Getting Help
 ```shell
