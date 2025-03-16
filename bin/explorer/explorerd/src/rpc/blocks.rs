@@ -37,13 +37,13 @@ use darkfi::{
 };
 use darkfi_serial::deserialize_async;
 
-use crate::{error::handle_database_error, Explorerd};
+use crate::{error::handle_database_error, rpc::DarkfidRpcClient, Explorerd};
 
-impl Explorerd {
-    // Queries darkfid for a block with given height.
-    async fn get_darkfid_block_by_height(&self, height: u32) -> Result<BlockInfo> {
+impl DarkfidRpcClient {
+    /// Retrieves a block from at a given height returning the corresponding [`BlockInfo`].
+    async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let params = self
-            .darkfid_daemon_request(
+            .request(
                 "blockchain.get_block",
                 &JsonValue::Array(vec![JsonValue::String(height.to_string())]),
             )
@@ -54,6 +54,19 @@ impl Explorerd {
         Ok(block)
     }
 
+    /// Retrieves the last confirmed block returning the block height and its header hash.
+    async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
+        let rep =
+            self.request("blockchain.last_confirmed_block", &JsonValue::Array(vec![])).await?;
+        let params = rep.get::<Vec<JsonValue>>().unwrap();
+        let height = *params[0].get::<f64>().unwrap() as u32;
+        let hash = params[1].get::<String>().unwrap().clone();
+
+        Ok((height, hash))
+    }
+}
+
+impl Explorerd {
     /// Synchronizes blocks between the explorer and a Darkfi blockchain node, ensuring
     /// the database remains consistent by syncing any missing or outdated blocks.
     ///
@@ -75,7 +88,8 @@ impl Explorerd {
         })?;
 
         // Grab the last confirmed block height and hash from the darkfi node
-        let (last_darkfid_height, last_darkfid_hash) = self.get_last_confirmed_block().await?;
+        let (last_darkfid_height, last_darkfid_hash) =
+            self.darkfid_client.get_last_confirmed_block().await?;
 
         // Initialize the current height to sync from, starting from genesis block if last sync block does not exist
         let (last_synced_height, last_synced_hash) = last_synced_block
@@ -130,7 +144,7 @@ impl Explorerd {
             let block_sync_start = Instant::now();
 
             // Retrieve the block from darkfi node by height
-            let block = match self.get_darkfid_block_by_height(current_height).await {
+            let block = match self.darkfid_client.get_block_by_height(current_height).await {
                 Ok(r) => r,
                 Err(e) => {
                     return Err(handle_database_error(
@@ -206,7 +220,7 @@ impl Explorerd {
             // Check if we found a synced block for current height being searched
             if let Some(synced_block) = synced_block {
                 // Fetch the block from darkfi node to check for a match
-                match self.get_darkfid_block_by_height(cur_height).await {
+                match self.darkfid_client.get_block_by_height(cur_height).await {
                     Ok(darkfid_block) => {
                         // If hashes match, we've found the point of divergence
                         if synced_block.header_hash == darkfid_block.hash().to_string() {
@@ -387,18 +401,6 @@ impl Explorerd {
             }
         }
     }
-
-    // Queries darkfid for last confirmed block.
-    async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
-        let rep = self
-            .darkfid_daemon_request("blockchain.last_confirmed_block", &JsonValue::Array(vec![]))
-            .await?;
-        let params = rep.get::<Vec<JsonValue>>().unwrap();
-        let height = *params[0].get::<f64>().unwrap() as u32;
-        let hash = params[1].get::<String>().unwrap().clone();
-
-        Ok((height, hash))
-    }
 }
 
 /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
@@ -409,7 +411,8 @@ pub async fn subscribe_blocks(
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<(StoppableTaskPtr, StoppableTaskPtr)> {
     // Grab last confirmed block
-    let (last_darkfid_height, last_darkfid_hash) = explorer.get_last_confirmed_block().await?;
+    let (last_darkfid_height, last_darkfid_hash) =
+        explorer.darkfid_client.get_last_confirmed_block().await?;
 
     // Grab last synced block
     let (mut height, hash) = match explorer.service.last_block() {

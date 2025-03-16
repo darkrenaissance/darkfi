@@ -25,17 +25,16 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    rpc::{
-        client::RpcClient,
-        server::{listen_and_serve, RequestHandler},
-    },
+    rpc::server::{listen_and_serve, RequestHandler},
     system::{StoppableTask, StoppableTaskPtr},
     util::path::get_config_path,
     Error, Result,
 };
 
 use crate::{
-    config::ExplorerNetworkConfig, rpc::blocks::subscribe_blocks, service::ExplorerService,
+    config::ExplorerNetworkConfig,
+    rpc::{blocks::subscribe_blocks, DarkfidRpcClient},
+    service::ExplorerService,
 };
 
 /// Configuration management across multiple networks (localnet, testnet, mainnet)
@@ -100,14 +99,18 @@ pub struct Explorerd {
     /// JSON-RPC connection tracker
     pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to darkfid daemon
-    pub rpc_client: RpcClient,
+    pub darkfid_client: Arc<DarkfidRpcClient>,
+    /// Darkfi blockchain node endpoint to sync with when not in no-sync mode
+    darkfid_endpoint: Url,
+    /// A asynchronous executor used to create an RPC client when not in no-sync mode
+    executor: Arc<smol::Executor<'static>>,
 }
 
 impl Explorerd {
     /// Creates a new `BlockchainExplorer` instance.
     async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
-        // Initialize rpc client
-        let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
+        // Initialize darkfid rpc client
+        let darkfid_client = Arc::new(DarkfidRpcClient::new());
         info!(target: "explorerd", "Connected to Darkfi node: {}", endpoint.to_string().trim_end_matches('/'));
 
         // Create explorer service
@@ -116,7 +119,19 @@ impl Explorerd {
         // Initialize the explorer service
         service.init().await?;
 
-        Ok(Self { rpc_connections: Mutex::new(HashSet::new()), rpc_client, service })
+        Ok(Self {
+            service,
+            rpc_connections: Mutex::new(HashSet::new()),
+            darkfid_client,
+            darkfid_endpoint: endpoint,
+            executor: ex,
+        })
+    }
+
+    /// Establishes a connection to the configured darkfid endpoint, returning a successful
+    /// result if the connection is successful, or an error otherwise.
+    async fn connect(&self) -> Result<()> {
+        self.darkfid_client.connect(self.darkfid_endpoint.clone(), self.executor.clone()).await
     }
 }
 
@@ -154,6 +169,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
     info!(target: "explorerd", "Started JSON-RPC server: {}", config.rpc.rpc_listen.to_string().trim_end_matches("/"));
+
+    // Connect the darkfid client
+    explorer.connect().await?;
 
     // Sync blocks
     info!(target: "explorerd", "Syncing blocks from darkfid...");
@@ -193,7 +211,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     subscriber_task.stop().await;
 
     info!(target: "explorerd", "Stopping JSON-RPC client...");
-    explorer.rpc_client.stop().await;
+    let _ = explorer.darkfid_client.stop().await;
 
     Ok(())
 }

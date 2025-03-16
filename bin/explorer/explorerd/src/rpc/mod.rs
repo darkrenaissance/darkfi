@@ -16,20 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, time::Instant};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
-use log::{debug, error, trace};
-use smol::lock::MutexGuard;
+use log::{debug, error, trace, warn};
+use smol::lock::{MutexGuard, RwLock};
 use tinyjson::JsonValue;
+use url::Url;
 
 use darkfi::{
     rpc::{
+        client::RpcClient,
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
-    Result,
+    Error, Result,
 };
 
 use crate::{
@@ -117,6 +119,97 @@ impl RequestHandler<()> for Explorerd {
     }
 }
 
+/// A RPC client for interacting with a Darkfid JSON-RPC endpoint, enabling communication with Darkfid blockchain nodes.
+/// Supports connection management, request handling, and graceful shutdowns.
+/// Implemented for shared access across ownership boundaries using `Arc`, with connection state managed via an `RwLock`.
+pub struct DarkfidRpcClient {
+    /// JSON-RPC client used to communicate with the Darkfid daemon. A value of `None` indicates no active connection.
+    /// The `RwLock` allows the client to be shared across ownership boundaries while managing the connection state.
+    rpc_client: RwLock<Option<RpcClient>>,
+}
+
+impl DarkfidRpcClient {
+    /// Creates a new client with an inactive connection.
+    pub fn new() -> Self {
+        Self { rpc_client: RwLock::new(None) }
+    }
+
+    /// Checks if there is an active connection to Darkfid.
+    pub async fn connected(&self) -> Result<bool> {
+        Ok(self.rpc_client.read().await.is_some())
+    }
+
+    /// Establishes a connection to the Darkfid node, storing the resulting client if successful.
+    /// If already connected, logs a message and returns without connecting again.
+    pub async fn connect(&self, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+        let mut rpc_client_guard = self.rpc_client.write().await;
+
+        if rpc_client_guard.is_some() {
+            warn!(target: "explorerd::rpc::connect", "Already connected to darkfid.");
+            return Ok(());
+        }
+
+        *rpc_client_guard = Some(RpcClient::new(endpoint, ex).await?);
+        Ok(())
+    }
+
+    /// Closes the connection with the connected darkfid, returning if there is no active connection.
+    /// If the connection is stopped, sets `rpc_client` to `None`.
+    pub async fn stop(&self) -> Result<()> {
+        let mut rpc_client_guard = self.rpc_client.write().await;
+
+        // If there's an active connection, stop it and clear the reference
+        if let Some(ref rpc_client) = *rpc_client_guard {
+            rpc_client.stop().await;
+            *rpc_client_guard = None;
+            return Ok(());
+        }
+
+        // If there's no connection, log the message and do nothing
+        warn!(target: "explorerd::rpc::stop", "Not connected to darkfid, nothing to stop.");
+        Ok(())
+    }
+
+    /// Sends a request to the client's Darkfid JSON-RPC endpoint using the given method and parameters.
+    /// Returns the received response or an error if no active connection to Darkfid exists.
+    pub async fn request(&self, method: &str, params: &JsonValue) -> Result<JsonValue> {
+        let rpc_client_guard = self.rpc_client.read().await;
+
+        if let Some(ref rpc_client) = *rpc_client_guard {
+            debug!(target: "explorerd::rpc::request", "Executing request {} with params: {:?}", method, params);
+            let latency = Instant::now();
+            let req = JsonRequest::new(method, params.clone());
+            let rep = rpc_client.request(req).await?;
+            let latency = latency.elapsed();
+            trace!(target: "explorerd::rpc::request", "Got reply: {:?}", rep);
+            debug!(target: "explorerd::rpc::request", "Latency: {:?}", latency);
+            return Ok(rep);
+        };
+
+        error!(target: "explorerd::rpc::request", "Not connected to darkfid.");
+        Err(Error::Custom(
+            "Not connected to darkfid. Is the explorer running in no-sync mode?".to_string(),
+        ))
+    }
+
+    /// Sends a ping request to the client's darkfid endpoint to verify connectivity,
+    /// returning `true` if the ping is successful or an error if the request fails.
+    async fn ping(&self) -> Result<bool> {
+        if let Err(e) = self.request("ping", &JsonValue::Array(vec![])).await {
+            error!(target: "explorerd::rpc::ping", "Failed to ping darkfid daemon: {}", e);
+            return Err(e);
+        }
+
+        Ok(true)
+    }
+}
+
+impl Default for DarkfidRpcClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Explorerd {
     // RPCAPI:
     // Pings configured darkfid daemon for liveness.
@@ -126,26 +219,10 @@ impl Explorerd {
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn ping_darkfid(&self, id: u16, _params: JsonValue) -> JsonResult {
         debug!(target: "explorerd::rpc::ping_darkfid", "Pinging darkfid daemon...");
-        if let Err(e) = self.darkfid_daemon_request("ping", &JsonValue::Array(vec![])).await {
+        if let Err(e) = self.darkfid_client.ping().await {
             error!(target: "explorerd::rpc::ping_darkfid", "Failed to ping darkfid daemon: {}", e);
             return server_error(RpcError::PingFailed, id, None)
         }
         JsonResponse::new(JsonValue::Boolean(true), id).into()
-    }
-
-    /// Auxiliary function to execute a request towards the configured darkfid daemon JSON-RPC endpoint.
-    pub async fn darkfid_daemon_request(
-        &self,
-        method: &str,
-        params: &JsonValue,
-    ) -> Result<JsonValue> {
-        debug!(target: "explorerd::rpc::darkfid_daemon_request", "Executing request {} with params: {:?}", method, params);
-        let latency = Instant::now();
-        let req = JsonRequest::new(method, params.clone());
-        let rep = self.rpc_client.request(req).await?;
-        let latency = latency.elapsed();
-        trace!(target: "explorerd::rpc::darkfid_daemon_request", "Got reply: {:?}", rep);
-        debug!(target: "explorerd::rpc::darkfid_daemon_request", "Latency: {:?}", latency);
-        Ok(rep)
     }
 }
