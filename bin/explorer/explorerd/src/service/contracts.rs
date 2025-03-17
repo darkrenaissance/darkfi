@@ -316,7 +316,7 @@ pub fn untar_source(tar_bytes: &[u8]) -> Result<Vec<ContractSourceFile>> {
 /// the `ExplorerService` when handling contract-related operations.
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Read, path::Path};
+    use std::{fs::File, io::Read, path::Path, sync::Arc};
 
     use tar::Archive;
     use tempdir::TempDir;
@@ -325,7 +325,7 @@ mod tests {
     use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
 
     use super::*;
-    use crate::test_utils::init_logger;
+    use crate::{rpc::DarkfidRpcClient, test_utils::init_logger};
 
     /// Tests the adding of [`ContractMetaData`] to the store by adding
     /// metadata, and verifying the inserted data matches the expected results.
@@ -469,7 +469,10 @@ mod tests {
         let db_path = temp_dir.path().join("sled_db");
 
         // Initialize the explorer service
-        ExplorerService::new(db_path.to_string_lossy().into_owned())
+        ExplorerService::new(
+            db_path.to_string_lossy().into_owned(),
+            Arc::new(DarkfidRpcClient::new()),
+        )
     }
 
     /// This Auxiliary function verifies that the loaded native contract source paths match the expected results

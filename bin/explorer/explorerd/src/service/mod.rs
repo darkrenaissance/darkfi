@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
 use log::debug;
 
 use darkfi::Result;
 
-use crate::store::ExplorerDb;
+use crate::{rpc::DarkfidRpcClient, store::ExplorerDb};
 
 /// Handles core block-related functionality
 pub mod blocks;
@@ -33,6 +35,9 @@ pub mod statistics;
 
 /// Manages transaction data processing
 pub mod transactions;
+
+/// Manages synchronization with darkfid
+pub mod sync;
 
 /// Represents the service layer for the Explorer application, bridging the RPC layer and the database.
 /// It encapsulates explorer business logic and provides a unified interface for core functionalities,
@@ -48,15 +53,17 @@ pub mod transactions;
 pub struct ExplorerService {
     /// Explorer database instance
     pub db: ExplorerDb,
+    /// JSON-RPC client used to execute requests to Darkfi blockchain nodes
+    pub darkfid_client: Arc<DarkfidRpcClient>,
 }
 
 impl ExplorerService {
     /// Creates a new `ExplorerService` instance.
-    pub fn new(db_path: String) -> Result<Self> {
+    pub fn new(db_path: String, darkfid_client: Arc<DarkfidRpcClient>) -> Result<Self> {
         // Initialize explorer database
         let db = ExplorerDb::new(db_path)?;
 
-        Ok(Self { db })
+        Ok(Self { db, darkfid_client })
     }
 
     /// Initializes the explorer service by deploying native contracts and loading native contract

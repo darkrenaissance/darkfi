@@ -33,8 +33,8 @@ use darkfi::{
 
 use crate::{
     config::ExplorerNetworkConfig,
-    rpc::{blocks::subscribe_blocks, DarkfidRpcClient},
-    service::ExplorerService,
+    rpc::DarkfidRpcClient,
+    service::{sync::subscribe_sync_blocks, ExplorerService},
 };
 
 /// Configuration management across multiple networks (localnet, testnet, mainnet)
@@ -123,7 +123,7 @@ impl Explorerd {
         let darkfid_client = Arc::new(DarkfidRpcClient::new());
 
         // Create explorer service
-        let service = ExplorerService::new(db_path)?;
+        let service = ExplorerService::new(db_path, darkfid_client.clone())?;
 
         // Initialize the explorer service
         service.init().await?;
@@ -189,7 +189,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         // Sync blocks
         info!(target: "explorerd", "Syncing blocks from darkfid...");
-        if let Err(e) = explorer.sync_blocks(args.reset).await {
+        if let Err(e) = explorer.service.sync_blocks(args.reset).await {
             let error_message = format!("Error syncing blocks: {:?}", e);
             error!(target: "explorerd", "{error_message}");
             return Err(Error::DatabaseError(error_message));
@@ -197,7 +197,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         // Subscribe blocks
         info!(target: "explorerd", "Subscribing to new blocks...");
-        match subscribe_blocks(explorer.clone(), config.endpoint.clone(), ex.clone()).await {
+        match subscribe_sync_blocks(explorer.clone(), config.endpoint.clone(), ex.clone()).await {
             Ok((sub_task, lst_task)) => {
                 subscriber_task = Some(sub_task);
                 listener_task = Some(lst_task);
