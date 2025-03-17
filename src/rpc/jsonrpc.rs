@@ -391,6 +391,19 @@ impl TryFrom<&JsonValue> for JsonResponse {
     }
 }
 
+impl TryFrom<JsonResult> for JsonResponse {
+    type Error = RpcError;
+
+    /// Converts [`JsonResult`] to [`JsonResponse`], returning the response or an `InvalidJson`
+    /// error if the structure is not a `JsonResponse`.
+    fn try_from(result: JsonResult) -> std::result::Result<Self, Self::Error> {
+        match result {
+            JsonResult::Response(response) => Ok(response),
+            _ => Err(RpcError::InvalidJson("Not a JsonResult::Response".to_string())),
+        }
+    }
+}
+
 /// A JSON-RPC error object
 #[derive(Clone, Debug)]
 pub struct JsonError {
@@ -439,6 +452,19 @@ impl From<&JsonError> for JsonValue {
             ("id".to_string(), JsonValue::Number(err.id.into())),
             ("error".to_string(), errmap),
         ]))
+    }
+}
+
+impl TryFrom<JsonResult> for JsonError {
+    type Error = RpcError;
+
+    /// Converts [`JsonResult`] to [`JsonError`], returning the response or an `InvalidJson`
+    /// error if the structure is not a `JsonError`.
+    fn try_from(result: JsonResult) -> std::result::Result<Self, Self::Error> {
+        match result {
+            JsonResult::Error(error) => Ok(error),
+            _ => Err(RpcError::InvalidJson("Not a JsonResult::Error".to_string())),
+        }
     }
 }
 
@@ -515,5 +541,102 @@ impl JsonSubscriber {
     pub async fn notify(&self, params: JsonValue) {
         let notification = JsonNotification::new(self.method, params);
         self.publisher.notify(notification).await;
+    }
+}
+
+/// Parses a [`JsonValue`] parameter into a `String`.
+/// Returns the string if successful or an error if the value is not a valid string.
+pub fn parse_json_string(name: &str, value: &JsonValue) -> std::result::Result<String, RpcError> {
+    value
+        .get::<String>()
+        .cloned()
+        .ok_or_else(|| RpcError::InvalidJson(format!("Parameter '{name}' is not a valid string")))
+}
+
+/// Parses a [`JsonValue`] parameter into a `f64`.
+/// Returns the number if successful or an error if the value is not a valid number.
+pub fn parse_json_number(name: &str, value: &JsonValue) -> std::result::Result<f64, RpcError> {
+    value.get::<f64>().cloned().ok_or_else(|| {
+        RpcError::InvalidJson(format!("Parameter '{name}' is not a supported number type"))
+    })
+}
+
+/// Parses the element at the specified index in a [`JsonValue::Array`] into a
+/// string. Returns the string if successful, or an error if the parameter is
+/// missing, not an array, or not a valid string.
+pub fn parse_json_array_string(
+    name: &str,
+    index: usize,
+    array_value: &JsonValue,
+) -> std::result::Result<String, RpcError> {
+    match array_value {
+        JsonValue::Array(values) => values
+            .get(index)
+            .ok_or_else(|| {
+                RpcError::InvalidJson(format!("Parameter '{name}' at index {index} is missing"))
+            })
+            .and_then(|param| parse_json_string(name, param)),
+        _ => Err(RpcError::InvalidJson(format!("Parameter '{name}' is not an array"))),
+    }
+}
+
+/// Parses the element at the specified index in a [`JsonValue::Array`] into an
+/// `f64` (compatible with [`JsonValue::Number`]). Returns the number if successful,
+/// or an error if the parameter is missing, not an array, or is not a valid number.
+pub fn parse_json_array_number(
+    name: &str,
+    index: usize,
+    array_value: &JsonValue,
+) -> std::result::Result<f64, RpcError> {
+    match array_value {
+        JsonValue::Array(values) => values
+            .get(index)
+            .ok_or_else(|| {
+                RpcError::InvalidJson(format!("Parameter '{name}' at index {index} is missing"))
+            })
+            .and_then(|param| parse_json_number(name, param)),
+        _ => Err(RpcError::InvalidJson(format!("Parameter '{name}' is not an array"))),
+    }
+}
+
+/// Attempts to parse a `JsonResult`, converting it into a `JsonResponse` and
+/// extracting a string result from it. Returns an error if conversion or
+/// extraction fails, and the extracted string on success.
+pub fn parse_json_response_string(
+    json_result: JsonResult,
+) -> std::result::Result<String, RpcError> {
+    // Try converting `JsonResult` into a `JsonResponse`.
+    let json_response: JsonResponse = json_result.try_into().map_err(|_| {
+        RpcError::InvalidJson("Failed to convert JsonResult into JsonResponse".to_string())
+    })?;
+
+    // Attempt to extract a string result from the JsonResponse
+    json_response.result.get::<String>().map(|value| value.to_string()).ok_or_else(|| {
+        RpcError::InvalidJson("Failed to parse string from JsonResponse result".to_string())
+    })
+}
+
+/// Converts the provided JSON-RPC parameters into an array of JSON values,
+/// returning a reference to the array if successful, or a JsonResult error containing a
+/// JsonError when the input is not a JSON array.
+pub fn to_json_array(params: &JsonValue) -> std::result::Result<&Vec<JsonValue>, RpcError> {
+    if let JsonValue::Array(array) = params {
+        Ok(array)
+    } else {
+        Err(RpcError::InvalidJson(
+            "Expected an array of values, but received a different JSON type.".to_string(),
+        ))
+    }
+}
+
+/// Validates whether the provided JSON parameter is an empty array or object, returning success if it is empty or an Error if it contains values.
+pub fn validate_empty_params(params: &JsonValue) -> std::result::Result<(), RpcError> {
+    match to_json_array(params) {
+        Ok(array) if array.is_empty() => Ok(()),
+        Ok(_) => Err(RpcError::InvalidJson(format!(
+            "Parameters not permited, received: {:?}",
+            params.stringify().unwrap_or("Error converting JSON to string".to_string())
+        ))),
+        Err(err) => Err(RpcError::InvalidJson(err.to_string())),
     }
 }
