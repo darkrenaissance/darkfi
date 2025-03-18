@@ -17,6 +17,8 @@
  */
 
 use std::{
+    fmt::{self, Debug, Formatter},
+    fs::remove_dir_all,
     io::{self, ErrorKind},
     pin::Pin,
     sync::Arc,
@@ -58,8 +60,8 @@ pub struct TorDialer {
     client: TorClient<PreferredRuntime>,
 }
 
-impl std::fmt::Debug for TorDialer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for TorDialer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "TorDialer {{ TorClient }}")
     }
 }
@@ -71,16 +73,24 @@ impl TorDialer {
         // the Tor dialer
         let client = match TOR_CLIENT
             .get_or_try_init(|| async {
-                debug!(target: "net::tor::do_dial", "Bootstrapping...");
+                debug!(target: "net::tor::TorDialer", "Bootstrapping...");
                 if let Some(datadir) = &datastore {
                     let datadir = expand_path(datadir).unwrap();
+                    let arti_data = datadir.join("arti-data");
+                    let arti_cache = datadir.join("arti-cache");
 
-                    let config = TorClientConfigBuilder::from_directories(
-                        datadir.join("arti-data"),
-                        datadir.join("arti-cache"),
-                    )
-                    .build()
-                    .unwrap();
+                    // Reset arti folders.
+                    // We unwrap here so we panic in case of errors.
+                    if arti_data.exists() {
+                        remove_dir_all(&arti_data).unwrap();
+                    }
+                    if arti_cache.exists() {
+                        remove_dir_all(&arti_cache).unwrap();
+                    }
+
+                    let config = TorClientConfigBuilder::from_directories(arti_data, arti_cache)
+                        .build()
+                        .unwrap();
 
                     TorClient::create_bootstrapped(config).await
                 } else {
@@ -91,7 +101,7 @@ impl TorDialer {
         {
             Ok(client) => client.isolated_client(),
             Err(e) => {
-                warn!("{}", e.report());
+                warn!(target: "net::tor::TorDialer", "{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"))
             }
         };
@@ -125,7 +135,7 @@ impl TorDialer {
                     Either::Left((Ok(stream), _)) => Ok(stream),
 
                     Either::Left((Err(e), _)) => {
-                        warn!("{}", e.report());
+                        warn!(target: "net::tor::do_dial", "{}", e.report());
                         Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
 
@@ -141,7 +151,7 @@ impl TorDialer {
                         // from arti-client in order to help debug Tor connections.
                         // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
                         // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
-                        warn!("{}", e.report());
+                        warn!(target: "net::tor::do_dial", "{}", e.report());
                         Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
                 }
@@ -186,7 +196,7 @@ impl TorListener {
         {
             Ok(client) => client,
             Err(e) => {
-                warn!("{}", e.report());
+                warn!(target: "net::tor::do_listen", "{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"))
             }
         };
