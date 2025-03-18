@@ -53,32 +53,26 @@ use crate::util::path::expand_path;
 static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
 
 /// Tor Dialer implementation
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TorDialer {
-    datastore: Option<String>,
+    client: TorClient<PreferredRuntime>,
+}
+
+impl std::fmt::Debug for TorDialer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "TorDialer {{ TorClient }}")
+    }
 }
 
 impl TorDialer {
     /// Instantiate a new [`TorDialer`] object
     pub(crate) async fn new(datastore: Option<String>) -> io::Result<Self> {
-        Ok(Self { datastore })
-    }
-
-    /// Internal dial function
-    pub(crate) async fn do_dial(
-        &self,
-        host: &str,
-        port: u16,
-        conn_timeout: Option<Duration>,
-    ) -> io::Result<DataStream> {
-        debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
-
         // Initialize or fetch the static TOR_CLIENT that should be reused in
         // the Tor dialer
         let client = match TOR_CLIENT
             .get_or_try_init(|| async {
                 debug!(target: "net::tor::do_dial", "Bootstrapping...");
-                if let Some(datadir) = &self.datastore {
+                if let Some(datadir) = &datastore {
                     let datadir = expand_path(datadir).unwrap();
 
                     let config = TorClientConfigBuilder::from_directories(
@@ -95,19 +89,31 @@ impl TorDialer {
             })
             .await
         {
-            Ok(client) => client,
+            Ok(client) => client.isolated_client(),
             Err(e) => {
                 warn!("{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"))
             }
         };
 
+        Ok(Self { client })
+    }
+
+    /// Internal dial function
+    pub(crate) async fn do_dial(
+        &self,
+        host: &str,
+        port: u16,
+        conn_timeout: Option<Duration>,
+    ) -> io::Result<DataStream> {
+        debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
+
         let mut stream_prefs = StreamPrefs::new();
         stream_prefs.connect_to_onion_services(BoolOrAuto::Explicit(true));
 
         // If a timeout is configured, run both the connect and timeout futures
         // and return whatever finishes first. Otherwise, wait on the connect future.
-        let connect = client.connect_with_prefs((host, port), &stream_prefs);
+        let connect = self.client.connect_with_prefs((host, port), &stream_prefs);
 
         match conn_timeout {
             Some(t) => {
