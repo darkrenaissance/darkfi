@@ -242,8 +242,20 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     if args.list_contacts {
-        let config_path = get_config_path(args.config, CONFIG_FILE)?;
-        let contents = fs::read_to_string(&config_path).await?;
+        let config_path = match get_config_path(args.config, CONFIG_FILE) {
+            Ok(path) => path,
+            Err(e) => {
+                error!("Unable to get config path: {}", e);
+                return Err(e)
+            }
+        };
+        let contents = match fs::read_to_string(&config_path).await {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Unable read path `{config_path:?}`: {}", e);
+                return Err(e.into())
+            }
+        };
         let contents = match toml::from_str(&contents) {
             Ok(v) => v,
             Err(e) => {
@@ -253,7 +265,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         };
 
         // Parse configured contacts
-        let contacts = list_configured_contacts(&contents)?;
+        let contacts = match list_configured_contacts(&contents) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("List contacts failed `{config_path:?}`: {}", e);
+                return Err(e)
+            }
+        };
 
         for (name, (public_key, my_secret_key)) in contacts {
             let public_key = bs58::encode(public_key.to_bytes()).into_string();
@@ -288,18 +306,45 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Initializing DarkIRC node");
 
     // Create datastore path if not there already.
-    let datastore = expand_path(&args.datastore)?;
-    fs::create_dir_all(&datastore).await?;
+    let datastore = match expand_path(&args.datastore) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Bad datastore path `{}`: {e}", args.datastore);
+            return Err(e)
+        }
+    };
+    if let Err(e) = fs::create_dir_all(&datastore).await {
+        error!("Failed to create data store path `{datastore:?}`: {e}");
+        return Err(e.into())
+    }
 
-    let replay_datastore = expand_path(&args.replay_datastore)?;
+    let replay_datastore = match expand_path(&args.replay_datastore) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Bad replay datastore path `{}`: {e}", args.replay_datastore);
+            return Err(e)
+        }
+    };
     let replay_mode = args.replay_mode;
 
     info!("Instantiating event DAG");
-    let sled_db = sled::open(datastore)?;
+    let sled_db = match sled::open(datastore.clone()) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed to open datastore database `{datastore:?}`: {e}");
+            return Err(e.into())
+        }
+    };
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
-    let p2p = P2p::new(p2p_settings, ex.clone()).await?;
-    let event_graph = EventGraph::new(
+    let p2p = match P2p::new(p2p_settings, ex.clone()).await {
+        Ok(p2p) => p2p,
+        Err(e) => {
+            error!("Unable to create P2P network: {e}");
+            return Err(e)
+        }
+    };
+    let event_graph = match EventGraph::new(
         p2p.clone(),
         sled_db.clone(),
         replay_datastore.clone(),
@@ -308,7 +353,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         1,
         ex.clone(),
     )
-    .await?;
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Event graph failed to start: {e}");
+            return Err(e)
+        }
+    };
 
     let prune_task = event_graph.prune_task.get().unwrap();
 
@@ -396,8 +448,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Starting IRC server");
     let password = args.password.unwrap_or_default();
-    let config_path = get_config_path(args.config, CONFIG_FILE)?;
-    let irc_server = IrcServer::new(
+    let config_path = match get_config_path(args.config.clone(), CONFIG_FILE) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Cannot get config path `{:?}`: {e}", args.config);
+            return Err(e)
+        }
+    };
+    let irc_server = match IrcServer::new(
         darkirc.clone(),
         args.irc_listen,
         args.irc_tls_cert,
@@ -405,7 +463,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         config_path,
         password,
     )
-    .await?;
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Unable to create IRC server: {e}");
+            return Err(e)
+        }
+    };
 
     let irc_task = StoppableTask::new();
     let ex_ = ex.clone();
@@ -422,10 +487,16 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting P2P network");
-    p2p.clone().start().await?;
+    if let Err(e) = p2p.clone().start().await {
+        error!("P2P failed to start: {e}");
+        return Err(e)
+    }
 
     // Initial DAG sync
-    sync_task(&p2p, &event_graph, args.skip_dag_sync).await?;
+    if let Err(e) = sync_task(&p2p, &event_graph, args.skip_dag_sync).await {
+        error!("DAG sync task failed to start: {e}");
+        return Err(e)
+    };
 
     // Stoppable task to monitor network and resync on disconnect.
     let sync_mon_task = StoppableTask::new();

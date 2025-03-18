@@ -169,10 +169,41 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 macro_rules! async_daemonize {
     ($realmain:ident) => {
         fn main() -> Result<()> {
-            let args = Args::from_args_with_toml("").unwrap();
-            let cfg_path = darkfi::util::path::get_config_path(args.config, CONFIG_FILE)?;
-            darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
-            let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
+            let args = match Args::from_args_with_toml("") {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Unable to get args: {e}");
+                    return Err(Error::ConfigInvalid)
+                }
+            };
+            let cfg_path =
+                match darkfi::util::path::get_config_path(args.config.clone(), CONFIG_FILE) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Unable to get config path `{:?}`: {e}", args.config);
+                        return Err(e)
+                    }
+                };
+            if let Err(e) =
+                darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())
+            {
+                eprintln!("Spawn config failed `{cfg_path:?}`: {e}");
+                return Err(e)
+            }
+            let cfg_text = match std::fs::read_to_string(&cfg_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Read config failed `{cfg_path:?}`: {e}");
+                    return Err(e.into())
+                }
+            };
+            let args = match Args::from_args_with_toml(&cfg_text) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Parsing config failed `{cfg_path:?}`: {e}");
+                    return Err(Error::ConfigInvalid)
+                }
+            };
 
             let log_level = darkfi::util::cli::get_log_level(args.verbose);
             let log_config = darkfi::util::cli::get_log_config(args.verbose);
@@ -189,13 +220,32 @@ macro_rules! async_daemonize {
             // Otherwise, output to terminal logger only.
             match args.log {
                 Some(ref log_path) => {
-                    let log_path = darkfi::util::path::expand_path(log_path)?;
-                    let log_file = std::fs::File::create(log_path)?;
+                    let log_path = match darkfi::util::path::expand_path(log_path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("Expanding log path failed `{log_path:?}`: {e}");
+                            return Err(e)
+                        }
+                    };
+                    let log_file = match std::fs::File::create(&log_path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("Creating log file failed `{log_path:?}`: {e}");
+                            return Err(e.into())
+                        }
+                    };
                     let write_logger = simplelog::WriteLogger::new(log_level, log_config, log_file);
-                    simplelog::CombinedLogger::init(vec![term_logger, write_logger])?;
+                    if let Err(e) = simplelog::CombinedLogger::init(vec![term_logger, write_logger])
+                    {
+                        eprintln!("Unable to init logger with term + logfile combo: {e}");
+                        return Err(e.into())
+                    }
                 }
                 None => {
-                    simplelog::CombinedLogger::init(vec![term_logger])?;
+                    if let Err(e) = simplelog::CombinedLogger::init(vec![term_logger]) {
+                        eprintln!("Unable to init term logger: {e}");
+                        return Err(e.into())
+                    }
                 }
             }
 
