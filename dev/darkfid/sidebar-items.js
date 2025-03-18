@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["error","proto","rpc","rpc_blockchain","rpc_tx","rpc_xmr","task"],"struct":["DarkfiNode","Darkfid"],"type":["DarkfiNodePtr","DarkfidPtr"]};
