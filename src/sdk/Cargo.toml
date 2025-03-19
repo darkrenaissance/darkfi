@@ -18,34 +18,34 @@ wasm = []
 
 [dependencies]
 # Error handling
-thiserror = "2.0.11"
+thiserror = { workspace = true }
 
 # Serialization
-darkfi-serial = {version = "0.4.2", features = ["crypto"]}
+darkfi-serial = { workspace = true, features = ["crypto"] }
 
 # Encoding
-bs58 = "0.5.1"
-sha2 = "0.10.8"
+bs58 = { workspace = true }
+sha2 = { workspace = true }
 
 # Cryptography
-blake2b_simd = "1.0.3"
-blake3 = "1.6.0"
-chacha20poly1305 = "0.10.1"
-halo2_gadgets = "0.3.1"
-bridgetree = "0.6.0"
-num-bigint = "0.4.6"
-num-traits = "0.2.19"
-pasta_curves = "0.5.1"
-rand_core = "0.6.4"
+blake2b_simd = { workspace = true }
+blake3 = { workspace = true }
+chacha20poly1305 = { workspace = true }
+halo2_gadgets = { workspace = true }
+bridgetree = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+pasta_curves = { workspace = true }
+rand_core = { workspace = true }
 
 # Misc
-lazy_static = "1.5.0"
-subtle = "2.6.1"
+lazy_static = { workspace = true }
+subtle = { workspace = true }
 
 [dev-dependencies]
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = {version = "0.3.1", features = ["test-dependencies"]}
-rand = "0.8.5"
+halo2_proofs = { workspace = true, features = ["dev-graph", "sanity-checks"] }
+halo2_gadgets = { workspace = true, features = ["test-dependencies"] }
+rand = { workspace = true }
 
 [lints]
 workspace = true

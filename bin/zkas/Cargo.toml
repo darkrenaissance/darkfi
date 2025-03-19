@@ -9,8 +9,8 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-arg = {git = "https://github.com/parazyd/arg"}
-darkfi = {path = "../../", features = ["zkas"]}
+arg = { workspace = true }
+darkfi = { workspace = true, features = ["zkas"] }
 
 [lints]
 workspace = true

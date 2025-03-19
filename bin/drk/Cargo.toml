@@ -10,37 +10,37 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../", features = ["async-daemonize", "bs58", "rpc", "validator"]}
-darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
-darkfi_dao_contract = {path = "../../src/contract/dao", features = ["no-entrypoint", "client"]}
-darkfi_deployooor_contract = {path = "../../src/contract/deployooor", features = ["no-entrypoint", "client"]}
-darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
-darkfi-serial = "0.4.2"
+darkfi = { workspace = true, features = ["async-daemonize", "bs58", "rpc", "validator"] }
+darkfi_money_contract = { workspace = true, features = ["no-entrypoint", "client"] }
+darkfi_dao_contract = { workspace = true, features = ["no-entrypoint", "client"] }
+darkfi_deployooor_contract = { workspace = true, features = ["no-entrypoint", "client"] }
+darkfi-sdk = { workspace = true, features = ["async"] }
+darkfi-serial = { workspace = true }
 
 # Misc
-blake3 = "1.6.0"
-bs58 = "0.5.1"
-lazy_static = "1.5.0"
-log = "0.4.26"
-num-bigint = "0.4.6"
-prettytable-rs = "0.10.0"
-rand = "0.8.5"
-rodio = {version = "0.20.1", default-features = false, features = ["minimp3"]}
-rusqlite = {version = "0.32.1", features = ["sqlcipher"]}
-toml = "0.8.20"
-url = "2.5.4"
+blake3 = { workspace = true }
+bs58 = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+num-bigint = { workspace = true }
+prettytable-rs = { workspace = true }
+rand = { workspace = true }
+rodio = { workspace = true, features = ["minimp3"] }
+rusqlite = { workspace = true, features = ["sqlcipher"] }
+toml = { workspace = true }
+url = { workspace = true }
 
 # Daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 [lints]
 workspace = true
