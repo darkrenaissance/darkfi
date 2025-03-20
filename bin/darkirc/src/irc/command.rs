@@ -61,11 +61,11 @@ use super::{
     client::{Client, ReplyType},
     rpl::*,
     server::MAX_NICK_LEN,
-    IrcChannel, Msg, Privmsg, SERVER_NAME,
+    IrcChannel, Msg, SERVER_NAME,
 };
 use crate::{
     crypto::bcrypt::bcrypt_hash_password,
-    irc::{PRIVMSG_TYPE_MOD, PRIVMSG_TYPE_NORMAL},
+    irc::{MSG_TYPE_MOD, MSG_TYPE_PRIV},
 };
 
 impl Client {
@@ -1002,17 +1002,10 @@ impl Client {
 
             // Try to deserialize the `Event`'s content and handle it
             // based on its type. Here we skip errors.
-            let skip = match Msg::deserialize(event.content()).await {
-                Ok(Msg::V1(old_msg)) => {
-                    self.handle_history_privmsg(channels, old_msg.into_new(), &mut replies).await
-                }
-                Ok(Msg::V2(new_msg)) => match new_msg.msg_type {
-                    PRIVMSG_TYPE_NORMAL => {
-                        self.handle_history_privmsg(channels, new_msg, &mut replies).await
-                    }
-                    PRIVMSG_TYPE_MOD => {
-                        self.handle_history_modmsg(channels, new_msg, &mut replies).await
-                    }
+            let skip = match deserialize::<Msg>(event.content()) {
+                Ok(msg) => match msg.msg_type {
+                    MSG_TYPE_PRIV => self.handle_history_privmsg(channels, msg, &mut replies).await,
+                    MSG_TYPE_MOD => self.handle_history_modmsg(channels, msg, &mut replies).await,
                     _ => true,
                 },
                 Err(_) => true,
@@ -1030,12 +1023,12 @@ impl Client {
         Ok(replies)
     }
 
-    /// Process provided history `Privmsg` of type `PRIVMSG_TYPE_NORMAL`.
+    /// Process provided history `Msg` of type `MSG_TYPE_PRIV`.
     /// Returns bool flag indicating if the message should be skipped.
     async fn handle_history_privmsg(
         &self,
         channels: &HashSet<String>,
-        mut privmsg: Privmsg,
+        mut privmsg: Msg,
         replies: &mut Vec<ReplyType>,
     ) -> bool {
         // Potentially decrypt it:
@@ -1099,12 +1092,12 @@ impl Client {
         false
     }
 
-    /// Process provided history `Privmsg` of type `PRIVMSG_TYPE_MOD`.
+    /// Process provided history `Msg` of type `MSG_TYPE_MOD`.
     /// Returns bool flag indicating if the message should be skipped.
     async fn handle_history_modmsg(
         &self,
         channels: &HashSet<String>,
-        mut modmsg: Privmsg,
+        mut modmsg: Msg,
         replies: &mut Vec<ReplyType>,
     ) -> bool {
         // Potentially decrypt it:

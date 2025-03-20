@@ -50,11 +50,11 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
-    Msg, NickServ, Privmsg, SERVER_NAME,
+    Msg, NickServ, SERVER_NAME,
 };
 use crate::{
     crypto::rln::{closest_epoch, hash_event, RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN_APP_IDENTIFIER},
-    irc::{PRIVMSG_TYPE_MOD, PRIVMSG_TYPE_NORMAL},
+    irc::{MSG_TYPE_MOD, MSG_TYPE_PRIV},
 };
 
 const PENALTY_LIMIT: usize = 5;
@@ -318,17 +318,14 @@ impl Client {
 
                     // Try to deserialize the `Event`'s content and handle it
                     // based on its type.
-                    let skip = match Msg::deserialize(r.content()).await {
-                        Ok(Msg::V1(old_msg)) => self.handle_privmsg(old_msg.into_new(), &mut writer).await,
-                        Ok(Msg::V2(new_msg)) => {
-                            match new_msg.msg_type {
-                                PRIVMSG_TYPE_NORMAL => self.handle_privmsg(new_msg, &mut writer).await,
-                                PRIVMSG_TYPE_MOD => self.handle_modmsg(new_msg, &mut writer).await,
-                                msg_type => {
-                                    error!("[IRC CLIENT] Unknown type of incoming Privmsg event: {msg_type}");
-                                    true
-                                },
-                            }
+                    let skip = match deserialize_async::<Msg>(r.content()).await {
+                        Ok(msg) => match msg.msg_type {
+                            MSG_TYPE_PRIV => self.handle_privmsg(msg, &mut writer).await,
+                            MSG_TYPE_MOD => self.handle_modmsg(msg, &mut writer).await,
+                            msg_type => {
+                                error!("[IRC CLIENT] Unknown type of incoming Privmsg event: {msg_type}");
+                                true
+                            },
                         }
                         Err(e) => {
                             error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
@@ -531,8 +528,8 @@ impl Client {
         };
         drop(channels);
 
-        // Generate the new `PrivMsg`
-        let mut privmsg = Privmsg::new_priv(
+        // Generate the new Privmsg
+        let mut privmsg = Msg::new_priv(
             channel_name,
             self.nickname.read().await.to_string(),
             msg.to_string(),
@@ -569,12 +566,8 @@ impl Client {
         let topic = if topic.len() > MAX_MSG_LEN { topic.split_at(MAX_MSG_LEN).0 } else { topic };
 
         // Create the Modmsg
-        let mut modmsg = Privmsg::new_mod(
-            channel_name,
-            String::from("TOPIC"),
-            String::from(topic),
-            &mod_secret_key,
-        );
+        let mut modmsg =
+            Msg::new_mod(channel_name, String::from("TOPIC"), String::from(topic), &mod_secret_key);
 
         // Encrypt the Modmsg if an encryption method is available
         self.server.try_encrypt_modmsg(&mut modmsg).await;
@@ -583,9 +576,9 @@ impl Client {
         Some(Event::new(serialize_async(&modmsg).await, &self.server.darkirc.event_graph).await)
     }
 
-    /// Process provided `Privmsg` of type `PRIVMSG_TYPE_NORMAL`.
+    /// Process provided `Msg` of type `MSG_TYPE_PRIV`.
     /// Returns bool flag indicating if the message should be skipped.
-    async fn handle_privmsg<W>(&self, mut privmsg: Privmsg, writer: &mut W) -> bool
+    async fn handle_privmsg<W>(&self, mut privmsg: Msg, writer: &mut W) -> bool
     where
         W: AsyncWrite + Unpin,
     {
@@ -655,9 +648,9 @@ impl Client {
         false
     }
 
-    /// Process provided `Privmsg` of type `PRIVMSG_TYPE_MOD`.
+    /// Process provided `Msg` of type `MSG_TYPE_MOD`.
     /// Returns bool flag indicating if the message should be skipped.
-    async fn handle_modmsg<W>(&self, mut modmsg: Privmsg, writer: &mut W) -> bool
+    async fn handle_modmsg<W>(&self, mut modmsg: Msg, writer: &mut W) -> bool
     where
         W: AsyncWrite + Unpin,
     {
