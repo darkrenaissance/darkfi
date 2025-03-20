@@ -19,11 +19,8 @@
 use std::{collections::HashSet, sync::Arc};
 
 use crypto_box::ChaChaBox;
-use darkfi::{Error, Result};
 use darkfi_sdk::crypto::{schnorr::SchnorrSecret, PublicKey, SecretKey};
-use darkfi_serial::{
-    async_trait, deserialize_async, serialize, Encodable, SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{async_trait, serialize, Encodable, SerialDecodable, SerialEncodable};
 
 /// IRC client state
 pub(crate) mod client;
@@ -44,39 +41,17 @@ pub(crate) mod rpl;
 /// Hardcoded server name
 const SERVER_NAME: &str = "irc.dark.fi";
 
-/// Hardcoded current Privmsg version
-const PRIVMSG_VERSION: u8 = 0;
+/// Hardcoded current 'Msg' version
+const MSG_VERSION: u8 = 0;
 
-/// Privmsg types
-const PRIVMSG_TYPE_NORMAL: u8 = 0;
-const PRIVMSG_TYPE_MOD: u8 = 1;
+/// 'Msg' types
+const MSG_TYPE_PRIV: u8 = 0;
+const MSG_TYPE_MOD: u8 = 1;
 
-/// IRC PRIVMSG (old version)
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct OldPrivmsg {
-    pub channel: String,
-    pub nick: String,
-    pub msg: String,
-}
-
-impl OldPrivmsg {
-    pub fn into_new(self) -> Privmsg {
-        Privmsg {
-            version: 0,
-            msg_type: 0,
-            channel: self.channel.clone(),
-            nick: self.nick.clone(),
-            msg: self.msg.clone(),
-            signature: vec![],
-        }
-    }
-}
-
-/// IRC PRIVMSG (new version)
 /// Message structure definition.
 /// Based on the type, each field represents different information.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct Privmsg {
+pub struct Msg {
     pub version: u8,
     pub msg_type: u8,
     /// Channel this message is for
@@ -92,8 +67,8 @@ pub struct Privmsg {
     pub signature: Vec<u8>,
 }
 
-impl Privmsg {
-    /// Generate a new `Privmsg` of `PRIVMSG_TYPE_NORMAL` type and sign it if a secret key is provided.
+impl Msg {
+    /// Generate a new `Msg` of `MSG_TYPE_PRIV` type and sign it if a secret key is provided.
     pub fn new_priv(
         channel: String,
         nick: String,
@@ -101,8 +76,8 @@ impl Privmsg {
         secret_key: Option<SecretKey>,
     ) -> Self {
         let mut message = Self {
-            version: PRIVMSG_VERSION,
-            msg_type: PRIVMSG_TYPE_NORMAL,
+            version: MSG_VERSION,
+            msg_type: MSG_TYPE_PRIV,
             channel,
             nick,
             msg,
@@ -114,11 +89,11 @@ impl Privmsg {
         message
     }
 
-    /// Generate a new `Privmsg` of `PRIVMSG_TYPE_NORMAL` type and sign it using provided secret key.
+    /// Generate a new `Msg` of `MSG_TYPE_MOD` type and sign it using provided secret key.
     pub fn new_mod(channel: String, nick: String, msg: String, secret_key: &SecretKey) -> Self {
         let mut message = Self {
-            version: PRIVMSG_VERSION,
-            msg_type: PRIVMSG_TYPE_MOD,
+            version: MSG_VERSION,
+            msg_type: MSG_TYPE_MOD,
             channel,
             nick,
             msg,
@@ -143,25 +118,6 @@ impl Privmsg {
         self.msg.encode(&mut hasher).expect("blake3 hasher");
 
         hasher.finalize().into()
-    }
-}
-
-pub enum Msg {
-    V1(OldPrivmsg),
-    V2(Privmsg),
-}
-
-impl Msg {
-    pub async fn deserialize(bytes: &[u8]) -> Result<Self> {
-        if let Ok(old_msg) = deserialize_async(bytes).await {
-            return Ok(Msg::V1(old_msg))
-        }
-
-        if let Ok(new_msg) = deserialize_async(bytes).await {
-            return Ok(Msg::V2(new_msg))
-        }
-
-        Err(Error::Custom("Unknown message format".into()))
     }
 }
 

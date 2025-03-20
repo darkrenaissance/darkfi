@@ -49,7 +49,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Msg};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -381,8 +381,8 @@ impl IrcServer {
         }
     }
 
-    /// Try encrypting a given `Privmsg` of type `PRIVMSG_TYPE_NORMAL` if there is such a channel/contact.
-    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
+    /// Try encrypting a given `Msg` of type `MSG_TYPE_PRIV` if there is such a channel/contact.
+    pub async fn try_encrypt(&self, privmsg: &mut Msg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will use a dummy channel value of MAX_NICK_LEN,
@@ -422,8 +422,8 @@ impl IrcServer {
         };
     }
 
-    /// Try decrypting a given potentially encrypted `Privmsg` of type `PRIVMSG_TYPE_NORMAL`.
-    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
+    /// Try decrypting a given potentially encrypted `Msg` of type `MSG_TYPE_PRIV`.
+    pub async fn try_decrypt(&self, privmsg: &mut Msg, self_nickname: &str) {
         // If all fields have base58, then we can consider decrypting.
         let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
             Ok(v) => v,
@@ -525,8 +525,8 @@ impl IrcServer {
         }
     }
 
-    /// Try encrypting a given `Privmsg` of type `PRIVMSG_TYPE_MOD` if there is such a channel.
-    pub async fn try_encrypt_modmsg(&self, modmsg: &mut Privmsg) {
+    /// Try encrypting a given `Msg` of type `MSG_TYPE_MOD` if there is such a channel.
+    pub async fn try_encrypt_modmsg(&self, modmsg: &mut Msg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&modmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will use a dummy channel value of MAX_NICK_LEN,
@@ -541,8 +541,8 @@ impl IrcServer {
         };
     }
 
-    /// Try decrypting a given potentially encrypted `Privmsg` of type `PRIVMSG_TYPE_MOD`.
-    pub async fn try_decrypt_modmsg(&self, modmsg: &mut Privmsg) {
+    /// Try decrypting a given potentially encrypted `Msg` of type `MSG_TYPE_MOD`.
+    pub async fn try_decrypt_modmsg(&self, modmsg: &mut Msg) {
         // If all fields have base58, then we can consider decrypting.
         let channel_ciphertext = match bs58::decode(&modmsg.channel).into_vec() {
             Ok(v) => v,
