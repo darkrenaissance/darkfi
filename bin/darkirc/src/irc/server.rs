@@ -391,8 +391,12 @@ impl IrcServer {
                 // We will pad the name to MAX_NICK_LEN so they all look the same
                 privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
                 privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
-                // TODO: all signatures should be same size, so if no signature exists,
-                // use a dummy vec of same size so they all look the same.
+                // If no signature was provided, we use a dummy signature bytes vector,
+                // so all encrypted messages look the same. We don't need to pad since
+                // all signatures produce a 64 bytes vector.
+                if privmsg.signature.is_empty() {
+                    privmsg.signature = vec![0x00; 64];
+                }
                 privmsg.signature = saltbox::encrypt(saltbox, &privmsg.signature).into();
                 debug!("Successfully encrypted message for {}", name);
                 return
@@ -407,8 +411,12 @@ impl IrcServer {
             // so we can identify our messages.
             privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
             privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
-            // TODO: all signatures should be same size, so if no signature exists,
-            // use a dummy vec of same size so they all look the same.
+            // If no signature was provided, we use a dummy signature bytes vector,
+            // so all encrypted messages look the same. We don't need to pad since
+            // all signatures produce a 64 bytes vector.
+            if privmsg.signature.is_empty() {
+                privmsg.signature = vec![0x00; 64];
+            }
             privmsg.signature = saltbox::encrypt(&contact.saltbox, &privmsg.signature).into();
             debug!("Successfully encrypted message for {}", name);
         };
@@ -457,13 +465,18 @@ impl IrcServer {
                 continue
             };
 
-            let Some(signature_dec) = saltbox::try_decrypt(saltbox, &signature_ciphertext) else {
+            let Some(mut signature_dec) = saltbox::try_decrypt(saltbox, &signature_ciphertext)
+            else {
                 warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt signature ciphertext for channel: {name}");
                 continue
             };
 
             Self::unpad(&mut nick_dec);
-            // TODO: check if signature_dec is the empty/dummy vec
+
+            // Filter dummy signature
+            if signature_dec == vec![0x00; 64] {
+                signature_dec = vec![];
+            }
 
             privmsg.channel = name.to_string();
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
@@ -491,13 +504,17 @@ impl IrcServer {
                 continue
             };
 
-            let Some(signature_dec) = saltbox::try_decrypt(&contact.saltbox, &signature_ciphertext)
+            let Some(mut signature_dec) =
+                saltbox::try_decrypt(&contact.saltbox, &signature_ciphertext)
             else {
                 warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt signature ciphertext for contact: {name}");
                 continue
             };
 
-            // TODO: check if signature_dec is the empty/dummy vec
+            // Filter dummy signature
+            if signature_dec == vec![0x00; 64] {
+                signature_dec = vec![];
+            }
 
             privmsg.channel = name.to_string();
             privmsg.nick = nick;
