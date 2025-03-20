@@ -61,9 +61,12 @@ use super::{
     client::{Client, ReplyType},
     rpl::*,
     server::MAX_NICK_LEN,
-    IrcChannel, Modmsg, Msg, Privmsg, SERVER_NAME,
+    IrcChannel, Msg, Privmsg, SERVER_NAME,
 };
-use crate::crypto::bcrypt::bcrypt_hash_password;
+use crate::{
+    crypto::bcrypt::bcrypt_hash_password,
+    irc::{PRIVMSG_TYPE_MOD, PRIVMSG_TYPE_NORMAL},
+};
 
 impl Client {
     /// `ADMIN [<server>]`
@@ -948,12 +951,15 @@ impl Client {
                 Ok(Msg::V1(old_msg)) => {
                     self.handle_history_privmsg(channels, old_msg.into_new(), &mut replies).await
                 }
-                Ok(Msg::V2(new_msg)) => {
-                    self.handle_history_privmsg(channels, new_msg, &mut replies).await
-                }
-                Ok(Msg::Mod(mod_msg)) => {
-                    self.handle_history_modmsg(channels, mod_msg, &mut replies).await
-                }
+                Ok(Msg::V2(new_msg)) => match new_msg.msg_type {
+                    PRIVMSG_TYPE_NORMAL => {
+                        self.handle_history_privmsg(channels, new_msg, &mut replies).await
+                    }
+                    PRIVMSG_TYPE_MOD => {
+                        self.handle_history_modmsg(channels, new_msg, &mut replies).await
+                    }
+                    _ => true,
+                },
                 Err(_) => true,
             };
 
@@ -969,7 +975,7 @@ impl Client {
         Ok(replies)
     }
 
-    /// Process provided history `Privmsg`.
+    /// Process provided history `Privmsg` of type `PRIVMSG_TYPE_NORMAL`.
     /// Returns bool flag indicating if the message should be skipped.
     async fn handle_history_privmsg(
         &self,
@@ -1038,12 +1044,12 @@ impl Client {
         false
     }
 
-    /// Process provided history `Modmsg`.
+    /// Process provided history `Privmsg` of type `PRIVMSG_TYPE_MOD`.
     /// Returns bool flag indicating if the message should be skipped.
     async fn handle_history_modmsg(
         &self,
         channels: &HashSet<String>,
-        mut modmsg: Modmsg,
+        mut modmsg: Privmsg,
         replies: &mut Vec<ReplyType>,
     ) -> bool {
         // Potentially decrypt it:
@@ -1081,14 +1087,14 @@ impl Client {
 
         // Ignore unimplemented commands
         // TODO: add rest commands here and ensure each one is tested
-        let command = modmsg.command.to_uppercase().to_string();
+        let command = modmsg.nick.to_uppercase().to_string();
         if !channel.mod_commands.contains(&command) {
             return true
         }
         drop(channels);
 
         // Handle command params lines individually
-        for line in modmsg.params.lines() {
+        for line in modmsg.msg.lines() {
             // Skip empty lines
             if line.is_empty() {
                 continue
