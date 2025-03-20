@@ -49,7 +49,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Modmsg, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Privmsg};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -381,7 +381,7 @@ impl IrcServer {
         }
     }
 
-    /// Try encrypting a given `Privmsg` if there is such a channel/contact.
+    /// Try encrypting a given `Privmsg` of type `PRIVMSG_TYPE_NORMAL` if there is such a channel/contact.
     pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
@@ -422,7 +422,7 @@ impl IrcServer {
         };
     }
 
-    /// Try decrypting a given potentially encrypted `Privmsg` object.
+    /// Try decrypting a given potentially encrypted `Privmsg` of type `PRIVMSG_TYPE_NORMAL`.
     pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
         // If all fields have base58, then we can consider decrypting.
         let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
@@ -525,36 +525,36 @@ impl IrcServer {
         }
     }
 
-    /// Try encrypting a given `Modmsg` if there is such a channel.
-    pub async fn try_encrypt_modmsg(&self, modmsg: &mut Modmsg) {
+    /// Try encrypting a given `Privmsg` of type `PRIVMSG_TYPE_MOD` if there is such a channel.
+    pub async fn try_encrypt_modmsg(&self, modmsg: &mut Privmsg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&modmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will use a dummy channel value of MAX_NICK_LEN,
                 // since its not used, so all encrypted messages look the same.
                 modmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
                 // We will pad the command to MAX_NICK_LEN so they all look the same
-                modmsg.command = saltbox::encrypt(saltbox, &Self::pad(&modmsg.command));
-                modmsg.params = saltbox::encrypt(saltbox, modmsg.params.as_bytes());
+                modmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&modmsg.nick));
+                modmsg.msg = saltbox::encrypt(saltbox, modmsg.msg.as_bytes());
                 modmsg.signature = saltbox::encrypt(saltbox, &modmsg.signature).into();
                 debug!("Successfully encrypted moderation command for {}", name);
             }
         };
     }
 
-    /// Try decrypting a given potentially encrypted `Modmsg` object.
-    pub async fn try_decrypt_modmsg(&self, modmsg: &mut Modmsg) {
+    /// Try decrypting a given potentially encrypted `Privmsg` of type `PRIVMSG_TYPE_MOD`.
+    pub async fn try_decrypt_modmsg(&self, modmsg: &mut Privmsg) {
         // If all fields have base58, then we can consider decrypting.
         let channel_ciphertext = match bs58::decode(&modmsg.channel).into_vec() {
             Ok(v) => v,
             Err(_) => return,
         };
 
-        let command_ciphertext = match bs58::decode(&modmsg.command).into_vec() {
+        let command_ciphertext = match bs58::decode(&modmsg.nick).into_vec() {
             Ok(v) => v,
             Err(_) => return,
         };
 
-        let params_ciphertext = match bs58::decode(&modmsg.params).into_vec() {
+        let params_ciphertext = match bs58::decode(&modmsg.msg).into_vec() {
             Ok(v) => v,
             Err(_) => return,
         };
@@ -592,8 +592,8 @@ impl IrcServer {
             Self::unpad(&mut command_dec);
 
             modmsg.channel = name.to_string();
-            modmsg.command = String::from_utf8_lossy(&command_dec).into();
-            modmsg.params = String::from_utf8_lossy(&params_dec).into();
+            modmsg.nick = String::from_utf8_lossy(&command_dec).into();
+            modmsg.msg = String::from_utf8_lossy(&params_dec).into();
             modmsg.signature = signature_dec;
             debug!("Successfully decrypted moderation command for {}", name);
             return
