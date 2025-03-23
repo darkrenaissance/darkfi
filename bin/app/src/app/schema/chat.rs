@@ -45,7 +45,7 @@ use crate::{
         chatview, emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer,
         ShapeVertex, Shortcut, Text, VectorArt, VectorShape, Window,
     },
-    util::{unixtime, Clipboard},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -1425,13 +1425,12 @@ pub async fn make(
     let actions_is_visible2 = actions_is_visible.clone();
     let editz_select_text2 = editz_select_text.clone();
     let listen_click = app.ex.spawn(async move {
-        let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked copy");
             let atom = &mut PropertyAtomicGuard::new();
             actions_is_visible2.set(atom, false);
             let select_text = editz_select_text2.get_str(0).unwrap();
-            clip.set(&select_text);
+            miniquad::window::clipboard_set(&select_text);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1453,10 +1452,9 @@ pub async fn make(
     let actions_is_visible2 = actions_is_visible.clone();
     let chatedit_node2 = chatedit_node.clone();
     let listen_click = app.ex.spawn(async move {
-        let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
             let atom = &mut PropertyAtomicGuard::new();
-            if let Some(text) = clip.get() {
+            if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
                 text.encode(&mut data).unwrap();
@@ -1614,10 +1612,9 @@ pub async fn make(
     let chatedit_node2 = chatedit_node.clone();
     let pasta_is_visible2 = pasta_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
-        let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
             let atom = &mut PropertyAtomicGuard::new();
-            if let Some(text) = clip.get() {
+            if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
                 text.encode(&mut data).unwrap();

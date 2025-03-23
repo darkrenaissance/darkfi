@@ -48,7 +48,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4, Clipboard},
+    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4},
     ExecutorPtr,
 };
 
@@ -1164,8 +1164,7 @@ impl ChatEdit {
             }
             'v' => {
                 if modkey_pressed {
-                    let mut clip = Clipboard::new();
-                    if let Some(text) = clip.get() {
+                    if let Some(text) = miniquad::window::clipboard_get() {
                         self.insert_text(&text, atom).await;
                     }
                     return true

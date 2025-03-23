@@ -70,7 +70,6 @@ halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-arboard = {version = "3.4.1", features=["wayland-data-control"]}
 dirs = "5.0.1"
 
 [target.'cfg(target_os = "android")'.dependencies]
