@@ -10,29 +10,29 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../", features = ["async-daemonize", "validator", "rpc"]}
-darkfi-sdk = {path = "../../src/sdk"}
-darkfi-serial = {version = "0.4.2", features = ["async"]}
+darkfi = { workspace = true, features = ["async-daemonize", "validator", "rpc"] }
+darkfi-sdk = { workspace = true }
+darkfi-serial = { workspace = true, features = ["async"] }
 
 # Misc
-log = "0.4.26"
-num-bigint = "0.4.6"
+log = { workspace = true }
+num-bigint = { workspace = true }
 
 # JSON-RPC
-tinyjson = "2.5.1"
-url = "2.5.4"
+tinyjson = { workspace = true }
+url = { workspace = true }
 
 # Daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 [lints]
 workspace = true

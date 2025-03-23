@@ -9,25 +9,25 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-blake2b_simd = "1.0.3"
-bs58 = "0.5.1"
-darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
-darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
-darkfi_money_contract = { path = "../money", features = ["no-entrypoint"] }
-thiserror = "2.0.11"
+blake2b_simd = { workspace = true }
+bs58 = { workspace = true }
+darkfi-sdk = { workspace = true, features = ["wasm"] }
+darkfi-serial = { workspace = true, features = ["derive", "crypto"] }
+darkfi_money_contract = { workspace = true, features = ["no-entrypoint"] }
+thiserror = { workspace = true }
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
-chacha20poly1305 = { version = "0.10.1", optional = true }
-darkfi = { path = "../../../", features = ["zk", "rpc", "blockchain"], optional = true }
-halo2_proofs = { version = "0.3.0", optional = true }
-log = { version = "0.4.26", optional = true }
-rand = { version = "0.8.5", optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
+darkfi = { workspace = true, features = ["zk", "rpc", "blockchain"], optional = true }
+halo2_proofs = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 
 # These are used just for the integration tests
 [dev-dependencies]
-smol = "2.0.2"
-darkfi-contract-test-harness = {path = "../test-harness"}
+smol = { workspace = true }
+darkfi-contract-test-harness = { workspace = true }
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.

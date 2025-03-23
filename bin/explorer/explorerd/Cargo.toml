@@ -9,35 +9,35 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../../", features = ["async-daemonize", "validator", "rpc"]}
-darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = "0.4.2"
+darkfi = { workspace = true, features = ["async-daemonize", "validator", "rpc"] }
+darkfi-sdk = { workspace = true }
+darkfi-serial = { workspace = true }
 
 # JSON-RPC
-async-trait = "0.1.86"
-tinyjson = "2.5.1"
-url = "2.5.4"
+async-trait = { workspace = true }
+tinyjson = { workspace = true }
+url = { workspace = true }
 
 # Daemon
-easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.17"
-simplelog = "0.12.2"
-smol = "2.0.2"
+easy-parallel = { workspace = true }
+signal-hook-async-std = { workspace = true }
+signal-hook = { workspace = true }
+simplelog = { workspace = true }
+smol = { workspace = true }
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
-structopt = "0.3.26"
-structopt-toml = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+structopt = { workspace = true }
+structopt-toml = { workspace = true }
 
 # Database
-sled-overlay = "0.1.6"
+sled-overlay = { workspace = true }
 
 # Misc
-log = "0.4.26"
-lazy_static = "1.5.0"
-tar = "0.4.44"
-toml = "0.8.20"
+log = { workspace = true }
+lazy_static = { workspace = true }
+tar = { workspace = true }
+toml = { workspace = true }
 
 # Testing
-tempdir = "0.3.7"
+tempdir = { workspace = true }

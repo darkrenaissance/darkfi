@@ -9,17 +9,17 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-genevd = {path = "../genevd"}
+genevd = { workspace = true }
 
-darkfi = {path = "../../../", features = ["event-graph", "rpc", "bs58"]}
-darkfi-serial = "0.4.2"
+darkfi = { workspace = true, features = ["event-graph", "rpc", "bs58"] }
+darkfi-serial = { workspace = true }
 
-smol = "2.0.2"
-clap = {version = "4.4.11", features = ["derive"]}
-log = "0.4.26"
-simplelog = "0.12.2"
-tinyjson = "2.5.1"
-url = "2.5.4"
+smol = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+log = { workspace = true }
+simplelog = { workspace = true }
+tinyjson = { workspace = true }
+url = { workspace = true }
 
 [lints]
 workspace = true

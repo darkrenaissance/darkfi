@@ -6,20 +6,20 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["validator"]}
-darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = {version = "0.4.2", features = ["crypto"]}
+darkfi = { workspace = true, features = ["validator"] }
+darkfi-sdk = { workspace = true }
+darkfi-serial = { workspace = true, features = ["crypto"] }
 
-darkfi_dao_contract = {path = "../dao", features = ["client", "no-entrypoint"]}
-darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint"]}
-darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
+darkfi_dao_contract = { workspace = true, features = ["client", "no-entrypoint"] }
+darkfi_money_contract = { workspace = true, features = ["client", "no-entrypoint"] }
+darkfi_deployooor_contract = { workspace = true, features = ["client", "no-entrypoint"] }
 
-num-bigint = "0.4.6"
-blake3 = "1.6.0"
-log = "0.4.26"
-rand = "0.8.5"
-simplelog = "0.12.2"
-sled-overlay = "0.1.6"
+num-bigint = { workspace = true }
+blake3 = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+simplelog = { workspace = true }
+sled-overlay = { workspace = true }
 
 [lints]
 workspace = true
