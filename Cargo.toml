@@ -171,6 +171,7 @@ validator = [
 
 geode = [
     "blake3",
+    "bs58",
     "futures",
     "smol",
 ]

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use darkfi::{
-    geode::{read_until_filled, MAX_CHUNK_SIZE},
+    geode::{hash_to_string, read_until_filled, MAX_CHUNK_SIZE},
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -227,6 +227,23 @@ impl ProtocolFud {
                 // TODO: Run geode GC
 
                 if let Ok(chunked_file) = file_res {
+                    // If the file has a single chunk, just reply with the chunk
+                    if chunked_file.len() == 1 {
+                        let chunk_res =
+                            self.fud.geode.get_chunk(&chunked_file.iter().next().unwrap().0).await;
+                        if let Ok(chunk_path) = chunk_res {
+                            let mut buf = vec![0u8; MAX_CHUNK_SIZE];
+                            let mut chunk_fd = File::open(&chunk_path).await.unwrap();
+                            let bytes_read =
+                                read_until_filled(&mut chunk_fd, &mut buf).await.unwrap();
+                            let chunk_slice = &buf[..bytes_read];
+                            let reply = FudChunkReply { chunk: chunk_slice.to_vec() };
+                            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk (file has a single chunk)");
+                            let _ = self.channel.send(&reply).await;
+                            continue;
+                        }
+                    }
+                    // Otherwise reply with the file metadata
                     let reply = FudFileReply {
                         chunk_hashes: chunked_file.iter().map(|(chunk, _)| *chunk).collect(),
                     };
@@ -237,7 +254,7 @@ impl ProtocolFud {
             }
 
             let reply = FudNotFound {};
-            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "We do not have {}", request.key.to_hex().to_string());
+            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "We do not have {}", hash_to_string(&request.key));
             let _ = self.channel.send(&reply).await;
         }
     }
@@ -254,7 +271,7 @@ impl ProtocolFud {
                     continue
                 }
             };
-            info!(target: "fud::ProtocolFud::handle_fud_find_nodes_request()", "Received FIND NODES for {}", &request.key);
+            info!(target: "fud::ProtocolFud::handle_fud_find_nodes_request()", "Received FIND NODES for {}", hash_to_string(&request.key));
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
@@ -283,7 +300,7 @@ impl ProtocolFud {
                     continue
                 }
             };
-            info!(target: "fud::ProtocolFud::handle_fud_find_seeders_request()", "Received FIND SEEDERS for {}", &request.key);
+            info!(target: "fud::ProtocolFud::handle_fud_find_seeders_request()", "Received FIND SEEDERS for {}", hash_to_string(&request.key));
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
@@ -319,7 +336,7 @@ impl ProtocolFud {
                     continue
                 }
             };
-            info!(target: "fud::ProtocolFud::handle_fud_announce()", "Received ANNOUNCE for {}", &request.key);
+            info!(target: "fud::ProtocolFud::handle_fud_announce()", "Received ANNOUNCE for {}", hash_to_string(&request.key));
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {

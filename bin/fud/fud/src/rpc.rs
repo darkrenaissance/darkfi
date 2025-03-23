@@ -24,6 +24,7 @@ use std::{
 use crate::{dht::DhtHandler, proto::FudAnnounce, Fud};
 use async_trait::async_trait;
 use darkfi::{
+    geode::hash_to_string,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         p2p_method::HandlerP2p,
@@ -96,7 +97,7 @@ impl Fud {
             }
         };
 
-        let (file_hash, chunk_hashes) = match self.geode.insert(fd).await {
+        let (file_hash, _) = match self.geode.insert(fd).await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "fud::put()", "Failed inserting file {:?} to geode: {}", path, e);
@@ -109,14 +110,7 @@ impl Fud {
         let fud_announce = FudAnnounce { key: file_hash, seeders: vec![self_node.clone().into()] };
         let _ = self.announce(&file_hash, &fud_announce, self.seeders_router.clone()).await;
 
-        // Announce chunks
-        for chunk_hash in chunk_hashes {
-            let fud_announce =
-                FudAnnounce { key: chunk_hash, seeders: vec![self_node.clone().into()] };
-            let _ = self.announce(&chunk_hash, &fud_announce, self.seeders_router.clone()).await;
-        }
-
-        JsonResponse::new(JsonValue::String(file_hash.to_hex().to_string()), id).into()
+        JsonResponse::new(JsonValue::String(hash_to_string(&file_hash)), id).into()
     }
 
     // RPCAPI:
@@ -138,10 +132,13 @@ impl Fud {
             None => None,
         };
 
-        let file_hash = match blake3::Hash::from_hex(params[0].get::<String>().unwrap()) {
-            Ok(v) => v,
+        let mut hash_buf = [0u8; 32];
+        match bs58::decode(params[0].get::<String>().unwrap().as_str()).onto(&mut hash_buf) {
+            Ok(_) => {}
             Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
-        };
+        }
+
+        let file_hash = blake3::Hash::from_bytes(hash_buf);
 
         let _ = self.get_tx.send((id, file_hash, file_name, Ok(()))).await;
 
@@ -207,7 +204,7 @@ impl Fud {
                     addresses.push(JsonValue::String(addr.to_string()));
                 }
                 nodes.push(JsonValue::Array(vec![
-                    JsonValue::String(node.id.to_hex().to_string()),
+                    JsonValue::String(hash_to_string(&node.id)),
                     JsonValue::Array(addresses),
                 ]));
             }
@@ -231,9 +228,9 @@ impl Fud {
         for (hash, items) in self.seeders_router.read().await.iter() {
             let mut node_ids = vec![];
             for item in items {
-                node_ids.push(JsonValue::String(item.node.id.to_hex().to_string()));
+                node_ids.push(JsonValue::String(hash_to_string(&item.node.id)));
             }
-            seeders_router.insert(hash.to_hex().to_string(), JsonValue::Array(node_ids));
+            seeders_router.insert(hash_to_string(hash), JsonValue::Array(node_ids));
         }
         let mut res: HashMap<String, JsonValue> = HashMap::new();
         res.insert("seeders".to_string(), JsonValue::Object(seeders_router));
@@ -282,15 +279,15 @@ pub enum FudEvent {
 impl From<ChunkDownloadCompleted> for JsonValue {
     fn from(info: ChunkDownloadCompleted) -> JsonValue {
         json_map([
-            ("file_hash", JsonValue::String(info.file_hash.to_hex().to_string())),
-            ("chunk_hash", JsonValue::String(info.chunk_hash.to_hex().to_string())),
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
+            ("chunk_hash", JsonValue::String(hash_to_string(&info.chunk_hash))),
         ])
     }
 }
 impl From<FileDownloadCompleted> for JsonValue {
     fn from(info: FileDownloadCompleted) -> JsonValue {
         json_map([
-            ("file_hash", JsonValue::String(info.file_hash.to_hex().to_string())),
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
             ("chunk_count", JsonValue::Number(info.chunk_count as f64)),
         ])
     }
@@ -298,7 +295,7 @@ impl From<FileDownloadCompleted> for JsonValue {
 impl From<DownloadCompleted> for JsonValue {
     fn from(info: DownloadCompleted) -> JsonValue {
         json_map([
-            ("file_hash", JsonValue::String(info.file_hash.to_hex().to_string())),
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
             ("file_path", JsonValue::String(info.file_path.to_string_lossy().to_string())),
         ])
     }
@@ -306,14 +303,14 @@ impl From<DownloadCompleted> for JsonValue {
 impl From<ChunkNotFound> for JsonValue {
     fn from(info: ChunkNotFound) -> JsonValue {
         json_map([
-            ("file_hash", JsonValue::String(info.file_hash.to_hex().to_string())),
-            ("chunk_hash", JsonValue::String(info.chunk_hash.to_hex().to_string())),
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
+            ("chunk_hash", JsonValue::String(hash_to_string(&info.chunk_hash))),
         ])
     }
 }
 impl From<FileNotFound> for JsonValue {
     fn from(info: FileNotFound) -> JsonValue {
-        json_map([("file_hash", JsonValue::String(info.file_hash.to_hex().to_string()))])
+        json_map([("file_hash", JsonValue::String(hash_to_string(&info.file_hash)))])
     }
 }
 impl From<FudEvent> for JsonValue {
@@ -396,11 +393,13 @@ impl Fud {
             };
         }
 
-        // Fetch any missing chunks
-        let mut missing_chunks = vec![];
+        let seeders = self.fetch_seeders(file_hash).await;
+
+        // List missing chunks
+        let mut missing_chunks = HashSet::new();
         for (chunk, path) in chunked_file.iter() {
             if path.is_none() {
-                missing_chunks.push(*chunk);
+                missing_chunks.insert(*chunk);
             } else {
                 self.download_publisher
                     .notify(FudEvent::ChunkDownloadCompleted(ChunkDownloadCompleted {
@@ -411,44 +410,16 @@ impl Fud {
             }
         }
 
-        for chunk in missing_chunks {
-            self.chunk_fetch_tx.send((chunk, Ok(()))).await.unwrap();
-            let (i_chunk_hash, status) = self.chunk_fetch_end_rx.recv().await.unwrap();
-
-            match status {
-                Ok(()) => {
-                    self.download_publisher
-                        .notify(FudEvent::ChunkDownloadCompleted(ChunkDownloadCompleted {
-                            file_hash,
-                            chunk_hash: i_chunk_hash,
-                        }))
-                        .await;
-                    let self_announce =
-                        FudAnnounce { key: i_chunk_hash, seeders: vec![self_node.clone().into()] };
-                    let _ = self
-                        .announce(&i_chunk_hash, &self_announce, self.seeders_router.clone())
-                        .await;
-                }
-                Err(Error::GeodeChunkRouteNotFound) => {
-                    self.download_publisher
-                        .notify(FudEvent::ChunkNotFound(ChunkNotFound {
-                            file_hash,
-                            chunk_hash: i_chunk_hash,
-                        }))
-                        .await;
-                    return;
-                }
-
-                Err(e) => panic!("{}", e),
-            };
-        }
+        // Fetch missing chunks from seeders
+        self.fetch_chunks(&file_hash, &missing_chunks, &seeders).await;
 
         let chunked_file = match self.geode.get(&file_hash).await {
             Ok(v) => v,
             Err(e) => panic!("{}", e),
         };
 
-        // We fetched all chunks, but the file is not complete?
+        // We fetched all chunks, but the file is not complete
+        // (some chunks were missing from all seeders)
         if !chunked_file.is_complete() {
             self.download_publisher.notify(FudEvent::MissingChunks(MissingChunks {})).await;
             return;

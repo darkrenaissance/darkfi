@@ -18,14 +18,14 @@
 
 use std::sync::Arc;
 
-use darkfi::{system::sleep, Error, Result};
+use darkfi::{geode::hash_to_string, system::sleep, Error, Result};
 
 use crate::{
     dht::DhtHandler,
     proto::{FudAnnounce, FudChunkReply, FudFileReply},
     Fud,
 };
-use log::{error, info, warn};
+use log::{error, info};
 
 /// Triggered when calling the `get` RPC method
 pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
@@ -48,32 +48,36 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
     info!(target: "fud::fetch_file_task()", "Started background file fetch task");
     loop {
         let (file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_file_task()", "Fetching file {}", file_hash);
+        info!(target: "fud::fetch_file_task()", "Fetching file {}", hash_to_string(&file_hash));
 
-        let result = fud.fetch(file_hash).await;
+        let result = fud.fetch_file_metadata(file_hash).await;
 
         match result {
             Some(reply) => {
                 match reply {
                     FetchReply::File(FudFileReply { chunk_hashes }) => {
                         if let Err(e) = fud.geode.insert_file(&file_hash, &chunk_hashes).await {
-                            error!("Failed inserting file {} to Geode: {}", file_hash, e);
+                            error!(
+                                "Failed inserting file {} to Geode: {}",
+                                hash_to_string(&file_hash),
+                                e
+                            );
                         }
                         fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
                     }
-                    // Looked for a file but got a chunk, meaning that file_hash = chunk_hash, the file fits in a single chunk
+                    // Looked for a file but got a chunk: the entire file fits in a single chunk
                     FetchReply::Chunk(FudChunkReply { chunk }) => {
-                        // TODO: Verify chunk
-                        info!(target: "fud::fetch()", "File fits in a single chunk");
-                        let _ = fud.geode.insert_file(&file_hash, &[file_hash]).await;
+                        info!(target: "fud::fetch_file_task()", "File fits in a single chunk");
+                        let chunk_hash = blake3::hash(&chunk);
+                        let _ = fud.geode.insert_file(&file_hash, &[chunk_hash]).await;
                         match fud.geode.insert_chunk(&chunk).await {
-                            Ok(inserted_hash) => {
-                                if inserted_hash != file_hash {
-                                    warn!("Received chunk does not match requested file");
-                                }
-                            }
+                            Ok(_) => {}
                             Err(e) => {
-                                error!("Failed inserting chunk {} to Geode: {}", file_hash, e);
+                                error!(
+                                    "Failed inserting chunk {} to Geode: {}",
+                                    hash_to_string(&file_hash),
+                                    e
+                                );
                             }
                         };
                         fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
@@ -83,53 +87,6 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
             None => {
                 fud.file_fetch_end_tx
                     .send((file_hash, Err(Error::GeodeFileRouteNotFound)))
-                    .await
-                    .unwrap();
-            }
-        };
-    }
-}
-
-/// Background task that receives chunk fetch requests and tries to
-/// fetch objects from the network using the routing table.
-/// TODO: This can be optimised a lot for connection reuse, etc.
-pub async fn fetch_chunk_task(fud: Arc<Fud>) -> Result<()> {
-    info!(target: "fud::fetch_chunk_task()", "Started background chunk fetch task");
-    loop {
-        let (chunk_hash, _) = fud.chunk_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_chunk_task()", "Fetching chunk {}", chunk_hash);
-
-        let result = fud.fetch(chunk_hash).await;
-
-        match result {
-            Some(reply) => {
-                match reply {
-                    FetchReply::Chunk(FudChunkReply { chunk }) => {
-                        // TODO: Verify chunk
-                        match fud.geode.insert_chunk(&chunk).await {
-                            Ok(inserted_hash) => {
-                                if inserted_hash != chunk_hash {
-                                    warn!("Received chunk does not match requested chunk");
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed inserting chunk {} to Geode: {}", chunk_hash, e);
-                            }
-                        };
-                        fud.chunk_fetch_end_tx.send((chunk_hash, Ok(()))).await.unwrap();
-                    }
-                    _ => {
-                        // Looked for a chunk but got a file instead, not supposed to happen
-                        fud.chunk_fetch_end_tx
-                            .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
-                            .await
-                            .unwrap();
-                    }
-                }
-            }
-            None => {
-                fud.chunk_fetch_end_tx
-                    .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
                     .await
                     .unwrap();
             }
@@ -154,20 +111,6 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
         sleep(3600).await; // TODO: Make a setting
 
         let seeders = vec![fud.dht().node.clone().into()];
-
-        info!(target: "fud::announce_task()", "Announcing chunks...");
-        let chunk_hashes = fud.geode.list_chunks().await;
-        if let Ok(chunks) = chunk_hashes {
-            for chunk in chunks {
-                let _ = fud
-                    .announce(
-                        &chunk,
-                        &FudAnnounce { key: chunk, seeders: seeders.clone() },
-                        fud.seeders_router.clone(),
-                    )
-                    .await;
-            }
-        }
 
         info!(target: "fud::announce_task()", "Announcing files...");
         let file_hashes = fud.geode.list_files().await;

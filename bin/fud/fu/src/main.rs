@@ -172,20 +172,11 @@ impl Fu {
                             return Err(Error::Custom(format!("Could not find file {}", file_hash)));
                         }
                         "chunk_not_found" => {
-                            let info = params
-                                .get("info")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            let chunk_hash =
-                                info.get("chunk_hash").unwrap().get::<String>().unwrap();
-                            println!();
-                            return Err(Error::Custom(format!(
-                                "Could not find chunk {}",
-                                chunk_hash
-                            )));
+                            // A seeder does not have a chunk we are looking for,
+                            // we will try another seeder so there is nothing to do
                         }
                         "missing_chunks" => {
+                            // We tried all seeders and some chunks are still missing
                             println!();
                             return Err(Error::Custom("Missing chunks".to_string()));
                         }

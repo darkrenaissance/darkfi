@@ -81,6 +81,10 @@ const CHUNKS_PATH: &str = "chunks";
 /// Path prefix where full files are stored
 const DOWNLOADS_PATH: &str = "downloads";
 
+pub fn hash_to_string(hash: &blake3::Hash) -> String {
+    bs58::encode(hash.as_bytes()).into_string()
+}
+
 /// `ChunkedFile` is a representation of a file we're trying to
 /// retrieve from `Geode`.
 ///
@@ -176,7 +180,9 @@ impl Geode {
         let mut lines = BufReader::new(fd).lines();
         while let Some(line) = lines.next().await {
             let line = line?;
-            let chunk_hash = blake3::Hash::from_hex(line)?;
+            let mut hash_buf = [0u8; 32];
+            bs58::decode(line).onto(&mut hash_buf)?;
+            let chunk_hash = blake3::Hash::from_bytes(hash_buf);
             read_chunks.push(chunk_hash);
         }
 
@@ -209,8 +215,9 @@ impl Geode {
                 Some(v) => v,
                 None => continue,
             };
-            let chunk_hash = match blake3::Hash::from_hex(file_name) {
-                Ok(v) => v,
+            let mut hash_buf = [0u8; 32];
+            let chunk_hash = match bs58::decode(file_name).onto(&mut hash_buf) {
+                Ok(_) => blake3::Hash::from_bytes(hash_buf),
                 Err(_) => continue,
             };
 
@@ -270,8 +277,9 @@ impl Geode {
                 Some(v) => v,
                 None => continue,
             };
-            let file_hash = match blake3::Hash::from_hex(file_name) {
-                Ok(v) => v,
+            let mut hash_buf = [0u8; 32];
+            let file_hash = match bs58::decode(file_name).onto(&mut hash_buf) {
+                Ok(_) => blake3::Hash::from_bytes(hash_buf),
                 Err(_) => continue,
             };
 
@@ -298,7 +306,7 @@ impl Geode {
     /// Insert a file into Geode. The function expects any kind of byte stream, which
     /// can either be another file on the filesystem, a buffer, etc.
     /// Returns a tuple of `(blake3::Hash, Vec<blake3::Hash>)` which represents the
-    /// file name, and the file's chunks, respectively.
+    /// file hash, and the file's chunks, respectively.
     pub async fn insert(
         &self,
         mut stream: impl AsyncRead + Unpin,
@@ -316,7 +324,7 @@ impl Geode {
 
             let chunk_slice = &buf[..bytes_read];
             let chunk_hash = blake3::hash(chunk_slice);
-            file_hasher.update(chunk_slice);
+            file_hasher.update(chunk_hash.as_bytes());
             chunk_hashes.push(chunk_hash);
 
             // Write the chunk to a file, if necessary. We first perform
@@ -324,7 +332,7 @@ impl Geode {
             // to perform a write, which is usually more expensive than
             // reading from disk.
             let mut chunk_path = self.chunks_path.clone();
-            chunk_path.push(chunk_hash.to_hex().as_str());
+            chunk_path.push(hash_to_string(&chunk_hash).as_str());
             let chunk_fd =
                 OpenOptions::new().read(true).write(true).create(true).open(&chunk_path).await?;
 
@@ -361,15 +369,15 @@ impl Geode {
             buf = [0u8; MAX_CHUNK_SIZE];
         }
 
-        // This hash is the file's chunks hashed in order.
+        // This hash is the file's chunks hashes hashed in order.
         let file_hash = file_hasher.finalize();
         let mut file_path = self.files_path.clone();
-        file_path.push(file_hash.to_hex().as_str());
+        file_path.push(hash_to_string(&file_hash).as_str());
 
         // We always overwrite the metadata.
         let mut file_fd = File::create(&file_path).await?;
         for ch in &chunk_hashes {
-            file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
+            file_fd.write(format!("{}\n", hash_to_string(ch).as_str()).as_bytes()).await?;
         }
 
         file_fd.flush().await?;
@@ -379,6 +387,7 @@ impl Geode {
 
     /// Create and insert file metadata into Geode given a list of hashes.
     /// Always overwrites any existing file.
+    /// Verifies that the file hash matches the chunk hashes
     pub async fn insert_file(
         &self,
         file_hash: &blake3::Hash,
@@ -386,12 +395,17 @@ impl Geode {
     ) -> Result<()> {
         info!(target: "geode::insert_file()", "[Geode] Inserting file metadata");
 
+        if !self.verify_file(file_hash, chunk_hashes) {
+            // The chunk list or file hash is wrong
+            return Err(Error::GeodeNeedsGc)
+        }
+
         let mut file_path = self.files_path.clone();
-        file_path.push(file_hash.to_hex().as_str());
+        file_path.push(hash_to_string(file_hash).as_str());
         let mut file_fd = File::create(&file_path).await?;
 
         for ch in chunk_hashes {
-            file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
+            file_fd.write(format!("{}\n", hash_to_string(ch).as_str()).as_bytes()).await?;
         }
         file_fd.flush().await?;
 
@@ -411,7 +425,7 @@ impl Geode {
         let chunk_hash = blake3::hash(chunk_slice);
 
         let mut chunk_path = self.chunks_path.clone();
-        chunk_path.push(chunk_hash.to_hex().as_str());
+        chunk_path.push(hash_to_string(&chunk_hash).as_str());
         let mut chunk_fd = File::create(&chunk_path).await?;
         chunk_fd.write_all(chunk_slice).await?;
         chunk_fd.flush().await?;
@@ -423,9 +437,10 @@ impl Geode {
     /// of chunks and optionally file paths to the said chunks. Returns an error if
     /// the read failed in any way (could also be the file does not exist).
     pub async fn get(&self, file_hash: &blake3::Hash) -> Result<ChunkedFile> {
-        info!(target: "geode::get()", "[Geode] Getting file chunks for {}...", file_hash);
+        let file_hash_str = hash_to_string(file_hash);
+        info!(target: "geode::get()", "[Geode] Getting file chunks for {}...", file_hash_str);
         let mut file_path = self.files_path.clone();
-        file_path.push(file_hash.to_hex().as_str());
+        file_path.push(file_hash_str);
 
         // Try to read the file metadata. If it's corrupt, return an error signalling
         // that garbage collection needs to run.
@@ -447,7 +462,7 @@ impl Geode {
         let mut buf = vec![];
         for (chunk_hash, chunk_path) in chunked_file.0.iter_mut() {
             let mut c_path = self.chunks_path.clone();
-            c_path.push(chunk_hash.to_hex().as_str());
+            c_path.push(hash_to_string(chunk_hash).as_str());
 
             if !c_path.exists() || !c_path.is_file() {
                 // TODO: We should be aggressive here and remove the non-file.
@@ -475,9 +490,10 @@ impl Geode {
     /// Fetch a single chunk from Geode. Returns a `PathBuf` pointing to the chunk
     /// if it is found.
     pub async fn get_chunk(&self, chunk_hash: &blake3::Hash) -> Result<PathBuf> {
-        info!(target: "geode::get_chunk()", "[Geode] Getting chunk {}", chunk_hash);
+        let chunk_hash_str = hash_to_string(chunk_hash);
+        info!(target: "geode::get_chunk()", "[Geode] Getting chunk {}", chunk_hash_str);
         let mut chunk_path = self.chunks_path.clone();
-        chunk_path.push(chunk_hash.to_hex().as_str());
+        chunk_path.push(chunk_hash_str);
 
         if !chunk_path.exists() || !chunk_path.is_file() {
             // TODO: We should be aggressive here and remove the non-file.
@@ -488,9 +504,7 @@ impl Geode {
         let mut buf = vec![];
         let mut chunk_fd = File::open(&chunk_path).await?;
         let bytes_read = chunk_fd.read_to_end(&mut buf).await?;
-        let chunk_slice = &buf[..bytes_read];
-        let hashed_chunk = blake3::hash(chunk_slice);
-        if &hashed_chunk != chunk_hash {
+        if !self.verify_chunk(chunk_hash, &buf[..bytes_read]) {
             // The chunk is corrupted
             return Err(Error::GeodeNeedsGc)
         }
@@ -498,15 +512,38 @@ impl Geode {
         Ok(chunk_path)
     }
 
+    /// Verifies that the file hash matches the chunk hashes.
+    pub fn verify_file(&self, file_hash: &blake3::Hash, chunk_hashes: &[blake3::Hash]) -> bool {
+        info!(target: "geode::verify_file()", "[Geode] Verifying file metadata");
+
+        let mut file_hasher = blake3::Hasher::new();
+        for chunk_hash in chunk_hashes {
+            file_hasher.update(chunk_hash.as_bytes());
+        }
+
+        *file_hash == file_hasher.finalize()
+    }
+
+    /// Verifies that the chunk hash matches the content.
+    pub fn verify_chunk(&self, chunk_hash: &blake3::Hash, chunk_slice: &[u8]) -> bool {
+        blake3::hash(chunk_slice) == *chunk_hash
+    }
+
     /// Assemble chunks to create a file.
     /// This method does NOT perform a consistency check.
-    pub async fn assemble_file(&self, file_hash: &blake3::Hash, chunked_file: &ChunkedFile, file_name: Option<String>) -> Result<PathBuf> {
-        info!(target: "geode::assemble_file()", "[Geode] Assembling file {}", file_hash);
+    pub async fn assemble_file(
+        &self,
+        file_hash: &blake3::Hash,
+        chunked_file: &ChunkedFile,
+        file_name: Option<String>,
+    ) -> Result<PathBuf> {
+        let file_hash_str = hash_to_string(file_hash);
+        info!(target: "geode::assemble_file()", "[Geode] Assembling file {}", file_hash_str);
 
         let mut file_path = self.downloads_path.clone();
-        file_path.push(file_hash.to_hex().as_str());
+        file_path.push(&file_hash_str);
         fs::create_dir_all(&file_path).await?;
-        file_path.push(file_name.unwrap_or(file_hash.to_hex().to_string()));
+        file_path.push(file_name.unwrap_or(file_hash_str));
 
         let mut file_fd = File::create(&file_path).await?;
         for (_, chunk_path) in chunked_file.iter() {
@@ -531,31 +568,15 @@ impl Geode {
 
         while let Some(file) = dir.try_next().await? {
             let os_file_name = file.file_name();
-            let file_name = os_file_name.to_string_lossy();
-            if let Ok(file_hash) = blake3::Hash::from_hex(file_name.to_string()) {
-                file_hashes.push(file_hash);
-            }
+            let file_name = os_file_name.to_string_lossy().to_string();
+            let mut hash_buf = [0u8; 32];
+            let file_hash = match bs58::decode(file_name).onto(&mut hash_buf) {
+                Ok(_) => blake3::Hash::from_bytes(hash_buf),
+                Err(_) => continue,
+            };
+            file_hashes.push(file_hash);
         }
 
         Ok(file_hashes)
-    }
-
-    /// List chunk hashes.
-    pub async fn list_chunks(&self) -> Result<Vec<blake3::Hash>> {
-        info!(target: "geode::list_chunks()", "[Geode] Listing chunks");
-
-        let mut dir = fs::read_dir(&self.chunks_path).await?;
-
-        let mut chunk_hashes = vec![];
-
-        while let Some(chunk) = dir.try_next().await? {
-            let os_file_name = chunk.file_name();
-            let file_name = os_file_name.to_string_lossy();
-            if let Ok(chunk_hash) = blake3::Hash::from_hex(file_name.to_string()) {
-                chunk_hashes.push(chunk_hash);
-            }
-        }
-
-        Ok(chunk_hashes)
     }
 }

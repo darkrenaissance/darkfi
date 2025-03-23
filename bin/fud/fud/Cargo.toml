@@ -15,6 +15,7 @@ darkfi-serial = {version = "0.4.2", features = ["hash"]}
 # Misc
 async-trait = "0.1.86"
 blake3 = "1.6.0"
+bs58 = "0.5.1"
 rand = "0.8.5"
 log = "0.4.26"
 tinyjson = "2.5.1"

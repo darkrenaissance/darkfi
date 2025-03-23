@@ -3400,6 +3400,7 @@ version = "0.4.1"
 dependencies = [
  "async-trait",
  "blake3 1.6.0",
+ "bs58",
  "darkfi",
  "darkfi-serial",
  "easy-parallel",

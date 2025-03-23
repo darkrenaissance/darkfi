@@ -24,6 +24,7 @@ use std::{
 };
 
 use num_bigint::BigUint;
+use rpc::{ChunkDownloadCompleted, ChunkNotFound};
 use tasks::FetchReply;
 
 use crate::rpc::FudEvent;
@@ -31,7 +32,7 @@ use async_trait::async_trait;
 use dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr};
 use futures::{future::FutureExt, pin_mut, select};
 use log::{debug, error, info, warn};
-use rand::{rngs::OsRng, RngCore};
+use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom, RngCore};
 use smol::{
     channel,
     fs::{File, OpenOptions},
@@ -44,7 +45,7 @@ use structopt_toml::{structopt::StructOpt, StructOptToml};
 
 use darkfi::{
     async_daemonize, cli_desc,
-    geode::Geode,
+    geode::{hash_to_string, Geode},
     net::{session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr},
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -122,10 +123,6 @@ pub struct Fud {
     file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
     file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
-    chunk_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
-    chunk_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
-    chunk_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
-    chunk_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
 
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 
@@ -168,7 +165,7 @@ impl DhtHandler for Fud {
 
     // TODO: Optimize this
     async fn on_new_node(&self, node: &DhtNode) -> Result<()> {
-        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", node.id);
+        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", hash_to_string(&node.id));
 
         // If this is the first node we know about, then bootstrap
         if !self.dht().is_bootstrapped().await {
@@ -176,7 +173,7 @@ impl DhtHandler for Fud {
 
             // Lookup our own node id
             let self_node = self.dht().node.clone();
-            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", self_node.id);
+            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", hash_to_string(&self_node.id));
             let _ = self.lookup_nodes(&self_node.id).await;
         }
 
@@ -200,7 +197,7 @@ impl DhtHandler for Fud {
     }
 
     async fn fetch_nodes(&self, node: &DhtNode, key: &blake3::Hash) -> Result<Vec<DhtNode>> {
-        debug!(target: "fud::DhtHandler::fetch_value()", "Fetching nodes close to {} from node {}", key, node.id);
+        debug!(target: "fud::DhtHandler::fetch_value()", "Fetching nodes close to {} from node {}", hash_to_string(key), hash_to_string(&node.id));
 
         let channel = self.get_channel(node).await?;
         let msg_subsystem = channel.message_subsystem();
@@ -219,15 +216,14 @@ impl DhtHandler for Fud {
 }
 
 impl Fud {
-    /// Add ourselves to `seeders_router` for the files and chunks we already have.
+    /// Add ourselves to `seeders_router` for the files we already have.
     /// Skipped if we have no external address.
     async fn init(&self) -> Result<()> {
         if self.dht().node.clone().addresses.is_empty() {
             return Ok(());
         }
         let self_router_items: Vec<DhtRouterItem> = vec![self.dht().node.clone().into()];
-        let mut hashes = self.geode.list_chunks().await?;
-        hashes.extend(self.geode.list_files().await?);
+        let hashes = self.geode.list_files().await?;
 
         for hash in hashes {
             self.add_to_router(self.seeders_router.clone(), &hash, self_router_items.clone()).await;
@@ -236,13 +232,186 @@ impl Fud {
         Ok(())
     }
 
-    /// Fetch a file or chunk from the network
+    /// Query nodes close to `key` to find the seeders
+    async fn fetch_seeders(&self, key: blake3::Hash) -> HashSet<DhtRouterItem> {
+        let closest_nodes = self.lookup_nodes(&key).await; // Find the `k` closest nodes
+        if closest_nodes.is_err() {
+            return HashSet::new();
+        }
+
+        let mut seeders: HashSet<DhtRouterItem> = HashSet::new();
+
+        for node in closest_nodes.unwrap() {
+            let channel = match self.get_channel(&node).await {
+                Ok(channel) => channel,
+                Err(e) => {
+                    warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {}", hash_to_string(&node.id), e);
+                    continue;
+                }
+            };
+            let msg_subsystem = channel.message_subsystem();
+            msg_subsystem.add_dispatch::<FudFindSeedersReply>().await;
+
+            let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
+                Ok(msg_subscriber) => msg_subscriber,
+                Err(e) => {
+                    warn!(target: "fud::fetch_seeders()", "Error subscribing to msg: {}", e);
+                    continue;
+                }
+            };
+
+            let send_res = channel.send(&FudFindSeedersRequest { key }).await;
+            if let Err(e) = send_res {
+                warn!(target: "fud::fetch_seeders()", "Error while sending FudFindSeedersRequest: {}", e);
+                msg_subscriber.unsubscribe().await;
+                continue;
+            }
+
+            let reply = match msg_subscriber.receive_with_timeout(self.dht().timeout).await {
+                Ok(reply) => reply,
+                Err(e) => {
+                    warn!(target: "fud::fetch_seeders()", "Error waiting for reply: {}", e);
+                    msg_subscriber.unsubscribe().await;
+                    continue;
+                }
+            };
+
+            msg_subscriber.unsubscribe().await;
+
+            seeders.extend(reply.seeders.clone());
+        }
+
+        info!(target: "fud::fetch_seeders()", "Found {} seeders for {}", seeders.len(), hash_to_string(&key));
+        seeders
+    }
+
+    /// Fetch chunks for a file from `seeders`
+    async fn fetch_chunks(
+        &self,
+        file_hash: &blake3::Hash,
+        chunk_hashes: &HashSet<blake3::Hash>,
+        seeders: &HashSet<DhtRouterItem>,
+    ) {
+        let mut remaining_chunks = chunk_hashes.clone();
+        let mut shuffled_seeders = {
+            let mut vec: Vec<_> = seeders.iter().cloned().collect();
+            vec.shuffle(&mut OsRng);
+            vec
+        };
+
+        while let Some(seeder) = shuffled_seeders.pop() {
+            let channel = match self.get_channel(&seeder.node).await {
+                Ok(channel) => channel,
+                Err(e) => {
+                    warn!(target: "fud::fetch_chunks()", "Could not get a channel for node {}: {}", hash_to_string(&seeder.node.id), e);
+                    continue;
+                }
+            };
+            info!("Requesting chunks from seeder {}", hash_to_string(&seeder.node.id));
+            loop {
+                let msg_subsystem = channel.message_subsystem();
+                msg_subsystem.add_dispatch::<FudChunkReply>().await;
+                msg_subsystem.add_dispatch::<FudNotFound>().await;
+                let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
+                let msg_subscriber_notfound = channel.subscribe_msg::<FudNotFound>().await.unwrap();
+
+                let mut chunks_to_query = remaining_chunks.clone();
+
+                // Select a chunk to request
+                let mut chunk_hash: Option<blake3::Hash> = None;
+                if let Some(&random_chunk) = chunks_to_query.iter().choose(&mut OsRng) {
+                    chunk_hash = Some(random_chunk);
+                }
+
+                if chunk_hash.is_none() {
+                    // No more chunks to request from this seeder
+                    break; // Switch to another seeder
+                }
+                let chunk_hash = chunk_hash.unwrap();
+
+                let send_res = channel.send(&FudFindRequest { key: chunk_hash }).await;
+                if let Err(e) = send_res {
+                    warn!(target: "fud::fetch_chunks()", "Error while sending FudFindRequest: {}", e);
+                    break; // Switch to another seeder
+                }
+
+                let chunk_recv =
+                    msg_subscriber_chunk.receive_with_timeout(self.dht().timeout).fuse();
+                let notfound_recv =
+                    msg_subscriber_notfound.receive_with_timeout(self.dht().timeout).fuse();
+
+                pin_mut!(chunk_recv, notfound_recv);
+
+                // Wait for a FudChunkReply or FudNotFound
+                select! {
+                    chunk_reply = chunk_recv => {
+                        if let Err(e) = chunk_reply {
+                            warn!(target: "fud::fetch_chunks()", "Error waiting for chunk reply: {}", e);
+                            break; // Switch to another seeder
+                        }
+                        chunks_to_query.remove(&chunk_hash);
+                        let reply = chunk_reply.unwrap();
+
+                        match self.geode.insert_chunk(&reply.chunk).await {
+                            Ok(inserted_hash) => {
+                                if inserted_hash != chunk_hash {
+                                    warn!("Received chunk does not match requested chunk");
+                                    msg_subscriber_chunk.unsubscribe().await;
+                                    msg_subscriber_notfound.unsubscribe().await;
+                                    continue; // Skip to next chunk, will retry this chunk later
+                                }
+
+                                info!(target: "fud::fetch_chunks()", "Received chunk {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
+                                self.download_publisher
+                                    .notify(FudEvent::ChunkDownloadCompleted(ChunkDownloadCompleted {
+                                        file_hash: *file_hash,
+                                        chunk_hash,
+                                    }))
+                                    .await;
+                                remaining_chunks.remove(&chunk_hash);
+                            }
+                            Err(e) => {
+                                error!("Failed inserting chunk {} to Geode: {}", hash_to_string(&chunk_hash), e);
+                            }
+                        };
+                    }
+                    notfound_reply = notfound_recv => {
+                        if let Err(e) = notfound_reply {
+                            warn!(target: "fud::fetch_chunks()", "Error waiting for NOTFOUND reply: {}", e);
+                            msg_subscriber_chunk.unsubscribe().await;
+                            msg_subscriber_notfound.unsubscribe().await;
+                            break; // Switch to another seeder
+                        }
+                        info!(target: "fud::fetch_chunks()", "Received NOTFOUND {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
+                        self.download_publisher
+                            .notify(FudEvent::ChunkNotFound(ChunkNotFound {
+                                file_hash: *file_hash,
+                                chunk_hash,
+                            }))
+                        .await;
+                        chunks_to_query.remove(&chunk_hash);
+                    }
+                };
+
+                msg_subscriber_chunk.unsubscribe().await;
+                msg_subscriber_notfound.unsubscribe().await;
+            }
+
+            // Stop when there are no missing chunks
+            if remaining_chunks.is_empty() {
+                break;
+            }
+        }
+    }
+
+    /// Fetch a single file metadata from the network.
+    /// If the file is smaller than a single chunk then the chunk is returned.
     /// 1. Lookup nodes close to the key
-    /// 2. Request seeders for the file/chunk from those nodes
-    /// 3. Request the file/chunk from the seeders
-    async fn fetch(&self, key: blake3::Hash) -> Option<FetchReply> {
+    /// 2. Request seeders for the file from those nodes
+    /// 3. Request the file from the seeders
+    async fn fetch_file_metadata(&self, file_hash: blake3::Hash) -> Option<FetchReply> {
         let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
-        let closest_nodes = self.lookup_nodes(&key).await; // 1
+        let closest_nodes = self.lookup_nodes(&file_hash).await; // 1
         let mut result: Option<FetchReply> = None;
         if closest_nodes.is_err() {
             return None
@@ -253,7 +422,7 @@ impl Fud {
             let channel = match self.get_channel(&node).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch()", "Could not get a channel for node {}: {}", node.id, e);
+                    warn!(target: "fud::fetch_file_metadata()", "Could not get a channel for node {}: {}", hash_to_string(&node.id), e);
                     continue;
                 }
             };
@@ -263,14 +432,14 @@ impl Fud {
             let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
                 Ok(msg_subscriber) => msg_subscriber,
                 Err(e) => {
-                    warn!(target: "fud::fetch()", "Error subscribing to msg: {}", e);
+                    warn!(target: "fud::fetch_file_metadata()", "Error subscribing to msg: {}", e);
                     continue;
                 }
             };
 
-            let send_res = channel.send(&FudFindSeedersRequest { key }).await;
+            let send_res = channel.send(&FudFindSeedersRequest { key: file_hash }).await;
             if let Err(e) = send_res {
-                warn!(target: "fud::fetch()", "Error while sending FudFindSeedersRequest: {}", e);
+                warn!(target: "fud::fetch_file_metadata()", "Error while sending FudFindSeedersRequest: {}", e);
                 msg_subscriber.unsubscribe().await;
                 continue;
             }
@@ -278,13 +447,14 @@ impl Fud {
             let reply = match msg_subscriber.receive_with_timeout(self.dht().timeout).await {
                 Ok(reply) => reply,
                 Err(e) => {
-                    warn!(target: "fud::fetch()", "Error waiting for reply: {}", e);
+                    warn!(target: "fud::fetch_file_metadata()", "Error waiting for reply: {}", e);
+                    msg_subscriber.unsubscribe().await;
                     continue;
                 }
             };
 
             let mut seeders = reply.seeders.clone();
-            info!(target: "fud::fetch()", "Found {} seeders for {}", seeders.len(), key);
+            info!(target: "fud::fetch_file_metadata()", "Found {} seeders for {}", seeders.len(), hash_to_string(&file_hash));
 
             msg_subscriber.unsubscribe().await;
 
@@ -308,9 +478,9 @@ impl Fud {
                     let msg_subscriber_notfound =
                         channel.subscribe_msg::<FudNotFound>().await.unwrap();
 
-                    let send_res = channel.send(&FudFindRequest { key }).await;
+                    let send_res = channel.send(&FudFindRequest { key: file_hash }).await;
                     if let Err(e) = send_res {
-                        warn!(target: "fud::fetch()", "Error while sending FudFindRequest: {}", e);
+                        warn!(target: "fud::fetch_file_metadata()", "Error while sending FudFindRequest: {}", e);
                         msg_subscriber_chunk.unsubscribe().await;
                         msg_subscriber_file.unsubscribe().await;
                         msg_subscriber_notfound.unsubscribe().await;
@@ -326,43 +496,55 @@ impl Fud {
 
                     pin_mut!(chunk_recv, file_recv, notfound_recv);
 
+                    let cleanup = async || {
+                        msg_subscriber_chunk.unsubscribe().await;
+                        msg_subscriber_file.unsubscribe().await;
+                        msg_subscriber_notfound.unsubscribe().await;
+                    };
+
                     // Wait for a FudChunkReply, FudFileReply, or FudNotFound
                     select! {
+                        // Received a chunk while requesting a file, this is allowed to
+                        // optimize fetching files smaller than a single chunk
                         chunk_reply = chunk_recv => {
+                            cleanup().await;
                             if let Err(e) = chunk_reply {
-                                warn!(target: "fud::fetch()", "Error waiting for chunk reply: {}", e);
+                                warn!(target: "fud::fetch_file_metadata()", "Error waiting for chunk reply: {}", e);
                                 continue;
                             }
                             let reply = chunk_reply.unwrap();
-                            info!(target: "fud::fetch()", "Received chunk {} from seeder {}", key, seeder.node.id.to_hex().to_string());
-                            msg_subscriber_chunk.unsubscribe().await;
-                            msg_subscriber_file.unsubscribe().await;
-                            msg_subscriber_notfound.unsubscribe().await;
+                            let chunk_hash = blake3::hash(&reply.chunk);
+                            // Check that this is the only chunk in the file
+                            if !self.geode.verify_file(&file_hash, &[chunk_hash]) {
+                                warn!(target: "fud::fetch_file_metadata()", "Received a chunk while fetching a file, the chunk did not match the file hash");
+                                continue;
+                            }
+                            info!(target: "fud::fetch_file_metadata()", "Received chunk {} (for file {}) from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&file_hash), hash_to_string(&seeder.node.id));
                             result = Some(FetchReply::Chunk((*reply).clone()));
                             break;
                         }
                         file_reply = file_recv => {
+                            cleanup().await;
                             if let Err(e) = file_reply {
-                                warn!(target: "fud::fetch()", "Error waiting for file reply: {}", e);
+                                warn!(target: "fud::fetch_file_metadata()", "Error waiting for file reply: {}", e);
                                 continue;
                             }
                             let reply = file_reply.unwrap();
-                            info!(target: "fud::fetch()", "Received file {} from seeder {}", key, seeder.node.id.to_hex().to_string());
-                            msg_subscriber_chunk.unsubscribe().await;
-                            msg_subscriber_file.unsubscribe().await;
-                            msg_subscriber_notfound.unsubscribe().await;
+                            if !self.geode.verify_file(&file_hash, &reply.chunk_hashes) {
+                                warn!(target: "fud::fetch_file_metadata()", "Received invalid file metadata");
+                                continue;
+                            }
+                            info!(target: "fud::fetch_file_metadata()", "Received file {} from seeder {}", hash_to_string(&file_hash), hash_to_string(&seeder.node.id));
                             result = Some(FetchReply::File((*reply).clone()));
                             break;
                         }
                         notfound_reply = notfound_recv => {
+                            cleanup().await;
                             if let Err(e) = notfound_reply {
-                                warn!(target: "fud::fetch()", "Error waiting for NOTFOUND reply: {}", e);
+                                warn!(target: "fud::fetch_file_metadata()", "Error waiting for NOTFOUND reply: {}", e);
                                 continue;
                             }
-                            info!(target: "fud::fetch()", "Received NOTFOUND {} from seeder {}", key, seeder.node.id.to_hex().to_string());
-                            msg_subscriber_chunk.unsubscribe().await;
-                            msg_subscriber_file.unsubscribe().await;
-                            msg_subscriber_notfound.unsubscribe().await;
+                            info!(target: "fud::fetch_file_metadata()", "Received NOTFOUND {} from seeder {}", hash_to_string(&file_hash), hash_to_string(&seeder.node.id));
                         }
                     };
                 }
@@ -438,15 +620,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             Ok(mut file) => {
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer).await?;
-                let buf: [u8; 64] = buffer.try_into().expect("Node ID must have 64 characters");
-                let node_id = blake3::Hash::from_hex(buf)?;
+                let buf: [u8; 44] = buffer.try_into().expect("Node ID must have 44 characters");
+                let mut out_buf = [0u8; 32];
+                bs58::decode(buf).onto(&mut out_buf)?;
+                let node_id = blake3::Hash::from_bytes(out_buf);
                 Ok(node_id)
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 let node_id = generate_node_id()?;
                 let mut file =
                     OpenOptions::new().write(true).create(true).open(node_id_path).await?;
-                file.write_all(node_id.to_hex().as_bytes()).await?;
+                file.write_all(&bs58::encode(node_id.as_bytes()).into_vec()).await?;
                 file.flush().await?;
                 Ok(node_id)
             }
@@ -456,15 +640,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     let node_id_ = node_id?;
 
-    info!(target: "fud", "Your node ID: {}", node_id_);
+    info!(target: "fud", "Your node ID: {}", hash_to_string(&node_id_));
 
     // Daemon instantiation
     let download_sub = JsonSubscriber::new("get");
     let (get_tx, get_rx) = smol::channel::unbounded();
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
     let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
-    let (chunk_fetch_tx, chunk_fetch_rx) = smol::channel::unbounded();
-    let (chunk_fetch_end_tx, chunk_fetch_end_rx) = smol::channel::unbounded();
     // TODO: Add DHT settings in the config file
     let dht = Arc::new(Dht::new(&node_id_, 4, 16, 60, p2p.clone(), ex.clone()).await);
     let fud = Arc::new(Fud {
@@ -478,10 +660,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         file_fetch_rx,
         file_fetch_end_tx,
         file_fetch_end_rx,
-        chunk_fetch_tx,
-        chunk_fetch_rx,
-        chunk_fetch_end_tx,
-        chunk_fetch_end_rx,
         rpc_connections: Mutex::new(HashSet::new()),
         dnet_sub,
         download_sub: download_sub.clone(),
@@ -520,20 +698,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "fud", "Failed starting fetch file task: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    info!(target: "fud", "Starting fetch chunk task");
-    let chunk_task = StoppableTask::new();
-    chunk_task.clone().start(
-        tasks::fetch_chunk_task(fud.clone()),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting fetch chunk task: {}", e),
             }
         },
         Error::DetachedTaskStopped,
@@ -642,9 +806,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "fud", "Stopping fetch file task...");
     file_task.stop().await;
-
-    info!(target: "fud", "Stopping fetch chunk task...");
-    chunk_task.stop().await;
 
     info!(target: "fud", "Stopping get task...");
     get_task_.stop().await;

@@ -31,7 +31,7 @@ use darkfi::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use futures::future::join_all;
-use log::{debug, error};
+use log::{debug, error, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
 use url::Url;
@@ -495,6 +495,7 @@ pub trait DhtHandler {
             let connector = Connector::new(self.dht().p2p.settings(), session_weak);
             let connect_res = connector.connect(&addr).await;
             if connect_res.is_err() {
+                warn!(target: "dht::DhtHandler::get_channel()", "Error while connecting to {}: {}", addr, connect_res.unwrap_err());
                 continue;
             }
             let (_, channel) = connect_res.unwrap();
@@ -502,6 +503,7 @@ pub trait DhtHandler {
                 session_out.register_channel(channel.clone(), self.dht().executor.clone()).await;
             if register_res.is_err() {
                 channel.clone().stop().await;
+                warn!(target: "dht::DhtHandler::get_channel()", "Error while registering channel {}: {}", channel.info.id, register_res.unwrap_err());
                 continue;
             }
 
