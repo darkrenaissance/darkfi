@@ -901,7 +901,6 @@ pub fn run_gui(
         window_resizable: true,
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
-            wayland_use_fallback_decorations: false,
             //blocking_event_loop: true,
             ..Default::default()
         },
