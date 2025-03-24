@@ -638,6 +638,12 @@ pub enum RpcError {
 
     #[error("IO Error: {0}")]
     IoError(std::io::ErrorKind),
+
+    #[error("Method not found: {0}")]
+    MethodNotFound(String),
+
+    #[error("Server-side Error: {0}")]
+    ServerError(#[from] std::sync::Arc<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 #[cfg(feature = "rpc")]
