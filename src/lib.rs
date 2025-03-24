@@ -19,7 +19,7 @@
 #![feature(ip)]
 
 pub mod error;
-pub use error::{ClientFailed, ClientResult, Error, Result};
+pub use error::{ClientFailed, ClientResult, Error, Result, RpcError};
 
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
