@@ -3067,6 +3067,7 @@ dependencies = [
  "structopt-toml",
  "tar",
  "tempdir",
+ "thiserror 2.0.11",
  "tinyjson",
  "toml 0.8.20",
  "url",
