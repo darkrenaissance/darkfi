@@ -284,6 +284,7 @@ pub trait DhtHandler {
         loop {
             let channel_sub = self.dht().p2p.hosts().subscribe_channel().await;
             let res = channel_sub.receive().await;
+            channel_sub.unsubscribe().await;
             if res.is_err() {
                 continue;
             }
