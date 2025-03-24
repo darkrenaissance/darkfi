@@ -54,6 +54,7 @@ mod store;
 mod error;
 
 /// Test utilities used for unit and integration testing
+#[cfg(test)]
 mod test_utils;
 
 const CONFIG_FILE: &str = "explorerd_config.toml";
