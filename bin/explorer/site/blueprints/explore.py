@@ -39,7 +39,7 @@ async def index():
     latest metric statistics (if available), and native contracts.
     """
     # Fetch the latest 10 blocks
-    blocks = await rpc.get_last_n_blocks("10")
+    blocks = await rpc.get_last_n_blocks(10)
 
     # Retrieve basic statistics summarizing the overall chain data
     basic_stats = await rpc.get_basic_statistics()
