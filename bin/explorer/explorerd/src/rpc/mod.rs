@@ -35,7 +35,7 @@ use darkfi::{
 };
 
 use crate::{
-    error::{server_error, RpcError},
+    error::{server_error, ExplorerdError},
     Explorerd,
 };
 
@@ -221,7 +221,7 @@ impl Explorerd {
         debug!(target: "explorerd::rpc::ping_darkfid", "Pinging darkfid daemon...");
         if let Err(e) = self.darkfid_client.ping().await {
             error!(target: "explorerd::rpc::ping_darkfid", "Failed to ping darkfid daemon: {}", e);
-            return server_error(RpcError::PingFailed, id, None)
+            return server_error(&ExplorerdError::PingDarkfidFailed(e.to_string()), id, None).into()
         }
         JsonResponse::new(JsonValue::Boolean(true), id).into()
     }

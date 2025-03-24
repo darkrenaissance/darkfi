@@ -38,6 +38,7 @@ log = "0.4.26"
 lazy_static = "1.5.0"
 tar = "0.4.44"
 toml = "0.8.20"
+thiserror = "2.0.11"
 
 # Testing
 tempdir = "0.3.7"

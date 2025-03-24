@@ -16,44 +16,77 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{fmt, sync::Arc};
+
 use log::error;
 
 use darkfi::{
-    rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult},
-    Error,
+    rpc::jsonrpc::{ErrorCode, JsonError},
+    Error, RpcError,
 };
 
+// Constant for the error code
+pub const ERROR_CODE_PING_DARKFID_FAILED: i32 = -32300;
+
 /// Custom RPC errors available for blockchain explorer.
-/// Please sort them sensefully.
-pub enum RpcError {
-    // Misc errors
-    PingFailed = -32300,
+/// These represent specific RPC-related failures.
+#[derive(Debug, thiserror::Error)]
+pub enum ExplorerdError {
+    #[error("Ping darkfid failed: {0}")]
+    PingDarkfidFailed(String),
+
+    #[error("Invalid contract ID: {0}")]
+    InvalidContractId(String),
+
+    #[error("Invalid header hash: {0}")]
+    InvalidHeaderHash(String),
+
+    #[error("Invalid tx hash: {0}")]
+    InvalidTxHash(String),
 }
 
-fn to_tuple(e: RpcError) -> (i32, String) {
-    let msg = match e {
-        // Misc errors
-        RpcError::PingFailed => "Darkfid daemon ping error",
-    };
-
-    (e as i32, msg.to_string())
-}
-
-pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
-    let (code, default_msg) = to_tuple(e);
-
-    if let Some(message) = msg {
-        return JsonError::new(ServerError(code), Some(message.to_string()), id).into()
+/// Provides a conversion from [`ExplorerdError`] to darkfi [`Error`] type.
+impl From<ExplorerdError> for Error {
+    fn from(err: ExplorerdError) -> Self {
+        let error: RpcError = err.into();
+        error.into()
     }
-
-    JsonError::new(ServerError(code), Some(default_msg), id).into()
 }
 
-/// Handles a database error by formatting the output, logging it with target-specific context,
-/// and returning a [`DatabaseError`].
-pub fn handle_database_error(target: &str, message: &str, error: impl std::fmt::Debug) -> Error {
+/// Conversion from [`ExplorerdRpcError`] to [`RpcError`]
+impl From<ExplorerdError> for RpcError {
+    fn from(err: ExplorerdError) -> Self {
+        RpcError::ServerError(Arc::new(err))
+    }
+}
+
+/// Helper function to convert `ExplorerdRpcError` into error code with corresponding error message.
+pub fn to_error_code_message(e: &ExplorerdError) -> (i32, String) {
+    match e {
+        ExplorerdError::PingDarkfidFailed(_) => (ERROR_CODE_PING_DARKFID_FAILED, e.to_string()),
+        ExplorerdError::InvalidContractId(_) |
+        ExplorerdError::InvalidHeaderHash(_) |
+        ExplorerdError::InvalidTxHash(_) => (ErrorCode::InvalidParams.code(), e.to_string()),
+    }
+}
+
+/// Constructs a [`JsonError`] representing a server error using the provided
+/// [`ExplorerdError`] , request ID, and optional custom message, returning a [`JsonError`]
+/// with a corresponding server error code and message.
+pub fn server_error(e: &ExplorerdError, id: u16, msg: Option<&str>) -> JsonError {
+    let (code, default_msg) = to_error_code_message(e);
+
+    // Use the provided custom message if available; otherwise, use the default.
+    let message = msg.unwrap_or(&default_msg).to_string();
+
+    JsonError::new(ErrorCode::ServerError(code), Some(message), id)
+}
+
+/// Logs and converts a database error into a [`DatabaseError`].
+/// This function ensures the error is logged contextually before being returned.
+pub fn handle_database_error(target: &str, message: &str, error: impl fmt::Debug) -> Error {
     let error_message = format!("{}: {:?}", message, error);
-    let formatted_target = format!("explorerd:: {target}");
+    let formatted_target = format!("explorerd::{}", target);
     error!(target: &formatted_target, "{}", error_message);
     Error::DatabaseError(error_message)
 }
