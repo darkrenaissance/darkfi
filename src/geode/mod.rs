@@ -32,21 +32,21 @@
 //!
 //! It might look like the following:
 //! ```
-//! /files/7d4c0d5539057c8f9b60d32b423964beb38ecd8ea1ab203c0207990cbf0cad22
+//! /files/B9fFKaEYphw2oH5PDbeL1TTAcSzL6ax84p8SjBKzuYzX
 //! /files/...
-//! /chunks/9d7abc2efa52b8be63ff82b756edb6822e09aa40fc587aba977185a5bb449c19
-//! /chunks/fc432e087d16d8788e87640511e627be34a4a50533f1e5ed3e1370645a0266b8
+//! /chunks/2bQPxSR8Frz7S7JW3DRAzEtkrHfLXB1CN65V7az77pUp
+//! /chunks/CvjvN6MfWQYK54DgKNR7MPgFSZqsCgpWKF2p8ot66CCP
 //! /chunks/...
 //! ```
 //!
-//! In the above example, contents of `7d4c0d5539057c8f9b60d32b423964beb38ecd8ea1ab203c0207990cbf0cad22`
+//! In the above example, contents of `B9fFKaEYphw2oH5PDbeL1TTAcSzL6ax84p8SjBKzuYzX`
 //! may be:
 //! ```
-//! 9d7abc2efa52b8be63ff82b756edb6822e09aa40fc587aba977185a5bb449c19
-//! fc432e087d16d8788e87640511e627be34a4a50533f1e5ed3e1370645a0266b8
+//! 2bQPxSR8Frz7S7JW3DRAzEtkrHfLXB1CN65V7az77pUp
+//! CvjvN6MfWQYK54DgKNR7MPgFSZqsCgpWKF2p8ot66CCP
 //! ```
 //!
-//! This means, in order to retrieve `7d4c0d5539057c8f9b60d32b423964beb38ecd8ea1ab203c0207990cbf0cad22`,
+//! This means, in order to retrieve `B9fFKaEYphw2oH5PDbeL1TTAcSzL6ax84p8SjBKzuYzX`,
 //! we need to concatenate the files under `/chunks` whose filenames are the
 //! hashes found above. The contents of the files in `/chunks` are arbitrary
 //! data, and by concatenating them we can retrieve the original file.
