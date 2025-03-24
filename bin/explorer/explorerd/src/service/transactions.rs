@@ -43,7 +43,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
 
-use crate::ExplorerService;
+use crate::{error::ExplorerdError, ExplorerService};
 
 #[derive(Debug, Clone)]
 /// Structure representing a `TRANSACTIONS_TABLE` record.
@@ -143,7 +143,7 @@ impl ExplorerService {
         // Parse header hash, returning an error if parsing fails
         let header_hash = header_hash
             .parse::<HeaderHash>()
-            .map_err(|_| Error::ParseFailed("[get_transactions_by_header_hash] Invalid hash"))?;
+            .map_err(|_| ExplorerdError::InvalidHeaderHash(header_hash.to_string()))?;
 
         // Fetch block by hash and handle encountered errors
         let block = match self.db.blockchain.get_blocks_by_hash(&[header_hash]) {

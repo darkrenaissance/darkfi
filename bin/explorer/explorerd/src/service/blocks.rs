@@ -30,7 +30,7 @@ use darkfi::{
 };
 use darkfi_sdk::{crypto::schnorr::Signature, tx::TransactionHash};
 
-use crate::ExplorerService;
+use crate::{error::ExplorerdError, ExplorerService};
 
 #[derive(Debug, Clone)]
 /// Structure representing a block record.
@@ -164,7 +164,7 @@ impl ExplorerService {
         // Parse header hash, returning an error if parsing fails
         let header_hash = header_hash
             .parse::<HeaderHash>()
-            .map_err(|_| Error::ParseFailed("[get_block_by_hash] Invalid header hash"))?;
+            .map_err(|_| ExplorerdError::InvalidHeaderHash(header_hash.to_string()))?;
 
         // Fetch block by hash and handle encountered errors
         match self.db.blockchain.get_blocks_by_hash(&[header_hash]) {
