@@ -18,13 +18,9 @@
 
 use std::vec::Vec;
 
-use log::error;
 use tinyjson::JsonValue;
 
-use darkfi::rpc::jsonrpc::{
-    ErrorCode::{InternalError, InvalidParams},
-    JsonError, JsonResponse, JsonResult,
-};
+use darkfi::{rpc::jsonrpc::validate_empty_params, Result};
 
 use crate::Explorerd;
 
@@ -39,26 +35,18 @@ impl Explorerd {
     // **Returns:**
     // * `BaseStatistics` encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "statistics.get_basic_statistics", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn statistics_get_basic_statistics(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Validate to ensure parameters are empty
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+    pub async fn statistics_get_basic_statistics(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Validate that no parameters are provided
+        validate_empty_params(params)?;
 
-        // Fetch `BaseStatistics`, transform to `JsonResult`, and return results
-        match self.service.get_base_statistics() {
-            Ok(Some(statistics)) => JsonResponse::new(statistics.to_json_array(), id).into(),
-            Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
-            Err(e) => {
-                error!(
-                    target: "explorerd::rpc_statistics::statistics_get_basic_statistics",
-                    "Failed fetching basic statistics: {}", e
-                );
-                JsonError::new(InternalError, None, id).into()
-            }
+        // Attempt to retrieve base statistics; if found, convert to a JSON array,
+        // otherwise return an empty JSON array
+        match self.service.get_base_statistics()? {
+            Some(statistics) => Ok(statistics.to_json_array()),
+            None => Ok(JsonValue::Array(vec![])),
         }
     }
 
@@ -72,26 +60,20 @@ impl Explorerd {
     // **Returns:**
     // * `MetricsStatistics` array encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "statistics.get_metric_statistics", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn statistics_get_metric_statistics(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Validate to ensure parameters are empty
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-        // Fetch metric statistics and return results
-        let metrics = match self.service.get_metrics_statistics().await {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "explorerd::rpc_statistics::statistics_get_metric_statistics", "Failed fetching metric statistics: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+    pub async fn statistics_get_metric_statistics(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Validate that no parameters are provided
+        validate_empty_params(params)?;
 
-        // Transform statistics to JsonResponse and return result
-        let metrics_json: Vec<JsonValue> = metrics.iter().map(|m| m.to_json_array()).collect();
-        JsonResponse::new(JsonValue::Array(metrics_json), id).into()
+        // Retrieve metric statistics
+        let statistics = self.service.get_metrics_statistics().await?;
+
+        // Convert each metric statistic into a JSON array, returning the collected array
+        let statistics_json: Vec<JsonValue> =
+            statistics.iter().map(|m| m.to_json_array()).collect();
+        Ok(JsonValue::Array(statistics_json))
     }
 
     // RPCAPI:
@@ -104,28 +86,20 @@ impl Explorerd {
     // **Returns:**
     // * `MetricsStatistics` encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "statistics.get_latest_metric_statistics", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn statistics_get_latest_metric_statistics(
         &self,
-        id: u16,
-        params: JsonValue,
-    ) -> JsonResult {
-        // Validate to ensure parameters are empty
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-        // Fetch metric statistics and return results
-        let metrics = match self.service.get_latest_metrics_statistics().await {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "explorerd::rpc_statistics::statistics_get_latest_metric_statistics", "Failed fetching metric statistics: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+        params: &JsonValue,
+    ) -> Result<JsonValue> {
+        // Validate that no parameters are provided
+        validate_empty_params(params)?;
 
-        // Transform statistics to JsonResponse and return result
-        JsonResponse::new(metrics.to_json_array(), id).into()
+        // Retrieve the latest statistics
+        let statistics = self.service.get_latest_metrics_statistics().await?;
+
+        // Convert the retrieved metrics into a JSON array and return it
+        Ok(statistics.to_json_array())
     }
 }

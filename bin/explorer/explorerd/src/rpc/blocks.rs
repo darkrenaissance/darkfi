@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::error;
 use tinyjson::JsonValue;
 
 use darkfi::{
     blockchain::BlockInfo,
-    rpc::jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams, ParseError},
-        JsonError, JsonResponse, JsonResult,
-    },
+    error::RpcError,
+    rpc::jsonrpc::{parse_json_array_number, parse_json_array_string},
     util::encoding::base64,
     Result,
 };
@@ -70,36 +67,23 @@ impl Explorerd {
     // **Returns:**
     // * Array of `BlockRecord` encoded into a JSON.
     //
-    // --> {"jsonrpc": "2.0", "method": "blocks.get_last_n_blocks", "params": ["10"], "id": 1}
+    // **Example API Usage:**
+    // --> {"jsonrpc": "2.0", "method": "blocks.get_last_n_blocks", "params": [10], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn blocks_get_last_n_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+    pub async fn blocks_get_last_n_blocks(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Extract the number of last blocks to fetch
+        let num_last_blocks = parse_json_array_number("num_last_blocks", 0, params)? as usize;
 
-        // Extract the number of last blocks to retrieve from parameters
-        let n = match params[0].get::<String>().unwrap().parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ParseError, None, id).into(),
-        };
+        // Fetch the blocks
+        let blocks_result = self.service.get_last_n(num_last_blocks)?;
 
-        // Fetch the blocks and handle potential errors
-        let blocks_result = match self.service.get_last_n(n) {
-            Ok(blocks) => blocks,
-            Err(e) => {
-                error!(target: "explorerd::rpc_blocks::blocks_get_last_n_blocks", "Failed fetching blocks: {}", e);
-                return JsonError::new(InternalError, None, id).into();
-            }
-        };
-
-        // Transform blocks to json and return result
+        // Transform blocks to `JsonValue`
         if blocks_result.is_empty() {
-            JsonResponse::new(JsonValue::Array(vec![]), id).into()
+            Ok(JsonValue::Array(vec![]))
         } else {
             let json_blocks: Vec<JsonValue> =
                 blocks_result.into_iter().map(|block| block.to_json_array()).collect();
-            JsonResponse::new(JsonValue::Array(json_blocks), id).into()
+            Ok(JsonValue::Array(json_blocks))
         }
     }
 
@@ -114,48 +98,37 @@ impl Explorerd {
     // **Returns:**
     // * Array of `BlockRecord` encoded into a JSON.
     //
-    // --> {"jsonrpc": "2.0", "method": "blocks.get_blocks_in_heights_range", "params": ["10", "15"], "id": 1}
+    // **Example API Usage:**
+    // --> {"jsonrpc": "2.0", "method": "blocks.get_blocks_in_heights_range", "params": [10, 15], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn blocks_get_blocks_in_heights_range(
         &self,
-        id: u16,
-        params: JsonValue,
-    ) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+        params: &JsonValue,
+    ) -> Result<JsonValue> {
+        // Extract the start range
+        let start = parse_json_array_number("start", 0, params)? as u32;
 
-        let start = match params[0].get::<String>().unwrap().parse::<u32>() {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ParseError, None, id).into(),
-        };
+        // Extract the end range
+        let end = parse_json_array_number("end", 1, params)? as u32;
 
-        let end = match params[1].get::<String>().unwrap().parse::<u32>() {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ParseError, None, id).into(),
-        };
-
+        // Validate for valid range
         if start > end {
-            return JsonError::new(ParseError, None, id).into()
+            return Err(RpcError::InvalidJson(format!(
+                "Invalid range: start ({start}) cannot be greater than end ({end})"
+            ))
+            .into());
         }
 
-        // Fetch the blocks and handle potential errors
-        let blocks_result = match self.service.get_by_range(start, end) {
-            Ok(blocks) => blocks,
-            Err(e) => {
-                error!(target: "explorerd::rpc_blocks::blocks_get_blocks_in_height_range", "Failed fetching blocks: {}", e);
-                return JsonError::new(InternalError, None, id).into();
-            }
-        };
+        // Fetch the blocks
+        let blocks_result = self.service.get_by_range(start, end)?;
 
-        // Transform blocks to json and return result
+        // Transform blocks to `JsonValue` and return result
         if blocks_result.is_empty() {
-            JsonResponse::new(JsonValue::Array(vec![]), id).into()
+            Ok(JsonValue::Array(vec![]))
         } else {
             let json_blocks: Vec<JsonValue> =
                 blocks_result.into_iter().map(|block| block.to_json_array()).collect();
-            JsonResponse::new(JsonValue::Array(json_blocks), id).into()
+            Ok(JsonValue::Array(json_blocks))
         }
     }
 
@@ -169,28 +142,17 @@ impl Explorerd {
     // **Returns:**
     // * `BlockRecord` encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "blocks.get_block_by_hash", "params": ["5cc...2f9"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn blocks_get_block_by_hash(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+    pub async fn blocks_get_block_by_hash(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Extract header hash
+        let header_hash = parse_json_array_string("header_hash", 0, params)?;
 
-        // Extract header hash from params, returning error if not provided
-        let header_hash = match params[0].get::<String>() {
-            Some(hash) => hash,
-            None => return JsonError::new(InvalidParams, None, id).into(),
-        };
-
-        // Fetch and transform block to json, handling any errors and returning the result
-        match self.service.get_block_by_hash(header_hash) {
-            Ok(Some(block)) => JsonResponse::new(block.to_json_array(), id).into(),
-            Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
-            Err(e) => {
-                error!(target: "explorerd::rpc_blocks", "Failed fetching block: {:?}", e);
-                JsonError::new(InternalError, None, id).into()
-            }
+        // Fetch and transform block to `JsonValue`
+        match self.service.get_block_by_hash(&header_hash)? {
+            Some(block) => Ok(block.to_json_array()),
+            None => Ok(JsonValue::Array(vec![])),
         }
     }
 }

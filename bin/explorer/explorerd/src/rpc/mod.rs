@@ -25,9 +25,12 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
+    error::RpcError,
     rpc::{
         client::RpcClient,
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        jsonrpc::{
+            validate_empty_params, ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult,
+        },
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
@@ -53,64 +56,145 @@ pub mod transactions;
 
 #[async_trait]
 impl RequestHandler<()> for Explorerd {
+    /// Handles an incoming JSON-RPC request by executing the appropriate individual request handler
+    /// implementation based on the request's `method` field and using the provided parameters.
+    /// Supports methods across various categories, including block-related queries, contract interactions,
+    /// transaction lookups, statistical queries, and miscellaneous operations. If an invalid
+    /// method is requested, an appropriate error is returned.
+    ///
+    /// The function performs the error handling, allowing individual RPC method handlers to propagate
+    /// errors via the `?` operator. It ensures uniform translation of errors into JSON-RPC error responses.
+    /// Additionally, it handles the creation of `JsonResponse` or `JsonError` objects, enabling method
+    /// handlers to focus solely on core logic. Individual RPC handlers return a `JsonValue`, which this
+    /// function translates into the corresponding `JsonResult`.
+    ///
+    /// Unified logging is incorporated, so individual handlers only propagate the error
+    /// for it to be logged. Logs include detailed error information, such as method names, parameters,
+    /// and JSON-RPC errors, providing consistent and informative error trails for debugging.
+    ///
+    /// ## Example Log Message
+    /// ```
+    /// 05:11:02 [ERROR] RPC Request Failure: method: transactions.get_transactions_by_header_hash,
+    /// params: ["0x0222"], error: {"error":{"code":-32602,"message":"Invalid header hash: 0x0222"},
+    /// "id":1,"jsonrpc":"2.0"}
+    /// ```
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "explorerd::rpc", "--> {}", req.stringify().unwrap());
 
-        match req.method.as_str() {
-            // =====================
-            // Miscellaneous methods
-            // =====================
-            "ping" => self.pong(req.id, req.params).await,
-            "ping_darkfid" => self.ping_darkfid(req.id, req.params).await,
+        // Store method and params for later use
+        let method = req.method.as_str();
+        let params = &req.params;
 
+        // Handle ping case, as it returns a JsonResponse
+        if method == "ping" {
+            return self.pong(req.id, params.clone()).await
+        }
+
+        // Match all other methods
+        let result = match req.method.as_str() {
             // =====================
             // Blocks methods
             // =====================
-            "blocks.get_last_n_blocks" => self.blocks_get_last_n_blocks(req.id, req.params).await,
+            "blocks.get_last_n_blocks" => self.blocks_get_last_n_blocks(params).await,
             "blocks.get_blocks_in_heights_range" => {
-                self.blocks_get_blocks_in_heights_range(req.id, req.params).await
+                self.blocks_get_blocks_in_heights_range(params).await
             }
-            "blocks.get_block_by_hash" => self.blocks_get_block_by_hash(req.id, req.params).await,
-
-            // =====================
-            // Contract methods
-            // =====================
-            "contracts.get_native_contracts" => {
-                self.contracts_get_native_contracts(req.id, req.params).await
-            }
-            "contracts.get_contract_source_code_paths" => {
-                self.contracts_get_contract_source_code_paths(req.id, req.params).await
-            }
-            "contracts.get_contract_source" => {
-                self.contracts_get_contract_source(req.id, req.params).await
-            }
+            "blocks.get_block_by_hash" => self.blocks_get_block_by_hash(params).await,
 
             // =====================
             // Transactions methods
             // =====================
             "transactions.get_transactions_by_header_hash" => {
-                self.transactions_get_transactions_by_header_hash(req.id, req.params).await
+                self.transactions_get_transactions_by_header_hash(params).await
             }
             "transactions.get_transaction_by_hash" => {
-                self.transactions_get_transaction_by_hash(req.id, req.params).await
+                self.transactions_get_transaction_by_hash(params).await
             }
 
             // =====================
             // Statistics methods
             // =====================
-            "statistics.get_basic_statistics" => {
-                self.statistics_get_basic_statistics(req.id, req.params).await
-            }
+            "statistics.get_basic_statistics" => self.statistics_get_basic_statistics(params).await,
             "statistics.get_metric_statistics" => {
-                self.statistics_get_metric_statistics(req.id, req.params).await
+                self.statistics_get_metric_statistics(params).await
             }
+            "statistics.get_latest_metric_statistics" => {
+                self.statistics_get_latest_metric_statistics(params).await
+            }
+
+            // =====================
+            // Contract methods
+            // =====================
+            "contracts.get_native_contracts" => self.contracts_get_native_contracts(params).await,
+            "contracts.get_contract_source_code_paths" => {
+                self.contracts_get_contract_source_code_paths(params).await
+            }
+            "contracts.get_contract_source" => self.contracts_get_contract_source(params).await,
+
+            // =====================
+            // Miscellaneous methods
+            // =====================
+            "ping_darkfid" => self.ping_darkfid(params).await,
 
             // TODO: add any other useful methods
 
             // ==============
             // Invalid method
             // ==============
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            _ => Err(RpcError::MethodNotFound(method.to_string()).into()),
+        };
+
+        // Process the result of the individual request handler, handling success or errors and translating
+        // them into an appropriate `JsonResult`.
+        match result {
+            // Successfully completed the request
+            Ok(value) => JsonResponse::new(value, req.id).into(),
+
+            // Handle errors when processing parameters
+            Err(Error::RpcServerError(RpcError::InvalidJson(e))) => {
+                let json_error =
+                    JsonError::new(ErrorCode::InvalidParams, Some(e.to_string()), req.id);
+
+                // Log the parameter error
+                log_request_failure(&req.method, params, &json_error);
+
+                // Convert error to JsonResult
+                json_error.into()
+            }
+
+            // Handle server errors
+            Err(Error::RpcServerError(RpcError::ServerError(e))) => {
+                // Remove the extra '&' and reference directly from e
+                let json_error = match e.downcast_ref::<ExplorerdError>() {
+                    Some(e_expl) => {
+                        // Successfully downcast to ExplorerdRpcError; call the typed function
+                        server_error(e_expl, req.id, None)
+                    }
+                    None => {
+                        // Return InternalError with the logged details
+                        JsonError::new(ErrorCode::InternalError, Some(e.to_string()), req.id)
+                    }
+                };
+
+                // Log the server error
+                log_request_failure(&req.method, params, &json_error);
+
+                // Convert error to JsonResult
+                json_error.into()
+            }
+
+            // Catch-all for any other unexpected errors
+            Err(e) => {
+                // Return InternalError with the logged details
+                let json_error =
+                    JsonError::new(ErrorCode::InternalError, Some(e.to_string()), req.id);
+
+                // Log the unexpected error
+                log_request_failure(&req.method, params, &json_error);
+
+                // Convert error to JsonResult
+                json_error.into()
+            }
         }
     }
 
@@ -145,7 +229,7 @@ impl DarkfidRpcClient {
         let mut rpc_client_guard = self.rpc_client.write().await;
 
         if rpc_client_guard.is_some() {
-            warn!(target: "explorerd::rpc::connect", "Already connected to darkfid.");
+            warn!(target: "explorerd::rpc::connect", "Already connected to darkfid");
             return Ok(());
         }
 
@@ -186,20 +270,13 @@ impl DarkfidRpcClient {
             return Ok(rep);
         };
 
-        error!(target: "explorerd::rpc::request", "Not connected to darkfid.");
-        Err(Error::Custom(
-            "Not connected to darkfid. Is the explorer running in no-sync mode?".to_string(),
-        ))
+        Err(Error::Custom("Not connected, is the explorer running in no-sync mode?".to_string()))
     }
 
     /// Sends a ping request to the client's darkfid endpoint to verify connectivity,
     /// returning `true` if the ping is successful or an error if the request fails.
     async fn ping(&self) -> Result<bool> {
-        if let Err(e) = self.request("ping", &JsonValue::Array(vec![])).await {
-            error!(target: "explorerd::rpc::ping", "Failed to ping darkfid daemon: {}", e);
-            return Err(e);
-        }
-
+        self.request("ping", &JsonValue::Array(vec![])).await?;
         Ok(true)
     }
 }
@@ -215,14 +292,50 @@ impl Explorerd {
     // Pings configured darkfid daemon for liveness.
     // Returns `true` on success.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "ping_darkfid", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
-    async fn ping_darkfid(&self, id: u16, _params: JsonValue) -> JsonResult {
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    async fn ping_darkfid(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Log the start of the operation
         debug!(target: "explorerd::rpc::ping_darkfid", "Pinging darkfid daemon...");
-        if let Err(e) = self.darkfid_client.ping().await {
-            error!(target: "explorerd::rpc::ping_darkfid", "Failed to ping darkfid daemon: {}", e);
-            return server_error(&ExplorerdError::PingDarkfidFailed(e.to_string()), id, None).into()
-        }
-        JsonResponse::new(JsonValue::Boolean(true), id).into()
+
+        // Validate that the parameters are empty
+        validate_empty_params(params)?;
+
+        // Attempt to ping the darkfid daemon
+        self.darkfid_client
+            .ping()
+            .await
+            .map_err(|e| ExplorerdError::PingDarkfidFailed(e.to_string()))?;
+
+        // Ping succeeded, return a successful Boolean(true) value
+        Ok(JsonValue::Boolean(true))
     }
+}
+
+/// Auxiliary function that logs RPC request failures by generating a structured log message
+/// containing the provided `req_method`, `params`, and `error` details. Constructs a log target
+/// specific to the request method, formats the error message by stringifying the JSON parameters
+/// and error, and performs the log operation without returning a value.
+fn log_request_failure(req_method: &str, params: &JsonValue, error: &JsonError) {
+    // Generate the log target based on request
+    let log_target = format!("explorerd::rpc::handle_request::{}", req_method);
+
+    // Stringify the params
+    let params_stringified = match params.stringify() {
+        Ok(params) => params,
+        Err(e) => format!("Failed to stringify params: {:?}", e),
+    };
+
+    // Stringfy the error
+    let error_stringified = match error.stringify() {
+        Ok(err_str) => err_str,
+        Err(e) => format!("Failed to stringify error: {:?}", e),
+    };
+
+    // Format the error message for the log
+    let error_message = format!("RPC Request Failure: method: {req_method}, params: {params_stringified}, error: {error_stringified}");
+
+    // Log the error
+    error!(target: &log_target, "{}", error_message);
 }

@@ -18,16 +18,15 @@
 
 use std::str::FromStr;
 
-use log::error;
 use tinyjson::JsonValue;
 
-use darkfi::rpc::jsonrpc::{
-    ErrorCode::{InternalError, InvalidParams},
-    JsonError, JsonResponse, JsonResult,
+use darkfi::{
+    rpc::jsonrpc::{parse_json_array_string, validate_empty_params},
+    Result,
 };
 use darkfi_sdk::crypto::ContractId;
 
-use crate::Explorerd;
+use crate::{error::ExplorerdError, Explorerd};
 
 impl Explorerd {
     // RPCAPI:
@@ -40,33 +39,25 @@ impl Explorerd {
     // **Returns:**
     // * Array of `ContractRecord`s encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "contracts.get_native_contracts", "params": ["5cc...2f9"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o", "Money Contract", "The money contract..."], "id": 1}
-    pub async fn contracts_get_native_contracts(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Ensure that the parameters are empty
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+    pub async fn contracts_get_native_contracts(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Validate that no parameters are provided
+        validate_empty_params(params)?;
 
-        // Retrieve native contracts and handle potential errors
-        let contract_records = match self.service.get_native_contracts() {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "explorerd::rpc_contracts::contracts_get_native_contracts", "Failed fetching native contracts: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+        // Retrieve native contracts
+        let contract_records = self.service.get_native_contracts()?;
 
-        // Transform contract records into a JSON array and return the result
+        // Transform contract records into a JSON array and return result
         if contract_records.is_empty() {
-            JsonResponse::new(JsonValue::Array(vec![]), id).into()
+            Ok(JsonValue::Array(vec![]))
         } else {
             let json_blocks: Vec<JsonValue> = contract_records
                 .into_iter()
                 .map(|contract_record| contract_record.to_json_array())
                 .collect();
-            JsonResponse::new(JsonValue::Array(json_blocks), id).into()
+            Ok(JsonValue::Array(json_blocks))
         }
     }
 
@@ -80,41 +71,27 @@ impl Explorerd {
     // **Returns:**
     // * `JsonArray` containing source code paths for the specified Contract ID.
     //
-    // Example Call:
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "contracts.get_contract_source_code_paths", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["path/to/source1.rs", "path/to/source2.rs"], "id": 1}
     pub async fn contracts_get_contract_source_code_paths(
         &self,
-        id: u16,
-        params: JsonValue,
-    ) -> JsonResult {
-        // Validate that a single required parameter is provided and is of type String
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+        params: &JsonValue,
+    ) -> Result<JsonValue> {
+        // Extract contract ID
+        let contact_id_str = parse_json_array_string("contract_id", 0, params)?;
 
-        // Validate the provided contract ID and convert it into a ContractId object
-        let contact_id_str = params[0].get::<String>().unwrap();
-        let contract_id = match ContractId::from_str(contact_id_str) {
-            Ok(contract_id) => contract_id,
-            Err(e) => return JsonError::new(InternalError, Some(e.to_string()), id).into(),
-        };
+        // Convert the contract string to a `ContractId` instance
+        let contract_id = ContractId::from_str(&contact_id_str)
+            .map_err(|_| ExplorerdError::InvalidContractId(contact_id_str))?;
 
-        // Retrieve source code paths for the contract, transform them into a JsonResponse, and return the result
-        match self.service.get_contract_source_paths(&contract_id) {
-            Ok(paths) => {
-                let transformed_paths =
-                    paths.iter().map(|path| JsonValue::String(path.clone())).collect();
-                JsonResponse::new(JsonValue::Array(transformed_paths), id).into()
-            }
-            Err(e) => {
-                error!(
-                    target: "explorerd::rpc_contracts::contracts_get_contract_source_code_paths",
-                    "Failed fetching contract source code paths: {e:?}");
-                JsonError::new(InternalError, None, id).into()
-            }
-        }
+        // Retrieve source code paths for the contract
+        let paths = self.service.get_contract_source_paths(&contract_id)?;
+
+        // Tranform found paths into `JsonValues`
+        let json_value_paths = paths.iter().map(|path| JsonValue::String(path.clone())).collect();
+
+        Ok(JsonValue::Array(json_value_paths))
     }
 
     // RPCAPI:
@@ -128,41 +105,24 @@ impl Explorerd {
     // **Returns:**
     // * `String` containing the content of the contract source file.
     //
-    // Example Call:
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "contracts.get_contract_source", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o", "client/lib.rs"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "/* This file is ...", "id": 1}
-    pub async fn contracts_get_contract_source(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Validate that the required parameters are provided
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+    pub async fn contracts_get_contract_source(&self, params: &JsonValue) -> Result<JsonValue> {
+        // Extract the contract ID
+        let contact_id_str = parse_json_array_string("contract_id", 0, params)?;
 
-        // Validate and extract the provided Contract ID
-        let contact_id_str = params[0].get::<String>().unwrap();
-        let contract_id = match ContractId::from_str(contact_id_str) {
-            Ok(contract_id) => contract_id,
-            Err(e) => return JsonError::new(InternalError, Some(e.to_string()), id).into(),
-        };
+        // Convert the contract string to a `ContractId` instance
+        let contract_id = ContractId::from_str(&contact_id_str)
+            .map_err(|_| ExplorerdError::InvalidContractId(contact_id_str))?;
 
-        // Extract the provided source path
-        let source_path = params[1].get::<String>().unwrap();
+        // Extract the source path
+        let source_path = parse_json_array_string("source_path", 1, params)?;
 
-        // Retrieve the contract source code, transform it into a JsonResponse, and return the result
-        match self.service.get_contract_source_content(&contract_id, source_path) {
-            Ok(Some(source_file)) => JsonResponse::new(JsonValue::String(source_file), id).into(),
-            Ok(None) => {
-                let empty_value =
-                    JsonValue::from(std::collections::HashMap::<String, JsonValue>::new());
-                JsonResponse::new(empty_value, id).into()
-            }
-            Err(e) => {
-                error!(
-                    target: "explorerd::rpc_contracts::contracts_get_contract_source",
-                    "Failed fetching contract source code: {}", e
-                );
-                JsonError::new(InternalError, None, id).into()
-            }
+        // Retrieve the contract source code, transform it into a `JsonValue`, and return the result
+        match self.service.get_contract_source_content(&contract_id, &source_path)? {
+            Some(source_file) => Ok(JsonValue::String(source_file)),
+            None => Ok(JsonValue::from(std::collections::HashMap::<String, JsonValue>::new())),
         }
     }
 }

@@ -16,16 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::error;
 use tinyjson::JsonValue;
 
-use darkfi::rpc::jsonrpc::{
-    ErrorCode::{InternalError, InvalidParams},
-    JsonError, JsonResponse, JsonResult,
-};
+use darkfi::{rpc::jsonrpc::parse_json_array_string, Result};
 use darkfi_sdk::tx::TransactionHash;
 
-use crate::Explorerd;
+use crate::{error::ExplorerdError, Explorerd};
 
 impl Explorerd {
     // RPCAPI:
@@ -38,32 +34,21 @@ impl Explorerd {
     // **Returns:**
     // * Array of `TransactionRecord` encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "transactions.get_transactions_by_header_hash", "params": ["5cc...2f9"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn transactions_get_transactions_by_header_hash(
         &self,
-        id: u16,
-        params: JsonValue,
-    ) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+        params: &JsonValue,
+    ) -> Result<JsonValue> {
+        // Extract header hash
+        let header_hash = parse_json_array_string("header_hash", 0, params)?;
 
-        let header_hash = params[0].get::<String>().unwrap();
-        let transactions = match self.service.get_transactions_by_header_hash(header_hash) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "explorerd::rpc_transactions::transactions_get_transaction_by_header_hash", "Failed fetching block transactions: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+        // Retrieve transactions by header hash
+        let transactions = self.service.get_transactions_by_header_hash(&header_hash)?;
 
-        let mut ret = vec![];
-        for transaction in transactions {
-            ret.push(transaction.to_json_array());
-        }
-        JsonResponse::new(JsonValue::Array(ret), id).into()
+        // Convert transactions into a JSON array, return result
+        Ok(JsonValue::Array(transactions.iter().map(|tx| tx.to_json_array()).collect()))
     }
 
     // RPCAPI:
@@ -76,33 +61,25 @@ impl Explorerd {
     // **Returns:**
     // * `TransactionRecord` encoded into a JSON.
     //
+    // **Example API Usage:**
     // --> {"jsonrpc": "2.0", "method": "transactions.get_transaction_by_hash", "params": ["7e7...b4d"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn transactions_get_transaction_by_hash(
         &self,
-        id: u16,
-        params: JsonValue,
-    ) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
+        params: &JsonValue,
+    ) -> Result<JsonValue> {
+        // Extract transaction hash
+        let tx_hash_str = parse_json_array_string("tx_hash", 0, params)?;
 
-        // Validate provided hash and store it for later use
-        let tx_hash_str = params[0].get::<String>().unwrap();
-        let tx_hash = match tx_hash_str.parse::<TransactionHash>() {
-            Ok(hash) => hash,
-            Err(e) => return JsonError::new(InternalError, Some(e.to_string()), id).into(),
-        };
+        // Convert the provided hash into a `TransactionHash` instance
+        let tx_hash = tx_hash_str
+            .parse::<TransactionHash>()
+            .map_err(|_| ExplorerdError::InvalidTxHash(tx_hash_str.to_string()))?;
 
-        // Retrieve transaction by hash and return result
-        match self.service.get_transaction_by_hash(&tx_hash) {
-            Ok(Some(transaction)) => JsonResponse::new(transaction.to_json_array(), id).into(),
-            Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
-            Err(e) => {
-                error!(target: "explorerd::rpc_transactions::transactions_get_transaction_by_hash", "Failed fetching transaction: {}", e);
-                JsonError::new(InternalError, None, id).into()
-            }
+        // Retrieve the transaction by its hash, returning the result as a JsonValue array
+        match self.service.get_transaction_by_hash(&tx_hash)? {
+            Some(transaction) => Ok(transaction.to_json_array()),
+            None => Ok(JsonValue::Array(vec![])),
         }
     }
 }
