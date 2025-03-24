@@ -103,3 +103,30 @@ impl Explorerd {
         Ok(statistics.to_json_array())
     }
 }
+
+#[cfg(test)]
+/// Test module for validating the functionality of RPC methods related to explorer statistics.
+/// Focuses on ensuring proper error handling for invalid parameters across several use cases.
+mod tests {
+
+    use crate::test_utils::{setup, validate_empty_rpc_parameters};
+
+    /// Tests all RPC-related statistics calls when provided with empty parameters, ensuring they
+    /// handle the input correctly and return appropriate validation responses.
+    #[test]
+    fn test_statistics_rpc_calls_for_empty_parameters() {
+        smol::block_on(async {
+            let explorerd = setup();
+
+            let rpc_methods = [
+                "statistics.get_latest_metric_statistics",
+                "statistics.get_metric_statistics",
+                "statistics.get_basic_statistics",
+            ];
+
+            for rpc_method in rpc_methods.iter() {
+                validate_empty_rpc_parameters(&explorerd, rpc_method).await;
+            }
+        });
+    }
+}

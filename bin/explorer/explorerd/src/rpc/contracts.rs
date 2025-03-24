@@ -126,3 +126,73 @@ impl Explorerd {
         }
     }
 }
+
+#[cfg(test)]
+/// Test module for validating the functionality of RPC methods related to explorer contracts.
+/// Focuses on ensuring proper error handling for invalid parameters across several use cases,
+/// including cases with missing values, unsupported types, and unparsable inputs.
+mod tests {
+
+    use tinyjson::JsonValue;
+
+    use darkfi::rpc::jsonrpc::ErrorCode;
+
+    use crate::test_utils::{
+        setup, validate_empty_rpc_parameters, validate_invalid_rpc_contract_id,
+        validate_invalid_rpc_parameter,
+    };
+
+    #[test]
+    /// Tests the `contracts.get_native_contracts` method to ensure it correctly handles cases where
+    /// empty parameters are supplied, returning an expected result or error response.
+    fn test_contracts_get_native_contracts_empty_params() {
+        smol::block_on(async {
+            validate_empty_rpc_parameters(&setup(), "contracts.get_native_contracts").await;
+        });
+    }
+
+    #[test]
+    /// Tests the `contracts.get_contract_source_code_paths` method to ensure it correctly handles cases
+    /// with invalid or missing `contract_id` parameters, returning appropriate error responses.
+    fn test_contracts_get_contract_source_code_paths_invalid_params() {
+        validate_invalid_rpc_contract_id(&setup(), "contracts.get_contract_source_code_paths");
+    }
+
+    #[test]
+    /// Tests the `contracts.get_contract_source` method to ensure it correctly handles cases
+    /// with invalid or missing parameters, returning appropriate error responses.
+    fn test_contracts_get_contract_source_invalid_params() {
+        let test_method = "contracts.get_contract_source";
+        let parameter_name = "source_path";
+
+        smol::block_on(async {
+            // Set up the explorerd instance
+            let explorerd = setup();
+
+            validate_invalid_rpc_contract_id(&explorerd, test_method);
+
+            // Test for missing `source_path` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                test_method,
+                &[JsonValue::String("BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o".to_string())],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' at index 1 is missing", parameter_name),
+            )
+            .await;
+
+            // Test for invalid `source_path` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                test_method,
+                &[
+                    JsonValue::String("BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o".to_string()),
+                    JsonValue::Number(123.0), // Invalid `source_path` type
+                ],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' is not a valid string", parameter_name),
+            )
+            .await;
+        });
+    }
+}

@@ -156,3 +156,155 @@ impl Explorerd {
         }
     }
 }
+
+#[cfg(test)]
+/// Test module for validating the functionality of RPC methods related to explorer blocks.
+/// Focuses on ensuring proper error handling for invalid parameters across several use cases,
+/// including cases with missing values, unsupported types, invalid ranges, and unparsable inputs.
+mod tests {
+
+    use tinyjson::JsonValue;
+
+    use darkfi::rpc::{
+        jsonrpc::{ErrorCode, JsonRequest, JsonResult},
+        server::RequestHandler,
+    };
+
+    use crate::test_utils::{
+        setup, validate_invalid_rpc_header_hash, validate_invalid_rpc_parameter,
+    };
+
+    #[test]
+    /// Tests the handling of invalid parameters for the `blocks.get_last_n_blocks` JSON-RPC method.
+    /// Verifies that missing and an invalid `num_last_blocks` value results in an appropriate error.
+    fn test_blocks_get_last_n_blocks_invalid_params() {
+        smol::block_on(async {
+            // Define rpc_method and parameter names
+            let rpc_method = "blocks.get_last_n_blocks";
+            let parameter_name = "num_last_blocks";
+
+            // Set up the Explorerd instance
+            let explorerd = setup();
+
+            // Test for missing `start` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' at index 0 is missing", parameter_name),
+            )
+            .await;
+
+            // Test for invalid num_last_blocks parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[JsonValue::String("invalid_number".to_string())],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' is not a supported number type", parameter_name),
+            )
+            .await;
+        });
+    }
+
+    #[test]
+    /// Tests the handling of invalid parameters for the `blocks.get_blocks_in_heights_range`
+    /// JSON-RPC method. Verifies that invalid/missing `start` or `end` parameter values, or an
+    /// invalid range where `start` is greater than `end`, result in appropriate errors.
+    fn test_blocks_get_blocks_in_heights_range_invalid_params() {
+        smol::block_on(async {
+            // Define rpc_method and parameter names
+            let rpc_method = "blocks.get_blocks_in_heights_range";
+            let start_parameter_name = "start";
+            let end_parameter_name = "end";
+
+            // Set up the Explorerd instance
+            let explorerd = setup();
+
+            // Test for missing `start` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' at index 0 is missing", start_parameter_name),
+            )
+            .await;
+
+            // Test for invalid `start` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[JsonValue::String("invalid_number".to_string()), JsonValue::Number(10.0)],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{start_parameter_name}' is not a supported number type"),
+            )
+            .await;
+
+            // Test for invalid `end` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[JsonValue::Number(10.0)],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{}' at index 1 is missing", end_parameter_name),
+            )
+            .await;
+
+            // Test for invalid `end` parameter
+            validate_invalid_rpc_parameter(
+                &explorerd,
+                rpc_method,
+                &[JsonValue::Number(10.0), JsonValue::String("invalid_number".to_string())],
+                ErrorCode::InvalidParams.code(),
+                &format!("Parameter '{end_parameter_name}' is not a supported number type"),
+            )
+            .await;
+
+            // Test invalid range where `start` > `end`
+            let request = JsonRequest {
+                id: 1,
+                jsonrpc: "2.0",
+                method: rpc_method.to_string(),
+                params: JsonValue::Array(vec![JsonValue::Number(20.0), JsonValue::Number(10.0)]),
+            };
+
+            let response = explorerd.handle_request(request).await;
+
+            // Verify that `start > end` error is raised
+            match response {
+                JsonResult::Error(actual_error) => {
+                    let expected_error_code = ErrorCode::InvalidParams.code();
+                    assert_eq!(
+                        actual_error.error.code,
+                        expected_error_code
+                    );
+                    assert_eq!(
+                        actual_error.error.message,
+                        "Invalid range: start (20) cannot be greater than end (10)"
+                    );
+                }
+                _ => panic!(
+                    "Expected a JSON error response for method: {rpc_method}, but got something else",
+                ),
+            }
+        });
+    }
+    #[test]
+    /// Tests the handling of invalid parameters for the `blocks.get_block_by_hash` JSON-RPC method.
+    /// Verifies that an invalid `header_hash` value, either a numeric type or invalid hash string,
+    /// results in appropriate error.
+    fn test_blocks_get_block_by_hash_invalid_params() {
+        smol::block_on(async {
+            // Define the RPC method name
+            let rpc_method = "blocks.get_block_by_hash";
+
+            // Set up the explorerd
+            let explorerd = setup();
+
+            // Validate when provided with an invalid tx hash
+            validate_invalid_rpc_header_hash(&explorerd, rpc_method);
+        });
+    }
+}

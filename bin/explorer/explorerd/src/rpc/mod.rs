@@ -339,3 +339,60 @@ fn log_request_failure(req_method: &str, params: &JsonValue, error: &JsonError) 
     // Log the error
     error!(target: &log_target, "{}", error_message);
 }
+
+/// Test module for validating API functions within this `mod.rs` file. It ensures that the core API
+/// functions behave as expected and that they handle invalid parameters properly.
+#[cfg(test)]
+mod tests {
+    use tinyjson::JsonValue;
+
+    use darkfi::rpc::jsonrpc::JsonRequest;
+
+    use super::*;
+    use crate::{
+        error::ERROR_CODE_PING_DARKFID_FAILED,
+        test_utils::{setup, validate_empty_rpc_parameters},
+    };
+
+    #[test]
+    /// Validates the failure scenario of the `ping_darkfid` JSON-RPC method by sending a request
+    /// to a disconnected darkfid endpoint, ensuring the response is an error with the expected
+    /// code and message.
+    fn test_ping_darkfid_failure() {
+        smol::block_on(async {
+            // Set up the Explorerd instance
+            let explorerd = setup();
+
+            // Prepare a JSON-RPC request for `ping_darkfid`
+            let request = JsonRequest {
+                id: 1,
+                jsonrpc: "2.0",
+                method: "ping_darkfid".to_string(),
+                params: JsonValue::Array(vec![]),
+            };
+
+            // Call `handle_request` on the Explorerd instance
+            let response = explorerd.handle_request(request).await;
+
+            // Verify the response is a `JsonError` with the `PingFailed` error code
+            match response {
+                JsonResult::Error(actual_error) => {
+                    let expected_error_code = ERROR_CODE_PING_DARKFID_FAILED;
+                    let expected_error_msg = "Ping darkfid failed: Not connected, is the explorer running in no-sync mode?";
+                    assert_eq!(actual_error.error.code, expected_error_code);
+                    assert_eq!(actual_error.error.message, expected_error_msg);
+                }
+                _ => panic!("Expected a JSON object for the response, but got something else"),
+            }
+        });
+    }
+
+    /// Tests the `ping_darkfid` method to ensure it correctly handles cases where non-empty parameters
+    /// are supplied, returning an expected error response.
+    #[test]
+    fn test_ping_darkfid_empty_params() {
+        smol::block_on(async {
+            validate_empty_rpc_parameters(&setup(), "ping_darkfid").await;
+        });
+    }
+}

@@ -83,3 +83,45 @@ impl Explorerd {
         }
     }
 }
+
+#[cfg(test)]
+/// Test module for validating the functionality of RPC methods related to explorer transactions.
+/// Focuses on ensuring proper error handling for invalid parameters across several use cases,
+/// including cases with missing values, unsupported types, and unparsable inputs.
+mod tests {
+
+    use crate::test_utils::{
+        setup, validate_invalid_rpc_header_hash, validate_invalid_rpc_tx_hash,
+    };
+
+    #[test]
+    /// Tests the handling of invalid parameters for the `transactions.get_transactions_by_header_hash` JSON-RPC method.
+    /// Verifies that missing and an invalid `header_hash` value results in an appropriate error.
+    fn test_transactions_get_transactions_by_header_hash() {
+        smol::block_on(async {
+            // Define the RPC method name
+            let rpc_method = "transactions.get_transactions_by_header_hash";
+
+            // Set up the explorerd
+            let explorerd = setup();
+
+            // Validate when provided with an invalid header hash
+            validate_invalid_rpc_header_hash(&explorerd, rpc_method);
+        });
+    }
+    #[test]
+    /// Tests the handling of invalid parameters for the `transactions.get_transaction_by_hash` JSON-RPC method.
+    /// Verifies that missing and an invalid `tx_hash` value results in an appropriate error.
+    fn test_transactions_get_transaction_by_hash() {
+        smol::block_on(async {
+            // Define the RPC method name
+            let rpc_method = "transactions.get_transaction_by_hash";
+
+            // Set up the explorerd
+            let explorerd = setup();
+
+            // Validate when provided with an invalid tx hash
+            validate_invalid_rpc_tx_hash(&explorerd, rpc_method);
+        });
+    }
+}

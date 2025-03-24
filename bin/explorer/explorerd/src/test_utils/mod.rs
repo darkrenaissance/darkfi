@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use lazy_static::lazy_static;
 use smol::Executor;
+use tempdir::TempDir;
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -29,8 +30,6 @@ use darkfi::rpc::{
 };
 
 use crate::Explorerd;
-
-const TEST_DATA_DIR: &str = "src/test_utils/test_data";
 
 // Defines a global `Explorerd` instance shared across all tests
 lazy_static! {
@@ -73,10 +72,13 @@ pub fn setup() -> Arc<Explorerd> {
 
     if instance.is_none() {
         // Initialize logger for the first time
-        init_logger(simplelog::LevelFilter::Info, vec!["sled", "runtime", "net"]);
+        init_logger(simplelog::LevelFilter::Off, vec!["sled", "runtime", "net"]);
 
         // Prepare parameters for Explorerd::new
-        let db_path = format!("{}/explorerd_0", TEST_DATA_DIR);
+        let temp_dir = TempDir::new("explorerd").expect("Failed to create temp dir");
+        let db_path_buf = temp_dir.path().join("explorerd_0");
+        let db_path =
+            db_path_buf.to_str().expect("Failed to convert db_path to string").to_string();
         let darkfid_endpoint = Url::parse("http://127.0.0.1:8240").expect("Invalid URL");
         let executor = Arc::new(Executor::new());
 
@@ -130,12 +132,12 @@ pub async fn validate_invalid_rpc_parameter(
 /// Auxiliary function that validates the handling of non-empty parameters when they are supposed
 /// to be empty for the given RPC `method`. It uses the provided [`Explorerd`] instance to ensure
 /// that unexpected non-empty parameters result in the expected error for invalid parameters.
-pub async fn validate_empty_rpc_parameters(explorerd: &Explorerd, method: String) {
+pub async fn validate_empty_rpc_parameters(explorerd: &Explorerd, method: &str) {
     // Prepare a JSON-RPC request for `ping_darkfid`
     let request = JsonRequest {
         id: 1,
         jsonrpc: "2.0",
-        method,
+        method: method.to_string(),
         params: JsonValue::Array(vec![JsonValue::String("non_empty_param".to_string())]),
     };
 

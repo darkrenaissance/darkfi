@@ -55,8 +55,6 @@ mod error;
 
 /// Test utilities used for unit and integration testing
 #[cfg(test)]
-#[allow(dead_code)]
-// TODO: Remove when test code that utilizes the new utility functions is checked in
 mod test_utils;
 
 const CONFIG_FILE: &str = "explorerd_config.toml";
