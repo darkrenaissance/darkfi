@@ -21,8 +21,9 @@ use std::{fmt, sync::Arc};
 use log::error;
 
 use darkfi::{
+    error::RpcError,
     rpc::jsonrpc::{ErrorCode, JsonError},
-    Error, RpcError,
+    Error,
 };
 
 // Constant for the error code
