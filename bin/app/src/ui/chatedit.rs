@@ -469,6 +469,7 @@ pub struct ChatEdit {
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
+    min_height: PropertyFloat32,
     max_height: PropertyFloat32,
     height: PropertyFloat32,
     rect: PropertyRect,
@@ -530,6 +531,7 @@ impl ChatEdit {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();
+        let min_height = PropertyFloat32::wrap(node_ref, Role::Internal, "min_height", 0).unwrap();
         let max_height = PropertyFloat32::wrap(node_ref, Role::Internal, "max_height", 0).unwrap();
         let height = PropertyFloat32::wrap(node_ref, Role::Internal, "height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -593,6 +595,7 @@ impl ChatEdit {
 
             is_active,
             is_focused,
+            min_height,
             max_height,
             height,
             rect,
@@ -720,8 +723,8 @@ impl ChatEdit {
             (atlas, wrapped_lines, selections, under_start, under_end)
         };
 
-        let mut height = wrapped_lines.height() + self.descent.get();
-        height = height.clamp(0., self.max_height.get());
+        let real_height = wrapped_lines.height() + self.descent.get();
+        let height = real_height.clamp(self.min_height.get(), self.max_height.get());
 
         self.rect.prop().set_f32(atom, Role::Internal, 3, height);
 
@@ -740,6 +743,10 @@ impl ChatEdit {
         t!("Rendering text '{text}' rect={clip:?} width={width} [trace_id={trace_id}]");
         clip.x = 0.;
         clip.y = 0.;
+
+        if real_height < height {
+            clip.y = (height - real_height) / 2.;
+        }
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut curr_y = -scroll;

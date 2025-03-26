@@ -59,6 +59,7 @@ mod android_ui_consts {
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 140.;
+    pub const CHATEDIT_MAX_HEIGHT: f32 = 1400.;
     pub const CHATEDIT_HEIGHT: f32 = 140.;
     pub const CHATEDIT_SINGLE_LINE_Y: f32 = 120.;
     pub const CHATEDIT_BOTTOM_PAD: f32 = 10.;
@@ -127,6 +128,7 @@ mod ui_consts {
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 26.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 60.;
+    pub const CHATEDIT_MAX_HEIGHT: f32 = 600.;
     pub const CHATEDIT_HEIGHT: f32 = 60.;
     pub const CHATEDIT_SINGLE_LINE_Y: f32 = 58.;
     pub const CHATEDIT_BOTTOM_PAD: f32 = 5.;
@@ -205,7 +207,6 @@ pub async fn make(
     cc.add_const_f32("CHATEDIT_SINGLE_LINE_Y", CHATEDIT_SINGLE_LINE_Y);
     cc.add_const_f32("CHATEDIT_BOTTOM_PAD", CHATEDIT_BOTTOM_PAD);
     cc.add_const_f32("CHATEDIT_NEG_W", CHATEDIT_NEG_W);
-    cc.add_const_f32("CHATEDIT_MIN_HEIGHT", CHATEDIT_MIN_HEIGHT);
     cc.add_const_f32("SENDARROW_NEG_X", SENDARROW_NEG_X);
     cc.add_const_f32("SENDARROW_NEG_Y", SENDARROW_NEG_Y);
     cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
@@ -476,19 +477,7 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 1, CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.clone().set_expr(atom, Role::App, 2, code).unwrap();
-    let code = cc
-        .compile(
-            "
-        height = if editz_h < CHATEDIT_MIN_HEIGHT {
-            CHATEDIT_MIN_HEIGHT
-        } else {
-            editz_h
-        };
-
-        h - CHATEDIT_HEIGHT - height - 2 * CHATEDIT_BOTTOM_PAD
-",
-        )
-        .unwrap();
+    let code = cc.compile("h - CHATEDIT_HEIGHT - editz_h - 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
     let chatview_rect_prop = prop.clone();
     node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
@@ -593,34 +582,10 @@ pub async fn make(
     let node = create_vector_art("editbox_bg");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    let code = cc
-        .compile(
-            "
-        height = if editz_h < CHATEDIT_MIN_HEIGHT {
-            CHATEDIT_MIN_HEIGHT
-        } else {
-            editz_h
-        };
-
-        h - height - 2 * CHATEDIT_BOTTOM_PAD
-",
-        )
-        .unwrap();
+    let code = cc.compile("h - editz_h - 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.clone().set_expr(atom, Role::App, 1, code).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    let code = cc
-        .compile(
-            "
-        height = if editz_h < CHATEDIT_MIN_HEIGHT {
-            CHATEDIT_MIN_HEIGHT
-        } else {
-            editz_h
-        };
-
-        height + 2 * CHATEDIT_BOTTOM_PAD
-",
-        )
-        .unwrap();
+    let code = cc.compile("editz_h + 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
@@ -734,23 +699,12 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
-    node.set_property_f32(atom, Role::App, "max_height", 600.).unwrap();
+    node.set_property_f32(atom, Role::App, "min_height", CHATEDIT_MIN_HEIGHT).unwrap();
+    node.set_property_f32(atom, Role::App, "max_height", CHATEDIT_MAX_HEIGHT).unwrap();
 
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
-    let code = cc
-        .compile(
-            "
-        height = if rect_h < CHATEDIT_MIN_HEIGHT {
-            CHATEDIT_SINGLE_LINE_Y
-        } else {
-            rect_h
-        };
-
-        parent_h - (height + CHATEDIT_BOTTOM_PAD)
-",
-        )
-        .unwrap();
+    let code = cc.compile("parent_h - (rect_h + CHATEDIT_BOTTOM_PAD)").unwrap();
     prop.clone().set_expr(atom, Role::App, 1, code).unwrap();
     let code = cc.compile("parent_w - CHATEDIT_NEG_W").unwrap();
     prop.clone().set_expr(atom, Role::App, 2, code).unwrap();

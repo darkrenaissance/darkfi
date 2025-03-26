@@ -314,7 +314,14 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_ui_text("Is Focused", "A focused EditBox receives input");
     node.add_property(prop).unwrap();
 
-    let prop = Property::new("max_height", PropertyType::Float32, PropertySubType::Pixel);
+    let mut prop = Property::new("min_height", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Min Height", "Minimum height");
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("max_height", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Max Height", "Maximum height");
+    prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("height", PropertyType::Float32, PropertySubType::Pixel);
