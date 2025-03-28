@@ -120,7 +120,10 @@ pub(super) struct GlyphInfo {
 
 impl GlyphInfo {
     pub fn substr<'a>(&self, text: &'a str) -> &'a str {
-        &text[self.cluster_start..self.cluster_end]
+        // RTL
+        let start = std::cmp::min(self.cluster_start, self.cluster_end);
+        let end = std::cmp::max(self.cluster_start, self.cluster_end);
+        &text[start..end]
     }
 }
 
