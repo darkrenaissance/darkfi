@@ -19,6 +19,13 @@ Then install the requirements:
 % pip install -r requirements.txt
 ```
 
+Using the Makefile to build the sources requires the Rust `mdbook`
+utility which may be installed via:
+
+```shell
+cargo install mdbook
+```
+
 For the mdbook-katex backend run:
 
 ```
