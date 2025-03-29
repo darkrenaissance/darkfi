@@ -30,9 +30,9 @@ use log::{error, info};
 /// Triggered when calling the `get` RPC method
 pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
     loop {
-        let (_, file_hash, file_name, _) = fud.get_rx.recv().await.unwrap();
+        let (_, file_hash, file_path, _) = fud.get_rx.recv().await.unwrap();
 
-        let _ = fud.handle_get(file_hash, file_name).await;
+        let _ = fud.handle_get(&file_hash, &file_path).await;
     }
 }
 
@@ -97,8 +97,10 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
 /// Background task that removes seeders that did not announce a file/chunk
 /// for more than an hour.
 pub async fn prune_seeders_task(fud: Arc<Fud>) -> Result<()> {
+    sleep(120).await;
+
     loop {
-        sleep(1800).await; // TODO: Make a setting
+        sleep(3600).await; // TODO: Make a setting
 
         info!(target: "fud::prune_seeders_task()", "Pruning seeders...");
         fud.dht().prune_router(fud.seeders_router.clone(), 3600).await;

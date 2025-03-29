@@ -78,8 +78,6 @@ pub const MAX_CHUNK_SIZE: usize = 262_144;
 const FILES_PATH: &str = "files";
 /// Path prefix where file chunks are stored
 const CHUNKS_PATH: &str = "chunks";
-/// Path prefix where full files are stored
-const DOWNLOADS_PATH: &str = "downloads";
 
 pub fn hash_to_string(hash: &blake3::Hash) -> String {
     bs58::encode(hash.as_bytes()).into_string()
@@ -127,8 +125,6 @@ pub struct Geode {
     files_path: PathBuf,
     /// Path to the filesystem directory where file chunks are stored
     chunks_path: PathBuf,
-    /// Path to the filesystem directory where full files are stored
-    downloads_path: PathBuf,
 }
 
 /// smol::fs::File::read does not guarantee that the buffer will be filled, even if the buffer is
@@ -158,17 +154,14 @@ impl Geode {
     pub async fn new(base_path: &PathBuf) -> Result<Self> {
         let mut files_path: PathBuf = base_path.into();
         let mut chunks_path: PathBuf = base_path.into();
-        let mut downloads_path: PathBuf = base_path.into();
         files_path.push(FILES_PATH);
         chunks_path.push(CHUNKS_PATH);
-        downloads_path.push(DOWNLOADS_PATH);
 
         // Create necessary directory structure if needed
         fs::create_dir_all(&files_path).await?;
         fs::create_dir_all(&chunks_path).await?;
-        fs::create_dir_all(&downloads_path).await?;
 
-        Ok(Self { files_path, chunks_path, downloads_path })
+        Ok(Self { files_path, chunks_path })
     }
 
     /// Attempt to read chunk hashes from a given file path and return
@@ -535,15 +528,14 @@ impl Geode {
         &self,
         file_hash: &blake3::Hash,
         chunked_file: &ChunkedFile,
-        file_name: Option<String>,
-    ) -> Result<PathBuf> {
+        file_path: &PathBuf,
+    ) -> Result<()> {
         let file_hash_str = hash_to_string(file_hash);
         info!(target: "geode::assemble_file()", "[Geode] Assembling file {}", file_hash_str);
 
-        let mut file_path = self.downloads_path.clone();
-        file_path.push(&file_hash_str);
-        fs::create_dir_all(&file_path).await?;
-        file_path.push(file_name.unwrap_or(file_hash_str));
+        if file_path.exists() && file_path.is_dir() {
+            return Err(Error::Custom("File path is an existing directory".to_string())) // TODO
+        }
 
         let mut file_fd = File::create(&file_path).await?;
         for (_, chunk_path) in chunked_file.iter() {
@@ -555,7 +547,7 @@ impl Geode {
             file_fd.flush().await?;
         }
 
-        Ok(file_path)
+        Ok(())
     }
 
     /// List file hashes.

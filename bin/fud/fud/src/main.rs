@@ -95,6 +95,10 @@ struct Args {
     /// Base directory for filesystem storage
     base_dir: String,
 
+    #[structopt(short, long)]
+    /// Default path to store downloaded files (defaults to <base_dir>/downloads)
+    downloads_path: Option<String>,
+
     #[structopt(flatten)]
     /// Network settings
     net: SettingsOpt,
@@ -114,11 +118,14 @@ pub struct Fud {
     /// The Geode instance
     geode: Geode,
 
+    /// Default download directory
+    downloads_path: PathBuf,
+
     /// The DHT instance
     dht: Arc<Dht>,
 
-    get_tx: channel::Sender<(u16, blake3::Hash, Option<String>, Result<()>)>,
-    get_rx: channel::Receiver<(u16, blake3::Hash, Option<String>, Result<()>)>,
+    get_tx: channel::Sender<(u16, blake3::Hash, PathBuf, Result<()>)>,
+    get_rx: channel::Receiver<(u16, blake3::Hash, PathBuf, Result<()>)>,
     file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
     file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
@@ -233,8 +240,8 @@ impl Fud {
     }
 
     /// Query nodes close to `key` to find the seeders
-    async fn fetch_seeders(&self, key: blake3::Hash) -> HashSet<DhtRouterItem> {
-        let closest_nodes = self.lookup_nodes(&key).await; // Find the `k` closest nodes
+    async fn fetch_seeders(&self, key: &blake3::Hash) -> HashSet<DhtRouterItem> {
+        let closest_nodes = self.lookup_nodes(key).await; // Find the `k` closest nodes
         if closest_nodes.is_err() {
             return HashSet::new();
         }
@@ -260,7 +267,7 @@ impl Fud {
                 }
             };
 
-            let send_res = channel.send(&FudFindSeedersRequest { key }).await;
+            let send_res = channel.send(&FudFindSeedersRequest { key: *key }).await;
             if let Err(e) = send_res {
                 warn!(target: "fud::fetch_seeders()", "Error while sending FudFindSeedersRequest: {}", e);
                 msg_subscriber.unsubscribe().await;
@@ -281,7 +288,7 @@ impl Fud {
             seeders.extend(reply.seeders.clone());
         }
 
-        info!(target: "fud::fetch_seeders()", "Found {} seeders for {}", seeders.len(), hash_to_string(&key));
+        info!(target: "fud::fetch_seeders()", "Found {} seeders for {}", seeders.len(), hash_to_string(key));
         seeders
     }
 
@@ -573,6 +580,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // The working directory for this daemon and geode.
     let basedir = expand_path(&args.base_dir)?;
 
+    // The directory to store the downloaded files
+    let downloads_path = match args.downloads_path {
+        Some(downloads_path) => expand_path(&downloads_path)?,
+        None => basedir.join("downloads"),
+    };
+
     // Hashmap used for routing
     let seeders_router = Arc::new(RwLock::new(HashMap::new()));
 
@@ -653,6 +666,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         seeders_router,
         p2p: p2p.clone(),
         geode,
+        downloads_path,
         dht: dht.clone(),
         get_tx,
         get_rx,

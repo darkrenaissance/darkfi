@@ -96,13 +96,7 @@ impl Fu {
         let rpc_client_ = self.rpc_client.clone();
         subscriber_task.clone().start(
             async move {
-                let req = JsonRequest::new(
-                    "get",
-                    JsonValue::Array(vec![
-                        JsonValue::String(file_hash_),
-                        JsonValue::String(file_name.unwrap_or_default()),
-                    ]),
-                );
+                let req = JsonRequest::new("subscribe", JsonValue::Array(vec![]));
                 rpc_client_.subscribe(req, publisher).await
             },
             move |res| async move {
@@ -137,17 +131,27 @@ impl Fu {
             stdout().flush().unwrap();
         };
 
+        let req = JsonRequest::new(
+            "get",
+            JsonValue::Array(vec![
+                JsonValue::String(file_hash_.clone()),
+                JsonValue::String(file_name.unwrap_or_default()),
+            ]),
+        );
+        let _ = self.rpc_client.request(req).await;
+
         loop {
             match subscription.receive().await {
                 JsonResult::Notification(n) => {
                     let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
+                    let info =
+                        params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+                    let hash = info.get("file_hash").unwrap().get::<String>().unwrap();
+                    if *hash != file_hash_ {
+                        continue;
+                    }
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
                         "file_download_completed" => {
-                            let info = params
-                                .get("info")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
                             chunks_total =
                                 *info.get("chunk_count").unwrap().get::<f64>().unwrap() as usize;
                             print_progress_bar(chunks_downloaded, chunks_total);
@@ -179,6 +183,18 @@ impl Fu {
                             // We tried all seeders and some chunks are still missing
                             println!();
                             return Err(Error::Custom("Missing chunks".to_string()));
+                        }
+                        "download_error" => {
+                            // An error that caused the download to be unsuccessful
+                            let info = params
+                                .get("info")
+                                .unwrap()
+                                .get::<HashMap<String, JsonValue>>()
+                                .unwrap();
+                            println!();
+                            return Err(Error::Custom(
+                                info.get("error").unwrap().get::<String>().unwrap().to_string(),
+                            ));
                         }
                         _ => {}
                     }
