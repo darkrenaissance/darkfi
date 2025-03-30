@@ -63,6 +63,9 @@ macro_rules! impl_p2p_message {
     };
 }
 
+/// Maximum command (message name) length in bytes
+pub const MAX_COMMAND_LENGTH: u8 = 255;
+
 /// Outbound keepalive message.
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PingMessage {
@@ -77,12 +80,12 @@ pub struct PongMessage {
 }
 impl_p2p_message!(PongMessage, "pong", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
-/// Requests address of outbound connecction.
+/// Requests address of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct GetAddrsMessage {
     /// Maximum number of addresses with preferred
     /// transports to receive. Response vector will
-    /// also containg addresses without the preferred
+    /// also contain addresses without the preferred
     /// transports, so its size will be 2 * max.
     pub max: u32,
     /// Preferred addresses transports

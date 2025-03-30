@@ -29,6 +29,7 @@ use std::{
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
 };
+
 use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
@@ -42,7 +43,7 @@ use super::{
     dnet::{self, dnetev, DnetEvent},
     hosts::{HostColor, HostsPtr},
     message,
-    message::{SerializedMessage, VersionMessage},
+    message::{SerializedMessage, VersionMessage, MAX_COMMAND_LENGTH},
     message_publisher::{MessageSubscription, MessageSubsystem},
     metering::{MeteringConfiguration, MeteringQueue},
     p2p::P2pPtr,
@@ -207,7 +208,7 @@ impl Channel {
     /// Sends the encoded payload of provided `SerializedMessage` across the channel.
     ///
     /// We first check if we should apply some throttling, based on the provided
-    /// `Message` configuration. We always sleep 2x times more that the exepted one,
+    /// `Message` configuration. We always sleep 2x times more than the expected one,
     /// so we don't flood the peer.
     /// Then, calls `send_message` that creates a new payload and sends it over the
     /// network transport as a packet.
@@ -334,6 +335,11 @@ impl Channel {
 
         // First extract the length from the stream
         let cmd_len = VarInt::decode_async(stream).await?.0;
+        if cmd_len > (MAX_COMMAND_LENGTH as u64) {
+            error!(target: "net::channel::read_command",
+                "Error: Command length ({cmd_len}) exceeds configured limit ({MAX_COMMAND_LENGTH}). Dropping...");
+            return Err(Error::MessageInvalid);
+        }
 
         // Then extract precisely `cmd_len` items from the stream.
         let mut take = stream.take(cmd_len);
@@ -401,6 +407,11 @@ impl Channel {
                             "[P2P] Channel {} disconnected",
                             self.address()
                         );
+                    } else if let Error::MessageInvalid = err {
+                        // The command name length has exceeded the limit, this is possibly a malicious attack so ban it
+                        if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
+                            self.ban().await;
+                        }
                     } else if self.session.upgrade().unwrap().type_id() &
                         (SESSION_ALL & !SESSION_REFINE) !=
                         0
@@ -451,7 +462,7 @@ impl Channel {
                     if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
                         warn!(
                         target: "net::channel::main_receive_loop()",
-                        "MissingDispatcher|MessageInvalid|MeteringLimitExcheeded for command={command}, channel={self:?}"
+                        "MissingDispatcher|MessageInvalid|MeteringLimitExceeded for command={command}, channel={self:?}"
                         );
 
                         if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {

@@ -241,7 +241,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     /// from an inbound stream.
     ///
     /// We extract the message length from the stream and use `take()`
-    /// to allocate an appropiately sized buffer as a basic DDOS protection.
+    /// to allocate an appropriately sized buffer as a basic DDOS protection.
     async fn trigger(
         &self,
         stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,

@@ -114,7 +114,7 @@ impl MeteringQueue {
 
     /// Add new metering value to the queue, after
     /// prunning expired metering information.
-    /// If no thresshold has been set, the insert is
+    /// If no threshold has been set, the insert is
     /// ignored.
     pub fn push(&mut self, value: &u64) {
         // Check if threshold has been set
