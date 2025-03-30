@@ -204,7 +204,7 @@ impl App {
         self.sg_root.clone().link(window.clone());
         self.sg_root.clone().link(setting_root.clone());
 
-        schema::make(&self, window.clone()).await;
+        schema::test::make(&self, window.clone()).await;
 
         d!("Schema loaded");
 

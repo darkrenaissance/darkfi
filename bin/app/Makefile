@@ -18,8 +18,8 @@ RELEASE_FEATURES = --features=enable-plugins
 DEBUG_FEATURES = --features=enable-filelog,enable-plugins
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
-DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-#DEV_FEATURES = --features=enable-filelog,enable-netdebug
+#DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
+DEV_FEATURES = --features=enable-filelog,enable-netdebug
 
 default: build-release
 	./darkfi-app

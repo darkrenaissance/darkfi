@@ -10,7 +10,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN curl -o rustup.sh --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
 RUN chmod +x rustup.sh
-RUN ./rustup.sh -y --default-toolchain nightly-2024-12-05
+RUN ./rustup.sh -y --default-toolchain nightly-2025-03-27
 
 #RUN rustup toolchain install nightly
 #RUN rustup default nightly

@@ -106,6 +106,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    /*
     // Create button bg
     let node = create_vector_art("btnbg");
     let prop = node.get_property("rect").unwrap();
@@ -255,6 +256,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
+    */
 
     // Create some text
     let node = create_text("label");
@@ -269,8 +271,9 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         atom,
         Role::App,
         "text",
-        "\u{f0007}",
-        //"hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
+        // Monero custom icon
+        //"\u{f0007}",
+        "yoyo 🚀 'پل خواجو' he", //"hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
     )
     .unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
@@ -294,6 +297,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.clone().link(node);
 
+    /*
     // Text edit
     let node = create_editbox("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -532,4 +536,5 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         })
         .await;
     layer_node.clone().link(node);
+    */
 }

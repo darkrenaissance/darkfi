@@ -49,6 +49,10 @@ simplelog = "0.12.2"
 file-rotate = "0.7.6"
 parking_lot = { version = "0.12.3", features = ["nightly"] }
 regex = "1.11"
+parley = { git = "https://github.com/linebender/parley.git" }
+swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
+# Use same zeno specified by swash
+zeno = { git = "https://github.com/valadaptive/zeno", branch = "tight-bounds" }
 
 [features]
 emulate-android = []
@@ -68,6 +72,9 @@ halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 # This patch didn't work for me
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
+
+# Once merged, we can remove this
+swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
