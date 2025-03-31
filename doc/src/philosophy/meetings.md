@@ -1,8 +1,11 @@
 # Discussion group
 
-Every other Wednesday at 15:00 UTC/16:00 CET/10:00 EST, there is a meeting on
-[darkirc](../misc/darkirc/darkirc.md) in `#philosophy`.  Come and discuss different
-philosophy texts with fellow community members.
+From Wednesday 1st May 2024-12th March 2025, there were biweekly
+philosophy meetings in [darkirc](../misc/darkirc/darkirc.md) in
+`#philosophy`.
+
+The meetings are now on pause due to more pressing concerns (shipping
+DarkFi).
 
 Meeting schedule: 
 
