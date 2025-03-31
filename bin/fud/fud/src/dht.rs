@@ -534,6 +534,7 @@ pub trait DhtHandler {
 
         // Add to router
         if let Some(k) = key_r {
+            k.retain(|it| !router_items.contains(it));
             k.extend(router_items.clone());
         } else {
             let mut hs = HashSet::new();

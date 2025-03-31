@@ -299,7 +299,9 @@ pub struct FileNotFound {
     pub file_hash: blake3::Hash,
 }
 #[derive(Clone, Debug)]
-pub struct MissingChunks {}
+pub struct MissingChunks {
+    pub file_hash: blake3::Hash,
+}
 #[derive(Clone, Debug)]
 pub struct DownloadError {
     pub file_hash: blake3::Hash,
@@ -363,6 +365,13 @@ impl From<FileNotFound> for JsonValue {
         json_map([("file_hash", JsonValue::String(hash_to_string(&info.file_hash)))])
     }
 }
+impl From<MissingChunks> for JsonValue {
+    fn from(info: MissingChunks) -> JsonValue {
+        json_map([
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
+        ])
+    }
+}
 impl From<DownloadError> for JsonValue {
     fn from(info: DownloadError) -> JsonValue {
         json_map([
@@ -392,7 +401,7 @@ impl From<FudEvent> for JsonValue {
             FudEvent::FileNotFound(info) => {
                 json_map([("event", json_str("file_not_found")), ("info", info.into())])
             }
-            FudEvent::MissingChunks(_) => json_map([("event", json_str("missing_chunks"))]),
+            FudEvent::MissingChunks(info) => json_map([("event", json_str("missing_chunks")), ("info", info.into())]),
             FudEvent::DownloadError(info) => {
                 json_map([("event", json_str("download_error")), ("info", info.into())])
             }
@@ -498,8 +507,9 @@ impl Fud {
         // We fetched all chunks, but the file is not complete
         // (some chunks were missing from all seeders)
         if !chunked_file.is_complete() {
-            self.download_publisher.notify(FudEvent::MissingChunks(MissingChunks {})).await;
-            return;
+            self.download_publisher.notify(FudEvent::MissingChunks(MissingChunks {
+                file_hash: *file_hash,
+            })).await;
         }
 
         match self.geode.assemble_file(file_hash, &chunked_file, file_path).await {
