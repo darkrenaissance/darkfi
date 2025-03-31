@@ -35,7 +35,8 @@ and our core community organizes through our own fully anonymous p2p chat system
 which has support for Tor (and Nym waiting for 
 [this feature request](https://github.com/nymtech/nym/issues/3610)).
 
-Every Monday at 15:00 UTC in #dev we have our main project meeting.
+Every Monday at 14:00 UTC (DST) or 15:00 UTC (ST) in #dev we have our main
+project meeting.
 
 See the guide on [darkirc](misc/darkirc/darkirc.md) for instructions on joining.
 

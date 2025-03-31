@@ -6,9 +6,9 @@ Join the dev chat, and attend a dev meeting. Make yourself known. Express an
 interest in which areas of the code you want to work on. Get mentored by
 existing members of the community.
 
-Every monday 16:00 CET, there is our main dev meeting on [our
-chat](../../misc/darkirc/darkirc.md).  Feel free to join and discuss
-with other darkfi devs.
+Every monday 14:00 UTC (DST) or 15:00 UTC (ST), there is our main dev
+meeting on [our chat](../../misc/darkirc/darkirc.md).  Feel free to join
+and discuss with other darkfi devs.
 
 In general, the best way to get started is to explore the codebase thoroughly and
 identify issues and areas of improvement.
@@ -132,7 +132,8 @@ Check `README.md` for instructions.
 
 Join our DarkIRC chat and ask to speak with the core team.
 
-Usually the best time would be our weekly Monday meetings at 15:00 UTC.
+Usually the best time would be our weekly Monday meetings at 14:00 UTC
+(DST) or 15.00 UTC (ST).
 
 If it's sensitive and time critical, then we will get in touch over DM,
 and we will post a message on dark.fi to confirm our identity once we're in

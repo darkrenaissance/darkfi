@@ -15,9 +15,10 @@ chance.
 
 ## Join the Community
 
-Get onto the [DarkIRC chat] where the core community is. Every Monday there's
-a core dev meet at 15:00 UTC. You can introduce yourself there to make yourself
-known and discuss which part of the code you'd like to get involved in.
+Get onto the [DarkIRC chat] where the core community is. Every Monday
+there's a core dev meet at 14:00 UTC (DST) or 15.00 (ST). You can
+introduce yourself there to make yourself known and discuss which part
+of the code you'd like to get involved in.
 
 Then you should run [tau] which is our task manager. The `darkfi-dev` workspace
 has a list of open tasks.
