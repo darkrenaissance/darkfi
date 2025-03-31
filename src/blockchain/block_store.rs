@@ -167,18 +167,18 @@ pub struct BlockOrder {
 
 /// Auxiliary structure used to keep track of block ranking information.
 ///
-/// Note: we only need height cummulative ranks, but we also keep its actual
+/// Note: we only need height cumulative ranks, but we also keep its actual
 /// ranks, so we can verify the sequence and/or know specific block height
 /// ranks, if ever needed.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockRanks {
     /// Block target rank
     pub target_rank: BigUint,
-    /// Height cummulative targets rank
+    /// Height cumulative targets rank
     pub targets_rank: BigUint,
     /// Block hash rank
     pub hash_rank: BigUint,
-    /// Height cummulative hashes rank
+    /// Height cumulative hashes rank
     pub hashes_rank: BigUint,
 }
 
@@ -195,7 +195,7 @@ impl BlockRanks {
 
 /// Auxiliary structure used to keep track of block PoW difficulty information.
 ///
-/// Note: we only need height cummulative difficulty, but we also keep its actual
+/// Note: we only need height cumulative difficulty, but we also keep its actual
 /// difficulty, so we can verify the sequence and/or know specific block height
 /// difficulty, if ever needed.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -206,8 +206,8 @@ pub struct BlockDifficulty {
     pub timestamp: Timestamp,
     /// Height difficulty
     pub difficulty: BigUint,
-    /// Height cummulative difficulty (total + height difficulty)
-    pub cummulative_difficulty: BigUint,
+    /// Height cumulative difficulty (total + height difficulty)
+    pub cumulative_difficulty: BigUint,
     /// Block ranks
     pub ranks: BlockRanks,
 }
@@ -217,10 +217,10 @@ impl BlockDifficulty {
         height: u32,
         timestamp: Timestamp,
         difficulty: BigUint,
-        cummulative_difficulty: BigUint,
+        cumulative_difficulty: BigUint,
         ranks: BlockRanks,
     ) -> Self {
-        Self { height, timestamp, difficulty, cummulative_difficulty, ranks }
+        Self { height, timestamp, difficulty, cumulative_difficulty, ranks }
     }
 
     /// Represents the genesis block difficulty

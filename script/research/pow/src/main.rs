@@ -173,20 +173,20 @@ fn check_block_timestamp(block: &Block, timestamps: &mut Vec<u64>) -> bool {
 
 /// Calculate the next mining difficulty.
 ///
-/// Takes a `RingBuffer` of timestamps, a `RingBuffer` of cummulative
+/// Takes a `RingBuffer` of timestamps, a `RingBuffer` of cumulative
 /// difficulties, and a target block time in seconds.
 /// **NOTE**: `timestamps` get sorted in this function.
 ///
 /// Panics if:
-/// * `timestamps.len() != cummulative_difficulties.len()`
+/// * `timestamps.len() != cumulative_difficulties.len()`
 /// * `timestamps.len() > DIFFICULTY_WINDOW`
 fn next_difficulty(
     timestamps: &mut Vec<u64>,
-    cummulative_difficulties: &[BigUint],
+    cumulative_difficulties: &[BigUint],
     target_seconds: usize,
 ) -> BigUint {
     let length = timestamps.len();
-    assert!(length == cummulative_difficulties.len() && length <= DIFFICULTY_WINDOW);
+    assert!(length == cumulative_difficulties.len() && length <= DIFFICULTY_WINDOW);
 
     if length <= 1 {
         return BigUint::one()
@@ -213,7 +213,7 @@ fn next_difficulty(
         time_span = 1;
     }
 
-    let total_work = &cummulative_difficulties[cut_end - 1] - &cummulative_difficulties[cut_begin];
+    let total_work = &cumulative_difficulties[cut_end - 1] - &cumulative_difficulties[cut_begin];
     assert!(total_work > BigUint::zero());
 
     (total_work * target_seconds + time_span - BigUint::one()) / time_span
@@ -239,10 +239,10 @@ fn main() -> Result<()> {
 
     // This represents the blocks in our blockchain
     let mut blockchain: Vec<Block> = vec![genesis_block.clone()];
-    // The cummulative difficulties track difficulty through time.
+    // The cumulative difficulties track difficulty through time.
     // The genesis block (block 0) is ignored. Blocks 1 and 2 must have difficulty 1.
     let mut difficulties = vec![];
-    let mut cummulative_difficulty = BigUint::zero();
+    let mut cumlative_difficulty = BigUint::zero();
     // We also track block timestamps this way.
     let mut timestamps = vec![];
 
@@ -374,7 +374,7 @@ fn main() -> Result<()> {
         // The new block appends to the blockchain
         timestamps.push(miner_block.header.timestamp);
         blockchain.push(miner_block);
-        cummulative_difficulty += difficulty;
-        difficulties.push(cummulative_difficulty.clone());
+        cumulative_difficulty += difficulty;
+        difficulties.push(cumulative_difficulty.clone());
     }
 }

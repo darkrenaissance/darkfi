@@ -82,13 +82,13 @@ pub struct PoWModule {
     pub fixed_difficulty: Option<BigUint>,
     /// Latest block timestamps ringbuffer
     pub timestamps: RingBuffer<Timestamp, BUF_SIZE>,
-    /// Latest block cummulative difficulties ringbuffer
+    /// Latest block cumulative difficulties ringbuffer
     pub difficulties: RingBuffer<BigUint, BUF_SIZE>,
-    /// Total blocks cummulative difficulty
+    /// Total blocks cumulative difficulty
     /// Note: we keep this as a struct field for faster
     /// access(optimization), since its always same as
     /// difficulties buffer last.
-    pub cummulative_difficulty: BigUint,
+    pub cumulative_difficulty: BigUint,
 }
 
 impl PoWModule {
@@ -106,15 +106,15 @@ impl PoWModule {
         // Retrieving last BUF_SIZE difficulties from blockchain to build the buffers
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
-        let mut cummulative_difficulty = BigUint::zero();
+        let mut cumulative_difficulty = BigUint::zero();
         let last_n = match height {
             Some(h) => blockchain.blocks.get_difficulties_before(h, BUF_SIZE)?,
             None => blockchain.blocks.get_last_n_difficulties(BUF_SIZE)?,
         };
         for difficulty in last_n {
             timestamps.push(difficulty.timestamp);
-            difficulties.push(difficulty.cummulative_difficulty.clone());
-            cummulative_difficulty = difficulty.cummulative_difficulty;
+            difficulties.push(difficulty.cumulative_difficulty.clone());
+            cumulative_difficulty = difficulty.cumulative_difficulty;
         }
 
         // If a fixed difficulty has been set, assert its greater than zero
@@ -128,7 +128,7 @@ impl PoWModule {
             fixed_difficulty,
             timestamps,
             difficulties,
-            cummulative_difficulty,
+            cumulative_difficulty,
         })
     }
 
@@ -295,8 +295,8 @@ impl PoWModule {
     /// Append provided timestamp and difficulty to the ring buffers.
     pub fn append(&mut self, timestamp: Timestamp, difficulty: &BigUint) {
         self.timestamps.push(timestamp);
-        self.cummulative_difficulty += difficulty;
-        self.difficulties.push(self.cummulative_difficulty.clone());
+        self.cumulative_difficulty += difficulty;
+        self.difficulties.push(self.cumulative_difficulty.clone());
     }
 
     /// Append provided block difficulty to the ring buffers and insert
@@ -330,7 +330,7 @@ impl std::fmt::Display for PoWModule {
         write!(f, "\ttarget: {}", self.target)?;
         write!(f, "\ttimestamps: {:?}", self.timestamps)?;
         write!(f, "\tdifficulties: {:?}", self.difficulties)?;
-        write!(f, "\tcummulative_difficulty: {}", self.cummulative_difficulty)
+        write!(f, "\tcumulative_difficulty: {}", self.cumulative_difficulty)
     }
 }
 

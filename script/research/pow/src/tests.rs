@@ -32,8 +32,8 @@ const DEFAULT_TEST_DIFFICULTY_TARGET: usize = 120;
 #[test]
 fn test_wide_difficulty() {
     let mut timestamps: Vec<u64> = vec![];
-    let mut cummulative_difficulties: Vec<BigUint> = vec![];
-    let mut cummulative_difficulty = BigUint::zero();
+    let mut cumulative_difficulties: Vec<BigUint> = vec![];
+    let mut cumulative_difficulty = BigUint::zero();
 
     let output = Command::new("./gen_wide_data.py").output().unwrap();
     let reader = Cursor::new(output.stdout);
@@ -57,7 +57,7 @@ fn test_wide_difficulty() {
         }
 
         let mut timestamps_cut = timestamps[begin..end].to_vec();
-        let difficulty_cut = &cummulative_difficulties[begin..end];
+        let difficulty_cut = &cumulative_difficulties[begin..end];
         let res =
             next_difficulty(&mut timestamps_cut, difficulty_cut, DEFAULT_TEST_DIFFICULTY_TARGET);
 
@@ -69,7 +69,7 @@ fn test_wide_difficulty() {
         }
 
         timestamps.push(timestamp);
-        cummulative_difficulty += difficulty;
-        cummulative_difficulties.push(cummulative_difficulty.clone());
+        cumulative_difficulty += difficulty;
+        cumulative_difficulties.push(cumulative_difficulty.clone());
     }
 }

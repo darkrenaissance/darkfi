@@ -470,8 +470,8 @@ impl Validator {
             current_hashes_rank += hash_distance_sq.clone();
 
             // Generate block difficulty and update PoW module
-            let cummulative_difficulty =
-                module.cummulative_difficulty.clone() + next_difficulty.clone();
+            let cumulative_difficulty =
+                module.cumulative_difficulty.clone() + next_difficulty.clone();
             let ranks = BlockRanks::new(
                 target_distance_sq,
                 current_targets_rank.clone(),
@@ -482,7 +482,7 @@ impl Validator {
                 block.header.height,
                 block.header.timestamp,
                 next_difficulty,
-                cummulative_difficulty,
+                cumulative_difficulty,
                 ranks,
             );
             module.append_difficulty(&overlay, block_difficulty)?;
@@ -572,8 +572,8 @@ impl Validator {
             current_hashes_rank += hash_distance_sq.clone();
 
             // Generate block difficulty and update PoW module
-            let cummulative_difficulty =
-                module.cummulative_difficulty.clone() + next_difficulty.clone();
+            let cumulative_difficulty =
+                module.cumulative_difficulty.clone() + next_difficulty.clone();
             let ranks = BlockRanks::new(
                 target_distance_sq,
                 current_targets_rank.clone(),
@@ -584,7 +584,7 @@ impl Validator {
                 block.header.height,
                 block.header.timestamp,
                 next_difficulty,
-                cummulative_difficulty,
+                cumulative_difficulty,
                 ranks,
             );
             module.append_difficulty(&overlay, block_difficulty)?;

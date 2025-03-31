@@ -172,7 +172,7 @@ pub(crate) fn money_pow_reward_process_update_v1(
     let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
 
     // Generate the accumulator for the next height
-    msg!("[PowRewardV1] Creating next height fees acummulator");
+    msg!("[PowRewardV1] Creating next height fees accumulator");
     wasm::db::db_set(fees_db, &serialize(&(update.height + 1)), &serialize(&0_u64))?;
 
     // This will just make a snapshot to match the coins one

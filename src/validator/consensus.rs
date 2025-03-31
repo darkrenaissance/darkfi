@@ -720,8 +720,8 @@ impl Fork {
         self.hashes_rank += hash_distance_sq.clone();
 
         // Generate block difficulty and update PoW module
-        let cummulative_difficulty =
-            self.module.cummulative_difficulty.clone() + next_difficulty.clone();
+        let cumulative_difficulty =
+            self.module.cumulative_difficulty.clone() + next_difficulty.clone();
         let ranks = BlockRanks::new(
             target_distance_sq,
             self.targets_rank.clone(),
@@ -732,7 +732,7 @@ impl Fork {
             proposal.block.header.height,
             proposal.block.header.timestamp,
             next_difficulty,
-            cummulative_difficulty,
+            cumulative_difficulty,
             ranks,
         );
         self.module.append_difficulty(&self.overlay, block_difficulty)?;
