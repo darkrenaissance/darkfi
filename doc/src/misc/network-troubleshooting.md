@@ -149,6 +149,28 @@ we'll delete the directory:
 4. Start `tor` daemon 
 5. Start `darkirc`
 
+### I'm connected but my messages do not go through
+
+If you see something in the logs like this:
+
+```
+[INFO] [P2P] Outbound slot #1 connected [tcp-tls://example_peer:25551/] 
+```
+
+That means you are connected. You can verify that by writing `test` in
+#random and seeing do you get a `test back` message.
+
+If you do not get a `test back` message, that can mean either:
+
+1. You need to wait for your DAG to sync (this can take several minutes,
+especially over Tor or on days with high network activity).
+
+2. You need to update your system clock. To sync the event graph,
+darkirc requires that your system clock is correct. You can check your
+system time by running `date`.  The best way to ensure your clock does
+not drift is to run some timekeeping daemon like `chrony` or `ntpd`. If
+your clock is wrong, set this up and try to reconnect again.
+
 ### DagSync spam
 
 If you see a many rapid `EventReq` messages in the log, it is possible that there is
