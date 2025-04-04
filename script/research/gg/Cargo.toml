@@ -21,10 +21,10 @@ darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = "0.4.2"
 
 # Misc
-async-std = {version = "1.13.0", features = ["attributes"]}
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
 sled-overlay = "0.1.6"
+smol = "2.0.2"
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
