@@ -26,7 +26,7 @@ use tinyjson::JsonValue;
 use darkfi::{
     impl_p2p_message,
     net::{
-        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        metering::MeteringConfiguration,
         protocol::protocol_generic::{
             ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
         },
@@ -35,7 +35,7 @@ use darkfi::{
     },
     rpc::jsonrpc::JsonSubscriber,
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    util::encoding::base64,
+    util::{encoding::base64, time::NanoTimestamp},
     validator::{consensus::Proposal, ValidatorPtr},
     Error, Result,
 };
@@ -47,7 +47,21 @@ use crate::task::handle_unknown_proposal;
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ProposalMessage(pub Proposal);
 
-impl_p2p_message!(ProposalMessage, "proposal", 0, 0, DEFAULT_METERING_CONFIGURATION);
+// TODO: Fine tune
+// Since messages are asynchronous we will define loose rules to prevent spamming.
+// Each message score will be 1, with a threshold of 50 and expiry time of 5.
+// We are not limiting `Proposal` size.
+impl_p2p_message!(
+    ProposalMessage,
+    "proposal",
+    0,
+    1,
+    MeteringConfiguration {
+        threshold: 50,
+        sleep_step: 500,
+        expiry_time: NanoTimestamp::from_secs(5),
+    }
+);
 
 /// Atomic pointer to the `ProtocolProposal` handler.
 pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;

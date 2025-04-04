@@ -25,7 +25,7 @@ use darkfi::{
     blockchain::{BlockInfo, Header, HeaderHash},
     impl_p2p_message,
     net::{
-        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        metering::MeteringConfiguration,
         protocol::protocol_generic::{
             ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
         },
@@ -33,13 +33,26 @@ use darkfi::{
         Message, P2pPtr,
     },
     system::ExecutorPtr,
+    util::time::NanoTimestamp,
     validator::{consensus::Proposal, ValidatorPtr},
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-// Constant defining how many blocks we send during syncing.
+// Constant defining max elements we send in vectors during syncing.
 pub const BATCH: usize = 20;
+
+// TODO: Fine tune
+// Protocol metering configuration.
+// Since all messages are synchronous(request -> response) we will define
+// strict rules to prevent spamming.
+// Each message score will be 1, with a threshold of 20 and expiry time of 5.
+// Check ../tests/metering.rs for each message max bytes definition.
+const PROTOCOL_SYNC_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 20,
+    sleep_step: 500,
+    expiry_time: NanoTimestamp::from_secs(5),
+};
 
 /// Structure represening a request to ask a node for their current
 /// canonical(confirmed) tip block hash, if they are synced. We also
@@ -50,7 +63,7 @@ pub struct TipRequest {
     pub tip: HeaderHash,
 }
 
-impl_p2p_message!(TipRequest, "tiprequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(TipRequest, "tiprequest", 32, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure representing the response to `TipRequest`,
 /// containing a boolean flag to indicate if we are synced,
@@ -65,7 +78,7 @@ pub struct TipResponse {
     pub hash: Option<HeaderHash>,
 }
 
-impl_p2p_message!(TipResponse, "tipresponse", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(TipResponse, "tipresponse", 39, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure represening a request to ask a node for up to `BATCH` headers before
 /// the provided header height.
@@ -75,7 +88,13 @@ pub struct HeaderSyncRequest {
     pub height: u32,
 }
 
-impl_p2p_message!(HeaderSyncRequest, "headersyncrequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(
+    HeaderSyncRequest,
+    "headersyncrequest",
+    4,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
+);
 
 /// Structure representing the response to `HeaderSyncRequest`,
 /// containing up to `BATCH` headers before the requested block height.
@@ -85,7 +104,13 @@ pub struct HeaderSyncResponse {
     pub headers: Vec<Header>,
 }
 
-impl_p2p_message!(HeaderSyncResponse, "headersyncresponse", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(
+    HeaderSyncResponse,
+    "headersyncresponse",
+    1701,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
+);
 
 /// Structure represening a request to ask a node for up to`BATCH` blocks
 /// of provided headers.
@@ -95,7 +120,7 @@ pub struct SyncRequest {
     pub headers: Vec<HeaderHash>,
 }
 
-impl_p2p_message!(SyncRequest, "syncrequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(SyncRequest, "syncrequest", 641, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure representing the response to `SyncRequest`,
 /// containing up to `BATCH` blocks after the requested block height.
@@ -105,7 +130,7 @@ pub struct SyncResponse {
     pub blocks: Vec<BlockInfo>,
 }
 
-impl_p2p_message!(SyncResponse, "syncresponse", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(SyncResponse, "syncresponse", 0, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure represening a request to ask a node a fork sequence.
 /// If we include a specific fork tip, they have to return its sequence,
@@ -120,17 +145,17 @@ pub struct ForkSyncRequest {
     pub fork_tip: Option<HeaderHash>,
 }
 
-impl_p2p_message!(ForkSyncRequest, "forksyncrequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(ForkSyncRequest, "forksyncrequest", 65, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure representing the response to `ForkSyncRequest`,
-/// containing the requested fork sequence.
+/// containing the requested fork sequence, up to `BATCH` proposals.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncResponse {
     /// Response fork proposals
     pub proposals: Vec<Proposal>,
 }
 
-impl_p2p_message!(ForkSyncResponse, "forksyncresponse", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(ForkSyncResponse, "forksyncresponse", 0, 1, PROTOCOL_SYNC_METERING_CONFIGURATION);
 
 /// Structure represening a request to ask a node a fork header for the
 /// requested height. The fork is identified by the provided header hash.
@@ -145,9 +170,9 @@ pub struct ForkHeaderHashRequest {
 impl_p2p_message!(
     ForkHeaderHashRequest,
     "forkheaderhashrequest",
-    0,
-    0,
-    DEFAULT_METERING_CONFIGURATION
+    36,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
 );
 
 /// Structure representing the response to `ForkHeaderHashRequest`,
@@ -161,9 +186,9 @@ pub struct ForkHeaderHashResponse {
 impl_p2p_message!(
     ForkHeaderHashResponse,
     "forkheaderhashresponse",
-    0,
-    0,
-    DEFAULT_METERING_CONFIGURATION
+    33,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
 );
 
 /// Structure represening a request to ask a node for up to `BATCH`
@@ -177,7 +202,13 @@ pub struct ForkHeadersRequest {
     pub fork_header: HeaderHash,
 }
 
-impl_p2p_message!(ForkHeadersRequest, "forkheadersrequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(
+    ForkHeadersRequest,
+    "forkheadersrequest",
+    673,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
+);
 
 /// Structure representing the response to `ForkHeadersRequest`,
 /// containing up to `BATCH` fork headers.
@@ -187,7 +218,13 @@ pub struct ForkHeadersResponse {
     pub headers: Vec<Header>,
 }
 
-impl_p2p_message!(ForkHeadersResponse, "forkheadersresponse", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(
+    ForkHeadersResponse,
+    "forkheadersresponse",
+    1701,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
+);
 
 /// Structure represening a request to ask a node for up to `BATCH`
 /// fork proposals for provided header hashes.  The fork is identified
@@ -203,9 +240,9 @@ pub struct ForkProposalsRequest {
 impl_p2p_message!(
     ForkProposalsRequest,
     "forkproposalsrequest",
-    0,
-    0,
-    DEFAULT_METERING_CONFIGURATION
+    673,
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
 );
 
 /// Structure representing the response to `ForkProposalsRequest`,
@@ -220,8 +257,8 @@ impl_p2p_message!(
     ForkProposalsResponse,
     "forkproposalsresponse",
     0,
-    0,
-    DEFAULT_METERING_CONFIGURATION
+    1,
+    PROTOCOL_SYNC_METERING_CONFIGURATION
 );
 
 /// Atomic pointer to the `ProtocolSync` handler.

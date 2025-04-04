@@ -230,13 +230,27 @@ impl std::fmt::Debug for Transaction {
 }
 
 #[cfg(feature = "net")]
-use crate::net::{
-    metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
-    Message,
+use crate::{
+    net::{metering::MeteringConfiguration, Message},
+    util::time::NanoTimestamp,
 };
 
 #[cfg(feature = "net")]
-crate::impl_p2p_message!(Transaction, "tx", 0, 0, DEFAULT_METERING_CONFIGURATION);
+// TODO: Fine tune
+// Since messages are asynchronous we will define loose rules to prevent spamming.
+// Each message score will be 1, with a threshold of 100 and expiry time of 5.
+// We are not limiting `Transaction` size.
+crate::impl_p2p_message!(
+    Transaction,
+    "tx",
+    0,
+    1,
+    MeteringConfiguration {
+        threshold: 100,
+        sleep_step: 500,
+        expiry_time: NanoTimestamp::from_secs(5),
+    }
+);
 
 /// Calls tree bounds definitions
 // TODO: increase min to 2 when fees are implement

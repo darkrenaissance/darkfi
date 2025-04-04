@@ -27,8 +27,6 @@ use darkfi::{
 };
 use log::info;
 
-// TODO: Protocal functions need to be protected so peers can't spam us.
-
 /// Block proposal broadcast protocol
 mod protocol_proposal;
 pub use protocol_proposal::{ProposalMessage, ProtocolProposalHandler, ProtocolProposalHandlerPtr};

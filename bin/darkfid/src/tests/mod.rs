@@ -36,6 +36,8 @@ mod sync_forks;
 
 mod unproposed_txs;
 
+mod metering;
+
 async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
