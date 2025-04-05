@@ -24,6 +24,7 @@ use std::{
 };
 
 use num_bigint::BigUint;
+use resource::{Resource, ResourceStatus};
 use rpc::{ChunkDownloadCompleted, ChunkNotFound};
 use tasks::FetchReply;
 
@@ -45,7 +46,7 @@ use structopt_toml::{structopt::StructOpt, StructOptToml};
 
 use darkfi::{
     async_daemonize, cli_desc,
-    geode::{hash_to_string, Geode},
+    geode::{hash_to_string, ChunkedFile, Geode},
     net::{session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr},
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -67,6 +68,7 @@ use proto::{
 };
 
 mod dht;
+mod resource;
 mod rpc;
 mod tasks;
 
@@ -124,6 +126,9 @@ pub struct Fud {
     /// The DHT instance
     dht: Arc<Dht>,
 
+    /// Resources (current status of all downloads/seeds)
+    resources: Arc<RwLock<HashMap<blake3::Hash, Resource>>>,
+
     get_tx: channel::Sender<(u16, blake3::Hash, PathBuf, Result<()>)>,
     get_rx: channel::Receiver<(u16, blake3::Hash, PathBuf, Result<()>)>,
     file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
@@ -137,9 +142,9 @@ pub struct Fud {
     dnet_sub: JsonSubscriber,
 
     /// Download JSON-RPC subscriber
-    download_sub: JsonSubscriber,
+    event_sub: JsonSubscriber,
 
-    download_publisher: PublisherPtr<FudEvent>,
+    event_publisher: PublisherPtr<FudEvent>,
 }
 
 impl HandlerP2p for Fud {
@@ -226,17 +231,93 @@ impl Fud {
     /// Add ourselves to `seeders_router` for the files we already have.
     /// Skipped if we have no external address.
     async fn init(&self) -> Result<()> {
+        info!(target: "fud::init()", "Finding resources...");
+        let hashes = self.geode.list_files().await?;
+        let mut resources_write = self.resources.write().await;
+        for hash in hashes {
+            resources_write.insert(
+                hash,
+                Resource {
+                    hash,
+                    status: ResourceStatus::Incomplete,
+                    chunks_total: 0,
+                    chunks_downloaded: 0,
+                },
+            );
+        }
+        drop(resources_write);
+
+        info!(target: "fud::init()", "Verifying resources...");
+        let resources = self.get_seeding_resources().await?;
+
         if self.dht().node.clone().addresses.is_empty() {
             return Ok(());
         }
-        let self_router_items: Vec<DhtRouterItem> = vec![self.dht().node.clone().into()];
-        let hashes = self.geode.list_files().await?;
 
-        for hash in hashes {
-            self.add_to_router(self.seeders_router.clone(), &hash, self_router_items.clone()).await;
+        info!(target: "fud::init()", "Start seeding...");
+        let self_router_items: Vec<DhtRouterItem> = vec![self.dht().node.clone().into()];
+
+        for resource in resources {
+            self.add_to_router(
+                self.seeders_router.clone(),
+                &resource.hash,
+                self_router_items.clone(),
+            )
+            .await;
         }
 
         Ok(())
+    }
+
+    /// Verify if resources are complete and uncorrupted.
+    /// If a resource is incomplete or corrupted, its status is changed to Incomplete.
+    /// If a resource is complete, its status is changed to Seeding.
+    /// Returns the list of verified and uncorrupted/complete seeding resources.
+    async fn get_seeding_resources(&self) -> Result<Vec<Resource>> {
+        let mut resources_write = self.resources.write().await;
+
+        let update_resource =
+            async |resource: &mut Resource,
+                   status: ResourceStatus,
+                   chunked_file: Option<&ChunkedFile>| {
+                resource.status = status;
+                resource.chunks_total = match chunked_file {
+                    Some(chunked_file) => chunked_file.len() as u64,
+                    None => 0,
+                };
+                resource.chunks_downloaded = match chunked_file {
+                    Some(chunked_file) => chunked_file.local_chunks() as u64,
+                    None => 0,
+                };
+            };
+
+        let mut seeding_resources: Vec<Resource> = vec![];
+        for (_, mut resource) in resources_write.iter_mut() {
+            match resource.status {
+                ResourceStatus::Seeding => {}
+                ResourceStatus::Incomplete => {}
+                _ => continue,
+            };
+
+            // Make sure the resource is not corrupted or incomplete
+            let chunked_file = match self.geode.get(&resource.hash).await {
+                Ok(v) => v,
+                Err(_) => {
+                    update_resource(&mut resource, ResourceStatus::Incomplete, None).await;
+                    continue;
+                }
+            };
+            if !chunked_file.is_complete() {
+                update_resource(&mut resource, ResourceStatus::Incomplete, Some(&chunked_file))
+                    .await;
+                continue;
+            }
+
+            update_resource(&mut resource, ResourceStatus::Seeding, Some(&chunked_file)).await;
+            seeding_resources.push(resource.clone());
+        }
+
+        Ok(seeding_resources)
     }
 
     /// Query nodes close to `key` to find the seeders
@@ -298,7 +379,7 @@ impl Fud {
         file_hash: &blake3::Hash,
         chunk_hashes: &HashSet<blake3::Hash>,
         seeders: &HashSet<DhtRouterItem>,
-    ) {
+    ) -> Result<()> {
         let mut remaining_chunks = chunk_hashes.clone();
         let mut shuffled_seeders = {
             let mut vec: Vec<_> = seeders.iter().cloned().collect();
@@ -368,11 +449,24 @@ impl Fud {
                                     continue; // Skip to next chunk, will retry this chunk later
                                 }
 
+                                // Upade resource `chunks_downloaded`
+                                let mut resources_write = self.resources.write().await;
+                                let resource = match resources_write.get_mut(file_hash) {
+                                    Some(resource) => {
+                                        resource.status = ResourceStatus::Downloading;
+                                        resource.chunks_downloaded += 1;
+                                        resource.clone()
+                                    }
+                                    None => return Ok(()) // Resource was removed, abort
+                                };
+                                drop(resources_write);
+
                                 info!(target: "fud::fetch_chunks()", "Received chunk {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
-                                self.download_publisher
+                                self.event_publisher
                                     .notify(FudEvent::ChunkDownloadCompleted(ChunkDownloadCompleted {
                                         file_hash: *file_hash,
                                         chunk_hash,
+                                        resource,
                                     }))
                                     .await;
                                 remaining_chunks.remove(&chunk_hash);
@@ -390,7 +484,7 @@ impl Fud {
                             break; // Switch to another seeder
                         }
                         info!(target: "fud::fetch_chunks()", "Received NOTFOUND {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
-                        self.download_publisher
+                        self.event_publisher
                             .notify(FudEvent::ChunkNotFound(ChunkNotFound {
                                 file_hash: *file_hash,
                                 chunk_hash,
@@ -409,6 +503,8 @@ impl Fud {
                 break;
             }
         }
+
+        Ok(())
     }
 
     /// Fetch a single file metadata from the network.
@@ -633,9 +729,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             Ok(mut file) => {
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer).await?;
-                let buf: [u8; 44] = buffer.try_into().expect("Node ID must have 44 characters");
                 let mut out_buf = [0u8; 32];
-                bs58::decode(buf).onto(&mut out_buf)?;
+                bs58::decode(buffer).onto(&mut out_buf)?;
                 let node_id = blake3::Hash::from_bytes(out_buf);
                 Ok(node_id)
             }
@@ -656,7 +751,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Your node ID: {}", hash_to_string(&node_id_));
 
     // Daemon instantiation
-    let download_sub = JsonSubscriber::new("get");
+    let event_sub = JsonSubscriber::new("event");
     let (get_tx, get_rx) = smol::channel::unbounded();
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
     let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
@@ -668,6 +763,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         geode,
         downloads_path,
         dht: dht.clone(),
+        resources: Arc::new(RwLock::new(HashMap::new())),
         get_tx,
         get_rx,
         file_fetch_tx,
@@ -676,22 +772,22 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         file_fetch_end_rx,
         rpc_connections: Mutex::new(HashSet::new()),
         dnet_sub,
-        download_sub: download_sub.clone(),
-        download_publisher: Publisher::new(),
+        event_sub: event_sub.clone(),
+        event_publisher: Publisher::new(),
     });
     fud.init().await?;
 
-    info!("Starting download subs task");
-    let download_sub_ = download_sub.clone();
+    info!(target: "fud", "Starting download subs task");
+    let event_sub_ = event_sub.clone();
     let fud_ = fud.clone();
-    let download_task = StoppableTask::new();
-    download_task.clone().start(
+    let event_task = StoppableTask::new();
+    event_task.clone().start(
         async move {
-            let download_sub = fud_.download_publisher.clone().subscribe().await;
+            let event_sub = fud_.event_publisher.clone().subscribe().await;
             loop {
-                let event = download_sub.receive().await;
-                debug!("Got download event: {:?}", event);
-                download_sub_.notify(event.into()).await;
+                let event = event_sub.receive().await;
+                debug!(target: "fud", "Got event: {:?}", event);
+                event_sub_.notify(event.into()).await;
             }
         },
         |res| async {
@@ -786,19 +882,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::DetachedTaskStopped,
         ex.clone(),
     );
-    let prune_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    prune_task.clone().start(
-        async move { tasks::prune_seeders_task(fud_.clone()).await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting prune seeders task: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
     let announce_task = StoppableTask::new();
     let fud_ = fud.clone();
     announce_task.clone().start(
@@ -816,7 +899,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "fud", "Caught termination signal, cleaning up and exiting...");
 
     info!(target: "fud", "Stopping fetch file task...");
     file_task.stop().await;
@@ -833,7 +916,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Stopping DHT tasks");
     dht_channel_task.stop().await;
     dht_disconnect_task.stop().await;
-    prune_task.stop().await;
     announce_task.stop().await;
 
     info!("Bye!");

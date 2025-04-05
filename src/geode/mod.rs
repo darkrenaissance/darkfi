@@ -117,6 +117,11 @@ impl ChunkedFile {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Return the number of chunks available locally.
+    pub fn local_chunks(&self) -> usize {
+        self.0.iter().filter(|(_, p)| p.is_some()).count()
+    }
 }
 
 /// Chunk-based file storage interface.
@@ -448,6 +453,11 @@ impl Geode {
                 }
             }
         };
+
+        // Make sure the chunk hashes match with the file hash
+        if !self.verify_file(file_hash, &chunk_hashes) {
+            return Err(Error::GeodeNeedsGc);
+        }
 
         let mut chunked_file = ChunkedFile::new(&chunk_hashes);
 

@@ -3385,6 +3385,7 @@ dependencies = [
  "log",
  "simplelog",
  "smol",
+ "termcolor",
  "url",
 ]
 

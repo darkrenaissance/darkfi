@@ -94,38 +94,37 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
     }
 }
 
-/// Background task that removes seeders that did not announce a file/chunk
-/// for more than an hour.
-pub async fn prune_seeders_task(fud: Arc<Fud>) -> Result<()> {
-    sleep(120).await;
-
-    loop {
-        sleep(3600).await; // TODO: Make a setting
-
-        info!(target: "fud::prune_seeders_task()", "Pruning seeders...");
-        fud.dht().prune_router(fud.seeders_router.clone(), 3600).await;
-    }
-}
-
 /// Background task that announces our files and chunks once every hour.
+/// Also removes seeders that did not announce for too long.
 pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
+    let interval = 3600; // TODO: Make a setting
+
     loop {
-        sleep(3600).await; // TODO: Make a setting
+        sleep(interval).await;
 
         let seeders = vec![fud.dht().node.clone().into()];
 
-        info!(target: "fud::announce_task()", "Announcing files...");
-        let file_hashes = fud.geode.list_files().await;
-        if let Ok(files) = file_hashes {
-            for file in files {
-                let _ = fud
-                    .announce(
-                        &file,
-                        &FudAnnounce { key: file, seeders: seeders.clone() },
-                        fud.seeders_router.clone(),
-                    )
-                    .await;
+        info!(target: "fud::announce_task()", "Verifying seeds...");
+        let seeding_resources = match fud.get_seeding_resources().await {
+            Ok(resources) => resources,
+            Err(e) => {
+                error!(target: "fud::announce_task()", "Error while verifying seeding resources: {}", e);
+                continue;
             }
+        };
+
+        info!(target: "fud::announce_task()", "Announcing files...");
+        for resource in seeding_resources {
+            let _ = fud
+                .announce(
+                    &resource.hash,
+                    &FudAnnounce { key: resource.hash, seeders: seeders.clone() },
+                    fud.seeders_router.clone(),
+                )
+                .await;
         }
+
+        info!(target: "fud::announce_task()", "Pruning seeders...");
+        fud.dht().prune_router(fud.seeders_router.clone(), interval.try_into().unwrap()).await;
     }
 }
