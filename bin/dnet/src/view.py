@@ -82,8 +82,8 @@ class Slot(DnetWidget):
 
 class View():
     palette = [
-              ('body','light gray','default', 'standout'),
-              ('line','dark cyan','default','standout'),
+              ('body','default','default','standout'),
+              ('line','dark cyan','black','standout'),
               ]
 
     def __init__(self, model):
