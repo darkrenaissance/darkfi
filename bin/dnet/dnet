@@ -98,6 +98,10 @@ class Dnetview:
         type = node['type']
 
         data = await rpc._make_request('p2p.get_info', [])
+
+        if 'error' in data:
+            logging.error(f"Error calling 'p2p.get_info' for '{name}'. Is it disabled with 'rpc_disabled_methods' in {name}_config.toml?")
+
         info[name] = (type, data)
 
         await self.queue.put(info)
@@ -150,6 +154,9 @@ class Dnetview:
             if not values and type == 'NORMAL':
                 self.model.add_offline(info, False)
 
+            if 'error' in values:
+                logging.error(f'{data}');
+
             if 'result' in values:
                 result = values.get('result')
                 if 'spawns' in result:
@@ -164,6 +171,7 @@ class Dnetview:
 
     def main(self):
         logging.basicConfig(filename='dnet.log',
+                            format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
                             encoding='utf-8',
                             level=logging.DEBUG)
 
