@@ -27,7 +27,7 @@ setup_apt() {
 }
 
 setup_pacman() {
-	pacman_deps="git make gcc pkgconf alsa-lib openssl sqlcipher wabt"
+	pacman_deps="git cmake make gcc pkgconf alsa-lib openssl sqlcipher wabt"
 	$1 -Sy $pacman_deps || return 1
 }
 
