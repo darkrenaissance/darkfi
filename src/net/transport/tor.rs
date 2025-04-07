@@ -182,8 +182,19 @@ impl TorListener {
                 debug!(target: "net::tor::do_listen", "Bootstrapping...");
                 if let Some(datadir) = &self.datastore {
                     let datadir = expand_path(datadir).unwrap();
+                    let arti_data = datadir.join("arti-data");
+                    let arti_cache = datadir.join("arti-cache");
 
-                    let config = TorClientConfigBuilder::from_directories(datadir.clone(), datadir)
+                    // Reset arti folders.
+                    // We unwrap here so we panic in case of errors.
+                    if arti_data.exists() {
+                        remove_dir_all(&arti_data).unwrap();
+                    }
+                    if arti_cache.exists() {
+                        remove_dir_all(&arti_cache).unwrap();
+                    }
+
+                    let config = TorClientConfigBuilder::from_directories(arti_data, arti_cache)
                         .build()
                         .unwrap();
 
@@ -194,7 +205,7 @@ impl TorListener {
             })
             .await
         {
-            Ok(client) => client,
+            Ok(client) => client.isolated_client(),
             Err(e) => {
                 warn!(target: "net::tor::do_listen", "{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"))
