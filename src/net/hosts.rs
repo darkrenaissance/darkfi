@@ -1447,9 +1447,9 @@ impl Hosts {
     }
 
     /// Downgrade host to Greylist, remove from Gold or White list.
-    pub fn greylist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
+    pub async fn greylist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
         debug!(target: "net::hosts:greylist_host()", "Downgrading addr={addr}");
-        self.move_host(addr, last_seen, HostColor::Grey)?;
+        self.move_host(addr, last_seen, HostColor::Grey).await?;
 
         // Free up this addr for future operations.
         self.unregister(addr);
@@ -1457,9 +1457,9 @@ impl Hosts {
         Ok(())
     }
 
-    pub fn whitelist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
+    pub async fn whitelist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
         debug!(target: "net::hosts:whitelist_host()", "Upgrading addr={addr}");
-        self.move_host(addr, last_seen, HostColor::White)?;
+        self.move_host(addr, last_seen, HostColor::White).await?;
 
         // Free up this addr for future operations.
         self.unregister(addr);
@@ -1480,7 +1480,7 @@ impl Hosts {
     /// The state transition from `Move` to `Connected` or `Suspend` are both valid operations.
     /// In some cases, `unregister()` can be called after `move_host()` to explicitly mark
     /// the host state as `Free`.
-    pub(in crate::net) fn move_host(
+    pub(in crate::net) async fn move_host(
         &self,
         addr: &Url,
         last_seen: u64,
@@ -1530,7 +1530,7 @@ impl Hosts {
                 if addr.host_str().is_some() {
                     // Localhost connections should never enter the blacklist
                     // This however allows any Tor, Nym and I2p connections.
-                    if self.is_local_host(addr) {
+                    if !self.settings.read().await.localnet && self.is_local_host(addr) {
                         return Ok(());
                     }
 

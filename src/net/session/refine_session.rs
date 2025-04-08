@@ -294,7 +294,7 @@ impl GreylistRefinery {
                     );
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    hosts.whitelist_host(url, last_seen).unwrap();
+                    hosts.whitelist_host(url, last_seen).await.unwrap();
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
 
