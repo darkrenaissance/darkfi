@@ -23,14 +23,14 @@ jobs:
             - name: Install Rust (nightly)
               uses: actions-rs/toolchain@v1
               with:
-                toolchain: nightly-2024-12-05
+                toolchain: nightly-2025-04-10
                 components: rustfmt, clippy
                 override: true
 
             - name: Install Rust (wasm32)
               uses: actions-rs/toolchain@v1
               with:
-                toolchain: nightly-2024-12-05
+                toolchain: nightly-2025-04-10
                 target: wasm32-unknown-unknown
                 override: true
 
@@ -56,7 +56,7 @@ jobs:
                 git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
                 git config --local user.name "bookworm"
                 cd doc
-                make CARGO="cargo +nightly-2024-12-05" github
+                make CARGO="cargo +nightly-2025-04-10" github
                 git checkout gh-pages
 
             - name: Push changes

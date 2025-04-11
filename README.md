@@ -117,25 +117,25 @@ to happen from time to time. As a workaround, we can configure an older
 nightly version, which was known to work:
 
 ```shell
-% rustup toolchain install nightly-2024-12-05
-% rustup target add wasm32-unknown-unknown --toolchain nightly-2024-12-05
+% rustup toolchain install nightly-2025-04-10
+% rustup target add wasm32-unknown-unknown --toolchain nightly-2025-04-10
 ```
 
 Now we can use that toolchain in `make` directly:
 
 ```shell
-% make CARGO="cargo +nightly-2024-12-05" {target}
+% make CARGO="cargo +nightly-2025-04-10" {target}
 ```
 
 Or, if we are lazy, we can modify the `Makefile` to always use that:
 
 ```shell
-% sed -i Makefile -e "s|nightly|nightly-2024-12-05|g"
+% sed -i Makefile -e "s|nightly|nightly-2025-04-10|g"
 ```
 
 Under no circumstances commit or push the Makefile change.
 
-When using `cargo` directly, you have to add the `+nightly-2024-12-05` flag,
+When using `cargo` directly, you have to add the `+nightly-2025-04-10` flag,
 in order for it to use the older nightly version.
 
 ## Install

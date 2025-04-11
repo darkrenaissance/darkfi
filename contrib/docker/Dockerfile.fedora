@@ -2,7 +2,7 @@
 #   optionally with: --build-arg OS_VER=fedora:37 --build-arg RUST_VER=nightly
 #   To use the legacy deprecated builder: DOCKER_BUILDKIT=0
 
-ARG RUST_VER=nightly-2024-12-05  # stable nightly beta 1.72
+ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
 ARG OS_VER=fedora:38             # fedora:37
 
 FROM ${OS_VER} as rust_builder

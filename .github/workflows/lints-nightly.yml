@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-04-10
           components: clippy
           override: true
       - name: Run Clippy

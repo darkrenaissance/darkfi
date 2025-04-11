@@ -2,7 +2,7 @@
 # Use: docker build . --platform=linux/arm64 --pull -t darkfi:ubuntu_arm64 -f contrib/docker/Dockerfile.ubuntuARMviaEmulation --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.70
 
-ARG RUST_VER=nightly-2024-12-05  # stable nightly beta 1.72
+ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
 ARG OS_VER=22.04                 # 20.04
 
 FROM --platform=$TARGETPLATFORM ubuntu:${OS_VER} as rust_builder

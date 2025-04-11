@@ -1,7 +1,7 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg ALPINE_VER=3.18 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2024-12-05  # 1.72 nightly stable
+ARG RUST_VER=nightly-2025-04-10  # 1.72 nightly stable
 ARG ALPINE_VER=3.18              # 3.17
 
 FROM alpine:${ALPINE_VER} as rust_builder

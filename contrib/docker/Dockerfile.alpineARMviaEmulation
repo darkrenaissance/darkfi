@@ -2,7 +2,7 @@
 # Use: docker build . --platform=linux/arm64 --pull -t darkfi:alpine_arm64 -f ./contrib/docker/Dockerfile.alpineARMviaEmulation --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=3.18 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2024-12-05  # 1.72 beta stable nightly
+ARG RUST_VER=nightly-2025-04-10 # 1.72 beta stable nightly
 ARG OS_VER=3.18                  # 3.17
 ARG REPOSITORY=arm64v8/alpine
 

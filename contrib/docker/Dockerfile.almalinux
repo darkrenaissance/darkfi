@@ -1,7 +1,7 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=almalinux/8-minimal --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2024-12-05  # stable nightly beta 1.72
+ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
 ARG OS_VER=almalinux/9-minimal   # almalinux/8-minimal
 
 FROM ${OS_VER} as rust_builder

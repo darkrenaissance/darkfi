@@ -1,7 +1,7 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=20.04 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2024-12-05  # stable nightly beta 1.72
+ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
 ARG OS_VER=22.04                 # 20.04
 
 FROM ubuntu:${OS_VER} as rust_builder
