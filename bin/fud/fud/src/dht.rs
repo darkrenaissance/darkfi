@@ -87,11 +87,10 @@ impl From<DhtNode> for DhtRouterItem {
 
 // TODO: Add a DhtSettings
 pub struct Dht {
-    pub p2p: P2pPtr,
-    pub executor: ExecutorPtr,
-
+    /// Our own node id
+    pub node_id: blake3::Hash,
+    /// Are we bootstrapped?
     pub bootstrapped: Arc<RwLock<bool>>,
-
     /// Vec of buckets
     pub buckets: Arc<RwLock<Vec<DhtBucket>>>,
     /// Number of parallel lookup requests
@@ -106,10 +105,11 @@ pub struct Dht {
     pub channel_cache: Arc<RwLock<HashMap<blake3::Hash, u32>>>,
     /// Node ID -> Set of keys
     pub router_cache: Arc<RwLock<HashMap<blake3::Hash, HashSet<blake3::Hash>>>>,
-    /// Our own node
-    pub node: DhtNode,
     /// Seconds
     pub timeout: u64,
+
+    pub p2p: P2pPtr,
+    pub executor: ExecutorPtr,
 }
 impl Dht {
     pub async fn new(
@@ -127,7 +127,7 @@ impl Dht {
         }
 
         Self {
-            p2p: p2p.clone(),
+            node_id: *node_id,
             buckets: Arc::new(RwLock::new(buckets)),
             bootstrapped: Arc::new(RwLock::new(false)),
             alpha: a,
@@ -136,9 +136,10 @@ impl Dht {
             node_cache: Arc::new(RwLock::new(HashMap::new())),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
             router_cache: Arc::new(RwLock::new(HashMap::new())),
-            executor: ex,
-            node: DhtNode { id: *node_id, addresses: p2p.clone().hosts().external_addrs().await },
             timeout,
+
+            p2p: p2p.clone(),
+            executor: ex,
         }
     }
 
@@ -150,6 +151,23 @@ impl Dht {
     pub async fn set_bootstrapped(&self) {
         let mut bootstrapped = self.bootstrapped.write().await;
         *bootstrapped = true;
+    }
+
+    /// Get own node
+    pub async fn node(&self) -> DhtNode {
+        DhtNode {
+            id: self.node_id,
+            addresses: self
+                .p2p
+                .clone()
+                .hosts()
+                .external_addrs()
+                .await
+                .iter()
+                .filter(|addr| !addr.to_string().contains("[::]"))
+                .cloned()
+                .collect(),
+        }
     }
 
     // Get the distance between `key_1` and `key_2`
@@ -166,7 +184,7 @@ impl Dht {
         result_bytes
     }
 
-    // Sort `nodes`
+    // Sort `nodes` by distance from `key`
     pub fn sort_by_distance(&self, nodes: &mut [DhtNode], key: &blake3::Hash) {
         nodes.sort_by(|a, b| {
             let distance_a = BigUint::from_bytes_be(&self.distance(key, &a.id));
@@ -177,10 +195,10 @@ impl Dht {
 
     // key -> bucket index
     pub async fn get_bucket_index(&self, key: &blake3::Hash) -> usize {
-        if key == &self.node.id {
+        if key == &self.node_id {
             return 0
         }
-        let distance = self.distance(&self.node.id, key);
+        let distance = self.distance(&self.node_id, key);
         let mut leading_zeros = 0;
 
         for &byte in &distance {
@@ -261,11 +279,12 @@ pub trait DhtHandler {
         message: &M,
         router: DhtRouterPtr,
     ) -> Result<()> {
-        if self.dht().node.addresses.is_empty() {
+        let self_node = self.dht().node().await;
+        if self_node.addresses.is_empty() {
             return Err(().into()); // TODO
         }
 
-        self.add_to_router(router.clone(), key, vec![self.dht().node.clone().into()]).await;
+        self.add_to_router(router.clone(), key, vec![self_node.clone().into()]).await;
         let nodes = self.lookup_nodes(key).await?;
 
         for node in nodes {
@@ -331,7 +350,7 @@ pub trait DhtHandler {
     // Add a node in the correct bucket
     async fn add_node(&self, node: DhtNode) {
         // Do not add ourselves to the buckets
-        if node.id == self.dht().node.id {
+        if node.id == self.dht().node_id {
             return;
         }
 
@@ -434,7 +453,7 @@ pub trait DhtHandler {
                 match value_result {
                     Ok(mut nodes) => {
                         // Remove ourselves from the new nodes
-                        nodes.retain(|node| node.id != self.dht().node.id);
+                        nodes.retain(|node| node.id != self.dht().node_id);
 
                         // Add each new node to our buckets
                         for node in nodes.clone() {

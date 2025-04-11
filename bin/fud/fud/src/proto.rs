@@ -175,7 +175,7 @@ impl ProtocolFud {
             };
             info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING");
 
-            let reply = FudPingReply { node: self.fud.dht.node.clone() };
+            let reply = FudPingReply { node: self.fud.dht.node().await };
             match self.channel.send(&reply).await {
                 Ok(()) => continue,
                 Err(_e) => continue,

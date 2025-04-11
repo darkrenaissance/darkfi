@@ -149,7 +149,7 @@ impl Fu {
                 JsonValue::String(file_name.unwrap_or_default()),
             ]),
         );
-        let _ = self.rpc_client.request(req).await;
+        let _ = self.rpc_client.request(req).await?;
 
         loop {
             match subscription.receive().await {
@@ -428,31 +428,12 @@ impl Fu {
                     let info =
                         params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
-                        "download_started" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            update_resource(resource).await;
-                        }
-                        "file_download_completed" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            update_resource(resource).await;
-                        }
-                        "chunk_download_completed" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            update_resource(resource).await;
-                        }
-                        "download_completed" => {
+                        "download_started" |
+                        "file_download_completed" |
+                        "chunk_download_completed" |
+                        "download_completed" |
+                        "missing_chunks" |
+                        "file_not_found" => {
                             let resource = info
                                 .get("resource")
                                 .unwrap()
@@ -477,14 +458,6 @@ impl Fu {
                             for resource in r.iter() {
                                 update_resource(resource).await;
                             }
-                        }
-                        "missing_chunks" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            update_resource(resource).await;
                         }
                         "download_error" => {
                             // An error that caused the download to be unsuccessful

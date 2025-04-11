@@ -102,7 +102,7 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
     loop {
         sleep(interval).await;
 
-        let seeders = vec![fud.dht().node.clone().into()];
+        let seeders = vec![fud.dht().node().await.into()];
 
         info!(target: "fud::announce_task()", "Verifying seeds...");
         let seeding_resources = match fud.get_seeding_resources().await {

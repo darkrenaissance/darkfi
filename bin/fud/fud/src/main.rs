@@ -23,16 +23,10 @@ use std::{
     sync::Arc,
 };
 
-use num_bigint::BigUint;
-use resource::{Resource, ResourceStatus};
-use rpc::{ChunkDownloadCompleted, ChunkNotFound};
-use tasks::FetchReply;
-
-use crate::rpc::FudEvent;
 use async_trait::async_trait;
-use dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr};
 use futures::{future::FutureExt, pin_mut, select};
 use log::{debug, error, info, warn};
+use num_bigint::BigUint;
 use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom, RngCore};
 use smol::{
     channel,
@@ -44,10 +38,14 @@ use smol::{
 };
 use structopt_toml::{structopt::StructOpt, StructOptToml};
 
+use crate::rpc::FudEvent;
 use darkfi::{
     async_daemonize, cli_desc,
     geode::{hash_to_string, ChunkedFile, Geode},
-    net::{session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr},
+    net::{
+        session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr,
+        Settings as NetSettings,
+    },
     rpc::{
         jsonrpc::JsonSubscriber,
         p2p_method::HandlerP2p,
@@ -58,6 +56,10 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
+use dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr};
+use resource::{Resource, ResourceStatus};
+use rpc::{ChunkDownloadCompleted, ChunkNotFound};
+use tasks::FetchReply;
 
 /// P2P protocols
 mod proto;
@@ -184,13 +186,12 @@ impl DhtHandler for Fud {
             self.dht().set_bootstrapped().await;
 
             // Lookup our own node id
-            let self_node = self.dht().node.clone();
-            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", hash_to_string(&self_node.id));
-            let _ = self.lookup_nodes(&self_node.id).await;
+            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", hash_to_string(&self.dht().node_id));
+            let _ = self.lookup_nodes(&self.dht().node_id).await;
         }
 
         // Send keys that are closer to this node than we are
-        let self_id = self.dht().node.id;
+        let self_id = self.dht().node_id;
         let channel = self.get_channel(node).await?;
         for (key, seeders) in self.seeders_router.read().await.iter() {
             let node_distance = BigUint::from_bytes_be(&self.dht().distance(key, &node.id));
@@ -250,12 +251,14 @@ impl Fud {
         info!(target: "fud::init()", "Verifying resources...");
         let resources = self.get_seeding_resources().await?;
 
-        if self.dht().node.clone().addresses.is_empty() {
+        let self_node = self.dht().node().await;
+
+        if self_node.addresses.is_empty() {
             return Ok(());
         }
 
         info!(target: "fud::init()", "Start seeding...");
-        let self_router_items: Vec<DhtRouterItem> = vec![self.dht().node.clone().into()];
+        let self_router_items: Vec<DhtRouterItem> = vec![self_node.into()];
 
         for resource in resources {
             self.add_to_router(
@@ -689,9 +692,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let geode = Geode::new(&basedir).await?;
 
     info!("Instantiating P2P network");
-    let p2p = P2p::new(args.net.into(), ex.clone()).await?;
+    let net_settings: NetSettings = args.net.into();
+    let p2p = P2p::new(net_settings.clone(), ex.clone()).await?;
 
-    let external_addrs = p2p.hosts().external_addrs().await;
+    let external_addrs = net_settings.external_addrs;
 
     if external_addrs.is_empty() {
         warn!(target: "fud::realmain", "No external addresses, you won't be able to seed")

@@ -82,7 +82,9 @@ impl Fud {
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
     async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
-        if self.dht().node.addresses.is_empty() {
+        let self_node = self.dht.node().await;
+
+        if self_node.addresses.is_empty() {
             error!(target: "fud::put()", "Cannot put file, you don't have any external address");
             return JsonError::new(
                 ErrorCode::InternalError,
@@ -123,8 +125,7 @@ impl Fud {
         };
 
         // Announce file
-        let self_node = self.dht.node.clone();
-        let fud_announce = FudAnnounce { key: file_hash, seeders: vec![self_node.clone().into()] };
+        let fud_announce = FudAnnounce { key: file_hash, seeders: vec![self_node.into()] };
         let _ = self.announce(&file_hash, &fud_announce, self.seeders_router.clone()).await;
 
         JsonResponse::new(JsonValue::String(hash_to_string(&file_hash)), id).into()
@@ -142,13 +143,20 @@ impl Fud {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let mut hash_buf = [0u8; 32];
+        let mut hash_buf = vec![];
         match bs58::decode(params[0].get::<String>().unwrap().as_str()).onto(&mut hash_buf) {
             Ok(_) => {}
             Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
         }
 
-        let file_hash = blake3::Hash::from_bytes(hash_buf);
+        if hash_buf.len() != 32 {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let mut hash_buf_arr = [0u8; 32];
+        hash_buf_arr.copy_from_slice(&hash_buf);
+
+        let file_hash = blake3::Hash::from_bytes(hash_buf_arr);
         let file_hash_str = hash_to_string(&file_hash);
 
         let file_path = match params[1].get::<String>() {
@@ -359,6 +367,7 @@ pub struct ChunkNotFound {
 #[derive(Clone, Debug)]
 pub struct FileNotFound {
     pub file_hash: blake3::Hash,
+    pub resource: Resource,
 }
 #[derive(Clone, Debug)]
 pub struct MissingChunks {
@@ -434,7 +443,10 @@ impl From<ChunkNotFound> for JsonValue {
 }
 impl From<FileNotFound> for JsonValue {
     fn from(info: FileNotFound) -> JsonValue {
-        json_map([("file_hash", JsonValue::String(hash_to_string(&info.file_hash)))])
+        json_map([
+            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
+            ("resource", info.resource.into()),
+        ])
     }
 }
 impl From<MissingChunks> for JsonValue {
@@ -490,7 +502,7 @@ impl From<FudEvent> for JsonValue {
 impl Fud {
     /// Handle `get` RPC request
     pub async fn handle_get(&self, file_hash: &blake3::Hash, file_path: &PathBuf) -> Result<()> {
-        let self_node = self.dht().node.clone();
+        let self_node = self.dht().node().await;
 
         // Add resource to `self.resources`
         let resource = Resource {
@@ -523,9 +535,19 @@ impl Fud {
                     Ok(()) => self.geode.get(&i_file_hash).await.unwrap(),
 
                     Err(Error::GeodeFileRouteNotFound) => {
-                        self.event_publisher
-                            .notify(FudEvent::FileNotFound(FileNotFound { file_hash: *file_hash }))
-                            .await;
+                        // Set resource status to `Incomplete` and send FudEvent::FileNotFound
+                        let mut resources_write = self.resources.write().await;
+                        if let Some(resource) = resources_write.get_mut(file_hash) {
+                            resource.status = ResourceStatus::Incomplete;
+
+                            self.event_publisher
+                                .notify(FudEvent::FileNotFound(FileNotFound {
+                                    file_hash: *file_hash,
+                                    resource: resource.clone(),
+                                }))
+                                .await;
+                        }
+                        drop(resources_write);
                         return Err(Error::GeodeFileRouteNotFound);
                     }
 
