@@ -51,5 +51,11 @@ witness.json
 /bin/darkwallet/darkwallet
 /darkwallet
 
+/bin/fud/fud/fud
+/fud
+
+/bin/fud/fu/fu
+/fu
+
 *.rusty-tags.emacs
 /tags
