@@ -57,7 +57,7 @@ setup_emerge() {
 }
 
 setup_pkg() {
-	pkg_deps="git bash gcc findutils cantarell-fonts gmake devel/automake"
+	pkg_deps="git bash gcc findutils cantarell-fonts gmake devel/automake rust wabt llvm cmake sqlcipher pkgconf python python3"
 	$1 install -y $pkg_deps || return 1
 }
 
@@ -137,15 +137,18 @@ Linux)
 	if command -v pkgin; then
 		echo "Setting up for pkgin/NetBSD" >&2
 		setup_pkgin "$SUDO $(command -v pkgin)" || exit 1
+                exit 0
 	elif command -v pkg; then
 		echo "Setting up for pkg/FreeBSD" >&2
 		setup_pkg "$SUDO $(command -v pkg)" || exit 1
+                exit 0
 	elif command -v pkg_add; then
 		echo "Setting up for pkg_add/OpenBSD" >&2
 		setup_pkg_add "$SUDO $(command -v pkg_add)" || exit 1
 		echo "Rust support is not yet ready for OpenBSD, see https://github.com/rust-lang/rustup/issues/2168#issuecomment-1505185711"
 		echo "You may try to compile rustc and cargo yourself or get the latest with:"
 		echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain stable --default-host x86_64-unknown-openbsd"
+                exit 0
 	fi
 
 	echo "Error: Could not recognize your package manager." >&2
