@@ -1,7 +1,7 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:debian -f ./contrib/docker/Dockerfile.debian --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=bullseye-slim --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2025-04-10  # nightly 1.72
+ARG RUST_VER=stable              # stable; nightly; 1.77
 ARG OS_VER=bookworm-slim         # (12); bullseye-slim (11); buster-slim (10)
 
 FROM debian:${OS_VER} as rust_builder
@@ -10,7 +10,8 @@ ARG RUST_VER
 
 RUN apt-get update && apt-get install -y build-essential cmake jq wget \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev libasound2-dev \
-  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev libsqlite3-dev
+  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev libsqlite3-dev \
+  libsqlcipher-dev wabt
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -49,6 +50,6 @@ RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmp
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/darkirc \
    /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud   ./
+   /opt/darkfi/taud   ./

@@ -12,7 +12,7 @@ RUN cd /tmp/ && \
     sh install-rustup.sh -yq --default-toolchain none && \
     rm install-rustup.sh
 ENV PATH "${PATH}:/root/.cargo/bin/"
-RUN rustup default nightly
+RUN rustup default stable
 RUN rustup target add aarch64-linux-android
 #RUN rustup target add armv7-linux-androideabi
 #RUN rustup target add i686-linux-android

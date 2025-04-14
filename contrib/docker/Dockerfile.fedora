@@ -1,9 +1,8 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=fedora:37 --build-arg RUST_VER=nightly
-#   To use the legacy deprecated builder: DOCKER_BUILDKIT=0
 
-ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
-ARG OS_VER=fedora:38             # fedora:37
+ARG RUST_VER=stable              # stable; nightly; 1.77
+ARG OS_VER=fedora:38             # fedora:38; fedora:37
 
 FROM ${OS_VER} as rust_builder
 
@@ -14,7 +13,7 @@ RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
   perl-FindBin perl-File-Compare perl-lib sqlite-devel \
-  perl-interpreter
+  perl-interpreter sqlcipher-devel wabt
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -54,6 +53,6 @@ RUN dnf -y install openssl lato-fonts alsa-lib \
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/darkirc \
    /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud   ./
+   /opt/darkfi/taud   ./

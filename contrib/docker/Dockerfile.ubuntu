@@ -1,8 +1,8 @@
 # Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=20.04 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=nightly-2025-04-10  # stable nightly beta 1.72
-ARG OS_VER=22.04                 # 20.04
+ARG RUST_VER=stable              # stable; nightly; 1.77
+ARG OS_VER=22.04                 # 22.04; 20.04
 
 FROM ubuntu:${OS_VER} as rust_builder
 
@@ -12,7 +12,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   build-essential cmake jq wget curl \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev python3-dev libsqlite3-dev
+  libasound2-dev python3-dev libsqlite3-dev libsqlcipher-dev wabt
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -51,6 +51,6 @@ RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmp
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/darkirc \
    /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud  ./
+   /opt/darkfi/taud  ./
