@@ -79,16 +79,16 @@ Run the following from the DarkFi repo folder:
 
 ```
 $ cd fuzz/
-$ cargo fuzz list
+$ cargo +nightly fuzz list
 ```
 
 This will list the available fuzzing targets. Choose one and run it with:
 
 ### Run
 ```
-# format: cargo fuzz run TARGET
+# format: cargo +nightly fuzz run TARGET
 # e.g. if `serial` is your target:
-$ cargo fuzz run --all-features -s none --jobs $(nproc) serial 
+$ cargo +nightly fuzz run --all-features -s none --jobs $(nproc) serial 
 ```
 
 This process will run infinitely until a crash occurs or until it is cancelled by the user.
