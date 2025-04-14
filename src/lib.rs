@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#![feature(ip)]
-
 pub mod error;
 pub use error::{ClientFailed, ClientResult, Error, Result};
 

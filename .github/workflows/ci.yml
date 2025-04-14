@@ -13,11 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: stable
           override: true
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: stable
           target: wasm32-unknown-unknown
           override: true
       - uses: actions/setup-python@v1
@@ -37,11 +37,11 @@ jobs:
 
       - name: Run test units
         run: |
-          make CARGO="cargo +nightly-2025-04-10" test
+          make test
 
       - name: Compile all bins
         run: |
-          make CARGO="cargo +nightly-2025-04-10"
+          make
 
   feature-powerset:
     name: Test crate feature powerset on ${{ matrix.os }}
@@ -54,11 +54,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: stable
           override: true
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: stable
           target: wasm32-unknown-unknown
           override: true
       - uses: taiki-e/install-action@cargo-hack
@@ -75,7 +75,7 @@ jobs:
 
       - name: Run feature powerset builds
         run: |
-          make CARGO="cargo +nightly-2025-04-10" check
+          make check
 
   fmt:
     name: rustfmt
@@ -85,8 +85,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: nightly
           components: rustfmt
           override: true
       - run: |
-          cargo +nightly-2025-04-10 fmt -- --check
+          cargo +nightly fmt -- --check

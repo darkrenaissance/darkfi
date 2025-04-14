@@ -1,23 +1,23 @@
-name: Nightly lints
+name: Lints
 
 # We only run these on trial-merges of PRs to reduce noise.
 on: pull_request
 
 jobs:
   clippy:
-    name: Clippy (nightly)
+    name: Clippy
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2025-04-10
+          toolchain: stable
           components: clippy
           override: true
       - name: Run Clippy
         uses: actions-rs/clippy-check@v1
         with:
-          name: Clippy (stable)
+          name: Clippy
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features --release -- -D warnings

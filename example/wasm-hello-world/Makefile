@@ -1,7 +1,7 @@
 .POSIX:
 
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo
 
 # wasm build target
 WASM_TARGET = wasm32-unknown-unknown

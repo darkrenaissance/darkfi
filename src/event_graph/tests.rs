@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// cargo +nightly test --release --features=event-graph --lib eventgraph_propagation -- --include-ignored
+// cargo test --release --features=event-graph --lib eventgraph_propagation -- --include-ignored
 
 use std::sync::Arc;
 

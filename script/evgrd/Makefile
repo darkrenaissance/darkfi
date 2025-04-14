@@ -1,7 +1,7 @@
 .POSIX:
 
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo
 
 BIN = evgrd
 

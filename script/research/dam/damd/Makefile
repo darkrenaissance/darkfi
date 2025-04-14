@@ -4,7 +4,7 @@
 PREFIX = $(HOME)/.cargo
 
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo
 
 # Compile target
 RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
@@ -24,7 +24,7 @@ $(BIN): $(SRC)
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 fmt:
-	$(CARGO) fmt --all
+	$(CARGO) +nightly fmt --all
 
 clippy:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \

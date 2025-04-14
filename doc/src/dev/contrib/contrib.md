@@ -123,7 +123,7 @@ if there is a version mismatch.
 $ sh contrib/dependency_setup.sh
 ```
 
-* Ensure that you are using the nightly toolchain and are building for `wasm32-unknown-unknown`.
+* Ensure that you are building for `wasm32-unknown-unknown`.
 Check `README.md` for instructions.
 
 * When running a `cargo` command, use the flag `--all-features`.

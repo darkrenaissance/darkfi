@@ -44,17 +44,12 @@ This project requires the Rust compiler to be installed.
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
 You have to install a native toolchain, which is set up during Rust installation,
-nightly toolchain and wasm32 target.
-To install nightly toolchain, execute:
-```shell
-% rustup toolchain install nightly
-```
+and wasm32 target.
 To install wasm32 target, execute:
 ```shell
 % rustup target add wasm32-unknown-unknown
-% rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
-Minimum Rust version supported is **1.77.0 (nightly)**.
+Minimum Rust version supported is **1.77.0**.
 
 The following dependencies are also required:
 
@@ -109,34 +104,6 @@ the provided Makefile to build the project:
 If you want to hack on the source code, make sure to read some
 introductory advice in the
 [DarkFi book](https://darkrenaissance.github.io/darkfi/dev/dev.html).
-
-### Living on the cutting edge
-
-Since the project uses the nightly toolchain, breaking changes are bound
-to happen from time to time. As a workaround, we can configure an older
-nightly version, which was known to work:
-
-```shell
-% rustup toolchain install nightly-2025-04-10
-% rustup target add wasm32-unknown-unknown --toolchain nightly-2025-04-10
-```
-
-Now we can use that toolchain in `make` directly:
-
-```shell
-% make CARGO="cargo +nightly-2025-04-10" {target}
-```
-
-Or, if we are lazy, we can modify the `Makefile` to always use that:
-
-```shell
-% sed -i Makefile -e "s|nightly|nightly-2025-04-10|g"
-```
-
-Under no circumstances commit or push the Makefile change.
-
-When using `cargo` directly, you have to add the `+nightly-2025-04-10` flag,
-in order for it to use the older nightly version.
 
 ## Install
 

@@ -199,15 +199,10 @@ interacts within the network. dnet log information is created in
 You can ping any node to make sure it's online by using the provided
 `ping` tool located at `${DARKFI_REPO}/script/ping`. Select a peer from 
 your hostlist file. You can now use the `ping` tool by 
-running this command (assuming nightly is default):
+running this command:
 
 ```
 $ cargo run -- tcp+tls://example_peer:26661
-```
-If nightly isn't default, use this command:
-
-```
-$ cargo +nightly run -- tcp+tls://example_peer:26661
 ```
 
 If the peers are reachable, you'll receive a `Connected!` output.

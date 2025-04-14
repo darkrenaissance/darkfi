@@ -41,6 +41,10 @@ exit 0
 Inside the darkfi project repo, place this script in `.git/hooks/pre-commit`
 and make sure it's executable by running `chmod +x .git/hooks/pre-commit`.
 
+Code style formatting(rustfmt) requires a nightly rust toolchain. To install nightly toolchain, execute:
+```
+$ rustup toolchain install nightly
+```
 
 ## Testing crate features
 
@@ -101,8 +105,8 @@ binaries from our codebase. A short setup using a Debian system and
 ```
 
 Inside the container, once attached, we have to install the required
-dependencies. We will have to use `rustup` to get the latest rust
-nightly, and we also have to compile `sqlcipher` on our own.
+dependencies. We will have to use `rustup` to get the latest rust,
+and we also have to compile `sqlcipher` on our own.
 
 ```
 # apk add rustup git musl-dev make gcc openssl-dev openssl-libs-static tcl-dev zlib-static
@@ -113,9 +117,9 @@ nightly, and we also have to compile `sqlcipher` on our own.
 # make -j$(nproc)
 # make install
 # cd ~
-# rustup-init --default-toolchain nightly -y
+# rustup-init --default-toolchain stable -y
 # source ~/.cargo/env
-# rustup target add wasm32-unknown-unknown --toolchain nightly
+# rustup target add wasm32-unknown-unknown --toolchain stable
 ```
 
 And now we should be able to build a statically linked binary:
@@ -134,7 +138,7 @@ In certain cases, it might also be possible to build natively by
 installing the musl toolchain:
 
 ```
-$ rustup target add x86_64-unknown-linux-musl --toolchain nightly
+$ rustup target add x86_64-unknown-linux-musl --toolchain stable
 ## Uncomment RUSTFLAGS in the main Makefile
 $ sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
 $ make RUST_TARGET=x86_64-unknown-linux-musl darkirc

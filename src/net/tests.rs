@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// cargo +nightly test --release --features=net --lib p2p -- --include-ignored
+// cargo test --release --features=net --lib p2p -- --include-ignored
 
 use std::{collections::HashSet, net::TcpListener, panic, sync::Arc};
 
