@@ -209,7 +209,7 @@ impl EmojiPicker {
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom) else {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
-            return;
+            return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
         t!("redraw DONE [trace_id={trace_id}]");

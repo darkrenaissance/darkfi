@@ -58,7 +58,7 @@ impl Token {
     fn flatten(self) -> Vec<Self> {
         match self {
             Self::NestedExpr(tokens) => {
-                let tokens = Box::into_inner(tokens);
+                let tokens: Vec<_> = *tokens;
                 tokens.into_iter().map(|t| t.flatten()).flatten().collect()
             }
             _ => vec![self],
@@ -375,7 +375,7 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
                                     Box::new(else_expr),
                                 )));
                                 out.push(token);
-                                continue 'mainloop
+                                continue 'mainloop;
                             }
                             cond_expr.push(token);
                         }

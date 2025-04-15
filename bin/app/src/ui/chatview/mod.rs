@@ -135,7 +135,7 @@ impl TouchInfo {
 
         // Now drop all old samples older than 40ms
         while let Some((instant, _)) = self.samples.front() {
-            if instant.elapsed().as_millis_f32() <= 40. {
+            if instant.elapsed().as_micros() <= 40_000 {
                 break
             }
             self.samples.pop_front().unwrap();
@@ -143,7 +143,7 @@ impl TouchInfo {
     }
 
     fn first_sample(&self) -> Option<(f32, f32)> {
-        self.samples.front().map(|(t, s)| (t.elapsed().as_millis_f32(), *s))
+        self.samples.front().map(|(t, s)| (t.elapsed().as_micros() as f32 / 1000., *s))
     }
 }
 
@@ -974,7 +974,8 @@ impl UIObject for ChatView {
                     let start_scroll = touch_info.start_scroll;
                     let start_y = touch_info.start_y;
 
-                    let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
+                    let start_elapsed =
+                        touch_info.start_instant.elapsed().as_micros() as f32 / 1000.;
                     if start_elapsed > select_hold_time && touch_info.is_select_mode.is_none() {
                         // Did we move?
                         if (touch_y - start_y).abs() < BIG_EPSILON {
@@ -988,8 +989,8 @@ impl UIObject for ChatView {
                     touch_info.push_sample(touch_y);
 
                     // Only update screen every 20ms. Avoid wasting cycles.
-                    let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
-                    let do_update = last_elapsed > 20.;
+                    let last_elapsed = touch_info.last_instant.elapsed().as_micros();
+                    let do_update = last_elapsed > 20_000;
                     if do_update {
                         touch_info.last_instant = std::time::Instant::now();
                     }
@@ -1012,9 +1013,7 @@ impl UIObject for ChatView {
                 }
 
                 // We are in selection mode so don't scroll the screen until touch phase ends.
-                if let Some(is_select_mode) = is_select_mode &&
-                    is_select_mode
-                {
+                if is_select_mode == Some(true) {
                     if ENABLE_SELECT {
                         self.select_line(touch_y).await;
                     }

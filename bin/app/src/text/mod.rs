@@ -104,7 +104,7 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         assert!(self.i <= self.glyphs.len());
         if self.i == self.glyphs.len() {
-            return None;
+            return None
         }
 
         let glyph = &self.glyphs[self.i];

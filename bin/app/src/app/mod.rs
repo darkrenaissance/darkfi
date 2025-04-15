@@ -166,7 +166,7 @@ impl App {
             Ok(db) => db,
             Err(err) => {
                 e!("Sled database '{}' failed to open: {err}!", db_path.display());
-                return Err(Error::SledDbErr);
+                return Err(Error::SledDbErr)
             }
         };
 
@@ -176,7 +176,8 @@ impl App {
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
 
-        let setting_root = Arc::new(SceneNode3::new("setting", SceneNodeType3::SettingRoot));
+        let setting_root = SceneNode3::new("setting", SceneNodeType3::SettingRoot);
+        let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree("settings").unwrap();
         let settings = Arc::new(PluginSettings {
             setting_root: setting_root.clone(),
@@ -208,7 +209,8 @@ impl App {
 
         d!("Schema loaded");
 
-        let plugin = Arc::new(SceneNode3::new("plugin", SceneNodeType3::PluginRoot));
+        let plugin = SceneNode3::new("plugin", SceneNodeType3::PluginRoot);
+        let plugin = plugin.setup_null();
         self.sg_root.clone().link(plugin.clone());
 
         #[cfg(feature = "enable-plugins")]
@@ -380,21 +382,21 @@ impl App {
 
     async fn trigger_draw(&self) {
         let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
-        match &window_node.pimpl {
+        match window_node.pimpl() {
             Pimpl::Window(win) => win.draw().await,
             _ => panic!("wrong pimpl"),
         }
     }
     async fn start_procs(&self) {
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
-        match &window_node.pimpl {
+        match window_node.pimpl() {
             Pimpl::Window(win) => win.clone().start(self.event_pub.clone(), self.ex.clone()).await,
             _ => panic!("wrong pimpl"),
         }
 
         let plugins = self.sg_root.clone().lookup_node("/plugin").unwrap();
         for plugin in plugins.get_children() {
-            match &plugin.pimpl {
+            match plugin.pimpl() {
                 Pimpl::DarkIrc(darkirc) => darkirc.clone().start(self.ex.clone()).await,
                 _ => panic!("wrong pimpl"),
             }

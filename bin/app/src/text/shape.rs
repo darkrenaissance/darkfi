@@ -174,18 +174,21 @@ impl ShapedGlyphs {
 
     fn consume(iter: &mut Peekable<IntoIter<GlyphInfo>>, cluster_bound: usize) -> Vec<GlyphInfo> {
         let mut consumed = vec![];
-        while let Some(glyph) = iter.peek() &&
-            glyph.cluster_start <= cluster_bound
-        {
+        while let Some(glyph) = iter.peek() {
+            if glyph.cluster_start > cluster_bound {
+                break
+            }
+
             let glyph = iter.next().unwrap();
             consumed.push(glyph);
         }
         consumed
     }
     fn drop_replaced(iter: &mut Peekable<IntoIter<GlyphInfo>>, cluster_end: usize) {
-        while let Some(glyph) = iter.peek() &&
-            glyph.cluster_start < cluster_end
-        {
+        while let Some(glyph) = iter.peek() {
+            if glyph.cluster_start >= cluster_end {
+                break
+            }
             let _ = iter.next();
         }
     }

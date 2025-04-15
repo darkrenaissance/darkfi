@@ -51,7 +51,7 @@ impl PressedKeysSmoothRepeat {
         if is_initial_keypress {
             trace!(target: "PressedKeysSmoothRepeat", "remove key {:?}", key);
             self.pressed_keys.remove(&key);
-            return 1;
+            return 1
         }
 
         // Insert key if not exists

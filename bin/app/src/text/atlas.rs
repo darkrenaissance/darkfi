@@ -153,7 +153,7 @@ impl<'a> Atlas<'a> {
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
     pub fn make(self) -> RenderedAtlas {
         //if self.glyph_ids.is_empty() {
-        //    return Err(Error::AtlasIsEmpty);
+        //    return Err(Error::AtlasIsEmpty)
         //}
 
         assert_eq!(self.glyph_ids.len(), self.sprites.len());

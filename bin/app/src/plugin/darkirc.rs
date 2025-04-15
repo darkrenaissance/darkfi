@@ -193,7 +193,7 @@ impl DarkIrc {
             Ok(db) => db,
             Err(err) => {
                 e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
-                return Err(Error::SledDbErr);
+                return Err(Error::SledDbErr)
             }
         };
 
@@ -242,7 +242,7 @@ impl DarkIrc {
             Ok(p2p) => p2p,
             Err(err) => {
                 e!("Create p2p network failed: {err}!");
-                return Err(Error::ServiceFailed);
+                return Err(Error::ServiceFailed)
             }
         };
 
@@ -260,7 +260,7 @@ impl DarkIrc {
             Ok(evgr) => evgr,
             Err(err) => {
                 e!("Create event graph failed: {err}!");
-                return Err(Error::ServiceFailed);
+                return Err(Error::ServiceFailed)
             }
         };
 

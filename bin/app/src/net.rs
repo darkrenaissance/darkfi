@@ -476,7 +476,7 @@ impl ZeroMQAdapter {
                         loop {
                             let Ok(signal_data) = recvr.recv().await else {
                                 // Die
-                                break;
+                                break
                             };
 
                             let mut m = zeromq::ZmqMessage::from(signal_data);

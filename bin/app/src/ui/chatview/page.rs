@@ -744,7 +744,7 @@ impl MessageBuffer {
     /// explicitly rendering since it may be off screen.
     pub fn adjust_width(&mut self, line_width: f32) {
         if (line_width - self.line_width).abs() < f32::EPSILON {
-            return;
+            return
         }
         self.line_width = line_width;
 
@@ -840,7 +840,7 @@ impl MessageBuffer {
         if self.msgs.is_empty() {
             let msg_idx = self.msgs.len();
             self.msgs.push(msg);
-            return self.msgs.last_mut().unwrap().get_privmsg_mut();
+            return self.msgs.last_mut().unwrap().get_privmsg_mut()
         }
 
         // We only add lines inside pages.
@@ -848,7 +848,7 @@ impl MessageBuffer {
         // When a line is before the first page, it will get preloaded as a new page.
         let oldest_timest = self.oldest_timestamp().unwrap();
         if timest < oldest_timest {
-            return None;
+            return None
         }
 
         // Timestamps go from most recent backwards
@@ -870,7 +870,7 @@ impl MessageBuffer {
         };
 
         self.msgs.insert(idx, msg);
-        return self.msgs[idx].get_privmsg_mut();
+        return self.msgs[idx].get_privmsg_mut()
     }
 
     pub fn push_privmsg(

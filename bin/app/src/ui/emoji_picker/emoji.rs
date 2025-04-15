@@ -154,11 +154,11 @@ fn unescape_unicode(input: &str) -> Option<String> {
         .replace_all(input, |caps: &regex::Captures| {
             let Ok(code) = u32::from_str_radix(&caps[1], 16) else {
                 failed = true;
-                return String::new();
+                return String::new()
             };
             let Some(chr) = char::from_u32(code) else {
                 failed = true;
-                return String::new();
+                return String::new()
             };
             chr.to_string()
         })

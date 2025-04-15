@@ -78,12 +78,12 @@ vertex RasterizerData vertexShader(Vertex v [[stage_in]])
     out.color = v.in_color;
     out.uv = v.texcoord;
 
-    return out;
+    return out
 }
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler texSmplr [[sampler(0)]])
 {
-    return in.color * tex.sample(texSmplr, in.uv);
+    return in.color * tex.sample(texSmplr, in.uv)
 }
 
 "#;

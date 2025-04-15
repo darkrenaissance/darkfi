@@ -426,14 +426,14 @@ impl EditBox {
         let mut rhs = 0.;
 
         if cursor_pos == 0 {
-            return 0.;
+            return 0.
         }
 
         for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
             glyph_rect.x -= scroll;
 
             if cursor_pos == glyph_idx {
-                return glyph_rect.x;
+                return glyph_rect.x
             }
 
             rhs = glyph_rect.rhs();
@@ -965,13 +965,13 @@ impl EditBox {
                 d!("TouchStateAction::DragSelectHandle [side=-1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
-                return true;
+                return true
             }
             if p2.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
                 d!("TouchStateAction::DragSelectHandle [side=1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
-                return true;
+                return true
             }
         }
 
@@ -1152,7 +1152,7 @@ impl EditBox {
 
         let rect_w = self.rect.get().w;
         if rhs <= rect_w {
-            return 0.;
+            return 0.
         }
         let max_scroll = rhs - rect_w;
         max_scroll
@@ -1178,7 +1178,7 @@ impl EditBox {
 
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::editbox", "Text failed to draw");
-            return;
+            return
         };
 
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
@@ -1492,7 +1492,7 @@ impl UIObject for EditBox {
         self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
 
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
-            return false;
+            return false
         }
 
         // if active and selection_active, then use x to modify the selection.

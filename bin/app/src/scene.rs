@@ -26,7 +26,7 @@ use std::{
     fmt,
     future::Future,
     str::FromStr,
-    sync::{Arc, RwLock as SyncRwLock, Weak},
+    sync::{Arc, OnceLock, RwLock as SyncRwLock, Weak},
 };
 
 use crate::{
@@ -63,24 +63,24 @@ impl FromStr for ScenePath {
 
     fn from_str(s: &str) -> Result<Self> {
         if s.is_empty() || s.chars().nth(0).unwrap() != '/' {
-            return Err(Error::InvalidScenePath);
+            return Err(Error::InvalidScenePath)
         }
         if s == "/" {
-            return Ok(ScenePath(VecDeque::new()));
+            return Ok(ScenePath(VecDeque::new()))
         }
 
         let mut tokens = s.split('/');
         // Should start with a /
         let initial = tokens.next().expect("should not be empty");
         if !initial.is_empty() {
-            return Err(Error::InvalidScenePath);
+            return Err(Error::InvalidScenePath)
         }
 
         let mut path = VecDeque::new();
         for token in tokens {
             // There should not be any double slashes //
             if token.is_empty() {
-                return Err(Error::InvalidScenePath);
+                return Err(Error::InvalidScenePath)
             }
             path.push_back(token.to_string());
         }
@@ -134,7 +134,7 @@ pub struct SceneNode {
     pub props: Vec<PropertyPtr>,
     pub sigs: SyncRwLock<Vec<SignalPtr>>,
     pub methods: Vec<Method>,
-    pub pimpl: Pimpl,
+    pub pimpl: OnceLock<Pimpl>,
 }
 
 impl SceneNode {
@@ -152,11 +152,11 @@ impl SceneNode {
             props: vec![],
             sigs: SyncRwLock::new(vec![]),
             methods: vec![],
-            pimpl: Pimpl::Null,
+            pimpl: OnceLock::new(),
         }
     }
 
-    pub async fn setup<F, Fut>(self, pimpl_fn: F) -> SceneNodePtr
+    pub async fn setup<F, Fut>(self, pimpl_fn: F) -> Arc<Self>
     where
         F: FnOnce(SceneNodeWeak) -> Fut,
         Fut: Future<Output = Pimpl>,
@@ -170,11 +170,27 @@ impl SceneNode {
         }
 
         let pimpl = pimpl_fn(weak_self).await;
-        // Arc::new_cyclic() doesnt allow async so we do this instead
-        unsafe {
-            Arc::get_mut_unchecked(&mut self_).pimpl = pimpl;
-        }
+        assert_eq!(Arc::strong_count(&self_), 1);
+        self_.pimpl.set(pimpl).unwrap();
         self_
+    }
+
+    pub fn setup_null(self) -> Arc<Self> {
+        let mut self_ = Arc::new(self);
+        let weak_self = Arc::downgrade(&self_);
+
+        // Initial props
+        for prop in &self_.props {
+            prop.set_parent(weak_self.clone());
+        }
+
+        assert_eq!(Arc::strong_count(&self_), 1);
+        self_.pimpl.set(Pimpl::Null);
+        self_
+    }
+
+    pub fn pimpl<'a>(&'a self) -> &'a Pimpl {
+        self.pimpl.get().unwrap()
     }
 
     pub fn link(self: Arc<Self>, child: SceneNodePtr) {
@@ -212,7 +228,7 @@ impl SceneNode {
     }
     pub fn add_property(&mut self, prop: Property) -> Result<()> {
         if self.has_property(&prop.name) {
-            return Err(Error::PropertyAlreadyExists);
+            return Err(Error::PropertyAlreadyExists)
         }
         self.props.push(Arc::new(prop));
         Ok(())
@@ -306,7 +322,7 @@ impl SceneNode {
     ) -> Result<()> {
         let name = name.into();
         if self.has_signal(&name) {
-            return Err(Error::SignalAlreadyExists);
+            return Err(Error::SignalAlreadyExists)
         }
         let fmt = fmt
             .into_iter()
@@ -370,7 +386,7 @@ impl SceneNode {
     ) -> Result<()> {
         let name = name.into();
         if self.has_method(&name) {
-            return Err(Error::MethodAlreadyExists);
+            return Err(Error::MethodAlreadyExists)
         }
         let args = args
             .into_iter()
@@ -534,4 +550,10 @@ pub enum Pimpl {
     Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
     DarkIrc(plugin::DarkIrcPtr),
+}
+
+impl std::fmt::Debug for Pimpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Pimpl")
+    }
 }

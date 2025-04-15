@@ -112,7 +112,7 @@ impl RenderedEditable {
                 return i
             }
         }
-        return self.glyphs.len();
+        return self.glyphs.len()
     }
 
     /// Converts glyph pos to idx in the string
@@ -124,7 +124,7 @@ impl RenderedEditable {
             }
             idx += glyph.substr.len();
         }
-        return idx;
+        return idx
     }
 
     pub fn has_underline(&self) -> bool {
@@ -143,10 +143,10 @@ impl RenderedEditable {
 
             let midpoint = glyph_rect.x + glyph_rect.w / 2.;
             if x < midpoint {
-                return glyph_idx;
+                return glyph_idx
             }
             assert!(x >= midpoint);
-            return glyph_idx + 1;
+            return glyph_idx + 1
         }
         // Everything to the right is at the end
         self.glyphs.len()
@@ -270,11 +270,13 @@ impl Editable {
         self.end_compose();
 
         let mut chars = self.before_text.chars();
-        chars.advance_back_by(before);
+        // nightly feature, commenting it for now
+        //chars.advance_back_by(before);
         self.before_text = chars.as_str().to_string();
 
         let mut chars = self.after_text.chars();
-        chars.advance_by(after);
+        // nightly feature, commenting it for now
+        //chars.advance_by(after);
         self.after_text = chars.as_str().to_string();
     }
 

@@ -566,7 +566,7 @@ pub async fn make(
     layer_node.clone().link(chatview_node.clone());
 
     if is_first_time {
-        let chatview = match &chatview_node.pimpl {
+        let chatview = match chatview_node.pimpl() {
             Pimpl::ChatView(obj) => obj.as_ref(),
             _ => panic!("wrong pimpl for chatview"),
         };

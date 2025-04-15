@@ -45,10 +45,9 @@ ENV NDK_HOME /usr/local/android-ndk-r25
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
-#RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
-RUN git clone --branch quad_injs https://github.com/narodnik/cargo-quad-apk cargo-apk
+RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
 # For deterministic builds, we want a deterministic toolchain
-#RUN cd /root/cargo-apk && git checkout 8962f6888e748e201f6ac2ced411669a3f939e07
+RUN cd /root/cargo-apk && git checkout f3b865610b79a2b1b9d2b90600c36390a9e19569
 
 # Install binary
 RUN cargo install --path /root/cargo-apk

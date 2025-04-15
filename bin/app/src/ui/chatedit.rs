@@ -78,7 +78,7 @@ fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
 }
 fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
     if byte_idx > s.len() || !s.is_char_boundary(byte_idx) {
-        return None;
+        return None
     }
     Some(s[..byte_idx].encode_utf16().count())
 }
@@ -842,13 +842,13 @@ impl ChatEdit {
                         d!("start touch: DragSelectHandle state [side=-1]");
                         // Set touch_state status to enable begin dragging them
                         touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
-                        return true;
+                        return true
                     }
                     if p2.dist_sq(&touch_pos) <= TOUCH_RADIUS_SQ {
                         d!("start touch: DragSelectHandle state [side=1]");
                         // Set touch_state status to enable begin dragging them
                         touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
-                        return true;
+                        return true
                     }
                 }
 
@@ -1191,7 +1191,7 @@ impl ChatEdit {
         t!("redraw()");
         let Some(draw_update) = self.make_draw_calls(trace_id, atom).await else {
             error!(target: "ui::chatedit", "Text failed to draw");
-            return;
+            return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
     }
@@ -1656,7 +1656,7 @@ impl UIObject for ChatEdit {
         self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
 
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
-            return false;
+            return false
         }
 
         let atom = &mut PropertyAtomicGuard::new();

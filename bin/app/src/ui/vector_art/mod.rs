@@ -111,7 +111,7 @@ impl VectorArt {
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::vector_art", "Mesh failed to draw [trace_id={trace_id}]");
-            return;
+            return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
     }

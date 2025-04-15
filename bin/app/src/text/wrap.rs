@@ -88,8 +88,7 @@ fn tokenize(font_size: f32, window_scale: f32, glyphs: &Vec<Glyph>) -> Vec<Token
 
             // Reset ruler
             lhs = -1.;
-            #[allow(unused_assignments)]
-            rhs = 0.;
+            //rhs = 0.;
             // take() blanked token_glyphs above
 
             token_type = new_type;

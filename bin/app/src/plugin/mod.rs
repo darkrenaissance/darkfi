@@ -107,7 +107,7 @@ impl PluginSettings {
         let atom = &mut PropertyAtomicGuard::new();
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
-                continue;
+                continue
             }
 
             let value = setting_node.get_property("value").clone().unwrap();
@@ -176,7 +176,7 @@ impl PluginSettings {
     pub fn save_settings(&self) {
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
-                continue;
+                continue
             }
 
             let value = setting_node.get_property("value").clone().unwrap();

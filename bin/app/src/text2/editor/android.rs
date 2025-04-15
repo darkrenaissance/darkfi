@@ -34,7 +34,7 @@ fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
 }
 fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
     if byte_idx > s.len() || !s.is_char_boundary(byte_idx) {
-        return None;
+        return None
     }
     Some(s[..byte_idx].encode_utf16().count())
 }

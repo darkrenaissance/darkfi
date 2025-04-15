@@ -138,7 +138,7 @@ impl Image {
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::image", "Image failed to draw");
-            return;
+            return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
         t!("redraw() DONE [trace_id={trace_id}]");

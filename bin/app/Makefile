@@ -1,7 +1,7 @@
 .POSIX:
 
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo
 
 RELEASE_APK = target/android-artifacts/release/apk/darkfi-app.apk
 DEBUG_APK = target/android-artifacts/debug/apk/darkfi-app.apk

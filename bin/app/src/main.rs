@@ -16,25 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// channel wait until deadline
-#![feature(deadline_api)]
-// Adds remainder() fn for String::split() result
-#![feature(str_split_whitespace_remainder)]
-// instant.elapsed().as_millis_f32()
-#![feature(duration_millis_float)]
-// Allow attributes on statements and code blocks
-#![feature(stmt_expr_attributes)]
-// if let Some(is_foo) = is_foo && is_foo { ... }
-#![feature(let_chains)]
-// consume a box
-#![feature(box_into_inner)]
-// we need Arc::get_mut_unchecked() to workaround the lack of Arc::new_cyclic() which
-// accepts async fns.
-// See https://github.com/rust-lang/rust/issues/112566
-#![feature(get_mut_unchecked)]
-// string.chars().advance_back_by(n), not strictly needed but makes life easier
-#![feature(iter_advance_by)]
-
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
 //#![deny(unused_imports)]

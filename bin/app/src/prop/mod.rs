@@ -443,13 +443,13 @@ impl Property {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_u32()?;
             if val < min {
-                return Err(Error::PropertyOutOfRange);
+                return Err(Error::PropertyOutOfRange)
             }
         }
         if self.max_val.is_some() {
             let max = self.max_val.as_ref().unwrap().as_u32()?;
             if val > max {
-                return Err(Error::PropertyOutOfRange);
+                return Err(Error::PropertyOutOfRange)
             }
         }
         self.set_raw_value(role, i, PropertyValue::Uint32(val))?;
@@ -466,13 +466,13 @@ impl Property {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_f32()?;
             if val < min {
-                return Err(Error::PropertyOutOfRange);
+                return Err(Error::PropertyOutOfRange)
             }
         }
         if self.max_val.is_some() {
             let max = self.max_val.as_ref().unwrap().as_f32()?;
             if val > max {
-                return Err(Error::PropertyOutOfRange);
+                return Err(Error::PropertyOutOfRange)
             }
         }
         self.set_raw_value(role, i, PropertyValue::Float32(val))?;

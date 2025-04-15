@@ -90,7 +90,7 @@ impl MeshBuilder {
         let clipped = match &self.clipper {
             Some(clipper) => {
                 let Some(clipped) = clipper.clip(&obj) else {
-                    return;
+                    return
                 };
                 clipped
             }
