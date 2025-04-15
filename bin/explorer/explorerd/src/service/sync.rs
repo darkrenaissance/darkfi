@@ -280,9 +280,9 @@ pub async fn subscribe_sync_blocks(
     };
 
     // Evaluates whether there is a mismatch between the last confirmed block and the last synced block
-    let blocks_mismatch = (last_darkfid_height != height || last_darkfid_hash != hash)
-        && last_darkfid_height != 0
-        && height != 0;
+    let blocks_mismatch = (last_darkfid_height != height || last_darkfid_hash != hash) &&
+        last_darkfid_height != 0 &&
+        height != 0;
 
     // Check if there is a mismatch, throwing an error to prevent operating in a potentially inconsistent state
     if blocks_mismatch {

@@ -1244,8 +1244,8 @@ mod tests {
 
         // Iterate and load data
         for height in 0..HEIGHT {
-            let timestamp_secs = (UNIX_EPOCH
-                + Duration::from_secs(start_time + height as u64 * GAS_METRICS_KEY_TIME_INTERVAL))
+            let timestamp_secs = (UNIX_EPOCH +
+                Duration::from_secs(start_time + height as u64 * GAS_METRICS_KEY_TIME_INTERVAL))
             .duration_since(UNIX_EPOCH)?
             .as_secs();
 
