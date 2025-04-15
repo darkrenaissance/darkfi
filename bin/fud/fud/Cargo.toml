@@ -13,11 +13,11 @@ darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc"]}
 darkfi-serial = {version = "0.4.2", features = ["hash"]}
 
 # Misc
-async-trait = "0.1.86"
-blake3 = "1.6.0"
+async-trait = "0.1.88"
+blake3 = "1.8.1"
 bs58 = "0.5.1"
 rand = "0.8.5"
-log = "0.4.26"
+log = "0.4.27"
 tinyjson = "2.5.1"
 url = "2.5.4"
 num-bigint = "0.4.6"
@@ -31,7 +31,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
+serde = {version = "1.0.219", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

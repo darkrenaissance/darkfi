@@ -15,8 +15,8 @@ darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint
 darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
 
 num-bigint = "0.4.6"
-blake3 = "1.6.0"
-log = "0.4.26"
+blake3 = "1.8.1"
+log = "0.4.27"
 rand = "0.8.5"
 simplelog = "0.12.2"
 sled-overlay = "0.1.6"

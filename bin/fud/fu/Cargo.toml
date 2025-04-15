@@ -16,7 +16,7 @@ smol = "2.0.2"
 
 # Misc
 clap = {version = "4.4.11", features = ["derive"]}
-log = "0.4.26"
+log = "0.4.27"
 simplelog = "0.12.2"
 url = "2.5.4"
 termcolor = "1.4.1"

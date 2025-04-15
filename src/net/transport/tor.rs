@@ -102,7 +102,7 @@ impl TorDialer {
             Ok(client) => client.isolated_client(),
             Err(e) => {
                 warn!(target: "net::tor::TorDialer", "{}", e.report());
-                return Err(io::Error::other("Internal Tor error, see logged warning"))
+                return Err(io::Error::other("Internal Tor error, see logged warning"));
             }
         };
 
@@ -208,7 +208,7 @@ impl TorListener {
             Ok(client) => client.isolated_client(),
             Err(e) => {
                 warn!(target: "net::tor::do_listen", "{}", e.report());
-                return Err(io::Error::other("Internal Tor error, see logged warning"))
+                return Err(io::Error::other("Internal Tor error, see logged warning"));
             }
         };
 
@@ -221,7 +221,7 @@ impl TorListener {
                     target: "net::tor::do_listen",
                     "[P2P] Failed to create OnionServiceConfig: {}", e,
                 );
-                return Err(io::Error::other("Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"));
             }
         };
 
@@ -232,18 +232,19 @@ impl TorListener {
                     target: "net::tor::do_listen",
                     "[P2P] Failed to launch Onion Service: {}", e,
                 );
-                return Err(io::Error::other("Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"));
             }
         };
 
         info!(
             target: "net::tor::do_listen",
             "[P2P] Established Tor listener on tor://{}:{}",
-            onion_service.onion_name().unwrap(), port,
+            onion_service.onion_address().unwrap(), port,
         );
 
         let endpoint =
-            Url::parse(&format!("tor://{}:{}", onion_service.onion_name().unwrap(), port)).unwrap();
+            Url::parse(&format!("tor://{}:{}", onion_service.onion_address().unwrap(), port))
+                .unwrap();
         self.endpoint.set(endpoint).await.expect("fatal endpoint already set for TorListener");
 
         Ok(TorListenerIntern {
@@ -270,7 +271,7 @@ impl PtListener for TorListenerIntern {
         let mut rendreq_stream = self.rendreq_stream.lock().await;
 
         let Some(rendrequest) = rendreq_stream.next().await else {
-            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
         };
 
         drop(rendreq_stream);
@@ -282,19 +283,19 @@ impl PtListener for TorListenerIntern {
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor RendRequest: {}", e,
                 );
-                return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+                return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
             }
         };
 
         let Some(streamrequest) = streamreq_stream.next().await else {
-            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
         };
 
         // Validate port correctness
         match streamrequest.request() {
             IncomingStreamRequest::Begin(begin) => {
                 if begin.port() != self.port {
-                    return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+                    return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
                 }
             }
             &_ => return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted")),
@@ -307,7 +308,7 @@ impl PtListener for TorListenerIntern {
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor StreamRequest: {}", e,
                 );
-                return Err(io::Error::other("Internal Tor error"))
+                return Err(io::Error::other("Internal Tor error"));
             }
         };
 

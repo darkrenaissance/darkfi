@@ -511,7 +511,7 @@ impl MetricsStoreOverlay {
 
             // Insert serialized gas data
             lock.insert(SLED_TX_GAS_DATA_TREE, tx_hash.inner(), &serialized_gas_data)?;
-            info!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {}: {gas_data:?}", tx_hash.to_string());
+            info!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {}: {gas_data:?}", tx_hash);
         }
 
         Ok(())
@@ -1244,8 +1244,8 @@ mod tests {
 
         // Iterate and load data
         for height in 0..HEIGHT {
-            let timestamp_secs = (UNIX_EPOCH +
-                Duration::from_secs(start_time + height as u64 * GAS_METRICS_KEY_TIME_INTERVAL))
+            let timestamp_secs = (UNIX_EPOCH
+                + Duration::from_secs(start_time + height as u64 * GAS_METRICS_KEY_TIME_INTERVAL))
             .duration_since(UNIX_EPOCH)?
             .as_secs();
 

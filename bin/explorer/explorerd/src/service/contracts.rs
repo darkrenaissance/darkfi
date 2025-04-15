@@ -172,7 +172,7 @@ impl ExplorerService {
 
             // Add source code into the `ContractMetaStore`
             self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
-            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {}", contract_id_str.to_string());
+            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {}", contract_id_str);
         }
         Ok(())
     }

@@ -287,7 +287,7 @@ impl ContractMetadataStoreOverlay {
                 &serialized_metadata,
             )?;
             debug!(target: "explorerd::contract_meta_store::insert_metadata",
-                "Inserted contract metadata for contract_id {}: {metadata:?}", contract_id.to_string());
+                "Inserted contract metadata for contract_id {}: {metadata:?}", contract_id);
         }
 
         // Commit the changes

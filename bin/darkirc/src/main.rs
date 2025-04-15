@@ -60,7 +60,7 @@ mod settings;
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
-    error!("{}", std::backtrace::Backtrace::force_capture().to_string());
+    error!("{}", std::backtrace::Backtrace::force_capture());
     std::process::abort()
 }
 
@@ -199,7 +199,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("dm_chacha_public = \"YOUR_CONTACT_PUBLIC_KEY\"");
         println!("my_dm_chacha_secret = \"{}\"", secret);
         println!("#my_dm_chacha_public = \"{}\"", public);
-        return Ok(())
+        return Ok(());
     }
 
     if args.gen_channel_secret {
@@ -208,7 +208,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("Place this in your config file:\n");
         println!("[channel.\"#yourchannelname\"]");
         println!("secret = \"{}\"", secret);
-        return Ok(())
+        return Ok(());
     }
 
     if args.gen_rln_identity {
@@ -219,7 +219,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("[rln]");
         println!("nullifier = \"{}\"", nullifier);
         println!("trapdoor = \"{}\"", trapdoor);
-        return Ok(())
+        return Ok(());
     }
 
     if let Some(chacha_secret) = args.chacha_secret {
@@ -227,18 +227,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             Ok(v) => v,
             Err(e) => {
                 println!("Error: {}", e);
-                return Err(Error::ParseFailed("Secret key parsing failed"))
+                return Err(Error::ParseFailed("Secret key parsing failed"));
             }
         };
 
         if bytes.len() != 32 {
-            return Err(Error::ParseFailed("Decoded base58 is not 32 bytes long"))
+            return Err(Error::ParseFailed("Decoded base58 is not 32 bytes long"));
         }
 
         let secret: [u8; 32] = bytes.try_into().unwrap();
         let secret = crypto_box::SecretKey::from(secret);
         println!("{}", bs58::encode(secret.public_key().to_bytes()).into_string());
-        return Ok(())
+        return Ok(());
     }
 
     if args.list_contacts {
@@ -246,21 +246,21 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             Ok(path) => path,
             Err(e) => {
                 error!("Unable to get config path: {}", e);
-                return Err(e)
+                return Err(e);
             }
         };
         let contents = match fs::read_to_string(&config_path).await {
             Ok(c) => c,
             Err(e) => {
                 error!("Unable read path `{config_path:?}`: {}", e);
-                return Err(e.into())
+                return Err(e.into());
             }
         };
         let contents = match toml::from_str(&contents) {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed parsing TOML config: {}", e);
-                return Err(Error::ParseFailed("Failed parsing TOML config"))
+                return Err(Error::ParseFailed("Failed parsing TOML config"));
             }
         };
 
@@ -269,7 +269,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             Ok(c) => c,
             Err(e) => {
                 error!("List contacts failed `{config_path:?}`: {}", e);
-                return Err(e)
+                return Err(e);
             }
         };
 
@@ -280,7 +280,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             let my_public_key = bs58::encode(my_public_key.to_bytes()).into_string();
             println!("{name}: {public_key} using key {my_secret_key}({my_public_key})")
         }
-        return Ok(())
+        return Ok(());
     }
 
     if args.encrypt_password {
@@ -300,7 +300,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("{}", bcrypt_hash_password(pw));
         std::io::stdout().flush()?;
 
-        return Ok(())
+        return Ok(());
     }
 
     info!("Initializing DarkIRC node");
@@ -310,19 +310,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(v) => v,
         Err(e) => {
             error!("Bad datastore path `{}`: {e}", args.datastore);
-            return Err(e)
+            return Err(e);
         }
     };
     if let Err(e) = fs::create_dir_all(&datastore).await {
         error!("Failed to create data store path `{datastore:?}`: {e}");
-        return Err(e.into())
+        return Err(e.into());
     }
 
     let replay_datastore = match expand_path(&args.replay_datastore) {
         Ok(v) => v,
         Err(e) => {
             error!("Bad replay datastore path `{}`: {e}", args.replay_datastore);
-            return Err(e)
+            return Err(e);
         }
     };
     let replay_mode = args.replay_mode;
@@ -332,7 +332,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(v) => v,
         Err(e) => {
             error!("Failed to open datastore database `{datastore:?}`: {e}");
-            return Err(e.into())
+            return Err(e.into());
         }
     };
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
@@ -341,7 +341,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(p2p) => p2p,
         Err(e) => {
             error!("Unable to create P2P network: {e}");
-            return Err(e)
+            return Err(e);
         }
     };
     let event_graph = match EventGraph::new(
@@ -358,7 +358,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(v) => v,
         Err(e) => {
             error!("Event graph failed to start: {e}");
-            return Err(e)
+            return Err(e);
         }
     };
 
@@ -452,7 +452,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(v) => v,
         Err(e) => {
             error!("Cannot get config path `{:?}`: {e}", args.config);
-            return Err(e)
+            return Err(e);
         }
     };
     let irc_server = match IrcServer::new(
@@ -468,7 +468,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to create IRC server: {e}");
-            return Err(e)
+            return Err(e);
         }
     };
 
@@ -489,13 +489,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting P2P network");
     if let Err(e) = p2p.clone().start().await {
         error!("P2P failed to start: {e}");
-        return Err(e)
+        return Err(e);
     }
 
     // Initial DAG sync
     if let Err(e) = sync_task(&p2p, &event_graph, args.skip_dag_sync).await {
         error!("DAG sync task failed to start: {e}");
-        return Err(e)
+        return Err(e);
     };
 
     // Stoppable task to monitor network and resync on disconnect.

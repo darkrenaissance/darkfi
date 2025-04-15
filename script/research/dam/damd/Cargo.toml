@@ -15,15 +15,15 @@ darkfi = {path = "../../../../", features = ["async-daemonize", "rpc"]}
 darkfi-serial = "0.4.2"
 
 # Misc
-log = "0.4.26"
+log = "0.4.27"
 
 # JSON-RPC
-async-trait = "0.1.86"
+async-trait = "0.1.88"
 tinyjson = "2.5.1"
 url = "2.5.4"
 
 # Daemon
-async-std = {version = "1.13.0", features = ["attributes"]}
+async-std = {version = "1.13.1", features = ["attributes"]}
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"
@@ -31,6 +31,6 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.218", features = ["derive"]}
+serde = {version = "1.0.219", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

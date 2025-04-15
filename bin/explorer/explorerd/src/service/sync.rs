@@ -150,7 +150,7 @@ impl ExplorerService {
                     "rpc_blocks::sync_blocks",
                     "[sync_blocks] Put block failed",
                     e,
-                ))
+                ));
             };
 
             debug!(
@@ -227,7 +227,7 @@ impl ExplorerService {
                                     "Reorg detected at height {}: explorer.{} != darkfid.{}",
                                     cur_height,
                                     synced_block.header_hash,
-                                    darkfid_block.hash().to_string()
+                                    darkfid_block.hash()
                                 );
                             }
                         }
@@ -280,9 +280,9 @@ pub async fn subscribe_sync_blocks(
     };
 
     // Evaluates whether there is a mismatch between the last confirmed block and the last synced block
-    let blocks_mismatch = (last_darkfid_height != height || last_darkfid_hash != hash) &&
-        last_darkfid_height != 0 &&
-        height != 0;
+    let blocks_mismatch = (last_darkfid_height != height || last_darkfid_hash != hash)
+        && last_darkfid_height != 0
+        && height != 0;
 
     // Check if there is a mismatch, throwing an error to prevent operating in a potentially inconsistent state
     if blocks_mismatch {
@@ -360,7 +360,7 @@ pub async fn subscribe_sync_blocks(
                                 },
                             };
                             info!(target: "explorerd::rpc_blocks::subscribe_blocks", "========================================================================================");
-                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "| Block Notification: {} |", darkfid_block.hash().to_string());
+                            info!(target: "explorerd::rpc_blocks::subscribe_blocks", "| Block Notification: {} |", darkfid_block.hash());
                             info!(target: "explorerd::rpc_blocks::subscribe_blocks", "========================================================================================");
 
                             // Store darkfi node block height for later use
