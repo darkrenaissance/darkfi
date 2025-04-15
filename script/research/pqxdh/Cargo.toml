@@ -16,7 +16,3 @@ kyber-kem = "0.1.3"
 rand = "0.8.5"
 sha2 = "0.10.8"
 x25519-dalek = {version = "2.0.1", features = ["static_secrets"]}
-
-[lints]
-workspace = true
-

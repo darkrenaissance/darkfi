@@ -139,7 +139,7 @@ fn median(v: &mut Vec<u64>) -> u64 {
     assert!(v.is_empty());
 
     if v.len() == 1 {
-        return v[0]
+        return v[0];
     }
 
     let n = v.len() / 2;
@@ -155,17 +155,17 @@ fn median(v: &mut Vec<u64>) -> u64 {
 /// Verify a block's timestamp is valid and matches certain criteria.
 fn check_block_timestamp(block: &Block, timestamps: &mut Vec<u64>) -> bool {
     if block.header.timestamp > Timestamp::current_time().inner() + BLOCK_FUTURE_TIME_LIMIT {
-        return false
+        return false;
     }
 
     // If not enough blocks, no proper median yet, return true
     if timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
-        return true
+        return true;
     }
 
     // Make sure the timestamp is higher than the median
     if block.header.timestamp < median(timestamps) {
-        return false
+        return false;
     }
 
     true
@@ -189,7 +189,7 @@ fn next_difficulty(
     assert!(length == cumulative_difficulties.len() && length <= DIFFICULTY_WINDOW);
 
     if length <= 1 {
-        return BigUint::one()
+        return BigUint::one();
     }
 
     // Sort the timestamps vector
@@ -242,7 +242,7 @@ fn main() -> Result<()> {
     // The cumulative difficulties track difficulty through time.
     // The genesis block (block 0) is ignored. Blocks 1 and 2 must have difficulty 1.
     let mut difficulties = vec![];
-    let mut cumlative_difficulty = BigUint::zero();
+    let mut cumulative_difficulty = BigUint::zero();
     // We also track block timestamps this way.
     let mut timestamps = vec![];
 
@@ -319,7 +319,7 @@ fn main() -> Result<()> {
                     block.header.nonce = pallas::Base::from(miner_nonce as u64);
                     if found_block.load(Ordering::SeqCst) {
                         println!("[#{}] [MINER] Block found, thread #{} exiting", n, t);
-                        break
+                        break;
                     }
 
                     let out_hash = vm.hash(block.hash().unwrap().as_bytes());
@@ -333,7 +333,7 @@ fn main() -> Result<()> {
                         );
                         println!("[#{}] [MINER] Block hash {}", n, block.hash().unwrap().to_hex());
                         println!("[#{}] [MINER] RandomX output: 0x{:064x}", n, out_hash);
-                        break
+                        break;
                     }
 
                     // This means thread 0 will use nonces, 0, 4, 8, ...
