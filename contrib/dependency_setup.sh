@@ -145,7 +145,7 @@ Linux)
 		setup_pkg_add "$SUDO $(command -v pkg_add)" || exit 1
 		echo "Rust support is not yet ready for OpenBSD, see https://github.com/rust-lang/rustup/issues/2168#issuecomment-1505185711"
 		echo "You may try to compile rustc and cargo yourself or get the latest with:"
-		echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain nightly --default-host x86_64-unknown-openbsd"
+		echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain stable --default-host x86_64-unknown-openbsd"
 	fi
 
 	echo "Error: Could not recognize your package manager." >&2
