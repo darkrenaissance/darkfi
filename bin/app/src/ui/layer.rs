@@ -31,7 +31,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
-    ExecutorPtr,
+    AndroidSuggestEvent, ExecutorPtr,
 };
 
 use super::{
@@ -300,30 +300,6 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_touch(phase, id, touch_pos).await {
-                return true
-            }
-        }
-        false
-    }
-    async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
-        if !self.is_visible.get() {
-            return false
-        }
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if obj.handle_compose_text(suggest_text, is_commit).await {
-                return true
-            }
-        }
-        false
-    }
-    async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
-        if !self.is_visible.get() {
-            return false
-        }
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if obj.handle_set_compose_region(start, end).await {
                 return true
             }
         }

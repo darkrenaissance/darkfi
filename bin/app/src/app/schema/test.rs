@@ -479,16 +479,19 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         })
         .await;
     layer_node.clone().link(node);
+    */
 
     // Text edit
     let node = create_chatedit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
-    node.set_property_f32(atom, Role::App, "max_height", 400.).unwrap();
+    let prop = node.get_property("height_range").unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 100.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 400.).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 100.).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 300.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 50.).unwrap();
@@ -536,5 +539,4 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         })
         .await;
     layer_node.clone().link(node);
-    */
 }

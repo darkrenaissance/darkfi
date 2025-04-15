@@ -7,6 +7,7 @@ K = GF(q)
 F.<z> = K[]
 
 f = 4 + 3*z + 1*z^2 + 5*z^3
+assert len(list(f)) == k
 
 # Let βᵢ = K(i - 1)
 

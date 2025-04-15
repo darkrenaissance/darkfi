@@ -49,6 +49,16 @@ extern crate log;
 #[allow(unused_imports)]
 use log::LevelFilter;
 
+#[derive(Debug)]
+pub enum AndroidSuggestEvent {
+    Init,
+    CreateInputConnect,
+    Compose { text: String, cursor_pos: i32, is_commit: bool },
+    ComposeRegion { start: usize, end: usize },
+    FinishCompose,
+    DeleteSurroundingText { left: usize, right: usize },
+}
+
 #[cfg(target_os = "android")]
 mod android;
 mod app;
@@ -68,6 +78,7 @@ mod scene;
 mod shape;
 use scene::SceneNode as SceneNode3;
 mod text;
+mod text2;
 mod ui;
 mod util;
 

@@ -1,26 +1,102 @@
 //% IMPORTS
 
-import android.view.inputmethod.InputMethodManager;
-import android.os.Environment;
+import android.view.ViewGroup;
+import android.text.Editable;
+import android.text.Spannable;
+import android.text.SpanWatcher;
+import android.text.Spanned;
+import android.text.TextWatcher;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.view.inputmethod.BaseInputConnection;
+import java.util.HashMap;
 
+import autosuggest.InvisibleInputView;
 import autosuggest.CustomInputConnection;
 
 //% END
 
 //% MAIN_ACTIVITY_BODY
 
-public void cancelComposition() {
-    InputMethodManager imm =
-        (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-    imm.restartInput(view);
+private ViewGroup rootView;
+
+private HashMap<Integer, InvisibleInputView> editors;
+
+native static void onInitEdit(int id);
+
+public void createComposer(final int id) {
+    Log.d("darkfi", "createComposer() -> " + id);
+
+    final InvisibleInputView iv = new InvisibleInputView(this, id);
+    editors.put(id, iv);
+
+    runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+            rootView.addView(iv);
+            iv.clearFocus();
+            onInitEdit(id);
+        }
+    });
 }
+
+public boolean focus(final int id) {
+    final InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
+        return false;
+    }
+
+    runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+            boolean isFocused = iv.requestFocus();
+            // Just Android things ;)
+            if (!isFocused) {
+                Log.w("darkfi", "error requesting focus for id=" + id + ": " + iv);
+            }
+
+            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.showSoftInput(iv, InputMethodManager.SHOW_IMPLICIT);
+        }
+    });
+
+    return true;
+}
+
+public CustomInputConnection getInputConnect(int id) {
+    InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
+        return null;
+    }
+    return iv.inputConnection;
+}
+
+public boolean setText(final int id, final String txt) {
+    final InvisibleInputView iv = editors.get(id);
+    if (iv == null || iv.inputConnection == null) {
+        return false;
+    }
+
+    // Maybe do this on the UI thread?
+    iv.inputConnection.setEditableText(txt, txt.length(), txt.length(), 0, 0);
+
+    return true;
+}
+
+/*
+// Editable string with the spans displayed inline
+public String getDebugEditableStr() {
+    String edit = view.inputConnection.debugEditableStr();
+    Log.d("darkfi", "getDebugEditableStr() -> " + edit);
+    return edit;
+}
+*/
 
 public String getAppDataPath() {
     return getApplicationContext().getDataDir().getAbsolutePath();
 }
 public String getExternalStoragePath() {
     return getApplicationContext().getExternalFilesDir(null).getAbsolutePath();
-    //return Environment.getExternalStorageDirectory().getAbsolutePath();
 }
 
 public int getKeyboardHeight() {
@@ -35,16 +111,14 @@ public int getKeyboardHeight() {
 
 //% END
 
-//% QUAD_SURFACE_ON_CREATE_INPUT_CONNECTION
+//% MAIN_ACTIVITY_ON_CREATE
 
-// Needed to fix error: unreachable statement in Java
-if (true) {
-    outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT
-        | EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT;
-    outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
-        | EditorInfo.IME_ACTION_NONE;
-    return new CustomInputConnection(this, outAttrs);
-}
+rootView = layout;
+editors = new HashMap<>();
+
+view.setFocusable(false);
+view.setFocusableInTouchMode(false);
+view.clearFocus();
 
 //% END
 

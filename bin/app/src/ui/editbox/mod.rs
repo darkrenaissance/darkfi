@@ -1558,7 +1558,13 @@ impl UIObject for EditBox {
         }
     }
 
-    async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
+    /*
+    async fn handle_compose_text(
+        &self,
+        suggest_text: &str,
+        cursor_pos: i32,
+        is_commit: bool,
+    ) -> bool {
         t!("handle_compose_text({suggest_text}, {is_commit})");
 
         if !self.is_active.get() {
@@ -1593,6 +1599,7 @@ impl UIObject for EditBox {
 
         true
     }
+    */
 }
 
 /// Filter these char events from being handled since we handle them

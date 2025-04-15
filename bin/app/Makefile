@@ -74,17 +74,17 @@ dev: $(SRC) fonts
 	./darkfi-app
 
 apk: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
+	podman run -v /home/narodnik/src/stuff/miniquad:/root/mq -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	-mv $(DEBUG_APK) .
-	-adb uninstall darkfi.app
-	adb install darkfi-app.apk
+	-adb uninstall darkfi.darkfi_app
+	adb install -r darkfi-app.apk
 	reset
 	adb logcat -c
-	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager
+	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app
 
 # Useful for dev
 cli:
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
+	podman run -v /home/narodnik/src/stuff/parley:/root/parley -v /home/narodnik/src/stuff/miniquad:/root/mq -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
 
 clean:
 	podman run -v $(shell pwd):/root/dw -w /root/dw -t apk rm -fr target/

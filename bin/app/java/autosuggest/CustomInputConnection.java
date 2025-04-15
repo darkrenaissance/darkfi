@@ -44,8 +44,8 @@ import android.view.inputmethod.InputMethodManager;
 // It then adapts android's IME to chrome's RenderWidgetHostView using the
 // native ImeAdapterAndroid via the outer class ImeAdapter.
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = false;
-    private int ID = (int)(Math.random() * (1 << 30));
+    private static final boolean DEBUG = true;
+    private int id = -1;
 
     private View mInternalView;
     //private ImeAdapter mImeAdapter;
@@ -54,12 +54,15 @@ public class CustomInputConnection extends BaseInputConnection {
     private int numBatchEdits;
     private boolean shouldUpdateImeSelection;
 
-    native static void onCompose(String text, int newCursorPos, boolean isCommit);
-    native static void onSetComposeRegion(int start, int end);
+    native static void onCompose(int id, String text, int newCursorPos, boolean isCommit);
+    native static void onSetComposeRegion(int id, int start, int end);
+    native static void onFinishCompose(int id);
+    native static void onDeleteSurroundingText(int id, int left, int right);
 
     //private AdapterInputConnection(View view, ImeAdapter imeAdapter, EditorInfo outAttrs) {
-    public CustomInputConnection(View view, EditorInfo outAttrs) {
+    public CustomInputConnection(int id, View view, EditorInfo outAttrs) {
         super(view, true);
+        this.id = id;
         log("CustomInputConnection()");
         mInternalView = view;
         //mImeAdapter = imeAdapter;
@@ -117,7 +120,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     private void log(String fstr, Object... args) {
         if (!DEBUG) return;
-        String text = "(" + ID + "): " + String.format(fstr, args);
+        String text = "(" + id + "): " + String.format(fstr, args);
         Log.d("darkfi", text);
     }
 
@@ -138,11 +141,12 @@ public class CustomInputConnection extends BaseInputConnection {
      */
     public void setEditableText(String text, int selectionStart, int selectionEnd,
             int compositionStart, int compositionEnd) {
-        log("darkfi", "setEditableText(%s, %d, %d, %d, %d)",
-            text, selectionStart, selectionEnd,
+        log("setEditableText(%s, %d, %d, %d, %d)", text,
+            selectionStart, selectionEnd,
             compositionStart, compositionEnd);
 
         if (mEditable == null) {
+            log("setEditableText creating new editable");
             mEditable = Editable.Factory.getInstance().newEditable("");
         }
 
@@ -176,12 +180,14 @@ public class CustomInputConnection extends BaseInputConnection {
         }
 
         if (!textUnchanged) {
+            log("replace mEditable with: %s", text);
             mEditable.replace(0, mEditable.length(), text);
         }
         Selection.setSelection(mEditable, selectionStart, selectionEnd);
         super.setComposingRegion(compositionStart, compositionEnd);
 
         if (textUnchanged || prevText.equals("")) {
+            log("setEditableText updating selection");
             // updateSelection should be called when a manual selection change occurs.
             // Should not be called if text is being entered else issues can occur
             // e.g. backspace to undo autocorrection will not work with the default OSK.
@@ -193,6 +199,7 @@ public class CustomInputConnection extends BaseInputConnection {
     @Override
     public Editable getEditable() {
         if (mEditable == null) {
+            log("getEditable() [create new]");
             mEditable = Editable.Factory.getInstance().newEditable("");
             Selection.setSelection(mEditable, 0);
         }
@@ -205,7 +212,7 @@ public class CustomInputConnection extends BaseInputConnection {
         log("setComposingText(%s, %d)", text, newCursorPosition);
         super.setComposingText(text, newCursorPosition);
         shouldUpdateImeSelection = true;
-        onCompose(text.toString(), newCursorPosition, false);
+        onCompose(id, text.toString(), newCursorPosition, false);
         return true;
     }
 
@@ -214,7 +221,7 @@ public class CustomInputConnection extends BaseInputConnection {
         log("commitText(%s, %d)", text, newCursorPosition);
         super.commitText(text, newCursorPosition);
         shouldUpdateImeSelection = true;
-        onCompose(text.toString(), newCursorPosition, text.length() > 0);
+        onCompose(id, text.toString(), newCursorPosition, text.length() > 0);
         return true;
     }
 
@@ -259,6 +266,27 @@ public class CustomInputConnection extends BaseInputConnection {
     }
 
     @Override
+    public CharSequence getTextAfterCursor(int length, int flags) {
+        log("getTextAfterCursor(%d, %d)", length, flags);
+        return super.getTextAfterCursor(length, flags);
+    }
+    @Override
+    public CharSequence getTextBeforeCursor(int length, int flags) {
+        log("getTextBeforeCursor(%d, %d)", length, flags);
+        return super.getTextBeforeCursor(length, flags);
+    }
+    @Override
+    public SurroundingText getSurroundingText(int beforeLength, int afterLength, int flags) {
+        log("getSurroundingText(%d, %d, %d)", beforeLength, afterLength, flags);
+        return super.getSurroundingText(beforeLength, afterLength, flags);
+    }
+    @Override
+    public CharSequence getSelectedText(int flags) {
+        log("getSelectedText(%d)", flags);
+        return super.getSelectedText(flags);
+    }
+
+    @Override
     public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
         log("getExtractedText(...)");
         ExtractedText et = new ExtractedText();
@@ -282,6 +310,7 @@ public class CustomInputConnection extends BaseInputConnection {
         }
         shouldUpdateImeSelection = true;
         //return mImeAdapter.deleteSurroundingText(leftLength, rightLength);
+        onDeleteSurroundingText(id, leftLength, rightLength);
         return true;
     }
 
@@ -330,7 +359,7 @@ public class CustomInputConnection extends BaseInputConnection {
             return true;
         }
         super.finishComposingText();
-        onCompose("", 0, true);
+        onFinishCompose(id);
         return true;
     }
 
@@ -360,7 +389,7 @@ public class CustomInputConnection extends BaseInputConnection {
         int a = Math.min(start, end);
         int b = Math.max(start, end);
         super.setComposingRegion(a, b);
-        onSetComposeRegion(a, b);
+        onSetComposeRegion(id, a, b);
         return true;
     }
 
@@ -369,19 +398,28 @@ public class CustomInputConnection extends BaseInputConnection {
     }
 
     private InputMethodManager getInputMethodManager() {
-        return (InputMethodManager) mInternalView.getContext()
-                .getSystemService(Context.INPUT_METHOD_SERVICE);
+        InputMethodManager imm = (InputMethodManager)mInternalView.getContext()
+            .getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm == null) {
+            Log.e("darkfi", "[IC]: InputMethodManager is NULL!");
+        }
+        return imm;
     }
 
     private void updateImeSelection() {
         log("updateImeSelection()");
-        if (mEditable != null) {
-            getInputMethodManager().updateSelection(mInternalView,
-                    Selection.getSelectionStart(mEditable),
-                    Selection.getSelectionEnd(mEditable),
-                    getComposingSpanStart(mEditable),
-                    getComposingSpanEnd(mEditable));
+        if (mEditable == null) {
+            return;
         }
+
+        getInputMethodManager().updateSelection(
+            mInternalView,
+            Selection.getSelectionStart(mEditable),
+            Selection.getSelectionEnd(mEditable),
+            getComposingSpanStart(mEditable),
+            getComposingSpanEnd(mEditable)
+        );
+        log("updateImeSelection() DONE");
     }
 
     @Override
@@ -398,6 +436,7 @@ public class CustomInputConnection extends BaseInputConnection {
             updateImeSelection();
             shouldUpdateImeSelection = false;
         }
+        log("endBatchEdit DONE");
         return false;
     }
 
@@ -419,7 +458,15 @@ public class CustomInputConnection extends BaseInputConnection {
             }
 
             // Append the character
-            xmlBuilder.append(editable.charAt(i));
+            char c = editable.charAt(i);
+            xmlBuilder.append(c);
+
+            if (Character.isHighSurrogate(c)) {
+                if (i + 1 < editable.length() && Character.isLowSurrogate(editable.charAt(i + 1))) {
+                    i += 1;
+                    xmlBuilder.append(editable.charAt(i));
+                }
+            }
 
             // Find spans ending at this position
             for (Object span : spans) {
@@ -452,6 +499,25 @@ public class CustomInputConnection extends BaseInputConnection {
         }
 
         return xmlBuilder.toString();
+    }
+
+    public String debugEditableStr() {
+        return editableToXml(mEditable);
+    }
+    public String rawText() {
+        return mEditable.toString();
+    }
+    public int getSelectionStart() {
+        return Selection.getSelectionStart(mEditable);
+    }
+    public int getSelectionEnd() {
+        return Selection.getSelectionEnd(mEditable);
+    }
+    public int getComposeStart() {
+        return getComposingSpanStart(mEditable);
+    }
+    public int getComposeEnd() {
+        return getComposingSpanEnd(mEditable);
     }
 }
 

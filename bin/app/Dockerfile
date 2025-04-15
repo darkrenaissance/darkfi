@@ -45,20 +45,21 @@ ENV NDK_HOME /usr/local/android-ndk-r25
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
-RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
+#RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
+RUN git clone --branch quad_injs https://github.com/narodnik/cargo-quad-apk cargo-apk
 # For deterministic builds, we want a deterministic toolchain
-RUN cd /root/cargo-apk && git checkout 8962f6888e748e201f6ac2ced411669a3f939e07
-
-# ArmV7a
-#ENV CC ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang
-#ENV CXX ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang++
-#ENV AR ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-#ENV CXXSTDLIB c++
-# Arm64V8a
-# X86
+#RUN cd /root/cargo-apk && git checkout 8962f6888e748e201f6ac2ced411669a3f939e07
 
 # Install binary
 RUN cargo install --path /root/cargo-apk
 
 # Add build-tools to PATH, for apksigner
 ENV PATH="/opt/android-sdk-linux/build-tools/31.0.0/:${PATH}"
+
+# Lets cache packages for faster builds
+RUN git clone https://codeberg.org/darkrenaissance/darkfi
+COPY Cargo.lock darkfi/bin/app/
+WORKDIR /root/darkfi/bin/app/
+RUN cargo fetch
+RUN rm -fr /root/darkfi/
+

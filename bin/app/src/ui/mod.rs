@@ -31,7 +31,7 @@ use crate::{
     gfx::{GfxBufferId, GfxDrawCall, GfxDrawMesh, GfxTextureId, Point, Rectangle},
     prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr, SceneNodeWeak},
-    ExecutorPtr,
+    AndroidSuggestEvent, ExecutorPtr,
 };
 
 mod button;
@@ -102,14 +102,6 @@ pub trait UIObject: Sync {
         false
     }
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        false
-    }
-
-    // Android Autosuggest
-    async fn handle_compose_text(&self, text: &str, is_commit: bool) -> bool {
-        false
-    }
-    async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
         false
     }
 }

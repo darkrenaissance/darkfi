@@ -32,6 +32,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
+    text2,
     util::unixtime,
     ExecutorPtr,
 };
@@ -116,143 +117,18 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    fn regen_mesh2(&self) -> Vec<GfxDrawInstruction> {
+    async fn regen_mesh(&self) -> Vec<GfxDrawInstruction> {
         let text = self.text.get();
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
 
-        let mut layout_cx = parley::LayoutContext::new();
-        let mut font_cx = parley::FontContext::new();
+        let layout = {
+            let mut txt_ctx = text2::get_ctx().await;
+            txt_ctx.make_layout(&text, text_color, font_size, 0., window_scale, None)
+        };
 
-        let mut builder = layout_cx.ranged_builder(&mut font_cx, &text, window_scale);
-
-        let brush_style = parley::StyleProperty::Brush(text_color);
-        builder.push_default(brush_style);
-
-        let font_stack = parley::FontStack::from("system-ui");
-        builder.push_default(font_stack);
-        builder.push_default(parley::StyleProperty::LineHeight(2.));
-        builder.push_default(parley::StyleProperty::FontSize(font_size));
-
-        let mut layout: parley::Layout<Color> = builder.build(&text);
-        // Perform layout (including bidi resolution and shaping) with start alignment
-        layout.break_all_lines(None);
-        layout.align(None, parley::Alignment::Start, parley::AlignmentOptions::default());
-
-        let mut scale_cx = swash::scale::ScaleContext::new();
-        let mut run_idx = 0;
-        let mut instrs = vec![];
-        for line in layout.lines() {
-            for item in line.items() {
-                match item {
-                    parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
-                        let mesh = self.render_glyph_run(&mut scale_cx, &glyph_run, &text, run_idx);
-                        instrs.push(GfxDrawInstruction::Draw(mesh));
-                        run_idx += 1;
-                    }
-                    parley::PositionedLayoutItem::InlineBox(_) => {}
-                }
-            }
-        }
-        instrs
-    }
-
-    fn render_glyph_run(
-        &self,
-        scale_ctx: &mut swash::scale::ScaleContext,
-        glyph_run: &parley::GlyphRun<'_, Color>,
-        text: &str,
-        run_idx: usize,
-    ) -> GfxDrawMesh {
-        let mut run_x = glyph_run.offset();
-        let run_y = glyph_run.baseline();
-        let style = glyph_run.style();
-        let color = style.brush;
-
-        let run = glyph_run.run();
-        let text = &text[run.text_range()];
-        t!("render_glyph_run '{text}' run_idx={run_idx}");
-
-        let font = run.font();
-        let font_size = run.font_size();
-        let normalized_coords = run.normalized_coords();
-        let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
-
-        let mut scaler = scale_ctx
-            .builder(font_ref)
-            .size(font_size)
-            .hint(true)
-            .normalized_coords(normalized_coords)
-            .build();
-
-        let mut atlas = text::atlas2::Atlas::new(scaler, &self.render_api);
-        for glyph in glyph_run.glyphs() {
-            atlas.push_glyph(glyph);
-        }
-        atlas.dump(&format!("/tmp/atlas_{run_idx}.png"));
-        let atlas = atlas.make();
-
-        let mut mesh = MeshBuilder::new();
-        for glyph in glyph_run.glyphs() {
-            let glyph_inf = atlas.fetch_uv(glyph.id).expect("missing glyph UV rect");
-
-            let glyph_x = run_x + glyph.x;
-            let glyph_y = run_y - glyph.y;
-            run_x += glyph.advance;
-
-            let glyph_rect = Rectangle::new(
-                glyph_x + glyph_inf.place.left as f32,
-                glyph_y - glyph_inf.place.top as f32,
-                glyph_inf.place.width as f32,
-                glyph_inf.place.height as f32,
-            );
-
-            let color = if glyph_inf.is_color { COLOR_WHITE } else { color };
-
-            mesh.draw_box(&glyph_rect, color, &glyph_inf.uv_rect);
-        }
-        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
-    }
-
-    fn regen_mesh(&self) -> TextRenderInfo {
-        let text = self.text.get();
-        let font_size = self.font_size.get();
-        let text_color = self.text_color.get();
-        let baseline = self.baseline.get();
-        let debug = self.debug.get();
-        let window_scale = self.window_scale.get();
-
-        t!("Rendering label '{}'", text);
-        let glyphs = self.text_shaper.shape(text, font_size, window_scale);
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
-
-        let mut mesh = MeshBuilder::new();
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
-            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-
-            if debug {
-                mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            }
-
-            let mut color = text_color.clone();
-            if glyph.sprite.has_color {
-                color = COLOR_WHITE;
-            }
-            mesh.draw_box(&glyph_rect, color, uv_rect);
-        }
-
-        if debug {
-            let mut rect = self.rect.get();
-            rect.x = 0.;
-            rect.y = 0.;
-            mesh.draw_outline(&rect, COLOR_RED, 1.);
-        }
-
-        let mesh = mesh.alloc(&self.render_api);
-
-        TextRenderInfo { mesh, texture: atlas.texture }
+        text2::render_layout(&layout, &self.render_api)
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -274,17 +150,7 @@ impl Text {
         let rect = self.rect.get();
 
         let mut instrs = vec![GfxDrawInstruction::Move(rect.pos())];
-        instrs.append(&mut self.regen_mesh2());
-
-        /*
-        let render_info = self.regen_mesh();
-        let mesh = GfxDrawMesh {
-            vertex_buffer: render_info.mesh.vertex_buffer,
-            index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture),
-            num_elements: render_info.mesh.num_elements,
-        };
-        */
+        instrs.append(&mut self.regen_mesh().await);
 
         Some(DrawUpdate {
             key: self.dc_key,

@@ -314,17 +314,14 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_ui_text("Is Focused", "A focused EditBox receives input");
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("min_height", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Min Height", "Minimum height");
+    let mut prop = Property::new("height_range", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
     prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("max_height", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Max Height", "Maximum height");
-    prop.set_range_f32(0., f32::MAX);
-    node.add_property(prop).unwrap();
-
-    let prop = Property::new("height", PropertyType::Float32, PropertySubType::Pixel);
+    let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Content Height", "The actual text's inner height");
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -332,6 +329,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    // DEPRECATED ------------
     let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
@@ -339,6 +337,13 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("descent", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+    //------------------------
+
+    let mut prop = Property::new("lineheight", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Line Height", "Line height/lead (em)");
+    prop.set_defaults_f32(vec![1.2]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);

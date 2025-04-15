@@ -35,7 +35,6 @@ use crate::gfx::Rectangle;
 
 mod atlas;
 pub use atlas::{make_texture_atlas, Atlas, RenderedAtlas};
-pub mod atlas2;
 mod ft;
 use ft::{render_glyph, FreetypeFace, Sprite, SpritePtr};
 mod shape;

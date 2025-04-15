@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-miniquad = { git = "https://github.com/not-fl3/miniquad" }
+miniquad = { git = "https://github.com/narodnik/miniquad" }
 
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6.1"
@@ -53,6 +53,7 @@ parley = { git = "https://github.com/linebender/parley.git" }
 swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
 # Use same zeno specified by swash
 zeno = { git = "https://github.com/valadaptive/zeno", branch = "tight-bounds" }
+peniko = "*"
 
 [features]
 emulate-android = []

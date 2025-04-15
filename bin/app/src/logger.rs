@@ -212,7 +212,7 @@ pub fn setup_logging() {
     #[cfg(target_os = "android")]
     {
         use android::AndroidLoggerWrapper;
-        let android_logger = AndroidLoggerWrapper::new(LevelFilter::Debug, cfg);
+        let android_logger = AndroidLoggerWrapper::new(LevelFilter::Trace, cfg);
         loggers.push(android_logger);
     }
 

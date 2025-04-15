@@ -231,8 +231,8 @@ impl Editable {
 
     /// Reset any composition in progress
     pub fn end_compose(&mut self) {
-        #[cfg(target_os = "android")]
-        crate::android::cancel_composition();
+        //#[cfg(target_os = "android")]
+        //crate::android::cancel_composition();
 
         //debug!(target: "ui::editbox", "end_compose() [editable={self:?}]");
         let final_text = self.composer.clear();
