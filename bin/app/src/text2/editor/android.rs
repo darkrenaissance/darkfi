@@ -149,4 +149,8 @@ impl Editor {
         let cursor_pos = Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32);
         Some(cursor_pos)
     }
+
+    pub async fn driver<'a>(&'a mut self) -> Option<parley::PlainEditorDriver<'a, Color>> {
+        None
+    }
 }

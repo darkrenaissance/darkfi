@@ -17,7 +17,7 @@
  */
 
 // Use these to incrementally fix warnings with cargo fix
-//#![allow(warnings, unused)]
+#![allow(warnings, unused)]
 //#![deny(unused_imports)]
 
 use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};

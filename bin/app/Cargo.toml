@@ -69,13 +69,16 @@ enable-netdebug = []
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
 freetype-sys = { git = "https://github.com/narodnik/freetype-sys2" }
 
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v4" }
+halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v4" }
 # This patch didn't work for me
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 
 # Once merged, we can remove this
 swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
+
+tor-rtcompat = { git = "https://github.com/narodnik/arti" }
+tor-rtmock = { git = "https://github.com/narodnik/arti" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
@@ -83,13 +86,12 @@ dirs = "5.0.1"
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
-rusqlite = {version = "0.32.1", features = ["bundled"]}
-tor-dirmgr = {version="0.26.0", features=["static"]}
-#android-fileopen = {path = "./android-fileopen/"}
+tor-dirmgr = { version="0.29.0", features=["static"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
-rusqlite = {version = "0.32.1", features = ["bundled"]}
+#rusqlite = {version = "0.32.1", features = ["bundled"]}
+tor-dirmgr = { version="0.29.0", features=["static"] }
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

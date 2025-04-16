@@ -10,10 +10,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN curl -o rustup.sh --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
 RUN chmod +x rustup.sh
-RUN ./rustup.sh -y --default-toolchain nightly-2025-04-10
-
-#RUN rustup toolchain install nightly
-#RUN rustup default nightly
+RUN ./rustup.sh -y
 RUN rustc --version
 
 RUN rustup target add armv7-linux-androideabi
@@ -56,7 +53,7 @@ RUN cargo install --path /root/cargo-apk
 ENV PATH="/opt/android-sdk-linux/build-tools/31.0.0/:${PATH}"
 
 # Lets cache packages for faster builds
-RUN git clone https://codeberg.org/darkrenaissance/darkfi
+RUN git clone --depth=1 https://codeberg.org/darkrenaissance/darkfi
 COPY Cargo.lock darkfi/bin/app/
 WORKDIR /root/darkfi/bin/app/
 RUN cargo fetch
