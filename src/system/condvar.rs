@@ -48,20 +48,23 @@ pub struct CondVar {
 
 struct CondVarState {
     is_awake: bool,
-    waker: Option<Waker>,
+    wakers: Vec<Waker>,
 }
 
 impl CondVar {
     pub fn new() -> Self {
-        Self { state: Mutex::new(CondVarState { is_awake: false, waker: None }) }
+        Self { state: Mutex::new(CondVarState { is_awake: false, wakers: Vec::new() }) }
     }
 
     /// Wakeup the waiting task. Subsequent calls to this do nothing until `wait()` is called.
     pub fn notify(&self) {
-        let mut state = self.state.lock().unwrap();
-        state.is_awake = true;
+        let wakers = {
+            let mut state = self.state.lock().unwrap();
+            state.is_awake = true;
+            std::mem::take(&mut state.wakers)
+        };
         // Notify the executor that the pending future from wait() is to be polled again.
-        if let Some(waker) = state.waker.take() {
+        for waker in wakers {
             waker.wake()
         }
     }
@@ -108,34 +111,19 @@ impl Future for CondVarWait<'_> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.state.lock().unwrap();
 
-        // Avoid cloning wherever possible.
-        // This code below is equivalent to:
-        //
-        //     state.waker = Some(cx.waker().clone());
-        //
-        // However checking whether the waker we have wakes up the same task
-        // as the one in the context cx, means we don't have to re-clone if
-        // we already have it.
-        //
-        // It's a minor thing which is basically recommended in the docs on
-        // creating pollable futures.
-        let new_waker = match state.waker.take() {
-            Some(waker) => {
-                let cx_waker = cx.waker();
-                if cx_waker.will_wake(&waker) {
-                    waker
-                } else {
-                    cx_waker.clone()
-                }
-            }
-            None => cx.waker().clone(),
-        };
-        state.waker = Some(new_waker);
-
-        match state.is_awake {
-            true => Poll::Ready(()),
-            false => Poll::Pending,
+        if state.is_awake {
+            return Poll::Ready(())
         }
+
+        let cx_waker = cx.waker();
+
+        // Do we have any wakers in the list?
+        if !state.wakers.iter().any(|w| cx_waker.will_wake(w)) {
+            // Add our waker
+            state.wakers.push(cx_waker.clone())
+        }
+
+        Poll::Pending
     }
 }
 
@@ -257,6 +245,33 @@ mod tests {
 
             // Allow above code to continue
             cv.notify();
+        }))
+    }
+
+    #[test]
+    fn condvar_test_multi() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv_ = cv.clone();
+            let t1 = executor_.spawn(async move {
+                // Waits here until notify() is called
+                cv_.wait().await;
+            });
+
+            let cv_ = cv.clone();
+            let t2 = executor_.spawn(async move {
+                // Waits here until notify() is called
+                cv_.wait().await;
+            });
+
+            // Allow both tasks above to continue
+            cv.notify();
+
+            t1.await;
+            t2.await;
         }))
     }
 }
