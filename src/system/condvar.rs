@@ -142,15 +142,15 @@ mod tests {
             let cv = Arc::new(CondVar::new());
 
             let cv_ = cv.clone();
-            executor_
-                .spawn(async move {
-                    // Waits here until notify() is called
-                    cv_.wait().await;
-                })
-                .detach();
+            let t = executor_.spawn(async move {
+                // Waits here until notify() is called
+                cv_.wait().await;
+            });
 
             // Allow above code to continue
             cv.notify();
+
+            t.await;
         }))
     }
 
@@ -162,29 +162,29 @@ mod tests {
             let cv = Arc::new(CondVar::new());
 
             let cv_ = cv.clone();
-            executor_
-                .spawn(async move {
-                    cv_.wait().await;
-                })
-                .detach();
+            let t = executor_.spawn(async move {
+                cv_.wait().await;
+            });
 
             // #1 send signal
             cv.notify();
             // Multiple calls to notify do nothing until we call reset()
             cv.notify();
 
+            t.await;
+
             // Without calling reset(), then the wait() will return instantly
             cv.reset();
 
             let cv_ = cv.clone();
-            executor_
-                .spawn(async move {
-                    cv_.wait().await;
-                })
-                .detach();
+            let t = executor_.spawn(async move {
+                cv_.wait().await;
+            });
 
             // #2 send signal again
             cv.notify();
+
+            t.await;
         }))
     }
 
@@ -197,11 +197,14 @@ mod tests {
 
             let cv2 = cv.clone();
             let cv3 = cv.clone();
-            executor_.spawn(async move { cv2.wait().await }).detach();
-            executor_.spawn(async move { cv3.wait().await }).detach();
+            let t1 = executor_.spawn(async move { cv2.wait().await });
+            let t2 = executor_.spawn(async move { cv3.wait().await });
 
             // Allow above code to continue
             cv.notify();
+
+            t1.await;
+            t2.await;
         }))
     }
 
@@ -213,13 +216,15 @@ mod tests {
             let cv = Arc::new(CondVar::new());
 
             let cv2 = cv.clone();
-            executor_.spawn(async move { cv2.wait().await }).detach();
+            let t = executor_.spawn(async move { cv2.wait().await });
 
             cv.notify();
+            t.await;
 
             // Should complete immediately
             let cv2 = cv.clone();
-            executor_.spawn(async move { cv2.wait().await }).detach();
+            let t = executor_.spawn(async move { cv2.wait().await });
+            t.await;
         }))
     }
 
@@ -231,47 +236,19 @@ mod tests {
             let cv = Arc::new(CondVar::new());
 
             let cv_ = cv.clone();
-            executor_
-                .spawn(async move {
-                    select! {
-                        () = cv_.wait().fuse() => (),
-                        () = (async {}).fuse() => ()
-                    }
+            let t = executor_.spawn(async move {
+                select! {
+                    () = cv_.wait().fuse() => (),
+                    () = (async {}).fuse() => ()
+                }
 
-                    // The above future was dropped and we make a new one
-                    cv_.wait().await
-                })
-                .detach();
+                // The above future was dropped and we make a new one
+                cv_.wait().await
+            });
 
             // Allow above code to continue
             cv.notify();
-        }))
-    }
-
-    #[test]
-    fn condvar_test_multi() {
-        let executor = Arc::new(Executor::new());
-        let executor_ = executor.clone();
-        smol::block_on(executor.run(async move {
-            let cv = Arc::new(CondVar::new());
-
-            let cv_ = cv.clone();
-            let t1 = executor_.spawn(async move {
-                // Waits here until notify() is called
-                cv_.wait().await;
-            });
-
-            let cv_ = cv.clone();
-            let t2 = executor_.spawn(async move {
-                // Waits here until notify() is called
-                cv_.wait().await;
-            });
-
-            // Allow both tasks above to continue
-            cv.notify();
-
-            t1.await;
-            t2.await;
+            t.await;
         }))
     }
 }
