@@ -123,12 +123,6 @@ impl Editor {
         let lineheight = self.lineheight.get();
         let edit = android::get_editable(self.composer_id).unwrap();
 
-        //let buffer = android::get_raw_text(self.composer_id).unwrap();
-        //let sel_start = android::get_selection_start(self.composer_id).unwrap();
-        //let sel_end = android::get_selection_end(self.composer_id).unwrap();
-        //if sel_start != sel_end || sel_start < 0 {
-        //    return None
-        //}
         let cursor_byte_idx = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
 
         let cursor = if cursor_byte_idx >= edit.buffer.len() {
@@ -150,7 +144,9 @@ impl Editor {
         Some(cursor_pos)
     }
 
-    pub async fn driver<'a>(&'a mut self) -> Option<parley::PlainEditorDriver<'a, Color>> {
-        None
+    pub fn driver<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut parley::PlainEditorDriver<'_, Color>),
+    {
     }
 }

@@ -539,8 +539,7 @@ impl ChatEdit {
         let key_str = key.encode_utf8(&mut tmp);
 
         let mut editor = self.editor.lock().await;
-        let mut drv = editor.driver().await.unwrap();
-        drv.insert_or_replace_selection(&key_str);
+        editor.driver(|mut drv| drv.insert_or_replace_selection(&key_str));
     }
 
     async fn handle_shortcut(

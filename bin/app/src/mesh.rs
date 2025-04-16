@@ -89,9 +89,7 @@ impl MeshBuilder {
     pub fn draw_box(&mut self, obj: &Rectangle, color: Color, uv: &Rectangle) {
         let clipped = match &self.clipper {
             Some(clipper) => {
-                let Some(clipped) = clipper.clip(&obj) else {
-                    return
-                };
+                let Some(clipped) = clipper.clip(&obj) else { return };
                 clipped
             }
             None => obj.clone(),

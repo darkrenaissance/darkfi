@@ -20,7 +20,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyColor, PropertyFloat32},
-    text2::{get_ctx, TextContext, FONT_STACK},
+    text2::{TextContext, FONT_STACK, TEXT_CTX2},
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor", $($arg)*); } }
@@ -63,9 +63,10 @@ impl Editor {
         styles.insert(parley::StyleProperty::Brush(text_color));
         *self.editor.edit_styles() = styles;
 
-        let mut txt_ctx = get_ctx().await;
-        let (font_ctx, layout_ctx) = txt_ctx.borrow();
-        self.editor.refresh_layout(font_ctx, layout_ctx);
+        TEXT_CTX2.with_borrow_mut(|txt_ctx| {
+            let (font_ctx, layout_ctx) = txt_ctx.borrow();
+            self.editor.refresh_layout(font_ctx, layout_ctx);
+        });
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {
@@ -81,38 +82,14 @@ impl Editor {
         Some(cursor_pos)
     }
 
-    pub async fn driver<'a>(&'a mut self) -> Option<DriverWrapper<'a>> {
-        let mut txt_ctx = get_ctx().await;
-        // I'm one billion percent sure this is safe and don't want to waste time
-        let (font_ctx, layout_ctx) = {
-            let (f, l) = txt_ctx.borrow();
-            let f: &'a mut parley::FontContext = unsafe { std::mem::transmute(f) };
-            let l: &'a mut parley::LayoutContext<Color> = unsafe { std::mem::transmute(l) };
-            (f, l)
-        };
-        let drv = self.editor.driver(font_ctx, layout_ctx);
-        // Storing the MutexGuard together with its dependent value drv ensures we cannot
-        // have a race condition and the lifetime rules are respected.
-        let drv = DriverWrapper { txt_ctx, drv };
-        Some(drv)
-    }
-}
-
-pub struct DriverWrapper<'a> {
-    txt_ctx: async_lock::MutexGuard<'static, TextContext>,
-    drv: parley::PlainEditorDriver<'a, Color>,
-}
-
-impl<'a> std::ops::Deref for DriverWrapper<'a> {
-    type Target = parley::PlainEditorDriver<'a, Color>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.drv
-    }
-}
-
-impl<'a> std::ops::DerefMut for DriverWrapper<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.drv
+    pub fn driver<F>(&mut self, f: F)
+    where
+        F: FnOnce(parley::PlainEditorDriver<'_, Color>),
+    {
+        TEXT_CTX2.with_borrow_mut(|txt_ctx| {
+            let (font_ctx, layout_ctx) = txt_ctx.borrow();
+            let drv = self.editor.driver(font_ctx, layout_ctx);
+            f(drv);
+        });
     }
 }

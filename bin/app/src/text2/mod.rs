@@ -17,7 +17,10 @@
  */
 
 use async_lock::Mutex as AsyncMutex;
-use std::sync::{Arc, OnceLock};
+use std::{
+    cell::RefCell,
+    sync::{Arc, OnceLock},
+};
 
 use crate::mesh::Color;
 
@@ -26,6 +29,10 @@ mod editor;
 pub use editor::Editor;
 mod render;
 pub use render::{render_layout, DebugRenderOptions};
+
+thread_local! {
+    static TEXT_CTX2: RefCell<TextContext> = RefCell::new(TextContext::new());
+}
 
 static TEXT_CTX: OnceLock<AsyncMutex<TextContext>> = OnceLock::new();
 

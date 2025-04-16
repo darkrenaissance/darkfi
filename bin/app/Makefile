@@ -86,6 +86,9 @@ apk: $(SRC) fonts
 cli:
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
 
+fmt:
+	$(CARGO) +nightly fmt
+
 clean:
 	podman run -v $(shell pwd):/root/dw -w /root/dw -t apk rm -fr target/
 	rm -f darkfi-app.apk
