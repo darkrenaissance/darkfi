@@ -20,7 +20,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyColor, PropertyFloat32},
-    text2::{TextContext, FONT_STACK, TEXT_CTX2},
+    text2::{TextContext, FONT_STACK, TEXT_CTX},
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor", $($arg)*); } }
@@ -63,10 +63,9 @@ impl Editor {
         styles.insert(parley::StyleProperty::Brush(text_color));
         *self.editor.edit_styles() = styles;
 
-        TEXT_CTX2.with_borrow_mut(|txt_ctx| {
-            let (font_ctx, layout_ctx) = txt_ctx.borrow();
-            self.editor.refresh_layout(font_ctx, layout_ctx);
-        });
+        let mut txt_ctx = TEXT_CTX.get().await;
+        let (font_ctx, layout_ctx) = txt_ctx.borrow();
+        self.editor.refresh_layout(font_ctx, layout_ctx);
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {
@@ -76,20 +75,27 @@ impl Editor {
     pub fn move_to_pos(&self, pos: Point) {}
 
     pub fn get_cursor_pos(&self) -> Option<Point> {
-        let lineheight = self.lineheight.get();
-        let cursor_rect = self.editor.cursor_geometry(lineheight).unwrap();
+        let cursor_rect = self.editor.cursor_geometry(0.).unwrap();
         let cursor_pos = Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32);
         Some(cursor_pos)
     }
 
-    pub fn driver<F>(&mut self, f: F)
-    where
-        F: FnOnce(parley::PlainEditorDriver<'_, Color>),
-    {
-        TEXT_CTX2.with_borrow_mut(|txt_ctx| {
-            let (font_ctx, layout_ctx) = txt_ctx.borrow();
-            let drv = self.editor.driver(font_ctx, layout_ctx);
-            f(drv);
-        });
+    pub async fn driver<'a>(
+        &'a mut self,
+        txt_ctx: &'a mut TextContext,
+    ) -> Option<parley::PlainEditorDriver<'a, Color>> {
+        let (font_ctx, layout_ctx) = txt_ctx.borrow();
+        Some(self.editor.driver(font_ctx, layout_ctx))
+    }
+
+    pub fn set_width(&mut self, w: f32) {
+        self.editor.set_width(Some(w));
+    }
+    pub fn height(&self) -> f32 {
+        self.layout().height()
+    }
+
+    pub fn selected_text(&self) -> Option<&str> {
+        self.editor.selected_text()
     }
 }

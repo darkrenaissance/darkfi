@@ -81,6 +81,7 @@ fn main() {
     // Abort the application on panic right away
     std::panic::set_hook(Box::new(panic_hook));
 
+    text2::init_txt_ctx();
     logger::setup_logging();
 
     #[cfg(target_os = "android")]

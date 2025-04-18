@@ -487,14 +487,20 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
     let prop = node.get_property("height_range").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 100.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 400.).unwrap();
 
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 100.).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 300.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, 50.).unwrap();
+    //prop.clone().set_f32(atom, Role::App, 3, 50.).unwrap();
+
+    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+
+    let prop = node.get_property("padding").unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 20.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 20.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", 34.).unwrap();
     node.set_property_f32(atom, Role::App, "linespacing", 50.).unwrap();
@@ -516,10 +522,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_f32(atom, Role::App, 1, 0.627).unwrap();
     prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_ascent", 50.).unwrap();
+    node.set_property_f32(atom, Role::App, "cursor_ascent", 35.).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_descent", 20.).unwrap();
-    node.set_property_f32(atom, Role::App, "select_ascent", 40.).unwrap();
-    node.set_property_f32(atom, Role::App, "select_descent", 8.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_ascent", 35.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_descent", 20.).unwrap();
     node.set_property_f32(atom, Role::App, "handle_descent", 25.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();

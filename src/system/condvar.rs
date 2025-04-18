@@ -52,7 +52,7 @@ struct CondVarState {
 }
 
 impl CondVar {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { state: Mutex::new(CondVarState { is_awake: false, wakers: Vec::new() }) }
     }
 

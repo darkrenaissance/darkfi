@@ -21,7 +21,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyColor, PropertyFloat32},
-    text2::get_ctx,
+    text2::{TextContext, TEXT_CTX},
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
@@ -44,6 +44,7 @@ pub struct Editor {
     is_init: bool,
 
     layout: parley::Layout<Color>,
+    width: Option<f32>,
 
     font_size: PropertyFloat32,
     text_color: PropertyColor,
@@ -63,6 +64,8 @@ impl Editor {
             is_init: false,
 
             layout: Default::default(),
+            width: None,
+
             font_size,
             text_color,
             window_scale,
@@ -90,14 +93,14 @@ impl Editor {
         let edit = android::get_editable(self.composer_id).unwrap();
         t!("refesh buffer = {}", edit.buffer);
 
-        let mut txt_ctx = get_ctx().await;
+        let mut txt_ctx = TEXT_CTX.get().await;
         self.layout = txt_ctx.make_layout(
             &edit.buffer,
             text_color,
             font_size,
             lineheight,
             window_scale,
-            None,
+            self.width,
         );
     }
 
@@ -144,9 +147,17 @@ impl Editor {
         Some(cursor_pos)
     }
 
-    pub fn driver<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut parley::PlainEditorDriver<'_, Color>),
-    {
+    pub async fn driver<'a>(
+        &'a mut self,
+        txt_ctx: &'a mut TextContext,
+    ) -> Option<parley::PlainEditorDriver<'a, Color>> {
+        None
+    }
+
+    pub fn set_width(&mut self, w: f32) {
+        self.width = Some(w);
+    }
+    pub fn height(&self) -> f32 {
+        self.layout().height()
     }
 }

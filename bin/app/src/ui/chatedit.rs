@@ -422,17 +422,17 @@ impl ChatEdit {
         self.node.upgrade().unwrap()
     }
 
-    fn wrap_width(&self) -> f32 {
-        let w = self.rect.prop().get_f32(2).unwrap() - self.cursor_width.get();
-        if w < 0. {
-            return 0.
-        }
-        w
+    fn padding_top(&self) -> f32 {
+        self.padding.get_f32(0).unwrap()
+    }
+    fn padding_bottom(&self) -> f32 {
+        self.padding.get_f32(1).unwrap()
     }
 
     fn abs_to_local(&self, point: &mut Point) {
         let rect = self.rect.get();
         *point -= rect.pos();
+        point.y -= self.padding_top();
         point.y += self.scroll.get();
     }
 
@@ -538,8 +538,10 @@ impl ChatEdit {
         let mut tmp = [0; 4];
         let key_str = key.encode_utf8(&mut tmp);
 
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
         let mut editor = self.editor.lock().await;
-        editor.driver(|mut drv| drv.insert_or_replace_selection(&key_str));
+        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+        drv.insert_or_replace_selection(&key_str);
     }
 
     async fn handle_shortcut(
@@ -556,37 +558,38 @@ impl ChatEdit {
         #[cfg(target_os = "macos")]
         let action_mod = mods.logo;
 
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut editor = self.editor.lock().await;
+        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+
         match key {
             'a' => {
                 if action_mod {
-                    {
-                        //let mut editor = self.editor.lock();
-                        //let mut drv = editor.driver();
-                        //drv.select_all();
-                    }
-
-                    self.redraw().await;
-                    return true
+                    drv.select_all();
                 }
             }
             'c' => {
                 if action_mod {
-                    return true
+                    if let Some(text) = editor.selected_text() {
+                        miniquad::window::clipboard_set(text);
+                    }
                 }
             }
             'v' => {
                 if action_mod {
-                    //if let Some(text) = miniquad::window::clipboard_get() {
-                    //    let mut editor = self.editor.lock();
-                    //    let mut drv = editor.driver();
-                    //    drv.insert_or_replace_selection(&text);
-                    //}
-                    return true
+                    if let Some(text) = miniquad::window::clipboard_get() {
+                        drv.insert_or_replace_selection(&text);
+                    }
                 }
             }
-            _ => {}
+            _ => return false,
         }
-        false
+
+        drop(editor);
+        drop(txt_ctx);
+
+        self.redraw().await;
+        true
     }
 
     async fn handle_key(
@@ -595,114 +598,114 @@ impl ChatEdit {
         mods: &KeyMods,
         atom: &mut PropertyAtomicGuard,
     ) -> bool {
-        t!("handle_key({:?}, {:?})", key, mods);
+        #[cfg(not(target_os = "macos"))]
+        let action_mod = mods.ctrl;
+
+        #[cfg(target_os = "macos")]
+        let action_mod = mods.logo;
+
+        t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
+
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut editor = self.editor.lock().await;
+        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+
         match key {
             KeyCode::Left => {
-                //if !self.adjust_cursor(&mods, |editable| editable.move_cursor(-1), atom) {
-                //    return false
-                //}
-                self.pause_blinking();
-                //self.apply_cursor_scrolling();
-                self.redraw().await;
-                return true
+                if action_mod {
+                    if mods.shift {
+                        drv.select_word_left();
+                    } else {
+                        drv.move_word_left();
+                    }
+                } else if mods.shift {
+                    drv.select_left();
+                } else {
+                    drv.move_left();
+                }
             }
             KeyCode::Right => {
-                //if !self.adjust_cursor(&mods, |editable| editable.move_cursor(1), atom) {
-                //    return false
-                //}
-                self.pause_blinking();
-                //self.apply_cursor_scrolling();
-                self.redraw().await;
-                return true
+                if action_mod {
+                    if mods.shift {
+                        drv.select_word_right();
+                    } else {
+                        drv.move_word_right();
+                    }
+                } else if mods.shift {
+                    drv.select_right();
+                } else {
+                    drv.move_right();
+                }
             }
-            KeyCode::Kp0 => {
-                self.insert_char('0').await;
-                return true
+            KeyCode::Up => {
+                if mods.shift {
+                    drv.select_up();
+                } else {
+                    drv.move_up();
+                }
             }
-            KeyCode::Kp1 => {
-                self.insert_char('1').await;
-                return true
-            }
-            KeyCode::Kp2 => {
-                self.insert_char('2').await;
-                return true
-            }
-            KeyCode::Kp3 => {
-                self.insert_char('3').await;
-                return true
-            }
-            KeyCode::Kp4 => {
-                self.insert_char('4').await;
-                return true
-            }
-            KeyCode::Kp5 => {
-                self.insert_char('5').await;
-                return true
-            }
-            KeyCode::Kp6 => {
-                self.insert_char('6').await;
-                return true
-            }
-            KeyCode::Kp7 => {
-                self.insert_char('7').await;
-                return true
-            }
-            KeyCode::Kp8 => {
-                self.insert_char('8').await;
-                return true
-            }
-            KeyCode::Kp9 => {
-                self.insert_char('9').await;
-                return true
-            }
-            KeyCode::KpDecimal => {
-                self.insert_char('.').await;
-                return true
+            KeyCode::Down => {
+                if mods.shift {
+                    drv.select_down();
+                } else {
+                    drv.move_down();
+                }
             }
             KeyCode::Enter | KeyCode::KpEnter => {
                 if mods.shift {
-                    // Does nothing for now. Later will enable multiline.
+                    drv.insert_or_replace_selection("\n");
                 }
             }
             KeyCode::Delete => {
-                //self.delete(0, 1, atom);
-                //self.clamp_scroll(&mut self.text_wrap.lock(), atom);
-                self.pause_blinking();
-                self.redraw().await;
-                return true
+                if action_mod {
+                    drv.delete_word();
+                } else {
+                    drv.delete();
+                }
             }
             KeyCode::Backspace => {
-                //self.delete(1, 0, atom);
-                //self.clamp_scroll(&mut self.text_wrap.lock(), atom);
-                t!("KeyCode::Backspace");
-                {
-                    //let mut editor = self.editor.lock();
-                    //t!("  editor (before): {editor:?}");
-                    //let mut drv = editor.driver();
-                    //drv.backdelete();
-                    //t!("  editor (after): {editor:?}");
+                if action_mod {
+                    drv.backdelete_word();
+                } else {
+                    drv.backdelete();
                 }
-                self.pause_blinking();
-                self.redraw().await;
-                return true
             }
             KeyCode::Home => {
-                //self.adjust_cursor(&mods, |editable| editable.move_start(), atom);
-                self.pause_blinking();
-                //self.apply_cursor_scrolling();
-                self.redraw().await;
-                return true
+                if action_mod {
+                    if mods.shift {
+                        drv.select_to_text_start();
+                    } else {
+                        drv.move_to_text_start();
+                    }
+                } else if mods.shift {
+                    drv.select_to_line_start();
+                } else {
+                    drv.move_to_line_start();
+                }
             }
             KeyCode::End => {
-                //self.adjust_cursor(&mods, |editable| editable.move_end(), atom);
-                self.pause_blinking();
-                //self.apply_cursor_scrolling();
-                self.redraw().await;
-                return true
+                if action_mod {
+                    if mods.shift {
+                        drv.select_to_text_end();
+                    } else {
+                        drv.move_to_text_end();
+                    }
+                } else if mods.shift {
+                    drv.select_to_line_end();
+                } else {
+                    drv.move_to_line_end();
+                }
             }
-            _ => {}
+            _ => return false,
         }
-        false
+
+        drop(editor);
+        drop(txt_ctx);
+
+        self.pause_blinking();
+        self.redraw().await;
+
+        return true
     }
 
     /*
@@ -1217,15 +1220,9 @@ impl ChatEdit {
 
         let mut cursor_instrs = vec![];
 
-        let Some(cursor_pos) = self.editor.lock().await.get_cursor_pos() else { return vec![] };
-        //let cursor_pos = self.get_cursor_pos();
+        let Some(mut cursor_pos) = self.editor.lock().await.get_cursor_pos() else { return vec![] };
 
-        // There is some mess here since ApplyView is in abs screen coords but should be
-        // relative, and also work together with Move. We will fix this later in gfx subsys.
-        let mut view_rect = self.rect.get();
-        view_rect.h = self.max_height.get();
-
-        cursor_instrs.push(GfxDrawInstruction::ApplyView(view_rect));
+        cursor_pos.y += self.padding_top();
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
@@ -1241,15 +1238,97 @@ impl ChatEdit {
         cursor_instrs
     }
 
-    async fn regen_mesh(&self) -> Vec<GfxDrawInstruction> {
+    async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
         let lineheight = self.lineheight.get();
+        let padding_top = self.padding_top();
+        let padding_bottom = self.padding_bottom();
+
+        let mut instrs = vec![];
+        // BUG FIXME SHOULDNT NEED THIS!
+        instrs.push(GfxDrawInstruction::Move(Point::zero()));
+
+        if self.debug.get() {
+            let mut rect = self.rect.get();
+            rect.x = 0.;
+            rect.y = 0.;
+            let mut mesh = MeshBuilder::new();
+            mesh.draw_outline(&rect, [0., 1., 0., 1.], 1.);
+            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+
+            rect.y = padding_top;
+            rect.h -= padding_top + padding_bottom;
+            let mut mesh = MeshBuilder::new();
+            mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
+            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+        }
+
+        let mut inner_pos = Point::zero();
+        inner_pos.y += padding_top;
+        inner_pos.y -= self.scroll.get();
+        instrs.push(GfxDrawInstruction::Move(inner_pos));
 
         let editor = self.editor.lock().await;
         let layout = editor.layout();
-        text2::render_layout(layout, &self.render_api)
+        let mut render_instrs = text2::render_layout(layout, &self.render_api);
+        instrs.append(&mut render_instrs);
+
+        instrs
+    }
+
+    fn bounded_height(&self, mut height: f32) -> f32 {
+        let min_height = self.min_height.get();
+        let max_height = self.max_height.get();
+
+        if height < min_height {
+            height = min_height;
+        }
+        if height > max_height {
+            height = max_height;
+        }
+
+        height
+    }
+
+    async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
+        let parent_rect = self.parent_rect.lock().clone().unwrap();
+        // First we evaluate the width based off the parent dimensions
+        self.rect
+            .eval_with(
+                vec![2],
+                vec![
+                    ("parent_w".to_string(), parent_rect.w),
+                    ("parent_h".to_string(), parent_rect.h),
+                ],
+            )
+            .unwrap();
+
+        // Use the width to adjust the height calcs
+        let rect_w = self.rect.get_width();
+        let inner_height = {
+            let mut editor = self.editor.lock().await;
+            editor.set_width(rect_w);
+            editor.refresh().await;
+            editor.height()
+        };
+        let content_height = inner_height + self.padding_top() + self.padding_bottom();
+        let rect_h = self.bounded_height(content_height);
+        self.rect.prop().set_f32(atom, Role::Internal, 3, rect_h);
+
+        // Finally calculate the position
+        self.rect
+            .eval_with(
+                vec![0, 1],
+                vec![
+                    ("parent_w".to_string(), parent_rect.w),
+                    ("parent_h".to_string(), parent_rect.h),
+                    ("rect_w".to_string(), rect_w),
+                    ("rect_h".to_string(), rect_h),
+                ],
+            )
+            .unwrap();
     }
 
     async fn make_draw_calls(
@@ -1257,20 +1336,11 @@ impl ChatEdit {
         trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        let parent_rect = self.parent_rect.lock().clone().unwrap();
-        self.rect.eval_with(
-            vec![2],
-            vec![("parent_w".to_string(), parent_rect.w), ("parent_h".to_string(), parent_rect.h)],
-        );
-        self.rect.prop().set_f32(atom, Role::Internal, 3, 2000.);
-
-        //let text_mesh = self.regen_text_mesh(trace_id, atom);
-        let cursor_instrs = self.get_cursor_instrs().await;
+        self.eval_rect(atom).await;
 
         let rect = self.rect.get();
-
-        let mut instrs = vec![GfxDrawInstruction::Move(rect.pos())];
-        instrs.append(&mut self.regen_mesh().await);
+        let cursor_instrs = self.get_cursor_instrs().await;
+        let txt_instrs = self.regen_txt_mesh().await;
 
         Some(DrawUpdate {
             key: self.main_dc_key,
@@ -1278,14 +1348,14 @@ impl ChatEdit {
                 (
                     self.main_dc_key,
                     GfxDrawCall {
-                        instrs: vec![],
+                        instrs: vec![GfxDrawInstruction::ApplyView(rect)],
                         dcs: vec![self.text_dc_key, self.cursor_dc_key],
                         z_index: self.z_index.get(),
                     },
                 ),
                 (
                     self.text_dc_key,
-                    GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+                    GfxDrawCall { instrs: txt_instrs, dcs: vec![], z_index: self.z_index.get() },
                 ),
                 (
                     self.cursor_dc_key,
@@ -1610,10 +1680,11 @@ impl UIObject for ChatEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
+        /*
         let width = self.wrap_width();
 
-        /*
         {
+
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
             self.update_cursor_pos(&mut text_wrap, atom);
@@ -1668,9 +1739,9 @@ impl UIObject for ChatEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
+        /*
         let width = self.wrap_width();
 
-        /*
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);

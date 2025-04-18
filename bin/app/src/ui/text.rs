@@ -32,7 +32,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
-    text2,
+    text2::{self, TEXT_CTX},
     util::unixtime,
     ExecutorPtr,
 };
@@ -124,7 +124,7 @@ impl Text {
         let window_scale = self.window_scale.get();
 
         let layout = {
-            let mut txt_ctx = text2::get_ctx().await;
+            let mut txt_ctx = TEXT_CTX.get().await;
             txt_ctx.make_layout(&text, text_color, font_size, 0., window_scale, None)
         };
 

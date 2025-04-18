@@ -17,9 +17,11 @@
  */
 
 use async_lock::Mutex as AsyncMutex;
+use futures::stream::{FuturesUnordered, StreamExt};
 use std::{
     cell::RefCell,
-    sync::{Arc, OnceLock},
+    fmt::Debug,
+    sync::{atomic::AtomicBool, Arc, OnceLock},
 };
 
 use crate::mesh::Color;
@@ -30,16 +32,41 @@ pub use editor::Editor;
 mod render;
 pub use render::{render_layout, DebugRenderOptions};
 
-thread_local! {
-    static TEXT_CTX2: RefCell<TextContext> = RefCell::new(TextContext::new());
+use darkfi::system::CondVar;
+
+pub struct AsyncGlobal<T> {
+    cv: CondVar,
+    val: OnceLock<AsyncMutex<T>>,
 }
 
-static TEXT_CTX: OnceLock<AsyncMutex<TextContext>> = OnceLock::new();
+impl<T> AsyncGlobal<T> {
+    const fn new() -> Self {
+        Self { cv: CondVar::new(), val: OnceLock::new() }
+    }
 
-pub async fn get_ctx() -> async_lock::MutexGuard<'static, TextContext> {
-    TEXT_CTX.get_or_init(|| AsyncMutex::new(TextContext::new())).lock().await
+    fn set(&self, val: T) {
+        self.val.set(AsyncMutex::new(val)).ok().unwrap();
+        self.cv.notify();
+    }
+
+    pub async fn get<'a>(&'a self) -> async_lock::MutexGuard<'a, T> {
+        self.cv.wait().await;
+        self.val.get().unwrap().lock().await
+    }
 }
 
+pub static TEXT_CTX: AsyncGlobal<TextContext> = AsyncGlobal::new();
+
+pub fn init_txt_ctx() {
+    std::thread::spawn(|| {
+        // This is quite slow. It takes 300ms
+        let txt_ctx = TextContext::new();
+        TEXT_CTX.set(txt_ctx);
+    });
+}
+
+/// Initializing this is expensive ~300ms, but storage is ~2kb.
+/// It has to be created once and reused. Currently we use thread local storage.
 pub struct TextContext {
     font_ctx: parley::FontContext,
     layout_ctx: parley::LayoutContext<Color>,
@@ -47,6 +74,7 @@ pub struct TextContext {
 
 impl TextContext {
     fn new() -> Self {
+        let layout_ctx = parley::LayoutContext::new();
         let mut font_ctx = parley::FontContext::new();
 
         let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
@@ -62,7 +90,7 @@ impl TextContext {
             trace!(target: "text", "Loaded font: {family_name}");
         }
 
-        Self { font_ctx, layout_ctx: Default::default() }
+        Self { font_ctx, layout_ctx }
     }
 
     pub fn borrow(&mut self) -> (&mut parley::FontContext, &mut parley::LayoutContext<Color>) {
