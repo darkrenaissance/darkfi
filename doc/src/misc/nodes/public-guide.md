@@ -114,14 +114,16 @@ inbound_connections = 64
 transport_mixing = false
 ```
 
-### Bridge node
+### Fully anonymous I2p-enabled node
 
-A bridge node is a node that offers connectivity via multiple transport layers. 
-This provides the most benefit for the health of the network. This is the most 
-maximally compatible node for people that wish to support the network. You can 
-find a complete example config file for `darkirc-mixed.toml` in 
-`${DARKFI_REPO}/bin/darkirc/config`. Refer to 
-[Tor Nodes](tor-guide.md#inbound-node-settings) to configure Tor.
+An I2p-enabled node routes traffic over `i2p`. You can find a complete example config
+file for `darkirc-i2p.toml` in `${DARKFI_REPO}/bin/darkirc/config`. This node
+configuration is for users that would like to support `darkirc` over the I2p
+network.
+
+You need to configure I2p and launch your eepsite(hidden service) prior to running your
+public node over I2p. Please refer to
+[I2p Nodes](i2p-guide.md#inbound-node-settings).
 
 ```toml
 ## connection settings
@@ -131,16 +133,59 @@ channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
 
 ## Whitelisted transports for outbound connections
-allowed_transports = ["tcp+tls", "tor"]
+allowed_transports = ["i2p", "i2p+tls"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661", "tor://youraddress.onion:25551"]
+external_addrs = ["i2p://youraddress.b32.i2p:25551"]
+
+## Seed nodes to connect to
+seeds = [
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+]
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:25551"]
+
+## Outbound connection slots
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 64
+
+## I2p Socks5 proxy
+i2p_socks5_proxy = "socks5://127.0.0.1:4447"
+```
+
+### Bridge node
+
+A bridge node is a node that offers connectivity via multiple transport layers. 
+This provides the most benefit for the health of the network. This is the most 
+maximally compatible node for people that wish to support the network. You can 
+find a complete example config file for `darkirc-mixed.toml` in 
+`${DARKFI_REPO}/bin/darkirc/config`. Refer to 
+[Tor Nodes](tor-guide.md#inbound-node-settings) to configure Tor.
+
+<!-- TODO: replace the i2p seed address with an official one-->
+```toml
+## connection settings
+outbound_connect_timeout = 60
+channel_handshake_timeout = 55
+channel_heartbeat_interval = 90
+outbound_peer_discovery_cooloff_time = 60
+
+## Whitelisted transports for outbound connections
+allowed_transports = ["tcp+tls", "tor", "i2p"]
+
+## Addresses we want to advertise to peers
+external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661",
+    "tor://youraddress.onion:25551", "i2p://youraddress.b32.i2p"]
 
 ## Seed nodes to connect to 
 seeds = [
     "tcp+tls://lilith1.dark.fi:5262",
     "tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
     "tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
 ]
 
 ## P2P accept addresses
@@ -154,6 +199,9 @@ inbound_connections = 64
 
 ## Enable transport mixing
 transport_mixing = true
+
+## I2p Socks5 proxy
+i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 ```
 
 ## Test your node

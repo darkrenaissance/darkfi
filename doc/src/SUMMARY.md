@@ -21,6 +21,7 @@
 - [Node Configurations](misc/nodes/node-configurations.md)
     - [Public Node Configurations](misc/nodes/public-guide.md)
     - [Tor Nodes](misc/nodes/tor-guide.md)
+    - [I2p Nodes](misc/nodes/i2p-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
 
 # Developer Doc
