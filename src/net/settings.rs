@@ -67,6 +67,8 @@ pub struct Settings {
     /// Socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
     /// and transport mixing is enabled
     pub socks5_proxy: Url,
+    /// I2p Socks5 proxy to connect to i2p eepsite (hidden services)
+    pub i2p_socks5_proxy: Url,
     /// Outbound connection slots number, this many connections will be
     /// attempted. (This does not include manual connections)
     pub outbound_connections: usize,
@@ -128,6 +130,7 @@ impl Default for Settings {
             allowed_transports: vec!["tcp+tls".to_string()],
             transport_mixing: true,
             socks5_proxy: Url::parse("socks5://127.0.0.1:9050").unwrap(),
+            i2p_socks5_proxy: Url::parse("socks5://127.0.0.1:4447").unwrap(),
             outbound_connections: 8,
             inbound_connections: 8,
             outbound_connect_timeout: 15,
@@ -234,6 +237,10 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub socks5_proxy: Option<Url>,
 
+    /// I2p Socks5 proxy to connect to i2p eepsite (hidden services)
+    #[structopt(long)]
+    pub i2p_socks5_proxy: Option<Url>,
+
     /// If this is true, strictly follow the gold_connect_count and
     /// white_connect_percent settings. Otherwise, connect to greylist
     /// entries if we have no white or gold connections.
@@ -311,6 +318,7 @@ impl From<SettingsOpt> for Settings {
             allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
             transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
             socks5_proxy: opt.socks5_proxy.unwrap_or(def.socks5_proxy),
+            i2p_socks5_proxy: opt.i2p_socks5_proxy.unwrap_or(def.i2p_socks5_proxy),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
             outbound_connect_timeout: opt

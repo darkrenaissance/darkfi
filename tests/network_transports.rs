@@ -39,7 +39,7 @@ fn tcp_transport() {
 
         let payload = "ohai tcp";
 
-        let dialer = Dialer::new(url, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -70,7 +70,7 @@ fn tcp_tls_transport() {
 
         let payload = "ohai tls";
 
-        let dialer = Dialer::new(url, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -103,7 +103,7 @@ fn unix_transport() {
 
         let payload = "ohai unix";
 
-        let dialer = Dialer::new(url, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 

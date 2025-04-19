@@ -73,7 +73,8 @@ const PROTO_NAME: &str = "ProtocolAddress";
 /// combinations.  Should be updated if and when new transports are
 /// added. Creates a upper bound on the number of transports a given peer
 /// can request.
-const TRANSPORT_COMBOS: [&str; 7] = ["tor", "tls", "tcp", "nym", "tor+tls", "nym+tls", "tcp+tls"];
+const TRANSPORT_COMBOS: [&str; 9] =
+    ["tor", "tls", "tcp", "nym", "i2p", "tor+tls", "nym+tls", "tcp+tls", "i2p+tls"];
 
 impl ProtocolAddress {
     /// Creates a new address protocol. Makes an address, an external address

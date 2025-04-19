@@ -67,6 +67,7 @@ impl Connector {
         let transport_mixing = settings.transport_mixing;
         let datastore = settings.p2p_datastore.clone();
         let outbound_connect_timeout = settings.outbound_connect_timeout;
+        let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
         let socks5_proxy = settings.socks5_proxy.clone();
         drop(settings);
 
@@ -111,7 +112,7 @@ impl Connector {
             }
         }
 
-        let dialer = Dialer::new(endpoint.clone(), datastore).await?;
+        let dialer = Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await?;
         let timeout = Duration::from_secs(outbound_connect_timeout);
 
         let stop_fut = async {

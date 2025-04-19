@@ -132,7 +132,11 @@ macro_rules! enforce_abspath {
 
 impl Dialer {
     /// Instantiate a new [`Dialer`] with the given [`Url`] and datastore path.
-    pub async fn new(endpoint: Url, datastore: Option<String>) -> io::Result<Self> {
+    pub async fn new(
+        endpoint: Url,
+        datastore: Option<String>,
+        i2p_socks5_proxy: Option<Url>,
+    ) -> io::Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             "tcp" => {
                 // Build a TCP dialer
@@ -207,6 +211,27 @@ impl Dialer {
                 // Build a SOCKS5 dialer with TLS encapsulation
                 enforce_hostport!(endpoint);
                 let variant = socks5::Socks5Dialer::new(&endpoint).await?;
+                let variant = DialerVariant::Socks5Tls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            "i2p" => {
+                // Build a Socks5 Dialer for I2p
+                enforce_hostport!(endpoint);
+                let mut url = i2p_socks5_proxy.unwrap();
+                url.set_path(&format!("{}:{}", endpoint.host().unwrap(), endpoint.port().unwrap()));
+                let variant = socks5::Socks5Dialer::new(&url).await?;
+                let variant = DialerVariant::Socks5(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            "i2p+tls" => {
+                // Build a SOCKS5 dialer with TLS encapsulation for I2p
+                enforce_hostport!(endpoint);
+                let mut url = i2p_socks5_proxy.unwrap();
+                url.set_path(&format!("{}:{}", endpoint.host().unwrap(), endpoint.port().unwrap()));
+                url.set_scheme("socks5+tls").unwrap();
+                let variant = socks5::Socks5Dialer::new(&url).await?;
                 let variant = DialerVariant::Socks5Tls(variant);
                 Ok(Self { endpoint, variant })
             }

@@ -40,6 +40,7 @@ use super::{
 use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
+        encoding::base32,
         file::{load_file, save_file},
         most_frequent_or_any,
         path::expand_path,
@@ -1357,6 +1358,16 @@ impl Hosts {
                     );
                 }
 
+                "i2p" | "i2p+tls" => {
+                    if !Self::is_i2p_host(host_str) {
+                        continue
+                    }
+                    trace!(
+                        target: "net::hosts::filter_addresses",
+                        "[I2p] Valid: {}", host_str,
+                    );
+                }
+
                 _ => continue,
             }
 
@@ -1501,7 +1512,7 @@ impl Hosts {
                 // with stuff that has host_str().
                 if addr.host_str().is_some() {
                     // Localhost connections should never enter the blacklist
-                    // This however allows any Tor and Nym connections.
+                    // This however allows any Tor, Nym and I2p connections.
                     if self.is_local_host(addr) {
                         return Ok(());
                     }
@@ -1589,6 +1600,26 @@ impl Hosts {
         //
 
         None
+    }
+
+    fn is_i2p_host(host: &str) -> bool {
+        if !host.ends_with(".i2p") {
+            return false
+        }
+
+        // Two kinds of address
+        // 1. wvbtv6i6njxdtxwsgsr3d4xejdtsy6n7s3d2paqgigjkv3fv5imq.b32.i2p
+        // 2. node.darkfi.i2p
+        let name = host.trim_end_matches(".i2p");
+
+        if name.ends_with(".b32") {
+            let b32 = name.trim_end_matches(".b32");
+            let decoded = base32::decode(b32);
+            // decoded should be a SHA256 hash
+            return decoded.is_some() && decoded.unwrap().len() == 32
+        }
+
+        name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
     }
 }
 
@@ -1865,5 +1896,13 @@ mod tests {
             let entry = hosts.container.fetch_last(HostColor::White).unwrap();
             println!("last entry: {} {}", entry.0, entry.1);
         });
+    }
+
+    #[test]
+    fn test_is_p2p_host() {
+        assert!(Hosts::is_i2p_host("tm7bz5qfh73id33yjpshxmesrqedoz2ckghd3levktqywcrramwq.b32.i2p"));
+        assert!(!Hosts::is_i2p_host("randomstring.b32.i2p"));
+        assert!(Hosts::is_i2p_host("node.dark.fi.i2p"));
+        assert!(!Hosts::is_i2p_host("node.dark.fi"));
     }
 }

@@ -363,6 +363,8 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
             "tor+tls".to_string(),
             "nym".to_string(),
             "nym+tls".to_string(),
+            "i2p".to_string(),
+            "i2p+tls".to_string(),
         ],
         ban_policy: BanPolicy::Relaxed,
         ..Default::default()
