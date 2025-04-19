@@ -102,6 +102,9 @@ transport_mixing = false
 # Socks5 proxy
 #socks5_proxy = "socks5://127.0.0.1:9050"
 
+# I2p Socks5 proxy
+#i2p_socks5_proxy = "socks5://127.0.0.1:4447"
+
 # Nodes to avoid interacting with for the duration of the program, in the
 # format ["host", ["scheme", "scheme"], [port, port]].
 # If scheme is left empty it will default to "tcp+tls". 
