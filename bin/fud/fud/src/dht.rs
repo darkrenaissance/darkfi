@@ -20,12 +20,13 @@ use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     sync::Arc,
+    time::Duration,
 };
 
 use async_trait::async_trait;
 use darkfi::{
     net::{connector::Connector, session::Session, ChannelPtr, Message, P2pPtr},
-    system::{sleep, ExecutorPtr},
+    system::{sleep, timeout::timeout, ExecutorPtr},
     util::time::Timestamp,
     Error, Result,
 };
@@ -513,7 +514,11 @@ pub trait DhtHandler {
             let session_weak = Arc::downgrade(&self.dht().p2p.session_outbound());
 
             let connector = Connector::new(self.dht().p2p.settings(), session_weak);
-            let connect_res = connector.connect(&addr).await;
+            let dur = Duration::from_secs(self.dht().timeout);
+            let Ok(connect_res) = timeout(dur, connector.connect(&addr)).await else {
+                warn!(target: "dht::DhtHandler::get_channel()", "Timeout trying to connect to {}", addr);
+                return Err(Error::ConnectTimeout);
+            };
             if connect_res.is_err() {
                 warn!(target: "dht::DhtHandler::get_channel()", "Error while connecting to {}: {}", addr, connect_res.unwrap_err());
                 continue;
