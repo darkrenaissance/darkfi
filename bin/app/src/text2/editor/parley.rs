@@ -95,7 +95,7 @@ impl Editor {
         self.layout().height()
     }
 
-    pub fn selected_text(&self) -> Option<&str> {
-        self.editor.selected_text()
+    pub fn selected_text(&self) -> Option<String> {
+        self.editor.selected_text().to_owned()
     }
 }

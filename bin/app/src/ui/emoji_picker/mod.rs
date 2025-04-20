@@ -51,8 +51,8 @@ mod default;
 mod emoji;
 pub use emoji::{EmojiMeshes, EmojiMeshesPtr};
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*); } }
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*) } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*) } }
 
 struct TouchInfo {
     start_pos: Point,
@@ -196,7 +196,7 @@ impl EmojiPicker {
                 let node = self.node.upgrade().unwrap();
                 node.trigger("emoji_select", param_data).await.unwrap();
             }
-            None => d!("Index out of bounds: {idx}"),
+            None => d!("Index out of bounds: {idx}")
         }
     }
 

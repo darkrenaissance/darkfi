@@ -571,7 +571,7 @@ impl ChatEdit {
             'c' => {
                 if action_mod {
                     if let Some(text) = editor.selected_text() {
-                        miniquad::window::clipboard_set(text);
+                        miniquad::window::clipboard_set(&text);
                     }
                 }
             }

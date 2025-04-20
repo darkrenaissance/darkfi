@@ -160,4 +160,14 @@ impl Editor {
     pub fn height(&self) -> f32 {
         self.layout().height()
     }
+
+    pub fn selected_text(&self) -> Option<String> {
+        let edit = android::get_editable(self.composer_id).unwrap();
+        if edit.select_start == edit.select_end {
+            return None
+        }
+        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
+        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+        Some(edit.buffer[select_start..select_end].to_string())
+    }
 }
