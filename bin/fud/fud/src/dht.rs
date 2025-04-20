@@ -543,7 +543,7 @@ pub trait DhtHandler {
         let mut router_items = router_items.clone();
         router_items.retain(|item| !item.node.addresses.is_empty());
 
-        debug!(target: "dht::DhtHandler::add_to_router()", "Inserting {} nodes to key {}", router_items.len(), key);
+        debug!(target: "dht::DhtHandler::add_to_router()", "Inserting {} nodes to key {}", router_items.len(), bs58::encode(key.as_bytes()).into_string());
 
         let mut router_write = router.write().await;
         let key_r = router_write.get_mut(key);
