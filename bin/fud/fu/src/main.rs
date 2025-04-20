@@ -90,6 +90,7 @@ enum Subcmd {
 
 struct Fu {
     pub rpc_client: Arc<RpcClient>,
+    pub endpoint: Url,
 }
 
 impl Fu {
@@ -126,19 +127,31 @@ impl Fu {
                 }
             },
             Error::DetachedTaskStopped,
-            ex,
+            ex.clone(),
         );
 
         let progress_bar_width = 20;
-        let mut chunks_total = 0;
-        let mut chunks_downloaded = 0;
 
-        let print_progress_bar = |chunks_downloaded: usize, chunks_total: usize| {
-            let completed = (chunks_downloaded as f64 / chunks_total as f64 *
-                progress_bar_width as f64) as usize;
+        let print_progress_bar = |info: &HashMap<String, JsonValue>| {
+            let resource =
+                info.get("resource").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+            let chunks_downloaded =
+                *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap() as usize;
+            let chunks_total =
+                *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
+            let status = match resource.get("status").unwrap().get::<String>().unwrap().as_str() {
+                "seeding" => "done",
+                s => s,
+            };
+            let completed = if chunks_total > 0 {
+                (chunks_downloaded as f64 / chunks_total as f64 * progress_bar_width as f64)
+                    as usize
+            } else {
+                0
+            };
             let remaining = progress_bar_width - completed;
             let bar = "=".repeat(completed) + &" ".repeat(remaining);
-            print!("\r[{}] {}/{} chunks", bar, chunks_downloaded, chunks_total);
+            print!("\x1B[2K\r[{}] {}/{} chunks | {}", bar, chunks_downloaded, chunks_total, status);
             stdout().flush().unwrap();
         };
 
@@ -149,7 +162,9 @@ impl Fu {
                 JsonValue::String(file_name.unwrap_or_default()),
             ]),
         );
-        let _ = self.rpc_client.request(req).await?;
+        // Create a RPC client to send the `get` request
+        let rpc_client_getter = RpcClient::new(self.endpoint.clone(), ex.clone()).await?;
+        let _ = rpc_client_getter.request(req).await?;
 
         loop {
             match subscription.receive().await {
@@ -162,43 +177,19 @@ impl Fu {
                         continue;
                     }
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
-                        "file_download_completed" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            chunks_total =
-                                *resource.get("chunks_total").unwrap().get::<f64>().unwrap()
-                                    as usize;
-                            print_progress_bar(chunks_downloaded, chunks_total);
-                        }
+                        "download_started" |
+                        "file_download_completed" |
                         "chunk_download_completed" => {
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            chunks_downloaded =
-                                *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap()
-                                    as usize;
-                            print_progress_bar(chunks_downloaded, chunks_total);
+                            print_progress_bar(info);
                         }
                         "download_completed" => {
                             let file_path = info.get("file_path").unwrap().get::<String>().unwrap();
-                            let resource = info
-                                .get("resource")
-                                .unwrap()
-                                .get::<HashMap<String, JsonValue>>()
-                                .unwrap();
-                            chunks_downloaded =
-                                *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap()
-                                    as usize;
-                            print_progress_bar(chunks_downloaded, chunks_total);
+                            print_progress_bar(info);
                             println!("\nDownload completed:\n{}", file_path);
                             return Ok(());
                         }
                         "file_not_found" => {
+                            println!();
                             return Err(Error::Custom(format!("Could not find file {}", file_hash)));
                         }
                         "chunk_not_found" => {
@@ -497,7 +488,7 @@ fn main() -> Result<()> {
     smol::block_on(async {
         ex.run(async {
             let rpc_client = Arc::new(RpcClient::new(args.endpoint.clone(), ex.clone()).await?);
-            let fu = Fu { rpc_client };
+            let fu = Fu { rpc_client, endpoint: args.endpoint.clone() };
 
             match args.command {
                 Subcmd::Get { file, name } => fu.get(file, name, ex.clone()).await,
