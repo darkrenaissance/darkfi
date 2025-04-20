@@ -47,10 +47,10 @@ pub enum FetchReply {
 pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
     info!(target: "fud::fetch_file_task()", "Started background file fetch task");
     loop {
-        let (file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
+        let (nodes, file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
         info!(target: "fud::fetch_file_task()", "Fetching file {}", hash_to_string(&file_hash));
 
-        let result = fud.fetch_file_metadata(file_hash).await;
+        let result = fud.fetch_file_metadata(nodes, file_hash).await;
 
         match result {
             Some(reply) => {

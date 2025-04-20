@@ -523,12 +523,15 @@ impl Fud {
             }))
             .await;
 
+        let mut closest_nodes = vec![];
+
         let chunked_file = match self.geode.get(file_hash).await {
             Ok(v) => v,
             Err(Error::GeodeNeedsGc) => todo!(),
             Err(Error::GeodeFileNotFound) => {
                 info!(target: "self::get()", "Requested file {} not found in Geode, triggering fetch", hash_to_string(file_hash));
-                self.file_fetch_tx.send((*file_hash, Ok(()))).await.unwrap();
+                closest_nodes = self.lookup_nodes(file_hash).await.unwrap_or_default();
+                self.file_fetch_tx.send((closest_nodes.clone(), *file_hash, Ok(()))).await.unwrap();
                 info!(target: "self::get()", "Waiting for background file fetch task...");
                 let (i_file_hash, status) = self.file_fetch_end_rx.recv().await.unwrap();
                 match status {
@@ -627,7 +630,10 @@ impl Fud {
             };
         }
 
-        let seeders = self.fetch_seeders(file_hash).await;
+        if closest_nodes.is_empty() {
+            closest_nodes = self.lookup_nodes(file_hash).await.unwrap_or_default();
+        }
+        let seeders = self.fetch_seeders(&closest_nodes, file_hash).await;
 
         // List missing chunks
         let mut missing_chunks = HashSet::new();

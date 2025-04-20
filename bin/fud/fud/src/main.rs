@@ -144,8 +144,8 @@ pub struct Fud {
 
     get_tx: channel::Sender<(u16, blake3::Hash, PathBuf, Result<()>)>,
     get_rx: channel::Receiver<(u16, blake3::Hash, PathBuf, Result<()>)>,
-    file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
-    file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+    file_fetch_tx: channel::Sender<(Vec<DhtNode>, blake3::Hash, Result<()>)>,
+    file_fetch_rx: channel::Receiver<(Vec<DhtNode>, blake3::Hash, Result<()>)>,
     file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
 
@@ -334,17 +334,16 @@ impl Fud {
         Ok(seeding_resources)
     }
 
-    /// Query nodes close to `key` to find the seeders
-    async fn fetch_seeders(&self, key: &blake3::Hash) -> HashSet<DhtRouterItem> {
-        let closest_nodes = self.lookup_nodes(key).await; // Find the `k` closest nodes
-        if closest_nodes.is_err() {
-            return HashSet::new();
-        }
-
+    /// Query `nodes` to find the seeders for `key`
+    async fn fetch_seeders(
+        &self,
+        nodes: &Vec<DhtNode>,
+        key: &blake3::Hash,
+    ) -> HashSet<DhtRouterItem> {
         let mut seeders: HashSet<DhtRouterItem> = HashSet::new();
 
-        for node in closest_nodes.unwrap() {
-            let channel = match self.get_channel(&node).await {
+        for node in nodes {
+            let channel = match self.get_channel(node).await {
                 Ok(channel) => channel,
                 Err(e) => {
                     warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {}", hash_to_string(&node.id), e);
@@ -521,21 +520,20 @@ impl Fud {
         Ok(())
     }
 
-    /// Fetch a single file metadata from the network.
+    /// Fetch a single file metadata from `nodes`.
     /// If the file is smaller than a single chunk then the chunk is returned.
-    /// 1. Lookup nodes close to the key
-    /// 2. Request seeders for the file from those nodes
-    /// 3. Request the file from the seeders
-    async fn fetch_file_metadata(&self, file_hash: blake3::Hash) -> Option<FetchReply> {
+    /// 1. Request seeders for the file from those nodes
+    /// 2. Request the file from the seeders
+    async fn fetch_file_metadata(
+        &self,
+        nodes: Vec<DhtNode>,
+        file_hash: blake3::Hash,
+    ) -> Option<FetchReply> {
         let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
-        let closest_nodes = self.lookup_nodes(&file_hash).await; // 1
         let mut result: Option<FetchReply> = None;
-        if closest_nodes.is_err() {
-            return None
-        }
 
-        for node in closest_nodes.unwrap() {
-            // 2. Request list of seeders
+        for node in nodes {
+            // 1. Request list of seeders
             let channel = match self.get_channel(&node).await {
                 Ok(channel) => channel,
                 Err(e) => {
@@ -575,7 +573,7 @@ impl Fud {
 
             msg_subscriber.unsubscribe().await;
 
-            // 3. Request the file/chunk from the seeders
+            // 2. Request the file/chunk from the seeders
             while let Some(seeder) = seeders.pop() {
                 // Only query a seeder once
                 if queried_seeders.iter().any(|s| *s == seeder.node.id) {
