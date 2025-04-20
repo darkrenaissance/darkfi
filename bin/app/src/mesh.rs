@@ -18,7 +18,7 @@
 
 use crate::{
     error::Result,
-    gfx::{GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Rectangle, RenderApi, Vertex},
+    gfx::{GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex},
 };
 
 pub type Color = [f32; 4];
@@ -134,7 +134,7 @@ impl MeshBuilder {
     }
 
     pub fn draw_filled_box(&mut self, obj: &Rectangle, color: Color) {
-        let uv = Rectangle { x: 0., y: 0., w: 0., h: 0. };
+        let uv = Rectangle::zero();
         self.draw_box(obj, color, &uv);
     }
 
@@ -151,6 +151,38 @@ impl MeshBuilder {
         self.draw_filled_box(&Rectangle::new(x2 - thickness, y1, thickness, dist_y), color);
         // bottom
         self.draw_filled_box(&Rectangle::new(x1, y2 - thickness, dist_x, thickness), color);
+    }
+
+    pub fn draw_line(&mut self, start: Point, end: Point, color: Color, thickness: f32) {
+        trace!(target: "mesh", "draw_line({start:?}, {end:?}, {color:?}, {thickness})");
+        let mut dir = end - start;
+        dir.normalize();
+        let left = dir.perp_left() * (thickness / 2.);
+        let right = dir.perp_right() * (thickness / 2.);
+        trace!(target: "mesh", " -> dir={dir:?} left={left:?} right={right:?}");
+
+        let p1 = start + left;
+        let p2 = end + left;
+        let p3 = start + right;
+        let p4 = end + right;
+
+        let uv = [0., 0.];
+
+        let verts = vec![
+            // top left
+            Vertex { pos: [p1.x, p1.y], color, uv },
+            // top right
+            Vertex { pos: [p2.x, p2.y], color, uv },
+            // bottom left
+            Vertex { pos: [p3.x, p3.y], color, uv },
+            // bottom right
+            Vertex { pos: [p4.x, p4.y], color, uv },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        trace!(target: "mesh", " -> {p1:?}, {p2:?}, {p3:?}, {p4:?}");
+        trace!(target: "mesh", " -> verts={verts:?} indices={indices:?}");
+
+        self.append(verts, indices);
     }
 
     pub fn alloc(self, render_api: &RenderApi) -> MeshInfo {

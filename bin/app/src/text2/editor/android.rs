@@ -25,6 +25,7 @@ use crate::{
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "text::editor::android", $($arg)*) } }
 
 // You must be careful working with string indexes in Java. They are UTF16 string indexs, not UTF8
 fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
@@ -90,8 +91,20 @@ impl Editor {
         let window_scale = self.window_scale.get();
         let lineheight = self.lineheight.get();
 
-        let edit = android::get_editable(self.composer_id).unwrap();
+        let Some(edit) = android::get_editable(self.composer_id) else {
+            w!("refresh(): editable composer_id={} not initialized yet", self.composer_id);
+            return
+        };
         t!("refesh buffer = {}", edit.buffer);
+
+        let mut underlines = vec![];
+        if let Some(compose_start) = edit.compose_start {
+            let compose_end = edit.compose_end.unwrap();
+
+            let compose_start = char16_to_byte_index(&edit.buffer, compose_start).unwrap();
+            let compose_end = char16_to_byte_index(&edit.buffer, compose_end).unwrap();
+            underlines.push((compose_start..compose_end));
+        }
 
         let mut txt_ctx = TEXT_CTX.get().await;
         self.layout = txt_ctx.make_layout(
@@ -101,6 +114,7 @@ impl Editor {
             lineheight,
             window_scale,
             self.width,
+            &underlines,
         );
     }
 

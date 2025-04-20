@@ -80,12 +80,12 @@ impl<'a> Atlas<'a> {
         }
     }
 
-    pub fn push_glyph(&mut self, glyph: parley::Glyph) {
-        if self.glyph_ids.contains(&glyph.id) {
+    pub fn push_glyph(&mut self, glyph_id: swash::GlyphId) {
+        if self.glyph_ids.contains(&glyph_id) {
             return
         }
 
-        self.glyph_ids.push(glyph.id);
+        self.glyph_ids.push(glyph_id);
 
         let rendered_glyph = swash::scale::Render::new(
             // Select our source order
@@ -97,7 +97,7 @@ impl<'a> Atlas<'a> {
         )
         // Select the simple alpha (non-subpixel) format
         .format(zeno::Format::Alpha)
-        .render(&mut self.scaler, glyph.id)
+        .render(&mut self.scaler, glyph_id)
         .unwrap();
 
         let glyph_width = rendered_glyph.placement.width as usize;

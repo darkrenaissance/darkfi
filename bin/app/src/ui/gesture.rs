@@ -74,8 +74,8 @@ impl Gesture {
         let Some(start_2) = state.start[1] else { return None };
         let curr_2 = state.curr[1].unwrap();
 
-        let start_dist_sq = start_1.dist_sq(&start_2);
-        let curr_dist_sq = curr_1.dist_sq(&curr_2);
+        let start_dist_sq = start_1.dist_sq(start_2);
+        let curr_dist_sq = curr_1.dist_sq(curr_2);
         let r = (curr_dist_sq / start_dist_sq).sqrt();
 
         Some(r)

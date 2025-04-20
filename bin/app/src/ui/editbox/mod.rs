@@ -119,7 +119,7 @@ impl TouchInfo {
     fn update(&mut self, pos: &Point) {
         match &self.state {
             TouchStateAction::Started { pos: start_pos, instant } => {
-                let travel_dist = pos.dist_sq(&start_pos);
+                let travel_dist = pos.dist_sq(*start_pos);
                 let x_dist = pos.x - start_pos.x;
                 let elapsed = instant.elapsed().as_millis();
 
@@ -961,13 +961,13 @@ impl EditBox {
             // Make pos relative to the rect
             let pos_rel = pos - self.rect.get().pos();
 
-            if p1.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
+            if p1.dist_sq(pos_rel) <= TOUCH_RADIUS_SQ {
                 d!("TouchStateAction::DragSelectHandle [side=-1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
                 return true
             }
-            if p2.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
+            if p2.dist_sq(pos_rel) <= TOUCH_RADIUS_SQ {
                 d!("TouchStateAction::DragSelectHandle [side=1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };

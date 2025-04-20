@@ -21,6 +21,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use std::{
     cell::RefCell,
     fmt::Debug,
+    ops::Range,
     sync::{atomic::AtomicBool, Arc, OnceLock},
 };
 
@@ -105,6 +106,7 @@ impl TextContext {
         lineheight: f32,
         window_scale: f32,
         width: Option<f32>,
+        underlines: &[Range<usize>],
     ) -> parley::Layout<Color> {
         let mut builder = self.layout_ctx.ranged_builder(&mut self.font_ctx, &text, window_scale);
         builder.push_default(parley::StyleProperty::LineHeight(lineheight));
@@ -113,6 +115,10 @@ impl TextContext {
             FONT_STACK.into(),
         )));
         builder.push_default(parley::StyleProperty::Brush(text_color));
+
+        for underline in underlines {
+            builder.push(parley::StyleProperty::Underline(true), underline.clone());
+        }
 
         let mut layout: parley::Layout<Color> = builder.build(&text);
         layout.break_all_lines(width);

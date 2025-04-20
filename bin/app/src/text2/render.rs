@@ -17,11 +17,11 @@
  */
 
 use crate::{
-    gfx::{GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi},
+    gfx::{GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
-use super::atlas::Atlas;
+use super::atlas::{Atlas, RenderedAtlas};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DebugRenderOptions(u32);
@@ -86,30 +86,16 @@ fn render_glyph_run(
     let run_y = glyph_run.baseline();
     let style = glyph_run.style();
     let color = style.brush;
-
-    let run = glyph_run.run();
     trace!(target: "text::render", "render_glyph_run run_idx={run_idx}");
 
-    let font = run.font();
-    let font_size = run.font_size();
-    let normalized_coords = run.normalized_coords();
-    let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
-
-    let mut scaler = scale_ctx
-        .builder(font_ref)
-        .size(font_size)
-        .hint(true)
-        .normalized_coords(normalized_coords)
-        .build();
-
-    let mut atlas = Atlas::new(scaler, render_api);
-    for glyph in glyph_run.glyphs() {
-        atlas.push_glyph(glyph);
-    }
-    //atlas.dump(&format!("/tmp/atlas_{run_idx}.png"));
-    let atlas = atlas.make();
+    let atlas = create_atlas(scale_ctx, glyph_run, render_api);
 
     let mut mesh = MeshBuilder::new();
+
+    if let Some(underline) = &style.underline {
+        render_underline(underline, glyph_run, &mut mesh);
+    }
+
     for glyph in glyph_run.glyphs() {
         let glyph_inf = atlas.fetch_uv(glyph.id).expect("missing glyph UV rect");
 
@@ -140,4 +126,61 @@ fn render_glyph_run(
     }
 
     mesh.alloc(render_api).draw_with_texture(atlas.texture)
+}
+
+fn render_underline(
+    underline: &parley::layout::Decoration<Color>,
+    glyph_run: &parley::GlyphRun<'_, Color>,
+    mesh: &mut MeshBuilder,
+) {
+    let color = underline.brush;
+    let run_metrics = glyph_run.run().metrics();
+    let offset = match underline.offset {
+        Some(offset) => offset,
+        None => run_metrics.underline_offset,
+    };
+    let width = match underline.size {
+        Some(size) => size,
+        None => run_metrics.underline_size,
+    };
+    // The `offset` is the distance from the baseline to the top of the underline
+    // so we move the line down by half the width
+    // Remember that we are using a y-down coordinate system
+    // If there's a custom width, because this is an underline, we want the custom
+    // width to go down from the default expectation
+    let y = glyph_run.baseline() - offset + width / 2.;
+
+    let start_x = glyph_run.offset();
+    let end_x = start_x + glyph_run.advance();
+
+    let start = Point::new(start_x, y);
+    let end = Point::new(end_x, y);
+
+    mesh.draw_line(start, end, color, width);
+}
+
+fn create_atlas(
+    scale_ctx: &mut swash::scale::ScaleContext,
+    glyph_run: &parley::GlyphRun<'_, Color>,
+    render_api: &RenderApi,
+) -> RenderedAtlas {
+    let run = glyph_run.run();
+    let font = run.font();
+    let font_size = run.font_size();
+    let normalized_coords = run.normalized_coords();
+    let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
+
+    let mut scaler = scale_ctx
+        .builder(font_ref)
+        .size(font_size)
+        .hint(true)
+        .normalized_coords(normalized_coords)
+        .build();
+
+    let mut atlas = Atlas::new(scaler, render_api);
+    for glyph in glyph_run.glyphs() {
+        atlas.push_glyph(glyph.id);
+    }
+    //atlas.dump(&format!("/tmp/atlas_{run_idx}.png"));
+    atlas.make()
 }

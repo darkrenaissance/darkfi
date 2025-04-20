@@ -131,7 +131,7 @@ impl TouchInfo {
     fn update(&mut self, pos: &Point) {
         match &self.state {
             TouchStateAction::Started { pos: start_pos, instant } => {
-                let travel_dist = pos.dist_sq(&start_pos);
+                let travel_dist = pos.dist_sq(*start_pos);
                 let grad = (pos.y - start_pos.y) / (pos.x - start_pos.x);
                 let elapsed = instant.elapsed().as_millis();
                 //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist={travel_dist}, grad={grad}]");

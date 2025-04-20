@@ -96,6 +96,6 @@ impl Editor {
     }
 
     pub fn selected_text(&self) -> Option<String> {
-        self.editor.selected_text().to_owned()
+        self.editor.selected_text().map(str::to_string)
     }
 }

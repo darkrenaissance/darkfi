@@ -85,8 +85,27 @@ impl Point {
         Rectangle { x: self.x, y: self.y, w, h }
     }
 
-    pub fn dist_sq(&self, other: &Point) -> f32 {
+    pub fn dist_sq(&self, other: Point) -> f32 {
         (self.x - other.x).powi(2) + (self.y - other.y).powi(2)
+    }
+    pub fn dist(&self, other: Point) -> f32 {
+        self.dist_sq(other).sqrt()
+    }
+
+    pub fn normalize(&mut self) {
+        let scale = self.dist(Point::zero());
+        self.x /= scale;
+        self.y /= scale;
+        assert!((self.dist(Point::zero()) - 1.) < f32::EPSILON);
+    }
+
+    /// Counterclockwise perp vector (with -y up)
+    pub fn perp_left(&self) -> Point {
+        Point::new(self.y, -self.x)
+    }
+    /// Clockwise perp vector (with +y down)
+    pub fn perp_right(&self) -> Point {
+        Point::new(-self.y, self.x)
     }
 }
 
@@ -127,6 +146,14 @@ impl AddAssign for Point {
 impl SubAssign for Point {
     fn sub_assign(&mut self, other: Self) {
         *self = Self { x: self.x - other.x, y: self.y - other.y };
+    }
+}
+
+impl Mul<f32> for Point {
+    type Output = Self;
+
+    fn mul(self, scale: f32) -> Self {
+        Point::new(scale * self.x, scale * self.y)
     }
 }
 

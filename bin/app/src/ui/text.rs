@@ -125,7 +125,7 @@ impl Text {
 
         let layout = {
             let mut txt_ctx = TEXT_CTX.get().await;
-            txt_ctx.make_layout(&text, text_color, font_size, 0., window_scale, None)
+            txt_ctx.make_layout(&text, text_color, font_size, 0., window_scale, None, &[])
         };
 
         text2::render_layout(&layout, &self.render_api)
