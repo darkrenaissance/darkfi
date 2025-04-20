@@ -103,6 +103,14 @@ struct Args {
     /// Default path to store downloaded files (defaults to <base_dir>/downloads)
     downloads_path: Option<String>,
 
+    #[structopt(short, long)]
+    /// Chunk transfer timeout in seconds
+    chunk_timeout: Option<u64>,
+
+    #[structopt(short, long)]
+    /// DHT requests timeout in seconds
+    dht_timeout: Option<u64>,
+
     #[structopt(flatten)]
     /// Network settings
     net: SettingsOpt,
@@ -124,6 +132,9 @@ pub struct Fud {
 
     /// Default download directory
     downloads_path: PathBuf,
+
+    /// Chunk transfer timeout in seconds
+    chunk_timeout: u64,
 
     /// The DHT instance
     dht: Arc<Dht>,
@@ -427,9 +438,9 @@ impl Fud {
                 }
 
                 let chunk_recv =
-                    msg_subscriber_chunk.receive_with_timeout(self.dht().timeout).fuse();
+                    msg_subscriber_chunk.receive_with_timeout(self.chunk_timeout).fuse();
                 let notfound_recv =
-                    msg_subscriber_notfound.receive_with_timeout(self.dht().timeout).fuse();
+                    msg_subscriber_notfound.receive_with_timeout(self.chunk_timeout).fuse();
 
                 pin_mut!(chunk_recv, notfound_recv);
 
@@ -594,11 +605,11 @@ impl Fud {
                     }
 
                     let chunk_recv =
-                        msg_subscriber_chunk.receive_with_timeout(self.dht().timeout).fuse();
+                        msg_subscriber_chunk.receive_with_timeout(self.chunk_timeout).fuse();
                     let file_recv =
-                        msg_subscriber_file.receive_with_timeout(self.dht().timeout).fuse();
+                        msg_subscriber_file.receive_with_timeout(self.chunk_timeout).fuse();
                     let notfound_recv =
-                        msg_subscriber_notfound.receive_with_timeout(self.dht().timeout).fuse();
+                        msg_subscriber_notfound.receive_with_timeout(self.chunk_timeout).fuse();
 
                     pin_mut!(chunk_recv, file_recv, notfound_recv);
 
@@ -760,12 +771,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
     let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
     // TODO: Add DHT settings in the config file
-    let dht = Arc::new(Dht::new(&node_id_, 4, 16, 60, p2p.clone(), ex.clone()).await);
+    let dht = Arc::new(
+        Dht::new(&node_id_, 4, 16, args.dht_timeout.unwrap_or(5), p2p.clone(), ex.clone()).await,
+    );
     let fud = Arc::new(Fud {
         seeders_router,
         p2p: p2p.clone(),
         geode,
         downloads_path,
+        chunk_timeout: args.chunk_timeout.unwrap_or(60),
         dht: dht.clone(),
         resources: Arc::new(RwLock::new(HashMap::new())),
         get_tx,

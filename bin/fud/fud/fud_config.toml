@@ -9,6 +9,12 @@
 # Path to the contents directory
 base_dir = "~/.local/share/darkfi/fud"
 
+# Chunk transfer timeout in seconds
+chunk_timeout = 60
+
+# DHT requests timeout in seconds
+dht_timeout = 5
+
 # JSON-RPC settings
 [rpc]
 # JSON-RPC listen URL
