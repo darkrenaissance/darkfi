@@ -19,7 +19,7 @@
 use crate::{
     gfx::Point,
     mesh::Color,
-    prop::{PropertyColor, PropertyFloat32},
+    prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, FONT_STACK, TEXT_CTX},
 };
 
@@ -28,6 +28,7 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor", $($arg)*); } 
 pub struct Editor {
     editor: parley::PlainEditor<Color>,
 
+    text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     window_scale: PropertyFloat32,
@@ -36,21 +37,22 @@ pub struct Editor {
 
 impl Editor {
     pub async fn new(
+        text: PropertyStr,
         font_size: PropertyFloat32,
         text_color: PropertyColor,
         window_scale: PropertyFloat32,
         lineheight: PropertyFloat32,
     ) -> Self {
         let editor = parley::PlainEditor::new(1.);
-        let mut self_ = Self { editor, font_size, text_color, window_scale, lineheight };
-        self_.refresh().await;
+        let mut self_ = Self { text, editor, font_size, text_color, window_scale, lineheight };
+        self_.refresh_layout().await;
         self_
     }
 
     pub fn init(&mut self) {}
     pub fn setup(&mut self) {}
 
-    pub async fn refresh(&mut self) {
+    async fn refresh_layout(&mut self) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -67,12 +69,21 @@ impl Editor {
         let (font_ctx, layout_ctx) = txt_ctx.borrow();
         self.editor.refresh_layout(font_ctx, layout_ctx);
     }
+    pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
+        self.refresh_layout().await;
+        self.text.set(atom, self.editor.raw_text());
+    }
 
     pub fn layout(&self) -> &parley::Layout<Color> {
         self.editor.try_layout().unwrap()
     }
 
-    pub fn move_to_pos(&self, pos: Point) {}
+    pub fn move_to_pos(&self, pos: Point) {
+        unimplemented!()
+    }
+    pub fn select_word_at_point(&self, pos: Point) {
+        unimplemented!()
+    }
 
     pub fn get_cursor_pos(&self) -> Option<Point> {
         let cursor_rect = self.editor.cursor_geometry(0.).unwrap();
@@ -97,5 +108,12 @@ impl Editor {
 
     pub fn selected_text(&self) -> Option<String> {
         self.editor.selected_text().map(str::to_string)
+    }
+    pub fn selection(&self) -> parley::Selection {
+        *self.editor.raw_selection()
+    }
+
+    pub fn buffer(&self) -> String {
+        self.editor.raw_text().to_string()
     }
 }

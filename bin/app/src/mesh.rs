@@ -154,12 +154,10 @@ impl MeshBuilder {
     }
 
     pub fn draw_line(&mut self, start: Point, end: Point, color: Color, thickness: f32) {
-        trace!(target: "mesh", "draw_line({start:?}, {end:?}, {color:?}, {thickness})");
         let mut dir = end - start;
         dir.normalize();
         let left = dir.perp_left() * (thickness / 2.);
         let right = dir.perp_right() * (thickness / 2.);
-        trace!(target: "mesh", " -> dir={dir:?} left={left:?} right={right:?}");
 
         let p1 = start + left;
         let p2 = end + left;
@@ -179,8 +177,6 @@ impl MeshBuilder {
             Vertex { pos: [p4.x, p4.y], color, uv },
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
-        trace!(target: "mesh", " -> {p1:?}, {p2:?}, {p3:?}, {p4:?}");
-        trace!(target: "mesh", " -> verts={verts:?} indices={indices:?}");
 
         self.append(verts, indices);
     }

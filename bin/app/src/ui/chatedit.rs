@@ -367,7 +367,7 @@ impl ChatEdit {
             padding,
             cursor_pos,
             font_size: font_size.clone(),
-            text,
+            text: text.clone(),
             text_color: text_color.clone(),
             text_hi_color,
             text_cmd_color,
@@ -401,7 +401,7 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
 
             editor: AsyncMutex::new(
-                Editor::new(font_size, text_color, window_scale, lineheight).await,
+                Editor::new(text, font_size, text_color, window_scale, lineheight).await,
             ),
         });
 
@@ -729,52 +729,26 @@ impl ChatEdit {
     */
 
     /// This will select the entire word rather than move the cursor to that location
-    fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
-        /*
-        let mut text_wrap = &mut self.text_wrap.lock();
-        text_wrap.clear_cache();
-        text_wrap.editable.end_compose();
+    async fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
+        t!("start_touch_select({touch_pos:?})");
 
-        let width = self.wrap_width();
-        let wrapped_lines = text_wrap.wrap(width);
-        let pos = wrapped_lines.point_to_pos(touch_pos);
+        let mut editor = self.editor.lock().await;
+        editor.select_word_at_point(touch_pos);
+        editor.refresh(atom).await;
 
-        let (word_start, word_end) = text_wrap.get_word_boundary(pos);
+        let seltext = editor.selected_text().unwrap();
+        d!("Selected {seltext:?} from {touch_pos:?}");
+        self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
 
-        // begin selection
-        let select = &mut text_wrap.select;
-        select.clear();
-        if word_start != word_end {
-            select.push(Selection::new(word_start, word_end));
+        drop(editor);
 
-            self.is_phone_select.store(true, Ordering::Relaxed);
-            // redraw() will now hide the cursor
-            self.hide_cursor.store(true, Ordering::Relaxed);
-        }
-
-        d!("Selected {select:?} from {touch_pos:?}");
-        self.update_select_text(&mut text_wrap, atom);
-        */
+        // if start != end {
+        self.is_phone_select.store(true, Ordering::Relaxed);
+        self.hide_cursor.store(true, Ordering::Relaxed);
+        // }
     }
 
     /*
-    /// Call this whenever the selection changes to update the external property
-    fn update_select_text(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
-        let select = &text_wrap.select;
-        let Some(select) = select.first().cloned() else {
-            self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
-            return
-        };
-
-        let start = std::cmp::min(select.start, select.end);
-        let end = std::cmp::max(select.start, select.end);
-
-        let rendered = text_wrap.get_render();
-        let glyphs = &rendered.glyphs[start..end];
-        let text = text::glyph_str(glyphs);
-        self.select_text.clone().set_str(atom, Role::Internal, 0, text).unwrap();
-    }
-
     /// Call this whenever the cursor pos changes to update the external property
     fn update_cursor_pos(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
         let cursor_off = text_wrap.editable.get_text_before().len() as u32;
@@ -859,7 +833,7 @@ impl ChatEdit {
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        t!("handle_touch_move({touch_pos:?})");
+        //t!("handle_touch_move({touch_pos:?})");
         let atom = &mut PropertyAtomicGuard::new();
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
@@ -878,7 +852,7 @@ impl ChatEdit {
                     node.trigger("paste_request", vec![]).await.unwrap();
                 } else {
                     self.abs_to_local(&mut touch_pos);
-                    self.start_touch_select(touch_pos, atom);
+                    self.start_touch_select(touch_pos, atom).await;
                     self.redraw().await;
                 }
                 d!("touch state: StartSelect -> Select");
@@ -985,7 +959,11 @@ impl ChatEdit {
 
         let mut editor = self.editor.lock().await;
         editor.move_to_pos(touch_pos);
-        editor.refresh().await;
+        editor.refresh(atom).await;
+        drop(editor);
+
+        self.pause_blinking();
+        self.hide_cursor.store(false, Ordering::Relaxed);
 
         //let layout = editor.layout();
         //let cursor = parley::Cursor::from_point(layout, touch_pos.x, touch_pos.y);
@@ -1272,6 +1250,23 @@ impl ChatEdit {
 
         let editor = self.editor.lock().await;
         let layout = editor.layout();
+
+        let sel = editor.selection();
+        let sel_color = self.hi_bg_color.get();
+        if !sel.is_collapsed() {
+            let mut mesh = MeshBuilder::new();
+            sel.geometry_with(layout, |rect: parley::Rect, _| {
+                let rect = Rectangle::new(
+                    rect.x0 as f32,
+                    rect.y0 as f32,
+                    rect.width() as f32,
+                    rect.height() as f32,
+                );
+                mesh.draw_filled_box(&rect, sel_color);
+            });
+            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+        }
+
         let mut render_instrs = text2::render_layout(layout, &self.render_api);
         instrs.append(&mut render_instrs);
 
@@ -1310,7 +1305,7 @@ impl ChatEdit {
         let inner_height = {
             let mut editor = self.editor.lock().await;
             editor.set_width(rect_w);
-            editor.refresh().await;
+            editor.refresh(atom).await;
             editor.height()
         };
         let content_height = inner_height + self.padding_top() + self.padding_bottom();
@@ -1411,7 +1406,8 @@ impl ChatEdit {
             _ => {} //editor.update(text.clone(), select_start, select_end, compose_start, compose_end),
         }
 
-        editor.refresh().await;
+        let atom = &mut PropertyAtomicGuard::new();
+        editor.refresh(atom).await;
         drop(editor);
 
         self.redraw().await;
@@ -1680,27 +1676,18 @@ impl UIObject for ChatEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
-        /*
-        let width = self.wrap_width();
-
         {
-
-            let mut text_wrap = self.text_wrap.lock();
-            let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
-            self.update_cursor_pos(&mut text_wrap, atom);
-            d!("Mouse move cursor pos to {cursor_pos}");
-
-            // begin selection
-            let select = &mut text_wrap.select;
-            let select_is_empty = select.is_empty();
-            select.clear();
-            if !select_is_empty {
-                self.update_select_text(&mut text_wrap, atom);
-            }
-
-            self.mouse_btn_held.store(true, Ordering::Relaxed);
+            let mut txt_ctx = text2::TEXT_CTX.get().await;
+            let mut editor = self.editor.lock().await;
+            let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+            drv.move_to_point(mouse_pos.x, mouse_pos.y);
         }
-        */
+
+        if !self.select_text.is_null(0).unwrap() {
+            self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
+        }
+
+        self.mouse_btn_held.store(true, Ordering::Relaxed);
 
         self.pause_blinking();
         self.redraw().await;
@@ -1739,23 +1726,19 @@ impl UIObject for ChatEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
-        /*
-        let width = self.wrap_width();
+        let seltext = {
+            let mut txt_ctx = text2::TEXT_CTX.get().await;
+            let mut editor = self.editor.lock().await;
+            let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+            drv.extend_selection_to_point(mouse_pos.x, mouse_pos.y);
+            editor.selected_text()
+        };
+        d!("Select {seltext:?} from {mouse_pos:?}");
 
-        {
-            let mut text_wrap = self.text_wrap.lock();
-            let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
-            self.update_cursor_pos(&mut text_wrap, atom);
-
-            // modify current selection
-            let select = &mut text_wrap.select;
-            if select.is_empty() {
-                select.push(Selection::new(cursor_pos, cursor_pos));
-            }
-            select.first_mut().unwrap().end = cursor_pos;
-            self.update_select_text(&mut text_wrap, atom);
+        // Will be None when drag select just started
+        if let Some(seltext) = seltext {
+            self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
         }
-        */
 
         self.pause_blinking();
         //self.apply_cursor_scrolling();

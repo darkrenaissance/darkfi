@@ -20,7 +20,7 @@ use crate::{
     android,
     gfx::Point,
     mesh::Color,
-    prop::{PropertyColor, PropertyFloat32},
+    prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, TEXT_CTX},
 };
 
@@ -47,6 +47,7 @@ pub struct Editor {
     layout: parley::Layout<Color>,
     width: Option<f32>,
 
+    text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     window_scale: PropertyFloat32,
@@ -55,6 +56,7 @@ pub struct Editor {
 
 impl Editor {
     pub async fn new(
+        text: PropertyStr,
         font_size: PropertyFloat32,
         text_color: PropertyColor,
         window_scale: PropertyFloat32,
@@ -67,6 +69,7 @@ impl Editor {
             layout: Default::default(),
             width: None,
 
+            text,
             font_size,
             text_color,
             window_scale,
@@ -85,7 +88,7 @@ impl Editor {
         self.is_init = true;
     }
 
-    pub async fn refresh(&mut self) {
+    pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -116,6 +119,8 @@ impl Editor {
             self.width,
             &underlines,
         );
+
+        self.text.set(atom, edit.buffer);
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {
@@ -130,6 +135,16 @@ impl Editor {
         let pos = byte_to_char16_index(&edit.buffer, cursor_idx).unwrap();
         android::set_selection(self.composer_id, pos, pos);
         t!("  {cursor_idx} => {pos}");
+    }
+
+    pub fn select_word_at_point(&self, pos: Point) {
+        let edit = android::get_editable(self.composer_id).unwrap();
+
+        let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y).text_range();
+        let select_start = byte_to_char16_index(&edit.buffer, select.start).unwrap();
+        let select_end = byte_to_char16_index(&edit.buffer, select.end).unwrap();
+        android::set_selection(self.composer_id, select_start, select_end);
+        t!("select_word_at_point({pos:?}) -> android::set_selection({}, {select_start}, {select_end})", self.composer_id);
     }
 
     pub fn get_cursor_pos(&self) -> Option<Point> {
@@ -183,5 +198,28 @@ impl Editor {
         let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
         let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
         Some(edit.buffer[select_start..select_end].to_string())
+    }
+    pub fn selection(&self) -> parley::Selection {
+        let Some(edit) = android::get_editable(self.composer_id) else {
+            return Default::default()
+        };
+
+        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
+        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+
+        let anchor = parley::Cursor::from_byte_index(
+            &self.layout,
+            select_start,
+            parley::Affinity::Downstream,
+        );
+        let focus =
+            parley::Cursor::from_byte_index(&self.layout, select_end, parley::Affinity::Downstream);
+
+        parley::Selection::new(anchor, focus)
+    }
+
+    pub fn buffer(&self) -> String {
+        let edit = android::get_editable(self.composer_id).unwrap();
+        edit.buffer
     }
 }
