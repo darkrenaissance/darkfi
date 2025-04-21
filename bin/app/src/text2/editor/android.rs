@@ -98,7 +98,6 @@ impl Editor {
             w!("refresh(): editable composer_id={} not initialized yet", self.composer_id);
             return
         };
-        t!("refesh buffer = {}", edit.buffer);
 
         let mut underlines = vec![];
         if let Some(compose_start) = edit.compose_start {
@@ -138,7 +137,9 @@ impl Editor {
     }
 
     pub fn select_word_at_point(&self, pos: Point) {
-        let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y).text_range();
+        let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
+        assert!(!select.is_collapsed());
+        let select = select.text_range();
         self.set_selection(select.start, select.end);
     }
 
@@ -194,24 +195,24 @@ impl Editor {
         let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
         Some(edit.buffer[select_start..select_end].to_string())
     }
-    pub fn selection(&self, focus_side: isize) -> parley::Selection {
-        assert!(focus_side == -1 || focus_side == 1);
+    pub fn selection(&self) -> parley::Selection {
         let Some(edit) = android::get_editable(self.composer_id) else { return Default::default() };
 
         let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
         let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
 
-        let (anchor_idx, focus_idx) =
-            if focus_side < 0 { (select_end, select_start) } else { (select_start, select_end) };
-
-        let anchor =
-            parley::Cursor::from_byte_index(&self.layout, anchor_idx, parley::Affinity::Downstream);
+        let anchor = parley::Cursor::from_byte_index(
+            &self.layout,
+            select_start,
+            parley::Affinity::Downstream,
+        );
         let focus =
-            parley::Cursor::from_byte_index(&self.layout, focus_idx, parley::Affinity::Downstream);
+            parley::Cursor::from_byte_index(&self.layout, select_end, parley::Affinity::Downstream);
 
         parley::Selection::new(anchor, focus)
     }
     pub fn set_selection(&self, select_start: usize, select_end: usize) {
+        t!("set_selection({select_start}, {select_end})");
         let edit = android::get_editable(self.composer_id).unwrap();
         let select_start = byte_to_char16_index(&edit.buffer, select_start).unwrap();
         let select_end = byte_to_char16_index(&edit.buffer, select_end).unwrap();

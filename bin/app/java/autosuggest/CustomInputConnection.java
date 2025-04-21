@@ -44,7 +44,7 @@ import android.view.inputmethod.InputMethodManager;
 // It then adapts android's IME to chrome's RenderWidgetHostView using the
 // native ImeAdapterAndroid via the outer class ImeAdapter.
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
     private int id = -1;
 
     private View mInternalView;

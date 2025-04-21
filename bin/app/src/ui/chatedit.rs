@@ -220,6 +220,8 @@ pub struct ChatEdit {
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
+    /// DC key for the selection.
+    select_dc_key: u64,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -349,6 +351,7 @@ impl ChatEdit {
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
+            select_dc_key: OsRng.gen(),
 
             is_active,
             is_focused,
@@ -453,7 +456,6 @@ impl ChatEdit {
     }
 
     fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, pos: Point, side: f32) {
-        debug!(target: "ui::chatedit", "draw_phone_select_handle(..., {pos:?}, {side})");
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
@@ -696,26 +698,6 @@ impl ChatEdit {
         return true
     }
 
-    /*
-    fn delete(&self, before: usize, after: usize, atom: &mut PropertyAtomicGuard) {
-        let mut text_wrap = &mut self.text_wrap.lock();
-        if text_wrap.select.is_empty() {
-            text_wrap.editable.delete(before, after);
-            text_wrap.clear_cache();
-        } else {
-            text_wrap.delete_selected();
-            self.update_select_text(&mut text_wrap, atom);
-        }
-
-        self.is_phone_select.store(false, Ordering::Relaxed);
-        // Reshow cursor (if hidden)
-        self.hide_cursor.store(false, Ordering::Relaxed);
-
-        let text = text_wrap.editable.get_text();
-        self.text.set(atom, text);
-    }
-    */
-
     /// This will select the entire word rather than move the cursor to that location
     async fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         t!("start_touch_select({touch_pos:?})");
@@ -758,7 +740,7 @@ impl ChatEdit {
         let editor = self.editor.lock().await;
         let layout = editor.layout();
 
-        let sel = editor.selection(1);
+        let sel = editor.selection();
         if sel.is_collapsed() {
             assert!(!self.is_phone_select.load(Ordering::Relaxed));
             return None
@@ -770,7 +752,6 @@ impl ChatEdit {
 
         sel.geometry_with(layout, |rect: parley::Rect, _| {
             let rect = Rectangle::from(rect);
-
             if first_pos.is_none() {
                 first_pos = Some(rect.bot_left());
             }
@@ -817,7 +798,7 @@ impl ChatEdit {
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        t!("handle_touch_move({touch_pos:?})");
+        //t!("handle_touch_move({touch_pos:?})");
         let atom = &mut PropertyAtomicGuard::new();
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
@@ -837,18 +818,17 @@ impl ChatEdit {
                 } else {
                     self.abs_to_local(&mut touch_pos);
                     self.start_touch_select(touch_pos, atom).await;
-                    self.redraw().await;
+                    self.redraw_select().await;
                 }
                 d!("touch state: StartSelect -> Select");
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
                 let handle_descent = self.handle_descent.get();
-
                 self.abs_to_local(&mut touch_pos);
 
                 let editor = self.editor.lock().await;
-                let sel = editor.selection(*side);
+                let sel = editor.selection();
 
                 assert!(*side == -1 || *side == 1);
                 assert!(self.is_phone_select.load(Ordering::Relaxed));
@@ -861,14 +841,30 @@ impl ChatEdit {
                 //let bhs = wrapped_lines.height();
                 //pos.y = min_f32(pos.y, bhs);
 
-                let layout = editor.layout();
-                let sel = sel.extend_to_point(layout, pos.x, pos.y);
+                let mut select = sel.text_range();
 
-                let sel = sel.text_range();
-                editor.set_selection(sel.start, sel.end);
+                let layout = editor.layout();
+                t!("select  (pre): {:?}", sel.text_range());
+                let mut cursor = parley::Cursor::from_point(layout, pos.x, pos.y).index();
+                t!("cursor: {cursor}");
+
+                // The selection is NOT allowed to cross over itself.
+                if *side == -1 {
+                    let max_start = sel.focus().previous_visual(layout).index();
+                    t!("side == -1  max={max_start}");
+                    select.start = std::cmp::min(cursor, max_start);
+                } else {
+                    assert_eq!(*side, 1);
+                    let min_end = sel.anchor().next_visual(layout).index();
+                    t!("side == +1  min={min_end}");
+                    select.end = std::cmp::max(cursor, min_end);
+                };
+                t!("set_select({select:?})");
+
+                editor.set_selection(select.start, select.end);
                 drop(editor);
 
-                self.redraw().await;
+                self.redraw_select().await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 /*
@@ -890,8 +886,6 @@ impl ChatEdit {
             TouchStateAction::SetCursorPos => {
                 // TBH I can't even see the cursor under my thumb so I'll just
                 // comment this for now.
-                self.abs_to_local(&mut touch_pos);
-                self.touch_set_cursor_pos(touch_pos, atom).await
             }
             _ => {}
         }
@@ -927,118 +921,9 @@ impl ChatEdit {
         drop(editor);
 
         self.pause_blinking();
-        self.hide_cursor.store(false, Ordering::Relaxed);
-
-        //let layout = editor.layout();
-        //let cursor = parley::Cursor::from_point(layout, touch_pos.x, touch_pos.y);
-        //drop(editor);
-
-        //let cursor_idx = cursor.index();
-        //let buffer = crate::android::get_raw_text().unwrap();
-        //let cursor_clsr = byte_to_char16_index(&buffer, cursor_idx).unwrap();
-        //crate::android::set_cursor_pos(cursor_clsr as i32);
-        //t!("  {cursor_idx} => {cursor_clsr}");
-
-        /*
-        // This is my own type that contains the editor and contexts.
-        let mut editor = self.editor.lock();
-        t!("  editor (before): {editor:?}");
-
-        //if editor.editor.is_composing() {
-        //    let mut drv = editor.driver();
-        //    // commit the existing compose text
-        //    drv.finish_compose();
-        //    t!("  editor (finish_compose): {editor:?}");
-        //}
-
-        let mut drv = editor.driver();
-        drv.move_to_point(touch_pos.x, touch_pos.y);
-
-        let focus = editor.editor.raw_selection().focus();
-        let layout = editor.layout();
-        let idx = focus.index();
-
-        // Android uses chars, so we have to convert the byte index to a char index
-        let buffer = editor.editor.raw_text();
-        let cursor_idx = byte_to_char16_index(buffer, idx).unwrap();
-        t!("  idx = {idx} => cursor_idx = {cursor_idx}");
-        crate::android::set_cursor_pos(cursor_idx as i32);
-        t!("  editor (after): {editor:?}");
-        t!("  editable: {}", crate::android::get_debug_editable());
-        */
-
-        // OLD
-        /*
-        let last_suggest_text = std::mem::take(&mut editor.last_suggest_text);
-        let is_composing = editor.editor.is_composing();
-        if is_composing {
-            let mut drv = editor.driver();
-            t!("clear and commit compose: {last_suggest_text}");
-            // commit the existing compose text
-            drv.clear_compose();
-            drv.insert_or_replace_selection(&last_suggest_text);
-            t!("  text: '{}'", editor.editor.raw_text());
-        }
-
-        let mut drv = editor.driver();
-        // We move the cursor here first so we can get the offset within the composing word
-        drv.move_to_point(touch_pos.x, touch_pos.y);
-        drop(drv);
-
-        let focus = editor.editor.raw_selection().focus();
-        let layout = editor.layout();
-        let start = focus.previous_logical_word(layout).index();
-        let curr_idx = focus.index();
-        assert!(curr_idx >= start);
-        let curr_off = curr_idx - start;
-
-        let txt = editor.editor.raw_text();
-        t!("{}[{}|{}", &txt[..start], &txt[start..curr_idx], &txt[curr_idx..]);
-        t!("start={start}, curr_idx={curr_idx}");
-
-        let mut drv = editor.driver();
-        // Move the word under the cursor to the composer
-        drv.select_word_at_point(touch_pos.x, touch_pos.y);
-        let current_word = drv.editor.selected_text().unwrap().to_string();
-        drv.delete_selection();
-        t!("selected word: '{}|{}'", &current_word[..curr_off], &current_word[curr_off..]);
-        drv.set_compose(&current_word, Some((curr_off, curr_off)));
-        drop(drv);
-
-        let comp = editor.editor.compose().clone().unwrap();
-        let txt = editor.editor.raw_text();
-        let (pre, rest) = txt.split_at(comp.start);
-        let (cmp, post) = rest.split_at(comp.end - comp.start);
-        t!("after compose: '{}[{}]{}'", pre, cmp, post);
-
-        // This will then trigger handlers that call drv.set_compose(...)
-        crate::android::set_compose(&current_word, curr_off as i32);
-        //crate::android::set_compose(&"", 0);
-        editor.last_suggest_text = current_word;
-        */
-
-        /*
-        let width = self.wrap_width();
-        {
-            let mut text_wrap = self.text_wrap.lock();
-            let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
-            self.update_cursor_pos(&mut text_wrap, atom);
-
-            let select = &mut text_wrap.select;
-            let select_is_empty = select.is_empty();
-            select.clear();
-            if !select_is_empty {
-                self.update_select_text(&mut text_wrap, atom);
-            }
-        }
 
         self.is_phone_select.store(false, Ordering::Relaxed);
-        // Reshow cursor (if hidden)
-        self.pause_blinking();
         self.hide_cursor.store(false, Ordering::Relaxed);
-
-        self.redraw().await;
-        */
     }
 
     /// Whenever the cursor property is modified this MUST be called
@@ -1134,7 +1019,6 @@ impl ChatEdit {
         let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
-        t!("redraw()");
         let Some(draw_update) = self.make_draw_calls(trace_id, atom).await else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return
@@ -1144,11 +1028,17 @@ impl ChatEdit {
 
     async fn redraw_cursor(&self) {
         let timest = unixtime();
-        let cursor_instrs = self.get_cursor_instrs().await;
-        let draw_calls = vec![(
-            self.cursor_dc_key,
-            GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
-        )];
+        let instrs = self.get_cursor_instrs().await;
+        let draw_calls =
+            vec![(self.cursor_dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: 2 })];
+        self.render_api.replace_draw_calls(timest, draw_calls);
+    }
+
+    async fn redraw_select(&self) {
+        let timest = unixtime();
+        let instrs = self.regen_select_mesh().await;
+        let draw_calls =
+            vec![(self.select_dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: 0 })];
         self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
@@ -1183,10 +1073,6 @@ impl ChatEdit {
     }
 
     async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
-        let font_size = self.font_size.get();
-        let text_color = self.text_color.get();
-        let window_scale = self.window_scale.get();
-        let lineheight = self.lineheight.get();
         let padding_top = self.padding_top();
         let padding_bottom = self.padding_bottom();
 
@@ -1217,7 +1103,26 @@ impl ChatEdit {
         let editor = self.editor.lock().await;
         let layout = editor.layout();
 
-        let sel = editor.selection(1);
+        let mut render_instrs = text2::render_layout(layout, &self.render_api);
+        instrs.append(&mut render_instrs);
+
+        instrs
+    }
+
+    async fn regen_select_mesh(&self) -> Vec<GfxDrawInstruction> {
+        let padding_top = self.padding_top();
+
+        let mut instrs = vec![];
+
+        let mut inner_pos = Point::zero();
+        inner_pos.y += padding_top;
+        inner_pos.y -= self.scroll.get();
+        instrs.push(GfxDrawInstruction::Move(inner_pos));
+
+        let editor = self.editor.lock().await;
+        let layout = editor.layout();
+
+        let sel = editor.selection();
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
             let mut first_pos = None;
@@ -1226,7 +1131,6 @@ impl ChatEdit {
             let mut mesh = MeshBuilder::new();
             sel.geometry_with(layout, |rect: parley::Rect, _| {
                 let rect = Rectangle::from(rect);
-
                 if first_pos.is_none() {
                     first_pos = Some(rect.pos());
                 }
@@ -1242,9 +1146,6 @@ impl ChatEdit {
 
             instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
-
-        let mut render_instrs = text2::render_layout(layout, &self.render_api);
-        instrs.append(&mut render_instrs);
 
         instrs
     }
@@ -1312,6 +1213,7 @@ impl ChatEdit {
         let rect = self.rect.get();
         let cursor_instrs = self.get_cursor_instrs().await;
         let txt_instrs = self.regen_txt_mesh().await;
+        let sel_instrs = self.regen_select_mesh().await;
 
         Some(DrawUpdate {
             key: self.main_dc_key,
@@ -1320,17 +1222,15 @@ impl ChatEdit {
                     self.main_dc_key,
                     GfxDrawCall {
                         instrs: vec![GfxDrawInstruction::ApplyView(rect)],
-                        dcs: vec![self.text_dc_key, self.cursor_dc_key],
+                        dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                         z_index: self.z_index.get(),
                     },
                 ),
-                (
-                    self.text_dc_key,
-                    GfxDrawCall { instrs: txt_instrs, dcs: vec![], z_index: self.z_index.get() },
-                ),
+                (self.select_dc_key, GfxDrawCall { instrs: sel_instrs, dcs: vec![], z_index: 0 }),
+                (self.text_dc_key, GfxDrawCall { instrs: txt_instrs, dcs: vec![], z_index: 1 }),
                 (
                     self.cursor_dc_key,
-                    GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
+                    GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: 2 },
                 ),
             ],
         })
@@ -1379,7 +1279,14 @@ impl ChatEdit {
                 return
             }
             AndroidSuggestEvent::CreateInputConnect => editor.setup(),
-            _ => {} //editor.update(text.clone(), select_start, select_end, compose_start, compose_end),
+            AndroidSuggestEvent::ComposeRegion { .. } | AndroidSuggestEvent::FinishCompose => {}
+            // Destructive text edits
+            AndroidSuggestEvent::Compose { .. } |
+            AndroidSuggestEvent::DeleteSurroundingText { .. } => {
+                // Any editing will collapse selections
+                self.is_phone_select.store(false, Ordering::Relaxed);
+                self.hide_cursor.store(false, Ordering::Relaxed);
+            }
         }
 
         let atom = &mut PropertyAtomicGuard::new();
