@@ -506,6 +506,16 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(atom, Role::App, "linespacing", 50.).unwrap();
     node.set_property_f32(atom, Role::App, "descent", 10.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
+
+    #[cfg(target_os = "android")]
+    {
+        let prop = node.get_property("padding").unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 80.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 80.).unwrap();
+
+        node.set_property_f32(atom, Role::App, "font_size", 60.).unwrap();
+    }
+
     //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();

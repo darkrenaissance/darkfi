@@ -361,11 +361,6 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_array_len(2);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("cursor_pos", PropertyType::Uint32, PropertySubType::Pixel);
-    prop.set_ui_text("Cursor Pos", "Cursor position within the text");
-    prop.set_range_u32(0, u32::MAX);
-    node.add_property(prop).unwrap();
-
     let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 

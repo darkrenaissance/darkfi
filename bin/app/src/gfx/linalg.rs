@@ -54,7 +54,7 @@ impl Div<f32> for Dimension {
     }
 }
 
-#[derive(Clone, Copy, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, Default, SerialEncodable, SerialDecodable)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -248,6 +248,9 @@ impl Rectangle {
     pub fn top_right(&self) -> Point {
         Point { x: self.rhs(), y: self.y }
     }
+    pub fn bot_left(&self) -> Point {
+        Point { x: self.x, y: self.y + self.h }
+    }
 
     pub fn dim(&self) -> Dimension {
         Dimension { w: self.w, h: self.h }
@@ -317,5 +320,11 @@ impl DivAssign<f32> for Rectangle {
 impl std::fmt::Debug for Rectangle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {}, {}, {})", self.x, self.y, self.w, self.h)
+    }
+}
+
+impl From<parley::Rect> for Rectangle {
+    fn from(rect: parley::Rect) -> Self {
+        Self::new(rect.x0 as f32, rect.y0 as f32, rect.width() as f32, rect.height() as f32)
     }
 }

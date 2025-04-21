@@ -109,7 +109,7 @@ impl Editor {
     pub fn selected_text(&self) -> Option<String> {
         self.editor.selected_text().map(str::to_string)
     }
-    pub fn selection(&self) -> parley::Selection {
+    pub fn selection(&self, focus_side: isize) -> parley::Selection {
         *self.editor.raw_selection()
     }
 

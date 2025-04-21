@@ -234,7 +234,6 @@ pub struct ChatEdit {
     scroll: PropertyFloat32,
     scroll_speed: PropertyFloat32,
     padding: PropertyPtr,
-    cursor_pos: PropertyUint32,
     font_size: PropertyFloat32,
     text: PropertyStr,
     text_color: PropertyColor,
@@ -302,7 +301,6 @@ impl ChatEdit {
         let scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_speed", 0).unwrap();
         let padding = node_ref.get_property("padding").unwrap();
-        let cursor_pos = PropertyUint32::wrap(node_ref, Role::Internal, "cursor_pos", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
@@ -365,7 +363,6 @@ impl ChatEdit {
             scroll: scroll.clone(),
             scroll_speed,
             padding,
-            cursor_pos,
             font_size: font_size.clone(),
             text: text.clone(),
             text_color: text_color.clone(),
@@ -455,15 +452,8 @@ impl ChatEdit {
         mesh.alloc(&self.render_api).draw_untextured()
     }
 
-    /*
-    fn draw_phone_select_handle(
-        &self,
-        mesh: &mut MeshBuilder,
-        gpos: TextPos,
-        wrapped_lines: &WrappedLines,
-        side: f32,
-    ) {
-        //debug!(target: "ui::chatedit", "draw_phone_select_handle(..., {x}, {side})");
+    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, pos: Point, side: f32) {
+        debug!(target: "ui::chatedit", "draw_phone_select_handle(..., {pos:?}, {side})");
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
@@ -475,9 +465,8 @@ impl ChatEdit {
         color_trans[3] = 0.;
 
         // find start_x
-        let (glyph_rect, line_idx) = wrapped_lines.get_glyph_info(gpos);
-        let x = glyph_rect.x;
-        let y_off = line_idx as f32 * linespacing - scroll;
+        let x = pos.x;
+        let y_off = pos.y - scroll;
 
         let y = y_off + baseline + handle_descent;
         if y < 0. {
@@ -521,7 +510,6 @@ impl ChatEdit {
         let indices = vec![0, 1, 2, 0, 2, 3];
         mesh.append(verts, indices);
     }
-    */
 
     async fn change_focus(self: Arc<Self>) {
         if !self.is_active.get() {
@@ -748,19 +736,10 @@ impl ChatEdit {
         // }
     }
 
-    /*
-    /// Call this whenever the cursor pos changes to update the external property
-    fn update_cursor_pos(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
-        let cursor_off = text_wrap.editable.get_text_before().len() as u32;
-        self.cursor_pos.set(atom, cursor_off);
-    }
-    */
-
     async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
         t!("handle_touch_start({touch_pos:?})");
-        let mut touch_info = self.touch_info.lock();
 
-        if self.try_handle_drag(&mut touch_info, touch_pos) {
+        if self.try_handle_drag(touch_pos).await {
             return true
         }
 
@@ -770,70 +749,75 @@ impl ChatEdit {
             return false
         }
 
+        let mut touch_info = self.touch_info.lock();
         touch_info.start(touch_pos);
         true
     }
-    fn try_handle_drag(&self, touch_info: &mut TouchInfo, mut touch_pos: Point) -> bool {
-        /*
-                // Is the handle visible? Use y within rect before adding the scroll.
-                let relative_y = touch_pos.y - self.rect.get().y;
-                if relative_y < 0. {
-                    return false
-                }
 
-                self.abs_to_local(&mut touch_pos);
+    async fn get_select_handles(&self) -> Option<(Point, Point)> {
+        let editor = self.editor.lock().await;
+        let layout = editor.layout();
 
-                let linespacing = self.linespacing.get();
-                let baseline = self.baseline.get();
-                let select_descent = self.select_descent.get();
-                let scroll = self.scroll.get();
+        let sel = editor.selection(1);
+        if sel.is_collapsed() {
+            assert!(!self.is_phone_select.load(Ordering::Relaxed));
+            return None
+        }
+        assert!(self.is_phone_select.load(Ordering::Relaxed));
 
-                let mut text_wrap = self.text_wrap.lock();
-                let width = self.wrap_width();
-                let wrapped_lines = text_wrap.wrap(width);
-                let selections = &text_wrap.select;
+        let mut first_pos = None;
+        let mut last_pos = Default::default();
 
-                if self.is_phone_select.load(Ordering::Relaxed) && selections.len() == 1 {
-                    let select = selections.first().unwrap();
+        sel.geometry_with(layout, |rect: parley::Rect, _| {
+            let rect = Rectangle::from(rect);
 
-                    let handle_off_y = baseline + self.handle_descent.get();
+            if first_pos.is_none() {
+                first_pos = Some(rect.bot_left());
+            }
+            last_pos = rect.corner();
+        });
 
-                    // Get left handle centerpoint
-                    let (glyph_rect, line_idx) = wrapped_lines.get_glyph_info(select.start);
-                    let mut p1 = glyph_rect.pos();
-                    // We always want the handles to be aligned so ignore the glyph's y pos
-                    p1.y = line_idx as f32 * linespacing + handle_off_y;
+        let first_pos = first_pos.unwrap();
+        Some((first_pos, last_pos))
+    }
 
-                    // Get right handle centerpoint
-                    let (glyph_rect, line_idx) = wrapped_lines.get_glyph_info(select.end);
-                    let mut p2 = glyph_rect.top_right();
-                    p2.y = line_idx as f32 * linespacing + handle_off_y;
+    async fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
+        let Some((mut first_pos, mut last_pos)) = self.get_select_handles().await else {
+            return false
+        };
 
-                    // Are we within range of either one?
-                    t!("handle center points = ({p1:?}, {p2:?})");
+        self.abs_to_local(&mut touch_pos);
+        t!("localize touch_pos = {touch_pos:?}");
 
-                    const TOUCH_RADIUS_SQ: f32 = 10_000.;
+        let handle_off_y = self.handle_descent.get();
+        first_pos.y += handle_off_y;
+        last_pos.y += handle_off_y;
 
-                    if p1.dist_sq(&touch_pos) <= TOUCH_RADIUS_SQ {
-                        d!("start touch: DragSelectHandle state [side=-1]");
-                        // Set touch_state status to enable begin dragging them
-                        touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
-                        return true
-                    }
-                    if p2.dist_sq(&touch_pos) <= TOUCH_RADIUS_SQ {
-                        d!("start touch: DragSelectHandle state [side=1]");
-                        // Set touch_state status to enable begin dragging them
-                        touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
-                        return true
-                    }
-                }
+        // Are we within range of either one?
+        t!("handle center points = ({first_pos:?}, {last_pos:?})");
 
-        */
+        const TOUCH_RADIUS_SQ: f32 = 10_000.;
+
+        if first_pos.dist_sq(touch_pos) <= TOUCH_RADIUS_SQ {
+            d!("start touch: DragSelectHandle state [side=-1]");
+            // Set touch_state status to enable begin dragging them
+            let mut touch_info = self.touch_info.lock();
+            touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
+            return true
+        }
+        if last_pos.dist_sq(touch_pos) <= TOUCH_RADIUS_SQ {
+            d!("start touch: DragSelectHandle state [side=1]");
+            // Set touch_state status to enable begin dragging them
+            let mut touch_info = self.touch_info.lock();
+            touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
+            return true
+        }
+
         false
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        //t!("handle_touch_move({touch_pos:?})");
+        t!("handle_touch_move({touch_pos:?})");
         let atom = &mut PropertyAtomicGuard::new();
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
@@ -859,51 +843,31 @@ impl ChatEdit {
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
+                let handle_descent = self.handle_descent.get();
+
                 self.abs_to_local(&mut touch_pos);
-                {
-                    /*
-                    let linespacing = self.linespacing.get();
-                    let baseline = self.baseline.get();
-                    let handle_descent = self.handle_descent.get();
 
-                    let mut text_wrap = self.text_wrap.lock();
-                    let width = self.wrap_width();
-                    let wrapped_lines = text_wrap.wrap(width);
-                    let rendered = text_wrap.get_render().clone();
-                    let selections = &mut text_wrap.select;
+                let editor = self.editor.lock().await;
+                let sel = editor.selection(*side);
 
-                    assert!(*side == -1 || *side == 1);
-                    assert!(self.is_phone_select.load(Ordering::Relaxed));
-                    assert_eq!(selections.len(), 1);
-                    let select = selections.first_mut().unwrap();
+                assert!(*side == -1 || *side == 1);
+                assert!(self.is_phone_select.load(Ordering::Relaxed));
+                assert!(!sel.is_collapsed());
 
-                    let mut point = touch_pos;
+                let mut pos = touch_pos;
+                // Only allow selecting text that is visible in the box
+                // We do our calcs relative to (0, 0) so bhs = rect_h
+                pos.y -= handle_descent + 25.;
+                //let bhs = wrapped_lines.height();
+                //pos.y = min_f32(pos.y, bhs);
 
-                    // Only allow selecting text that is visible in the box
-                    // We do our calcs relative to (0, 0) so bhs = rect_h
-                    point.y -= handle_descent + 25.;
-                    let bhs = wrapped_lines.height();
-                    point.y = min_f32(point.y, bhs);
+                let layout = editor.layout();
+                let sel = sel.extend_to_point(layout, pos.x, pos.y);
 
-                    let mut pos = wrapped_lines.point_to_pos(point);
+                let sel = sel.text_range();
+                editor.set_selection(sel.start, sel.end);
+                drop(editor);
 
-                    if *side == -1 {
-                        let select_other_pos = &mut select.end;
-                        if pos >= *select_other_pos {
-                            pos = *select_other_pos - 1;
-                        }
-                        select.start = pos;
-                    } else {
-                        let select_other_pos = &mut select.start;
-                        if pos <= *select_other_pos {
-                            pos = *select_other_pos + 1;
-                        }
-                        select.end = pos;
-                    }
-
-                    self.update_select_text(&mut text_wrap, atom);
-                    */
-                }
                 self.redraw().await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
@@ -1080,6 +1044,7 @@ impl ChatEdit {
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
     fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
+        /*
         let rect = self.rect.get();
 
         let cursor_pos = self.cursor_pos.get() as usize;
@@ -1126,6 +1091,7 @@ impl ChatEdit {
         }
 
         self.scroll.set(atom, scroll);
+        */
     }
 
     /*
@@ -1251,19 +1217,29 @@ impl ChatEdit {
         let editor = self.editor.lock().await;
         let layout = editor.layout();
 
-        let sel = editor.selection();
+        let sel = editor.selection(1);
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
+            let mut first_pos = None;
+            let mut last_pos = Default::default();
+
             let mut mesh = MeshBuilder::new();
             sel.geometry_with(layout, |rect: parley::Rect, _| {
-                let rect = Rectangle::new(
-                    rect.x0 as f32,
-                    rect.y0 as f32,
-                    rect.width() as f32,
-                    rect.height() as f32,
-                );
+                let rect = Rectangle::from(rect);
+
+                if first_pos.is_none() {
+                    first_pos = Some(rect.pos());
+                }
+                last_pos = rect.top_right();
+
                 mesh.draw_filled_box(&rect, sel_color);
             });
+
+            if self.is_phone_select.load(Ordering::Relaxed) {
+                self.draw_phone_select_handle(&mut mesh, first_pos.unwrap(), -1.);
+                self.draw_phone_select_handle(&mut mesh, last_pos, 1.);
+            }
+
             instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
 
@@ -1446,7 +1422,6 @@ impl UIObject for ChatEdit {
         // Cursor and selection might be invalidated.
         async fn reset(self_: Arc<ChatEdit>) {
             let atom = &mut PropertyAtomicGuard::new();
-            self_.cursor_pos.set(atom, 0);
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
             self_.scroll.set(atom, 0.);
             self_.redraw().await;
