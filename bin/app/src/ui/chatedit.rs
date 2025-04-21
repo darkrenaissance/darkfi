@@ -432,8 +432,19 @@ impl ChatEdit {
     fn abs_to_local(&self, point: &mut Point) {
         let rect = self.rect.get();
         *point -= rect.pos();
-        point.y -= self.padding_top();
-        point.y += self.scroll.get();
+        *point -= self.inner_pos();
+    }
+
+    fn inner_pos(&self) -> Point {
+        let content_height = self.content_height.get();
+        let rect_h = self.rect.get_height();
+        let mut inner_pos = Point::zero();
+        if content_height < rect_h {
+            inner_pos.y = (rect_h - content_height) / 2.;
+        }
+        t!("inner_pos() -> {inner_pos:?}  rect_h={rect_h}, content_height={content_height}");
+        inner_pos.y -= self.scroll.get();
+        inner_pos
     }
 
     fn regen_cursor_mesh(&self) -> GfxDrawMesh {
@@ -1070,18 +1081,11 @@ impl ChatEdit {
         let mut cursor_instrs = vec![];
 
         let Some(mut cursor_pos) = self.editor.lock().await.get_cursor_pos() else { return vec![] };
-
-        cursor_pos.y += self.padding_top();
+        cursor_pos += self.inner_pos();
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
-        let cursor_mesh = {
-            let mut cursor_mesh = self.cursor_mesh.lock();
-            if cursor_mesh.is_none() {
-                *cursor_mesh = Some(self.regen_cursor_mesh());
-            }
-            cursor_mesh.clone().unwrap()
-        };
-
+        let cursor_mesh =
+            self.cursor_mesh.lock().get_or_insert_with(|| self.regen_cursor_mesh()).clone();
         cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
 
         cursor_instrs
@@ -1110,10 +1114,7 @@ impl ChatEdit {
             instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
 
-        let mut inner_pos = Point::zero();
-        inner_pos.y += padding_top;
-        inner_pos.y -= self.scroll.get();
-        instrs.push(GfxDrawInstruction::Move(inner_pos));
+        instrs.push(GfxDrawInstruction::Move(self.inner_pos()));
 
         let editor = self.editor.lock().await;
         let layout = editor.layout();
@@ -1127,12 +1128,7 @@ impl ChatEdit {
     async fn regen_select_mesh(&self) -> Vec<GfxDrawInstruction> {
         let padding_top = self.padding_top();
 
-        let mut instrs = vec![];
-
-        let mut inner_pos = Point::zero();
-        inner_pos.y += padding_top;
-        inner_pos.y -= self.scroll.get();
-        instrs.push(GfxDrawInstruction::Move(inner_pos));
+        let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
 
         let editor = self.editor.lock().await;
         let layout = editor.layout();
@@ -1194,14 +1190,15 @@ impl ChatEdit {
 
         // Use the width to adjust the height calcs
         let rect_w = self.rect.get_width();
-        let inner_height = {
+        let content_height = {
             let mut editor = self.editor.lock().await;
             editor.set_width(rect_w);
             editor.refresh(atom).await;
             editor.height()
         };
-        let content_height = inner_height + self.padding_top() + self.padding_bottom();
-        let rect_h = self.bounded_height(content_height);
+        self.content_height.set(atom, content_height);
+        let outer_height = content_height + self.padding_top() + self.padding_bottom();
+        let rect_h = self.bounded_height(outer_height);
         self.rect.prop().set_f32(atom, Role::Internal, 3, rect_h);
 
         // Finally calculate the position

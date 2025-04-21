@@ -342,6 +342,9 @@ impl PropertyRect {
     pub fn get_width(&self) -> f32 {
         self.prop.get_f32(2).unwrap()
     }
+    pub fn get_height(&self) -> f32 {
+        self.prop.get_f32(3).unwrap()
+    }
 
     pub fn get_opt(&self) -> Option<Rectangle> {
         Some(Rectangle::from_array([
