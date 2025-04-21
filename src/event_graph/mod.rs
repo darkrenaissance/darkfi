@@ -81,7 +81,7 @@ pub type EventGraphPtr = Arc<EventGraph>;
 /// An Event Graph instance
 pub struct EventGraph {
     /// Pointer to the P2P network instance
-    p2p: P2pPtr,
+    pub p2p: P2pPtr,
     /// Sled tree containing the DAG
     dag: sled::Tree,
     /// Replay logs path.
@@ -192,6 +192,11 @@ impl EventGraph {
         }
 
         Ok(self_)
+    }
+
+    // for pybinding testing purpose
+    pub fn dag_len(&self) -> usize {
+        self.dag.len()
     }
 
     pub fn days_rotation(&self) -> u64 {

@@ -2137,6 +2137,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfi-eventgraph-py"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "blake3 1.5.5",
+ "darkfi",
+ "futures",
+ "pyo3",
+ "pyo3-async-runtimes",
+ "semver 1.0.25",
+ "sled-overlay",
+ "smol",
+ "url",
+]
+
+[[package]]
 name = "darkfi-mmproxy"
 version = "0.4.1"
 dependencies = [
@@ -5974,6 +5990,31 @@ dependencies = [
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
+]
+
+[[package]]
+name = "pyo3-async-runtimes"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2529f0be73ffd2be0cc43c013a640796558aa12d7ca0aab5cc14f375b4733031"
+dependencies = [
+ "async-std",
+ "futures",
+ "once_cell",
+ "pin-project-lite 0.2.16",
+ "pyo3",
+ "pyo3-async-runtimes-macros",
+]
+
+[[package]]
+name = "pyo3-async-runtimes-macros"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22c26fd8e9fc19f53f0c1e00bf61471de6789f7eb263056f7f944a9cceb5823e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]

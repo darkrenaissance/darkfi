@@ -54,9 +54,9 @@ pub type P2pPtr = Arc<P2p>;
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
     /// Global multithreaded executor reference
-    executor: ExecutorPtr,
+    pub executor: ExecutorPtr,
     /// Known hosts (peers)
-    hosts: HostsPtr,
+    pub hosts: HostsPtr,
     /// Protocol registry
     protocol_registry: ProtocolRegistry,
     /// P2P network settings
