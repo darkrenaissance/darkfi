@@ -779,18 +779,33 @@ impl ChatEdit {
 
         const TOUCH_RADIUS_SQ: f32 = 10_000.;
 
-        if first_pos.dist_sq(touch_pos) <= TOUCH_RADIUS_SQ {
-            d!("start touch: DragSelectHandle state [side=-1]");
-            // Set touch_state status to enable begin dragging them
-            let mut touch_info = self.touch_info.lock();
-            touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
-            return true
+        let first_dist_sq = first_pos.dist_sq(touch_pos);
+        let last_dist_sq = last_pos.dist_sq(touch_pos);
+
+        let is_first = first_dist_sq <= TOUCH_RADIUS_SQ;
+        let is_last = last_dist_sq <= TOUCH_RADIUS_SQ;
+
+        let mut side = 0;
+
+        if is_first && is_last {
+            // Are we closer to the first or last?
+            // Break the tie
+            if first_dist_sq < last_dist_sq {
+                side = -1;
+            } else {
+                side = 1;
+            }
+        } else if is_first {
+            side = -1;
+        } else if is_last {
+            side = 1;
         }
-        if last_pos.dist_sq(touch_pos) <= TOUCH_RADIUS_SQ {
-            d!("start touch: DragSelectHandle state [side=1]");
+
+        if side != 0 {
+            d!("start touch: DragSelectHandle state [side={side}]");
             // Set touch_state status to enable begin dragging them
             let mut touch_info = self.touch_info.lock();
-            touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
+            touch_info.state = TouchStateAction::DragSelectHandle { side };
             return true
         }
 
