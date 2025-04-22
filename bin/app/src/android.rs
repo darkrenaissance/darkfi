@@ -259,6 +259,7 @@ pub fn get_editable(id: usize) -> Option<Editable> {
 
         let buffer =
             ndk_utils::call_object_method!(env, input_connect, "rawText", "()Ljava/lang/String;");
+        assert!(!buffer.is_null());
         let buffer = ndk_utils::get_utf_str!(env, buffer).to_string();
 
         let select_start =

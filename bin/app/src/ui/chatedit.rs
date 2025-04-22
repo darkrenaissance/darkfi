@@ -214,7 +214,8 @@ pub struct ChatEdit {
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
     glyphs: SyncMutex<Vec<Glyph>>,
-    main_dc_key: u64,
+    root_dc_key: u64,
+    content_dc_key: u64,
     /// DC key for the text
     text_dc_key: u64,
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
@@ -347,7 +348,8 @@ impl ChatEdit {
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
             glyphs: SyncMutex::new(glyphs),
-            main_dc_key: OsRng.gen(),
+            root_dc_key: OsRng.gen(),
+            content_dc_key: OsRng.gen(),
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
@@ -433,8 +435,10 @@ impl ChatEdit {
         let rect = self.rect.get();
         *point -= rect.pos();
         *point -= self.inner_pos();
+        point.y += self.scroll.get();
     }
 
+    /// Inner position used for rendering
     fn inner_pos(&self) -> Point {
         let content_height = self.content_height.get();
         let rect_h = self.rect.get_height();
@@ -442,9 +446,17 @@ impl ChatEdit {
         if content_height < rect_h {
             inner_pos.y = (rect_h - content_height) / 2.;
         }
-        t!("inner_pos() -> {inner_pos:?}  rect_h={rect_h}, content_height={content_height}");
-        inner_pos.y -= self.scroll.get();
         inner_pos
+    }
+
+    /// Maximum allowed scroll value
+    fn max_scroll(&self) -> f32 {
+        let content_height = self.content_height.get();
+        let rect_h = self.rect.get_height();
+        let mut max_scroll = (content_height - rect_h).max(0.);
+        // Arbitrary little space at the bottom
+        max_scroll += self.font_size.get() / 3.;
+        max_scroll
     }
 
     fn regen_cursor_mesh(&self) -> GfxDrawMesh {
@@ -471,46 +483,24 @@ impl ChatEdit {
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
         let color = self.text_hi_color.get();
-        let linespacing = self.linespacing.get();
-        let scroll = self.scroll.get();
         // Transparent for fade
         let mut color_trans = color.clone();
         color_trans[3] = 0.;
 
-        // find start_x
         let x = pos.x;
-        let y_off = pos.y - scroll;
-
-        let y = y_off + baseline + handle_descent;
-        if y < 0. {
-            return
-        }
+        let mut y = pos.y + baseline;
 
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
-            Vertex {
-                pos: [x - side * 1., y_off + baseline - select_ascent],
-                color: color_trans,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x + side * 4., y_off + baseline - select_ascent],
-                color: color_trans,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x - side * 1., y_off + baseline + handle_descent + 5.],
-                color,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x + side * 4., y_off + baseline + handle_descent + 5.],
-                color,
-                uv: [0., 0.],
-            },
+            Vertex { pos: [x - side * 1., y - select_ascent], color: color_trans, uv: [0., 0.] },
+            Vertex { pos: [x + side * 4., y - select_ascent], color: color_trans, uv: [0., 0.] },
+            Vertex { pos: [x - side * 1., y + handle_descent + 5.], color, uv: [0., 0.] },
+            Vertex { pos: [x + side * 4., y + handle_descent + 5.], color, uv: [0., 0.] },
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         mesh.append(verts, indices);
+
+        y += handle_descent;
 
         // The arrow itself.
         // Go anti-clockwise
@@ -893,21 +883,14 @@ impl ChatEdit {
                 self.redraw_select().await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
-                /*
-                let max_scroll = {
-                    let mut text_wrap = self.text_wrap.lock();
-                    self.max_scroll(&mut text_wrap)
-                };
-
                 let y_dist = start_pos.y - touch_pos.y;
                 let mut scroll = scroll_start + y_dist;
-                scroll = scroll.clamp(0., max_scroll);
+                scroll = scroll.clamp(0., self.max_scroll());
                 if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
                 }
                 self.scroll.set(atom, scroll);
-                self.redraw().await;
-                */
+                self.redraw_scroll().await;
             }
             TouchStateAction::SetCursorPos => {
                 // TBH I can't even see the cursor under my thumb so I'll just
@@ -1045,11 +1028,28 @@ impl ChatEdit {
         let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
-        let Some(draw_update) = self.make_draw_calls(trace_id, atom).await else {
-            error!(target: "ui::chatedit", "Text failed to draw");
-            return
-        };
+        let draw_update = self.make_draw_calls(trace_id, atom).await;
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+    }
+
+    /// Called when scroll changes. Moves content up or down. Nothing more.
+    async fn redraw_scroll(&self) {
+        let timest = unixtime();
+        let rect = self.rect.get();
+        let scroll = self.scroll.get();
+
+        let draw_main = vec![(
+            self.content_dc_key,
+            GfxDrawCall {
+                instrs: vec![
+                    GfxDrawInstruction::ApplyView(rect),
+                    GfxDrawInstruction::Move(Point::new(0., -scroll)),
+                ],
+                dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                z_index: self.z_index.get(),
+            },
+        )];
+        self.render_api.replace_draw_calls(timest, draw_main);
     }
 
     async fn redraw_cursor(&self) {
@@ -1091,14 +1091,13 @@ impl ChatEdit {
         cursor_instrs
     }
 
-    async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
+    fn regen_bg_mesh(&self) -> Vec<GfxDrawInstruction> {
         let padding_top = self.padding_top();
         let padding_bottom = self.padding_bottom();
 
         let mut instrs = vec![];
         // BUG FIXME SHOULDNT NEED THIS!
         instrs.push(GfxDrawInstruction::Move(Point::zero()));
-
         if self.debug.get() {
             let mut rect = self.rect.get();
             rect.x = 0.;
@@ -1113,8 +1112,11 @@ impl ChatEdit {
             mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
             instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
+        instrs
+    }
 
-        instrs.push(GfxDrawInstruction::Move(self.inner_pos()));
+    async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
+        let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
 
         let editor = self.editor.lock().await;
         let layout = editor.layout();
@@ -1215,27 +1217,42 @@ impl ChatEdit {
             .unwrap();
     }
 
-    async fn make_draw_calls(
-        &self,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
-    ) -> Option<DrawUpdate> {
+    async fn make_draw_calls(&self, trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
         self.eval_rect(atom).await;
 
         let rect = self.rect.get();
+        let max_scroll = self.max_scroll();
+        let mut scroll = self.scroll.get();
+        if scroll > max_scroll {
+            scroll = max_scroll;
+            self.scroll.set(atom, scroll);
+        }
+
         let cursor_instrs = self.get_cursor_instrs().await;
         let txt_instrs = self.regen_txt_mesh().await;
         let sel_instrs = self.regen_select_mesh().await;
 
-        Some(DrawUpdate {
-            key: self.main_dc_key,
+        let mut root_instrs = vec![GfxDrawInstruction::ApplyView(rect)];
+        let mut bg_instrs = self.regen_bg_mesh();
+        root_instrs.append(&mut bg_instrs);
+
+        DrawUpdate {
+            key: self.root_dc_key,
             draw_calls: vec![
                 (
-                    self.main_dc_key,
+                    self.root_dc_key,
                     GfxDrawCall {
-                        instrs: vec![GfxDrawInstruction::ApplyView(rect)],
-                        dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                        instrs: root_instrs,
+                        dcs: vec![self.content_dc_key],
                         z_index: self.z_index.get(),
+                    },
+                ),
+                (
+                    self.content_dc_key,
+                    GfxDrawCall {
+                        instrs: vec![GfxDrawInstruction::Move(Point::new(0., -scroll))],
+                        dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                        z_index: 0,
                     },
                 ),
                 (self.select_dc_key, GfxDrawCall { instrs: sel_instrs, dcs: vec![], z_index: 0 }),
@@ -1245,7 +1262,7 @@ impl ChatEdit {
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: 2 },
                 ),
             ],
-        })
+        }
     }
 
     async fn process_insert_text_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -1460,7 +1477,7 @@ impl UIObject for ChatEdit {
         t!("ChatEdit::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
 
-        self.make_draw_calls(trace_id, atom).await
+        Some(self.make_draw_calls(trace_id, atom).await)
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
@@ -1636,7 +1653,7 @@ impl UIObject for ChatEdit {
 
         self.pause_blinking();
         //self.apply_cursor_scrolling();
-        self.redraw().await;
+        self.redraw_select().await;
         true
     }
 
@@ -1647,18 +1664,11 @@ impl UIObject for ChatEdit {
 
         let atom = &mut PropertyAtomicGuard::new();
 
-        /*
-        let max_scroll = {
-            let mut text_wrap = self.text_wrap.lock();
-            self.max_scroll(&mut text_wrap)
-        };
-
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
-        scroll = scroll.clamp(0., max_scroll);
+        scroll = scroll.clamp(0., self.max_scroll());
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(atom, scroll);
-        self.redraw().await;
-        */
+        self.redraw_scroll().await;
 
         true
     }
