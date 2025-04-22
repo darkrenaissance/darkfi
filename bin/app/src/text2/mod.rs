@@ -31,7 +31,7 @@ pub mod atlas;
 mod editor;
 pub use editor::Editor;
 mod render;
-pub use render::{render_layout, DebugRenderOptions};
+pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 
 use darkfi::system::CondVar;
 

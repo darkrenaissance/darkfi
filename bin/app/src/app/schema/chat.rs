@@ -68,11 +68,9 @@ mod android_ui_consts {
     pub const CHATEDIT_SELECT_ASCENT: f32 = 50.;
     pub const CHATEDIT_SELECT_DESCENT: f32 = 20.;
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 10.;
-    pub const CHATEDIT_LINESPACING: f32 = 70.;
     pub const CHATEDIT_NEG_W: f32 = 300.;
     pub const CHATEDIT_LHS_PAD: f32 = 150.;
     pub const TEXTBAR_BASELINE: f32 = 60.;
-    pub const TEXT_DESCENT: f32 = 20.;
     pub const EMOJI_BTN_X: f32 = 60.;
     pub const EMOJI_BG_W: f32 = 120.;
     pub const EMOJI_SCALE: f32 = 40.;
@@ -137,11 +135,9 @@ mod ui_consts {
     pub const CHATEDIT_SELECT_ASCENT: f32 = 30.;
     pub const CHATEDIT_SELECT_DESCENT: f32 = 10.;
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 35.;
-    pub const CHATEDIT_LINESPACING: f32 = 35.;
     pub const CHATEDIT_NEG_W: f32 = 190.;
     pub const CHATEDIT_LHS_PAD: f32 = 100.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
-    pub const TEXT_DESCENT: f32 = 10.;
     pub const EMOJI_BTN_X: f32 = 38.;
     pub const EMOJI_BG_W: f32 = 80.;
     pub const EMOJI_SCALE: f32 = 20.;
@@ -699,8 +695,9 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
-    node.set_property_f32(atom, Role::App, "min_height", CHATEDIT_MIN_HEIGHT).unwrap();
-    node.set_property_f32(atom, Role::App, "max_height", CHATEDIT_MAX_HEIGHT).unwrap();
+    let prop = node.get_property("height_range").unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, CHATEDIT_MIN_HEIGHT).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, CHATEDIT_MAX_HEIGHT).unwrap();
 
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
@@ -714,12 +711,10 @@ pub async fn make(
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
     let prop = node.get_property("padding").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, TEXTBAR_BASELINE / 2.).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, TEXTBAR_BASELINE / 2.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "linespacing", CHATEDIT_LINESPACING).unwrap();
-    node.set_property_f32(atom, Role::App, "descent", TEXT_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -784,7 +779,6 @@ pub async fn make(
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let editz_select_text = node.get_property("select_text").unwrap();
-    let editz_cursor_pos = node.get_property("cursor_pos").unwrap();
 
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
@@ -1580,16 +1574,6 @@ pub async fn make(
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
-
-    let editz_cpos_sub = editz_cursor_pos.subscribe_modify();
-    let pasta_is_visible2 = pasta_is_visible.clone();
-    let editz_cpos_task = app.ex.spawn(async move {
-        while let Ok(_) = editz_cpos_sub.receive().await {
-            let atom = &mut PropertyAtomicGuard::new();
-            pasta_is_visible2.set(atom, false);
-        }
-    });
-    app.tasks.lock().unwrap().push(editz_cpos_task);
 
     let editz_select_sub = editz_select_text.subscribe_modify();
     let pasta_is_visible2 = pasta_is_visible.clone();

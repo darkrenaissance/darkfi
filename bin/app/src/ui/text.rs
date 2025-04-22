@@ -22,8 +22,8 @@ use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
-        RenderApi,
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Point,
+        Rectangle, RenderApi,
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
@@ -65,6 +65,7 @@ pub struct Text {
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     baseline: PropertyFloat32,
+    lineheight: PropertyFloat32,
     debug: PropertyBool,
 
     window_scale: PropertyFloat32,
@@ -89,6 +90,7 @@ impl Text {
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
+        let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let node_name = node_ref.name.clone();
@@ -108,6 +110,7 @@ impl Text {
             font_size,
             text_color,
             baseline,
+            lineheight,
             debug,
 
             window_scale,
@@ -120,15 +123,21 @@ impl Text {
     async fn regen_mesh(&self) -> Vec<GfxDrawInstruction> {
         let text = self.text.get();
         let font_size = self.font_size.get();
+        let lineheight = self.lineheight.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
 
         let layout = {
             let mut txt_ctx = TEXT_CTX.get().await;
-            txt_ctx.make_layout(&text, text_color, font_size, 0., window_scale, None, &[])
+            txt_ctx.make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[])
         };
 
-        text2::render_layout(&layout, &self.render_api)
+        let mut debug_opts = text2::DebugRenderOptions::Off;
+        if self.debug.get() {
+            debug_opts |= text2::DebugRenderOptions::Baseline;
+        }
+
+        text2::render_layout_with_opts(&layout, debug_opts, &self.render_api)
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -178,7 +187,6 @@ impl UIObject for Text {
         on_modify.when_change(self.font_size.prop(), Self::redraw);
         on_modify.when_change(self.text_color.prop(), Self::redraw);
         on_modify.when_change(self.debug.prop(), Self::redraw);
-        on_modify.when_change(self.baseline.prop(), Self::redraw);
 
         self.tasks.set(on_modify.tasks);
     }

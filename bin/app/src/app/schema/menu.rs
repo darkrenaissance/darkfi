@@ -48,8 +48,9 @@ use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
+    pub const CHANNEL_LABEL_Y: f32 = 28.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
-    pub const CHANNEL_LABEL_FONTSIZE: f32 = 40.;
+    pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
     pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
 }
 
@@ -69,8 +70,9 @@ mod ui_consts {
 ))]
 mod ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 20.;
+    pub const CHANNEL_LABEL_Y: f32 = 14.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
-    pub const CHANNEL_LABEL_FONTSIZE: f32 = 20.;
+    pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
     pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
 }
 
@@ -101,13 +103,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
     window.link(layer_node.clone());
 
-    let mut channel_y = 0.;
-
     // Channels label bg
     let node = create_vector_art("channels_label_bg");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, channel_y).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
@@ -148,7 +148,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let node = create_text("channels_label");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, channel_y).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -156,6 +156,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "CHANNELS").unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.clone().set_f32(atom, Role::App, 0, 0.65).unwrap();
@@ -183,7 +184,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.clone().link(node);
 
-    channel_y += CHANNEL_LABEL_LINESPACE;
+    let mut channel_y = CHANNEL_LABEL_LINESPACE;
 
     for (i, channel) in CHANNELS.iter().enumerate() {
         let node = create_vector_art(&(channel.to_string() + "_channel_label_bg"));
@@ -234,7 +235,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         let node = create_text(&(channel.to_string() + "_channel_label"));
         let prop = node.get_property("rect").unwrap();
         prop.clone().set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, channel_y).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, channel_y + CHANNEL_LABEL_Y).unwrap();
         prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
         prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();

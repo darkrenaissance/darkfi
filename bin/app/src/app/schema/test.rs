@@ -503,8 +503,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_f32(atom, Role::App, 1, 20.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", 34.).unwrap();
-    node.set_property_f32(atom, Role::App, "linespacing", 50.).unwrap();
-    node.set_property_f32(atom, Role::App, "descent", 10.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
 
     #[cfg(target_os = "android")]

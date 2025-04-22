@@ -43,6 +43,11 @@ impl std::ops::BitOr for DebugRenderOptions {
         Self(self.0 | rhs.0)
     }
 }
+impl std::ops::BitOrAssign for DebugRenderOptions {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
 
 pub fn render_layout(
     layout: &parley::Layout<Color>,

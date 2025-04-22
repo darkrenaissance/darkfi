@@ -231,8 +231,6 @@ pub struct ChatEdit {
     content_height: PropertyFloat32,
     rect: PropertyRect,
     baseline: PropertyFloat32,
-    linespacing: PropertyFloat32,
-    descent: PropertyFloat32,
     lineheight: PropertyFloat32,
     scroll: PropertyFloat32,
     scroll_speed: PropertyFloat32,
@@ -296,9 +294,6 @@ impl ChatEdit {
             PropertyFloat32::wrap(node_ref, Role::Internal, "content_height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
-        let linespacing =
-            PropertyFloat32::wrap(node_ref, Role::Internal, "linespacing", 0).unwrap();
-        let descent = PropertyFloat32::wrap(node_ref, Role::Internal, "descent", 0).unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let scroll_speed =
@@ -362,8 +357,6 @@ impl ChatEdit {
             content_height,
             rect,
             baseline,
-            linespacing,
-            descent,
             lineheight: lineheight.clone(),
             scroll: scroll.clone(),
             scroll_speed,
@@ -1383,7 +1376,6 @@ impl UIObject for ChatEdit {
 
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.baseline.prop(), redraw);
-        on_modify.when_change(self.linespacing.prop(), redraw);
         on_modify.when_change(self.lineheight.prop(), redraw);
         on_modify.when_change(self.select_ascent.prop(), redraw);
         on_modify.when_change(self.select_descent.prop(), redraw);
