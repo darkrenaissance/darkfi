@@ -19,11 +19,13 @@
 package autosuggest;
 
 import android.content.Context;
-import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.text.Editable;
+import android.text.Selection;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -32,6 +34,7 @@ import autosuggest.CustomInputConnection;
 public class InvisibleInputView extends View {
     public CustomInputConnection inputConnection;
     public int id = -1;
+    public Editable editable;
 
     native static void onCreateInputConnect(int id);
 
@@ -44,14 +47,20 @@ public class InvisibleInputView extends View {
         //setAlpha(0f);
         setLayoutParams(new ViewGroup.LayoutParams(400, 200));
         this.id = id;
+        editable = Editable.Factory.getInstance().newEditable("");
+        Selection.setSelection(editable, 0);
     }
 
-    /*
-    @Override
-    protected void onDraw(Canvas canvas) {
-        Log.d("darkfi", "InvisibleInputView skipping onDraw()");
+    // Maybe move CustomInputConnection.setEditableText() to here?
+    // For now this is called when the InputConnection is not yet available.
+    public void setEditableText(String text) {
+        editable.replace(0, editable.length(), text);
+        Selection.setSelection(editable, text.length(), text.length());
     }
-    */
+    // Same as above
+    public void setSelection(int start, int end) {
+        Selection.setSelection(editable, start, end);
+    }
 
     @Override
     protected void onAttachedToWindow() {
@@ -74,9 +83,14 @@ public class InvisibleInputView extends View {
 
         outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT
             | EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT;
+            //| EditorInfo.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT;
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
-            | EditorInfo.IME_ACTION_NONE;
-        inputConnection = new CustomInputConnection(id, this, outAttrs);
+            //| EditorInfo.IME_ACTION_NONE;
+            | EditorInfo.IME_ACTION_GO;
+        outAttrs.initialSelStart = getSelectionStart();
+        outAttrs.initialSelEnd = getSelectionEnd();
+
+        inputConnection = new CustomInputConnection(id, editable, this);
         onCreateInputConnect(id);
         return inputConnection;
     }
@@ -85,6 +99,25 @@ public class InvisibleInputView extends View {
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
         Log.d("darkfi", "onFocusChanged: " + gainFocus);
+    }
+
+    public String debugEditableStr() {
+        return CustomInputConnection.editableToXml(editable);
+    }
+    public String rawText() {
+        return editable.toString();
+    }
+    public int getSelectionStart() {
+        return Selection.getSelectionStart(editable);
+    }
+    public int getSelectionEnd() {
+        return Selection.getSelectionEnd(editable);
+    }
+    public int getComposeStart() {
+        return BaseInputConnection.getComposingSpanStart(editable);
+    }
+    public int getComposeEnd() {
+        return BaseInputConnection.getComposingSpanEnd(editable);
     }
 }
 

@@ -70,7 +70,7 @@ mod android_ui_consts {
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 10.;
     pub const CHATEDIT_NEG_W: f32 = 300.;
     pub const CHATEDIT_LHS_PAD: f32 = 150.;
-    pub const TEXTBAR_BASELINE: f32 = 60.;
+    pub const TEXTBAR_BASELINE: f32 = 40.;
     pub const EMOJI_BTN_X: f32 = 60.;
     pub const EMOJI_BG_W: f32 = 120.;
     pub const EMOJI_SCALE: f32 = 40.;
@@ -975,19 +975,21 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
 
     let (slot, recvr) = Slot::new("reqkeyb");
-    chatedit_node.register("keyboard_request", slot).unwrap();
+    chatedit_node.register("focus_request", slot).unwrap();
+    let chatedit_node2 = chatedit_node.clone();
     let emoji_btn_is_visible2 = emoji_btn_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             if emoji_btn_is_visible2.get() {
                 debug!(target: "app::chat", "Emoji picker not visible so showing keyboard");
-                miniquad::window::show_keyboard(true);
+                chatedit_node2.call_method("focus", vec![]).await.unwrap();
             }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
 
     let (slot, recvr) = Slot::new("emoji_clicked");
+    let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         let mut panel_height = if cfg!(target_os = "android") {
@@ -1013,7 +1015,7 @@ pub async fn make(
             }
 
             if emoji_btn_is_visible.get() {
-                miniquad::window::show_keyboard(false);
+                chatedit_node2.call_method("focus", vec![]).await.unwrap();
 
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
@@ -1025,7 +1027,7 @@ pub async fn make(
                 //    msleep(10).await;
                 //}
             } else {
-                miniquad::window::show_keyboard(true);
+                chatedit_node2.call_method("focus", vec![]).await.unwrap();
 
                 assert!(emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() > 0.);

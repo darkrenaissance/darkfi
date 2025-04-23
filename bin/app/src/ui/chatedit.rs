@@ -899,7 +899,7 @@ impl ChatEdit {
         }
 
         let node = self.node.upgrade().unwrap();
-        node.trigger("keyboard_request", vec![]).await.unwrap();
+        node.trigger("focus_request", vec![]).await.unwrap();
 
         true
     }
@@ -993,9 +993,7 @@ impl ChatEdit {
         let draw_main = vec![(
             self.content_dc_key,
             GfxDrawCall {
-                instrs: vec![
-                    GfxDrawInstruction::Move(Point::new(0., -scroll)),
-                ],
+                instrs: vec![GfxDrawInstruction::Move(Point::new(0., -scroll))],
                 dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                 z_index: self.z_index.get(),
             },
@@ -1031,7 +1029,7 @@ impl ChatEdit {
 
         let mut cursor_instrs = vec![];
 
-        let Some(mut cursor_pos) = self.editor.lock().await.get_cursor_pos() else { return vec![] };
+        let mut cursor_pos = self.editor.lock().await.get_cursor_pos();
         cursor_pos += self.inner_pos();
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
@@ -1244,6 +1242,26 @@ impl ChatEdit {
         true
     }
 
+    async fn process_focus_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            debug!(target: "ui::chatedit", "Event relayer closed");
+            return false
+        };
+
+        t!("method called: focus({method_call:?})");
+        assert!(method_call.send_res.is_none());
+        assert!(method_call.data.is_empty());
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before insert_text_method_task was stopped!");
+        };
+
+        let mut editor = self_.editor.lock().await;
+        editor.focus();
+        true
+    }
+
     async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
         t!("handle_android_event({ev:?})");
         if !self.is_active.get() {
@@ -1299,6 +1317,11 @@ impl UIObject for ChatEdit {
             ex.spawn(
                 async move { while Self::process_insert_text_method(&me2, &method_sub).await {} },
             );
+
+        let method_sub = node_ref.subscribe_method_call("focus").unwrap();
+        let me2 = me.clone();
+        let focus_task =
+            ex.spawn(async move { while Self::process_focus_method(&me2, &method_sub).await {} });
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.is_focused.prop(), Self::change_focus);
@@ -1384,7 +1407,7 @@ impl UIObject for ChatEdit {
             }
         });
 
-        let mut tasks = vec![insert_text_task, blinking_cursor_task];
+        let mut tasks = vec![insert_text_task, focus_task, blinking_cursor_task];
         tasks.append(&mut on_modify.tasks);
 
         #[cfg(target_os = "android")]

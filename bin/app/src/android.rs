@@ -207,31 +207,23 @@ pub fn set_text(id: usize, text: &str) -> Option<()> {
 
 pub fn set_selection(id: usize, select_start: usize, select_end: usize) -> Option<()> {
     //trace!(target: "android", "set_selection({id}, {select_start}, {select_end})");
-    unsafe {
+    let is_success = unsafe {
         let env = android::attach_jni_env();
-        let input_connect = ndk_utils::call_object_method!(
-            env,
-            android::ACTIVITY,
-            "getInputConnect",
-            "(I)Lautosuggest/CustomInputConnection;",
-            id as i32
-        );
-        if input_connect.is_null() {
-            return None
-        }
-
-        ndk_utils::call_bool_method!(env, input_connect, "beginBatchEdit", "()Z");
         ndk_utils::call_bool_method!(
             env,
-            input_connect,
+            android::ACTIVITY,
             "setSelection",
-            "(II)Z",
-            select_start,
-            select_end
-        );
-        ndk_utils::call_bool_method!(env, input_connect, "endBatchEdit", "()Z");
+            "(III)Z",
+            id as i32,
+            select_start as i32,
+            select_end as i32
+        )
+    };
+    if is_success == 0u8 {
+        None
+    } else {
+        Some(())
     }
-    Some(())
 }
 
 pub struct Editable {
@@ -246,31 +238,29 @@ pub fn get_editable(id: usize) -> Option<Editable> {
     //trace!(target: "android", "get_editable({id})");
     unsafe {
         let env = android::attach_jni_env();
-        let input_connect = ndk_utils::call_object_method!(
+        let input_view = ndk_utils::call_object_method!(
             env,
             android::ACTIVITY,
-            "getInputConnect",
-            "(I)Lautosuggest/CustomInputConnection;",
+            "getInputView",
+            "(I)Lautosuggest/InvisibleInputView;",
             id as i32
         );
-        if input_connect.is_null() {
+        if input_view.is_null() {
             return None
         }
 
         let buffer =
-            ndk_utils::call_object_method!(env, input_connect, "rawText", "()Ljava/lang/String;");
+            ndk_utils::call_object_method!(env, input_view, "rawText", "()Ljava/lang/String;");
         assert!(!buffer.is_null());
         let buffer = ndk_utils::get_utf_str!(env, buffer).to_string();
 
-        let select_start =
-            ndk_utils::call_int_method!(env, input_connect, "getSelectionStart", "()I");
+        let select_start = ndk_utils::call_int_method!(env, input_view, "getSelectionStart", "()I");
 
-        let select_end = ndk_utils::call_int_method!(env, input_connect, "getSelectionEnd", "()I");
+        let select_end = ndk_utils::call_int_method!(env, input_view, "getSelectionEnd", "()I");
 
-        let compose_start =
-            ndk_utils::call_int_method!(env, input_connect, "getComposeStart", "()I");
+        let compose_start = ndk_utils::call_int_method!(env, input_view, "getComposeStart", "()I");
 
-        let compose_end = ndk_utils::call_int_method!(env, input_connect, "getComposeEnd", "()I");
+        let compose_end = ndk_utils::call_int_method!(env, input_view, "getComposeEnd", "()I");
 
         assert!(select_start >= 0);
         assert!(select_end >= 0);

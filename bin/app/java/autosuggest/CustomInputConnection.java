@@ -19,36 +19,23 @@
 package autosuggest;
 
 import android.content.Context;
-import android.os.Bundle;
-import android.os.Handler;
 import android.text.Editable;
 import android.text.Selection;
-import android.text.SpannableStringBuilder;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.inputmethod.BaseInputConnection;
-import android.view.inputmethod.InputConnection;
-import android.view.inputmethod.InputContentInfo;
 import android.view.inputmethod.EditorInfo;
 import android.view.View;
-import android.view.inputmethod.CompletionInfo;
-import android.view.inputmethod.CorrectionInfo;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.SurroundingText;
 import android.view.inputmethod.InputMethodManager;
-//import android.view.inputmethod.TextSnapshot;
-//import android.view.inputmethod.TextAttribute;
 
-// This InputConnection is created by ContentView.onCreateInputConnection.
-// It then adapts android's IME to chrome's RenderWidgetHostView using the
-// native ImeAdapterAndroid via the outer class ImeAdapter.
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
     private int id = -1;
 
     private View mInternalView;
-    //private ImeAdapter mImeAdapter;
     private Editable mEditable;
     private boolean mSingleLine;
     private int numBatchEdits;
@@ -59,63 +46,13 @@ public class CustomInputConnection extends BaseInputConnection {
     native static void onFinishCompose(int id);
     native static void onDeleteSurroundingText(int id, int left, int right);
 
-    //private AdapterInputConnection(View view, ImeAdapter imeAdapter, EditorInfo outAttrs) {
-    public CustomInputConnection(int id, View view, EditorInfo outAttrs) {
+    public CustomInputConnection(int id, Editable editable, View view) {
         super(view, true);
-        this.id = id;
         log("CustomInputConnection()");
+        this.id = id;
+        mEditable = editable;
         mInternalView = view;
-        //mImeAdapter = imeAdapter;
-        //mImeAdapter.setInputConnection(this);
-        mSingleLine = true;
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
-        outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT
-                | EditorInfo.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT;
-            /*
-        if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeText) {
-        */
-            // Normal text field
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_GO;
-            /*
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeTextArea ||
-                imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeContentEditable) {
-            // TextArea or contenteditable.
-            outAttrs.inputType |= EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE
-                    | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES
-                    | EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT;
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_NONE;
-            mSingleLine = false;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypePassword) {
-            // Password
-            outAttrs.inputType = InputType.TYPE_CLASS_TEXT
-                    | InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD;
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_GO;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeSearch) {
-            // Search
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_SEARCH;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeUrl) {
-            // Url
-            // TYPE_TEXT_VARIATION_URI prevents Tab key from showing, so
-            // exclude it for now.
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_GO;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeEmail) {
-            // Email
-            outAttrs.inputType = InputType.TYPE_CLASS_TEXT
-                    | InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS;
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_GO;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeTel) {
-            // Telephone
-            // Number and telephone do not have both a Tab key and an
-            // action in default OSK, so set the action to NEXT
-            outAttrs.inputType = InputType.TYPE_CLASS_PHONE;
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_NEXT;
-        } else if (imeAdapter.mTextInputType == ImeAdapter.sTextInputTypeNumber) {
-            // Number
-            outAttrs.inputType = InputType.TYPE_CLASS_NUMBER
-                    | InputType.TYPE_NUMBER_VARIATION_NORMAL;
-            outAttrs.imeOptions |= EditorInfo.IME_ACTION_NEXT;
-        }
-        */
+        mSingleLine = false;
     }
 
     private void log(String fstr, Object... args) {
@@ -144,11 +81,6 @@ public class CustomInputConnection extends BaseInputConnection {
         log("setEditableText(%s, %d, %d, %d, %d)", text,
             selectionStart, selectionEnd,
             compositionStart, compositionEnd);
-
-        if (mEditable == null) {
-            log("setEditableText creating new editable");
-            mEditable = Editable.Factory.getInstance().newEditable("");
-        }
 
         int prevSelectionStart = Selection.getSelectionStart(mEditable);
         int prevSelectionEnd = Selection.getSelectionEnd(mEditable);
@@ -198,11 +130,6 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public Editable getEditable() {
-        if (mEditable == null) {
-            log("getEditable() [create new]");
-            mEditable = Editable.Factory.getInstance().newEditable("");
-            Selection.setSelection(mEditable, 0);
-        }
         log("getEditable() -> %s", editableToXml(mEditable));
         return mEditable;
     }
@@ -290,14 +217,10 @@ public class CustomInputConnection extends BaseInputConnection {
     public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
         log("getExtractedText(...)");
         ExtractedText et = new ExtractedText();
-        if (mEditable == null) {
-            et.text = "";
-        } else {
-            et.text = mEditable.toString();
-            et.partialEndOffset = mEditable.length();
-            et.selectionStart = Selection.getSelectionStart(mEditable);
-            et.selectionEnd = Selection.getSelectionEnd(mEditable);
-        }
+        et.text = mEditable.toString();
+        et.partialEndOffset = mEditable.length();
+        et.selectionStart = Selection.getSelectionStart(mEditable);
+        et.selectionEnd = Selection.getSelectionEnd(mEditable);
         et.flags = mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
         return et;
     }
@@ -354,8 +277,7 @@ public class CustomInputConnection extends BaseInputConnection {
     @Override
     public boolean finishComposingText() {
         log("finishComposingText()");
-        if (mEditable == null
-                || (getComposingSpanStart(mEditable) == getComposingSpanEnd(mEditable))) {
+        if (getComposingSpanStart(mEditable) == getComposingSpanEnd(mEditable)) {
             return true;
         }
         super.finishComposingText();
@@ -408,10 +330,6 @@ public class CustomInputConnection extends BaseInputConnection {
 
     private void updateImeSelection() {
         log("updateImeSelection()");
-        if (mEditable == null) {
-            return;
-        }
-
         getInputMethodManager().updateSelection(
             mInternalView,
             Selection.getSelectionStart(mEditable),
@@ -440,7 +358,7 @@ public class CustomInputConnection extends BaseInputConnection {
         return false;
     }
 
-    private String editableToXml(Editable editable) {
+    public static String editableToXml(Editable editable) {
         StringBuilder xmlBuilder = new StringBuilder();
         int length = editable.length();
 
@@ -499,25 +417,6 @@ public class CustomInputConnection extends BaseInputConnection {
         }
 
         return xmlBuilder.toString();
-    }
-
-    public String debugEditableStr() {
-        return editableToXml(mEditable);
-    }
-    public String rawText() {
-        return mEditable.toString();
-    }
-    public int getSelectionStart() {
-        return Selection.getSelectionStart(mEditable);
-    }
-    public int getSelectionEnd() {
-        return Selection.getSelectionEnd(mEditable);
-    }
-    public int getComposeStart() {
-        return getComposingSpanStart(mEditable);
-    }
-    public int getComposeEnd() {
-        return getComposingSpanEnd(mEditable);
     }
 }
 

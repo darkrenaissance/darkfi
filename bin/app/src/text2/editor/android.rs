@@ -23,6 +23,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, TEXT_CTX},
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "text::editor::android", $($arg)*) } }
@@ -43,6 +44,10 @@ fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
 pub struct Editor {
     pub composer_id: usize,
     is_init: bool,
+    is_setup: bool,
+    /// We cannot receive focus until `AndroidSuggestEvent::Init` has finished.
+    /// We use this flag to delay calling `android::focus()` until the init has completed.
+    is_focus_req: AtomicBool,
 
     layout: parley::Layout<Color>,
     width: Option<f32>,
@@ -65,6 +70,8 @@ impl Editor {
         Self {
             composer_id: usize::MAX,
             is_init: false,
+            is_setup: false,
+            is_focus_req: AtomicBool::new(false),
 
             layout: Default::default(),
             width: None,
@@ -77,18 +84,37 @@ impl Editor {
         }
     }
 
+    /// Called on `AndroidSuggestEvent::Init` after the View has been added to the main hierarchy
+    /// and is ready to receive commands such as focus.
     pub fn init(&mut self) {
-        android::focus(self.composer_id).unwrap();
+        self.is_init = true;
+
+        // Perform any focus requests.
+        let is_focus_req = self.is_focus_req.swap(false, Ordering::SeqCst);
+        if is_focus_req {
+            android::focus(self.composer_id).unwrap();
+        }
     }
+    /// Called on `AndroidSuggestEvent::CreateInputConnect`, which only happens after the View
+    /// is focused for the first time.
     pub fn setup(&mut self) {
+        assert!(self.is_init);
+        self.is_setup = true;
+
         assert!(self.composer_id != usize::MAX);
         t!("Initialized composer [{}]", self.composer_id);
         //let atxt = "A berry is small 😊 and pulpy.";
         //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
-        // This will initialize the editable and set the cursor.
-        // Otherwise get_editable() will segfault.
-        android::set_text(self.composer_id, "").unwrap();
-        self.is_init = true;
+    }
+
+    /// Can only be called after AndroidSuggestEvent::Init.
+    pub fn focus(&self) {
+        // We're not yet ready to receive focus
+        if !self.is_init {
+            self.is_focus_req.store(true, Ordering::SeqCst);
+            return
+        }
+        android::focus(self.composer_id).unwrap();
     }
 
     pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
@@ -97,10 +123,7 @@ impl Editor {
         let window_scale = self.window_scale.get();
         let lineheight = self.lineheight.get();
 
-        let Some(edit) = android::get_editable(self.composer_id) else {
-            w!("refresh(): editable composer_id={} not initialized yet", self.composer_id);
-            return
-        };
+        let edit = android::get_editable(self.composer_id).unwrap();
 
         let mut underlines = vec![];
         if let Some(compose_start) = edit.compose_start {
@@ -135,8 +158,8 @@ impl Editor {
         let edit = android::get_editable(self.composer_id).unwrap();
         let cursor_idx = cursor.index();
         let pos = byte_to_char16_index(&edit.buffer, cursor_idx).unwrap();
-        android::set_selection(self.composer_id, pos, pos);
         t!("  {cursor_idx} => {pos}");
+        android::set_selection(self.composer_id, pos, pos);
     }
 
     pub fn select_word_at_point(&self, pos: Point) {
@@ -146,11 +169,7 @@ impl Editor {
         self.set_selection(select.start, select.end);
     }
 
-    pub fn get_cursor_pos(&self) -> Option<Point> {
-        if !self.is_init {
-            return None
-        }
-
+    pub fn get_cursor_pos(&self) -> Point {
         let lineheight = self.lineheight.get();
         let edit = android::get_editable(self.composer_id).unwrap();
 
@@ -170,9 +189,7 @@ impl Editor {
             )
         };
         let cursor_rect = cursor.geometry(&self.layout, lineheight);
-
-        let cursor_pos = Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32);
-        Some(cursor_pos)
+        Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32)
     }
 
     pub async fn driver<'a>(
@@ -199,7 +216,7 @@ impl Editor {
         Some(edit.buffer[select_start..select_end].to_string())
     }
     pub fn selection(&self) -> parley::Selection {
-        let Some(edit) = android::get_editable(self.composer_id) else { return Default::default() };
+        let edit = android::get_editable(self.composer_id).unwrap();
 
         let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
         let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();

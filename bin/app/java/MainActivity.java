@@ -63,6 +63,7 @@ public boolean focus(final int id) {
     return true;
 }
 
+/*
 public CustomInputConnection getInputConnect(int id) {
     InvisibleInputView iv = editors.get(id);
     if (iv == null) {
@@ -70,16 +71,42 @@ public CustomInputConnection getInputConnect(int id) {
     }
     return iv.inputConnection;
 }
+*/
+public InvisibleInputView getInputView(int id) {
+    return editors.get(id);
+}
 
-public boolean setText(final int id, final String txt) {
-    final InvisibleInputView iv = editors.get(id);
-    if (iv == null || iv.inputConnection == null) {
+public boolean setText(int id, String txt) {
+    InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
         return false;
+    }
+
+    // If inputConnection is not yet ready, then setup the editable directly.
+    if (iv.inputConnection == null) {
+        iv.setEditableText(txt);
+        return true;
     }
 
     // Maybe do this on the UI thread?
     iv.inputConnection.setEditableText(txt, txt.length(), txt.length(), 0, 0);
+    return true;
+}
+public boolean setSelection(int id, int start, int end) {
+    InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
+        return false;
+    }
 
+    // If inputConnection is not yet ready, then setup the sel directly.
+    if (iv.inputConnection == null) {
+        iv.setSelection(start, end);
+        return true;
+    }
+
+    iv.inputConnection.beginBatchEdit();
+    iv.inputConnection.setSelection(start, end);
+    iv.inputConnection.endBatchEdit();
     return true;
 }
 
