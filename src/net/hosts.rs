@@ -420,7 +420,7 @@ impl HostContainer {
         color: HostColor,
         transports: &[String],
         transport_mixing: bool,
-        socks5_proxy: Url,
+        tor_socks5_proxy: Url,
     ) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_addrs()", "[START] {:?}", color);
         let mut hosts = vec![];
@@ -451,10 +451,10 @@ impl HostContainer {
                             addr.host().unwrap(),
                             addr.port().unwrap()
                         ));
-                        addr.set_host(socks5_proxy.host_str()).unwrap();
-                        addr.set_port(socks5_proxy.port()).unwrap();
-                        addr.set_username(socks5_proxy.username()).unwrap();
-                        addr.set_password(socks5_proxy.password()).unwrap();
+                        addr.set_host(tor_socks5_proxy.host_str()).unwrap();
+                        addr.set_port(tor_socks5_proxy.port()).unwrap();
+                        addr.set_username(tor_socks5_proxy.username()).unwrap();
+                        addr.set_password(tor_socks5_proxy.password()).unwrap();
                         addr.set_scheme($a).unwrap();
                         hosts.push((addr.clone(), last_seen.clone()));
                     }

@@ -218,7 +218,7 @@ impl Slot {
         let transports = settings.allowed_transports.clone();
         let transport_mixing = settings.transport_mixing;
         let preference_strict = settings.slot_preference_strict;
-        let socks5_proxy = settings.socks5_proxy.clone();
+        let tor_socks5_proxy = settings.tor_socks5_proxy.clone();
 
         // Drop Settings read lock
         drop(settings);
@@ -230,13 +230,13 @@ impl Slot {
         // If we only have grey entries, select from the greylist. Otherwise,
         // use the preference defined in settings.
         let addrs = if grey_only && !preference_strict {
-            container.fetch(HostColor::Grey, &transports, transport_mixing, socks5_proxy)
+            container.fetch(HostColor::Grey, &transports, transport_mixing, tor_socks5_proxy)
         } else if slot < gold_count {
-            container.fetch(HostColor::Gold, &transports, transport_mixing, socks5_proxy)
+            container.fetch(HostColor::Gold, &transports, transport_mixing, tor_socks5_proxy)
         } else if slot < white_count {
-            container.fetch(HostColor::White, &transports, transport_mixing, socks5_proxy)
+            container.fetch(HostColor::White, &transports, transport_mixing, tor_socks5_proxy)
         } else {
-            container.fetch(HostColor::Grey, &transports, transport_mixing, socks5_proxy)
+            container.fetch(HostColor::Grey, &transports, transport_mixing, tor_socks5_proxy)
         };
 
         hosts.check_addrs(addrs).await

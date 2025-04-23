@@ -99,8 +99,8 @@ allowed_transports = ["tcp+tls"]
 # By default this is not allowed.
 transport_mixing = false
 
-# Socks5 proxy
-#socks5_proxy = "socks5://127.0.0.1:9050"
+# Tor Socks5 proxy
+#tor_socks5_proxy = "socks5://127.0.0.1:9050"
 
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"

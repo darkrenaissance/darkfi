@@ -68,7 +68,7 @@ impl Connector {
         let datastore = settings.p2p_datastore.clone();
         let outbound_connect_timeout = settings.outbound_connect_timeout;
         let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
-        let socks5_proxy = settings.socks5_proxy.clone();
+        let tor_socks5_proxy = settings.tor_socks5_proxy.clone();
         drop(settings);
 
         let mut endpoint = url.clone();
@@ -91,10 +91,10 @@ impl Connector {
                     endpoint.host().unwrap(),
                     endpoint.port().unwrap()
                 ));
-                endpoint.set_host(socks5_proxy.host_str())?;
-                endpoint.set_port(socks5_proxy.port())?;
-                endpoint.set_username(socks5_proxy.username())?;
-                endpoint.set_password(socks5_proxy.password())?;
+                endpoint.set_host(tor_socks5_proxy.host_str())?;
+                endpoint.set_port(tor_socks5_proxy.port())?;
+                endpoint.set_username(tor_socks5_proxy.username())?;
+                endpoint.set_password(tor_socks5_proxy.password())?;
                 endpoint.set_scheme("socks5")?;
             } else if transports.contains(&"socks5+tls".to_string()) &&
                 (scheme == "tcp+tls" || scheme == "tor+tls")
@@ -104,10 +104,10 @@ impl Connector {
                     endpoint.host().unwrap(),
                     endpoint.port().unwrap()
                 ));
-                endpoint.set_host(socks5_proxy.host_str())?;
-                endpoint.set_port(socks5_proxy.port())?;
-                endpoint.set_username(socks5_proxy.username())?;
-                endpoint.set_password(socks5_proxy.password())?;
+                endpoint.set_host(tor_socks5_proxy.host_str())?;
+                endpoint.set_port(tor_socks5_proxy.port())?;
+                endpoint.set_username(tor_socks5_proxy.username())?;
+                endpoint.set_password(tor_socks5_proxy.password())?;
                 endpoint.set_scheme("socks5+tls")?;
             }
         }

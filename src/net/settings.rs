@@ -64,9 +64,9 @@ pub struct Settings {
     pub allowed_transports: Vec<String>,
     /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
     pub transport_mixing: bool,
-    /// Socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
     /// and transport mixing is enabled
-    pub socks5_proxy: Url,
+    pub tor_socks5_proxy: Url,
     /// I2p Socks5 proxy to connect to i2p eepsite (hidden services)
     pub i2p_socks5_proxy: Url,
     /// Outbound connection slots number, this many connections will be
@@ -129,7 +129,7 @@ impl Default for Settings {
             app_version,
             allowed_transports: vec!["tcp+tls".to_string()],
             transport_mixing: true,
-            socks5_proxy: Url::parse("socks5://127.0.0.1:9050").unwrap(),
+            tor_socks5_proxy: Url::parse("socks5://127.0.0.1:9050").unwrap(),
             i2p_socks5_proxy: Url::parse("socks5://127.0.0.1:4447").unwrap(),
             outbound_connections: 8,
             inbound_connections: 8,
@@ -232,10 +232,10 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub transport_mixing: Option<bool>,
 
-    /// Socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
     /// and transport mixing is enabled
     #[structopt(long)]
-    pub socks5_proxy: Option<Url>,
+    pub tor_socks5_proxy: Option<Url>,
 
     /// I2p Socks5 proxy to connect to i2p eepsite (hidden services)
     #[structopt(long)]
@@ -317,7 +317,7 @@ impl From<SettingsOpt> for Settings {
             app_version: def.app_version,
             allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
             transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
-            socks5_proxy: opt.socks5_proxy.unwrap_or(def.socks5_proxy),
+            tor_socks5_proxy: opt.tor_socks5_proxy.unwrap_or(def.tor_socks5_proxy),
             i2p_socks5_proxy: opt.i2p_socks5_proxy.unwrap_or(def.i2p_socks5_proxy),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
