@@ -91,7 +91,7 @@ fn render_glyph_run(
     let run_y = glyph_run.baseline();
     let style = glyph_run.style();
     let color = style.brush;
-    //trace!(target: "text::render", "render_glyph_run run_idx={run_idx}");
+    //trace!(target: "text::render", "render_glyph_run run_idx={run_idx} baseline={run_y}");
 
     let atlas = create_atlas(scale_ctx, glyph_run, render_api);
 

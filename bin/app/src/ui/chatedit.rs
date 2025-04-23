@@ -400,16 +400,6 @@ impl ChatEdit {
             ),
         });
 
-        //self_
-        //    .text_wrap
-        //    .lock()
-        //    .editable
-        //    .set_text("".to_string(), "king!😁🍆jelly 🍆1234".to_string());
-        //self_.text_wrap.lock().editable.set_text(
-        //    "".to_string(),
-        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.".to_string()
-        //);
-
         Pimpl::ChatEdit(self_)
     }
 
@@ -980,37 +970,6 @@ impl ChatEdit {
         self.scroll.set(atom, scroll);
         */
     }
-
-    /*
-    fn max_scroll(&self, text_wrap: &mut TextWrap) -> f32 {
-        let width = self.wrap_width();
-        let mut inner_height = text_wrap.wrap(width).height();
-        // Top padding
-        inner_height += self.padding.get_f32(0).unwrap();
-        // Bottom padding
-        inner_height += self.padding.get_f32(1).unwrap();
-
-        let max_height = self.max_height.get();
-        if inner_height < max_height {
-            return 0.
-        }
-
-        let max_scroll = inner_height - max_height;
-        max_scroll.clamp(0., f32::MAX)
-    }
-    */
-
-    /// When we resize the screen, the rect changes so we may need to alter the scroll.
-    /// Or if we delete text.
-    /*
-    fn clamp_scroll(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
-        let max_scroll = self.max_scroll(text_wrap);
-        let mut scroll = self.scroll.get();
-        if scroll > max_scroll {
-            self.scroll.set(atom, max_scroll);
-        }
-    }
-    */
 
     fn pause_blinking(&self) {
         self.blink_is_paused.store(true, Ordering::Relaxed);

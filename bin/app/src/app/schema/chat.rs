@@ -137,7 +137,7 @@ mod ui_consts {
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 35.;
     pub const CHATEDIT_NEG_W: f32 = 190.;
     pub const CHATEDIT_LHS_PAD: f32 = 100.;
-    pub const TEXTBAR_BASELINE: f32 = 34.;
+    pub const TEXTBAR_BASELINE: f32 = 25.;
     pub const EMOJI_BTN_X: f32 = 38.;
     pub const EMOJI_BG_W: f32 = 80.;
     pub const EMOJI_SCALE: f32 = 20.;
@@ -715,7 +715,7 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 1, TEXTBAR_BASELINE / 2.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
     //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::PaperLight {
