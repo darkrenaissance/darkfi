@@ -136,6 +136,10 @@ public int getKeyboardHeight() {
     return Math.max(0, imeInsets.bottom - navInsets.bottom);
 }
 
+public float getScreenDensity() {
+    return getResources().getDisplayMetrics().density;
+}
+
 //% END
 
 //% MAIN_ACTIVITY_ON_CREATE

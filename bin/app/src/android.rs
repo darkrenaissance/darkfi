@@ -46,6 +46,14 @@ macro_rules! call_mainactivity_str_method {
         }
     }};
 }
+macro_rules! call_mainactivity_float_method {
+    ($method:expr) => {{
+        unsafe {
+            let env = android::attach_jni_env();
+            ndk_utils::call_method!(CallFloatMethod, env, android::ACTIVITY, $method, "()F")
+        }
+    }};
+}
 
 struct GlobalData {
     sender: Option<async_channel::Sender<AndroidSuggestEvent>>,
@@ -277,13 +285,17 @@ pub fn get_editable(id: usize) -> Option<Editable> {
     }
 }
 
-pub fn get_keyboard_height() -> usize {
-    call_mainactivity_int_method!("getKeyboardHeight", "()I") as usize
-}
-
 pub fn get_appdata_path() -> PathBuf {
     call_mainactivity_str_method!("getAppDataPath").into()
 }
 pub fn get_external_storage_path() -> PathBuf {
     call_mainactivity_str_method!("getExternalStoragePath").into()
+}
+
+pub fn get_keyboard_height() -> usize {
+    call_mainactivity_int_method!("getKeyboardHeight", "()I") as usize
+}
+
+pub fn get_screen_density() -> f32 {
+    call_mainactivity_float_method!("getScreenDensity")
 }

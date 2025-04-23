@@ -31,6 +31,7 @@ use std::{
 };
 
 use crate::{
+    android,
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
@@ -184,7 +185,14 @@ impl App {
             sled_tree: settings_tree,
         });
 
-        settings.add_setting("scale", PropertyValue::Float32(1.));
+        let mut window_scale = 1.;
+        #[cfg(target_os = "android")]
+        {
+            window_scale = android::get_screen_density() / 2.25;
+            t!("Setting window_scale to {window_scale}");
+        }
+
+        settings.add_setting("scale", PropertyValue::Float32(window_scale));
         settings.load_settings();
 
         // Save app settings in sled when they change
