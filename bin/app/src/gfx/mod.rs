@@ -409,6 +409,7 @@ impl<'a> RenderContext<'a> {
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
         let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
 
+        let old_scale = self.scale;
         let old_view = self.view;
         let old_cursor = self.cursor;
 
@@ -431,7 +432,10 @@ impl<'a> RenderContext<'a> {
                     self.apply_model();
                 }
                 DrawInstruction::ApplyView(view) => {
-                    self.view = *view;
+                    // Adjust view relative to cursor
+                    self.view = *view + self.cursor;
+                    // Cursor resets within the view
+                    self.cursor = Point::zero();
                     if DEBUG_RENDER {
                         debug!(target: "gfx",
                             "{ws}apply_view({view:?})  scale={}, view={:?}",
@@ -439,6 +443,7 @@ impl<'a> RenderContext<'a> {
                         );
                     }
                     self.apply_view();
+                    self.apply_model();
                 }
                 DrawInstruction::Draw(mesh) => {
                     if DEBUG_RENDER {
@@ -469,6 +474,8 @@ impl<'a> RenderContext<'a> {
             }
             self.draw_call(dc, indent + 1);
         }
+
+        self.scale = old_scale;
 
         self.cursor = old_cursor;
         self.apply_model();

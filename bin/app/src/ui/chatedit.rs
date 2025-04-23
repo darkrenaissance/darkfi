@@ -1035,7 +1035,6 @@ impl ChatEdit {
             self.content_dc_key,
             GfxDrawCall {
                 instrs: vec![
-                    GfxDrawInstruction::ApplyView(rect),
                     GfxDrawInstruction::Move(Point::new(0., -scroll)),
                 ],
                 dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
@@ -1089,8 +1088,6 @@ impl ChatEdit {
         let padding_bottom = self.padding_bottom();
 
         let mut instrs = vec![];
-        // BUG FIXME SHOULDNT NEED THIS!
-        instrs.push(GfxDrawInstruction::Move(Point::zero()));
         if self.debug.get() {
             let mut rect = self.rect.get();
             rect.x = 0.;
