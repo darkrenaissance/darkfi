@@ -30,6 +30,7 @@ use std::io::ErrorKind;
 pub(crate) mod tls;
 
 /// SOCKS5 proxy client
+#[cfg(feature = "p2p-socks5")]
 pub mod socks5;
 
 /// TCP transport
@@ -77,9 +78,11 @@ pub enum DialerVariant {
     Unix(unix::UnixDialer),
 
     /// SOCKS5 proxy
+    #[cfg(feature = "p2p-socks5")]
     Socks5(socks5::Socks5Dialer),
 
     /// SOCKS5 proxy with TLS
+    #[cfg(feature = "p2p-socks5")]
     Socks5Tls(socks5::Socks5Dialer),
 }
 
@@ -199,6 +202,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-socks5")]
             "socks5" => {
                 // Build a SOCKS5 dialer
                 enforce_hostport!(endpoint);
@@ -207,6 +211,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-socks5")]
             "socks5+tls" => {
                 // Build a SOCKS5 dialer with TLS encapsulation
                 enforce_hostport!(endpoint);
@@ -215,6 +220,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-i2p")]
             "i2p" => {
                 // Build a Socks5 Dialer for I2p
                 enforce_hostport!(endpoint);
@@ -225,6 +231,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-i2p")]
             "i2p+tls" => {
                 // Build a SOCKS5 dialer with TLS encapsulation for I2p
                 enforce_hostport!(endpoint);
@@ -303,11 +310,13 @@ impl Dialer {
                 Ok(Box::new(stream))
             }
 
+            #[cfg(feature = "p2p-socks5")]
             DialerVariant::Socks5(dialer) => {
                 let stream = dialer.do_dial().await?;
                 Ok(Box::new(stream))
             }
 
+            #[cfg(feature = "p2p-socks5")]
             DialerVariant::Socks5Tls(dialer) => {
                 let stream = dialer.do_dial().await?;
                 let tlsupgrade = tls::TlsUpgrade::new().await;

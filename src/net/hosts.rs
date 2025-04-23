@@ -40,7 +40,6 @@ use super::{
 use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
-        encoding::base32,
         file::{load_file, save_file},
         most_frequent_or_any,
         path::expand_path,
@@ -1358,6 +1357,7 @@ impl Hosts {
                     );
                 }
 
+                #[cfg(feature = "p2p-i2p")]
                 "i2p" | "i2p+tls" => {
                     if !Self::is_i2p_host(host_str) {
                         continue
@@ -1602,6 +1602,7 @@ impl Hosts {
         None
     }
 
+    #[cfg(feature = "p2p-i2p")]
     fn is_i2p_host(host: &str) -> bool {
         if !host.ends_with(".i2p") {
             return false
@@ -1614,7 +1615,7 @@ impl Hosts {
 
         if name.ends_with(".b32") {
             let b32 = name.trim_end_matches(".b32");
-            let decoded = base32::decode(b32);
+            let decoded = crate::util::encoding::base32::decode(b32);
             // decoded should be a SHA256 hash
             return decoded.is_some() && decoded.unwrap().len() == 32
         }

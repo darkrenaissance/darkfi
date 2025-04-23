@@ -227,9 +227,16 @@ net-defaults = [
 
     "p2p-tor",
     #"p2p-nym",
+    "p2p-i2p",
 ]
 
 p2p-unix = []
+
+p2p-socks5 = []
+
+p2p-i2p = [
+    "p2p-socks5"
+]
 
 net = ["net-defaults"]
 
