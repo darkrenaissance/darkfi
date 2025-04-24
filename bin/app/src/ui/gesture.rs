@@ -89,7 +89,7 @@ impl UIObject for Gesture {
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
+        //t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
         let id = id as usize;
         if id >= MAX_TOUCH {
             return false

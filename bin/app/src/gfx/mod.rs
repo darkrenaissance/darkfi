@@ -272,8 +272,10 @@ impl GfxDrawMesh {
 pub enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
+    SetPos(Point),
     ApplyView(Rectangle),
     Draw(GfxDrawMesh),
+    EnableDebug,
 }
 
 impl GfxDrawInstruction {
@@ -285,8 +287,10 @@ impl GfxDrawInstruction {
         let instr = match self {
             Self::SetScale(scale) => DrawInstruction::SetScale(scale),
             Self::Move(off) => DrawInstruction::Move(off),
+            Self::SetPos(pos) => DrawInstruction::SetPos(pos),
             Self::ApplyView(view) => DrawInstruction::ApplyView(view),
             Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)?),
+            Self::EnableDebug => DrawInstruction::EnableDebug,
         };
         Some(instr)
     }
@@ -333,8 +337,10 @@ struct DrawMesh {
 enum DrawInstruction {
     SetScale(f32),
     Move(Point),
+    SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
+    EnableDebug,
 }
 
 #[derive(Debug)]
@@ -362,7 +368,7 @@ impl<'a> RenderContext<'a> {
             debug!(target: "gfx", "RenderContext::draw()");
         }
         let curr_pos = Point::zero();
-        self.draw_call(&self.draw_calls[&0], 0);
+        self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw() [DONE]");
         }
@@ -406,8 +412,8 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_uniforms_from_bytes(self.uniforms_data.as_ptr(), self.uniforms_data.len());
     }
 
-    fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
-        let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
+    fn draw_call(&mut self, draw_call: &DrawCall, mut indent: u32, mut is_debug: bool) {
+        let mut ws = if is_debug { " ".repeat(indent as usize * 4) } else { String::new() };
 
         let old_scale = self.scale;
         let old_view = self.view;
@@ -417,15 +423,25 @@ impl<'a> RenderContext<'a> {
             match instr {
                 DrawInstruction::SetScale(scale) => {
                     self.scale = *scale;
-                    if DEBUG_RENDER {
+                    if is_debug {
                         debug!(target: "gfx", "{ws}set_scale({scale})");
                     }
                 }
                 DrawInstruction::Move(off) => {
-                    self.cursor = old_cursor + *off;
-                    if DEBUG_RENDER {
+                    self.cursor += *off;
+                    if is_debug {
                         debug!(target: "gfx",
                             "{ws}move({off:?})  cursor={:?}, scale={}, view={:?}",
+                            self.cursor, self.scale, self.view
+                        );
+                    }
+                    self.apply_model();
+                }
+                DrawInstruction::SetPos(pos) => {
+                    self.cursor = old_cursor + *pos;
+                    if is_debug {
+                        debug!(target: "gfx",
+                            "{ws}set_pos({pos:?})  cursor={:?}, scale={}, view={:?}",
                             self.cursor, self.scale, self.view
                         );
                     }
@@ -436,7 +452,7 @@ impl<'a> RenderContext<'a> {
                     self.view = *view + self.cursor;
                     // Cursor resets within the view
                     self.cursor = Point::zero();
-                    if DEBUG_RENDER {
+                    if is_debug {
                         debug!(target: "gfx",
                             "{ws}apply_view({view:?})  scale={}, view={:?}",
                             self.scale, self.view
@@ -446,7 +462,7 @@ impl<'a> RenderContext<'a> {
                     self.apply_model();
                 }
                 DrawInstruction::Draw(mesh) => {
-                    if DEBUG_RENDER {
+                    if is_debug {
                         debug!(target: "gfx", "{ws}draw({mesh:?})");
                     }
                     let texture = match mesh.texture {
@@ -461,6 +477,13 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
+                DrawInstruction::EnableDebug => {
+                    if !is_debug {
+                        indent = 0;
+                    }
+                    is_debug = true;
+                    debug!(target: "gfx", "Frame start");
+                }
             }
         }
 
@@ -469,19 +492,23 @@ impl<'a> RenderContext<'a> {
         draw_calls.sort_unstable_by_key(|(_, dc)| dc.z_index);
 
         for (dc_key, dc) in draw_calls {
-            if DEBUG_RENDER {
+            if is_debug {
                 debug!(target: "gfx", "{ws}drawcall {dc_key}");
             }
-            self.draw_call(dc, indent + 1);
+            self.draw_call(dc, indent + 1, is_debug);
         }
 
         self.scale = old_scale;
 
-        self.cursor = old_cursor;
-        self.apply_model();
+        if is_debug {
+            debug!(target: "gfx", "{ws}Frame close: cursor={old_cursor:?}, view={old_view:?}");
+        }
 
         self.view = old_view;
         self.apply_view();
+
+        self.cursor = old_cursor;
+        self.apply_model();
     }
 }
 

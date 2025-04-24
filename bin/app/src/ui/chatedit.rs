@@ -213,16 +213,15 @@ pub struct ChatEdit {
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
-    glyphs: SyncMutex<Vec<Glyph>>,
+    // Moves the draw cursor and applies scroll
     root_dc_key: u64,
+    phone_select_handle_dc_key: u64,
+    // Applies the clipping view
     content_dc_key: u64,
-    /// DC key for the text
-    text_dc_key: u64,
-    cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
-    /// DC key for the cursor. Allows updating cursor independently.
-    cursor_dc_key: u64,
-    /// DC key for the selection.
     select_dc_key: u64,
+    text_dc_key: u64,
+    cursor_dc_key: u64,
+    cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -332,9 +331,6 @@ impl ChatEdit {
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
 
-        // Must do this whenever the text changes
-        let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get());
-
         let self_ = Arc::new(Self {
             node,
             tasks: OnceLock::new(),
@@ -342,13 +338,13 @@ impl ChatEdit {
             text_shaper: text_shaper.clone(),
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
-            glyphs: SyncMutex::new(glyphs),
             root_dc_key: OsRng.gen(),
+            phone_select_handle_dc_key: OsRng.gen(),
             content_dc_key: OsRng.gen(),
-            text_dc_key: OsRng.gen(),
-            cursor_mesh: SyncMutex::new(None),
-            cursor_dc_key: OsRng.gen(),
             select_dc_key: OsRng.gen(),
+            text_dc_key: OsRng.gen(),
+            cursor_dc_key: OsRng.gen(),
+            cursor_mesh: SyncMutex::new(None),
 
             is_active,
             is_focused,
@@ -462,6 +458,7 @@ impl ChatEdit {
     }
 
     fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, pos: Point, side: f32) {
+        let scroll = self.scroll.get();
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
@@ -472,6 +469,10 @@ impl ChatEdit {
 
         let x = pos.x;
         let mut y = pos.y + baseline;
+
+        if y - scroll < 0. {
+            return
+        }
 
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
@@ -705,14 +706,14 @@ impl ChatEdit {
     async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
         t!("handle_touch_start({touch_pos:?})");
 
-        if self.try_handle_drag(touch_pos).await {
-            return true
-        }
-
         let rect = self.rect.get();
         if !rect.contains(touch_pos) {
             t!("rect!cont rect={rect:?}, touch_pos={touch_pos:?}");
             return false
+        }
+
+        if self.try_handle_drag(touch_pos).await {
+            return true
         }
 
         let mut touch_info = self.touch_info.lock();
@@ -729,42 +730,31 @@ impl ChatEdit {
             assert!(!self.is_phone_select.load(Ordering::Relaxed));
             return None
         }
-        assert!(self.is_phone_select.load(Ordering::Relaxed));
 
-        let mut first_pos = None;
-        let mut last_pos = Default::default();
-
-        sel.geometry_with(layout, |rect: parley::Rect, _| {
-            let rect = Rectangle::from(rect);
-            if first_pos.is_none() {
-                first_pos = Some(rect.bot_left());
-            }
-            last_pos = rect.corner();
-        });
-
-        let first_pos = first_pos.unwrap();
-        Some((first_pos, last_pos))
+        let first = Rectangle::from(sel.anchor().geometry(layout, 0.)).pos();
+        let last = Rectangle::from(sel.focus().geometry(layout, 0.)).pos();
+        Some((first, last))
     }
 
     async fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
-        let Some((mut first_pos, mut last_pos)) = self.get_select_handles().await else {
-            return false
-        };
+        let Some((mut first, mut last)) = self.get_select_handles().await else { return false };
 
         self.abs_to_local(&mut touch_pos);
         t!("localize touch_pos = {touch_pos:?}");
 
+        let baseline = self.baseline.get();
         let handle_off_y = self.handle_descent.get();
-        first_pos.y += handle_off_y;
-        last_pos.y += handle_off_y;
+
+        first.y += baseline + handle_off_y;
+        last.y += baseline + handle_off_y;
 
         // Are we within range of either one?
-        t!("handle center points = ({first_pos:?}, {last_pos:?})");
+        t!("handle center points = ({first:?}, {last:?})");
 
         const TOUCH_RADIUS_SQ: f32 = 10_000.;
 
-        let first_dist_sq = first_pos.dist_sq(touch_pos);
-        let last_dist_sq = last_pos.dist_sq(touch_pos);
+        let first_dist_sq = first.dist_sq(touch_pos);
+        let last_dist_sq = last.dist_sq(touch_pos);
 
         let is_first = first_dist_sq <= TOUCH_RADIUS_SQ;
         let is_last = last_dist_sq <= TOUCH_RADIUS_SQ;
@@ -884,7 +874,7 @@ impl ChatEdit {
         true
     }
     async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
-        t!("handle_touch_end({touch_pos:?})");
+        //t!("handle_touch_end({touch_pos:?})");
         let atom = &mut PropertyAtomicGuard::new();
         self.abs_to_local(&mut touch_pos);
 
@@ -990,14 +980,29 @@ impl ChatEdit {
         let rect = self.rect.get();
         let scroll = self.scroll.get();
 
-        let draw_main = vec![(
-            self.content_dc_key,
-            GfxDrawCall {
-                instrs: vec![GfxDrawInstruction::Move(Point::new(0., -scroll))],
-                dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
-                z_index: self.z_index.get(),
-            },
-        )];
+        let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
+
+        let mut content_instrs = vec![
+            GfxDrawInstruction::ApplyView(rect.with_zero_pos()),
+            GfxDrawInstruction::Move(Point::new(0., -scroll)),
+        ];
+        let mut bg_instrs = self.regen_bg_mesh();
+        content_instrs.append(&mut bg_instrs);
+
+        let draw_main = vec![
+            (
+                self.content_dc_key,
+                GfxDrawCall {
+                    instrs: content_instrs,
+                    dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                    z_index: 0,
+                },
+            ),
+            (
+                self.phone_select_handle_dc_key,
+                GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
+            ),
+        ];
         self.render_api.replace_draw_calls(timest, draw_main);
     }
 
@@ -1011,9 +1016,15 @@ impl ChatEdit {
 
     async fn redraw_select(&self) {
         let timest = unixtime();
-        let instrs = self.regen_select_mesh().await;
-        let draw_calls =
-            vec![(self.select_dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: 0 })];
+        let sel_instrs = self.regen_select_mesh().await;
+        let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
+        let draw_calls = vec![
+            (self.select_dc_key, GfxDrawCall { instrs: sel_instrs, dcs: vec![], z_index: 0 }),
+            (
+                self.phone_select_handle_dc_key,
+                GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
+            ),
+        ];
         self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
@@ -1041,25 +1052,23 @@ impl ChatEdit {
     }
 
     fn regen_bg_mesh(&self) -> Vec<GfxDrawInstruction> {
+        if !self.debug.get() {
+            return vec![]
+        }
+
         let padding_top = self.padding_top();
         let padding_bottom = self.padding_bottom();
 
-        let mut instrs = vec![];
-        if self.debug.get() {
-            let mut rect = self.rect.get();
-            rect.x = 0.;
-            rect.y = 0.;
-            let mut mesh = MeshBuilder::new();
-            mesh.draw_outline(&rect, [0., 1., 0., 1.], 1.);
-            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+        let mut rect = self.rect.get().with_zero_pos();
 
-            rect.y = padding_top;
-            rect.h -= padding_top + padding_bottom;
-            let mut mesh = MeshBuilder::new();
-            mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
-            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
-        }
-        instrs
+        let mut mesh = MeshBuilder::new();
+        mesh.draw_outline(&rect, [0., 1., 0., 1.], 1.);
+
+        rect.y = padding_top;
+        rect.h -= padding_top + padding_bottom;
+        mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
+
+        vec![GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
     }
 
     async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
@@ -1085,29 +1094,42 @@ impl ChatEdit {
         let sel = editor.selection();
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
-            let mut first_pos = None;
-            let mut last_pos = Default::default();
-
             let mut mesh = MeshBuilder::new();
             sel.geometry_with(layout, |rect: parley::Rect, _| {
-                let rect = Rectangle::from(rect);
-                if first_pos.is_none() {
-                    first_pos = Some(rect.pos());
-                }
-                last_pos = rect.top_right();
-
-                mesh.draw_filled_box(&rect, sel_color);
+                mesh.draw_filled_box(&rect.into(), sel_color);
             });
-
-            if self.is_phone_select.load(Ordering::Relaxed) {
-                self.draw_phone_select_handle(&mut mesh, first_pos.unwrap(), -1.);
-                self.draw_phone_select_handle(&mut mesh, last_pos, 1.);
-            }
 
             instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
 
         instrs
+    }
+
+    async fn regen_phone_select_handle_mesh(&self) -> Vec<GfxDrawInstruction> {
+        //t!("regen_phone_select_handle_mesh()");
+        let Some((mut first, mut last)) = self.get_select_handles().await else {
+            assert!(!self.is_phone_select.load(Ordering::Relaxed));
+            return vec![];
+        };
+
+        let scroll = self.scroll.get();
+
+        let editor = self.editor.lock().await;
+        let layout = editor.layout();
+
+        let sel = editor.selection();
+        assert!(!sel.is_collapsed());
+
+        let pos = self.inner_pos() + Point::new(0., -scroll);
+
+        // We could cache this and use Move instead but why bother?
+        let mut mesh = MeshBuilder::new();
+        self.draw_phone_select_handle(&mut mesh, first, -1.);
+        self.draw_phone_select_handle(&mut mesh, last, 1.);
+        vec![
+            GfxDrawInstruction::Move(pos),
+            GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()),
+        ]
     }
 
     fn bounded_height(&self, mut height: f32) -> f32 {
@@ -1167,7 +1189,7 @@ impl ChatEdit {
     async fn make_draw_calls(&self, trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
         self.eval_rect(atom).await;
 
-        let rect = self.rect.get();
+        let mut rect = self.rect.get();
         let max_scroll = self.max_scroll();
         let mut scroll = self.scroll.get();
         if scroll > max_scroll {
@@ -1178,10 +1200,28 @@ impl ChatEdit {
         let cursor_instrs = self.get_cursor_instrs().await;
         let txt_instrs = self.regen_txt_mesh().await;
         let sel_instrs = self.regen_select_mesh().await;
+        let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
-        let mut root_instrs = vec![GfxDrawInstruction::ApplyView(rect)];
+        let mut content_instrs = vec![
+            GfxDrawInstruction::ApplyView(rect.with_zero_pos()),
+            GfxDrawInstruction::Move(Point::new(0., -scroll)),
+        ];
         let mut bg_instrs = self.regen_bg_mesh();
-        root_instrs.append(&mut bg_instrs);
+        content_instrs.append(&mut bg_instrs);
+
+        // + root (move)
+        // -+ content (apply view)
+        //  └╴select
+        //  └╴text
+        //  └╴cursor
+        // - phone_handle
+
+        // Why do we have such a complicated layout?
+        // Firstly phone select handles should never be clipped. So we must draw them outside
+        // of ApplyView.
+        // Then when adjusting selection, it's slow to redraw everything, so the selection
+        // must be drawn separately.
+        // Lastly the cursor is blinking and that's on top but with clipping.
 
         DrawUpdate {
             key: self.root_dc_key,
@@ -1189,15 +1229,15 @@ impl ChatEdit {
                 (
                     self.root_dc_key,
                     GfxDrawCall {
-                        instrs: root_instrs,
-                        dcs: vec![self.content_dc_key],
+                        instrs: vec![GfxDrawInstruction::Move(rect.pos())],
+                        dcs: vec![self.content_dc_key, self.phone_select_handle_dc_key],
                         z_index: self.z_index.get(),
                     },
                 ),
                 (
                     self.content_dc_key,
                     GfxDrawCall {
-                        instrs: vec![GfxDrawInstruction::Move(Point::new(0., -scroll))],
+                        instrs: content_instrs,
                         dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                         z_index: 0,
                     },
@@ -1207,6 +1247,10 @@ impl ChatEdit {
                 (
                     self.cursor_dc_key,
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: 2 },
+                ),
+                (
+                    self.phone_select_handle_dc_key,
+                    GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
                 ),
             ],
         }
@@ -1272,6 +1316,9 @@ impl ChatEdit {
         match ev {
             AndroidSuggestEvent::Init => {
                 editor.init();
+                // For debugging select, enable these and set a selection in the editor.
+                //self.is_phone_select.store(true, Ordering::Relaxed);
+                //self.hide_cursor.store(true, Ordering::Relaxed);
                 return
             }
             AndroidSuggestEvent::CreateInputConnect => editor.setup(),
@@ -1412,11 +1459,7 @@ impl UIObject for ChatEdit {
 
         #[cfg(target_os = "android")]
         {
-            let (sender, recvr) = async_channel::unbounded();
-            let composer_id = crate::android::create_composer(sender);
-            self.editor.lock().await.composer_id = composer_id;
-            t!("Created composer [{composer_id}]");
-
+            let recvr = self.editor.lock().await.recvr.take().unwrap();
             let me2 = me.clone();
             let autosuggest_task = ex.spawn(async move {
                 loop {

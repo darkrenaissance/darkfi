@@ -54,12 +54,13 @@ use super::{ColorScheme, COLOR_SCHEME};
 mod android_ui_consts {
     use crate::gfx::{Point, Rectangle};
 
-    pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
+    pub const CHANNEL_LABEL_Y: f32 = 30.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 30.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 140.;
-    pub const CHATEDIT_MAX_HEIGHT: f32 = 1400.;
+    pub const CHATEDIT_MAX_HEIGHT: f32 = 500.;
     pub const CHATEDIT_HEIGHT: f32 = 140.;
     pub const CHATEDIT_SINGLE_LINE_Y: f32 = 120.;
     pub const CHATEDIT_BOTTOM_PAD: f32 = 10.;
@@ -100,7 +101,7 @@ mod android_ui_consts {
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 200., 160.);
     pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(220., 0., 240., 160.);
     pub const ACTION_SELECT_ALL_RECT: Rectangle = Rectangle::new(480., 0., 400., 160.);
-    pub const ACTION_LABEL_POS: Point = Point::new(40., 92.);
+    pub const ACTION_LABEL_POS: Point = Point::new(40., 40.);
 }
 
 #[cfg(target_os = "android")]
@@ -121,6 +122,7 @@ mod ui_consts {
     use crate::gfx::{Point, Rectangle};
 
     // Chat UI
+    pub const CHANNEL_LABEL_Y: f32 = 30.;
     pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
@@ -342,11 +344,11 @@ pub async fn make(
     let node = create_text("channel_label");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
     node.set_property_str(atom, Role::App, "text", &("#".to_string() + channel)).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
@@ -1337,7 +1339,7 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", 0.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
     node.set_property_str(atom, Role::App, "text", "copy   paste   select all").unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();

@@ -89,6 +89,10 @@ public class InvisibleInputView extends View {
             | EditorInfo.IME_ACTION_GO;
         outAttrs.initialSelStart = getSelectionStart();
         outAttrs.initialSelEnd = getSelectionEnd();
+        //if (outAttrs.initialSelStart != 0) {
+        //    Log.d("darkfi", "  select: [" + outAttrs.initialSelStart + ", " +
+        //                    outAttrs.initialSelEnd + "]");
+        //}
 
         inputConnection = new CustomInputConnection(id, editable, this);
         onCreateInputConnect(id);

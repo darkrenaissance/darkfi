@@ -207,6 +207,10 @@ impl Rectangle {
         Some(clipped)
     }
 
+    pub fn with_zero_pos(&self) -> Self {
+        Self::new(0., 0., self.w, self.h)
+    }
+
     pub fn clip_point(&self, point: &mut Point) {
         if point.x < self.x {
             point.x = self.x;

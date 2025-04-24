@@ -22,6 +22,7 @@ use crate::{
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, TEXT_CTX},
+    AndroidSuggestEvent,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -43,6 +44,7 @@ fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
 
 pub struct Editor {
     pub composer_id: usize,
+    pub recvr: Option<async_channel::Receiver<AndroidSuggestEvent>>,
     is_init: bool,
     is_setup: bool,
     /// We cannot receive focus until `AndroidSuggestEvent::Init` has finished.
@@ -67,8 +69,13 @@ impl Editor {
         window_scale: PropertyFloat32,
         lineheight: PropertyFloat32,
     ) -> Self {
+        let (sender, recvr) = async_channel::unbounded();
+        let composer_id = android::create_composer(sender);
+        t!("Created composer [{composer_id}]");
+
         Self {
-            composer_id: usize::MAX,
+            composer_id,
+            recvr: Some(recvr),
             is_init: false,
             is_setup: false,
             is_focus_req: AtomicBool::new(false),
@@ -94,6 +101,13 @@ impl Editor {
         if is_focus_req {
             android::focus(self.composer_id).unwrap();
         }
+
+        //android::focus(self.composer_id).unwrap();
+        //let atxt = "A berry is small 😊 and pulpy.";
+        //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
+        //android::set_text(self.composer_id, atxt);
+        //self.set_selection(2, 7);
+        //self.refresh(&mut PropertyAtomicGuard::new());
     }
     /// Called on `AndroidSuggestEvent::CreateInputConnect`, which only happens after the View
     /// is focused for the first time.
@@ -103,8 +117,6 @@ impl Editor {
 
         assert!(self.composer_id != usize::MAX);
         t!("Initialized composer [{}]", self.composer_id);
-        //let atxt = "A berry is small 😊 and pulpy.";
-        //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
     }
 
     /// Can only be called after AndroidSuggestEvent::Init.
@@ -220,6 +232,7 @@ impl Editor {
 
         let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
         let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+        //t!("selection() -> ({select_start}, {select_end})");
 
         let anchor = parley::Cursor::from_byte_index(
             &self.layout,

@@ -75,11 +75,15 @@ dev: $(SRC) fonts
 
 apk: $(SRC) fonts
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
+	$(MAKE) install-apk
+
+install-apk:
 	-mv $(DEBUG_APK) .
 	-adb uninstall darkfi.darkfi_app
 	adb install -r darkfi-app.apk
 	reset
 	adb logcat -c
+	adb shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
 	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app
 
 # Useful for dev

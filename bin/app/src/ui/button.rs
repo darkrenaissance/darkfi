@@ -136,7 +136,7 @@ impl UIObject for Button {
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
+        //t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
         if !self.is_active.get() {
             return false
         }
@@ -148,7 +148,7 @@ impl UIObject for Button {
 
         let rect = self.rect.get();
         if !rect.contains(touch_pos) {
-            t!("not inside rect");
+            //t!("not inside rect");
             return false
         }
 
