@@ -183,6 +183,49 @@ async def show_deactive_tasks(month_ts, workspace, server_name, port):
     tasks = await api.fetch_deactive_tasks(month_ts, server_name, port)
     list_tasks(tasks, workspace, [])
 
+async def show_log(server_name, port, timeframe):
+    # fetch all tasks
+    refids = await api.get_ref_ids(server_name, port)
+    tasks = await api.fetch_deactive_tasks(None, server_name, port)
+    for refid in refids:
+        tasks.append(await api.fetch_task(refid, server_name, port))
+
+    # list tasks events within a timeframe
+    if timeframe == "day":
+        timestamp = 86400
+    elif timeframe == "week" or timeframe == None:
+        timestamp = 604800
+    elif timeframe == "month":
+        timestamp = 2628002
+    else:
+        print(f"Error: invalid timeframe {timeframe}")
+        print("valid timeframes are: 'day', 'week' and 'month'")
+        print("try: tau log week")
+        exit(-1)
+    res_events = []
+    now = lib.util.now()
+    for task in tasks:
+        events = task["events"]
+        for event in events:
+            # if timestamp is in ms convert it to s
+            event_ts = int(event["timestamp"])
+            if event_ts > 10e10:
+                event_ts //= 1000
+            date = lib.util.unix_to_datetime(event_ts)
+            if (now - event_ts) < timestamp:
+                if event["action"] == "state":
+                    action = "stopped" if event["content"] == "stop" else f"{event["content"]}ed"
+                    res = f"{date}: {event["author"]} {action} task: ({task["ref_id"][:6]}) '{task["title"]}'"
+                    res_events.append(res)
+                if event["action"] == "comment":
+                    res = f"{date}: {event["author"]} commented on task: ({task["ref_id"][:6]}) '{task["title"]}'"
+                    res_events.append(res)
+                if event["action"] in ["assign", "tags"] :
+                    res = f"{date}: {event["author"]} added {event["content"][1:]} to {event["action"]} in task: ({task["ref_id"][:6]}) '{task["title"]}'"
+                    res_events.append(res)
+    for i in res_events:
+        print(i)
+
 def list_tasks(tasks, workspace, filters):
     print(f"Workspace: {workspace}")
     headers = ["ID", "Title", "Status", "Project",
@@ -584,6 +627,13 @@ Examples:
     tau archive 1122            # completed tasks of Nov. 2022
     tau archive 1122 1          # show info of task completed in Nov. 2022
 ''')
+        return 0
+    elif sys.argv[1] == "log":
+        if len(sys.argv) == 3:
+            timeframe = sys.argv[2]
+        else:
+            timeframe = None
+        await show_log(server_name, port, timeframe)
         return 0
     elif sys.argv[1] == "add":
         task_args = sys.argv[2:]
