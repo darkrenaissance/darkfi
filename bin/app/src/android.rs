@@ -18,6 +18,7 @@
 
 use miniquad::native::android::{self, ndk_sys, ndk_utils};
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{LazyLock, Mutex as SyncMutex},
 };
@@ -56,15 +57,24 @@ macro_rules! call_mainactivity_float_method {
 }
 
 struct GlobalData {
-    sender: Option<async_channel::Sender<AndroidSuggestEvent>>,
+    senders: HashMap<usize, async_channel::Sender<AndroidSuggestEvent>>,
     next_id: usize,
+}
+
+fn send(id: usize, ev: AndroidSuggestEvent) {
+    let globals = &GLOBALS.lock().unwrap();
+    let Some(sender) = globals.senders.get(&id) else {
+        warn!(target: "android", "Unknown composer_id={id} discard ev: {ev:?}");
+        return
+    };
+    let _ = sender.try_send(ev);
 }
 
 unsafe impl Send for GlobalData {}
 unsafe impl Sync for GlobalData {}
 
 static GLOBALS: LazyLock<SyncMutex<GlobalData>> =
-    LazyLock::new(|| SyncMutex::new(GlobalData { sender: None, next_id: 0 }));
+    LazyLock::new(|| SyncMutex::new(GlobalData { senders: HashMap::new(), next_id: 0 }));
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_darkfi_darkfi_1app_MainActivity_onInitEdit(
@@ -72,13 +82,9 @@ pub unsafe extern "C" fn Java_darkfi_darkfi_1app_MainActivity_onInitEdit(
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
 ) {
-    trace!(target: "android", "onInit() CALLED");
     assert!(id >= 0);
     let id = id as usize;
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        trace!(target: "android", "onInit()");
-        let _ = sender.try_send(AndroidSuggestEvent::Init);
-    }
+    send(id, AndroidSuggestEvent::Init);
 }
 
 #[no_mangle]
@@ -89,9 +95,7 @@ pub unsafe extern "C" fn Java_autosuggest_InvisibleInputView_onCreateInputConnec
 ) {
     assert!(id >= 0);
     let id = id as usize;
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::CreateInputConnect);
-    }
+    send(id, AndroidSuggestEvent::CreateInputConnect);
 }
 
 #[no_mangle]
@@ -106,13 +110,14 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCompose(
     assert!(id >= 0);
     let id = id as usize;
     let text = ndk_utils::get_utf_str!(env, text);
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::Compose {
+    send(
+        id,
+        AndroidSuggestEvent::Compose {
             text: text.to_string(),
             cursor_pos,
             is_commit: is_commit == 1,
-        });
-    }
+        },
+    );
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onSetComposeRegion(
@@ -124,12 +129,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onSetComposeRegi
 ) {
     assert!(id >= 0);
     let id = id as usize;
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::ComposeRegion {
-            start: start as usize,
-            end: end as usize,
-        });
-    }
+    send(id, AndroidSuggestEvent::ComposeRegion { start: start as usize, end: end as usize });
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onFinishCompose(
@@ -139,9 +139,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onFinishCompose(
 ) {
     assert!(id >= 0);
     let id = id as usize;
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::FinishCompose);
-    }
+    send(id, AndroidSuggestEvent::FinishCompose);
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onDeleteSurroundingText(
@@ -153,12 +151,10 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onDeleteSurround
 ) {
     assert!(id >= 0);
     let id = id as usize;
-    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::DeleteSurroundingText {
-            left: left as usize,
-            right: right as usize,
-        });
-    }
+    send(
+        id,
+        AndroidSuggestEvent::DeleteSurroundingText { left: left as usize, right: right as usize },
+    );
 }
 
 pub fn create_composer(sender: async_channel::Sender<AndroidSuggestEvent>) -> usize {
@@ -166,7 +162,7 @@ pub fn create_composer(sender: async_channel::Sender<AndroidSuggestEvent>) -> us
         let mut globals = GLOBALS.lock().unwrap();
         let id = globals.next_id;
         globals.next_id += 1;
-        globals.sender = Some(sender);
+        globals.senders.insert(id, sender);
         id
     };
     unsafe {
