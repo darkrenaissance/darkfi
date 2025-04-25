@@ -291,11 +291,17 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 2, EMOJI_BG_W).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
+    // Menu doesn't exist yet ;)
+    // So look it up in the callback.
     let sg_root = app.sg_root.clone();
+    let layer_node2 = layer_node.clone();
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let goback = move || {
+    let goback = async move || {
         info!(target: "app::chat", "clicked back");
         let atom = &mut PropertyAtomicGuard::new();
+
+        let editz_node = layer_node2.clone().lookup_node("/content/editz").unwrap();
+        editz_node.call_method("unfocus", vec![]).await.unwrap();
 
         let menu_node = sg_root.clone().lookup_node("/window/menu_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -306,10 +312,9 @@ pub async fn make(
     let (slot, recvr) = Slot::new("back_clicked");
     node.register("click", slot).unwrap();
     let goback2 = goback.clone();
-    // Menu doesn't exist yet ;)
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            goback2();
+            goback2().await;
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

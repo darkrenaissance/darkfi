@@ -453,6 +453,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     // Used by emoji_picker
     node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();
     node.add_method("focus", vec![], None).unwrap();
+    node.add_method("unfocus", vec![], None).unwrap();
 
     node
 }

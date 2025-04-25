@@ -128,6 +128,9 @@ impl Editor {
         }
         android::focus(self.composer_id).unwrap();
     }
+    pub fn unfocus(&self) {
+        android::unfocus(self.composer_id).unwrap();
+    }
 
     pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
         let font_size = self.font_size.get();

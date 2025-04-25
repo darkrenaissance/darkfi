@@ -184,6 +184,18 @@ pub fn focus(id: usize) -> Option<()> {
         Some(())
     }
 }
+pub fn unfocus(id: usize) -> Option<()> {
+    let is_success = unsafe {
+        let env = android::attach_jni_env();
+
+        ndk_utils::call_bool_method!(env, android::ACTIVITY, "unfocus", "(I)Z", id as i32)
+    };
+    if is_success == 0u8 {
+        None
+    } else {
+        Some(())
+    }
+}
 
 pub fn set_text(id: usize, text: &str) -> Option<()> {
     let ctext = std::ffi::CString::new(text).unwrap();

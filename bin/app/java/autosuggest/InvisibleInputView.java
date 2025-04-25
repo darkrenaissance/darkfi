@@ -76,10 +76,11 @@ public class InvisibleInputView extends View {
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
         Log.d("darkfi", "Create InputConnection for view=" + this.toString());
-        if (inputConnection != null) {
-            Log.d("darkfi", "  ->  return existing InputConnection");
-            return inputConnection;
-        }
+        // Losing focus requires the inputConnection to be destroyed
+        //if (inputConnection != null) {
+        //    Log.d("darkfi", "  ->  return existing InputConnection");
+        //    return inputConnection;
+        //}
 
         outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT
             | EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT;

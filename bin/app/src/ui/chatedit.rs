@@ -1305,6 +1305,25 @@ impl ChatEdit {
         editor.focus();
         true
     }
+    async fn process_unfocus_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            debug!(target: "ui::chatedit", "Event relayer closed");
+            return false
+        };
+
+        t!("method called: focus({method_call:?})");
+        assert!(method_call.send_res.is_none());
+        assert!(method_call.data.is_empty());
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before insert_text_method_task was stopped!");
+        };
+
+        let mut editor = self_.editor.lock().await;
+        editor.unfocus();
+        true
+    }
 
     async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
         t!("handle_android_event({ev:?})");
@@ -1369,6 +1388,11 @@ impl UIObject for ChatEdit {
         let me2 = me.clone();
         let focus_task =
             ex.spawn(async move { while Self::process_focus_method(&me2, &method_sub).await {} });
+
+        let method_sub = node_ref.subscribe_method_call("unfocus").unwrap();
+        let me2 = me.clone();
+        let unfocus_task =
+            ex.spawn(async move { while Self::process_unfocus_method(&me2, &method_sub).await {} });
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.is_focused.prop(), Self::change_focus);
@@ -1454,7 +1478,7 @@ impl UIObject for ChatEdit {
             }
         });
 
-        let mut tasks = vec![insert_text_task, focus_task, blinking_cursor_task];
+        let mut tasks = vec![insert_text_task, focus_task, unfocus_task, blinking_cursor_task];
         tasks.append(&mut on_modify.tasks);
 
         #[cfg(target_os = "android")]

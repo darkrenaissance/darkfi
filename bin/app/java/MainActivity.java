@@ -40,6 +40,9 @@ public void createComposer(final int id) {
     });
 }
 
+private InputMethodManager getIMM() {
+    return (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+}
 public boolean focus(final int id) {
     final InvisibleInputView iv = editors.get(id);
     if (iv == null) {
@@ -55,8 +58,23 @@ public boolean focus(final int id) {
                 Log.w("darkfi", "error requesting focus for id=" + id + ": " + iv);
             }
 
-            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.showSoftInput(iv, InputMethodManager.SHOW_IMPLICIT);
+            getIMM().showSoftInput(iv, InputMethodManager.SHOW_IMPLICIT);
+        }
+    });
+
+    return true;
+}
+public boolean unfocus(final int id) {
+    final InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
+        return false;
+    }
+
+    runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+            iv.clearFocus();
+            getIMM().hideSoftInputFromWindow(iv.getWindowToken(), 0);
         }
     });
 
