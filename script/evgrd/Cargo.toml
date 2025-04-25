@@ -26,7 +26,7 @@ darkfi = {path = "../../", features = ["event-graph"]}
 darkfi-serial = {version = "0.4.2", features = ["async"]}
 
 # Event Graph DB
-sled-overlay = "0.1.6"
+sled-overlay = "0.1.7"
 
 # Crypto
 blake3 = "1.8.1"

@@ -18,7 +18,7 @@ darkfi-serial = "0.4.2"
 # Misc
 bs58 = "0.5.1"
 log = "0.4.27"
-sled-overlay = "0.1.6"
+sled-overlay = "0.1.7"
 
 # JSON-RPC
 async-trait = "0.1.88"
