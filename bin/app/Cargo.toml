@@ -113,3 +113,12 @@ assets = "assets"
 name = "android.permission.INTERNET"
 [[package.metadata.android.permission]]
 name = "android.permission.ACCESS_NETWORK_STATE"
+[[package.metadata.android.permission]]
+name = "android.permission.FOREGROUND_SERVICE"
+[[package.metadata.android.permission]]
+name = "android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"
+
+[[package.metadata.android.service]]
+name = ".ForegroundService"
+foreground_service_type = "remoteMessaging"
+exported = false

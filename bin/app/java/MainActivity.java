@@ -169,5 +169,9 @@ view.setFocusable(false);
 view.setFocusableInTouchMode(false);
 view.clearFocus();
 
+// Start a foreground service so the app stays awake
+Intent serviceIntent = new Intent(this, ForegroundService.class);
+startForegroundService(serviceIntent);
+
 //% END
 

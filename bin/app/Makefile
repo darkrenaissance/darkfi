@@ -88,7 +88,7 @@ install-apk:
 
 # Useful for dev
 cli:
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
+	podman run -v /home/narodnik/src/stuff/cargo-quad-apk:/root/capk -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
 
 fmt:
 	$(CARGO) +nightly fmt
