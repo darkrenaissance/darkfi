@@ -31,10 +31,13 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use futures::future::join_all;
-use log::{debug, error, warn};
+use futures::stream::FuturesUnordered;
+use log::{debug, info, warn};
 use num_bigint::BigUint;
-use smol::lock::RwLock;
+use smol::{
+    lock::{RwLock, Semaphore},
+    stream::StreamExt,
+};
 use structopt::StructOpt;
 use url::Url;
 
@@ -458,85 +461,112 @@ pub trait DhtHandler {
         bucket.nodes.push(n);
     }
 
-    // Find nodes closest to a key
+    /// Wait to acquire a semaphore, then run `self.fetch_nodes`.
+    /// This is meant to be used in `lookup_nodes`.
+    async fn fetch_nodes_sp(
+        &self,
+        semaphore: Arc<Semaphore>,
+        node: DhtNode,
+        key: &blake3::Hash,
+    ) -> (DhtNode, Result<Vec<DhtNode>>) {
+        let _permit = semaphore.acquire().await;
+        (node.clone(), self.fetch_nodes(&node, key).await)
+    }
+
+    /// Find `k` nodes closest to a key
     async fn lookup_nodes(&self, key: &blake3::Hash) -> Result<Vec<DhtNode>> {
-        debug!(target: "dht::DhtHandler::lookup_nodes()", "Starting node lookup for key {}", key);
+        info!(target: "dht::DhtHandler::lookup_nodes()", "Starting node lookup for key {}", bs58::encode(key.as_bytes()).into_string());
 
-        let k = self.dht().k;
-        let a = self.dht().alpha;
-        let mut visited_nodes = HashSet::new();
+        let k = self.dht().settings.k;
+        let a = self.dht().settings.alpha;
+        let semaphore = Arc::new(Semaphore::new(self.dht().settings.concurrency));
+        let mut futures = FuturesUnordered::new();
+
+        // Nodes we did not send a request to (yet), sorted by distance from `key`
         let mut nodes_to_visit = self.dht().find_neighbors(key, k).await;
-        let mut nearest_nodes: Vec<DhtNode> = vec![];
+        // Nodes with a pending request or a request completed
+        let mut visited_nodes = HashSet::<blake3::Hash>::new();
+        // Nodes that responded to our request, sorted by distance from `key`
+        let mut result = Vec::<DhtNode>::new();
 
-        while !nodes_to_visit.is_empty() {
-            let mut queries: Vec<DhtNode> = Vec::with_capacity(a);
-
-            // Get `alpha` nodes from `nodes_to_visit` which is sorted by distance
-            for _ in 0..a {
-                match nodes_to_visit.pop() {
-                    Some(node) => {
-                        queries.push(node);
-                    }
-                    None => {
-                        break;
-                    }
+        // Create the first `alpha` tasks
+        for _ in 0..a {
+            match nodes_to_visit.pop() {
+                Some(node) => {
+                    visited_nodes.insert(node.id);
+                    futures.push(self.fetch_nodes_sp(semaphore.clone(), node, key));
                 }
-            }
-
-            let mut tasks = Vec::with_capacity(queries.len());
-            for node in &queries {
-                // Avoid visiting the same node multiple times
-                if !visited_nodes.insert(node.id) {
-                    continue;
-                }
-
-                // Query the node for the value associated with the key
-                tasks.push(self.fetch_nodes(node, key));
-            }
-
-            let results = join_all(tasks).await;
-            for (i, value_result) in results.into_iter().enumerate() {
-                match value_result {
-                    Ok(mut nodes) => {
-                        // Remove ourselves from the new nodes
-                        nodes.retain(|node| node.id != self.dht().node_id);
-
-                        // Add each new node to our buckets
-                        for node in nodes.clone() {
-                            self.add_node(node).await;
-                        }
-
-                        // Add nodes to the list of nodes to visit
-                        nodes_to_visit.extend(nodes);
-                        self.dht().sort_by_distance(&mut nodes_to_visit, key);
-
-                        // Update nearest_nodes
-                        nearest_nodes.push(queries[i].clone());
-                        self.dht().sort_by_distance(&mut nearest_nodes, key);
-                    }
-                    Err(e) => {
-                        error!(target: "dht::DhtHandler::lookup_nodes", "{}", e);
-                    }
-                }
-            }
-
-            // Early termination check
-            // Stops if our furthest visited node is closer than the closest node we will query
-            if let Some(furthest) = nearest_nodes.last() {
-                if let Some(next_node) = nodes_to_visit.first() {
-                    let furthest_dist =
-                        BigUint::from_bytes_be(&self.dht().distance(key, &furthest.id));
-                    let next_dist =
-                        BigUint::from_bytes_be(&self.dht().distance(key, &next_node.id));
-                    if furthest_dist < next_dist {
-                        break;
-                    }
+                None => {
+                    break;
                 }
             }
         }
 
-        nearest_nodes.truncate(k);
-        return Ok(nearest_nodes)
+        while let Some((queried_node, value_result)) = futures.next().await {
+            match value_result {
+                Ok(mut nodes) => {
+                    info!(target: "dht::DhtHandler::lookup_nodes", "Queried {}, got {} nodes", bs58::encode(queried_node.id.as_bytes()).into_string(), nodes.len());
+
+                    // Remove ourselves and already known nodes from the new nodes
+                    nodes.retain(|node| {
+                        node.id != self.dht().node_id &&
+                            !visited_nodes.contains(&node.id) &&
+                            !nodes_to_visit.iter().any(|n| n.id == node.id)
+                    });
+
+                    // Add new nodes to our buckets
+                    for node in nodes.clone() {
+                        self.add_node(node).await;
+                    }
+
+                    // Add nodes to the list of nodes to visit
+                    nodes_to_visit.extend(nodes.clone());
+                    self.dht().sort_by_distance(&mut nodes_to_visit, key);
+
+                    // Update nearest_nodes
+                    result.push(queried_node.clone());
+                    self.dht().sort_by_distance(&mut result, key);
+
+                    // Early termination check:
+                    // Stop if our furthest visited node is closer than the closest node we will query,
+                    // and we already have `k` or more nodes in the result set
+                    if result.len() >= k {
+                        if let Some(furthest) = result.last() {
+                            if let Some(next_node) = nodes_to_visit.first() {
+                                let furthest_dist =
+                                    BigUint::from_bytes_be(&self.dht().distance(key, &furthest.id));
+                                let next_dist = BigUint::from_bytes_be(
+                                    &self.dht().distance(key, &next_node.id),
+                                );
+                                if furthest_dist < next_dist {
+                                    info!(target: "dht::DhtHandler::lookup_nodes", "Early termination for lookup nodes");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Create the `alpha` tasks
+                    for _ in 0..a {
+                        match nodes_to_visit.pop() {
+                            Some(node) => {
+                                visited_nodes.insert(node.id);
+                                futures.push(self.fetch_nodes_sp(semaphore.clone(), node, key));
+                            }
+                            None => {
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(target: "dht::DhtHandler::lookup_nodes", "Error looking for nodes: {}", e);
+                }
+            }
+        }
+
+        result.truncate(k);
+        return Ok(result.to_vec())
     }
 
     // Get an existing channel, or create a new one
