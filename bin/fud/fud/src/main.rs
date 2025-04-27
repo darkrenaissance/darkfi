@@ -709,12 +709,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let net_settings: NetSettings = args.net.into();
     let p2p = P2p::new(net_settings.clone(), ex.clone()).await?;
 
-    let external_addrs = net_settings.external_addrs;
-
-    if external_addrs.is_empty() {
-        warn!(target: "fud::realmain", "No external addresses, you won't be able to seed")
-    }
-
     info!("Starting dnet subs task");
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
     let dnet_sub_ = dnet_sub.clone();
@@ -873,6 +867,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         })
         .await;
     p2p.clone().start().await?;
+
+    let p2p_settings_lock = p2p.settings();
+    let p2p_settings = p2p_settings_lock.read().await;
+    if p2p_settings.external_addrs.is_empty() {
+        warn!(target: "fud::realmain", "No external addresses, you won't be able to seed")
+    }
+    drop(p2p_settings);
 
     info!(target: "fud", "Starting DHT tasks");
     let dht_channel_task = StoppableTask::new();
