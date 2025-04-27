@@ -38,7 +38,10 @@ use smol::{
 };
 use structopt_toml::{structopt::StructOpt, StructOptToml};
 
-use crate::rpc::FudEvent;
+use crate::{
+    dht::{DhtSettings, DhtSettingsOpt},
+    rpc::FudEvent,
+};
 use darkfi::{
     async_daemonize, cli_desc,
     geode::{hash_to_string, ChunkedFile, Geode},
@@ -103,13 +106,9 @@ struct Args {
     /// Default path to store downloaded files (defaults to <base_dir>/downloads)
     downloads_path: Option<String>,
 
-    #[structopt(short, long)]
+    #[structopt(short, long, default_value = "60")]
     /// Chunk transfer timeout in seconds
-    chunk_timeout: Option<u64>,
-
-    #[structopt(short, long)]
-    /// DHT requests timeout in seconds
-    dht_timeout: Option<u64>,
+    chunk_timeout: u64,
 
     #[structopt(flatten)]
     /// Network settings
@@ -118,6 +117,10 @@ struct Args {
     #[structopt(flatten)]
     /// JSON-RPC settings
     rpc: RpcSettingsOpt,
+
+    #[structopt(flatten)]
+    /// DHT settings
+    dht: DhtSettingsOpt,
 }
 
 pub struct Fud {
@@ -181,7 +184,7 @@ impl DhtHandler for Fud {
 
         channel.send(&request).await?;
 
-        let reply = msg_subscriber.receive_with_timeout(self.dht().timeout).await?;
+        let reply = msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await?;
 
         msg_subscriber.unsubscribe().await;
 
@@ -231,7 +234,7 @@ impl DhtHandler for Fud {
         let request = FudFindNodesRequest { key: *key };
         channel.send(&request).await?;
 
-        let reply = msg_subscriber_nodes.receive_with_timeout(self.dht().timeout).await?;
+        let reply = msg_subscriber_nodes.receive_with_timeout(self.dht().settings.timeout).await?;
 
         msg_subscriber_nodes.unsubscribe().await;
 
@@ -368,7 +371,8 @@ impl Fud {
                 continue;
             }
 
-            let reply = match msg_subscriber.receive_with_timeout(self.dht().timeout).await {
+            let reply = match msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await
+            {
                 Ok(reply) => reply,
                 Err(e) => {
                     warn!(target: "fud::fetch_seeders()", "Error waiting for reply: {}", e);
@@ -559,7 +563,8 @@ impl Fud {
                 continue;
             }
 
-            let reply = match msg_subscriber.receive_with_timeout(self.dht().timeout).await {
+            let reply = match msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await
+            {
                 Ok(reply) => reply,
                 Err(e) => {
                     warn!(target: "fud::fetch_file_metadata()", "Error waiting for reply: {}", e);
@@ -768,16 +773,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let (get_tx, get_rx) = smol::channel::unbounded();
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
     let (file_fetch_end_tx, file_fetch_end_rx) = smol::channel::unbounded();
-    // TODO: Add DHT settings in the config file
-    let dht = Arc::new(
-        Dht::new(&node_id_, 4, 16, args.dht_timeout.unwrap_or(5), p2p.clone(), ex.clone()).await,
-    );
+    let dht_settings: DhtSettings = args.dht.into();
+    let dht: Arc<Dht> = Arc::new(Dht::new(&node_id_, &dht_settings, p2p.clone(), ex.clone()).await);
     let fud = Arc::new(Fud {
         seeders_router,
         p2p: p2p.clone(),
         geode,
         downloads_path,
-        chunk_timeout: args.chunk_timeout.unwrap_or(60),
+        chunk_timeout: args.chunk_timeout,
         dht: dht.clone(),
         resources: Arc::new(RwLock::new(HashMap::new())),
         get_tx,

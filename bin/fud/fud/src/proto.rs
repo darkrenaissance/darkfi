@@ -279,7 +279,7 @@ impl ProtocolFud {
             }
 
             let reply = FudFindNodesReply {
-                nodes: self.fud.dht().find_neighbors(&request.key, self.fud.dht().k).await,
+                nodes: self.fud.dht().find_neighbors(&request.key, self.fud.dht().settings.k).await,
             };
             match self.channel.send(&reply).await {
                 Ok(()) => continue,

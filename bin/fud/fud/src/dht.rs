@@ -35,6 +35,7 @@ use futures::future::join_all;
 use log::{debug, error, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
+use structopt::StructOpt;
 use url::Url;
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
@@ -86,7 +87,58 @@ impl From<DhtNode> for DhtRouterItem {
     }
 }
 
-// TODO: Add a DhtSettings
+#[derive(Clone, Debug)]
+pub struct DhtSettings {
+    /// Number of nodes in a bucket
+    pub k: usize,
+    /// Number of lookup requests in a burst
+    pub alpha: usize,
+    /// Maximum number of parallel lookup requests
+    pub concurrency: usize,
+    /// Timeout in seconds
+    pub timeout: u64,
+}
+
+impl Default for DhtSettings {
+    fn default() -> Self {
+        Self { k: 16, alpha: 4, concurrency: 10, timeout: 5 }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
+#[structopt()]
+#[serde(rename = "dht")]
+pub struct DhtSettingsOpt {
+    /// Number of nodes in a DHT bucket
+    #[structopt(long)]
+    pub dht_k: Option<usize>,
+
+    /// Number of DHT lookup requests in a burst
+    #[structopt(long)]
+    pub dht_alpha: Option<usize>,
+
+    /// Maximum number of parallel DHT lookup requests
+    #[structopt(long)]
+    pub dht_concurrency: Option<usize>,
+
+    /// Timeout in seconds
+    #[structopt(long)]
+    pub dht_timeout: Option<u64>,
+}
+
+impl From<DhtSettingsOpt> for DhtSettings {
+    fn from(opt: DhtSettingsOpt) -> Self {
+        let def = DhtSettings::default();
+
+        Self {
+            k: opt.dht_k.unwrap_or(def.k),
+            alpha: opt.dht_alpha.unwrap_or(def.alpha),
+            concurrency: opt.dht_concurrency.unwrap_or(def.concurrency),
+            timeout: opt.dht_timeout.unwrap_or(def.timeout),
+        }
+    }
+}
+
 pub struct Dht {
     /// Our own node id
     pub node_id: blake3::Hash,
@@ -94,10 +146,6 @@ pub struct Dht {
     pub bootstrapped: Arc<RwLock<bool>>,
     /// Vec of buckets
     pub buckets: Arc<RwLock<Vec<DhtBucket>>>,
-    /// Number of parallel lookup requests
-    pub alpha: usize,
-    /// Number of nodes in a bucket
-    pub k: usize,
     /// Number of buckets
     pub n_buckets: usize,
     /// Channel ID -> Node ID
@@ -106,8 +154,8 @@ pub struct Dht {
     pub channel_cache: Arc<RwLock<HashMap<blake3::Hash, u32>>>,
     /// Node ID -> Set of keys
     pub router_cache: Arc<RwLock<HashMap<blake3::Hash, HashSet<blake3::Hash>>>>,
-    /// Seconds
-    pub timeout: u64,
+
+    pub settings: DhtSettings,
 
     pub p2p: P2pPtr,
     pub executor: ExecutorPtr,
@@ -115,9 +163,7 @@ pub struct Dht {
 impl Dht {
     pub async fn new(
         node_id: &blake3::Hash,
-        a: usize,
-        k: usize,
-        timeout: u64,
+        settings: &DhtSettings,
         p2p: P2pPtr,
         ex: ExecutorPtr,
     ) -> Self {
@@ -130,14 +176,13 @@ impl Dht {
         Self {
             node_id: *node_id,
             buckets: Arc::new(RwLock::new(buckets)),
-            bootstrapped: Arc::new(RwLock::new(false)),
-            alpha: a,
-            k,
             n_buckets: 256,
+            bootstrapped: Arc::new(RwLock::new(false)),
             node_cache: Arc::new(RwLock::new(HashMap::new())),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
             router_cache: Arc::new(RwLock::new(HashMap::new())),
-            timeout,
+
+            settings: settings.clone(),
 
             p2p: p2p.clone(),
             executor: ex,
@@ -371,7 +416,7 @@ pub trait DhtHandler {
         }
 
         // Bucket is full
-        if bucket.nodes.len() >= self.dht().k {
+        if bucket.nodes.len() >= self.dht().settings.k {
             // Ping the least recently seen node
             let channel = self.get_channel(&bucket.nodes[0]).await;
             if channel.is_ok() {
@@ -514,7 +559,7 @@ pub trait DhtHandler {
             let session_weak = Arc::downgrade(&self.dht().p2p.session_outbound());
 
             let connector = Connector::new(self.dht().p2p.settings(), session_weak);
-            let dur = Duration::from_secs(self.dht().timeout);
+            let dur = Duration::from_secs(self.dht().settings.timeout);
             let Ok(connect_res) = timeout(dur, connector.connect(&addr)).await else {
                 warn!(target: "dht::DhtHandler::get_channel()", "Timeout trying to connect to {}", addr);
                 return Err(Error::ConnectTimeout);

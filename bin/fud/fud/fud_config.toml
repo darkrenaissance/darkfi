@@ -9,11 +9,22 @@
 # Path to the contents directory
 base_dir = "~/.local/share/darkfi/fud"
 
-# Chunk transfer timeout in seconds
-chunk_timeout = 60
+## Chunk transfer timeout in seconds
+#chunk_timeout = 60
 
-# DHT requests timeout in seconds
-dht_timeout = 5
+# DHT settings
+[dht]
+## Number of nodes in a bucket
+#dht_k = 16
+
+## Number of lookup requests in a burst
+#dht_alpha = 4
+
+## Maximum number of parallel lookup requests
+#dht_concurrency = 10
+
+## Timeout in seconds
+#dht_timeout = 5
 
 # JSON-RPC settings
 [rpc]
