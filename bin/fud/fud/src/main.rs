@@ -574,7 +574,7 @@ impl Fud {
             };
 
             let mut seeders = reply.seeders.clone();
-            info!(target: "fud::fetch_file_metadata()", "Found {} seeders for {}", seeders.len(), hash_to_string(&file_hash));
+            info!(target: "fud::fetch_file_metadata()", "Found {} seeders for {} (from {})", seeders.len(), hash_to_string(&file_hash), hash_to_string(&node.id));
 
             msg_subscriber.unsubscribe().await;
 
