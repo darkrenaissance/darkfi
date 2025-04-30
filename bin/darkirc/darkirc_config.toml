@@ -82,8 +82,8 @@ hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
 seeds = [
     "tcp+tls://lilith0.dark.fi:25551",
     "tcp+tls://lilith1.dark.fi:25551",
-    #"tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
-    #"tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
+    #"tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
+    #"tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
 ]
 
 ## Manual peers to connect to
