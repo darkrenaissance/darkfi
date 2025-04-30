@@ -81,8 +81,8 @@ hostlist = "~/.local/share/darkfi/taud/hostlist.tsv"
 
 ## Seed nodes to connect to
 seeds = [
-    #"tcp+tls://lilith0.dark.fi:5363",
-    "tcp+tls://lilith1.dark.fi:5363",
+    "tcp+tls://lilith0.dark.fi:23331",
+    "tcp+tls://lilith1.dark.fi:23331",
     # "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5362"
     # "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5362"
 ]
