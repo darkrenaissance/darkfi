@@ -20,12 +20,13 @@ use async_trait::async_trait;
 use darkfi_serial::Encodable;
 use image::ImageReader;
 use miniquad::{MouseButton, TouchPhase};
+use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as SyncMutex, OnceLock, Weak,
+        Arc, Weak,
     },
 };
 
@@ -65,7 +66,7 @@ pub type EmojiPickerPtr = Arc<EmojiPicker>;
 pub struct EmojiPicker {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
     emoji_meshes: EmojiMeshesPtr,
@@ -108,7 +109,7 @@ impl EmojiPicker {
         let self_ = Arc::new(Self {
             node,
             render_api,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
 
             dc_key: OsRng.gen(),
             emoji_meshes,
@@ -144,7 +145,7 @@ impl EmojiPicker {
     }
 
     fn max_scroll(&self) -> f32 {
-        let emojis_len = self.emoji_meshes.lock().unwrap().get_list().len() as f32;
+        let emojis_len = self.emoji_meshes.lock().get_list().len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
         let rows = (emojis_len / cols).ceil();
@@ -178,7 +179,7 @@ impl EmojiPicker {
         //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
         let emoji_selected = {
-            let mut emoji_meshes = self.emoji_meshes.lock().unwrap();
+            let mut emoji_meshes = self.emoji_meshes.lock();
             let emoji_list = emoji_meshes.get_list();
 
             if idx < emoji_list.len() {
@@ -205,7 +206,7 @@ impl EmojiPicker {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("redraw({:?}) [timest={timest}, trace_id={trace_id}]", self.node.upgrade().unwrap());
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom) else {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
@@ -238,7 +239,7 @@ impl EmojiPicker {
         let off_x = self.calc_off_x();
         let emoji_size = self.emoji_size.get();
 
-        let mut emoji_meshes = self.emoji_meshes.lock().unwrap();
+        let mut emoji_meshes = self.emoji_meshes.lock();
         let emoji_list_len = emoji_meshes.get_list().len();
 
         let mut x = emoji_size / 2.;
@@ -290,7 +291,12 @@ impl UIObject for EmojiPicker {
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.z_index.prop(), redraw);
 
-        self.tasks.set(on_modify.tasks);
+        *self.tasks.lock() = on_modify.tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        self.emoji_meshes.lock().clear();
     }
 
     async fn draw(
@@ -300,7 +306,7 @@ impl UIObject for EmojiPicker {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("EmojiPicker::draw({parent_rect:?}, {trace_id})");
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id, atom)
     }
 
@@ -354,7 +360,7 @@ impl UIObject for EmojiPicker {
         // todo: clean this up
         let mut emoji_is_clicked = false;
         {
-            let mut touch_info = self.touch_info.lock().unwrap();
+            let mut touch_info = self.touch_info.lock();
             match phase {
                 TouchPhase::Started => {
                     if !rect.contains(touch_pos) {

@@ -20,9 +20,9 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use rand::{rngs::OsRng, Rng};
 use parking_lot::Mutex as SyncMutex;
-use std::sync::{atomic::Ordering, Arc, OnceLock, Weak};
+use rand::{rngs::OsRng, Rng};
+use std::sync::{atomic::Ordering, Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},

@@ -507,7 +507,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let emoji_meshes2 = emoji_meshes.clone();
     std::thread::spawn(move || {
         for i in (0..500).step_by(20) {
-            let mut emoji = emoji_meshes2.lock().unwrap();
+            let mut emoji = emoji_meshes2.lock();
             for j in i..(i + 20) {
                 emoji.get(j);
             }

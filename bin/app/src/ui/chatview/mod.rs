@@ -23,6 +23,7 @@ use chrono::{Local, TimeZone};
 use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
+use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
 use std::{
@@ -31,7 +32,7 @@ use std::{
     io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as SyncMutex, OnceLock, Weak,
+        Arc, Weak,
     },
 };
 
@@ -151,7 +152,7 @@ pub type ChatViewPtr = Arc<ChatView>;
 
 pub struct ChatView {
     node: SceneNodeWeak,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
 
@@ -181,7 +182,8 @@ pub struct ChatView {
 
     mouse_btn_held: AtomicBool,
 
-    /// Triggers the background loading task to wake up
+    /// Triggers the background loading task to wake up.
+    /// We use this since there should only ever be a single bg task loading.
     bgload_cv: Arc<CondVar>,
 
     /// We use it when we re-eval rect when its changed via property.
@@ -235,7 +237,7 @@ impl ChatView {
 
         let self_ = Arc::new(Self {
             node: node.clone(),
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
             render_api: render_api.clone(),
             text_shaper: text_shaper.clone(),
 
@@ -370,7 +372,7 @@ impl ChatView {
 
     fn end_touch_phase(&self, touch_y: f32) {
         // Now calculate scroll acceleration
-        let touch_info = std::mem::replace(&mut *self.touch_info.lock().unwrap(), None);
+        let touch_info = std::mem::replace(&mut *self.touch_info.lock(), None);
         let Some(touch_info) = &touch_info else { return };
 
         self.touch_is_active.store(false, Ordering::Relaxed);
@@ -710,7 +712,7 @@ impl ChatView {
     async fn redraw_all(&self) {
         let trace_id = rand::random();
         t!("ChatView::redraw_all() [trace_id={trace_id}]");
-        let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
+        let parent_rect = self.parent_rect.lock().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
 
         let mut msgbuf = self.msgbuf.lock().await;
@@ -806,7 +808,14 @@ impl UIObject for ChatView {
             vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];
         tasks.append(&mut on_modify.tasks);
 
-        self.tasks.set(tasks);
+        *self.tasks.lock() = tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
+        // Clear mesh caches
+        self.msgbuf.lock_blocking().clear();
     }
 
     async fn draw(
@@ -817,7 +826,7 @@ impl UIObject for ChatView {
     ) -> Option<DrawUpdate> {
         t!("ChatView::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
 
-        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
+        *self.parent_rect.lock() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
@@ -902,7 +911,7 @@ impl UIObject for ChatView {
         t!("handle_mouse_move({mouse_pos:?})");
 
         // We store the mouse pos for use in handle_mouse_wheel()
-        *self.mouse_pos.lock().unwrap() = mouse_pos.clone();
+        *self.mouse_pos.lock() = mouse_pos.clone();
 
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return false
@@ -924,7 +933,7 @@ impl UIObject for ChatView {
 
         let rect = self.rect.get();
 
-        let mouse_pos = self.mouse_pos.lock().unwrap().clone();
+        let mouse_pos = self.mouse_pos.lock().clone();
         if !rect.contains(mouse_pos) {
             t!("not inside rect");
             return false
@@ -948,7 +957,7 @@ impl UIObject for ChatView {
 
         if !rect.contains(touch_pos) {
             match phase {
-                TouchPhase::Started => *self.touch_info.lock().unwrap() = None,
+                TouchPhase::Started => *self.touch_info.lock() = None,
                 _ => self.end_touch_phase(touch_y),
             }
             return false
@@ -961,12 +970,12 @@ impl UIObject for ChatView {
             TouchPhase::Started => {
                 self.touch_is_active.store(true, Ordering::Relaxed);
 
-                let mut touch_info = self.touch_info.lock().unwrap();
+                let mut touch_info = self.touch_info.lock();
                 *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
             }
             TouchPhase::Moved => {
                 let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
-                    let mut touch_info = self.touch_info.lock().unwrap();
+                    let mut touch_info = self.touch_info.lock();
                     let Some(touch_info) = &mut *touch_info else { return false };
 
                     touch_info.last_y = touch_y;

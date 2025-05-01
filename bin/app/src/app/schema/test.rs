@@ -481,7 +481,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     layer_node.clone().link(node);
     */
 
-        /*
     // Text edit
     let node = create_chatedit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -554,5 +553,4 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         })
         .await;
     layer_node.clone().link(node);
-    */
 }

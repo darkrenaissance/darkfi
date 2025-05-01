@@ -27,12 +27,12 @@ use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
     io::Cursor,
+    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Weak,
     },
     time::Instant,
-    ops::{Deref, DerefMut}
 };
 
 use crate::{
@@ -1390,7 +1390,13 @@ impl UIObject for ChatEdit {
     fn init(&self) {
         let mut guard = self.editor.lock_blocking();
         assert!(guard.is_none());
-        *guard = Some(Editor::new(self.text.clone(), self.font_size.clone(), self.text_color.clone(), self.window_scale.clone(), self.lineheight.clone()));
+        *guard = Some(Editor::new(
+            self.text.clone(),
+            self.font_size.clone(),
+            self.text_color.clone(),
+            self.window_scale.clone(),
+            self.lineheight.clone(),
+        ));
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

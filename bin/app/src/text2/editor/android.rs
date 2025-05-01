@@ -24,7 +24,10 @@ use crate::{
     text2::{TextContext, TEXT_CTX},
     AndroidSuggestEvent,
 };
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "text::editor::android", $($arg)*) } }

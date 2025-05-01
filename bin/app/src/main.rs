@@ -63,7 +63,12 @@ mod text2;
 mod ui;
 mod util;
 
-use crate::{app::{App, AppPtr}, net::ZeroMQAdapter, text::TextShaper, util::AsyncRuntime};
+use crate::{
+    app::{App, AppPtr},
+    net::ZeroMQAdapter,
+    text::TextShaper,
+    util::AsyncRuntime,
+};
 
 // This is historical, but ideally we can fix the entire project and remove this import.
 pub use util::ExecutorPtr;
@@ -156,7 +161,7 @@ impl God {
 
             render_api,
             method_rep,
-            event_pub
+            event_pub,
         }
     }
 

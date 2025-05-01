@@ -18,10 +18,11 @@
 
 use async_trait::async_trait;
 use image::ImageReader;
+use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
+    sync::{Arc, Weak},
 };
 
 use crate::{
@@ -46,7 +47,7 @@ pub type ImagePtr = Arc<Image>;
 pub struct Image {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     texture: SyncMutex<Option<ManagedTexturePtr>>,
     dc_key: u64,
@@ -77,7 +78,7 @@ impl Image {
         let self_ = Arc::new(Self {
             node,
             render_api,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
 
             texture: SyncMutex::new(None),
             dc_key: OsRng.gen(),
@@ -91,14 +92,12 @@ impl Image {
             parent_rect: SyncMutex::new(None),
         });
 
-        *self_.texture.lock().unwrap() = Some(self_.load_texture());
-
         Pimpl::Image(self_)
     }
 
     async fn reload(self: Arc<Self>) {
         let texture = self.load_texture();
-        let old_texture = std::mem::replace(&mut *self.texture.lock().unwrap(), Some(texture));
+        *self.texture.lock() = Some(texture);
 
         self.clone().redraw().await;
     }
@@ -110,13 +109,13 @@ impl Image {
         let data = Arc::new(SyncMutex::new(vec![]));
         let data2 = data.clone();
         miniquad::fs::load_file(&path.clone(), move |res| match res {
-            Ok(res) => *data2.lock().unwrap() = res,
+            Ok(res) => *data2.lock() = res,
             Err(e) => {
                 error!(target: "ui::image", "Unable to open image: {path}");
                 panic!("Resource not found!");
             }
         });
-        let data = std::mem::take(&mut *data.lock().unwrap());
+        let data = std::mem::take(&mut *data.lock());
         let img =
             ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode().unwrap();
         let img = img.to_rgba8();
@@ -134,7 +133,7 @@ impl Image {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::image", "Image failed to draw");
@@ -160,7 +159,7 @@ impl Image {
         self.uv.eval(&rect).ok()?;
 
         let mesh = self.regen_mesh();
-        let texture = self.texture.lock().unwrap().clone().expect("Node missing texture_id!");
+        let texture = self.texture.lock().clone().expect("Node missing texture_id!");
 
         let mesh = GfxDrawMesh {
             vertex_buffer: mesh.vertex_buffer,
@@ -192,6 +191,10 @@ impl UIObject for Image {
         self.priority.get()
     }
 
+    fn init(&self) {
+        *self.texture.lock() = Some(self.load_texture());
+    }
+
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
@@ -201,7 +204,13 @@ impl UIObject for Image {
         on_modify.when_change(self.z_index.prop(), Self::redraw);
         on_modify.when_change(self.path.prop(), Self::reload);
 
-        self.tasks.set(on_modify.tasks);
+        *self.tasks.lock() = on_modify.tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
+        *self.texture.lock() = None;
     }
 
     async fn draw(
@@ -211,7 +220,7 @@ impl UIObject for Image {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("Image::draw() [trace_id={trace_id}]");
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await
     }
 }

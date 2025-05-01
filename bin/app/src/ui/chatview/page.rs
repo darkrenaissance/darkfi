@@ -707,6 +707,11 @@ impl MessageBuffer {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.msgs.clear();
+        self.date_msgs.clear();
+    }
+
     fn node(&self) -> SceneNodePtr {
         self.node.upgrade().unwrap()
     }

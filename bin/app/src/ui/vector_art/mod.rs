@@ -17,9 +17,9 @@
  */
 
 use async_trait::async_trait;
-use rand::{rngs::OsRng, Rng};
 use parking_lot::Mutex as SyncMutex;
-use std::sync::{Arc, OnceLock, Weak};
+use rand::{rngs::OsRng, Rng};
+use std::sync::{Arc, Weak};
 
 use crate::{
     error::{Error, Result},

@@ -18,11 +18,7 @@
 
 use miniquad::native::android::{self, ndk_sys, ndk_utils};
 use parking_lot::Mutex as SyncMutex;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::LazyLock
-};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use crate::AndroidSuggestEvent;
 

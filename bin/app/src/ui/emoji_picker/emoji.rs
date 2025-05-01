@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use parking_lot::Mutex as SyncMutex;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock, Mutex as SyncMutex},
+    sync::{Arc, LazyLock},
 };
 
 use crate::{
@@ -74,6 +75,10 @@ impl EmojiMeshes {
             emoji_list: LazyLock::new(load_emoji_list),
             meshes: vec![],
         }))
+    }
+
+    pub fn clear(&mut self) {
+        self.meshes.clear();
     }
 
     pub fn get(&mut self, i: usize) -> GfxDrawMesh {

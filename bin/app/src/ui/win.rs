@@ -68,9 +68,11 @@ impl Window {
             Role::Internal,
             "value",
             0,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let self_ = Arc::new(Self { node, tasks: SyncMutex::new(vec![]), screen_size, scale, render_api });
+        let self_ =
+            Arc::new(Self { node, tasks: SyncMutex::new(vec![]), screen_size, scale, render_api });
 
         Pimpl::Window(self_)
     }

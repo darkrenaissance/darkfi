@@ -80,13 +80,7 @@ impl App {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Arc<Self> {
-        Arc::new(Self {
-            sg_root,
-            ex,
-            render_api,
-            text_shaper,
-            tasks: SyncMutex::new(vec![]),
-        })
+        Arc::new(Self { sg_root, ex, render_api, text_shaper, tasks: SyncMutex::new(vec![]) })
     }
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
@@ -128,7 +122,6 @@ impl App {
         settings.load_settings();
 
         // Save app settings in sled when they change
-        /*
         for setting_node in settings.setting_root.get_children().iter() {
             let setting_sub = setting_node.get_property("value").unwrap().subscribe_modify();
             let settings2 = settings.clone();
@@ -139,7 +132,6 @@ impl App {
             });
             self.tasks.lock().unwrap().push(setting_task);
         }
-        */
 
         let window =
             window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
@@ -147,7 +139,7 @@ impl App {
         self.sg_root.clone().link(window.clone());
         self.sg_root.clone().link(setting_root.clone());
 
-        schema::test::make(&self, window.clone()).await;
+        schema::make(&self, window.clone()).await;
 
         d!("Schema loaded");
 
@@ -167,140 +159,138 @@ impl App {
     }
 
     /*
-    #[cfg(feature = "enable-plugins")]
-    async fn load_plugins(&self, plugin: SceneNodePtr) {
-        let darkirc = create_darkirc("darkirc");
-        let darkirc = darkirc
-            .setup(|me| async {
-                plugin::DarkIrc::new(me, self.ex.clone()).await.expect("DarkIrc pimpl setup")
-            })
-            .await;
+        #[cfg(feature = "enable-plugins")]
+        async fn load_plugins(&self, plugin: SceneNodePtr) {
+            let darkirc = create_darkirc("darkirc");
+            let darkirc = darkirc
+                .setup(|me| async {
+                    plugin::DarkIrc::new(me, self.ex.clone()).await.expect("DarkIrc pimpl setup")
+                })
+                .await;
 
-        let (slot, recvr) = Slot::new("recvmsg");
-        darkirc.register("recv", slot).unwrap();
-        let sg_root2 = self.sg_root.clone();
-        let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
-        let listen_recv = self.ex.spawn(async move {
-            while let Ok(data) = recvr.recv().await {
-                let atom = &mut PropertyAtomicGuard::new();
+            let (slot, recvr) = Slot::new("recvmsg");
+            darkirc.register("recv", slot).unwrap();
+            let sg_root2 = self.sg_root.clone();
+            let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
+            let listen_recv = self.ex.spawn(async move {
+                while let Ok(data) = recvr.recv().await {
+                    let atom = &mut PropertyAtomicGuard::new();
 
-                let mut cur = Cursor::new(&data);
-                let channel = String::decode(&mut cur).unwrap();
-                let timestamp = chatview::Timestamp::decode(&mut cur).unwrap();
-                let id = chatview::MessageId::decode(&mut cur).unwrap();
-                let nick = String::decode(&mut cur).unwrap();
-                let msg = String::decode(&mut cur).unwrap();
+                    let mut cur = Cursor::new(&data);
+                    let channel = String::decode(&mut cur).unwrap();
+                    let timestamp = chatview::Timestamp::decode(&mut cur).unwrap();
+                    let id = chatview::MessageId::decode(&mut cur).unwrap();
+                    let nick = String::decode(&mut cur).unwrap();
+                    let msg = String::decode(&mut cur).unwrap();
 
-                let node_path = format!("/window/{channel}_chat_layer/content/chatty");
-                t!("Attempting to relay message to {node_path}");
-                let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
-                    d!("Ignoring message since {node_path} doesn't exist");
-                    continue
-                };
+                    let node_path = format!("/window/{channel}_chat_layer/content/chatty");
+                    t!("Attempting to relay message to {node_path}");
+                    let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
+                        d!("Ignoring message since {node_path} doesn't exist");
+                        continue
+                    };
 
-                // I prefer to just re-encode because the code is clearer.
-                let mut data = vec![];
-                timestamp.encode(&mut data).unwrap();
-                id.encode(&mut data).unwrap();
-                nick.encode(&mut data).unwrap();
-                msg.encode(&mut data).unwrap();
-                if let Err(err) = chatview.call_method("insert_line", data).await {
-                    error!(
-                        target: "app",
-                        "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
-                    );
+                    // I prefer to just re-encode because the code is clearer.
+                    let mut data = vec![];
+                    timestamp.encode(&mut data).unwrap();
+                    id.encode(&mut data).unwrap();
+                    nick.encode(&mut data).unwrap();
+                    msg.encode(&mut data).unwrap();
+                    if let Err(err) = chatview.call_method("insert_line", data).await {
+                        error!(
+                            target: "app",
+                            "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
+                        );
+                    }
+
+                    // Apply coloring when you get a message
+                    let chat_path = format!("/window/{channel}_chat_layer");
+                    let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
+                    if chat_layer.get_property_bool("is_visible").unwrap() {
+                        continue
+                    }
+
+                    let node_path = format!("/window/menu_layer/{channel}_channel_label");
+                    let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
+                    let prop = menu_label.get_property("text_color").unwrap();
+                    if msg.contains(&darkirc_nick.get()) {
+                        // Nick highlight
+                        prop.clone().set_f32(atom, Role::App, 0, 0.56).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 1, 0.61).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                    } else {
+                        // Normal channel activity
+                        prop.clone().set_f32(atom, Role::App, 0, 0.36).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 2, 0.51).unwrap();
+                        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                    }
                 }
+            });
+            self.tasks.lock().unwrap().push(listen_recv);
 
-                // Apply coloring when you get a message
-                let chat_path = format!("/window/{channel}_chat_layer");
-                let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
-                if chat_layer.get_property_bool("is_visible").unwrap() {
-                    continue
-                }
+            let (slot, recvr) = Slot::new("connect");
+            darkirc.register("connect", slot).unwrap();
+            let sg_root2 = self.sg_root.clone();
+            let listen_connect = self.ex.spawn(async move {
+                let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
+                let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
+                let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
+                let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
 
-                let node_path = format!("/window/menu_layer/{channel}_channel_label");
-                let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
-                let prop = menu_label.get_property("text_color").unwrap();
-                if msg.contains(&darkirc_nick.get()) {
-                    // Nick highlight
-                    prop.clone().set_f32(atom, Role::App, 0, 0.56).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 0.61).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-                } else {
-                    // Normal channel activity
-                    prop.clone().set_f32(atom, Role::App, 0, 0.36).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 2, 0.51).unwrap();
-                    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
-                }
-            }
-        });
-        self.tasks.lock().unwrap().push(listen_recv);
+                let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
+                let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
+                let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
+                let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
 
-        let (slot, recvr) = Slot::new("connect");
-        darkirc.register("connect", slot).unwrap();
-        let sg_root2 = self.sg_root.clone();
-        let listen_connect = self.ex.spawn(async move {
-            let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
-            let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
-            let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
-            let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
+                while let Ok(data) = recvr.recv().await {
+                    let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-            let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
-            let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
-            let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
-            let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
+                    let atom = &mut PropertyAtomicGuard::new();
 
-            while let Ok(data) = recvr.recv().await {
-                let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
+                    if peers_count == 0 {
+                        net0_is_visible.set(atom, true);
+                        net1_is_visible.set(atom, false);
+                        net2_is_visible.set(atom, false);
+                        net3_is_visible.set(atom, false);
+                        continue
+                    }
 
-                let atom = &mut PropertyAtomicGuard::new();
+                    assert!(peers_count > 0);
+                    if !is_dag_synced {
+                        net0_is_visible.set(atom, false);
+                        net1_is_visible.set(atom, true);
+                        net2_is_visible.set(atom, false);
+                        net3_is_visible.set(atom, false);
+                        continue
+                    }
 
-                if peers_count == 0 {
-                    net0_is_visible.set(atom, true);
+                    assert!(peers_count > 0 && is_dag_synced);
+                    if peers_count == 1 {
+                        net0_is_visible.set(atom, false);
+                        net1_is_visible.set(atom, false);
+                        net2_is_visible.set(atom, true);
+                        net3_is_visible.set(atom, false);
+                        continue
+                    }
+
+                    net0_is_visible.set(atom, false);
                     net1_is_visible.set(atom, false);
                     net2_is_visible.set(atom, false);
-                    net3_is_visible.set(atom, false);
-                    continue
+                    net3_is_visible.set(atom, true);
                 }
+            });
+            self.tasks.lock().unwrap().push(listen_connect);
 
-                assert!(peers_count > 0);
-                if !is_dag_synced {
-                    net0_is_visible.set(atom, false);
-                    net1_is_visible.set(atom, true);
-                    net2_is_visible.set(atom, false);
-                    net3_is_visible.set(atom, false);
-                    continue
-                }
+            plugin.link(darkirc);
 
-                assert!(peers_count > 0 && is_dag_synced);
-                if peers_count == 1 {
-                    net0_is_visible.set(atom, false);
-                    net1_is_visible.set(atom, false);
-                    net2_is_visible.set(atom, true);
-                    net3_is_visible.set(atom, false);
-                    continue
-                }
-
-                net0_is_visible.set(atom, false);
-                net1_is_visible.set(atom, false);
-                net2_is_visible.set(atom, false);
-                net3_is_visible.set(atom, true);
-            }
-        });
-        self.tasks.lock().unwrap().push(listen_connect);
-
-        plugin.link(darkirc);
-
-        i!("Plugins loaded");
-    }
-*/
+            i!("Plugins loaded");
+        }
+    */
 
     /// Begins the draw of the tree, and then starts the UI procs.
-    pub async fn start(self: Arc<Self>,
-        event_pub: GraphicsEventPublisherPtr
-        ) {
+    pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr) {
         d!("Starting app");
         let atom = &mut PropertyAtomicGuard::new();
 
@@ -344,9 +334,7 @@ impl App {
             _ => panic!("wrong pimpl"),
         }
     }
-    async fn start_procs(&self,
-        event_pub: GraphicsEventPublisherPtr
-        ) {
+    async fn start_procs(&self, event_pub: GraphicsEventPublisherPtr) {
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.clone().start(event_pub, self.ex.clone()).await,

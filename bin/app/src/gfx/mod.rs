@@ -43,11 +43,11 @@ pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
 
 use crate::{
-    GOD,
     app::AppPtr,
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
-    util::{AsyncRuntime, ansi_texture},
+    util::{ansi_texture, AsyncRuntime},
+    GOD,
 };
 
 // This is very noisy so suppress output by default
@@ -645,8 +645,7 @@ struct Stage {
 }
 
 impl Stage {
-    pub fn new(
-    ) -> Self {
+    pub fn new() -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         // This will start the app to start. Needed since we cannot get window size for init
@@ -931,8 +930,7 @@ impl EventHandler for Stage {
     }
 }
 
-pub fn run_gui(
-) {
+pub fn run_gui() {
     let mut window_width = 1024;
     let mut window_height = 768;
     if let Ok(mut file) = File::open(get_window_size_filename()) {
@@ -963,7 +961,5 @@ pub fn run_gui(
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || {
-        Box::new(Stage::new())
-    });
+    miniquad::start(conf, || Box::new(Stage::new()));
 }
