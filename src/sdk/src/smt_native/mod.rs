@@ -1,6 +1,7 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2025 Dyne.org foundation
+ * Copyright (C) 2021 MONOLOG (Taeho Francis Lim and Jongwhan Lee) MIT License
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,45 +17,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub use bridgetree;
-pub use num_bigint;
-pub use num_traits;
-pub use pasta_curves as pasta;
+/// Size of fixed length byte-array from a `Hasher`.
+/// Equivalent to `key` length of the tree.
+pub const HASH_LEN: usize = 32;
 
-/// Blockchain structures
-pub mod blockchain;
+/// A type representing length of `Bits`
+pub type BitsLen = u16;
 
-/// DarkTree structures
-pub mod dark_tree;
+/// Type indicating fixed length byte-array.
+pub type Hash = [u8; HASH_LEN];
 
-/// Native (non-wasm, non-ff) Sparse Merkle Tree
-pub mod smt_native;
+/// Type representing a Merkle proof
+pub type Proof = Vec<(bool, Vec<u8>)>;
 
-/// Contract deployment utilities
-pub mod deploy;
+/// The key to be used to restore the latest `root`
+pub const ROOT_KEY: &Hash = b"_______monotree::headroot_______";
 
-/// Error handling
-pub mod error;
-pub use error::{ContractError, GenericResult};
+pub mod bits;
 
-/// Hex encoding/decoding from bytes
-pub mod hex;
-pub use hex::AsHex;
+pub mod node;
 
-/// Logging infrastructure
-pub mod log;
+pub mod tree;
+pub use tree::Monotree;
 
-/// Crypto-related definitions
-pub mod crypto;
+pub mod utils;
 
-/// Transaction structure
-pub mod tx;
-pub use tx::ContractCall;
-
-/// Convenience utilities
-pub mod util;
-
-#[macro_use]
-#[cfg(feature = "wasm")]
-/// WASM API functions
-pub mod wasm;
+#[cfg(test)]
+mod tests;

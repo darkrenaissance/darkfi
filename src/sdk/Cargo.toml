@@ -25,6 +25,7 @@ darkfi-serial = {version = "0.4.2", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.1"
+num = "0.4.3"
 sha2 = "0.10.8"
 
 # Cryptography
@@ -37,15 +38,16 @@ num-bigint = "0.4.6"
 num-traits = "0.2.19"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
+rand = "0.8.5"
 
 # Misc
 lazy_static = "1.5.0"
 subtle = "2.6.1"
+hashbrown = "0.15.3"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.1", features = ["test-dependencies"]}
-rand = "0.8.5"
 
 [lints]
 workspace = true
