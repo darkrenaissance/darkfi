@@ -1,3 +1,4 @@
+from tabulate import tabulate
 q = 11
 k = 3
 d0 = q - k + 1
@@ -11,19 +12,23 @@ K = GF(q)
 F.<z> = K[]
 
 V = VectorSpace(K, n)
-C = V.subspace([
+M = V.subspace([
     [1, 0, 0, 0, 0, 0, 0],
     [0, 1, 0, 0, 0, 0, 0],
     [0, 0, 1, 0, 0, 0, 0],
 ])
-for c in C:
-    f = c[0] + c[1]*z + c[2]*z^2
+table = []
+for m in M:
+    f = m[0] + m[1]*z + m[2]*z^2
 
-    w = vector(f(β) for β in list(K)[:n])
-    assert len(w) == n
+    c = vector(f(β) for β in list(K)[:n])
+    assert len(c) == n
 
-    if w.is_zero():
+    if c.is_zero():
         continue
 
-    assert d <= w.hamming_weight()
+    table.append((c, c.hamming_weight()))
+    assert d <= c.hamming_weight()
 
+print(tabulate(table))
+print(d)

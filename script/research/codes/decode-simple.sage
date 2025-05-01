@@ -25,16 +25,17 @@ c[1] = 0
 table = []
 count = 0
 total = 0
-for (i0, i1) in itertools.permutations(range(n), int(2)):
-    g = R.lagrange_polynomial([(α^i0, c[i0]), (α^i1, c[i1])])
-    table.append([
-        (i0, i1),
-        g,
-        "*" if f == g else None
-    ])
-    if f == g:
-        count += 1
-    total += 1
+for i0 in range(n):
+    for i1 in range(i0+1, n):
+        g = R.lagrange_polynomial([(α^i0, c[i0]), (α^i1, c[i1])])
+        table.append([
+            (i0, i1),
+            g,
+            "*" if f == g else None
+        ])
+        if f == g:
+            count += 1
+        total += 1
 print(tabulate(table))
 print(f"{count} / {total}")
 
