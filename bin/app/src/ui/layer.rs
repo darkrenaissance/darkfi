@@ -21,7 +21,8 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
-use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, OnceLock, Weak};
+use parking_lot::Mutex as SyncMutex;
+use std::sync::{atomic::Ordering, Arc, OnceLock, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
@@ -46,7 +47,7 @@ pub type LayerPtr = Arc<Layer>;
 pub struct Layer {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     dc_key: u64,
 
     is_visible: PropertyBool,
@@ -72,7 +73,7 @@ impl Layer {
         let self_ = Arc::new(Self {
             node,
             render_api,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
             is_visible,
@@ -96,7 +97,7 @@ impl Layer {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("Layer::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom).await else {
             error!(target: "ui::layer", "Layer failed to draw [trace_id={trace_id}]");
@@ -155,6 +156,13 @@ impl UIObject for Layer {
         self.priority.get()
     }
 
+    fn init(&self) {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.init();
+        }
+    }
+
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
@@ -163,11 +171,20 @@ impl UIObject for Layer {
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
 
-        self.tasks.set(on_modify.tasks);
+        *self.tasks.lock() = on_modify.tasks;
 
         for child in self.get_children() {
             let obj = get_ui_object_ptr(&child);
             obj.start(ex.clone()).await;
+        }
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.stop();
         }
     }
 
@@ -178,7 +195,7 @@ impl UIObject for Layer {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("Layer::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
 
         /*
         if !parent_rect.dim().contains(&offset_rect) {

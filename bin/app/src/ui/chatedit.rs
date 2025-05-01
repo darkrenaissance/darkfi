@@ -29,9 +29,10 @@ use std::{
     io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, OnceLock, Weak,
+        Arc, Weak,
     },
     time::Instant,
+    ops::{Deref, DerefMut}
 };
 
 use crate::{
@@ -198,17 +199,28 @@ impl std::fmt::Debug for Editor {
 }
 */
 
-enum ColoringState {
-    Start,
-    IsCommand,
-    Normal,
+struct EditorHandle<'a> {
+    guard: async_lock::MutexGuard<'a, Option<Editor>>,
+}
+
+impl<'a> Deref for EditorHandle<'a> {
+    type Target = Editor;
+
+    fn deref(&self) -> &Self::Target {
+        self.guard.as_ref().unwrap()
+    }
+}
+impl<'a> DerefMut for EditorHandle<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard.as_mut().unwrap()
+    }
 }
 
 pub type ChatEditPtr = Arc<ChatEdit>;
 
 pub struct ChatEdit {
     node: SceneNodeWeak,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
@@ -269,7 +281,7 @@ pub struct ChatEdit {
     parent_rect: SyncMutex<Option<Rectangle>>,
     is_mouse_hover: AtomicBool,
 
-    editor: AsyncMutex<Editor>,
+    editor: AsyncMutex<Option<Editor>>,
 }
 
 impl ChatEdit {
@@ -333,7 +345,7 @@ impl ChatEdit {
 
         let self_ = Arc::new(Self {
             node,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
             render_api,
             text_shaper: text_shaper.clone(),
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
@@ -391,9 +403,7 @@ impl ChatEdit {
             parent_rect: SyncMutex::new(None),
             is_mouse_hover: AtomicBool::new(false),
 
-            editor: AsyncMutex::new(
-                Editor::new(text, font_size, text_color, window_scale, lineheight).await,
-            ),
+            editor: AsyncMutex::new(None),
         });
 
         Pimpl::ChatEdit(self_)
@@ -436,6 +446,11 @@ impl ChatEdit {
         // Arbitrary little space at the bottom
         max_scroll += self.font_size.get() / 3.;
         max_scroll
+    }
+
+    /// Lazy-initializes the editor and returns a handle to it
+    async fn lock_editor<'a>(&'a self) -> EditorHandle<'a> {
+        EditorHandle { guard: self.editor.lock().await }
     }
 
     fn regen_cursor_mesh(&self) -> GfxDrawMesh {
@@ -514,7 +529,7 @@ impl ChatEdit {
         let key_str = key.encode_utf8(&mut tmp);
 
         let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
         drv.insert_or_replace_selection(&key_str);
     }
@@ -534,7 +549,7 @@ impl ChatEdit {
         let action_mod = mods.logo;
 
         let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
 
         match key {
@@ -582,7 +597,7 @@ impl ChatEdit {
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
 
         let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
 
         match key {
@@ -687,7 +702,7 @@ impl ChatEdit {
     async fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         t!("start_touch_select({touch_pos:?})");
 
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         editor.select_word_at_point(touch_pos);
         editor.refresh(atom).await;
 
@@ -722,7 +737,7 @@ impl ChatEdit {
     }
 
     async fn get_select_handles(&self) -> Option<(Point, Point)> {
-        let editor = self.editor.lock().await;
+        let editor = self.lock_editor().await;
         let layout = editor.layout();
 
         let sel = editor.selection();
@@ -816,7 +831,7 @@ impl ChatEdit {
                 let handle_descent = self.handle_descent.get();
                 self.abs_to_local(&mut touch_pos);
 
-                let editor = self.editor.lock().await;
+                let editor = self.lock_editor().await;
                 let sel = editor.selection();
 
                 assert!(*side == -1 || *side == 1);
@@ -897,7 +912,7 @@ impl ChatEdit {
     async fn touch_set_cursor_pos(&self, mut touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         editor.move_to_pos(touch_pos);
         editor.refresh(atom).await;
         drop(editor);
@@ -1040,7 +1055,7 @@ impl ChatEdit {
 
         let mut cursor_instrs = vec![];
 
-        let mut cursor_pos = self.editor.lock().await.get_cursor_pos();
+        let mut cursor_pos = self.lock_editor().await.get_cursor_pos();
         cursor_pos += self.inner_pos();
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
@@ -1074,7 +1089,7 @@ impl ChatEdit {
     async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
         let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
 
-        let editor = self.editor.lock().await;
+        let editor = self.lock_editor().await;
         let layout = editor.layout();
 
         let mut render_instrs = text2::render_layout(layout, &self.render_api);
@@ -1088,7 +1103,7 @@ impl ChatEdit {
 
         let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
 
-        let editor = self.editor.lock().await;
+        let editor = self.lock_editor().await;
         let layout = editor.layout();
 
         let sel = editor.selection();
@@ -1114,7 +1129,7 @@ impl ChatEdit {
 
         let scroll = self.scroll.get();
 
-        let editor = self.editor.lock().await;
+        let editor = self.lock_editor().await;
         let layout = editor.layout();
 
         let sel = editor.selection();
@@ -1162,7 +1177,7 @@ impl ChatEdit {
         // Use the width to adjust the height calcs
         let rect_w = self.rect.get_width();
         let content_height = {
-            let mut editor = self.editor.lock().await;
+            let mut editor = self.lock_editor().await;
             editor.set_width(rect_w);
             editor.refresh(atom).await;
             editor.height()
@@ -1301,7 +1316,7 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.editor.lock().await;
+        let mut editor = self_.lock_editor().await;
         editor.focus();
         true
     }
@@ -1320,7 +1335,7 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.editor.lock().await;
+        let mut editor = self_.lock_editor().await;
         editor.unfocus();
         true
     }
@@ -1331,7 +1346,7 @@ impl ChatEdit {
             return
         }
 
-        let mut editor = self.editor.lock().await;
+        let mut editor = self.lock_editor().await;
         match ev {
             AndroidSuggestEvent::Init => {
                 editor.init();
@@ -1370,6 +1385,12 @@ impl Drop for ChatEdit {
 impl UIObject for ChatEdit {
     fn priority(&self) -> u32 {
         self.priority.get()
+    }
+
+    fn init(&self) {
+        let mut guard = self.editor.lock_blocking();
+        assert!(guard.is_none());
+        *guard = Some(Editor::new(self.text.clone(), self.font_size.clone(), self.text_color.clone(), self.window_scale.clone(), self.lineheight.clone()));
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
@@ -1483,7 +1504,7 @@ impl UIObject for ChatEdit {
 
         #[cfg(target_os = "android")]
         {
-            let recvr = self.editor.lock().await.recvr.take().unwrap();
+            let recvr = self.lock_editor().await.recvr.clone();
             let me2 = me.clone();
             let autosuggest_task = ex.spawn(async move {
                 loop {
@@ -1503,7 +1524,16 @@ impl UIObject for ChatEdit {
             tasks.push(autosuggest_task);
         }
 
-        self.tasks.set(tasks);
+        *self.tasks.lock() = tasks;
+    }
+
+    fn stop(&self) {
+        t!("stopping chatedit");
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
+        self.key_repeat.lock().clear();
+        *self.cursor_mesh.lock() = None;
+        *self.editor.lock_blocking() = None;
     }
 
     async fn draw(
@@ -1627,7 +1657,7 @@ impl UIObject for ChatEdit {
 
         {
             let mut txt_ctx = text2::TEXT_CTX.get().await;
-            let mut editor = self.editor.lock().await;
+            let mut editor = self.lock_editor().await;
             let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
             drv.move_to_point(mouse_pos.x, mouse_pos.y);
         }
@@ -1677,7 +1707,7 @@ impl UIObject for ChatEdit {
 
         let seltext = {
             let mut txt_ctx = text2::TEXT_CTX.get().await;
-            let mut editor = self.editor.lock().await;
+            let mut editor = self.lock_editor().await;
             let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
             drv.extend_selection_to_point(mouse_pos.x, mouse_pos.y);
             editor.selected_text()

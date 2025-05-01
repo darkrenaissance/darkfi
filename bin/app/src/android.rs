@@ -17,10 +17,11 @@
  */
 
 use miniquad::native::android::{self, ndk_sys, ndk_utils};
+use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{LazyLock, Mutex as SyncMutex},
+    sync::LazyLock
 };
 
 use crate::AndroidSuggestEvent;
@@ -62,12 +63,18 @@ struct GlobalData {
 }
 
 fn send(id: usize, ev: AndroidSuggestEvent) {
-    let globals = &GLOBALS.lock().unwrap();
+    let globals = &GLOBALS.lock();
     let Some(sender) = globals.senders.get(&id) else {
         warn!(target: "android", "Unknown composer_id={id} discard ev: {ev:?}");
         return
     };
     let _ = sender.try_send(ev);
+}
+
+pub fn clear_state() {
+    let mut globals = &mut GLOBALS.lock();
+    globals.senders.clear();
+    globals.next_id = 0;
 }
 
 unsafe impl Send for GlobalData {}
@@ -159,7 +166,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onDeleteSurround
 
 pub fn create_composer(sender: async_channel::Sender<AndroidSuggestEvent>) -> usize {
     let composer_id = {
-        let mut globals = GLOBALS.lock().unwrap();
+        let mut globals = GLOBALS.lock();
         let id = globals.next_id;
         globals.next_id += 1;
         globals.senders.insert(id, sender);

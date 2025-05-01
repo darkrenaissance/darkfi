@@ -18,7 +18,8 @@
 
 use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
+use parking_lot::Mutex as SyncMutex;
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::{
     error::{Error, Result},
@@ -49,7 +50,7 @@ pub type VectorArtPtr = Arc<VectorArt>;
 pub struct VectorArt {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     shape: VectorShape,
     dc_key: u64,
@@ -83,7 +84,7 @@ impl VectorArt {
         let self_ = Arc::new(Self {
             node,
             render_api,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
 
             shape,
             dc_key: OsRng.gen(),
@@ -107,7 +108,7 @@ impl VectorArt {
         let trace_id = rand::random();
         let timest = unixtime();
         trace!(target: "ui::vector_art", "VectorArt::redraw({}) [trace_id={trace_id}]", self.node_path());
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::vector_art", "Mesh failed to draw [trace_id={trace_id}]");
@@ -168,7 +169,12 @@ impl UIObject for VectorArt {
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
 
-        self.tasks.set(on_modify.tasks);
+        *self.tasks.lock() = on_modify.tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
     }
 
     async fn draw(
@@ -178,7 +184,7 @@ impl UIObject for VectorArt {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("VectorArt::draw({}) [trace_id={trace_id}]", self.node_path());
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await
     }
 }

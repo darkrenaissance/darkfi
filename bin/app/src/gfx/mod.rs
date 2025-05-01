@@ -43,10 +43,11 @@ pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
 
 use crate::{
-    app::{AppPtr, AsyncRuntime},
+    GOD,
+    app::AppPtr,
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
-    util::ansi_texture,
+    util::{AsyncRuntime, ansi_texture},
 };
 
 // This is very noisy so suppress output by default
@@ -127,21 +128,35 @@ impl std::fmt::Debug for ManagedBuffer {
     }
 }
 
+pub type EpochIndex = u32;
+
 #[derive(Clone)]
 pub struct RenderApi {
-    method_req: mpsc::Sender<GraphicsMethod>,
+    /// We are abusing async_channel since it's cloneable whereas std::sync::mpsc is shit.
+    method_req: async_channel::Sender<(EpochIndex, GraphicsMethod)>,
+    /// Keep track of the current UI epoch
+    epoch: Arc<AtomicU32>,
 }
 
 impl RenderApi {
-    pub fn new(method_req: mpsc::Sender<GraphicsMethod>) -> Self {
-        Self { method_req }
+    pub fn new(method_req: async_channel::Sender<(EpochIndex, GraphicsMethod)>) -> Self {
+        Self { method_req, epoch: Arc::new(AtomicU32::new(0)) }
+    }
+
+    fn next_epoch(&self) -> EpochIndex {
+        self.epoch.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    fn send(&self, method: GraphicsMethod) {
+        let epoch = self.epoch.load(Ordering::Relaxed);
+        let _ = self.method_req.try_send((epoch, method)).unwrap();
     }
 
     fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
-        let _ = self.method_req.send(method);
+        self.send(method);
 
         gfx_texture_id
     }
@@ -155,14 +170,14 @@ impl RenderApi {
 
     fn delete_unmanaged_texture(&self, texture: GfxTextureId) {
         let method = GraphicsMethod::DeleteTexture(texture);
-        let _ = self.method_req.send(method);
+        self.send(method);
     }
 
     fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
-        let _ = self.method_req.send(method);
+        self.send(method);
 
         gfx_buffer_id
     }
@@ -171,7 +186,7 @@ impl RenderApi {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
-        let _ = self.method_req.send(method);
+        self.send(method);
 
         gfx_buffer_id
     }
@@ -191,12 +206,12 @@ impl RenderApi {
 
     fn delete_unmanaged_buffer(&self, buffer: GfxBufferId) {
         let method = GraphicsMethod::DeleteBuffer(buffer);
-        let _ = self.method_req.send(method);
+        self.send(method);
     }
 
     pub fn replace_draw_calls(&self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
         let method = GraphicsMethod::ReplaceDrawCalls { timest, dcs };
-        let _ = self.method_req.send(method);
+        self.send(method);
     }
 }
 
@@ -616,11 +631,6 @@ impl GraphicsEventPublisher {
 }
 
 struct Stage {
-    #[allow(dead_code)]
-    app: AppPtr,
-    #[allow(dead_code)]
-    async_runtime: AsyncRuntime,
-
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
@@ -629,23 +639,27 @@ struct Stage {
     textures: HashMap<GfxTextureId, miniquad::TextureId>,
     buffers: HashMap<GfxBufferId, miniquad::BufferId>,
 
-    method_rep: mpsc::Receiver<GraphicsMethod>,
+    epoch: EpochIndex,
+    method_rep: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
 }
 
 impl Stage {
     pub fn new(
-        app: AppPtr,
-        async_runtime: AsyncRuntime,
-        method_rep: mpsc::Receiver<GraphicsMethod>,
-        event_pub: GraphicsEventPublisherPtr,
-        cv_started: Arc<CondVar>,
     ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         // This will start the app to start. Needed since we cannot get window size for init
         // until window is created.
-        cv_started.notify();
+        let god = GOD.get().unwrap();
+        god.start_app();
+
+        // Start a new epoch. This is a brand new UI run.
+        let epoch = god.render_api.next_epoch();
+
+        let method_rep = god.method_rep.clone();
+        let event_pub = god.event_pub.clone();
+        drop(god);
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -687,8 +701,6 @@ impl Stage {
         );
 
         Stage {
-            app,
-            async_runtime,
             ctx,
             pipeline,
             white_texture,
@@ -696,8 +708,11 @@ impl Stage {
                 0,
                 DrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
             )]),
+
             textures: HashMap::new(),
             buffers: HashMap::new(),
+
+            epoch,
             method_rep,
             event_pub,
         }
@@ -820,7 +835,13 @@ impl Stage {
 impl EventHandler for Stage {
     fn update(&mut self) {
         // Process as many methods as we can
-        while let Ok(method) = self.method_rep.try_recv() {
+        while let Ok((epoch, method)) = self.method_rep.try_recv() {
+            if epoch < self.epoch {
+                // Discard old rubbish
+                trace!(target: "gfx", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
+                continue
+            }
+            assert_eq!(epoch, self.epoch);
             self.process_method(method);
         }
     }
@@ -905,19 +926,12 @@ impl EventHandler for Stage {
 
     fn quit_requested_event(&mut self) {
         debug!(target: "gfx", "quit requested");
-        // Doesn't work
-        //miniquad::window::cancel_quit();
-        //self.app.stop();
-        //self.async_runtime.stop();
+        let god = GOD.get().unwrap();
+        god.stop_app();
     }
 }
 
 pub fn run_gui(
-    app: AppPtr,
-    async_runtime: AsyncRuntime,
-    method_rep: mpsc::Receiver<GraphicsMethod>,
-    event_pub: GraphicsEventPublisherPtr,
-    cv_started: Arc<CondVar>,
 ) {
     let mut window_width = 1024;
     let mut window_height = 768;
@@ -950,6 +964,6 @@ pub fn run_gui(
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
     miniquad::start(conf, || {
-        Box::new(Stage::new(app, async_runtime, method_rep, event_pub, cv_started))
+        Box::new(Stage::new())
     });
 }

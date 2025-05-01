@@ -69,7 +69,12 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*)
 pub trait UIObject: Sync {
     fn priority(&self) -> u32;
 
+    fn init(&self) {}
+
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
+
+    /// Clear all buffers and caches
+    fn stop(&self) {}
 
     async fn draw(
         &self,

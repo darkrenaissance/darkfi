@@ -44,6 +44,10 @@ impl PressedKeysSmoothRepeat {
         Self { pressed_keys: HashMap::new(), start_delay, step_time }
     }
 
+    pub fn clear(&mut self) {
+        self.pressed_keys.clear()
+    }
+
     pub fn key_down(&mut self, key: PressedKey, repeat: bool) -> u32 {
         trace!(target: "PressedKeysSmoothRepeat", "key_down({:?}, {})", key, repeat);
 

@@ -18,7 +18,8 @@
 
 use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
+use parking_lot::Mutex as SyncMutex;
+use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{
@@ -54,7 +55,7 @@ pub struct Text {
     node: SceneNodeWeak,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
 
@@ -100,7 +101,7 @@ impl Text {
             node,
             render_api,
             text_shaper,
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
             rect,
@@ -144,7 +145,7 @@ impl Text {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("Text::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::text", "Text failed to draw [trace_id={trace_id}]");
@@ -188,7 +189,12 @@ impl UIObject for Text {
         on_modify.when_change(self.text_color.prop(), Self::redraw);
         on_modify.when_change(self.debug.prop(), Self::redraw);
 
-        self.tasks.set(on_modify.tasks);
+        *self.tasks.lock() = on_modify.tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
     }
 
     async fn draw(
@@ -198,7 +204,7 @@ impl UIObject for Text {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("Text::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await
     }
 }

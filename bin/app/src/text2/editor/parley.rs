@@ -53,6 +53,8 @@ impl Editor {
 
     pub fn init(&mut self) {}
     pub fn setup(&mut self) {}
+    pub fn focus(&self) {}
+    pub fn unfocus(&self) {}
 
     async fn refresh_layout(&mut self) {
         let font_size = self.font_size.get();
@@ -87,10 +89,10 @@ impl Editor {
         unimplemented!()
     }
 
-    pub fn get_cursor_pos(&self) -> Option<Point> {
+    pub fn get_cursor_pos(&self) -> Point {
         let cursor_rect = self.editor.cursor_geometry(0.).unwrap();
         let cursor_pos = Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32);
-        Some(cursor_pos)
+        cursor_pos
     }
 
     pub async fn driver<'a>(

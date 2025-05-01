@@ -30,8 +30,10 @@ use std::{
     thread,
 };
 
+#[cfg(target_os = "android")]
+use crate::android;
+
 use crate::{
-    android,
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
@@ -61,79 +63,11 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 //    println!("{}", std::any::type_name::<T>())
 //}
 
-pub struct AsyncRuntime {
-    signal: async_channel::Sender<()>,
-    shutdown: async_channel::Receiver<()>,
-    exec_threadpool: SyncMutex<Option<thread::JoinHandle<()>>>,
-    ex: ExecutorPtr,
-    tasks: SyncMutex<Vec<Task<()>>>,
-}
-
-impl AsyncRuntime {
-    pub fn new(ex: ExecutorPtr) -> Self {
-        let (signal, shutdown) = async_channel::unbounded::<()>();
-
-        Self {
-            signal,
-            shutdown,
-            exec_threadpool: SyncMutex::new(None),
-            ex,
-            tasks: SyncMutex::new(vec![]),
-        }
-    }
-
-    pub fn start(&self) {
-        let n_threads = thread::available_parallelism().unwrap().get();
-        let shutdown = self.shutdown.clone();
-        let ex = self.ex.clone();
-        let exec_threadpool = thread::spawn(move || {
-            easy_parallel::Parallel::new()
-                // N executor threads
-                .each(0..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-                .run();
-        });
-        *self.exec_threadpool.lock().unwrap() = Some(exec_threadpool);
-        info!(target: "async_runtime", "Started runtime [{n_threads} threads]");
-    }
-
-    pub fn push_task(&self, task: Task<()>) {
-        self.tasks.lock().unwrap().push(task);
-    }
-
-    pub fn stop(&self) {
-        // Go through event graph and call stop on everything
-        // Depth first
-        d!("Stopping async runtime...");
-
-        let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
-        // Close all tasks
-        smol::future::block_on(async {
-            // Perform cleanup code
-            // If not finished in certain amount of time, then just exit
-
-            let futures = FuturesUnordered::new();
-            for task in tasks {
-                futures.push(task.cancel());
-            }
-            let _: Vec<_> = futures.collect().await;
-        });
-
-        if !self.signal.close() {
-            error!(target: "app", "exec threadpool was already shutdown");
-        }
-        let exec_threadpool = std::mem::replace(&mut *self.exec_threadpool.lock().unwrap(), None);
-        let exec_threadpool = exec_threadpool.expect("threadpool wasnt started");
-        exec_threadpool.join().unwrap();
-        i!("Stopped app");
-    }
-}
-
 pub type AppPtr = Arc<App>;
 
 pub struct App {
     pub sg_root: SceneNodePtr,
     pub render_api: RenderApi,
-    pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
@@ -143,7 +77,6 @@ impl App {
     pub fn new(
         sg_root: SceneNodePtr,
         render_api: RenderApi,
-        event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Arc<Self> {
@@ -151,7 +84,6 @@ impl App {
             sg_root,
             ex,
             render_api,
-            event_pub,
             text_shaper,
             tasks: SyncMutex::new(vec![]),
         })
@@ -196,6 +128,7 @@ impl App {
         settings.load_settings();
 
         // Save app settings in sled when they change
+        /*
         for setting_node in settings.setting_root.get_children().iter() {
             let setting_sub = setting_node.get_property("value").unwrap().subscribe_modify();
             let settings2 = settings.clone();
@@ -206,6 +139,7 @@ impl App {
             });
             self.tasks.lock().unwrap().push(setting_task);
         }
+        */
 
         let window =
             window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
@@ -213,7 +147,7 @@ impl App {
         self.sg_root.clone().link(window.clone());
         self.sg_root.clone().link(setting_root.clone());
 
-        schema::make(&self, window.clone()).await;
+        schema::test::make(&self, window.clone()).await;
 
         d!("Schema loaded");
 
@@ -221,17 +155,18 @@ impl App {
         let plugin = plugin.setup_null();
         self.sg_root.clone().link(plugin.clone());
 
-        #[cfg(feature = "enable-plugins")]
-        self.load_plugins(plugin).await;
+        //#[cfg(feature = "enable-plugins")]
+        //self.load_plugins(plugin).await;
 
-        #[cfg(not(feature = "enable-plugins"))]
-        w!("Plugins are disabled in this build");
+        //#[cfg(not(feature = "enable-plugins"))]
+        //w!("Plugins are disabled in this build");
 
-        settings::make(&self, window, self.ex.clone()).await;
+        //settings::make(&self, window, self.ex.clone()).await;
 
         Ok(None)
     }
 
+    /*
     #[cfg(feature = "enable-plugins")]
     async fn load_plugins(&self, plugin: SceneNodePtr) {
         let darkirc = create_darkirc("darkirc");
@@ -360,9 +295,12 @@ impl App {
 
         i!("Plugins loaded");
     }
+*/
 
     /// Begins the draw of the tree, and then starts the UI procs.
-    pub async fn start(self: Arc<Self>) {
+    pub async fn start(self: Arc<Self>,
+        event_pub: GraphicsEventPublisherPtr
+        ) {
         d!("Starting app");
         let atom = &mut PropertyAtomicGuard::new();
 
@@ -376,16 +314,27 @@ impl App {
         drop(atom);
 
         // Access drawable in window node and call draw()
+        self.init();
         self.trigger_draw().await;
 
-        self.start_procs().await;
+        self.start_procs(event_pub).await;
         i!("App started");
     }
 
+    pub fn init(&self) {
+        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        match window_node.pimpl() {
+            Pimpl::Window(win) => win.init(),
+            _ => panic!("wrong pimpl"),
+        }
+    }
+
     pub fn stop(&self) {
-        smol::future::block_on(async {
-            self.async_stop().await;
-        });
+        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        match window_node.pimpl() {
+            Pimpl::Window(win) => win.stop(),
+            _ => panic!("wrong pimpl"),
+        }
     }
 
     async fn trigger_draw(&self) {
@@ -395,10 +344,12 @@ impl App {
             _ => panic!("wrong pimpl"),
         }
     }
-    async fn start_procs(&self) {
+    async fn start_procs(&self,
+        event_pub: GraphicsEventPublisherPtr
+        ) {
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
         match window_node.pimpl() {
-            Pimpl::Window(win) => win.clone().start(self.event_pub.clone(), self.ex.clone()).await,
+            Pimpl::Window(win) => win.clone().start(event_pub, self.ex.clone()).await,
             _ => panic!("wrong pimpl"),
         }
 
@@ -409,19 +360,6 @@ impl App {
                 _ => panic!("wrong pimpl"),
             }
         }
-    }
-
-    /// Shutdown code here
-    async fn async_stop(&self) {
-        //self.darkirc_backend.stop().await;
-    }
-}
-
-impl Drop for App {
-    fn drop(&mut self) {
-        t!("Dropping app");
-        // This hangs
-        //self.stop();
     }
 }
 

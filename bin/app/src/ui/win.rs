@@ -17,7 +17,8 @@
  */
 
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use std::sync::{Arc, OnceLock, Weak};
+use parking_lot::Mutex as SyncMutex;
+use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{
@@ -46,7 +47,7 @@ pub type WindowPtr = Arc<Window>;
 pub struct Window {
     node: SceneNodeWeak,
 
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
     render_api: RenderApi,
@@ -62,17 +63,23 @@ impl Window {
 
         let node_ref = &node.upgrade().unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
-        let scale_ = PropertyFloat32::wrap(
+        let scale = PropertyFloat32::wrap(
             &setting_root.clone().lookup_node("/scale").unwrap(),
             Role::Internal,
             "value",
             0,
-        );
-        let scale = scale_.unwrap();
+        ).unwrap();
 
-        let self_ = Arc::new(Self { node, tasks: OnceLock::new(), screen_size, scale, render_api });
+        let self_ = Arc::new(Self { node, tasks: SyncMutex::new(vec![]), screen_size, scale, render_api });
 
         Pimpl::Window(self_)
+    }
+
+    pub fn init(&self) {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.init();
+        }
     }
 
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, ex: ExecutorPtr) {
@@ -162,11 +169,19 @@ impl Window {
             touch_task,
         ];
         tasks.append(&mut on_modify.tasks);
-        self.tasks.set(tasks);
+        *self.tasks.lock() = tasks;
 
         for child in self.get_children() {
             let obj = get_ui_object_ptr(&child);
             obj.start(ex.clone()).await;
+        }
+    }
+
+    pub fn stop(&self) {
+        self.tasks.lock().clear();
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.stop();
         }
     }
 

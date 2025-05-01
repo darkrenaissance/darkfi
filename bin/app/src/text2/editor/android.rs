@@ -24,7 +24,7 @@ use crate::{
     text2::{TextContext, TEXT_CTX},
     AndroidSuggestEvent,
 };
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "text::editor::android", $($arg)*) } }
@@ -44,7 +44,7 @@ fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
 
 pub struct Editor {
     pub composer_id: usize,
-    pub recvr: Option<async_channel::Receiver<AndroidSuggestEvent>>,
+    pub recvr: async_channel::Receiver<AndroidSuggestEvent>,
     is_init: bool,
     is_setup: bool,
     /// We cannot receive focus until `AndroidSuggestEvent::Init` has finished.
@@ -62,7 +62,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub async fn new(
+    pub fn new(
         text: PropertyStr,
         font_size: PropertyFloat32,
         text_color: PropertyColor,
@@ -75,7 +75,7 @@ impl Editor {
 
         Self {
             composer_id,
-            recvr: Some(recvr),
+            recvr,
             is_init: false,
             is_setup: false,
             is_focus_req: AtomicBool::new(false),

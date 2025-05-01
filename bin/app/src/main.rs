@@ -23,7 +23,7 @@
 use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use darkfi::system::CondVar;
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, OnceLock};
 
 #[macro_use]
 extern crate log;
@@ -63,13 +63,14 @@ mod text2;
 mod ui;
 mod util;
 
-use crate::{net::ZeroMQAdapter, text::TextShaper};
+use crate::{app::{App, AppPtr}, net::ZeroMQAdapter, text::TextShaper, util::AsyncRuntime};
+
+// This is historical, but ideally we can fix the entire project and remove this import.
+pub use util::ExecutorPtr;
 
 // Hides the cmd.exe terminal on Windows.
 // Enable this when making release builds.
 //#![windows_subsystem = "windows"]
-
-pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
@@ -77,80 +78,180 @@ fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     std::process::abort()
 }
 
-fn main() {
-    // Abort the application on panic right away
-    std::panic::set_hook(Box::new(panic_hook));
+/// Contains values which persist between app restarts. For example on Android, we are
+/// running a foreground service. Everytime the UI restarts main() is called again.
+/// However the global state remains intact.
+struct God {
+    bg_runtime: AsyncRuntime,
+    bg_ex: ExecutorPtr,
 
-    text2::init_txt_ctx();
-    logger::setup_logging();
+    fg_runtime: AsyncRuntime,
+    fg_ex: ExecutorPtr,
 
-    #[cfg(target_os = "android")]
-    {
-        use crate::android::{get_appdata_path, get_external_storage_path};
+    /// App must fully finish setup() before start() is allowed to begin.
+    cv_app_is_setup: Arc<CondVar>,
+    app: AppPtr,
 
-        info!("App internal data path: {:?}", get_appdata_path());
-        info!("App external storage path: {:?}", get_external_storage_path());
+    /// This is the main rendering API used to send commands to the gfx subsystem.
+    /// We have a ref here so the gfx subsystem can increment the epoch counter.
+    render_api: gfx::RenderApi,
+    /// This is how the gfx subsystem receives messages from the render API.
+    method_rep: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
+    /// Publisher to send input and window events to subscribers.
+    event_pub: gfx::GraphicsEventPublisherPtr,
+}
 
-        // Workaround for this bug
-        // https://gitlab.torproject.org/tpo/core/arti/-/issues/999
-        unsafe {
-            std::env::set_var("HOME", get_appdata_path().as_os_str());
+impl God {
+    fn new() -> Self {
+        info!(target: "main", "Creating the app");
+
+        // Abort the application on panic right away
+        std::panic::set_hook(Box::new(panic_hook));
+
+        text2::init_txt_ctx();
+        logger::setup_logging();
+
+        #[cfg(target_os = "android")]
+        {
+            use crate::android::get_appdata_path;
+
+            // Workaround for this bug
+            // https://gitlab.torproject.org/tpo/core/arti/-/issues/999
+            unsafe {
+                std::env::set_var("HOME", get_appdata_path().as_os_str());
+            }
         }
 
-        //let paths = std::fs::read_dir("/data/data/darkfi.darkfi/").unwrap();
-        //for path in paths {
-        //    debug!("{}", path.unwrap().path().display())
-        //}
+        let exe_path = std::env::current_exe().unwrap();
+        let basename = exe_path.parent().unwrap();
+        std::env::set_current_dir(basename);
+
+        let bg_ex = Arc::new(smol::Executor::new());
+        let fg_ex = Arc::new(smol::Executor::new());
+        let sg_root = SceneNode3::root();
+
+        let bg_runtime = AsyncRuntime::new(bg_ex.clone(), "bg");
+        bg_runtime.start();
+
+        let fg_runtime = AsyncRuntime::new(fg_ex.clone(), "fg");
+
+        let (method_req, method_rep) = async_channel::unbounded();
+        // The UI actually needs to be running for this to reply back.
+        // Otherwise calls will just hang.
+        let render_api = gfx::RenderApi::new(method_req);
+        let event_pub = gfx::GraphicsEventPublisher::new();
+
+        let text_shaper = TextShaper::new();
+
+        let app = App::new(sg_root, render_api.clone(), text_shaper, fg_ex.clone());
+
+        Self {
+            bg_runtime,
+            bg_ex,
+
+            fg_runtime,
+            fg_ex,
+            cv_app_is_setup: Arc::new(CondVar::new()),
+            app,
+
+            render_api,
+            method_rep,
+            event_pub
+        }
     }
 
-    let exe_path = std::env::current_exe().unwrap();
-    let basename = exe_path.parent().unwrap();
-    std::env::set_current_dir(basename);
+    /// Restart the app but leave the backends intact.
+    fn setup_app(&self) {
+        info!(target: "main", "Restarting the app");
+        #[cfg(target_os = "android")]
+        {
+            use crate::android::{get_appdata_path, get_external_storage_path};
 
-    info!("Target OS: {}", build_info::TARGET_OS);
-    info!("Target arch: {}", build_info::TARGET_ARCH);
-    let cwd = std::env::current_dir().unwrap();
-    info!("Current dir: {}", cwd.display());
+            info!("App internal data path: {:?}", get_appdata_path());
+            info!("App external storage path: {:?}", get_external_storage_path());
 
-    let ex = Arc::new(smol::Executor::new());
-    let sg_root = SceneNode3::root();
+            //let paths = std::fs::read_dir("/data/data/darkfi.darkfi/").unwrap();
+            //for path in paths {
+            //    debug!("{}", path.unwrap().path().display())
+            //}
+        }
 
-    let async_runtime = app::AsyncRuntime::new(ex.clone());
-    async_runtime.start();
+        info!("Target OS: {}", build_info::TARGET_OS);
+        info!("Target arch: {}", build_info::TARGET_ARCH);
+        let cwd = std::env::current_dir().unwrap();
+        info!("Current dir: {}", cwd.display());
 
-    #[cfg(feature = "enable-netdebug")]
-    {
-        let sg_root2 = sg_root.clone();
-        let ex2 = ex.clone();
-        let zmq_task = ex.spawn(async {
-            let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
-            zmq_rpc.run().await;
+        self.fg_runtime.start_with_count(2);
+
+        /*
+        #[cfg(feature = "enable-netdebug")]
+        {
+            let sg_root2 = sg_root.clone();
+            let ex2 = ex.clone();
+            let zmq_task = ex.spawn(async {
+                let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
+                zmq_rpc.run().await;
+            });
+            async_runtime.push_task(zmq_task);
+        }
+        */
+
+        let app = self.app.clone();
+        let cv = self.cv_app_is_setup.clone();
+        let app_task = self.fg_ex.spawn(async move {
+            app.setup().await;
+            cv.notify();
         });
-        async_runtime.push_task(zmq_task);
+        self.fg_runtime.push_task(app_task);
     }
 
-    let (method_req, method_rep) = mpsc::channel();
-    // The UI actually needs to be running for this to reply back.
-    // Otherwise calls will just hang.
-    let render_api = gfx::RenderApi::new(method_req);
-    let event_pub = gfx::GraphicsEventPublisher::new();
+    /// Start the app. Can only happen once the window is ready.
+    pub fn start_app(&self) {
+        let app = self.app.clone();
+        let cv = self.cv_app_is_setup.clone();
+        let event_pub = self.event_pub.clone();
+        let app_task = self.fg_ex.spawn(async move {
+            cv.wait().await;
+            app.start(event_pub).await;
+        });
+        self.fg_runtime.push_task(app_task);
+    }
 
-    let text_shaper = TextShaper::new();
+    /// Put the app to sleep until the next restart.
+    pub fn stop_app(&self) {
+        self.fg_runtime.stop();
+        self.app.stop();
+        self.cv_app_is_setup.reset();
 
-    let cv_gfxwin_started = Arc::new(CondVar::new());
-    let cv_gfxwin_started2 = cv_gfxwin_started.clone();
-    let cv_app_started = Arc::new(CondVar::new());
-    let cv_app_started2 = cv_app_started.clone();
-    let app = app::App::new(sg_root, render_api, event_pub.clone(), text_shaper, ex.clone());
-    let app2 = app.clone();
-    let app_task = ex.spawn(async move {
-        app2.setup().await;
-        // Needed because accessing screen_size() is not allowed until window init
-        cv_gfxwin_started2.wait().await;
-        app2.start().await;
-        cv_app_started2.notify();
-    });
-    async_runtime.push_task(app_task);
+        #[cfg(target_os = "android")]
+        android::clear_state();
+
+        info!(target: "main", "App stopped");
+    }
+}
+
+impl std::fmt::Debug for God {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "God")
+    }
+}
+
+pub static GOD: OnceLock<God> = OnceLock::new();
+
+fn main() {
+    if GOD.get().is_none() {
+        let god = God::new();
+        GOD.set(god).unwrap();
+    }
+
+    // Reuse render_api, event_pub and text_shaper
+    // No need for setup(), just wait for gfx start then call .start()
+    // ZMQ, darkirc stay running
+
+    {
+        let god = GOD.get().unwrap();
+        god.setup_app();
+    }
 
     /*
     // Nice to see which events exist
@@ -205,7 +306,7 @@ fn main() {
     */
 
     //let stage = gfx::Stage::new(method_rep, event_pub);
-    gfx::run_gui(app, async_runtime, method_rep, event_pub, cv_gfxwin_started);
+    gfx::run_gui();
     debug!(target: "main", "Started GFX backend");
 }
 
