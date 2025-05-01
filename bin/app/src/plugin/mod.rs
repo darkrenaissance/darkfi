@@ -36,11 +36,6 @@ use crate::{
 use sled_overlay::sled;
 use std::{array::TryFromSliceError, string::FromUtf8Error};
 
-#[async_trait]
-pub trait PluginObject {
-    async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
-}
-
 pub struct PluginSettings {
     pub setting_root: SceneNodePtr,
     pub sled_tree: sled::Tree,

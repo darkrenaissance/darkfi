@@ -49,7 +49,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{PluginObject, PluginSettings};
+use super::PluginSettings;
 
 const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
@@ -280,6 +280,7 @@ impl DarkIrc {
             nick,
             settings,
         });
+        self_.clone().start(ex).await;
         Ok(Pimpl::DarkIrc(self_))
     }
 
@@ -501,10 +502,7 @@ impl DarkIrc {
         let mut write_guard = p2p_settings.write().await;
         self_.settings.update_p2p_settings(&mut write_guard);
     }
-}
 
-#[async_trait]
-impl PluginObject for DarkIrc {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);

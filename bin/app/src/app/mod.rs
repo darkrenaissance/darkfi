@@ -37,19 +37,18 @@ use crate::{
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
-    plugin::{self, PluginObject, PluginSettings},
+    plugin::PluginSettings,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
         PropertyValue, Role,
     },
-    scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3, Slot},
+    scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType, Slot},
     text::TextShaperPtr,
     ui::{chatview, Window},
     ExecutorPtr,
 };
 
 mod node;
-use node::create_darkirc;
 mod schema;
 use schema::{get_settingsdb_path, get_window_scale_filename, settings};
 
@@ -97,13 +96,13 @@ impl App {
             }
         };
 
-        let mut window = SceneNode3::new("window", SceneNodeType3::Window);
+        let mut window = SceneNode::new("window", SceneNodeType::Window);
 
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
 
-        let setting_root = SceneNode3::new("setting", SceneNodeType3::SettingRoot);
+        let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree("settings").unwrap();
         let settings = Arc::new(PluginSettings {

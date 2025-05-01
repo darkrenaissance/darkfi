@@ -22,8 +22,9 @@
 
 use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use darkfi::system::CondVar;
+use darkfi_serial::{deserialize, Decodable, Encodable};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use std::sync::{mpsc, Arc, OnceLock};
+use std::{io::Cursor, sync::{mpsc, Arc, OnceLock}};
 
 #[macro_use]
 extern crate log;
@@ -57,7 +58,6 @@ mod pubsub;
 mod ringbuf;
 mod scene;
 mod shape;
-use scene::SceneNode as SceneNode3;
 mod text;
 mod text2;
 mod ui;
@@ -68,10 +68,17 @@ use crate::{
     net::ZeroMQAdapter,
     text::TextShaper,
     util::AsyncRuntime,
+    prop::{PropertyType, Property, PropertySubType, PropertyBool, PropertyStr, Role, PropertyAtomicGuard}, scene::{SceneNode, SceneNodePtr, SceneNodeType, Slot, CallArgType}, ui::chatview
 };
 
 // This is historical, but ideally we can fix the entire project and remove this import.
 pub use util::ExecutorPtr;
+
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "main", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "main", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "main", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "main", $($arg)*); } }
 
 // Hides the cmd.exe terminal on Windows.
 // Enable this when making release builds.
@@ -133,7 +140,7 @@ impl God {
 
         let bg_ex = Arc::new(smol::Executor::new());
         let fg_ex = Arc::new(smol::Executor::new());
-        let sg_root = SceneNode3::root();
+        let sg_root = SceneNode::root();
 
         let bg_runtime = AsyncRuntime::new(bg_ex.clone(), "bg");
         bg_runtime.start();
@@ -171,7 +178,13 @@ impl God {
         fg_runtime.push_task(app_task);
 
         #[cfg(feature = "enable-plugins")]
-        load_plugins(&bg_runtime, sg_root).await;
+        {
+            let ex = bg_ex.clone();
+            let plug_task = bg_ex.spawn(async move {
+                load_plugins(ex, sg_root).await;
+            });
+            bg_runtime.push_task(plug_task);
+        }
 
         #[cfg(not(feature = "enable-plugins"))]
         warn!(target: "main", "Plugins are disabled in this build");
@@ -245,25 +258,23 @@ impl std::fmt::Debug for God {
 pub static GOD: OnceLock<God> = OnceLock::new();
 
 #[cfg(feature = "enable-plugins")]
-async fn load_plugins(rt: &AsyncRuntime, sg_root: SceneNodePtr) {
-    let plugin = SceneNode3::new("plugin", SceneNodeType3::PluginRoot);
+async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr) {
+    let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
-    sg_root.link(plugin.clone());
+    sg_root.clone().link(plugin.clone());
 
     let darkirc = create_darkirc("darkirc");
     let darkirc = darkirc
         .setup(|me| async {
-            plugin::DarkIrc::new(me, rt.ex()).await.expect("DarkIrc pimpl setup")
+            plugin::DarkIrc::new(me, ex.clone()).await.expect("DarkIrc pimpl setup")
         })
         .await;
-    // This seems redundant. We should just move it into new()
-    darkirc.start(rt.clone()).await;
 
     let (slot, recvr) = Slot::new("recvmsg");
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
-    let listen_recv = rt.ex.spawn(async move {
+    let listen_recv = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let atom = &mut PropertyAtomicGuard::new();
 
@@ -319,12 +330,11 @@ async fn load_plugins(rt: &AsyncRuntime, sg_root: SceneNodePtr) {
             }
         }
     });
-    rt.push_task(listen_recv);
 
     let (slot, recvr) = Slot::new("connect");
     darkirc.register("connect", slot).unwrap();
     let sg_root2 = sg_root.clone();
-    let listen_connect = rt.ex.spawn(async move {
+    let listen_connect = ex.spawn(async move {
         let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
         let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
         let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
@@ -372,11 +382,53 @@ async fn load_plugins(rt: &AsyncRuntime, sg_root: SceneNodePtr) {
             net3_is_visible.set(atom, true);
         }
     });
-    rt.push_task(listen_connect);
 
     plugin.link(darkirc);
 
     i!("Plugins loaded");
+    futures::join!(listen_recv, listen_connect);
+}
+
+pub fn create_darkirc(name: &str) -> SceneNode {
+    t!("create_darkirc({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Plugin);
+
+    let mut prop = Property::new("nick", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Nick", "Nickname");
+    prop.set_defaults_str(vec!["anon".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "recv",
+        "Message received",
+        vec![
+            ("channel", "Channel", CallArgType::Str),
+            ("timestamp", "Timestamp", CallArgType::Uint64),
+            ("id", "ID", CallArgType::Hash),
+            ("nick", "Nick", CallArgType::Str),
+            ("msg", "Message", CallArgType::Str),
+        ],
+    )
+    .unwrap();
+
+    node.add_signal(
+        "connect",
+        "Connections and disconnects",
+        vec![
+            ("peers_count", "Peers Count", CallArgType::Uint32),
+            ("dag_synced", "Is DAG Synced", CallArgType::Bool),
+        ],
+    )
+    .unwrap();
+
+    node.add_method(
+        "send",
+        vec![("channel", "Channel", CallArgType::Str), ("msg", "Message", CallArgType::Str)],
+        None,
+    )
+    .unwrap();
+
+    node
 }
 
 fn main() {
