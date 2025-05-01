@@ -138,6 +138,17 @@ impl God {
         let bg_runtime = AsyncRuntime::new(bg_ex.clone(), "bg");
         bg_runtime.start();
 
+        #[cfg(feature = "enable-netdebug")]
+        {
+            let sg_root = sg_root.clone();
+            let ex = bg_ex.clone();
+            let zmq_task = bg_ex.spawn(async {
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, ex).await;
+                zmq_rpc.run().await;
+            });
+            bg_runtime.push_task(zmq_task);
+        }
+
         let fg_runtime = AsyncRuntime::new(fg_ex.clone(), "fg");
 
         let (method_req, method_rep) = async_channel::unbounded();
@@ -148,7 +159,22 @@ impl God {
 
         let text_shaper = TextShaper::new();
 
-        let app = App::new(sg_root, render_api.clone(), text_shaper, fg_ex.clone());
+        let app = App::new(sg_root.clone(), render_api.clone(), text_shaper, fg_ex.clone());
+
+        let app2 = app.clone();
+        let cv_app_is_setup = Arc::new(CondVar::new());
+        let cv = cv_app_is_setup.clone();
+        let app_task = fg_ex.spawn(async move {
+            app2.setup().await;
+            cv.notify();
+        });
+        fg_runtime.push_task(app_task);
+
+        #[cfg(feature = "enable-plugins")]
+        load_plugins(&bg_runtime, sg_root).await;
+
+        #[cfg(not(feature = "enable-plugins"))]
+        warn!(target: "main", "Plugins are disabled in this build");
 
         Self {
             bg_runtime,
@@ -156,7 +182,7 @@ impl God {
 
             fg_runtime,
             fg_ex,
-            cv_app_is_setup: Arc::new(CondVar::new()),
+            cv_app_is_setup,
             app,
 
             render_api,
@@ -165,8 +191,8 @@ impl God {
         }
     }
 
-    /// Restart the app but leave the backends intact.
-    fn setup_app(&self) {
+    /// Start the app. Can only happen once the window is ready.
+    pub fn start_app(&self) {
         info!(target: "main", "Restarting the app");
         #[cfg(target_os = "android")]
         {
@@ -188,30 +214,6 @@ impl God {
 
         self.fg_runtime.start_with_count(2);
 
-        /*
-        #[cfg(feature = "enable-netdebug")]
-        {
-            let sg_root2 = sg_root.clone();
-            let ex2 = ex.clone();
-            let zmq_task = ex.spawn(async {
-                let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
-                zmq_rpc.run().await;
-            });
-            async_runtime.push_task(zmq_task);
-        }
-        */
-
-        let app = self.app.clone();
-        let cv = self.cv_app_is_setup.clone();
-        let app_task = self.fg_ex.spawn(async move {
-            app.setup().await;
-            cv.notify();
-        });
-        self.fg_runtime.push_task(app_task);
-    }
-
-    /// Start the app. Can only happen once the window is ready.
-    pub fn start_app(&self) {
         let app = self.app.clone();
         let cv = self.cv_app_is_setup.clone();
         let event_pub = self.event_pub.clone();
@@ -226,7 +228,6 @@ impl God {
     pub fn stop_app(&self) {
         self.fg_runtime.stop();
         self.app.stop();
-        self.cv_app_is_setup.reset();
 
         #[cfg(target_os = "android")]
         android::clear_state();
@@ -243,74 +244,148 @@ impl std::fmt::Debug for God {
 
 pub static GOD: OnceLock<God> = OnceLock::new();
 
+#[cfg(feature = "enable-plugins")]
+async fn load_plugins(rt: &AsyncRuntime, sg_root: SceneNodePtr) {
+    let plugin = SceneNode3::new("plugin", SceneNodeType3::PluginRoot);
+    let plugin = plugin.setup_null();
+    sg_root.link(plugin.clone());
+
+    let darkirc = create_darkirc("darkirc");
+    let darkirc = darkirc
+        .setup(|me| async {
+            plugin::DarkIrc::new(me, rt.ex()).await.expect("DarkIrc pimpl setup")
+        })
+        .await;
+    // This seems redundant. We should just move it into new()
+    darkirc.start(rt.clone()).await;
+
+    let (slot, recvr) = Slot::new("recvmsg");
+    darkirc.register("recv", slot).unwrap();
+    let sg_root2 = sg_root.clone();
+    let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
+    let listen_recv = rt.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let atom = &mut PropertyAtomicGuard::new();
+
+            let mut cur = Cursor::new(&data);
+            let channel = String::decode(&mut cur).unwrap();
+            let timestamp = chatview::Timestamp::decode(&mut cur).unwrap();
+            let id = chatview::MessageId::decode(&mut cur).unwrap();
+            let nick = String::decode(&mut cur).unwrap();
+            let msg = String::decode(&mut cur).unwrap();
+
+            let node_path = format!("/window/{channel}_chat_layer/content/chatty");
+            t!("Attempting to relay message to {node_path}");
+            let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
+                d!("Ignoring message since {node_path} doesn't exist");
+                continue
+            };
+
+            // I prefer to just re-encode because the code is clearer.
+            let mut data = vec![];
+            timestamp.encode(&mut data).unwrap();
+            id.encode(&mut data).unwrap();
+            nick.encode(&mut data).unwrap();
+            msg.encode(&mut data).unwrap();
+            if let Err(err) = chatview.call_method("insert_line", data).await {
+                error!(
+                    target: "app",
+                    "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
+                );
+            }
+
+            // Apply coloring when you get a message
+            let chat_path = format!("/window/{channel}_chat_layer");
+            let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
+            if chat_layer.get_property_bool("is_visible").unwrap() {
+                continue
+            }
+
+            let node_path = format!("/window/menu_layer/{channel}_channel_label");
+            let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
+            let prop = menu_label.get_property("text_color").unwrap();
+            if msg.contains(&darkirc_nick.get()) {
+                // Nick highlight
+                prop.clone().set_f32(atom, Role::App, 0, 0.56).unwrap();
+                prop.clone().set_f32(atom, Role::App, 1, 0.61).unwrap();
+                prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+            } else {
+                // Normal channel activity
+                prop.clone().set_f32(atom, Role::App, 0, 0.36).unwrap();
+                prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+                prop.clone().set_f32(atom, Role::App, 2, 0.51).unwrap();
+                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+            }
+        }
+    });
+    rt.push_task(listen_recv);
+
+    let (slot, recvr) = Slot::new("connect");
+    darkirc.register("connect", slot).unwrap();
+    let sg_root2 = sg_root.clone();
+    let listen_connect = rt.ex.spawn(async move {
+        let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
+        let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
+        let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
+        let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
+
+        let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
+        let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
+        let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
+        let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
+
+        while let Ok(data) = recvr.recv().await {
+            let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
+
+            let atom = &mut PropertyAtomicGuard::new();
+
+            if peers_count == 0 {
+                net0_is_visible.set(atom, true);
+                net1_is_visible.set(atom, false);
+                net2_is_visible.set(atom, false);
+                net3_is_visible.set(atom, false);
+                continue
+            }
+
+            assert!(peers_count > 0);
+            if !is_dag_synced {
+                net0_is_visible.set(atom, false);
+                net1_is_visible.set(atom, true);
+                net2_is_visible.set(atom, false);
+                net3_is_visible.set(atom, false);
+                continue
+            }
+
+            assert!(peers_count > 0 && is_dag_synced);
+            if peers_count == 1 {
+                net0_is_visible.set(atom, false);
+                net1_is_visible.set(atom, false);
+                net2_is_visible.set(atom, true);
+                net3_is_visible.set(atom, false);
+                continue
+            }
+
+            net0_is_visible.set(atom, false);
+            net1_is_visible.set(atom, false);
+            net2_is_visible.set(atom, false);
+            net3_is_visible.set(atom, true);
+        }
+    });
+    rt.push_task(listen_connect);
+
+    plugin.link(darkirc);
+
+    i!("Plugins loaded");
+}
+
 fn main() {
-    if GOD.get().is_none() {
-        let god = God::new();
-        GOD.set(god).unwrap();
-    }
+    GOD.get_or_init(God::new);
 
     // Reuse render_api, event_pub and text_shaper
     // No need for setup(), just wait for gfx start then call .start()
     // ZMQ, darkirc stay running
 
-    {
-        let god = GOD.get().unwrap();
-        god.setup_app();
-    }
-
-    /*
-    // Nice to see which events exist
-    let ev_sub = event_pub.subscribe_key_down();
-    let ev_relay_task = ex.spawn(async move {
-        debug!(target: "main", "event relayer started");
-        loop {
-            let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-                debug!(target: "main", "Event relayer closed");
-                break
-            };
-            // Ignore keys which get stuck repeating when switching windows
-            match key {
-                miniquad::KeyCode::LeftShift | miniquad::KeyCode::LeftSuper => continue,
-                _ => {}
-            }
-            if !repeat {
-                debug!(target: "main", "key_down event: {:?} {:?} {}", key, mods, repeat);
-            }
-        }
-    });
-    async_runtime.push_task(ev_relay_task);
-    let ev_sub = event_pub.subscribe_key_up();
-    let ev_relay_task = ex.spawn(async move {
-        debug!(target: "main", "event relayer started");
-        loop {
-            let Ok((key, mods)) = ev_sub.receive().await else {
-                debug!(target: "main", "Event relayer closed");
-                break
-            };
-            // Ignore keys which get stuck repeating when switching windows
-            match key {
-                miniquad::KeyCode::LeftShift | miniquad::KeyCode::LeftSuper => continue,
-                _ => {}
-            }
-            debug!(target: "main", "key_up event: {:?} {:?}", key, mods);
-        }
-    });
-    async_runtime.push_task(ev_relay_task);
-    let ev_sub = event_pub.subscribe_char();
-    let ev_relay_task = ex.spawn(async move {
-        debug!(target: "main", "event relayer started");
-        loop {
-            let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-                debug!(target: "main", "Event relayer closed");
-                break
-            };
-            debug!(target: "main", "char event: {:?} {:?} {}", key, mods, repeat);
-        }
-    });
-    async_runtime.push_task(ev_relay_task);
-    */
-
-    //let stage = gfx::Stage::new(method_rep, event_pub);
     gfx::run_gui();
     debug!(target: "main", "Started GFX backend");
 }
@@ -357,3 +432,4 @@ def foo():
     println!("{:?}", res);
 }
 */
+

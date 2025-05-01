@@ -1534,7 +1534,6 @@ impl UIObject for ChatEdit {
     }
 
     fn stop(&self) {
-        t!("stopping chatedit");
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
         self.key_repeat.lock().clear();
