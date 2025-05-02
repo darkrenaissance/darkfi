@@ -28,7 +28,7 @@ pub mod blockchain;
 pub mod dark_tree;
 
 /// Native (non-wasm, non-ff) Sparse Merkle Tree
-pub mod smt_native;
+pub mod monotree;
 
 /// Contract deployment utilities
 pub mod deploy;

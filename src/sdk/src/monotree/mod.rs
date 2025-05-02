@@ -33,6 +33,9 @@ pub type Proof = Vec<(bool, Vec<u8>)>;
 /// The key to be used to restore the latest `root`
 pub const ROOT_KEY: &Hash = b"_______monotree::headroot_______";
 
+use std::sync::LazyLock;
+pub static EMPTY_HASH: LazyLock<Hash> = LazyLock::new(|| *blake3::hash(&[]).as_bytes());
+
 pub mod bits;
 
 pub mod node;
