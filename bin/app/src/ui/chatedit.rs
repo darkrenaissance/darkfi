@@ -704,7 +704,7 @@ impl ChatEdit {
 
         let mut editor = self.lock_editor().await;
         editor.select_word_at_point(touch_pos);
-        editor.refresh(atom).await;
+        editor.refresh().await;
 
         let seltext = editor.selected_text().unwrap();
         d!("Selected {seltext:?} from {touch_pos:?}");
@@ -890,14 +890,13 @@ impl ChatEdit {
     }
     async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_end({touch_pos:?})");
-        let atom = &mut PropertyAtomicGuard::new();
         self.abs_to_local(&mut touch_pos);
 
         let state = self.touch_info.lock().stop();
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                self.touch_set_cursor_pos(touch_pos, atom).await;
+                self.touch_set_cursor_pos(touch_pos).await;
                 self.redraw().await;
             }
             _ => {}
@@ -909,12 +908,12 @@ impl ChatEdit {
         true
     }
 
-    async fn touch_set_cursor_pos(&self, mut touch_pos: Point, atom: &mut PropertyAtomicGuard) {
+    async fn touch_set_cursor_pos(&self, mut touch_pos: Point) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
         let mut editor = self.lock_editor().await;
         editor.move_to_pos(touch_pos);
-        editor.refresh(atom).await;
+        editor.refresh().await;
         drop(editor);
 
         self.pause_blinking();
@@ -1179,7 +1178,7 @@ impl ChatEdit {
         let content_height = {
             let mut editor = self.lock_editor().await;
             editor.set_width(rect_w);
-            editor.refresh(atom).await;
+            editor.refresh().await;
             editor.height()
         };
         self.content_height.set(atom, content_height);
@@ -1366,8 +1365,7 @@ impl ChatEdit {
             }
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
-        editor.refresh(atom).await;
+        editor.on_buffer_changed().await;
         drop(editor);
 
         self.redraw().await;
@@ -1436,18 +1434,7 @@ impl UIObject for ChatEdit {
             self_.redraw().await;
         }
         async fn set_text(self_: Arc<ChatEdit>) {
-            {
-                let text = self_.text.get();
-
-                //let mut text_wrap = self_.text_wrap.lock();
-                //text_wrap.editable.end_compose();
-                //text_wrap.editable.set_text(text, String::new());
-                //text_wrap.clear_cache();
-
-                //let select = &mut text_wrap.select;
-                //select.clear();
-            }
-
+            self_.lock_editor().await.on_text_changed().await;
             self_.redraw().await;
         }
 

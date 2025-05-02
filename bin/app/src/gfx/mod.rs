@@ -469,7 +469,7 @@ impl<'a> RenderContext<'a> {
                     // using an is_visible flag.
                     match self.view.clip(&old_view) {
                         Some(clipped) => self.view = clipped,
-                        None => self.view = Rectangle::zero()
+                        None => self.view = Rectangle::zero(),
                     }
                     // Cursor resets within the view
                     self.cursor = Point::zero();

@@ -96,6 +96,7 @@ mod android_ui_consts {
     pub const CMD_HELP_NICK_CMD_WIDTH: f32 = 280.;
     pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 1000.;
     pub const CMD_HELP_NICK_DESC_X: f32 = 320.;
+    pub const CMD_HELP_LABEL_Y: f32 = 20.;
 
     pub const ACTION_POPUP_Y_OFF: f32 = 200.;
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 200., 160.);
@@ -1148,7 +1149,7 @@ pub async fn make(
     let node = create_text("cmd_nick_label");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CMD_HELP_CMD_LABEL_X_INSET).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, CMD_HELP_LABEL_Y).unwrap();
     prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", CMD_HELP_BASELINE).unwrap();
@@ -1180,7 +1181,7 @@ pub async fn make(
     let node = create_text("cmd_nick_desc_label");
     let prop = node.get_property("rect").unwrap();
     prop.clone().set_f32(atom, Role::App, 0, CMD_HELP_NICK_DESC_X).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, CMD_HELP_LABEL_Y).unwrap();
     prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", CMD_HELP_BASELINE).unwrap();

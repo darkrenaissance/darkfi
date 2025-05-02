@@ -24,7 +24,10 @@ use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use darkfi::system::CondVar;
 use darkfi_serial::{deserialize, Decodable, Encodable};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use std::{io::Cursor, sync::{mpsc, Arc, OnceLock}};
+use std::{
+    io::Cursor,
+    sync::{mpsc, Arc, OnceLock},
+};
 
 #[macro_use]
 extern crate log;
@@ -66,9 +69,14 @@ mod util;
 use crate::{
     app::{App, AppPtr},
     net::ZeroMQAdapter,
+    prop::{
+        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
+        Role,
+    },
+    scene::{CallArgType, SceneNode, SceneNodePtr, SceneNodeType, Slot},
     text::TextShaper,
+    ui::chatview,
     util::AsyncRuntime,
-    prop::{PropertyType, Property, PropertySubType, PropertyBool, PropertyStr, Role, PropertyAtomicGuard}, scene::{SceneNode, SceneNodePtr, SceneNodeType, Slot, CallArgType}, ui::chatview
 };
 
 // This is historical, but ideally we can fix the entire project and remove this import.
@@ -484,4 +492,3 @@ def foo():
     println!("{:?}", res);
 }
 */
-

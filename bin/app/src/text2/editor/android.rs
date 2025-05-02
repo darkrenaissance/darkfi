@@ -122,6 +122,23 @@ impl Editor {
         t!("Initialized composer [{}]", self.composer_id);
     }
 
+    pub async fn on_text_changed(&mut self) {
+        // Get modified text property
+        let txt = self.text.get();
+        // Update Android text buffer
+        android::set_text(self.composer_id, &txt);
+        assert_eq!(android::get_editable(self.composer_id).unwrap().buffer, txt);
+        // Refresh our layout
+        self.refresh().await;
+    }
+    pub async fn on_buffer_changed(&mut self) {
+        // Refresh the layout using the Android buffer
+        self.refresh().await;
+        // Now update the text attribute
+        let edit = android::get_editable(self.composer_id).unwrap();
+        self.text.set(&mut PropertyAtomicGuard::new(), &edit.buffer);
+    }
+
     /// Can only be called after AndroidSuggestEvent::Init.
     pub fn focus(&self) {
         // We're not yet ready to receive focus
@@ -135,7 +152,7 @@ impl Editor {
         android::unfocus(self.composer_id).unwrap();
     }
 
-    pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
+    pub async fn refresh(&mut self) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -162,8 +179,6 @@ impl Editor {
             self.width,
             &underlines,
         );
-
-        self.text.set(atom, edit.buffer);
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {

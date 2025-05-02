@@ -118,14 +118,15 @@ public class CustomInputConnection extends BaseInputConnection {
         Selection.setSelection(mEditable, selectionStart, selectionEnd);
         super.setComposingRegion(compositionStart, compositionEnd);
 
-        if (textUnchanged || prevText.equals("")) {
-            log("setEditableText updating selection");
+        //log("textUnchanged=%s  prevText=%s", textUnchanged, prevText);
+        //if (textUnchanged || prevText.equals("")) {
+        //    log("setEditableText updating selection");
             // updateSelection should be called when a manual selection change occurs.
             // Should not be called if text is being entered else issues can occur
             // e.g. backspace to undo autocorrection will not work with the default OSK.
             getInputMethodManager().updateSelection(mInternalView,
                     selectionStart, selectionEnd, compositionStart, compositionEnd);
-        }
+        //}
     }
 
     @Override

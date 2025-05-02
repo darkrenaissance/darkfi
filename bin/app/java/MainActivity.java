@@ -95,6 +95,7 @@ public InvisibleInputView getInputView(int id) {
 }
 
 public boolean setText(int id, String txt) {
+    //Log.d("darkfi", "setText(" + id + ", " + txt + ")");
     InvisibleInputView iv = editors.get(id);
     if (iv == null) {
         return false;
