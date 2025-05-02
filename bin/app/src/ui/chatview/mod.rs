@@ -684,7 +684,7 @@ impl ChatView {
             let off_y = (scroll + start_pos - y_pos);
             let pos = Point::from([0., off_y]);
 
-            instrs.push(GfxDrawInstruction::Move(pos));
+            instrs.push(GfxDrawInstruction::SetPos(pos));
             instrs.push(GfxDrawInstruction::Draw(mesh));
         }
 

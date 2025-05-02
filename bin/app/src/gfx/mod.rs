@@ -465,6 +465,12 @@ impl<'a> RenderContext<'a> {
                 DrawInstruction::ApplyView(view) => {
                     // Adjust view relative to cursor
                     self.view = *view + self.cursor;
+                    // We could just skip drawing when clipping rect isn't visible
+                    // using an is_visible flag.
+                    match self.view.clip(&old_view) {
+                        Some(clipped) => self.view = clipped,
+                        None => self.view = Rectangle::zero()
+                    }
                     // Cursor resets within the view
                     self.cursor = Point::zero();
                     if is_debug {
