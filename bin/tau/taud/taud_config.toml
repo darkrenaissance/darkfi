@@ -83,8 +83,8 @@ hostlist = "~/.local/share/darkfi/taud/hostlist.tsv"
 seeds = [
     "tcp+tls://lilith0.dark.fi:23331",
     "tcp+tls://lilith1.dark.fi:23331",
-    # "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5362"
-    # "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5362"
+    #"tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:23332",
+    #"tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:23332",
 ]
 
 ## Manual peers to connect to
