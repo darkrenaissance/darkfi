@@ -123,7 +123,7 @@ mod ui_consts {
     use crate::gfx::{Point, Rectangle};
 
     // Chat UI
-    pub const CHANNEL_LABEL_Y: f32 = 30.;
+    pub const CHANNEL_LABEL_Y: f32 = 12.;
     pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
@@ -339,7 +339,7 @@ pub async fn make(
     node.register("shortcut", slot).unwrap();
     let listen_enter = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            goback();
+            goback().await;
         }
     });
     app.tasks.lock().unwrap().push(listen_enter);

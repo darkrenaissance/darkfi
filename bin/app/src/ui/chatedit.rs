@@ -634,6 +634,10 @@ impl ChatEdit {
                 if mods.shift {
                     drv.insert_or_replace_selection("\n");
                     editor.on_buffer_changed(atom);
+                } else {
+                    //let node = self.node.upgrade().unwrap();
+                    //node.trigger("enter_pressed", vec![]).await.unwrap();
+                    return false;
                 }
             }
             KeyCode::Delete => {
@@ -1579,7 +1583,7 @@ impl UIObject for ChatEdit {
         }
         drop(drv);
         drop(txt_ctx);
-        editor.on_buffer_changed(atom);
+        editor.on_buffer_changed(atom).await;
         drop(editor);
 
         self.redraw().await;

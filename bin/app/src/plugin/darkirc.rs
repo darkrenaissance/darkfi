@@ -211,24 +211,24 @@ impl DarkIrc {
 
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
+                    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552"
                 )
                 .unwrap(),
             );
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
+                    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552"
                 )
                 .unwrap(),
             );
+            p2p_settings.allowed_transports = vec!["tor".to_string()];
         } else {
             i!("Setup P2P network [clearnet]");
             p2p_settings.outbound_connect_timeout = 40;
             p2p_settings.channel_handshake_timeout = 30;
 
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26661").unwrap());
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26671").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
         }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
