@@ -934,6 +934,12 @@ impl EventHandler for Stage {
         let god = GOD.get().unwrap();
         god.stop_app();
     }
+
+    fn force_reload(&mut self) {
+        let god = GOD.get().unwrap();
+        god.stop_app();
+        god.start_app();
+    }
 }
 
 pub fn run_gui() {

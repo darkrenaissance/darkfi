@@ -36,7 +36,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub async fn new(
+    pub fn new(
         text: PropertyStr,
         font_size: PropertyFloat32,
         text_color: PropertyColor,
@@ -46,17 +46,28 @@ impl Editor {
         let mut editor = parley::PlainEditor::new(1.);
         //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
         //editor.set_text(atxt);
-        let mut self_ = Self { text, editor, font_size, text_color, window_scale, lineheight };
-        self_.refresh_layout().await;
-        self_
+        Self { text, editor, font_size, text_color, window_scale, lineheight }
     }
 
+    // These are android specific
     pub fn init(&mut self) {}
     pub fn setup(&mut self) {}
     pub fn focus(&self) {}
     pub fn unfocus(&self) {}
 
-    async fn refresh_layout(&mut self) {
+    pub async fn on_text_prop_changed(&mut self) {
+        // Get modified text property
+        let txt = self.text.get();
+        // Update Parley text buffer
+        self.editor.set_text(&txt);
+        // Refresh our layout
+        self.refresh().await;
+    }
+    pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
+        self.text.set(atom, self.editor.raw_text());
+    }
+
+    pub async fn refresh(&mut self) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -72,10 +83,6 @@ impl Editor {
         let mut txt_ctx = TEXT_CTX.get().await;
         let (font_ctx, layout_ctx) = txt_ctx.borrow();
         self.editor.refresh_layout(font_ctx, layout_ctx);
-    }
-    pub async fn refresh(&mut self, atom: &mut PropertyAtomicGuard) {
-        self.refresh_layout().await;
-        self.text.set(atom, self.editor.raw_text());
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {

@@ -122,7 +122,7 @@ impl Editor {
         t!("Initialized composer [{}]", self.composer_id);
     }
 
-    pub async fn on_text_changed(&mut self) {
+    pub async fn on_text_prop_changed(&mut self) {
         // Get modified text property
         let txt = self.text.get();
         // Update Android text buffer
@@ -131,12 +131,13 @@ impl Editor {
         // Refresh our layout
         self.refresh().await;
     }
-    pub async fn on_buffer_changed(&mut self) {
+    pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
         // Refresh the layout using the Android buffer
         self.refresh().await;
-        // Now update the text attribute
+
+        // Update the text attribute
         let edit = android::get_editable(self.composer_id).unwrap();
-        self.text.set(&mut PropertyAtomicGuard::new(), &edit.buffer);
+        self.text.set(atom, &edit.buffer);
     }
 
     /// Can only be called after AndroidSuggestEvent::Init.

@@ -523,17 +523,6 @@ impl ChatEdit {
         self.redraw().await;
     }
 
-    async fn insert_char(&self, key: char) {
-        t!("insert_char({key})");
-        let mut tmp = [0; 4];
-        let key_str = key.encode_utf8(&mut tmp);
-
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
-        drv.insert_or_replace_selection(&key_str);
-    }
-
     async fn handle_shortcut(
         &self,
         key: char,
@@ -644,6 +633,7 @@ impl ChatEdit {
             KeyCode::Enter | KeyCode::KpEnter => {
                 if mods.shift {
                     drv.insert_or_replace_selection("\n");
+                    editor.on_buffer_changed(atom);
                 }
             }
             KeyCode::Delete => {
@@ -652,6 +642,7 @@ impl ChatEdit {
                 } else {
                     drv.delete();
                 }
+                editor.on_buffer_changed(atom);
             }
             KeyCode::Backspace => {
                 if action_mod {
@@ -659,6 +650,7 @@ impl ChatEdit {
                 } else {
                     drv.backdelete();
                 }
+                editor.on_buffer_changed(atom);
             }
             KeyCode::Home => {
                 if action_mod {
@@ -1365,7 +1357,8 @@ impl ChatEdit {
             }
         }
 
-        editor.on_buffer_changed().await;
+        let atom = &mut PropertyAtomicGuard::new();
+        editor.on_buffer_changed(atom).await;
         drop(editor);
 
         self.redraw().await;
@@ -1434,7 +1427,7 @@ impl UIObject for ChatEdit {
             self_.redraw().await;
         }
         async fn set_text(self_: Arc<ChatEdit>) {
-            self_.lock_editor().await.on_text_changed().await;
+            self_.lock_editor().await.on_text_prop_changed().await;
             self_.redraw().await;
         }
 
@@ -1568,11 +1561,27 @@ impl UIObject for ChatEdit {
             return self.handle_shortcut(key, &mods, atom).await
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        // Do nothing
+        if actions == 0 {
+            return true
+        }
+
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut editor = self.lock_editor().await;
+        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+
         t!("Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
-            self.insert_char(key).await;
+            let mut tmp = [0; 4];
+            let key_str = key.encode_utf8(&mut tmp);
+
+            drv.insert_or_replace_selection(&key_str);
         }
+        drop(drv);
+        drop(txt_ctx);
+        editor.on_buffer_changed(atom);
+        drop(editor);
+
         self.redraw().await;
         true
     }

@@ -165,6 +165,7 @@ mod ui_consts {
     pub const CMD_HELP_NICK_CMD_WIDTH: f32 = 140.;
     pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 500.;
     pub const CMD_HELP_NICK_DESC_X: f32 = 160.;
+    pub const CMD_HELP_LABEL_Y: f32 = 10.;
 
     pub const ACTION_POPUP_Y_OFF: f32 = 100.;
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 100., 80.);
