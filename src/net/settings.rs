@@ -128,7 +128,7 @@ impl Default for Settings {
             seeds: vec![],
             app_version,
             allowed_transports: vec!["tcp+tls".to_string()],
-            transport_mixing: true,
+            transport_mixing: false,
             tor_socks5_proxy: Url::parse("socks5://127.0.0.1:9050").unwrap(),
             i2p_socks5_proxy: Url::parse("socks5://127.0.0.1:4447").unwrap(),
             outbound_connections: 8,
