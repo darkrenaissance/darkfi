@@ -34,8 +34,8 @@ use std::{
 use crate::{
     error::Result,
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
-        Point, Rectangle, RenderApi, Vertex,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
+        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
@@ -335,9 +335,10 @@ impl EditBox {
         //debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let rendered = self.editable.lock().unwrap().render();
-        let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
+        let atlas =
+            text::make_texture_atlas(&self.render_api, gfxtag!("editbox_txt"), &rendered.glyphs);
 
-        let mut mesh = MeshBuilder::with_clip(clip.clone());
+        let mut mesh = MeshBuilder::with_clip(gfxtag!("editbox_txt"), clip.clone());
 
         let selections = self.select.lock().unwrap().clone();
         // Just an assert
@@ -401,7 +402,7 @@ impl EditBox {
         };
         let cursor_color = self.cursor_color.get();
 
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("editbox_cursor"));
         mesh.draw_filled_box(&cursor_rect, cursor_color);
         mesh.alloc(&self.render_api).draw_untextured()
     }

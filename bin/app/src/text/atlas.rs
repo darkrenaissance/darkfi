@@ -18,7 +18,7 @@
 
 use crate::{
     error::Result,
-    gfx::{GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
+    gfx::{DebugTag, GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
 };
 
 use super::{
@@ -32,8 +32,12 @@ use super::{
 const ATLAS_GAP: usize = 2;
 
 /// Convenience wrapper fn. Use if rendering a single line of glyphs.
-pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> RenderedAtlas {
-    let mut atlas = Atlas::new(render_api);
+pub fn make_texture_atlas(
+    render_api: &RenderApi,
+    tag: DebugTag,
+    glyphs: &Vec<Glyph>,
+) -> RenderedAtlas {
+    let mut atlas = Atlas::new(render_api, tag);
     atlas.push(&glyphs);
     atlas.make()
 }
@@ -60,10 +64,11 @@ pub struct Atlas<'a> {
     height: usize,
 
     render_api: &'a RenderApi,
+    tag: DebugTag,
 }
 
 impl<'a> Atlas<'a> {
-    pub fn new(render_api: &'a RenderApi) -> Self {
+    pub fn new(render_api: &'a RenderApi, tag: DebugTag) -> Self {
         Self {
             glyph_ids: vec![],
             sprites: vec![],
@@ -74,6 +79,7 @@ impl<'a> Atlas<'a> {
             // FYI glyphs have a gap on all sides (top and bottom here).
             height: 2 * ATLAS_GAP,
             render_api,
+            tag,
         }
     }
 
@@ -160,7 +166,8 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture = self.render_api.new_texture(self.width as u16, self.height as u16, atlas);
+        let texture =
+            self.render_api.new_texture(self.width as u16, self.height as u16, atlas, self.tag);
 
         let uv_rects = self.compute_uvs();
         let glyph_ids = self.glyph_ids;

@@ -26,8 +26,8 @@ use std::{
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Point,
-        Rectangle, RenderApi,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
+        Point, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{
@@ -104,7 +104,7 @@ impl EmojiMeshes {
         // The params here don't actually matter since we're talking about BMP fixed sizes
         let glyphs = self.text_shaper.shape(emoji.to_string(), 10., 1.);
         assert_eq!(glyphs.len(), 1);
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
+        let atlas = text::make_texture_atlas(&self.render_api, gfxtag!("emoji_mesh"), &glyphs);
         let glyph = glyphs.into_iter().next().unwrap();
 
         // Emoji's vary in size. We make them all a consistent size.
@@ -116,7 +116,7 @@ impl EmojiMeshes {
         let y = -h / 2.;
 
         let uv = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("emoji_mesh"));
         mesh.draw_box(&Rectangle::new(x, y, w, h), COLOR_WHITE, &uv);
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
     }

@@ -27,8 +27,8 @@ use std::{
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
-        RenderApi,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
+        Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyAtomicGuard, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -126,7 +126,7 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        self.render_api.new_texture(width, height, bmp)
+        self.render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -148,7 +148,7 @@ impl Image {
         let rect = self.rect.get();
         let uv = self.uv.get();
         let mesh_rect = Rectangle::from([0., 0., rect.w, rect.h]);
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("img"));
         mesh.draw_box(&mesh_rect, COLOR_WHITE, &uv);
         mesh.alloc(&self.render_api)
     }

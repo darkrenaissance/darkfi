@@ -25,7 +25,8 @@ use crate::{
     error::{Error, Result},
     expr::{Op, SExprCode, SExprMachine, SExprVal},
     gfx::{
-        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi, Vertex,
+        gfxtag, GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi,
+        Vertex,
     },
     mesh::Color,
     prop::{
@@ -127,8 +128,9 @@ impl VectorArt {
         let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
 
         //debug!(target: "ui::vector_art", "=> {verts:#?}");
-        let vertex_buffer = self.render_api.new_vertex_buffer(verts);
-        let index_buffer = self.render_api.new_index_buffer(self.shape.indices.clone());
+        let vertex_buffer = self.render_api.new_vertex_buffer(verts, gfxtag!("vectorart"));
+        let index_buffer =
+            self.render_api.new_index_buffer(self.shape.indices.clone(), gfxtag!("vectorart"));
         let mesh = GfxDrawMesh {
             vertex_buffer,
             index_buffer,

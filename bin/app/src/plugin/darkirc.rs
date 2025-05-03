@@ -211,13 +211,13 @@ impl DarkIrc {
 
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552"
+                    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
                 )
                 .unwrap(),
             );
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552"
+                    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
                 )
                 .unwrap(),
             );

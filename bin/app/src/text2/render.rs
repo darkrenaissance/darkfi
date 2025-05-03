@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    gfx::{GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi},
+    gfx::{DebugTag, GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
@@ -52,14 +52,16 @@ impl std::ops::BitOrAssign for DebugRenderOptions {
 pub fn render_layout(
     layout: &parley::Layout<Color>,
     render_api: &RenderApi,
+    tag: DebugTag,
 ) -> Vec<GfxDrawInstruction> {
-    render_layout_with_opts(layout, DebugRenderOptions::Off, render_api)
+    render_layout_with_opts(layout, DebugRenderOptions::Off, render_api, tag)
 }
 
 pub fn render_layout_with_opts(
     layout: &parley::Layout<Color>,
     opts: DebugRenderOptions,
     render_api: &RenderApi,
+    tag: DebugTag,
 ) -> Vec<GfxDrawInstruction> {
     let mut scale_cx = swash::scale::ScaleContext::new();
     let mut run_idx = 0;
@@ -69,7 +71,7 @@ pub fn render_layout_with_opts(
             match item {
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
                     let mesh =
-                        render_glyph_run(&mut scale_cx, &glyph_run, run_idx, opts, render_api);
+                        render_glyph_run(&mut scale_cx, &glyph_run, run_idx, opts, render_api, tag);
                     instrs.push(GfxDrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
@@ -86,6 +88,7 @@ fn render_glyph_run(
     run_idx: usize,
     opts: DebugRenderOptions,
     render_api: &RenderApi,
+    tag: DebugTag,
 ) -> GfxDrawMesh {
     let mut run_x = glyph_run.offset();
     let run_y = glyph_run.baseline();
@@ -93,9 +96,9 @@ fn render_glyph_run(
     let color = style.brush;
     //trace!(target: "text::render", "render_glyph_run run_idx={run_idx} baseline={run_y}");
 
-    let atlas = create_atlas(scale_ctx, glyph_run, render_api);
+    let atlas = create_atlas(scale_ctx, glyph_run, render_api, tag);
 
-    let mut mesh = MeshBuilder::new();
+    let mut mesh = MeshBuilder::new(tag);
 
     if let Some(underline) = &style.underline {
         render_underline(underline, glyph_run, &mut mesh);
@@ -168,6 +171,7 @@ fn create_atlas(
     scale_ctx: &mut swash::scale::ScaleContext,
     glyph_run: &parley::GlyphRun<'_, Color>,
     render_api: &RenderApi,
+    tag: DebugTag,
 ) -> RenderedAtlas {
     let run = glyph_run.run();
     let font = run.font();
@@ -182,7 +186,7 @@ fn create_atlas(
         .normalized_coords(normalized_coords)
         .build();
 
-    let mut atlas = Atlas::new(scaler, render_api);
+    let mut atlas = Atlas::new(scaler, render_api, tag);
     for glyph in glyph_run.glyphs() {
         atlas.push_glyph(glyph.id);
     }

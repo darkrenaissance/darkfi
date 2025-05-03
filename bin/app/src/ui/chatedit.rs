@@ -38,8 +38,8 @@ use std::{
 use crate::{
     error::Result,
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
-        Point, Rectangle, RenderApi, Vertex,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
+        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex,
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
@@ -467,7 +467,7 @@ impl ChatEdit {
         };
         let cursor_color = self.cursor_color.get();
 
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("chatedit_cursor"));
         mesh.draw_filled_box(&cursor_rect, cursor_color);
         mesh.alloc(&self.render_api).draw_untextured()
     }
@@ -1071,7 +1071,7 @@ impl ChatEdit {
 
         let mut rect = self.rect.get().with_zero_pos();
 
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("chatedit_bg"));
         mesh.draw_outline(&rect, [0., 1., 0., 1.], 1.);
 
         rect.y = padding_top;
@@ -1087,7 +1087,8 @@ impl ChatEdit {
         let editor = self.lock_editor().await;
         let layout = editor.layout();
 
-        let mut render_instrs = text2::render_layout(layout, &self.render_api);
+        let mut render_instrs =
+            text2::render_layout(layout, &self.render_api, gfxtag!("chatedit_txt_mesh"));
         instrs.append(&mut render_instrs);
 
         instrs
@@ -1104,7 +1105,7 @@ impl ChatEdit {
         let sel = editor.selection();
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
-            let mut mesh = MeshBuilder::new();
+            let mut mesh = MeshBuilder::new(gfxtag!("chatedit_select_mesh"));
             sel.geometry_with(layout, |rect: parley::Rect, _| {
                 mesh.draw_filled_box(&rect.into(), sel_color);
             });
@@ -1133,7 +1134,7 @@ impl ChatEdit {
         let pos = self.inner_pos() + Point::new(0., -scroll);
 
         // We could cache this and use Move instead but why bother?
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("chatedit_phone_select_handle"));
         self.draw_phone_select_handle(&mut mesh, first, -1.);
         self.draw_phone_select_handle(&mut mesh, last, 1.);
         vec![

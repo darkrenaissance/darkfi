@@ -31,7 +31,7 @@ use std::{
 use super::{max, MessageId, Timestamp};
 use crate::{
     gfx::{
-        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
+        gfxtag, GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
         GraphicsEventPublisherPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK, COLOR_WHITE},
@@ -102,7 +102,7 @@ impl PrivMessage {
         }
         let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api);
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_privmsg"));
         atlas.push(&time_glyphs);
         atlas.push(&unwrapped_glyphs);
         let atlas = atlas.make();
@@ -156,7 +156,7 @@ impl PrivMessage {
         }
 
         //t!("gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg"));
 
         if self.is_selected {
             let height = self.height(line_height) + msg_spacing;
@@ -336,7 +336,7 @@ impl PrivMessage {
         };
         self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api);
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_privmsg"));
         atlas.push(&self.time_glyphs);
         atlas.push(&self.unwrapped_glyphs);
         self.atlas = atlas.make();
@@ -401,7 +401,7 @@ impl DateMessage {
 
         let glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api);
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_datemsg"));
         atlas.push(&glyphs);
         let atlas = atlas.make();
 
@@ -436,7 +436,7 @@ impl DateMessage {
         let datestr = Self::datestr(self.timestamp);
         self.glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api);
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_datemsg"));
         atlas.push(&self.glyphs);
         self.atlas = atlas.make();
     }
@@ -459,7 +459,7 @@ impl DateMessage {
         debug_render: bool,
         render_api: &RenderApi,
     ) -> GfxDrawMesh {
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_datemsg"));
 
         let glyph_pos_iter =
             GlyphPositionIter::new(self.font_size, self.window_scale, &self.glyphs, baseline);

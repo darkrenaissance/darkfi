@@ -54,6 +54,22 @@ use crate::{
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
 
+#[macro_export]
+macro_rules! gfxtag {
+    ($s:expr) => {{
+        Some($s)
+    }};
+}
+pub use crate::gfxtag;
+
+pub type DebugTag = Option<&'static str>;
+
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "gfx", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "gfx", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "gfx", $($arg)*); } }
+
 #[cfg(target_os = "android")]
 pub fn get_window_size_filename() -> PathBuf {
     crate::android::get_appdata_path().join("window_size")
@@ -93,11 +109,12 @@ pub type ManagedTexturePtr = Arc<ManagedTexture>;
 pub struct ManagedTexture {
     id: GfxTextureId,
     render_api: RenderApi,
+    tag: DebugTag,
 }
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_texture(self.id);
+        self.render_api.delete_unmanaged_texture(self.id, self.tag);
     }
 }
 
@@ -114,11 +131,13 @@ pub type ManagedBufferPtr = Arc<ManagedBuffer>;
 pub struct ManagedBuffer {
     id: GfxBufferId,
     render_api: RenderApi,
+    tag: DebugTag,
+    buftype: u8,
 }
 
 impl Drop for ManagedBuffer {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_buffer(self.id);
+        self.render_api.delete_unmanaged_buffer(self.id, self.tag, self.buftype);
     }
 }
 
@@ -161,15 +180,22 @@ impl RenderApi {
         gfx_texture_id
     }
 
-    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> ManagedTexturePtr {
+    pub fn new_texture(
+        &self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        tag: DebugTag,
+    ) -> ManagedTexturePtr {
         Arc::new(ManagedTexture {
             id: self.new_unmanaged_texture(width, height, data),
             render_api: self.clone(),
+            tag,
         })
     }
 
-    fn delete_unmanaged_texture(&self, texture: GfxTextureId) {
-        let method = GraphicsMethod::DeleteTexture(texture);
+    fn delete_unmanaged_texture(&self, texture: GfxTextureId, tag: DebugTag) {
+        let method = GraphicsMethod::DeleteTexture((texture, tag));
         self.send(method);
     }
 
@@ -191,21 +217,25 @@ impl RenderApi {
         gfx_buffer_id
     }
 
-    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> ManagedBufferPtr {
+    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
         Arc::new(ManagedBuffer {
             id: self.new_unmanaged_vertex_buffer(verts),
             render_api: self.clone(),
+            tag,
+            buftype: 0,
         })
     }
-    pub fn new_index_buffer(&self, indices: Vec<u16>) -> ManagedBufferPtr {
+    pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
         Arc::new(ManagedBuffer {
             id: self.new_unmanaged_index_buffer(indices),
             render_api: self.clone(),
+            tag,
+            buftype: 1,
         })
     }
 
-    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId) {
-        let method = GraphicsMethod::DeleteBuffer(buffer);
+    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId, tag: DebugTag, buftype: u8) {
+        let method = GraphicsMethod::DeleteBuffer((buffer, tag, buftype));
         self.send(method);
     }
 
@@ -536,10 +566,10 @@ impl<'a> RenderContext<'a> {
 #[derive(Clone, Debug)]
 pub enum GraphicsMethod {
     NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
-    DeleteTexture(GfxTextureId),
+    DeleteTexture((GfxTextureId, DebugTag)),
     NewVertexBuffer((Vec<Vertex>, GfxBufferId)),
     NewIndexBuffer((Vec<u16>, GfxBufferId)),
-    DeleteBuffer(GfxBufferId),
+    DeleteBuffer((GfxBufferId, DebugTag, u8)),
     ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
 }
 
@@ -723,34 +753,45 @@ impl Stage {
         }
     }
 
-    fn process_method(&mut self, method: GraphicsMethod) {
+    fn clear(&mut self) {
+        std::mem::take(&mut self.draw_calls);
+        std::mem::take(&mut self.textures);
+        std::mem::take(&mut self.buffers);
+    }
+
+    fn process_method(&mut self, mut method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
-        match method {
+        let res = match &mut method {
             GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
-                self.method_new_texture(width, height, data, gfx_texture_id)
+                self.method_new_texture(*width, *height, data, *gfx_texture_id)
             }
-            GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
-            GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
-                self.method_new_vertex_buffer(verts, sendr)
+            GraphicsMethod::DeleteTexture((texture, _)) => self.method_delete_texture(*texture),
+            GraphicsMethod::NewVertexBuffer((verts, gbuffid)) => {
+                self.method_new_vertex_buffer(verts, *gbuffid)
             }
-            GraphicsMethod::NewIndexBuffer((indices, sendr)) => {
-                self.method_new_index_buffer(indices, sendr)
+            GraphicsMethod::NewIndexBuffer((indices, gbuffid)) => {
+                self.method_new_index_buffer(indices, *gbuffid)
             }
-            GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
+            GraphicsMethod::DeleteBuffer((buffer, _, _)) => self.method_delete_buffer(*buffer),
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
-                self.method_replace_draw_calls(timest, dcs)
+                let dcs = std::mem::take(dcs);
+                self.method_replace_draw_calls(*timest, dcs)
             }
         };
+        if let Err(err) = res {
+            e!("process_method(method={method:?}) failed with err: {err:?}");
+            panic!("process_method failed!")
+        }
     }
 
     fn method_new_texture(
         &mut self,
         width: u16,
         height: u16,
-        data: Vec<u8>,
+        data: &Vec<u8>,
         gfx_texture_id: GfxTextureId,
-    ) {
-        let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
+    ) -> Result<()> {
+        let texture = self.ctx.new_texture_from_rgba8(width, height, data);
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: new_texture({}, {}, ..., {}) -> {:?}",
                    width, height, gfx_texture_id, texture);
@@ -759,22 +800,32 @@ impl Stage {
             //       ansi_texture(width as usize, height as usize, &data));
         }
         if let Some(_) = self.textures.insert(gfx_texture_id, texture) {
-            panic!("Duplicate texture ID={gfx_texture_id} detected!");
+            //panic!("Duplicate texture ID={gfx_texture_id} detected!");
+            return Err(Error::GfxDuplicateTextureID)
         }
+        Ok(())
     }
-    fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) {
-        let texture = self.textures.remove(&gfx_texture_id).expect("couldn't find gfx_texture_id");
+    fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) -> Result<()> {
+        let Some(texture) = self.textures.remove(&gfx_texture_id) else {
+            //.expect("couldn't find gfx_texture_id");
+            return Err(Error::GfxUnknownTextureID)
+        };
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: delete_texture({} => {:?})",
                    gfx_texture_id, texture);
         }
         self.ctx.delete_texture(texture);
+        Ok(())
     }
-    fn method_new_vertex_buffer(&mut self, verts: Vec<Vertex>, gfx_buffer_id: GfxBufferId) {
+    fn method_new_vertex_buffer(
+        &mut self,
+        verts: &[Vertex],
+        gfx_buffer_id: GfxBufferId,
+    ) -> Result<()> {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
-            BufferSource::slice(&verts),
+            BufferSource::slice(verts),
         );
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: new_vertex_buffer(..., {}) -> {:?}",
@@ -783,10 +834,16 @@ impl Stage {
             //       verts, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
-            panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!");
+            //panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!");
+            return Err(Error::GfxDuplicateBufferID)
         }
+        Ok(())
     }
-    fn method_new_index_buffer(&mut self, indices: Vec<u16>, gfx_buffer_id: GfxBufferId) {
+    fn method_new_index_buffer(
+        &mut self,
+        indices: &[u16],
+        gfx_buffer_id: GfxBufferId,
+    ) -> Result<()> {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
@@ -799,18 +856,28 @@ impl Stage {
             //       indices, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
-            panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
+            //panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
+            return Err(Error::GfxDuplicateBufferID)
         }
+        Ok(())
     }
-    fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) {
-        let buffer = self.buffers.remove(&gfx_buffer_id).expect("couldn't find gfx_buffer_id");
+    fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) -> Result<()> {
+        let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
+            //.expect("couldn't find gfx_buffer_id");
+            return Err(Error::GfxUnknownBufferID)
+        };
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: delete_buffer({} => {:?})",
                    gfx_buffer_id, buffer);
         }
         self.ctx.delete_buffer(buffer);
+        Ok(())
     }
-    fn method_replace_draw_calls(&mut self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
+    fn method_replace_draw_calls(
+        &mut self,
+        timest: u64,
+        dcs: Vec<(u64, GfxDrawCall)>,
+    ) -> Result<()> {
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
         }
@@ -834,6 +901,7 @@ impl Stage {
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -938,7 +1006,10 @@ impl EventHandler for Stage {
     fn force_reload(&mut self) {
         let god = GOD.get().unwrap();
         god.stop_app();
-        god.start_app();
+        //god.start_app();
+        drop(god);
+        self.clear();
+        *self = Self::new();
     }
 }
 

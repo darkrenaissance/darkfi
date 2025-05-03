@@ -23,8 +23,8 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Point,
-        Rectangle, RenderApi,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
+        Point, Rectangle, RenderApi,
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
@@ -138,7 +138,7 @@ impl Text {
             debug_opts |= text2::DebugRenderOptions::Baseline;
         }
 
-        text2::render_layout_with_opts(&layout, debug_opts, &self.render_api)
+        text2::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
     }
 
     async fn redraw(self: Arc<Self>) {

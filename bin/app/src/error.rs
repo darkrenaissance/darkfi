@@ -124,6 +124,18 @@ pub enum Error {
 
     #[error("Service failed")]
     ServiceFailed = 40,
+
+    #[error("Duplicate texture ID")]
+    GfxDuplicateTextureID = 41,
+
+    #[error("Unknown texture ID")]
+    GfxUnknownTextureID = 42,
+
+    #[error("Duplicate buffer ID")]
+    GfxDuplicateBufferID = 43,
+
+    #[error("Unknown buffer ID")]
+    GfxUnknownBufferID = 44,
 }
 
 impl From<sled::Error> for Error {

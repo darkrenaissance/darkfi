@@ -18,7 +18,10 @@
 
 use crate::{
     error::Result,
-    gfx::{GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex},
+    gfx::{
+        DebugTag, GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
+        Vertex,
+    },
 };
 
 pub type Color = [f32; 4];
@@ -70,14 +73,15 @@ pub struct MeshBuilder {
     pub verts: Vec<Vertex>,
     pub indices: Vec<u16>,
     clipper: Option<Rectangle>,
+    tag: DebugTag,
 }
 
 impl MeshBuilder {
-    pub fn new() -> Self {
-        Self { verts: vec![], indices: vec![], clipper: None }
+    pub fn new(tag: DebugTag) -> Self {
+        Self { verts: vec![], indices: vec![], clipper: None, tag }
     }
-    pub fn with_clip(clipper: Rectangle) -> Self {
-        Self { verts: vec![], indices: vec![], clipper: Some(clipper) }
+    pub fn with_clip(tag: DebugTag, clipper: Rectangle) -> Self {
+        Self { verts: vec![], indices: vec![], clipper: Some(clipper), tag }
     }
 
     pub fn append(&mut self, mut verts: Vec<Vertex>, indices: Vec<u16>) {
@@ -187,8 +191,8 @@ impl MeshBuilder {
         //    debug!(target: "mesh", "  {:?}", vert);
         //}
         let num_elements = self.indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(self.verts);
-        let index_buffer = render_api.new_index_buffer(self.indices);
+        let vertex_buffer = render_api.new_vertex_buffer(self.verts, self.tag);
+        let index_buffer = render_api.new_index_buffer(self.indices, self.tag);
         MeshInfo { vertex_buffer, index_buffer, num_elements }
     }
 }
