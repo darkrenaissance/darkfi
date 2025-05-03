@@ -33,7 +33,7 @@ futures-rustls = {version = "0.26.0", default-features = false, features = ["log
 rustls-pemfile = "2.2.0"
 
 # Crypto
-blake3 = "1.8.1"
+blake3 = "1.8.2"
 bcrypt = "0.17.0"
 crypto_box = {version = "0.9.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
@@ -44,12 +44,12 @@ url = "2.5.4"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.20"
+toml = "0.8.22"
 semver = "1.0.26"
 
 # Daemon
 easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
+signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
 smol = "2.0.2"

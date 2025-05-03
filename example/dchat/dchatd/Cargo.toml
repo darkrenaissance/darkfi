@@ -17,7 +17,7 @@ darkfi-serial = "0.4.2"
 
 # daemon
 easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
+signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
 smol = "2.0.2"

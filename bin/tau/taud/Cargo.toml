@@ -31,17 +31,17 @@ darkfi-serial = "0.4.2"
 sled-overlay = "0.1.7"
 
 # Crypto
-blake3 = "1.8.1"
+blake3 = "1.8.2"
 crypto_box = { version = "0.9.1", features = ["std", "chacha20"] }
 rand = "0.8.5"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.20"
+toml = "0.8.22"
 
 # Misc
 async-trait = "0.1.88"
-chrono = "0.4.40"
+chrono = "0.4.41"
 futures = "0.3.31"
 libc = "0.2.172"
 log = "0.4.27"
@@ -51,7 +51,7 @@ url = "2.5.4"
 
 # Daemon
 easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
+signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
 smol = "2.0.2"

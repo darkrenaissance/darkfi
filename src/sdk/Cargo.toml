@@ -26,11 +26,11 @@ darkfi-serial = {version = "0.4.2", features = ["crypto"]}
 # Encoding
 bs58 = "0.5.1"
 num = "0.4.3"
-sha2 = "0.10.8"
+sha2 = "0.10.9"
 
 # Cryptography
 blake2b_simd = "1.0.3"
-blake3 = "1.8.1"
+blake3 = "1.8.2"
 chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.3.1"
 bridgetree = "0.6.0"

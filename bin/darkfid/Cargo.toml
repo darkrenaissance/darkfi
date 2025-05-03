@@ -17,13 +17,13 @@ darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = "0.4.2"
 
 # Misc
-blake3 = "1.8.1"
+blake3 = "1.8.2"
 bs58 = "0.5.1"
 log = "0.4.27"
 num-bigint = "0.4.6"
 rand = "0.8.5"
 sled-overlay = "0.1.7"
-toml = "0.8.20"
+toml = "0.8.22"
 
 # JSON-RPC
 async-trait = "0.1.88"
@@ -32,7 +32,7 @@ url = "2.5.4"
 
 # Daemon
 easy-parallel = "3.3.1"
-signal-hook-async-std = "0.2.2"
+signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
 smol = "2.0.2"

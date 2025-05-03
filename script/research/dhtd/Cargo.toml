@@ -11,10 +11,10 @@ features = ["dht"]
 
 [dependencies]
 async-channel = "2.3.1"
-async-executor = "1.13.1"
+async-executor = "1.13.2"
 async-std = "1.13.1"
 async-trait = "0.1.88"
-blake3 = "1.8.1"
+blake3 = "1.8.2"
 ctrlc = { version = "3.4.6", features = ["termination"] }
 easy-parallel = "3.3.1"
 futures-lite = "2.6.0"
