@@ -1366,7 +1366,11 @@ impl ChatEdit {
         editor.on_buffer_changed(atom).await;
         drop(editor);
 
-        self.redraw().await;
+        // Only redraw once we have the parent_rect
+        // Can happen when we receive an Android event before the canvas is ready
+        if self.parent_rect.lock().is_some() {
+            self.redraw().await;
+        }
     }
 }
 
@@ -1385,14 +1389,16 @@ impl UIObject for ChatEdit {
 
     fn init(&self) {
         let mut guard = self.editor.lock_blocking();
-        assert!(guard.is_none());
-        *guard = Some(Editor::new(
-            self.text.clone(),
-            self.font_size.clone(),
-            self.text_color.clone(),
-            self.window_scale.clone(),
-            self.lineheight.clone(),
-        ));
+        //assert!(guard.is_none());
+        if guard.is_none() {
+            *guard = Some(Editor::new(
+                self.text.clone(),
+                self.font_size.clone(),
+                self.text_color.clone(),
+                self.window_scale.clone(),
+                self.lineheight.clone(),
+            ));
+        }
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
@@ -1523,7 +1529,7 @@ impl UIObject for ChatEdit {
         *self.parent_rect.lock() = None;
         self.key_repeat.lock().clear();
         *self.cursor_mesh.lock() = None;
-        *self.editor.lock_blocking() = None;
+        //*self.editor.lock_blocking() = None;
     }
 
     async fn draw(
