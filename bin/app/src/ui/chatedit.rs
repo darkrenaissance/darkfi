@@ -1267,6 +1267,15 @@ impl ChatEdit {
         }
     }
 
+    async fn insert(&self, txt: &str, atom: &mut PropertyAtomicGuard) {
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut editor = self.lock_editor().await;
+        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+
+        drv.insert_or_replace_selection(&txt);
+        editor.on_buffer_changed(atom).await;
+    }
+
     async fn process_insert_text_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
             debug!(target: "ui::chatedit", "Event relayer closed");
@@ -1293,7 +1302,8 @@ impl ChatEdit {
         };
 
         let atom = &mut PropertyAtomicGuard::new();
-        //self_.insert_text(&text, atom).await;
+        self_.insert(&text, atom).await;
+        self_.redraw().await;
         true
     }
 
@@ -1577,22 +1587,9 @@ impl UIObject for ChatEdit {
             return true
         }
 
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
-
         t!("Key {:?} has {} actions", key, actions);
-        for _ in 0..actions {
-            let mut tmp = [0; 4];
-            let key_str = key.encode_utf8(&mut tmp);
-
-            drv.insert_or_replace_selection(&key_str);
-        }
-        drop(drv);
-        drop(txt_ctx);
-        editor.on_buffer_changed(atom).await;
-        drop(editor);
-
+        let key_str = key.to_string().repeat(actions as usize);
+        self.insert(&key_str, atom).await;
         self.redraw().await;
         true
     }
@@ -1600,7 +1597,7 @@ impl UIObject for ChatEdit {
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
         t!("handle_key_down({key:?}, {mods:?}, {repeat})");
         // First filter for only single digit keys
-        // Avoid processing events handled by insert_char()
+        // Avoid processing events handled by handle_char()
         if !ALLOWED_KEYCODES.contains(&key) {
             return false
         }

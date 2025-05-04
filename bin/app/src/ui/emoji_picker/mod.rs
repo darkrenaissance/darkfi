@@ -248,7 +248,7 @@ impl EmojiPicker {
             let pos = Point::new(x, y);
             let mesh = emoji_meshes.get(i);
             instrs.extend_from_slice(&[
-                GfxDrawInstruction::Move(pos),
+                GfxDrawInstruction::SetPos(pos),
                 GfxDrawInstruction::Draw(mesh),
             ]);
 

@@ -29,7 +29,7 @@ use crate::{
     error::Error,
     expr::{self, Compiler, Op},
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
-    mesh::{Color, COLOR_PURPLE, MeshBuilder},
+    mesh::{Color, MeshBuilder, COLOR_PURPLE},
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
         PropertyType, Role,
@@ -108,7 +108,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         expr::load_var("w"),
         expr::load_var("h"),
         1.,
-        COLOR_PURPLE
+        COLOR_PURPLE,
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;

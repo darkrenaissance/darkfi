@@ -68,8 +68,8 @@ mod util;
 
 use crate::{
     app::{App, AppPtr},
-    net::ZeroMQAdapter,
     gfx::EpochIndex,
+    net::ZeroMQAdapter,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
         Role,

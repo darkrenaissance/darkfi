@@ -36,7 +36,7 @@ use crate::android;
 use crate::{
     error::Error,
     expr::Op,
-    gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex, EpochIndex},
+    gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi, Vertex},
     plugin::PluginSettings,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
