@@ -67,12 +67,6 @@ fn send(id: usize, ev: AndroidSuggestEvent) {
     let _ = sender.try_send(ev);
 }
 
-pub fn clear_state() {
-    let mut globals = &mut GLOBALS.lock();
-    globals.senders.clear();
-    globals.next_id = 0;
-}
-
 unsafe impl Send for GlobalData {}
 unsafe impl Sync for GlobalData {}
 

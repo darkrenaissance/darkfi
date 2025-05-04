@@ -36,7 +36,7 @@ use crate::android;
 use crate::{
     error::Error,
     expr::Op,
-    gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
+    gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex, EpochIndex},
     plugin::PluginSettings,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
@@ -148,8 +148,8 @@ impl App {
     }
 
     /// Begins the draw of the tree, and then starts the UI procs.
-    pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr) {
-        d!("Starting app");
+    pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
+        d!("Starting app epoch={epoch}");
         let atom = &mut PropertyAtomicGuard::new();
 
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
@@ -163,7 +163,9 @@ impl App {
 
         // Access drawable in window node and call draw()
         self.init();
-        self.trigger_draw().await;
+        if epoch == 1 {
+            self.trigger_draw().await;
+        }
 
         self.start_procs(event_pub).await;
         i!("App started");

@@ -684,14 +684,12 @@ impl Stage {
     pub fn new() -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
-        // This will start the app to start. Needed since we cannot get window size for init
-        // until window is created.
         let god = GOD.get().unwrap();
-        god.start_app();
-
         // Start a new epoch. This is a brand new UI run.
         let epoch = god.render_api.next_epoch();
-
+        // This will start the app to start. Needed since we cannot get window size for init
+        // until window is created.
+        god.start_app(epoch);
         let method_rep = god.method_rep.clone();
         let event_pub = god.event_pub.clone();
         drop(god);
@@ -952,6 +950,7 @@ impl EventHandler for Stage {
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
+        t!("resize_event({width}, {height})");
         let filename = get_window_size_filename();
         if let Some(parent) = filename.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -1004,12 +1003,14 @@ impl EventHandler for Stage {
     }
 
     fn force_reload(&mut self) {
+        t!("force_reload");
         let god = GOD.get().unwrap();
         god.stop_app();
         //god.start_app();
         drop(god);
         self.clear();
         *self = Self::new();
+        t!("force_reload [DONE]");
     }
 }
 

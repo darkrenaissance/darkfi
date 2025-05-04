@@ -69,6 +69,7 @@ mod util;
 use crate::{
     app::{App, AppPtr},
     net::ZeroMQAdapter,
+    gfx::EpochIndex,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
         Role,
@@ -213,8 +214,8 @@ impl God {
     }
 
     /// Start the app. Can only happen once the window is ready.
-    pub fn start_app(&self) {
-        info!(target: "main", "Restarting the app");
+    pub fn start_app(&self, epoch: EpochIndex) {
+        info!(target: "main", "Starting the app");
         #[cfg(target_os = "android")]
         {
             use crate::android::{get_appdata_path, get_external_storage_path};
@@ -238,21 +239,16 @@ impl God {
         let app = self.app.clone();
         let cv = self.cv_app_is_setup.clone();
         let event_pub = self.event_pub.clone();
-        let app_task = self.fg_ex.spawn(async move {
+        smol::block_on(async move {
             cv.wait().await;
-            app.start(event_pub).await;
+            app.start(event_pub, epoch).await;
         });
-        self.fg_runtime.push_task(app_task);
     }
 
     /// Put the app to sleep until the next restart.
     pub fn stop_app(&self) {
         self.fg_runtime.stop();
         self.app.stop();
-
-        #[cfg(target_os = "android")]
-        android::clear_state();
-
         info!(target: "main", "App stopped");
     }
 }
