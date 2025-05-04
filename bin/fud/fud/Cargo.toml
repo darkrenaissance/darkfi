@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht"]}
 darkfi-serial = {version = "0.4.2", features = ["hash"]}
 
 # Misc

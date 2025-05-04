@@ -292,6 +292,11 @@ zkas = [
     "darkfi-serial",
 ]
 
+dht = [
+    "async-trait",
+    "num-bigint",
+]
+
 # Could not get this to work. Complains manifest-key is ignored.
 #[target.'cfg(target_family = "unix")'.features]
 #net = ["net-defaults", "p2p-unix"]

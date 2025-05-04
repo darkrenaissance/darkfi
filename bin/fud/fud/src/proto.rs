@@ -16,10 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
+use log::{debug, error, info};
+use smol::{fs::File, Executor};
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use darkfi::{
+    dht::{DhtHandler, DhtNode, DhtRouterItem},
     geode::{hash_to_string, read_until_filled, MAX_CHUNK_SIZE},
     impl_p2p_message,
     net::{
@@ -30,11 +33,8 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use log::{debug, error, info};
-use smol::{fs::File, Executor};
 
 use super::Fud;
-use crate::dht::{DhtHandler, DhtNode, DhtRouterItem};
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]

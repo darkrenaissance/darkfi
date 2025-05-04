@@ -16,13 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    io::ErrorKind,
-    path::PathBuf,
-    sync::Arc,
-};
-
 use async_trait::async_trait;
 use futures::{future::FutureExt, pin_mut, select};
 use log::{debug, error, info, warn};
@@ -36,14 +29,17 @@ use smol::{
     stream::StreamExt,
     Executor,
 };
+use std::{
+    collections::{HashMap, HashSet},
+    io::ErrorKind,
+    path::PathBuf,
+    sync::Arc,
+};
 use structopt_toml::{structopt::StructOpt, StructOptToml};
 
-use crate::{
-    dht::{DhtSettings, DhtSettingsOpt},
-    rpc::FudEvent,
-};
 use darkfi::{
     async_daemonize, cli_desc,
+    dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr, DhtSettings, DhtSettingsOpt},
     geode::{hash_to_string, ChunkedFile, Geode},
     net::{
         session::SESSION_DEFAULT, settings::SettingsOpt, ChannelPtr, P2p, P2pPtr,
@@ -59,9 +55,9 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr};
+
 use resource::{Resource, ResourceStatus};
-use rpc::{ChunkDownloadCompleted, ChunkNotFound};
+use rpc::{ChunkDownloadCompleted, ChunkNotFound, FudEvent};
 use tasks::FetchReply;
 
 /// P2P protocols
@@ -72,7 +68,6 @@ use proto::{
     FudPingRequest, ProtocolFud,
 };
 
-mod dht;
 mod resource;
 mod rpc;
 mod tasks;
@@ -175,7 +170,7 @@ impl DhtHandler for Fud {
         self.dht.clone()
     }
 
-    async fn ping(&self, channel: ChannelPtr) -> Result<dht::DhtNode> {
+    async fn ping(&self, channel: ChannelPtr) -> Result<DhtNode> {
         debug!(target: "fud::DhtHandler::ping()", "Sending ping to channel {}", channel.info.id);
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<FudPingReply>().await;

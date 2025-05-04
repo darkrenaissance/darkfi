@@ -16,16 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use log::{error, info};
 use std::sync::Arc;
 
-use darkfi::{geode::hash_to_string, system::sleep, Error, Result};
+use darkfi::{dht::DhtHandler, geode::hash_to_string, system::sleep, Error, Result};
 
 use crate::{
-    dht::DhtHandler,
     proto::{FudAnnounce, FudChunkReply, FudFileReply},
     Fud,
 };
-use log::{error, info};
 
 /// Triggered when calling the `get` RPC method
 pub async fn get_task(fud: Arc<Fud>) -> Result<()> {

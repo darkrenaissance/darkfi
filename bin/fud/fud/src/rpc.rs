@@ -16,19 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
+use log::{error, info};
+use smol::{
+    fs::{self, File},
+    lock::MutexGuard,
+};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
+use tinyjson::JsonValue;
 
-use crate::{
-    dht::DhtHandler,
-    proto::FudAnnounce,
-    resource::{Resource, ResourceStatus},
-    Fud,
-};
-use async_trait::async_trait;
 use darkfi::{
+    dht::DhtHandler,
     geode::hash_to_string,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
@@ -40,12 +41,12 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use log::{error, info};
-use smol::{
-    fs::{self, File},
-    lock::MutexGuard,
+
+use crate::{
+    proto::FudAnnounce,
+    resource::{Resource, ResourceStatus},
+    Fud,
 };
-use tinyjson::JsonValue;
 
 #[async_trait]
 impl RequestHandler<()> for Fud {

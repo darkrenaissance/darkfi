@@ -55,6 +55,9 @@ pub mod zk;
 #[cfg(feature = "zkas")]
 pub mod zkas;
 
+#[cfg(feature = "dht")]
+pub mod dht;
+
 pub const ANSI_LOGO: &str = include_str!("../contrib/darkfi.ansi");
 
 #[macro_export]
