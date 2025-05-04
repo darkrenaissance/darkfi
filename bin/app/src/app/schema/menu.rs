@@ -48,7 +48,7 @@ use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
-    pub const CHANNEL_LABEL_Y: f32 = 28.;
+    pub const CHANNEL_LABEL_Y: f32 = 35.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
     pub const CHANNEL_LABEL_BASELINE: f32 = 82.;

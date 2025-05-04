@@ -113,8 +113,8 @@ impl App {
         let mut window_scale = 1.;
         #[cfg(target_os = "android")]
         {
-            window_scale = android::get_screen_density() / 2.25;
-            t!("Setting window_scale to {window_scale}");
+            window_scale = android::get_screen_density() / 2.625;
+            d!("Setting window_scale to {window_scale}");
         }
 
         settings.add_setting("scale", PropertyValue::Float32(window_scale));
@@ -163,9 +163,9 @@ impl App {
 
         // Access drawable in window node and call draw()
         self.init();
-        if epoch == 1 {
-            self.trigger_draw().await;
-        }
+        //if epoch == 1 {
+        self.trigger_draw().await;
+        //}
 
         self.start_procs(event_pub).await;
         i!("App started");

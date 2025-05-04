@@ -411,6 +411,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     // Navbar Settings Button
 
+    /*
     // Layer
     let settingslayer_node = create_layer("settings_button_layer");
     let prop = settingslayer_node.get_property("rect").unwrap();
@@ -497,6 +498,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     settingslayer_node.clone().link(node);
+    */
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(
         app.render_api.clone(),

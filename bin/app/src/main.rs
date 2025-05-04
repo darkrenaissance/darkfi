@@ -189,8 +189,9 @@ impl God {
         #[cfg(feature = "enable-plugins")]
         {
             let ex = bg_ex.clone();
+            let cv = cv_app_is_setup.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root).await;
+                load_plugins(ex, sg_root, cv).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -262,7 +263,7 @@ impl std::fmt::Debug for God {
 pub static GOD: OnceLock<God> = OnceLock::new();
 
 #[cfg(feature = "enable-plugins")]
-async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr) {
+async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
     sg_root.clone().link(plugin.clone());
@@ -339,6 +340,7 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr) {
     darkirc.register("connect", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let listen_connect = ex.spawn(async move {
+        cv.wait().await;
         let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
         let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
         let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();

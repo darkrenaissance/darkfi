@@ -126,12 +126,13 @@ Open cmd and navigate to the folder. Now run `cargo build`.
 
 ```
 C:\Users\a> cd ../../darkfi/bin/app/
-C:\darkfi\bin\app> cargo build
+C:\darkfi\bin\app> cargo build --release --features=enable-plugins
 ```
 
 ## Create Installer
 
 * Use Advanced Installer to create an MSI installer.
+    * Application Folder should have `DarkFi App.exe` and `assets/`.
 * Add shortcuts. Use the provided darkfi.ico icon.
     * Application Shortcut Folder
     * Desktop
