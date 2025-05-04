@@ -128,6 +128,23 @@ public boolean setSelection(int id, int start, int end) {
     iv.inputConnection.endBatchEdit();
     return true;
 }
+public boolean commitText(int id, String txt) {
+    //Log.d("darkfi", "setText(" + id + ", " + txt + ")");
+    InvisibleInputView iv = editors.get(id);
+    if (iv == null) {
+        return false;
+    }
+
+    if (iv.inputConnection == null) {
+        return false;
+    }
+
+    iv.inputConnection.beginBatchEdit();
+    iv.inputConnection.finishComposingText();
+    iv.inputConnection.commitText(txt, 1);
+    iv.inputConnection.endBatchEdit();
+    return true;
+}
 
 /*
 // Editable string with the spans displayed inline

@@ -201,15 +201,18 @@ pub fn set_text(id: usize, text: &str) -> Option<()> {
 
         let new_string_utf = (**env).NewStringUTF.unwrap();
         let jtext = new_string_utf(env, ctext.as_ptr());
+        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
 
-        ndk_utils::call_bool_method!(
+        let res = ndk_utils::call_bool_method!(
             env,
             android::ACTIVITY,
             "setText",
             "(ILjava/lang/String;)Z",
             id as i32,
             jtext
-        )
+        );
+        delete_local_ref(env, jtext);
+        res
     };
     if is_success == 0u8 {
         None
@@ -231,6 +234,34 @@ pub fn set_selection(id: usize, select_start: usize, select_end: usize) -> Optio
             select_start as i32,
             select_end as i32
         )
+    };
+    if is_success == 0u8 {
+        None
+    } else {
+        Some(())
+    }
+}
+
+pub fn commit_text(id: usize, text: &str) -> Option<()> {
+    let ctext = std::ffi::CString::new(text).unwrap();
+    let is_success = unsafe {
+        let env = android::attach_jni_env();
+
+        let new_string_utf = (**env).NewStringUTF.unwrap();
+        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
+
+        let jtext = new_string_utf(env, ctext.as_ptr());
+
+        let res = ndk_utils::call_bool_method!(
+            env,
+            android::ACTIVITY,
+            "commitText",
+            "(ILjava/lang/String;)Z",
+            id as i32,
+            jtext
+        );
+        delete_local_ref(env, jtext);
+        res
     };
     if is_success == 0u8 {
         None

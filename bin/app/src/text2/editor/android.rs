@@ -226,7 +226,12 @@ impl Editor {
         Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32)
     }
 
-    pub async fn driver<'a>(
+    pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
+        android::commit_text(self.composer_id, txt);
+        self.on_buffer_changed(atom).await;
+    }
+
+    pub fn driver<'a>(
         &'a mut self,
         txt_ctx: &'a mut TextContext,
     ) -> Option<parley::PlainEditorDriver<'a, Color>> {

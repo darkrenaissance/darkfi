@@ -102,7 +102,15 @@ impl Editor {
         cursor_pos
     }
 
-    pub async fn driver<'a>(
+    pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
+        let mut txt_ctx = TEXT_CTX.get().await;
+        let (font_ctx, layout_ctx) = txt_ctx.borrow();
+        let mut drv = self.editor.driver(font_ctx, layout_ctx);
+        drv.insert_or_replace_selection(&txt);
+        self.on_buffer_changed(atom).await;
+    }
+
+    pub fn driver<'a>(
         &'a mut self,
         txt_ctx: &'a mut TextContext,
     ) -> Option<parley::PlainEditorDriver<'a, Color>> {

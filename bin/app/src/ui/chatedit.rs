@@ -539,7 +539,7 @@ impl ChatEdit {
 
         let mut txt_ctx = text2::TEXT_CTX.get().await;
         let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+        let mut drv = editor.driver(&mut txt_ctx).unwrap();
 
         match key {
             'a' => {
@@ -587,7 +587,7 @@ impl ChatEdit {
 
         let mut txt_ctx = text2::TEXT_CTX.get().await;
         let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+        let mut drv = editor.driver(&mut txt_ctx).unwrap();
 
         match key {
             KeyCode::Left => {
@@ -1268,12 +1268,8 @@ impl ChatEdit {
     }
 
     async fn insert(&self, txt: &str, atom: &mut PropertyAtomicGuard) {
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
         let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
-
-        drv.insert_or_replace_selection(&txt);
-        editor.on_buffer_changed(atom).await;
+        editor.insert(txt, atom).await;
     }
 
     async fn process_insert_text_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -1667,7 +1663,7 @@ impl UIObject for ChatEdit {
         {
             let mut txt_ctx = text2::TEXT_CTX.get().await;
             let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+            let mut drv = editor.driver(&mut txt_ctx).unwrap();
             drv.move_to_point(mouse_pos.x, mouse_pos.y);
         }
 
@@ -1717,7 +1713,7 @@ impl UIObject for ChatEdit {
         let seltext = {
             let mut txt_ctx = text2::TEXT_CTX.get().await;
             let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut txt_ctx).await.unwrap();
+            let mut drv = editor.driver(&mut txt_ctx).unwrap();
             drv.extend_selection_to_point(mouse_pos.x, mouse_pos.y);
             editor.selected_text()
         };
