@@ -200,6 +200,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let node = node.setup(|me| Shortcut::new(me)).await;
     window.clone().link(node);
 
+    /*
     let node = create_gesture("zoom_gesture");
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let (slot, recvr) = Slot::new("zoom_gesture");
@@ -226,6 +227,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Gesture::new(me)).await;
     window.clone().link(node);
+    */
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         // Bg layer

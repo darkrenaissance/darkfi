@@ -59,7 +59,7 @@ mod android_ui_consts {
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
-    pub const CHATEDIT_MIN_HEIGHT: f32 = 140.;
+    pub const CHATEDIT_MIN_HEIGHT: f32 = 160.;
     pub const CHATEDIT_MAX_HEIGHT: f32 = 500.;
     pub const CHATEDIT_HEIGHT: f32 = 140.;
     pub const CHATEDIT_SINGLE_LINE_Y: f32 = 120.;
@@ -720,7 +720,7 @@ pub async fn make(
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
     let prop = node.get_property("padding").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, TEXTBAR_BASELINE * 0.4).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, TEXTBAR_BASELINE / 2.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
@@ -1346,7 +1346,7 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", 0.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.24).unwrap();
     node.set_property_str(atom, Role::App, "text", "copy   paste   select all").unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();

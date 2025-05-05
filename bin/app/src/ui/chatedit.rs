@@ -429,23 +429,40 @@ impl ChatEdit {
 
     /// Inner position used for rendering
     fn inner_pos(&self) -> Point {
+        let pad_top = self.padding_top();
+        let pad_bot = self.padding_bottom();
         let content_height = self.content_height.get();
+        let outer_height = content_height + pad_top + pad_bot;
         let rect_h = self.rect.get_height();
         let mut inner_pos = Point::zero();
-        if content_height < rect_h {
+        if outer_height < rect_h {
+            // Min was applied to clip. Center content inside the rect.
             inner_pos.y = (rect_h - content_height) / 2.;
+        } else {
+            inner_pos.y = pad_top;
         }
         inner_pos
     }
 
     /// Maximum allowed scroll value
+    /// * `content_height` measures the height of the actual content.
+    /// * `outer_height` applies the inner padding.
+    /// * `rect_h` then clips the `outer_height` to min/max values.
+    /// We only allow scrolling when max clipping has been applied.
     fn max_scroll(&self) -> f32 {
         let content_height = self.content_height.get();
+        let outer_height = content_height + self.padding_top() + self.padding_bottom();
         let rect_h = self.rect.get_height();
-        let mut max_scroll = (content_height - rect_h).max(0.);
-        // Arbitrary little space at the bottom
-        max_scroll += self.font_size.get() / 3.;
-        max_scroll
+        //t!("max_scroll content_height={content_height}, rect_h={rect_h}");
+        (outer_height - rect_h).max(0.)
+    }
+
+    /// Gets the real cursor pos within the rect.
+    async fn get_cursor_pos(&self) -> Point {
+        // This is the position within the content.
+        let cursor_pos = self.lock_editor().await.get_cursor_pos();
+        // Apply the inner padding
+        cursor_pos + self.inner_pos()
     }
 
     /// Lazy-initializes the editor and returns a handle to it
@@ -913,62 +930,36 @@ impl ChatEdit {
         drop(editor);
 
         self.pause_blinking();
-
-        self.is_phone_select.store(false, Ordering::Relaxed);
-        self.hide_cursor.store(false, Ordering::Relaxed);
+        self.finish_select(&mut PropertyAtomicGuard::new());
     }
 
-    /// Whenever the cursor property is modified this MUST be called
-    /// to recalculate the scroll x property.
-    fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
-        /*
-        let rect = self.rect.get();
+    fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
+        self.is_phone_select.store(false, Ordering::Relaxed);
+        self.hide_cursor.store(false, Ordering::Relaxed);
+        self.select_text
+            .clone()
+            .set_null(&mut PropertyAtomicGuard::new(), Role::Internal, 0)
+            .unwrap();
+    }
 
-        let cursor_pos = self.cursor_pos.get() as usize;
-        let cursor_width = self.cursor_width.get();
+    /// Whenever the cursor is modified this MUST be called
+    /// to recalculate the scroll y property.
+    async fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
         let mut scroll = self.scroll.get();
+        let rect_h = self.rect.get_height();
+        let cursor_y0 = self.get_cursor_pos().await.y;
+        let cursor_h = self.baseline.get() + self.cursor_descent.get();
+        // The bottom
+        let cursor_y1 = cursor_y0 + cursor_h;
 
-        let cursor_x = {
-            let font_size = self.font_size.get();
-            let window_scale = self.window_scale.get();
-            let baseline = self.baseline.get();
-            let glyphs = self.glyphs.lock().clone();
-
-            let mut glyph_pos_iter =
-                GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-
-            if cursor_pos == 0 {
-                0.
-            } else if cursor_pos == glyphs.len() {
-                let glyph_pos = glyph_pos_iter.last().unwrap();
-
-                let rhs = glyph_pos.rhs() + eol_nudge(font_size, &glyphs);
-                rhs
-            } else {
-                assert!(cursor_pos < glyphs.len());
-                let glyph_pos = glyph_pos_iter.nth(cursor_pos).expect("glyph pos mismatch glyphs");
-                glyph_pos.x
-            }
-        };
-
-        // The LHS and RHS of the cursor box
-        let cursor_lhs = cursor_x - scroll;
-        let cursor_rhs = cursor_lhs + cursor_width;
-
-        // RHS is outside
-        if cursor_rhs > rect.w {
-            // We want a scroll so RHS = w
-            // cursor_x - scroll + CURSOR_WIDTH = rect.w
-            scroll = cursor_x + cursor_width - rect.w;
-        // LHS is negative
-        } else if cursor_lhs < 0. {
-            // We want scroll so LHS = 0
-            // cursor_x - scroll = 0
-            scroll = cursor_x;
+        if cursor_y1 > rect_h + scroll {
+            // We want cursor_y1 = rect_h + scroll by adjusting scroll
+            scroll = cursor_y1 - rect_h;
+            self.scroll.set(atom, scroll);
+        } else if cursor_y0 < scroll {
+            scroll = cursor_y0;
+            self.scroll.set(atom, scroll);
         }
-
-        self.scroll.set(atom, scroll);
-        */
     }
 
     fn pause_blinking(&self) {
@@ -1046,19 +1037,13 @@ impl ChatEdit {
             return vec![]
         }
 
-        let lineheight = self.lineheight.get();
-
-        let mut cursor_instrs = vec![];
-
-        let mut cursor_pos = self.lock_editor().await.get_cursor_pos();
-        cursor_pos += self.inner_pos();
-        cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
-
         let cursor_mesh =
             self.cursor_mesh.lock().get_or_insert_with(|| self.regen_cursor_mesh()).clone();
-        cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
 
-        cursor_instrs
+        vec![
+            GfxDrawInstruction::Move(self.get_cursor_pos().await),
+            GfxDrawInstruction::Draw(cursor_mesh),
+        ]
     }
 
     fn regen_bg_mesh(&self) -> Vec<GfxDrawInstruction> {
@@ -1143,18 +1128,8 @@ impl ChatEdit {
         ]
     }
 
-    fn bounded_height(&self, mut height: f32) -> f32 {
-        let min_height = self.min_height.get();
-        let max_height = self.max_height.get();
-
-        if height < min_height {
-            height = min_height;
-        }
-        if height > max_height {
-            height = max_height;
-        }
-
-        height
+    fn bounded_height(&self, height: f32) -> f32 {
+        height.clamp(self.min_height.get(), self.max_height.get())
     }
 
     async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
@@ -1348,29 +1323,42 @@ impl ChatEdit {
             return
         }
 
-        let mut editor = self.lock_editor().await;
         match ev {
             AndroidSuggestEvent::Init => {
+                let mut editor = self.lock_editor().await;
                 editor.init();
                 // For debugging select, enable these and set a selection in the editor.
                 //self.is_phone_select.store(true, Ordering::Relaxed);
                 //self.hide_cursor.store(true, Ordering::Relaxed);
+
+                // Debug code if we set text in editor.init()
+                //let atom = &mut PropertyAtomicGuard::new();
+                //editor.on_buffer_changed(atom).await;
                 return
             }
-            AndroidSuggestEvent::CreateInputConnect => editor.setup(),
-            AndroidSuggestEvent::ComposeRegion { .. } | AndroidSuggestEvent::FinishCompose => {}
+            AndroidSuggestEvent::CreateInputConnect => {
+                let mut editor = self.lock_editor().await;
+                editor.setup();
+            }
             // Destructive text edits
+            AndroidSuggestEvent::ComposeRegion { .. } |
+            AndroidSuggestEvent::FinishCompose |
             AndroidSuggestEvent::Compose { .. } |
             AndroidSuggestEvent::DeleteSurroundingText { .. } => {
                 // Any editing will collapse selections
                 self.is_phone_select.store(false, Ordering::Relaxed);
                 self.hide_cursor.store(false, Ordering::Relaxed);
+
+                let atom = &mut PropertyAtomicGuard::new();
+                self.finish_select(atom);
+
+                let mut editor = self.lock_editor().await;
+                editor.on_buffer_changed(atom).await;
+                drop(editor);
+
+                self.apply_cursor_scrolling(atom).await;
             }
         }
-
-        let atom = &mut PropertyAtomicGuard::new();
-        editor.on_buffer_changed(atom).await;
-        drop(editor);
 
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready
