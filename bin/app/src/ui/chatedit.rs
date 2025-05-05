@@ -554,35 +554,38 @@ impl ChatEdit {
         #[cfg(target_os = "macos")]
         let action_mod = mods.logo;
 
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
-        let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).unwrap();
-
         match key {
             'a' => {
                 if action_mod {
+                    let mut txt_ctx = text2::TEXT_CTX.get().await;
+                    let mut editor = self.lock_editor().await;
+                    let mut drv = editor.driver(&mut txt_ctx).unwrap();
+
                     drv.select_all();
+                    if let Some(seltext) = editor.selected_text() {
+                        self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+                    }
                 }
             }
             'c' => {
                 if action_mod {
-                    if let Some(text) = editor.selected_text() {
-                        miniquad::window::clipboard_set(&text);
+                    let editor = self.lock_editor().await;
+                    if let Some(txt) = editor.selected_text() {
+                        miniquad::window::clipboard_set(&txt);
                     }
                 }
             }
             'v' => {
                 if action_mod {
-                    if let Some(text) = miniquad::window::clipboard_get() {
-                        drv.insert_or_replace_selection(&text);
+                    if let Some(txt) = miniquad::window::clipboard_get() {
+                        self.insert(&txt, atom).await;
+                        // Maybe insert should call this?
+                        self.apply_cursor_scrolling(atom).await;
                     }
                 }
             }
             _ => return false,
         }
-
-        drop(editor);
-        drop(txt_ctx);
 
         self.redraw().await;
         true
@@ -702,9 +705,16 @@ impl ChatEdit {
             _ => return false,
         }
 
+        if let Some(seltext) = editor.selected_text() {
+            self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+        } else {
+            self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
+        }
+
         drop(editor);
         drop(txt_ctx);
 
+        self.apply_cursor_scrolling(atom).await;
         self.pause_blinking();
         self.redraw().await;
 
@@ -951,12 +961,15 @@ impl ChatEdit {
         let cursor_h = self.baseline.get() + self.cursor_descent.get();
         // The bottom
         let cursor_y1 = cursor_y0 + cursor_h;
+        //t!("apply_cursor_scrolling() cursor = [{cursor_y0}, {cursor_y1}] rect_h={rect_h} scroll={scroll}");
 
         if cursor_y1 > rect_h + scroll {
+            //t!("  cursor bottom below rect");
             // We want cursor_y1 = rect_h + scroll by adjusting scroll
             scroll = cursor_y1 - rect_h;
             self.scroll.set(atom, scroll);
         } else if cursor_y0 < scroll {
+            //t!("  cursor top above rect");
             scroll = cursor_y0;
             self.scroll.set(atom, scroll);
         }
@@ -1102,11 +1115,11 @@ impl ChatEdit {
     }
 
     async fn regen_phone_select_handle_mesh(&self) -> Vec<GfxDrawInstruction> {
+        if !self.is_phone_select.load(Ordering::Relaxed) {
+            return vec![]
+        }
         //t!("regen_phone_select_handle_mesh()");
-        let Some((mut first, mut last)) = self.get_select_handles().await else {
-            assert!(!self.is_phone_select.load(Ordering::Relaxed));
-            return vec![];
-        };
+        let (mut first, mut last) = self.get_select_handles().await.unwrap();
 
         let scroll = self.scroll.get();
 
@@ -1713,7 +1726,9 @@ impl UIObject for ChatEdit {
         }
 
         self.pause_blinking();
-        //self.apply_cursor_scrolling();
+        self.apply_cursor_scrolling(atom).await;
+        self.redraw_scroll().await;
+        self.redraw_cursor().await;
         self.redraw_select().await;
         true
     }

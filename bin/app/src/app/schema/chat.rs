@@ -171,7 +171,7 @@ mod ui_consts {
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 100., 80.);
     pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(110., 0., 120., 80.);
     pub const ACTION_SELECT_ALL_RECT: Rectangle = Rectangle::new(240., 0., 200., 80.);
-    pub const ACTION_LABEL_POS: Point = Point::new(20., 46.);
+    pub const ACTION_LABEL_POS: Point = Point::new(20., 20.);
 }
 
 use super::EMOJI_PICKER_ICON_SIZE;
@@ -1586,24 +1586,27 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let editz_select_sub = editz_select_text.subscribe_modify();
-    let pasta_is_visible2 = pasta_is_visible.clone();
-    let editz_select_task = app.ex.spawn(async move {
-        while let Ok(_) = editz_select_sub.receive().await {
-            let atom = &mut PropertyAtomicGuard::new();
-            if editz_select_text.is_null(0).unwrap() {
-                info!(target: "app::chat", "selection changed: null");
-                actions_is_visible.set(atom, false);
-                pasta_is_visible2.set(atom, false);
-            } else {
-                let select_text = editz_select_text.get_str(0).unwrap();
-                info!(target: "app::chat", "selection changed: {select_text}");
-                actions_is_visible.set(atom, true);
-                pasta_is_visible2.set(atom, false);
+    #[cfg(target_os = "android")]
+    {
+        let editz_select_sub = editz_select_text.subscribe_modify();
+        let pasta_is_visible2 = pasta_is_visible.clone();
+        let editz_select_task = app.ex.spawn(async move {
+            while let Ok(_) = editz_select_sub.receive().await {
+                let atom = &mut PropertyAtomicGuard::new();
+                if editz_select_text.is_null(0).unwrap() {
+                    info!(target: "app::chat", "selection changed: null");
+                    actions_is_visible.set(atom, false);
+                    pasta_is_visible2.set(atom, false);
+                } else {
+                    let select_text = editz_select_text.get_str(0).unwrap();
+                    info!(target: "app::chat", "selection changed: {select_text}");
+                    actions_is_visible.set(atom, true);
+                    pasta_is_visible2.set(atom, false);
+                }
             }
-        }
-    });
-    app.tasks.lock().unwrap().push(editz_select_task);
+        });
+        app.tasks.lock().unwrap().push(editz_select_task);
+    }
 
     let editz_text_sub = editz_text.prop().subscribe_modify();
     let editz_text_task = app.ex.spawn(async move {
