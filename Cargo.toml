@@ -293,8 +293,18 @@ zkas = [
 ]
 
 dht = [
-    "async-trait",
+    "async-sdk",
+    "blake3",
+    "bs58",
+    "futures",
     "num-bigint",
+    "serde",
+    "structopt",
+    "structopt-toml",
+    "smol",
+
+    "darkfi-serial",
+    "net",
 ]
 
 # Could not get this to work. Complains manifest-key is ignored.
