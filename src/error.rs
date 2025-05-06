@@ -330,6 +330,12 @@ pub enum Error {
     #[error("Provided output hash is greater than current target")]
     PoWInvalidOutHash,
 
+    #[error("Contracts states monotree root missing")]
+    ContractsStatesRootNotFoundError,
+
+    #[error("Contracts states monotree root missmatch: {0} - {1}")]
+    ContractsStatesRootError(String, String),
+
     // ===============
     // Database errors
     // ===============

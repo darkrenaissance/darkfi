@@ -56,6 +56,11 @@ pub async fn consensus_init_task(
     config: ConsensusInitTaskConfig,
     ex: ExecutorPtr,
 ) -> Result<()> {
+    // Check current canonical blockchain for curruption
+    // TODO: create a restore method reverting each block backwards
+    //       until its healthy again
+    node.validator.consensus.healthcheck().await?;
+
     // Check if network is configured to start in the future.
     // NOTE: Always configure the network to start in the future when bootstrapping
     // or restarting it.

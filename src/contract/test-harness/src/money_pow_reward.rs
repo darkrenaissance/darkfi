@@ -17,8 +17,9 @@
  */
 
 use darkfi::{
-    blockchain::{BlockInfo, Header},
+    blockchain::{BlockInfo, BlockchainOverlay, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    validator::verification::apply_producer_transaction,
     Result,
 };
 use darkfi_money_contract::{
@@ -27,7 +28,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode},
+    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode, MerkleTree},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -127,6 +128,19 @@ impl TestHarness {
 
         // Add producer transaction to the block
         block.append_txs(vec![tx]);
+
+        // Compute block contracts states monotree root
+        let overlay = BlockchainOverlay::new(&wallet.validator.blockchain)?;
+        let _ = apply_producer_transaction(
+            &overlay,
+            block.header.height,
+            wallet.validator.consensus.module.read().await.target,
+            block.txs.last().unwrap(),
+            &mut MerkleTree::new(1),
+        )
+        .await?;
+        block.header.state_root =
+            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
 
         // Attach signature
         block.sign(&wallet.keypair.secret);

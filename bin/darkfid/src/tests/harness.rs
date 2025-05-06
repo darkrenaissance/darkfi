@@ -19,12 +19,17 @@
 use std::{collections::HashMap, sync::Arc};
 
 use darkfi::{
-    blockchain::{BlockInfo, Header, HeaderHash},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header, HeaderHash},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
     system::sleep,
     tx::{ContractCallLeaf, TransactionBuilder},
-    validator::{consensus::Proposal, Validator, ValidatorConfig},
+    validator::{
+        consensus::{Fork, Proposal},
+        utils::deploy_native_contracts,
+        verification::{apply_producer_transaction, verify_block},
+        Validator, ValidatorConfig,
+    },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     Result,
 };
@@ -33,7 +38,7 @@ use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{Keypair, MONEY_CONTRACT_ID},
+    crypto::{Keypair, MerkleTree, MONEY_CONTRACT_ID},
     ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -78,6 +83,15 @@ impl Harness {
         // Append it again so its added to the merkle tree
         genesis_block.append_txs(vec![producer_tx]);
 
+        // Compute genesis contracts states monotree root
+        let (_, vks) = vks::get_cached_pks_and_vks()?;
+        let sled_db = sled::Config::new().temporary(true).open()?;
+        vks::inject(&sled_db, &vks)?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        deploy_native_contracts(&overlay, config.pow_target).await?;
+        genesis_block.header.state_root =
+            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
+
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
@@ -89,8 +103,7 @@ impl Harness {
             verify_fees,
         };
 
-        // Generate validators using pregenerated vks
-        let (_, vks) = vks::get_cached_pks_and_vks()?;
+        // Generate validators
         let mut settings =
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
@@ -139,11 +152,13 @@ impl Harness {
         for (index, fork) in alice.iter().enumerate() {
             assert_eq!(fork.proposals.len(), fork_sizes[index]);
             assert_eq!(fork.diffs.len(), fork_sizes[index]);
+            assert!(fork.healthcheck().is_ok());
         }
 
         for (index, fork) in bob.iter().enumerate() {
             assert_eq!(fork.proposals.len(), fork_sizes[index]);
             assert_eq!(fork.diffs.len(), fork_sizes[index]);
+            assert!(fork.healthcheck().is_ok());
         }
     }
 
@@ -166,18 +181,22 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn generate_next_block(&self, previous: &BlockInfo) -> Result<BlockInfo> {
+    pub async fn generate_next_block(&self, fork: &mut Fork) -> Result<BlockInfo> {
+        // Grab fork last block
+        let previous = fork.overlay.lock().unwrap().last_block()?;
+
         // Next block info
         let block_height = previous.header.height + 1;
         let last_nonce = previous.header.nonce;
 
         // Generate a producer transaction
         let keypair = Keypair::default();
-        let (zkbin, _) = self.alice.validator.blockchain.contracts.get_zkas(
-            &self.alice.validator.blockchain.sled_db,
-            &MONEY_CONTRACT_ID,
-            MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-        )?;
+        let (zkbin, _) = fork
+            .overlay
+            .lock()
+            .unwrap()
+            .contracts
+            .get_zkas(&MONEY_CONTRACT_ID, MONEY_CONTRACT_ZKAS_MINT_NS_V1)?;
         let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
         let pk = ProvingKey::build(zkbin.k, &circuit);
 
@@ -216,8 +235,33 @@ impl Harness {
         // Add producer transaction to the block
         block.append_txs(vec![tx]);
 
+        // Compute block contracts states monotree root
+        let overlay = fork.overlay.lock().unwrap().full_clone()?;
+        let _ = apply_producer_transaction(
+            &overlay,
+            block.header.height,
+            fork.module.target,
+            block.txs.last().unwrap(),
+            &mut MerkleTree::new(1),
+        )
+        .await?;
+        block.header.state_root =
+            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
+
         // Attach signature
         block.sign(&keypair.secret);
+
+        // Append new block to fork
+        verify_block(
+            &fork.overlay,
+            &fork.module,
+            &mut fork.state_monotree,
+            &block,
+            &previous,
+            self.alice.validator.verify_fees,
+        )
+        .await?;
+        fork.append_proposal(&Proposal::new(block.clone())).await?;
 
         Ok(block)
     }

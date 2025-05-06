@@ -20,9 +20,13 @@ use std::collections::HashMap;
 
 use darkfi_sdk::{
     blockchain::block_version,
-    crypto::{schnorr::SchnorrPublic, ContractId, MerkleTree, PublicKey},
+    crypto::{
+        schnorr::{SchnorrPublic, Signature},
+        ContractId, MerkleTree, PublicKey,
+    },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
+    monotree::Monotree,
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
@@ -100,9 +104,27 @@ pub async fn verify_genesis_block(
 
     // Append producer transaction to the tree and check tree matches header one
     append_tx_to_merkle_tree(&mut tree, producer_tx);
-    if tree.root(0).unwrap() != block.header.root {
+    if tree.root(0).unwrap() != block.header.transactions_root {
         error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
         return Err(Error::BlockIsInvalid(block_hash))
+    }
+
+    // Verify header contracts states root
+    let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
+    let Some(state_root) = state_monotree.get_headroot()? else {
+        return Err(Error::ContractsStatesRootNotFoundError);
+    };
+    if state_root != block.header.state_root {
+        return Err(Error::ContractsStatesRootError(
+            blake3::hash(&state_root).to_string(),
+            blake3::hash(&block.header.state_root).to_string(),
+        ));
+    }
+
+    // Genesis producer signature must be the Signature::dummy() one(empty)
+    if block.signature != Signature::dummy() {
+        error!(target: "validator::verification::verify_genesis_block", "Genesis producer signature is not dummy one");
+        return Err(Error::InvalidSignature)
     }
 
     // Insert block
@@ -175,6 +197,7 @@ pub fn validate_blockchain(
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     module: &PoWModule,
+    state_monotree: &mut Monotree,
     block: &BlockInfo,
     previous: &BlockInfo,
     verify_fees: bool,
@@ -227,9 +250,21 @@ pub async fn verify_block(
     .await?;
 
     // Verify transactions merkle tree root matches header one
-    if tree.root(0).unwrap() != block.header.root {
+    if tree.root(0).unwrap() != block.header.transactions_root {
         error!(target: "validator::verification::verify_block", "Block Merkle tree root is invalid");
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
+    }
+
+    // Update the provided contracts states monotree and verify header contracts states root
+    overlay.lock().unwrap().contracts.update_state_monotree(state_monotree)?;
+    let Some(state_root) = state_monotree.get_headroot()? else {
+        return Err(Error::ContractsStatesRootNotFoundError);
+    };
+    if state_root != block.header.state_root {
+        return Err(Error::ContractsStatesRootError(
+            blake3::hash(&state_root).to_string(),
+            blake3::hash(&block.header.state_root).to_string(),
+        ));
     }
 
     // Verify producer signature
@@ -245,6 +280,7 @@ pub async fn verify_block(
 /// Verify given checkpoint [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
+    state_monotree: &mut Monotree,
     block: &BlockInfo,
     header: &HeaderHash,
     block_target: u32,
@@ -292,9 +328,21 @@ pub async fn verify_checkpoint_block(
     .await?;
 
     // Verify transactions merkle tree root matches header one
-    if tree.root(0).unwrap() != block.header.root {
+    if tree.root(0).unwrap() != block.header.transactions_root {
         error!(target: "validator::verification::verify_checkpoint_block", "Block Merkle tree root is invalid");
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
+    }
+
+    // Update the provided contracts states monotree and verify header contracts states root
+    overlay.lock().unwrap().contracts.update_state_monotree(state_monotree)?;
+    let Some(state_root) = state_monotree.get_headroot()? else {
+        return Err(Error::ContractsStatesRootNotFoundError);
+    };
+    if state_root != block.header.state_root {
+        return Err(Error::ContractsStatesRootError(
+            blake3::hash(&state_root).to_string(),
+            blake3::hash(&block.header.state_root).to_string(),
+        ));
     }
 
     // Verify producer signature
@@ -458,7 +506,7 @@ pub async fn verify_producer_transaction(
 
 /// Apply given producer [`Transaction`] to the provided overlay, without formal verification.
 /// Returns transaction signature public key. Additionally, append its hash to the provided Merkle tree.
-async fn apply_producer_transaction(
+pub async fn apply_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
     block_target: u32,
@@ -803,7 +851,7 @@ pub async fn verify_transaction(
 
 /// Apply given [`Transaction`] to the provided overlay.
 /// Additionally, append its hash to the provided Merkle tree.
-async fn apply_transaction(
+pub async fn apply_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
     block_target: u32,
@@ -1021,15 +1069,22 @@ pub async fn verify_proposal(
     }
 
     // Check if proposal extends any existing forks
-    let (fork, index) = consensus.find_extended_fork(proposal).await?;
+    let (mut fork, index) = consensus.find_extended_fork(proposal).await?;
 
     // Grab overlay last block
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Verify proposal block (2)
-    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous, verify_fees)
-        .await
-        .is_err()
+    if verify_block(
+        &fork.overlay,
+        &fork.module,
+        &mut fork.state_monotree,
+        &proposal.block,
+        &previous,
+        verify_fees,
+    )
+    .await
+    .is_err()
     {
         error!(target: "validator::verification::verify_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -1046,7 +1101,7 @@ pub async fn verify_proposal(
 ///     2. Block is valid
 /// Additional validity rules can be applied.
 pub async fn verify_fork_proposal(
-    fork: &Fork,
+    fork: &mut Fork,
     proposal: &Proposal,
     verify_fees: bool,
 ) -> Result<()> {
@@ -1064,9 +1119,16 @@ pub async fn verify_fork_proposal(
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Verify proposal block (2)
-    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous, verify_fees)
-        .await
-        .is_err()
+    if verify_block(
+        &fork.overlay,
+        &fork.module,
+        &mut fork.state_monotree,
+        &proposal.block,
+        &previous,
+        verify_fees,
+    )
+    .await
+    .is_err()
     {
         error!(target: "validator::verification::verify_fork_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;

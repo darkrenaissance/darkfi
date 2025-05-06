@@ -22,6 +22,7 @@ use darkfi_sdk::{
     blockchain::block_version,
     crypto::{MerkleNode, MerkleTree},
     hex::decode_hex_arr,
+    monotree::{Hash as StateHash, EMPTY_HASH},
     AsHex,
 };
 #[cfg(feature = "async-serial")]
@@ -83,14 +84,17 @@ pub struct Header {
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u64,
     /// Merkle tree root of the transactions hashes contained in this block
-    pub root: MerkleNode,
+    pub transactions_root: MerkleNode,
+    /// Contracts states Monotree(SMT) root this block commits to
+    pub state_root: StateHash,
 }
 
 impl Header {
     pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
-        let root = MerkleTree::new(1).root(0).unwrap();
-        Self { version, previous, height, timestamp, nonce, root }
+        let transactions_root = MerkleTree::new(1).root(0).unwrap();
+        let state_root = *EMPTY_HASH;
+        Self { version, previous, height, timestamp, nonce, transactions_root, state_root }
     }
 
     /// Compute the header's hash
@@ -121,7 +125,7 @@ impl Default for Header {
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = format!(
-            "{} {{\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n}}",
+            "{} {{\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n}}",
             "Header",
             "Hash",
             self.hash(),
@@ -135,8 +139,10 @@ impl fmt::Display for Header {
             self.timestamp,
             "Nonce",
             self.nonce,
-            "Root",
-            self.root,
+            "Transactions Root",
+            self.transactions_root,
+            "State Root",
+            blake3::hash(&self.state_root),
         );
 
         write!(f, "{}", s)

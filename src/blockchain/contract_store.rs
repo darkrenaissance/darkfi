@@ -18,7 +18,7 @@ r* This program is distributed in the hope that it will be useful,
 
 use std::{collections::BTreeMap, io::Cursor};
 
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{crypto::ContractId, monotree::Monotree};
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 use sled_overlay::{serial::parse_record, sled};
@@ -253,6 +253,38 @@ impl ContractStore {
 
         Ok(ret)
     }
+
+    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree> {
+        // Initialize the monotree
+        let mut root = None;
+        let mut tree = Monotree::new();
+
+        // Iterate over current contracts states records
+        // TODO: parallelize this with a threadpool
+        for state_record in self.state.iter().values() {
+            // Iterate over contract states pointers
+            let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?)?;
+            for state_ptr in state_pointers {
+                // Grab the state tree
+                let state_tree = db.open_tree(state_ptr)?;
+
+                // Compute its checksum
+                let mut hasher = blake3::Hasher::new();
+                for record in state_tree.iter() {
+                    let (key, value) = record?;
+                    hasher.update(&key);
+                    hasher.update(&value);
+                }
+
+                // Insert record to monotree
+                root = tree.insert(root.as_ref(), &state_ptr, hasher.finalize().as_bytes())?;
+                tree.set_headroot(root.as_ref());
+            }
+        }
+
+        Ok(tree)
+    }
 }
 
 /// Overlay structure over a [`ContractStore`] instance.
@@ -388,5 +420,77 @@ impl ContractStoreOverlay {
         let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf, circuit).unwrap();
 
         Ok((zkbin, vk))
+    }
+
+    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    /// Be carefull as this will open all states trees in the overlay.
+    pub fn get_state_monotree(&self) -> Result<Monotree> {
+        let mut lock = self.0.lock().unwrap();
+
+        // Grab all states pointers
+        let mut states_pointers = vec![];
+        for state_record in lock.iter(SLED_CONTRACTS_TREE)? {
+            let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?.1)?;
+            for state_ptr in state_pointers {
+                states_pointers.push(state_ptr);
+            }
+        }
+
+        // Initialize the monotree
+        let mut root = None;
+        let mut tree = Monotree::new();
+
+        // Iterate over contract states pointers
+        // TODO: parallelize this with a threadpool
+        for state_ptr in states_pointers {
+            // Open the state tree in the overlay
+            lock.open_tree(&state_ptr, false)?;
+
+            // Compute its checksum
+            let mut hasher = blake3::Hasher::new();
+            for record in lock.iter(&state_ptr)? {
+                let (key, value) = record?;
+                hasher.update(&key);
+                hasher.update(&value);
+            }
+
+            // Insert record to monotree
+            root = tree.insert(root.as_ref(), &state_ptr, hasher.finalize().as_bytes())?;
+            tree.set_headroot(root.as_ref());
+        }
+
+        Ok(tree)
+    }
+
+    /// Compute all updated contracts states checksums and update their records
+    /// in the provided Monotree(SMT).
+    pub fn update_state_monotree(&self, tree: &mut Monotree) -> Result<()> {
+        let lock = self.0.lock().unwrap();
+
+        // Iterate over overlay's caches
+        // TODO: parallelize this with a threadpool
+        let mut root = tree.get_headroot()?;
+        for state_key in lock.state.caches.keys() {
+            // Check if that cache is a contract state one.
+            // Overlay protected trees are all the native/non-contract ones.
+            if lock.state.protected_tree_names.contains(state_key) {
+                continue
+            }
+
+            // Iterate over state tree to compute its checksum
+            let mut hasher = blake3::Hasher::new();
+            for record in lock.iter(state_key)? {
+                let (key, value) = record?;
+                hasher.update(&key);
+                hasher.update(&value);
+            }
+
+            // Insert record to monotree
+            root =
+                tree.insert(root.as_ref(), &deserialize(state_key)?, hasher.finalize().as_bytes())?;
+            tree.set_headroot(root.as_ref());
+        }
+
+        Ok(())
     }
 }

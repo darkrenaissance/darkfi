@@ -18,7 +18,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
+use darkfi_sdk::{crypto::MerkleTree, monotree::Monotree, tx::TransactionHash};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{debug, info, warn};
 use num_bigint::BigUint;
@@ -229,6 +229,9 @@ impl Consensus {
             fork.targets_rank += target_distance_sq;
             fork.hashes_rank += hash_distance_sq;
         }
+
+        // Rebuild fork contracts states monotree
+        fork.compute_monotree()?;
 
         // Drop forks lock
         drop(forks);
@@ -638,6 +641,35 @@ impl Consensus {
         debug!(target: "validator::consensus::reset_pow_module", "PoW module reset successfully!");
         Ok(())
     }
+
+    /// Auxiliary function to check current contracts states checksums
+    /// Monotree(SMT) validity in all active forks and canonical.
+    pub async fn healthcheck(&self) -> Result<()> {
+        // Grab a lock over current forks
+        let lock = self.forks.read().await;
+
+        // Rebuild current canonical contract states checksums monotree
+        let state_monotree = self.blockchain.get_state_monotree()?;
+
+        // Check that the root matches last block header state root
+        let Some(state_root) = state_monotree.get_headroot()? else {
+            return Err(Error::ContractsStatesRootNotFoundError);
+        };
+        let last_block_state_root = self.blockchain.last_header()?.state_root;
+        if state_root != last_block_state_root {
+            return Err(Error::ContractsStatesRootError(
+                blake3::hash(&state_root).to_string(),
+                blake3::hash(&last_block_state_root).to_string(),
+            ));
+        }
+
+        // Check each fork health
+        for fork in lock.iter() {
+            fork.healthcheck()?;
+        }
+
+        Ok(())
+    }
 }
 
 /// This struct represents a block proposal, used for consensus.
@@ -673,8 +705,10 @@ pub struct Fork {
     pub blockchain: Blockchain,
     /// Overlay cache over canonical Blockchain
     pub overlay: BlockchainOverlayPtr,
-    /// Current PoW module state,
+    /// Current PoW module state
     pub module: PoWModule,
+    /// Current contracts states checksums Monotree(SMT)
+    pub state_monotree: Monotree,
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
@@ -691,6 +725,8 @@ impl Fork {
     pub async fn new(blockchain: Blockchain, module: PoWModule) -> Result<Self> {
         let mempool = blockchain.get_pending_txs()?.iter().map(|tx| tx.hash()).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
+        // Build current contract states checksums monotree
+        let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
         // Retrieve last block difficulty to access current ranks
         let last_difficulty = blockchain.last_block_difficulty()?;
         let targets_rank = last_difficulty.ranks.targets_rank;
@@ -699,6 +735,7 @@ impl Fork {
             blockchain,
             overlay,
             module,
+            state_monotree,
             proposals: vec![],
             diffs: vec![],
             mempool,
@@ -764,17 +801,23 @@ impl Fork {
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions,
-    /// along with their total gas used and total paid fees.
+    /// along with their total gas used, total paid fees and the overlay
+    /// used to verify the transactions for further processing.
+    ///
+    /// Note: Always remember to purge new trees from the overlay if not needed.
     pub async fn unproposed_txs(
         &self,
         blockchain: &Blockchain,
         verifying_block_height: u32,
         block_target: u32,
         verify_fees: bool,
-    ) -> Result<(Vec<Transaction>, u64, u64)> {
+    ) -> Result<(Vec<Transaction>, u64, u64, BlockchainOverlayPtr)> {
+        // Clone forks' overlay
+        let overlay = self.overlay.lock().unwrap().full_clone()?;
+
         // Check if our mempool is not empty
         if self.mempool.is_empty() {
-            return Ok((vec![], 0, 0))
+            return Ok((vec![], 0, 0, overlay))
         }
 
         // Transactions Merkle tree
@@ -786,9 +829,6 @@ impl Fork {
 
         // Map of ZK proof verifying keys for the current transaction batch
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
-
-        // Clone forks' overlay
-        let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Grab all current proposals transactions hashes
         let proposals_txs = overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
@@ -851,7 +891,7 @@ impl Fork {
             unproposed_txs.push(unproposed_tx);
         }
 
-        Ok((unproposed_txs, total_gas_used, total_gas_paid))
+        Ok((unproposed_txs, total_gas_used, total_gas_paid, overlay))
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
@@ -861,6 +901,7 @@ impl Fork {
         let blockchain = self.blockchain.clone();
         let overlay = self.overlay.lock().unwrap().full_clone()?;
         let module = self.module.clone();
+        let state_monotree = self.state_monotree.clone();
         let proposals = self.proposals.clone();
         let diffs = self.diffs.clone();
         let mempool = self.mempool.clone();
@@ -871,11 +912,54 @@ impl Fork {
             blockchain,
             overlay,
             module,
+            state_monotree,
             proposals,
             diffs,
             mempool,
             targets_rank,
             hashes_rank,
         })
+    }
+
+    /// Build current contract states checksums monotree.
+    pub fn compute_monotree(&mut self) -> Result<()> {
+        self.state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
+        Ok(())
+    }
+
+    /// Auxiliary function to check current contracts states checksums
+    /// Monotree(SMT) validity.
+    ///
+    /// Note: This should be executed on fresh forks and/or when
+    ///       a fork doesn't contain changes over the last appended
+    //        proposal.
+    pub fn healthcheck(&self) -> Result<()> {
+        // Rebuild current contract states checksums monotree
+        let state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
+
+        // Check that it matches forks' tree
+        let Some(state_root) = state_monotree.get_headroot()? else {
+            return Err(Error::ContractsStatesRootNotFoundError);
+        };
+        let Some(fork_state_root) = self.state_monotree.get_headroot()? else {
+            return Err(Error::ContractsStatesRootNotFoundError);
+        };
+        if state_root != fork_state_root {
+            return Err(Error::ContractsStatesRootError(
+                blake3::hash(&state_root).to_string(),
+                blake3::hash(&fork_state_root).to_string(),
+            ));
+        }
+
+        // Check that the root matches last block header state root
+        let last_block_state_root = self.last_proposal()?.block.header.state_root;
+        if state_root != last_block_state_root {
+            return Err(Error::ContractsStatesRootError(
+                blake3::hash(&state_root).to_string(),
+                blake3::hash(&last_block_state_root).to_string(),
+            ));
+        }
+
+        Ok(())
     }
 }

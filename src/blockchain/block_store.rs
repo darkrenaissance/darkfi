@@ -128,7 +128,7 @@ impl BlockInfo {
         append_tx_to_merkle_tree(&mut tree, &tx);
         self.txs.push(tx);
         // Grab the tree root and store it in the header
-        self.header.root = tree.root(0).unwrap();
+        self.header.transactions_root = tree.root(0).unwrap();
     }
 
     /// Append a vector of transactions to the block. Also adds them to the
@@ -147,7 +147,7 @@ impl BlockInfo {
             self.txs.push(tx);
         }
         // Grab the tree root and store it in the header
-        self.header.root = tree.root(0).unwrap();
+        self.header.transactions_root = tree.root(0).unwrap();
     }
 
     /// Sign block header using provided secret key

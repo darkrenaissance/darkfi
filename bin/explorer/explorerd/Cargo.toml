@@ -34,6 +34,7 @@ structopt-toml = "0.5.1"
 sled-overlay = "0.1.7"
 
 # Misc
+blake3 = "1.8.2"
 log = "0.4.27"
 lazy_static = "1.5.0"
 tar = "0.4.44"

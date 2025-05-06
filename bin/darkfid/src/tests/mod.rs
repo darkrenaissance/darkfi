@@ -19,7 +19,10 @@
 use std::sync::Arc;
 
 use darkfi::{
-    net::Settings, rpc::settings::RpcSettings, validator::utils::best_fork_index, Result,
+    net::Settings,
+    rpc::settings::RpcSettings,
+    validator::{consensus::Fork, utils::best_fork_index, verification::verify_block},
+    Result,
 };
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
@@ -53,27 +56,42 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     };
     let th = Harness::new(config, true, &ex).await?;
 
-    // Retrieve genesis block
-    let genesis = th.alice.validator.blockchain.last_block()?;
+    // Generate a fork to create new blocks
+    let mut fork = th.alice.validator.consensus.forks.read().await[0].full_clone()?;
 
     // Generate next blocks
-    let block1 = th.generate_next_block(&genesis).await?;
-    let block2 = th.generate_next_block(&block1).await?;
-    let block3 = th.generate_next_block(&block2).await?;
-    let block4 = th.generate_next_block(&block3).await?;
+    let block1 = th.generate_next_block(&mut fork).await?;
+    let block2 = th.generate_next_block(&mut fork).await?;
+    let block3 = th.generate_next_block(&mut fork).await?;
+    let block4 = th.generate_next_block(&mut fork).await?;
 
     // Add them to nodes
-    th.add_blocks(&vec![block1, block2.clone(), block3.clone(), block4.clone()]).await?;
+    th.add_blocks(&vec![block1, block2.clone(), block3.clone(), block4]).await?;
 
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
 
     // Extend current fork sequence
-    let block5 = th.generate_next_block(&block4).await?;
+    let block5 = th.generate_next_block(&mut fork).await?;
     // Create a new fork extending canonical
-    let block6 = th.generate_next_block(&block3).await?;
+    fork = Fork::new(
+        th.alice.validator.consensus.blockchain.clone(),
+        th.alice.validator.consensus.module.read().await.clone(),
+    )
+    .await?;
+    // Append block3 to fork and generate the next one
+    verify_block(
+        &fork.overlay,
+        &fork.module,
+        &mut fork.state_monotree,
+        &block3,
+        &block2,
+        th.alice.validator.verify_fees,
+    )
+    .await?;
+    let block6 = th.generate_next_block(&mut fork).await?;
     // Add them to nodes
-    th.add_blocks(&vec![block5, block6.clone()]).await?;
+    th.add_blocks(&vec![block5, block6]).await?;
 
     // Grab current best fork index
     let forks = th.alice.validator.consensus.forks.read().await;
@@ -91,7 +109,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     // We are going to create a third node and try to sync from Bob
     let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
-
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
     settings.inbound_addrs = vec![charlie_url];
     let bob_url = th.bob.p2p_handler.p2p.settings().read().await.inbound_addrs[0].clone();
@@ -121,8 +138,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     drop(charlie_forks);
 
     // Extend the small fork sequence and add it to nodes
-    let block7 = th.generate_next_block(&block6).await?;
-    th.add_blocks(&vec![block7.clone()]).await?;
+    th.add_blocks(&vec![th.generate_next_block(&mut fork).await?]).await?;
 
     // Nodes must have two forks with 2 blocks each
     th.validate_fork_chains(2, vec![2, 2]).await;
@@ -148,11 +164,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Since the don't know if the second fork was the best,
     // we extend it until it becomes best and a confirmation
     // occurred.
-    let mut fork_sequence = vec![block6, block7];
     loop {
-        let proposal = th.generate_next_block(fork_sequence.last().unwrap()).await?;
-        th.add_blocks(&vec![proposal.clone()]).await?;
-        fork_sequence.push(proposal);
+        th.add_blocks(&vec![th.generate_next_block(&mut fork).await?]).await?;
         // Check if confirmation occured
         if th.alice.validator.blockchain.len() > 4 {
             break
@@ -160,15 +173,15 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // Nodes must have executed confirmation, so we validate their chains
-    th.validate_chains(4 + (fork_sequence.len() - 2)).await?;
+    th.validate_chains(4 + (fork.proposals.len() - 2)).await?;
     let bob = &th.bob.validator;
     let last = alice.blockchain.last()?.1;
-    assert_eq!(last, fork_sequence[fork_sequence.len() - 3].hash());
+    assert_eq!(last, fork.proposals[fork.proposals.len() - 3]);
     assert_eq!(last, bob.blockchain.last()?.1);
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
     let last_proposal = alice.consensus.forks.read().await[0].proposals[1];
-    assert_eq!(last_proposal, fork_sequence.last().unwrap().hash());
+    assert_eq!(last_proposal, *fork.proposals.last().unwrap());
     assert_eq!(last_proposal, bob.consensus.forks.read().await[0].proposals[1]);
 
     // Same for Charlie
@@ -228,34 +241,6 @@ fn darkfid_programmatic_control() -> Result<()> {
         log::debug!(target: "darkfid_programmatic_control", "Logger initialized");
     }
 
-    // Daemon configuration
-    let mut genesis_block = darkfi::blockchain::BlockInfo::default();
-    let producer_tx = genesis_block.txs.pop().unwrap();
-    genesis_block.append_txs(vec![producer_tx]);
-    let bootstrap = genesis_block.header.timestamp.inner();
-    let config = darkfi::validator::ValidatorConfig {
-        confirmation_threshold: 1,
-        pow_target: 20,
-        pow_fixed_difficulty: Some(BigUint::one()),
-        genesis_block,
-        verify_fees: false,
-    };
-    let consensus_config = crate::ConsensusInitTaskConfig {
-        skip_sync: true,
-        checkpoint_height: None,
-        checkpoint: None,
-        miner: false,
-        recipient: None,
-        spend_hook: None,
-        user_data: None,
-        bootstrap,
-    };
-    let sled_db = sled_overlay::sled::Config::new().temporary(true).open()?;
-    let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks()?;
-    darkfi_contract_test_harness::vks::inject(&sled_db, &vks)?;
-    let rpc_settings =
-        RpcSettings { listen: Url::parse("tcp://127.0.0.1:8240")?, ..RpcSettings::default() };
-
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
@@ -263,6 +248,50 @@ fn darkfid_programmatic_control() -> Result<()> {
     easy_parallel::Parallel::new().each(0..1, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
         || {
             smol::block_on(async {
+                // Daemon configuration
+                let mut genesis_block = darkfi::blockchain::BlockInfo::default();
+                let producer_tx = genesis_block.txs.pop().unwrap();
+                genesis_block.append_txs(vec![producer_tx]);
+                let sled_db = sled_overlay::sled::Config::new().temporary(true).open().unwrap();
+                let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks().unwrap();
+                darkfi_contract_test_harness::vks::inject(&sled_db, &vks).unwrap();
+                let overlay = darkfi::blockchain::BlockchainOverlay::new(
+                    &darkfi::blockchain::Blockchain::new(&sled_db).unwrap(),
+                )
+                .unwrap();
+                darkfi::validator::utils::deploy_native_contracts(&overlay, 20).await.unwrap();
+                genesis_block.header.state_root = overlay
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .get_state_monotree()
+                    .unwrap()
+                    .get_headroot()
+                    .unwrap()
+                    .unwrap();
+                let bootstrap = genesis_block.header.timestamp.inner();
+                let config = darkfi::validator::ValidatorConfig {
+                    confirmation_threshold: 1,
+                    pow_target: 20,
+                    pow_fixed_difficulty: Some(BigUint::one()),
+                    genesis_block,
+                    verify_fees: false,
+                };
+                let consensus_config = crate::ConsensusInitTaskConfig {
+                    skip_sync: true,
+                    checkpoint_height: None,
+                    checkpoint: None,
+                    miner: false,
+                    recipient: None,
+                    spend_hook: None,
+                    user_data: None,
+                    bootstrap,
+                };
+                let rpc_settings = RpcSettings {
+                    listen: Url::parse("tcp://127.0.0.1:8240").unwrap(),
+                    ..RpcSettings::default()
+                };
+
                 // Initialize a daemon
                 let daemon = crate::Darkfid::init(
                     &sled_db,

@@ -22,11 +22,11 @@ use std::{
 };
 
 use darkfi::{
-    blockchain::{BlockInfo, BlockchainOverlay},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::{pcg::Pcg32, time::Timestamp},
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::{utils::deploy_native_contracts, Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -267,6 +267,14 @@ impl TestHarness {
             let proving_key = ProvingKey::read(&mut reader, circuit)?;
             proving_keys.insert(namespace, (proving_key, zkbin));
         }
+
+        // Compute genesis contracts states monotree root
+        let sled_db = sled::Config::new().temporary(true).open()?;
+        vks::inject(&sled_db, &vks)?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        deploy_native_contracts(&overlay, 90).await?;
+        genesis_block.header.state_root =
+            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
 
         // Create `Wallet` instances
         let mut holders_map = HashMap::new();

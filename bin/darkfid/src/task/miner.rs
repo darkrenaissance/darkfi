@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    blockchain::{BlockInfo, Header},
+    blockchain::{BlockInfo, Header, HeaderHash},
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
     system::{ExecutorPtr, StoppableTask, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
@@ -25,6 +25,7 @@ use darkfi::{
     validator::{
         consensus::{Fork, Proposal},
         utils::best_fork_index,
+        verification::apply_producer_transaction,
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -34,7 +35,7 @@ use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, FuncId, PublicKey, SecretKey, MONEY_CONTRACT_ID},
+    crypto::{poseidon_hash, FuncId, MerkleTree, PublicKey, SecretKey, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -160,12 +161,15 @@ pub async fn miner_task(
         };
         drop(forks);
 
+        // Grab extended fork last proposal hash
+        let last_proposal_hash = extended_fork.last_proposal()?.hash;
+
         // Start listenning for network proposals and mining next block for best fork.
         match smol::future::or(
-            listen_to_network(node, &extended_fork, &subscription, &sender),
+            listen_to_network(node, last_proposal_hash, &subscription, &sender),
             mine(
                 node,
-                &extended_fork,
+                extended_fork,
                 &mut secret,
                 recipient_config,
                 &zkbin,
@@ -234,12 +238,10 @@ pub async fn miner_task(
 /// Async task to listen for incoming proposals and check if the best fork has changed.
 async fn listen_to_network(
     node: &DarkfiNodePtr,
-    extended_fork: &Fork,
+    last_proposal_hash: HeaderHash,
     subscription: &Subscription<JsonNotification>,
     sender: &Sender<()>,
 ) -> Result<()> {
-    // Grab extended fork last proposal hash
-    let last_proposal_hash = extended_fork.last_proposal()?.hash;
     loop {
         // Wait until a new proposal has been received
         subscription.receive().await;
@@ -273,7 +275,7 @@ async fn listen_to_network(
 #[allow(clippy::too_many_arguments)]
 async fn mine(
     node: &DarkfiNodePtr,
-    extended_fork: &Fork,
+    extended_fork: Fork,
     secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
@@ -304,7 +306,7 @@ pub async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
 /// Async task to generate and mine provided fork index next block.
 async fn mine_next_block(
     node: &DarkfiNodePtr,
-    extended_fork: &Fork,
+    mut extended_fork: Fork,
     secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
@@ -313,7 +315,7 @@ async fn mine_next_block(
 ) -> Result<()> {
     // Grab next target and block
     let (next_target, mut next_block) = generate_next_block(
-        extended_fork,
+        &mut extended_fork,
         secret,
         recipient_config,
         zkbin,
@@ -354,7 +356,7 @@ async fn mine_next_block(
 
 /// Auxiliary function to generate next block in an atomic manner.
 async fn generate_next_block(
-    extended_fork: &Fork,
+    extended_fork: &mut Fork,
     secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
@@ -369,7 +371,7 @@ async fn generate_next_block(
     let next_block_height = last_proposal.block.header.height + 1;
 
     // Grab forks' unproposed transactions
-    let (mut txs, _, fees) = extended_fork
+    let (mut txs, _, fees, overlay) = extended_fork
         .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
         .await?;
 
@@ -382,10 +384,31 @@ async fn generate_next_block(
 
     // Generate reward transaction
     let tx = generate_transaction(next_block_height, fees, secret, recipient_config, zkbin, pk)?;
+
+    // Apply producer transaction in the overlay
+    let _ = apply_producer_transaction(
+        &overlay,
+        next_block_height,
+        block_target,
+        &tx,
+        &mut MerkleTree::new(1),
+    )
+    .await?;
     txs.push(tx);
 
+    // Grab the updated contracts states root
+    overlay.lock().unwrap().contracts.update_state_monotree(&mut extended_fork.state_monotree)?;
+    let Some(state_root) = extended_fork.state_monotree.get_headroot()? else {
+        return Err(Error::ContractsStatesRootNotFoundError);
+    };
+
+    // Drop new trees opened by the unproposed transactions overlay
+    overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+
     // Generate the new header
-    let header = Header::new(last_proposal.hash, next_block_height, Timestamp::current_time(), 0);
+    let mut header =
+        Header::new(last_proposal.hash, next_block_height, Timestamp::current_time(), 0);
+    header.state_root = state_root;
 
     // Generate the block
     let mut next_block = BlockInfo::new_empty(header);

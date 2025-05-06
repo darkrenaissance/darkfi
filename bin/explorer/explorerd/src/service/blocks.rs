@@ -48,7 +48,9 @@ pub struct BlockRecord {
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u64,
     /// Merkle tree root of the transactions hashes contained in this block
-    pub root: String,
+    pub transactions_root: String,
+    /// Contracts states Monotree(SMT) root this block commits to
+    pub state_root: String,
     /// Block producer signature
     pub signature: Signature,
 }
@@ -63,7 +65,8 @@ impl BlockRecord {
             JsonValue::Number(self.height as f64),
             JsonValue::String(self.timestamp.to_string()),
             JsonValue::Number(self.nonce as f64),
-            JsonValue::String(self.root.clone()),
+            JsonValue::String(self.transactions_root.clone()),
+            JsonValue::String(self.state_root.clone()),
             JsonValue::String(format!("{:?}", self.signature)),
         ])
     }
@@ -78,7 +81,8 @@ impl From<&BlockInfo> for BlockRecord {
             height: block.header.height,
             timestamp: block.header.timestamp,
             nonce: block.header.nonce,
-            root: block.header.root.to_string(),
+            transactions_root: block.header.transactions_root.to_string(),
+            state_root: blake3::hash(&block.header.state_root).to_string(),
             signature: block.signature,
         }
     }

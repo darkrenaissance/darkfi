@@ -42,22 +42,24 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     };
     let th = Harness::new(config, true, &ex).await?;
 
-    // Retrieve genesis block and generate 3 forks
-    let genesis = th.alice.validator.blockchain.last_block()?;
+    // Generate 3 forks
+    let mut fork0 = th.alice.validator.consensus.forks.read().await[0].full_clone()?;
+    let mut fork1 = fork0.full_clone()?;
+    let mut fork2 = fork1.full_clone()?;
 
-    // Generate a fork with 3 blocks
-    let block1 = th.generate_next_block(&genesis).await?;
-    let block2 = th.generate_next_block(&block1).await?;
-    let block3 = th.generate_next_block(&block2).await?;
-    th.add_blocks(&vec![block1, block2, block3]).await?;
+    // Extend first fork with 3 blocks
+    th.add_blocks(&vec![
+        th.generate_next_block(&mut fork0).await?,
+        th.generate_next_block(&mut fork0).await?,
+        th.generate_next_block(&mut fork0).await?,
+    ])
+    .await?;
 
-    // Generate a fork with 1 block
-    let block4 = th.generate_next_block(&genesis).await?;
-    th.add_blocks(&vec![block4.clone()]).await?;
+    // Extend second fork with 1 block
+    th.add_blocks(&vec![th.generate_next_block(&mut fork1).await?]).await?;
 
-    // Generate a fork with 1 block
-    let block5 = th.generate_next_block(&genesis).await?;
-    th.add_blocks(&vec![block5.clone()]).await?;
+    // Extend third fork with 1 block
+    th.add_blocks(&vec![th.generate_next_block(&mut fork2).await?]).await?;
 
     // Check nodes have all the forks
     th.validate_fork_chains(3, vec![3, 1, 1]).await;
@@ -82,11 +84,8 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     drop(charlie_forks);
 
     // Extend the small fork sequences and add it to nodes
-    let block6 = th.generate_next_block(&block4).await?;
-    th.add_blocks(&vec![block6]).await?;
-
-    let block7 = th.generate_next_block(&block5).await?;
-    th.add_blocks(&vec![block7]).await?;
+    th.add_blocks(&vec![th.generate_next_block(&mut fork1).await?]).await?;
+    th.add_blocks(&vec![th.generate_next_block(&mut fork2).await?]).await?;
 
     // Check charlie has the correct forks
     let charlie_forks = charlie.validator.consensus.forks.read().await;

@@ -18,7 +18,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use darkfi_sdk::tx::TransactionHash;
+use darkfi_sdk::{monotree::Monotree, tx::TransactionHash};
 use log::debug;
 use sled_overlay::{sled, sled::Transactional};
 
@@ -218,6 +218,12 @@ impl Blockchain {
         self.blocks.get_last()
     }
 
+    /// Retrieve the last block header.
+    pub fn last_header(&self) -> Result<Header> {
+        let (_, hash) = self.last()?;
+        Ok(self.headers.get(&[hash], true)?[0].clone().unwrap())
+    }
+
     /// Retrieve the last block info.
     pub fn last_block(&self) -> Result<BlockInfo> {
         let (_, hash) = self.last()?;
@@ -388,6 +394,11 @@ impl Blockchain {
         drop(overlay_lock);
 
         Ok(())
+    }
+
+    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    pub fn get_state_monotree(&self) -> Result<Monotree> {
+        self.contracts.get_state_monotree(&self.sled_db)
     }
 }
 
@@ -583,5 +594,12 @@ impl BlockchainOverlay {
         let contracts = ContractStoreOverlay::new(&overlay)?;
 
         Ok(Arc::new(Mutex::new(Self { overlay, headers, blocks, transactions, contracts })))
+    }
+
+    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    /// A clone is used so we are not affected by the opened trees during
+    /// checksum computing.
+    pub fn get_state_monotree(&self) -> Result<Monotree> {
+        self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
     }
 }

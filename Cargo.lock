@@ -3128,6 +3128,7 @@ name = "explorerd"
 version = "0.4.1"
 dependencies = [
  "async-trait",
+ "blake3 1.8.2",
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",

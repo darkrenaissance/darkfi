@@ -253,14 +253,15 @@ the tx in Bitcoin with the most outputs has 2501.
 
 ## Header
 
-| Field       | Type       | Description                                         |
-|-------------|------------|-----------------------------------------------------|
-| `version`   | `u8`       | Block version                                       |
-| `previous`  | `[u8; 32]` | Previous block hash                                 |
-| `height`    | `u32`      | Block height                                        |
-| `timestamp` | `u64`      | Block creation timestamp                            |
-| `nonce`     | `u64`      | The block's nonce value                             |
-| `tree_root` | `[u8; 32]` | Merkle tree root of the block's transactions hashes |
+| Field               | Type       | Description                                              |
+|---------------------|------------|----------------------------------------------------------|
+| `version`           | `u8`       | Block version                                            |
+| `previous`          | `[u8; 32]` | Previous block hash                                      |
+| `height`            | `u32`      | Block height                                             |
+| `timestamp`         | `u64`      | Block creation timestamp                                 |
+| `nonce`             | `u64`      | The block's nonce value                                  |
+| `transactions_root` | `[u8; 32]` | Merkle tree root of the block's transactions hashes      |
+| `state_root`        | `[u8; 32]` | Contracts states Monotree(SMT) root the block commits to |
 
 ## Block
 

@@ -26,21 +26,24 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use darkfi::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
+    blockchain::{block_store::append_tx_to_merkle_tree, BlockInfo, Blockchain, BlockchainOverlay},
     cli_desc,
-    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    tx::{ContractCallLeaf, TransactionBuilder},
     util::{encoding::base64, parse::decode_base10, path::expand_path, time::Timestamp},
-    validator::{utils::deploy_native_contracts, verification::verify_genesis_block},
+    validator::{
+        utils::deploy_native_contracts,
+        verification::{apply_transaction, verify_genesis_block},
+    },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 use darkfi_contract_test_harness::vks;
 use darkfi_money_contract::{
     client::genesis_mint_v1::GenesisMintCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, PublicKey, SecretKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleTree, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
     ContractCall,
 };
@@ -69,6 +72,10 @@ enum Subcmd {
         #[arg(short, long)]
         /// Genesis timestamp to use, instead of current one
         genesis_timestamp: Option<u64>,
+
+        #[arg(short, long, default_value = "90")]
+        /// Configured PoW target
+        pow_target: u32,
     },
 
     /// Read a Darkfi genesis block from stdin and verify it
@@ -119,33 +126,52 @@ fn main() -> Result<()> {
                 println!("{genesis_block:?}");
             }
 
-            Subcmd::Generate { txs_folder, genesis_timestamp } => {
+            Subcmd::Generate { txs_folder, genesis_timestamp, pow_target } => {
+                // Generate the genesis block
+                let mut genesis_block = BlockInfo::default();
+
+                // Retrieve genesis producer transaction
+                let producer_tx = genesis_block.txs.pop().unwrap();
+
+                // Initialize a temporary sled database
+                let sled_db = sled::Config::new().temporary(true).open()?;
+                let (_, vks) = vks::get_cached_pks_and_vks()?;
+                vks::inject(&sled_db, &vks)?;
+
+                // Create an overlay over whole blockchain
+                let blockchain = Blockchain::new(&sled_db)?;
+                let overlay = BlockchainOverlay::new(&blockchain)?;
+                deploy_native_contracts(&overlay, 0).await?;
+
                 // Grab genesis transactions from folder
                 let txs_folder = expand_path(&txs_folder).unwrap();
-                let mut genesis_txs: Vec<Transaction> = vec![];
+                let mut tree = MerkleTree::new(1);
                 for file in read_dir(txs_folder)? {
                     let file = file?;
                     let bytes = base64::decode(read_to_string(file.path())?.trim()).unwrap();
                     let tx = deserialize_async(&bytes).await?;
-                    genesis_txs.push(tx);
+                    apply_transaction(&overlay, 0, pow_target, &tx, &mut tree).await?;
+                    genesis_block.txs.push(tx);
                 }
-
-                // Generate the genesis block
-                let mut genesis_block = BlockInfo::default();
 
                 // Update timestamp if one was provided
                 if let Some(timestamp) = genesis_timestamp {
                     genesis_block.header.timestamp = Timestamp::from_u64(timestamp);
                 }
 
-                // Retrieve genesis producer transaction
-                let producer_tx = genesis_block.txs.pop().unwrap();
+                // Append producer tx
+                append_tx_to_merkle_tree(&mut tree, &producer_tx);
+                genesis_block.txs.push(producer_tx);
 
-                // Append genesis transactions
-                if !genesis_txs.is_empty() {
-                    genesis_block.append_txs(genesis_txs);
-                }
-                genesis_block.append_txs(vec![producer_tx]);
+                // Update the transactions root
+                genesis_block.header.transactions_root = tree.root(0).unwrap();
+
+                // Grab the updated contracts states root
+                let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
+                let Some(state_root) = state_monotree.get_headroot()? else {
+                    return Err(Error::ContractsStatesRootNotFoundError);
+                };
+                genesis_block.header.state_root = state_root;
 
                 // Write generated genesis block to stdin
                 let encoded = base64::encode(&serialize_async(&genesis_block).await);

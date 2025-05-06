@@ -374,6 +374,9 @@ async fn handle_reorg(
         peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)?;
     }
 
+    // Rebuild fork contracts states monotree
+    peer_fork.compute_monotree()?;
+
     // Retrieve the proposals of the hashes sequence, in batches
     info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", peer_header_hashes.len());
     let mut batch = Vec::with_capacity(BATCH);
@@ -425,7 +428,7 @@ async fn handle_reorg(
 
             // Verify proposal
             if let Err(e) =
-                verify_fork_proposal(&peer_fork, peer_proposal, validator.verify_fees).await
+                verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await
             {
                 error!(target: "darkfid::task::handle_reorg", "Verify fork proposal failed: {e}");
                 return Ok(())
@@ -446,7 +449,7 @@ async fn handle_reorg(
     }
 
     // Verify trigger proposal
-    if let Err(e) = verify_fork_proposal(&peer_fork, &proposal, validator.verify_fees).await {
+    if let Err(e) = verify_fork_proposal(&mut peer_fork, &proposal, validator.verify_fees).await {
         error!(target: "darkfid::task::handle_reorg", "Verify proposal failed: {e}");
         return Ok(())
     }

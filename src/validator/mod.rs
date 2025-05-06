@@ -414,7 +414,7 @@ impl Validator {
     /// block hash matches the expected header one.
     /// Note: this function should only be used for blocks received using a
     /// checkpoint, since in that case we enforce the node to follow the sequence,
-    /// assuming they all its blocks are valid. Additionally, it will update
+    /// assuming all its blocks are valid. Additionally, it will update
     /// any forks to a single empty one, holding the updated module.
     pub async fn add_checkpoint_blocks(
         &self,
@@ -437,6 +437,9 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
+        // Grab current contracts states monotree to validate each block
+        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
+
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
@@ -448,7 +451,15 @@ impl Validator {
         // Validate and insert each block
         for (index, block) in blocks.iter().enumerate() {
             // Verify block
-            match verify_checkpoint_block(&overlay, block, &headers[index], module.target).await {
+            match verify_checkpoint_block(
+                &overlay,
+                &mut state_monotree,
+                block,
+                &headers[index],
+                module.target,
+            )
+            .await
+            {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => continue,
@@ -536,6 +547,9 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
+        // Grab current contracts states monotree to validate each block
+        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
+
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
@@ -547,7 +561,16 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Verify block
-            match verify_block(&overlay, &module, block, previous, self.verify_fees).await {
+            match verify_block(
+                &overlay,
+                &module,
+                &mut state_monotree,
+                block,
+                previous,
+                self.verify_fees,
+            )
+            .await
+            {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => {
@@ -755,10 +778,23 @@ impl Validator {
         // Create a PoW module to validate each block
         let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, None)?;
 
+        // Grab current contracts states monotree to validate each block
+        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
+
         // Validate and insert each block
         for block in &blocks[1..] {
             // Verify block
-            if verify_block(&overlay, &module, block, previous, self.verify_fees).await.is_err() {
+            if verify_block(
+                &overlay,
+                &module,
+                &mut state_monotree,
+                block,
+                previous,
+                self.verify_fees,
+            )
+            .await
+            .is_err()
+            {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))
