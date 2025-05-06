@@ -1,4 +1,10 @@
-use monero::Hash;
+use std::io::{self, Read, Write};
+
+use darkfi_serial::{Decodable, Encodable, ReadExt};
+use monero::{
+    consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
+    Hash,
+};
 
 use crate::error::MergeMineError;
 
@@ -97,6 +103,39 @@ pub fn tree_hash(hashes: &[Hash]) -> Result<Hash, MergeMineError> {
 pub struct MerkleProof {
     branch: Vec<Hash>,
     path_bitmap: u32,
+}
+
+impl Encodable for MerkleProof {
+    fn encode<S: Write>(&self, s: &mut S) -> io::Result<usize> {
+        let mut n = 0;
+
+        let len = self.branch.len() as u8;
+        n += len.encode(s)?;
+
+        for hash in &self.branch {
+            n += (*hash).consensus_encode(s)?;
+        }
+
+        n += self.path_bitmap.encode(s)?;
+
+        Ok(n)
+    }
+}
+
+impl Decodable for MerkleProof {
+    fn decode<D: Read>(d: &mut D) -> io::Result<Self> {
+        let len: u8 = d.read_u8()?;
+        let mut branch = Vec::with_capacity(len as usize);
+
+        for _ in 0..len {
+            branch
+                .push(Hash::consensus_decode(d).map_err(|_| io::Error::other("Invalid XMR hash"))?);
+        }
+
+        let path_bitmap: u32 = Decodable::decode(d)?;
+
+        Ok(Self { branch, path_bitmap })
+    }
 }
 
 impl MerkleProof {
