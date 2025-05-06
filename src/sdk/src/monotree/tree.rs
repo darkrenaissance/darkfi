@@ -27,7 +27,7 @@ use super::{
 };
 use crate::GenericResult;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct MemCache {
     pub(crate) set: HashSet<Hash>,
     pub(crate) map: HashMap<Hash, Vec<u8>>,
@@ -48,7 +48,7 @@ impl MemCache {
         !self.set.contains(key) && self.map.contains_key(key)
     }
 
-    pub(crate) fn get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+    pub(crate) fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         self.map.get(key).cloned()
     }
 
@@ -62,7 +62,7 @@ impl MemCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MemoryDb {
     db: HashMap<Hash, Vec<u8>>,
     batch: MemCache,
@@ -75,7 +75,7 @@ impl MemoryDb {
         Self { db: HashMap::new(), batch: MemCache::new(), batch_on: false }
     }
 
-    fn get(&mut self, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
         if self.batch_on && self.batch.contains(key) {
             return Ok(self.batch.get(key));
         }
@@ -127,7 +127,7 @@ impl MemoryDb {
 }
 
 /// A structure for `monotree`
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Monotree {
     db: MemoryDb,
 }
@@ -151,7 +151,7 @@ impl Monotree {
     }
 
     /// Retrieves the latest state (root) from the database.
-    pub fn get_headroot(&mut self) -> GenericResult<Option<Hash>> {
+    pub fn get_headroot(&self) -> GenericResult<Option<Hash>> {
         let headroot = self.db.get(ROOT_KEY)?;
         match headroot {
             Some(root) => Ok(Some(slice_to_hash(&root))),
