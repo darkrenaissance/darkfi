@@ -50,7 +50,7 @@ impl HeaderHash {
     }
 
     pub fn as_string(&self) -> String {
-        format!("{}", blake3::hash(&self.0))
+        blake3::Hash::from_bytes(self.0).to_string()
     }
 }
 
@@ -64,7 +64,7 @@ impl FromStr for HeaderHash {
 
 impl fmt::Display for HeaderHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", blake3::hash(&self.0))
+        write!(f, "{}", self.as_string())
     }
 }
 
@@ -140,7 +140,7 @@ impl fmt::Display for Header {
             "Transactions Root",
             self.transactions_root,
             "State Root",
-            blake3::hash(&self.state_root),
+            blake3::Hash::from_bytes(self.state_root),
         );
 
         write!(f, "{}", s)

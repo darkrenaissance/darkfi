@@ -47,7 +47,7 @@ impl TransactionHash {
     }
 
     pub fn as_string(&self) -> String {
-        format!("{}", blake3::hash(&self.0))
+        blake3::Hash::from_bytes(self.0).to_string()
     }
 }
 
@@ -64,7 +64,7 @@ impl FromStr for TransactionHash {
 
 impl fmt::Display for TransactionHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", blake3::hash(&self.0))
+        write!(f, "{}", self.as_string())
     }
 }
 

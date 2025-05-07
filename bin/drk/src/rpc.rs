@@ -225,13 +225,14 @@ impl Drk {
         println!("=======================================");
         println!("[scan_block] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
-            let tx_hash = tx.hash().to_string();
+            let tx_hash = tx.hash();
+            let tx_hash_string = tx_hash.to_string();
             let mut wallet_tx = false;
-            println!("[scan_block] Processing transaction: {tx_hash}");
+            println!("[scan_block] Processing transaction: {tx_hash_string}");
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
-                    if self.apply_tx_money_data(i, &tx.calls, &tx_hash).await? {
+                    if self.apply_tx_money_data(i, &tx.calls, &tx_hash_string).await? {
                         wallet_tx = true;
                     };
                     continue
@@ -239,16 +240,7 @@ impl Drk {
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
                     println!("[scan_block] Found DAO contract in call {i}");
-                    if self
-                        .apply_tx_dao_data(
-                            &call.data.data,
-                            TransactionHash::new(
-                                *blake3::hash(&serialize_async(tx).await).as_bytes(),
-                            ),
-                            i as u8,
-                        )
-                        .await?
-                    {
+                    if self.apply_tx_dao_data(&call.data.data, tx_hash, i as u8).await? {
                         wallet_tx = true;
                     };
                     continue

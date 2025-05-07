@@ -116,8 +116,8 @@ pub async fn verify_genesis_block(
     };
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
-            blake3::hash(&state_root).to_string(),
-            blake3::hash(&block.header.state_root).to_string(),
+            blake3::Hash::from_bytes(state_root).to_string(),
+            blake3::Hash::from_bytes(block.header.state_root).to_string(),
         ));
     }
 
@@ -262,8 +262,8 @@ pub async fn verify_block(
     };
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
-            blake3::hash(&state_root).to_string(),
-            blake3::hash(&block.header.state_root).to_string(),
+            blake3::Hash::from_bytes(state_root).to_string(),
+            blake3::Hash::from_bytes(block.header.state_root).to_string(),
         ));
     }
 
@@ -340,8 +340,8 @@ pub async fn verify_checkpoint_block(
     };
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
-            blake3::hash(&state_root).to_string(),
-            blake3::hash(&block.header.state_root).to_string(),
+            blake3::Hash::from_bytes(state_root).to_string(),
+            blake3::Hash::from_bytes(block.header.state_root).to_string(),
         ));
     }
 

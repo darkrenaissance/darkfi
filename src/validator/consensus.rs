@@ -658,8 +658,8 @@ impl Consensus {
         let last_block_state_root = self.blockchain.last_header()?.state_root;
         if state_root != last_block_state_root {
             return Err(Error::ContractsStatesRootError(
-                blake3::hash(&state_root).to_string(),
-                blake3::hash(&last_block_state_root).to_string(),
+                blake3::Hash::from_bytes(state_root).to_string(),
+                blake3::Hash::from_bytes(last_block_state_root).to_string(),
             ));
         }
 
@@ -946,8 +946,8 @@ impl Fork {
         };
         if state_root != fork_state_root {
             return Err(Error::ContractsStatesRootError(
-                blake3::hash(&state_root).to_string(),
-                blake3::hash(&fork_state_root).to_string(),
+                blake3::Hash::from_bytes(state_root).to_string(),
+                blake3::Hash::from_bytes(fork_state_root).to_string(),
             ));
         }
 
@@ -955,8 +955,8 @@ impl Fork {
         let last_block_state_root = self.last_proposal()?.block.header.state_root;
         if state_root != last_block_state_root {
             return Err(Error::ContractsStatesRootError(
-                blake3::hash(&state_root).to_string(),
-                blake3::hash(&last_block_state_root).to_string(),
+                blake3::Hash::from_bytes(state_root).to_string(),
+                blake3::Hash::from_bytes(last_block_state_root).to_string(),
             ));
         }
 
