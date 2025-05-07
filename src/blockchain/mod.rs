@@ -50,6 +50,9 @@ pub use contract_store::{
     ContractStore, ContractStoreOverlay, SLED_BINCODE_TREE, SLED_CONTRACTS_TREE,
 };
 
+/// Monero definitions needed for merge mining
+pub mod monero;
+
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
 pub struct Blockchain {

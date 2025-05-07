@@ -336,6 +336,9 @@ pub enum Error {
     #[error("Contracts states monotree root missmatch: {0} - {1}")]
     ContractsStatesRootError(String, String),
 
+    #[error("Hashing of Monero data failed: {0}")]
+    MoneroHashingError(String),
+
     // ===============
     // Database errors
     // ===============
