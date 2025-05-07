@@ -16,9 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, Read, Result, Write};
+use std::io::{self, Cursor, Error, Read, Write};
 
-use darkfi_serial::{Decodable, Encodable, ReadExt};
+use async_trait::async_trait;
+use darkfi_serial::{
+    AsyncDecodable, AsyncEncodable, AsyncRead, AsyncReadExt, AsyncWrite, Decodable, Encodable,
+    ReadExt,
+};
 use monero::{
     consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
     Hash,
@@ -36,7 +40,7 @@ pub struct MerkleProof {
 }
 
 impl Encodable for MerkleProof {
-    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> io::Result<usize> {
         let mut n = 0;
 
         let len = self.branch.len() as u8;
@@ -52,8 +56,28 @@ impl Encodable for MerkleProof {
     }
 }
 
+#[async_trait]
+impl AsyncEncodable for MerkleProof {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> io::Result<usize> {
+        let mut n = 0;
+
+        let len = self.branch.len() as u8;
+        n += len.encode_async(s).await?;
+
+        for hash in &self.branch {
+            let mut buf = vec![];
+            (*hash).consensus_encode(&mut buf)?;
+            n += buf.encode_async(s).await?;
+        }
+
+        n += self.path_bitmap.encode_async(s).await?;
+
+        Ok(n)
+    }
+}
+
 impl Decodable for MerkleProof {
-    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> io::Result<Self> {
         let len: u8 = d.read_u8()?;
         let mut branch = Vec::with_capacity(len as usize);
 
@@ -62,6 +86,26 @@ impl Decodable for MerkleProof {
         }
 
         let path_bitmap: u32 = Decodable::decode(d)?;
+
+        Ok(Self { branch, path_bitmap })
+    }
+}
+
+#[async_trait]
+impl AsyncDecodable for MerkleProof {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> io::Result<Self> {
+        let len: u8 = d.read_u8_async().await?;
+        let mut branch = Vec::with_capacity(len as usize);
+
+        for _ in 0..len {
+            let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+            let mut buf = Cursor::new(buf);
+            branch.push(
+                Hash::consensus_decode(&mut buf).map_err(|_| Error::other("Invalid XMR hash"))?,
+            );
+        }
+
+        let path_bitmap: u32 = AsyncDecodable::decode_async(d).await?;
 
         Ok(Self { branch, path_bitmap })
     }

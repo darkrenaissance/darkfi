@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, Read, Result, Write};
+use std::io::{self, Cursor, Error, Read, Write};
 
-use darkfi_serial::{Decodable, Encodable};
+use async_trait::async_trait;
+use darkfi_serial::{AsyncDecodable, AsyncEncodable, AsyncRead, AsyncWrite, Decodable, Encodable};
 use monero::{
     blockdata::transaction::RawExtraField,
     consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
@@ -61,13 +62,14 @@ pub struct MoneroPowData {
 }
 
 impl Encodable for MoneroPowData {
-    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> io::Result<usize> {
         let mut n = 0;
 
         n += self.header.consensus_encode(s)?;
         n += self.randomx_key.encode(s)?;
         n += self.transaction_count.encode(s)?;
-        n += self.merkle_root.as_fixed_bytes().encode(s)?;
+        n += self.merkle_root.consensus_encode(s)?;
+        n += self.coinbase_merkle_proof.encode(s)?;
 
         // This is an incomplete hasher. Dump it from memory
         // and write it down. We can restore it the same way.
@@ -81,16 +83,47 @@ impl Encodable for MoneroPowData {
     }
 }
 
+#[async_trait]
+impl AsyncEncodable for MoneroPowData {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> io::Result<usize> {
+        let mut n = 0;
+
+        let mut buf = vec![];
+        self.header.consensus_encode(&mut buf)?;
+        n += buf.encode_async(s).await?;
+
+        n += self.randomx_key.encode_async(s).await?;
+        n += self.transaction_count.encode_async(s).await?;
+
+        let mut buf = vec![];
+        self.merkle_root.consensus_encode(&mut buf)?;
+        n += buf.encode_async(s).await?;
+
+        n += self.coinbase_merkle_proof.encode_async(s).await?;
+
+        // This is an incomplete hasher. Dump it from memory
+        // and write it down. We can restore it the same way.
+        let buf = keccak_to_bytes(&self.coinbase_tx_hasher);
+        n += buf.encode_async(s).await?;
+
+        n += self.coinbase_tx_extra.0.encode_async(s).await?;
+        n += self.aux_chain_merkle_proof.encode_async(s).await?;
+
+        Ok(n)
+    }
+}
+
+#[async_trait]
 impl Decodable for MoneroPowData {
-    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> io::Result<Self> {
         let header =
             BlockHeader::consensus_decode(d).map_err(|_| Error::other("Invalid XMR header"))?;
 
         let randomx_key: [u8; 64] = Decodable::decode(d)?;
         let transaction_count: u16 = Decodable::decode(d)?;
 
-        let merkle_root: [u8; 32] = Decodable::decode(d)?;
-        let merkle_root = Hash::from_slice(&merkle_root);
+        let merkle_root =
+            Hash::consensus_decode(d).map_err(|_| Error::other("Invamid XMR hash"))?;
 
         let coinbase_merkle_proof: MerkleProof = Decodable::decode(d)?;
 
@@ -99,8 +132,45 @@ impl Decodable for MoneroPowData {
 
         let coinbase_tx_extra: Vec<u8> = Decodable::decode(d)?;
         let coinbase_tx_extra = RawExtraField(coinbase_tx_extra);
-
         let aux_chain_merkle_proof: MerkleProof = Decodable::decode(d)?;
+
+        Ok(Self {
+            header,
+            randomx_key,
+            transaction_count,
+            merkle_root,
+            coinbase_merkle_proof,
+            coinbase_tx_hasher,
+            coinbase_tx_extra,
+            aux_chain_merkle_proof,
+        })
+    }
+}
+
+#[async_trait]
+impl AsyncDecodable for MoneroPowData {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> io::Result<Self> {
+        let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+        let mut buf = Cursor::new(buf);
+        let header = BlockHeader::consensus_decode(&mut buf)
+            .map_err(|_| Error::other("Invalid XMR header"))?;
+
+        let randomx_key: [u8; 64] = AsyncDecodable::decode_async(d).await?;
+        let transaction_count: u16 = AsyncDecodable::decode_async(d).await?;
+
+        let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+        let mut buf = Cursor::new(buf);
+        let merkle_root =
+            Hash::consensus_decode(&mut buf).map_err(|_| Error::other("Invalid XMR hash"))?;
+
+        let coinbase_merkle_proof: MerkleProof = AsyncDecodable::decode_async(d).await?;
+
+        let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+        let coinbase_tx_hasher = keccak_from_bytes(&buf);
+
+        let coinbase_tx_extra: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+        let coinbase_tx_extra = RawExtraField(coinbase_tx_extra);
+        let aux_chain_merkle_proof: MerkleProof = AsyncDecodable::decode_async(d).await?;
 
         Ok(Self {
             header,
