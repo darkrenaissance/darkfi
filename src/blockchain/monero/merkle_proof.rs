@@ -18,11 +18,11 @@
 
 use std::io::{self, Cursor, Error, Read, Write};
 
-use async_trait::async_trait;
+#[cfg(feature = "async-serial")]
 use darkfi_serial::{
-    AsyncDecodable, AsyncEncodable, AsyncRead, AsyncReadExt, AsyncWrite, Decodable, Encodable,
-    ReadExt,
+    async_trait, AsyncDecodable, AsyncEncodable, AsyncRead, AsyncReadExt, AsyncWrite,
 };
+use darkfi_serial::{Decodable, Encodable, ReadExt};
 use monero::{
     consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
     Hash,
@@ -56,6 +56,7 @@ impl Encodable for MerkleProof {
     }
 }
 
+#[cfg(feature = "async-serial")]
 #[async_trait]
 impl AsyncEncodable for MerkleProof {
     async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> io::Result<usize> {
@@ -91,6 +92,7 @@ impl Decodable for MerkleProof {
     }
 }
 
+#[cfg(feature = "async-serial")]
 #[async_trait]
 impl AsyncDecodable for MerkleProof {
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> io::Result<Self> {

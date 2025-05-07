@@ -18,8 +18,9 @@
 
 use std::io::{self, Cursor, Error, Read, Write};
 
-use async_trait::async_trait;
-use darkfi_serial::{AsyncDecodable, AsyncEncodable, AsyncRead, AsyncWrite, Decodable, Encodable};
+#[cfg(feature = "async-serial")]
+use darkfi_serial::{async_trait, AsyncDecodable, AsyncEncodable, AsyncRead, AsyncWrite};
+use darkfi_serial::{Decodable, Encodable};
 use monero::{
     blockdata::transaction::RawExtraField,
     consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
@@ -83,6 +84,7 @@ impl Encodable for MoneroPowData {
     }
 }
 
+#[cfg(feature = "async-serial")]
 #[async_trait]
 impl AsyncEncodable for MoneroPowData {
     async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> io::Result<usize> {
@@ -113,7 +115,6 @@ impl AsyncEncodable for MoneroPowData {
     }
 }
 
-#[async_trait]
 impl Decodable for MoneroPowData {
     fn decode<D: Read>(d: &mut D) -> io::Result<Self> {
         let header =
@@ -147,6 +148,7 @@ impl Decodable for MoneroPowData {
     }
 }
 
+#[cfg(feature = "async-serial")]
 #[async_trait]
 impl AsyncDecodable for MoneroPowData {
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> io::Result<Self> {
