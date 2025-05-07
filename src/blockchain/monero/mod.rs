@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{self, Cursor, Error, Read, Write};
+use std::{
+    fmt,
+    io::{self, Cursor, Error, Read, Write},
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::{async_trait, AsyncDecodable, AsyncEncodable, AsyncRead, AsyncWrite};
@@ -60,6 +63,22 @@ pub struct MoneroPowData {
     pub coinbase_tx_extra: RawExtraField,
     /// Aux chain Merkle proof hashes
     pub aux_chain_merkle_proof: MerkleProof,
+}
+
+impl fmt::Debug for MoneroPowData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut digest = [0u8; 32];
+        self.coinbase_tx_hasher.clone().finalize(&mut digest);
+        f.debug_struct("MoneroPowData")
+            .field("header", &self.header)
+            .field("randomx_key", &self.randomx_key)
+            .field("transaction_count", &self.transaction_count)
+            .field("merkle_root", &self.merkle_root)
+            .field("coinbase_merkle_proof", &self.coinbase_merkle_proof)
+            .field("coinbase_tx_extra", &self.coinbase_tx_extra)
+            .field("aux_chain_merkle_proof", &self.aux_chain_merkle_proof)
+            .finish()
+    }
 }
 
 impl Encodable for MoneroPowData {

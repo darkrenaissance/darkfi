@@ -24,7 +24,7 @@ use darkfi_sdk::{
     monotree::{Hash as StateHash, EMPTY_HASH},
 };
 #[cfg(feature = "async-serial")]
-use darkfi_serial::async_trait;
+use darkfi_serial::{async_trait, FutAsyncWriteExt};
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{
     serial::{parse_record, parse_u32_key_record},
@@ -33,10 +33,20 @@ use sled_overlay::{
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::SledDbOverlayPtr;
+use super::{monero::MoneroPowData, SledDbOverlayPtr};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-// We have to introduce a type rather than using an alias so we can restrict API access
+/// Struct representing the Proof of Work used in a block.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[allow(clippy::large_enum_variant)]
+pub enum PowData {
+    /// Native Darkfi PoW
+    Darkfi,
+    /// Monero merge mining PoW
+    Monero(MoneroPowData),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+// We have to introduce a type rather than using an alias so we can restrict API access.
 pub struct HeaderHash(pub [u8; 32]);
 
 impl HeaderHash {
@@ -69,7 +79,7 @@ impl fmt::Display for HeaderHash {
 }
 
 /// This struct represents a tuple of the form (version, previous, height, timestamp, nonce, merkle_tree).
-#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
@@ -85,17 +95,31 @@ pub struct Header {
     pub transactions_root: MerkleNode,
     /// Contracts states Monotree(SMT) root this block commits to
     pub state_root: StateHash,
+    /// Block Proof of Work type
+    pub pow_data: PowData,
 }
 
 impl Header {
+    /// Generates a new header with default transactions and state root,
+    /// using Darkfi native Proof of Work data.
     pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
         let transactions_root = MerkleTree::new(1).root(0).unwrap();
         let state_root = *EMPTY_HASH;
-        Self { version, previous, height, timestamp, nonce, transactions_root, state_root }
+        let pow_data = PowData::Darkfi;
+        Self {
+            version,
+            previous,
+            height,
+            timestamp,
+            nonce,
+            transactions_root,
+            state_root,
+            pow_data,
+        }
     }
 
-    /// Compute the header's hash
+    /// Compute the header's hash.
     pub fn hash(&self) -> HeaderHash {
         let mut hasher = blake3::Hasher::new();
 
@@ -106,10 +130,28 @@ impl Header {
 
         HeaderHash(hasher.finalize().into())
     }
+
+    /// Compute the header's template hash, which excludes its Proof of Work data.
+    pub fn template_hash(&self) -> HeaderHash {
+        let mut hasher = blake3::Hasher::new();
+
+        // Blake3 hasher .update() method never fails.
+        // This call returns a Result due to how the Write trait is specified.
+        // Calling unwrap() here should be safe.
+        self.version.encode(&mut hasher).expect("blake3 hasher");
+        self.previous.encode(&mut hasher).expect("blake3 hasher");
+        self.height.encode(&mut hasher).expect("blake3 hasher");
+        self.timestamp.encode(&mut hasher).expect("blake3 hasher");
+        self.nonce.encode(&mut hasher).expect("blake3 hasher");
+        self.transactions_root.encode(&mut hasher).expect("blake3 hasher");
+        self.state_root.encode(&mut hasher).expect("blake3 hasher");
+
+        HeaderHash(hasher.finalize().into())
+    }
 }
 
 impl Default for Header {
-    /// Represents the genesis header on current timestamp
+    /// Represents the genesis header on current timestamp.
     fn default() -> Self {
         Header::new(
             HeaderHash::new(blake3::hash(b"Let there be dark!").into()),
@@ -123,7 +165,7 @@ impl Default for Header {
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = format!(
-            "{} {{\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n}}",
+            "{} {{\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {:?}\n}}",
             "Header",
             "Hash",
             self.hash(),
@@ -141,6 +183,8 @@ impl fmt::Display for Header {
             self.transactions_root,
             "State Root",
             blake3::Hash::from_bytes(self.state_root),
+            "Proof of Work data",
+            self.pow_data,
         );
 
         write!(f, "{}", s)

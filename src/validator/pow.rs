@@ -266,6 +266,7 @@ impl PoWModule {
     }
 
     /// Verify provided block corresponds to next mine target.
+    // TODO: Verify depending on block Proof of Work data
     pub fn verify_block_hash(&self, block: &BlockInfo) -> Result<()> {
         let verifier_setup = Instant::now();
 

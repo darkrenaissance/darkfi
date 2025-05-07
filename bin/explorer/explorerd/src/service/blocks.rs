@@ -51,6 +51,8 @@ pub struct BlockRecord {
     pub transactions_root: String,
     /// Contracts states Monotree(SMT) root this block commits to
     pub state_root: String,
+    /// Block Proof of Work type
+    pub pow_data: String,
     /// Block producer signature
     pub signature: Signature,
 }
@@ -67,6 +69,7 @@ impl BlockRecord {
             JsonValue::Number(self.nonce as f64),
             JsonValue::String(self.transactions_root.clone()),
             JsonValue::String(self.state_root.clone()),
+            JsonValue::String(self.pow_data.clone()),
             JsonValue::String(format!("{:?}", self.signature)),
         ])
     }
@@ -83,6 +86,7 @@ impl From<&BlockInfo> for BlockRecord {
             nonce: block.header.nonce,
             transactions_root: block.header.transactions_root.to_string(),
             state_root: blake3::Hash::from_bytes(block.header.state_root).to_string(),
+            pow_data: format!("{:?}", block.header.pow_data),
             signature: block.signature,
         }
     }

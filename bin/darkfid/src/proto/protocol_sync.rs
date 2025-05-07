@@ -107,7 +107,7 @@ pub struct HeaderSyncResponse {
 impl_p2p_message!(
     HeaderSyncResponse,
     "headersyncresponse",
-    2341,
+    8192, // We leave some headroom for merge mining data
     1,
     PROTOCOL_SYNC_METERING_CONFIGURATION
 );
@@ -221,7 +221,7 @@ pub struct ForkHeadersResponse {
 impl_p2p_message!(
     ForkHeadersResponse,
     "forkheadersresponse",
-    2341,
+    8192, // We leave some headroom for merge mining data
     1,
     PROTOCOL_SYNC_METERING_CONFIGURATION
 );

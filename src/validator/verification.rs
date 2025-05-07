@@ -36,8 +36,8 @@ use smol::io::Cursor;
 
 use crate::{
     blockchain::{
-        block_store::append_tx_to_merkle_tree, BlockInfo, Blockchain, BlockchainOverlayPtr,
-        HeaderHash,
+        block_store::append_tx_to_merkle_tree, header_store::PowData, BlockInfo, Blockchain,
+        BlockchainOverlayPtr, HeaderHash,
     },
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
@@ -73,6 +73,12 @@ pub async fn verify_genesis_block(
     // Block version must be correct
     if block.header.version != block_version(block.header.height) {
         return Err(Error::BlockIsInvalid(block_hash))
+    }
+
+    // Block must use Darkfi native Proof of Work data
+    match block.header.pow_data {
+        PowData::Darkfi => { /* do nothing */ }
+        _ => return Err(Error::BlockIsInvalid(block_hash)),
     }
 
     // Verify transactions vector contains at least one(producers) transaction

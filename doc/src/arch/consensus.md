@@ -262,6 +262,7 @@ the tx in Bitcoin with the most outputs has 2501.
 | `nonce`             | `u64`      | The block's nonce value                                  |
 | `transactions_root` | `[u8; 32]` | Merkle tree root of the block's transactions hashes      |
 | `state_root`        | `[u8; 32]` | Contracts states Monotree(SMT) root the block commits to |
+| `pow_data`          | `Enum`     | Block Proof of Work type                                 |
 
 ## Block
 
