@@ -15,38 +15,29 @@ rpc_listen = "tcp://127.0.0.1:18927"
 #rpc_disabled_methods = []
 
 ## Per-network settings
-#[network."darkfid_sync_v4"]
-#accept_addrs = ["tcp+tls://0.0.0.0:33022"]
+#[network."darkfid_testnet_v5"]
+#accept_addrs = ["tcp+tls://0.0.0.0:8342"]
 #seeds = []
 #peers = []
-#version = "0.4.1"
+#version = "0.5.0"
 #localnet = false
 #hostlist ="~/.local/share/darkfi/lilith/darkfid_sync/hostlist.tsv"
 #datastore = "~/.local/share/darkfi/lilith/darkfid_sync"
 
-#[network."darkfid_consensus_v4"]
-#accept_addrs = ["tcp+tls://0.0.0.0:33023"]
-#seeds = []
-#peers = []
-#version = "0.4.1"
-#localnet = false
-#datastore = "~/.local/share/darkfi/lilith/darkfid_consensus"
-#hostlist ="~/.local/share/darkfi/lilith/darkfid_consensus/hostlist.tsv"
-
-#[network."darkirc_v4"]
+#[network."darkirc_v5"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
 #seeds = []
 #peers = []
-#version = "0.4.1"
+#version = "0.5.1"
 #localnet = false
 #datastore = "~/.local/share/darkfi/lilith/darkirc"
 #hostlist ="~/.local/share/darkfi/lilith/darkirc/hostlist.tsv"
 
-#[network."taud_v4"]
+#[network."taud_v5"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
 #seeds = []
 #peers = []
-#version = "0.4.1"
+#version = "0.5.0"
 #localnet = false
 #datastore = "~/.local/share/darkfi/lilith/taud"
 #hostlist ="~/.local/share/darkfi/lilith/taud/hostlist.tsv"
