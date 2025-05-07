@@ -21,9 +21,7 @@ use std::{fmt, str::FromStr};
 use darkfi_sdk::{
     blockchain::block_version,
     crypto::{MerkleNode, MerkleTree},
-    hex::decode_hex_arr,
     monotree::{Hash as StateHash, EMPTY_HASH},
-    AsHex,
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -52,7 +50,7 @@ impl HeaderHash {
     }
 
     pub fn as_string(&self) -> String {
-        self.0.hex().to_string()
+        format!("{}", blake3::hash(&self.0))
     }
 }
 
@@ -60,13 +58,13 @@ impl FromStr for HeaderHash {
     type Err = Error;
 
     fn from_str(header_hash_str: &str) -> Result<Self> {
-        Ok(Self(decode_hex_arr(header_hash_str)?))
+        Ok(Self(*blake3::Hash::from_str(header_hash_str)?.as_bytes()))
     }
 }
 
 impl fmt::Display for HeaderHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.hex())
+        write!(f, "{}", blake3::hash(&self.0))
     }
 }
 
@@ -240,7 +238,7 @@ impl HeaderStore {
                 continue
             }
             if strict {
-                return Err(Error::HeaderNotFound(hash.inner().hex()))
+                return Err(Error::HeaderNotFound(hash.as_string()))
             }
             ret.push(None);
         }
@@ -395,7 +393,7 @@ impl HeaderStoreOverlay {
                 continue
             }
             if strict {
-                return Err(Error::HeaderNotFound(hash.inner().hex()))
+                return Err(Error::HeaderNotFound(hash.as_string()))
             }
             ret.push(None);
         }

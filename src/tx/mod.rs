@@ -27,7 +27,6 @@ use darkfi_sdk::{
     error::DarkTreeResult,
     pasta::pallas,
     tx::{ContractCall, TransactionHash},
-    AsHex,
 };
 
 #[cfg(feature = "async-serial")]
@@ -128,10 +127,7 @@ impl Transaction {
         self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
 
-        debug!(
-            target: "tx::verify_sigs",
-            "tx.verify_sigs: data_hash: {}", data_hash.as_bytes().hex(),
-        );
+        debug!(target: "tx::verify_sigs", "tx.verify_sigs: data_hash: {data_hash}");
 
         assert_eq!(self.signatures.len(), pub_table.len());
 
@@ -139,20 +135,14 @@ impl Transaction {
             assert_eq!(sigs.len(), pubkeys.len());
 
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
-                debug!(
-                    target: "tx::verify_sigs",
-                    "[TX] Verifying signature with public key: {}", pubkey,
-                );
+                debug!(target: "tx::verify_sigs", "[TX] Verifying signature with public key: {pubkey}");
                 if !pubkey.verify(&data_hash.as_bytes()[..], signature) {
-                    error!(
-                        target: "tx::verify_sigs",
-                        "[TX] tx::verify_sigs[{}] failed to verify signature", i,
-                    );
+                    error!(target: "tx::verify_sigs", "[TX] tx::verify_sigs[{i}] failed to verify signature");
                     return Err(Error::InvalidSignature)
                 }
             }
 
-            debug!(target: "tx::verify_sigs", "[TX] tx::verify_sigs[{}] passed", i);
+            debug!(target: "tx::verify_sigs", "[TX] tx::verify_sigs[{i}] passed");
         }
 
         Ok(())
@@ -166,10 +156,7 @@ impl Transaction {
         self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
 
-        debug!(
-            target: "tx::create_sigs",
-            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes().hex(),
-        );
+        debug!(target: "tx::create_sigs", "[TX] tx.create_sigs: data_hash: {data_hash}");
 
         let mut sigs = vec![];
         for secret in secret_keys {

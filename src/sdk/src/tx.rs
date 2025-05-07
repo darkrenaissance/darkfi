@@ -25,11 +25,7 @@ use std::{
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::{
-    crypto::ContractId,
-    hex::{decode_hex_arr, AsHex},
-    ContractError, GenericResult,
-};
+use super::{crypto::ContractId, ContractError, GenericResult};
 use crate::crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
@@ -51,7 +47,7 @@ impl TransactionHash {
     }
 
     pub fn as_string(&self) -> String {
-        self.0.hex().to_string()
+        format!("{}", blake3::hash(&self.0))
     }
 }
 
@@ -59,13 +55,16 @@ impl FromStr for TransactionHash {
     type Err = ContractError;
 
     fn from_str(tx_hash_str: &str) -> GenericResult<Self> {
-        Ok(Self(decode_hex_arr(tx_hash_str)?))
+        let Ok(hash) = blake3::Hash::from_str(tx_hash_str) else {
+            return Err(ContractError::HexFmtErr);
+        };
+        Ok(Self(*hash.as_bytes()))
     }
 }
 
 impl fmt::Display for TransactionHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.hex())
+        write!(f, "{}", blake3::hash(&self.0))
     }
 }
 
