@@ -91,15 +91,15 @@ $ ./minerd
 You now have to configure `darkfid` to use your wallet address as the
 rewards recipient, when submitting blocks to `minerd` to mine. Open
 your config file with your editor of choice (default path is
-`~/.config/darkfi/darkfid_config.toml`) and find the `recipient`
-option under the network configuration you will operate on (for testnet
-it is `[network_config."testnet"]`). Uncomment it by removing the `#`
-character at the start of line, and replace the `YOUR_WALLET_ADDRESS_HERE`
-string with your wallet address.
+`~/.config/darkfi/darkfid_config.toml`) and find the `recipient` and
+`minerd_endpoint` options under the network configuration you will operate
+on (for testnet it is `[network_config."testnet"]`). Uncomment them by
+removing the `#` character at the start of line, and replace the
+`YOUR_WALLET_ADDRESS_HERE` string with your wallet address.
 
 ```
-# Enable this to mine
-miner = true
+# Put your `minerd` endpoint here (default for testnet is in this example)
+minerd_endpoint = "tcp://127.0.0.1:28467"
 # Put the address from `drk wallet --address` here
 recipient = "..."
 ```
