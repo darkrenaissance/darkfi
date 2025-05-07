@@ -2046,7 +2046,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "arti-client",
  "async-recursion",
@@ -2282,7 +2282,7 @@ dependencies = [
 
 [[package]]
 name = "darkfid"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "blake3 1.8.2",
