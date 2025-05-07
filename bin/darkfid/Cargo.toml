@@ -1,6 +1,6 @@
 [package]
 name = "darkfid"
-version = "0.4.1"
+version = "0.5.0"
 homepage = "https://dark.fi"
 description = "DarkFi node daemon"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

@@ -97,7 +97,7 @@ hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
 #allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
+#transport_mixing = false
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
@@ -228,12 +228,16 @@ hostlist = "~/.local/share/darkfi/darkfid/testnet/p2p_hostlist.tsv"
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
+#seeds = [
+#    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:8343",
+#    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:8343",
+#]
 
 # Whitelisted network transports for outbound connections
 allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
+#transport_mixing = false
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
@@ -363,7 +367,7 @@ seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
 allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
+#transport_mixing = false
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
