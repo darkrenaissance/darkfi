@@ -25,7 +25,11 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use super::{Dht, DhtNode, DhtRouterItem, DhtRouterPtr};
 use crate::{
-    net::{connector::Connector, session::Session, ChannelPtr, Message},
+    net::{
+        connector::Connector,
+        session::{Session, SESSION_REFINE, SESSION_SEED},
+        ChannelPtr, Message,
+    },
     system::{sleep, timeout::timeout},
     Error, Result,
 };
@@ -82,6 +86,11 @@ pub trait DhtHandler {
             let channel_cache_lock = self.dht().channel_cache.clone();
             let mut channel_cache = channel_cache_lock.write().await;
             if !channel.is_stopped() && !channel_cache.values().any(|&v| v == channel.info.id) {
+                // Skip this channel is it's a seed or refine session.
+                if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+                    continue;
+                }
+
                 let node = self.ping(channel.clone()).await;
 
                 if let Ok(n) = node {
@@ -298,6 +307,13 @@ pub trait DhtHandler {
 
         if let Some(channel_id) = channel_cache.get(&node.id) {
             if let Some(channel) = self.dht().p2p.get_channel(*channel_id) {
+                if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+                    return Err(Error::Custom(
+                        "Could not get a channel (for DHT) as this is a seed or refine session"
+                            .to_string(),
+                    ));
+                }
+
                 if channel.is_stopped() {
                     channel.clone().start(self.dht().executor.clone());
                 }
@@ -321,6 +337,14 @@ pub trait DhtHandler {
                 continue;
             }
             let (_, channel) = connect_res.unwrap();
+
+            if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+                return Err(Error::Custom(
+                    "Could not create a channel (for DHT) as this is a seed or refine session"
+                        .to_string(),
+                ));
+            }
+
             let register_res =
                 session_out.register_channel(channel.clone(), self.dht().executor.clone()).await;
             if register_res.is_err() {
