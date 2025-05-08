@@ -80,7 +80,7 @@ pub struct PoWRewardCallBuilder {
 
 impl PoWRewardCallBuilder {
     fn _build(&self, value: u64) -> Result<PoWRewardCallDebris> {
-        debug!(target: "contract::money::client::pow_reward", "Building Money::PowRewardV1 contract call");
+        debug!(target: "contract::money::client::pow_reward", "Building Money::PoWRewardV1 contract call");
 
         // In this call, we will build one clear input and one anonymous output.
         // Only DARK_TOKEN_ID can be minted as PoW reward.
