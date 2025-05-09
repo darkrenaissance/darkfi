@@ -43,7 +43,7 @@ p2p_datastore = "~/.local/share/darkfi/fud"
 hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 
 ## P2P accept addresses
-# inbound = ["tcp://0.0.0.0:13337"]
+#inbound = ["tcp+tls://0.0.0.0:24441", "tcp+tls://[::]:24441"]
 
 ## Outbound connection slots
 # outbound_connections = 16
@@ -59,7 +59,7 @@ hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
-#external_addrs = ["tcp+tls://my.resolveable.address:26661"]
+#external_addrs = ["tcp+tls://my.resolveable.address:24441"]
 
 ## Seed nodes to connect to
 seeds = [
@@ -73,7 +73,7 @@ seeds = [
 #peers = []
 
 # Whitelisted transports for outbound connections
-allowed_transports = ["tcp", "tcp+tls"]
+allowed_transports = ["tcp+tls"]
 #allowed_transports = ["tor"]
 #allowed_transports = ["tor", "tor+tls"]
 
