@@ -1,6 +1,6 @@
 [package]
 name = "darkfi-sdk"
-version = "0.4.1"
+version = "0.5.0"
 homepage = "https://dark.fi"
 description = "SDK used for developing smart contracts on DarkFi"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

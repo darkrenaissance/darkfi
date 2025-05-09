@@ -1,6 +1,6 @@
 [package]
 name = "explorerd"
-version = "0.4.1"
+version = "0.5.0"
 description = "Daemon to listen for new blocks from darkfid and store them in an easily accessible format for further usage."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://codeberg.org/darkrenaissance/darkfi"

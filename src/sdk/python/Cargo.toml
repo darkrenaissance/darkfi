@@ -1,7 +1,7 @@
 [package]
 name = "darkfi-sdk-py"
 description = "Python bindings for the DarkFi SDK"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"

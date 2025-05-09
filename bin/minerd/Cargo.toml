@@ -1,6 +1,6 @@
 [package]
 name = "minerd"
-version = "0.4.1"
+version = "0.5.0"
 homepage = "https://dark.fi"
 description = "Darkfi mining daemon"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

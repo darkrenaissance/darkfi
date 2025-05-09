@@ -1,6 +1,6 @@
 [package]
 name = "darkfi_dao_contract"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 edition = "2021"
