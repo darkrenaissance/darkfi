@@ -22,7 +22,6 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 BINS = \
 	zkas \
 	darkfid \
-	darkfi-mmproxy \
 	minerd \
 	drk \
 	darkirc \
@@ -60,13 +59,6 @@ darkfid: contracts
 		RUSTFLAGS="$(RUSTFLAGS)"
 
 minerd: contracts
-	$(MAKE) -C bin/$@ \
-		PREFIX="$(PREFIX)" \
-		CARGO="$(CARGO)" \
-		RUST_TARGET="$(RUST_TARGET)" \
-		RUSTFLAGS="$(RUSTFLAGS)"
-
-darkfi-mmproxy:
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
