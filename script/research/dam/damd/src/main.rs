@@ -24,7 +24,8 @@ use smol::Executor;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
 use darkfi::{
-    async_daemonize, cli_desc, net::settings::SettingsOpt, rpc::settings::RpcSettingsOpt, Result,
+    async_daemonize, cli_desc, net::settings::SettingsOpt, rpc::settings::RpcSettingsOpt, Error,
+    Result,
 };
 
 use damd::Damd;
