@@ -85,9 +85,37 @@ tor_socks5_proxy = "socks5://127.0.0.1:9050"
 
 With these settings your node becomes a Tor inbound node. The `inbound` 
 settings are optional, but enabling them will increase the strength and 
-reliability of the network. Using Tor, we can host anonymous nodes as Tor hidden 
-services. To do this, we need to set up our Tor daemon and create a hidden service.
-The following instructions should work on any Linux system.
+reliability of the network.
+
+There are currently two methods of doing this, both documented below.
+The Arti method allows you to create ephemeral onions that will
+change each time you restart your node. Alternatively you can make a
+non-ephemeral service using the torrc method. In this case the address
+always stays the same, which is useful for nodes such as seed nodes that
+need to be found on the same onion adddress.
+
+#### Using Arti
+
+We can use Arti to create an ephemeral onion on each startup that we
+will receive Inbound connections on. Set this in your config file with
+a port number of your choice:
+
+```
+inbound = ["tor://127.0.0.1:25551"]
+```
+
+On running your node, you should get a message like this:
+
+```
+[INFO] [P2P] Starting Inbound session #0 on tor://127.0.0.1:25551/
+```
+
+This means your ephemeral onion is active and awaiting connections. 
+
+#### Using torrc
+
+Alternatively, we can set up a static Tor daemon and create a hidden
+service.  The following instructions should work on any Linux system.
 
 First, you must install [Tor](https://www.torproject.org/). It can usually be 
 installed with your package manager. For example on an `apt` based system we can run:
