@@ -18,10 +18,13 @@ r* This program is distributed in the hope that it will be useful,
 
 use std::{collections::BTreeMap, io::Cursor};
 
-use darkfi_sdk::{crypto::ContractId, monotree::Monotree};
+use darkfi_sdk::{
+    crypto::contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    monotree::Monotree,
+};
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
-use sled_overlay::{serial::parse_record, sled};
+use sled_overlay::{serial::parse_record, sled, SledDbOverlay};
 
 use crate::{
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
@@ -254,7 +257,10 @@ impl ContractStore {
         Ok(ret)
     }
 
-    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    /// Generate a Monotree(SMT) containing all contracts states
+    /// checksums, along with the wasm bincodes checksum.
+    ///
+    /// Note: native contracts wasm bincodes are excluded.
     pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree> {
         // Initialize the monotree
         let mut root = None;
@@ -270,18 +276,39 @@ impl ContractStore {
                 let state_tree = db.open_tree(state_ptr)?;
 
                 // Compute its checksum
-                let mut hasher = blake3::Hasher::new();
-                for record in state_tree.iter() {
-                    let (key, value) = record?;
-                    hasher.update(&key);
-                    hasher.update(&value);
-                }
+                let checksum = sled_tree_checksum(&state_tree)?;
 
                 // Insert record to monotree
-                root = tree.insert(root.as_ref(), &state_ptr, hasher.finalize().as_bytes())?;
+                root = tree.insert(root.as_ref(), &state_ptr, &checksum)?;
                 tree.set_headroot(root.as_ref());
             }
         }
+
+        // Iterate over current contracts wasm bincodes to compute its checksum
+        let mut hasher = blake3::Hasher::new();
+        for record in self.wasm.iter() {
+            let (key, value) = record?;
+
+            // Skip native ones
+            if key == MONEY_CONTRACT_ID.to_bytes() ||
+                key == DAO_CONTRACT_ID.to_bytes() ||
+                key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
+            {
+                continue
+            }
+
+            // Hash record
+            hasher.update(&key);
+            hasher.update(&value);
+        }
+
+        // Insert wasm bincodes record to monotree
+        root = tree.insert(
+            root.as_ref(),
+            blake3::hash(SLED_BINCODE_TREE).as_bytes(),
+            hasher.finalize().as_bytes(),
+        )?;
+        tree.set_headroot(root.as_ref());
 
         Ok(tree)
     }
@@ -422,8 +449,11 @@ impl ContractStoreOverlay {
         Ok((zkbin, vk))
     }
 
-    /// Generate a Monotree(SMT) containing all contracts states checksums.
+    /// Generate a Monotree(SMT) containing all contracts states
+    /// checksums, along with the wasm bincodes checksum.
     /// Be carefull as this will open all states trees in the overlay.
+    ///
+    /// Note: native contracts wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree> {
         let mut lock = self.0.lock().unwrap();
 
@@ -447,50 +477,137 @@ impl ContractStoreOverlay {
             lock.open_tree(&state_ptr, false)?;
 
             // Compute its checksum
-            let mut hasher = blake3::Hasher::new();
-            for record in lock.iter(&state_ptr)? {
-                let (key, value) = record?;
-                hasher.update(&key);
-                hasher.update(&value);
-            }
+            let checksum = sled_overlay_tree_checksum(&lock, &state_ptr)?;
 
             // Insert record to monotree
-            root = tree.insert(root.as_ref(), &state_ptr, hasher.finalize().as_bytes())?;
+            root = tree.insert(root.as_ref(), &state_ptr, &checksum)?;
             tree.set_headroot(root.as_ref());
         }
+
+        // Iterate over current contracts wasm bincodes to compute its checksum
+        let mut hasher = blake3::Hasher::new();
+        for record in lock.iter(SLED_BINCODE_TREE)? {
+            let (key, value) = record?;
+
+            // Skip native ones
+            if key == MONEY_CONTRACT_ID.to_bytes() ||
+                key == DAO_CONTRACT_ID.to_bytes() ||
+                key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
+            {
+                continue
+            }
+
+            // Hash record
+            hasher.update(&key);
+            hasher.update(&value);
+        }
+
+        // Insert wasm bincodes record to monotree
+        root = tree.insert(
+            root.as_ref(),
+            blake3::hash(SLED_BINCODE_TREE).as_bytes(),
+            hasher.finalize().as_bytes(),
+        )?;
+        tree.set_headroot(root.as_ref());
 
         Ok(tree)
     }
 
-    /// Compute all updated contracts states checksums and update their records
-    /// in the provided Monotree(SMT).
+    /// Compute all updated contracts states and wasm bincodes
+    /// checksums and update their records in the provided
+    /// Monotree(SMT).
     pub fn update_state_monotree(&self, tree: &mut Monotree) -> Result<()> {
         let lock = self.0.lock().unwrap();
 
         // Iterate over overlay's caches
         // TODO: parallelize this with a threadpool
         let mut root = tree.get_headroot()?;
-        for state_key in lock.state.caches.keys() {
+        for (state_key, state_cache) in &lock.state.caches {
             // Check if that cache is a contract state one.
             // Overlay protected trees are all the native/non-contract ones.
-            if lock.state.protected_tree_names.contains(state_key) {
+            if !lock.state.protected_tree_names.contains(state_key) {
+                // Compute its checksum
+                let checksum = sled_overlay_tree_checksum(&lock, state_key)?;
+
+                // Insert record to monotree
+                root = tree.insert(root.as_ref(), &deserialize(state_key)?, &checksum)?;
+                tree.set_headroot(root.as_ref());
+
                 continue
             }
 
-            // Iterate over state tree to compute its checksum
+            // Skip if its not the wasm bincodes cache
+            if state_key != SLED_BINCODE_TREE {
+                continue
+            }
+
+            // Check if wasm bincodes cache is updated
+            if state_cache.state.cache.is_empty() && state_cache.state.removed.is_empty() {
+                continue
+            }
+
+            // Iterate over current contracts wasm bincodes to compute
+            // its checksum.
             let mut hasher = blake3::Hasher::new();
-            for record in lock.iter(state_key)? {
+            for record in lock.iter(SLED_BINCODE_TREE)? {
                 let (key, value) = record?;
+
+                // Skip native ones
+                if key == MONEY_CONTRACT_ID.to_bytes() ||
+                    key == DAO_CONTRACT_ID.to_bytes() ||
+                    key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
+                {
+                    continue
+                }
+
+                // Hash record
                 hasher.update(&key);
                 hasher.update(&value);
             }
 
-            // Insert record to monotree
-            root =
-                tree.insert(root.as_ref(), &deserialize(state_key)?, hasher.finalize().as_bytes())?;
+            // Insert wasm bincodes record to monotree
+            root = tree.insert(
+                root.as_ref(),
+                blake3::hash(SLED_BINCODE_TREE).as_bytes(),
+                hasher.finalize().as_bytes(),
+            )?;
             tree.set_headroot(root.as_ref());
         }
 
         Ok(())
     }
+}
+
+/// Auxiliary function to compute a blake3 checksum for provided sled
+/// tree.
+fn sled_tree_checksum(tree: &sled::Tree) -> Result<[u8; 32]> {
+    // Generate a new blake3 hashed
+    let mut hasher = blake3::Hasher::new();
+
+    // Iterate over tree records to compute its checksum
+    for record in tree.iter() {
+        let (key, value) = record?;
+        hasher.update(&key);
+        hasher.update(&value);
+    }
+
+    // Return the finalized hasher bytes
+    Ok(*hasher.finalize().as_bytes())
+}
+
+/// Auxiliary function to compute a blake3 checksum for provided sled
+/// overlay tree.
+fn sled_overlay_tree_checksum(overlay: &SledDbOverlay, tree_key: &[u8]) -> Result<[u8; 32]> {
+    // Generate a new blake3 hashed
+    let mut hasher = blake3::Hasher::new();
+
+    // Iterate over tree records to compute its checksum
+    for record in overlay.iter(tree_key)? {
+        let (key, value) = record?;
+        hasher.update(&key);
+        hasher.update(&value);
+    }
+
+    // Return the finalized hasher bytes
+    Ok(*hasher.finalize().as_bytes())
 }
