@@ -19,9 +19,7 @@
 use std::process::Command;
 
 fn main() {
-    let output = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output();
+    let output = Command::new("git").args(["rev-parse", "--short", "HEAD"]).output();
 
     if let Ok(output) = output {
         if output.status.success() {

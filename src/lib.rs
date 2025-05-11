@@ -65,7 +65,7 @@ macro_rules! cli_desc {
     () => {{
         let commitish = match option_env!("COMMITISH") {
             Some(c) => &format!("-{}", c),
-            None => ""
+            None => "",
         };
         let desc = format!(
             "{} {}\n{}{}\n{}",
