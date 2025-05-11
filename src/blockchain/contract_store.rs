@@ -19,7 +19,7 @@ r* This program is distributed in the hope that it will be useful,
 use std::{collections::BTreeMap, io::Cursor};
 
 use darkfi_sdk::{
-    crypto::contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::contract_id::{ContractId, NATIVE_CONTRACT_IDS_BYTES},
     monotree::Monotree,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -290,10 +290,7 @@ impl ContractStore {
             let (key, value) = record?;
 
             // Skip native ones
-            if key == MONEY_CONTRACT_ID.to_bytes() ||
-                key == DAO_CONTRACT_ID.to_bytes() ||
-                key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
-            {
+            if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
                 continue
             }
 
@@ -490,10 +487,7 @@ impl ContractStoreOverlay {
             let (key, value) = record?;
 
             // Skip native ones
-            if key == MONEY_CONTRACT_ID.to_bytes() ||
-                key == DAO_CONTRACT_ID.to_bytes() ||
-                key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
-            {
+            if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
                 continue
             }
 
@@ -553,10 +547,7 @@ impl ContractStoreOverlay {
                 let (key, value) = record?;
 
                 // Skip native ones
-                if key == MONEY_CONTRACT_ID.to_bytes() ||
-                    key == DAO_CONTRACT_ID.to_bytes() ||
-                    key == DEPLOYOOOR_CONTRACT_ID.to_bytes()
-                {
+                if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
                     continue
                 }
 

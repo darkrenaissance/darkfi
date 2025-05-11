@@ -51,6 +51,10 @@ lazy_static! {
     /// `EJs7oEjKkvCeEVCmpRsd6fEoTGCFJ7WKUBfmAjwaegN`
     pub static ref DEPLOYOOOR_CONTRACT_ID: ContractId =
         ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(2)]));
+
+    /// Native contract IDs bytes, for various checks
+    pub static ref NATIVE_CONTRACT_IDS_BYTES: [[u8; 32]; 3] =
+        [MONEY_CONTRACT_ID.to_bytes(), DAO_CONTRACT_ID.to_bytes(), DEPLOYOOOR_CONTRACT_ID.to_bytes()];
 }
 
 /// ContractId represents an on-chain identifier for a certain smart contract.
