@@ -63,10 +63,15 @@ pub const ANSI_LOGO: &str = include_str!("../contrib/darkfi.ansi");
 #[macro_export]
 macro_rules! cli_desc {
     () => {{
+        let commitish = match option_env!("COMMITISH") {
+            Some(c) => &format!("-{}", c),
+            None => ""
+        };
         let desc = format!(
-            "{} {}\n{}\n{}",
+            "{} {}\n{}{}\n{}",
             env!("CARGO_PKG_NAME").to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
+            commitish,
             env!("CARGO_PKG_DESCRIPTION").to_string(),
             darkfi::ANSI_LOGO,
         );

@@ -66,7 +66,11 @@ fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
-#[structopt(name = "darkirc", about = cli_desc!())]
+#[structopt(
+    name = "darkirc",
+    about = cli_desc!(),
+    version = concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMITISH"))
+)]
 struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
