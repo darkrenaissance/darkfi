@@ -85,6 +85,9 @@ transport_mixing = false
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
 
+# Nym Socks5 proxy
+#nym_socks5_proxy = "socks5://127.0.0.1:1080"
+
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 

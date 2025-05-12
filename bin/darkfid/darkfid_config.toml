@@ -113,6 +113,9 @@ allowed_transports = ["tcp+tls"]
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
 
+# Nym Socks5 proxy
+#nym_socks5_proxy = "socks5://127.0.0.1:1080"
+
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 
@@ -244,6 +247,9 @@ allowed_transports = ["tcp+tls"]
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
+
+# Nym Socks5 proxy
+#nym_socks5_proxy = "socks5://127.0.0.1:1080"
 
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"
@@ -377,6 +383,9 @@ hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
+
+# Nym Socks5 proxy
+#nym_socks5_proxy = "socks5://127.0.0.1:1080"
 
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"
