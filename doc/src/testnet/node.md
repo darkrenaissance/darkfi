@@ -20,14 +20,14 @@ and stays connected to the p2p network.
 * `drk` is a CLI wallet. It provides an interface to smart contracts such
 as Money and DAO, manages our keys and coins, and scans the blockchain
 to update our balances.
-* `minerd` is the DarkFi mining daemon. It connects to `darkfid` over
-RPC, which triggers commands for it to mine blocks.
+* `minerd` is the DarkFi mining daemon. `darkfid` connects to it over
+RPC, and triggers commands to mine blocks.
 
 The config files for `darkfid` and `drk` are sectioned into three parts,
 each marked `[network_config]`. The sections look like this:
 
-* `[network_config."mainnet"]`
 * `[network_config."testnet"]`
+* `[network_config."mainnet"]`
 * `[network_config."localnet"]`
 
 At the top of the `darkfid` and `drk` config file, we can modify the
@@ -149,7 +149,7 @@ rest of the tutorial (`darkfid` and `drk` handle this), but if you want
 to help secure the network, you can participate in the mining process
 by running the native `minerd` mining daemon.
 
-To mine on DarkFI we need to connect the `minerd` RPC to the `darkfid`
+To mine on DarkFI we need to expose the `minerd` RPC to the `darkfid`
 full node, which will initiate the mining process. We'll also need to
 add a recipient to `darkfid` that specifies where the mining rewards
 will be minted to. 
@@ -164,7 +164,9 @@ $ make minerd
 
 This process will now compile the mining daemon. When finished, run
 `minerd` once so that it spawns its config file on your system. This
-config file is used to configure `minerd`.
+config file is used to configure `minerd`. You can define how many
+threads will be used for mining. RandomX can use up to 2080 MiB per
+thread so configure it to not consume all your system available memory.
 
 ```
 $ ./minerd
@@ -182,9 +184,9 @@ $ ./minerd
 
 ![step8](img/step9.png)
 
-You now have to connect `minerd` to `darkfid` over RPC, and configure
-`darkfid` to use your wallet address as the rewards recipient, when
-submitting blocks to `minerd` to mine.
+You now have to expose `minerd` RPC to `darkfid`, and configure it
+to use your wallet address as the rewards recipient, when submitting
+blocks to `minerd` to mine.
 
 Open your `darkfid` config file with a text editor (the default path
 is `~/.config/darkfi/darkfid_config.toml`). Find the `recipient` and
@@ -196,7 +198,7 @@ like this:
 # Put your `minerd` endpoint here (default for testnet is in this example)
 minerd_endpoint = "tcp://127.0.0.1:28467"
 # Put the address from `drk wallet --address` here
-#recipient = "YOUR_WALLET_ADDRESS_HERE"
+recipient = "YOUR_WALLET_ADDRESS_HERE"
 ```
 
 Now ensure that `minerd_endpoint` is set to the same value as the
