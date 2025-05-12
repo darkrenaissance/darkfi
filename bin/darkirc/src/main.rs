@@ -123,6 +123,10 @@ struct Args {
     skip_dag_sync: bool,
 
     #[structopt(long)]
+    // Whether to sync headers only or full sync
+    pub fast_mode: bool,
+
+    #[structopt(long)]
     /// IRC Password (Encrypted with bcrypt-2b)
     password: Option<String>,
 
@@ -493,7 +497,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // Initial DAG sync
-    if let Err(e) = sync_task(&p2p, &event_graph, args.skip_dag_sync).await {
+    if let Err(e) = sync_task(&p2p, &event_graph, args.skip_dag_sync, args.fast_mode).await {
         error!("DAG sync task failed to start: {e}");
         return Err(e);
     };
@@ -501,7 +505,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Stoppable task to monitor network and resync on disconnect.
     let sync_mon_task = StoppableTask::new();
     sync_mon_task.clone().start(
-        sync_and_monitor(p2p.clone(), event_graph.clone(), args.skip_dag_sync),
+        sync_and_monitor(p2p.clone(), event_graph.clone(), args.skip_dag_sync, args.fast_mode),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
@@ -543,7 +547,12 @@ async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
 }
 
 /// Async task to endlessly try to sync DAG, returns Ok if done.
-async fn sync_task(p2p: &P2pPtr, event_graph: &EventGraphPtr, skip_dag_sync: bool) -> Result<()> {
+async fn sync_task(
+    p2p: &P2pPtr,
+    event_graph: &EventGraphPtr,
+    skip_dag_sync: bool,
+    fast_mode: bool,
+) -> Result<()> {
     let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
 
     loop {
@@ -552,7 +561,7 @@ async fn sync_task(p2p: &P2pPtr, event_graph: &EventGraphPtr, skip_dag_sync: boo
             // We'll attempt to sync for ever
             if !skip_dag_sync {
                 info!("Syncing event DAG");
-                match event_graph.dag_sync().await {
+                match event_graph.dag_sync(fast_mode).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
@@ -579,6 +588,7 @@ async fn sync_and_monitor(
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
     skip_dag_sync: bool,
+    fast_mode: bool,
 ) -> Result<()> {
     loop {
         let net_subscription = p2p.hosts().subscribe_disconnect().await;
@@ -591,7 +601,7 @@ async fn sync_and_monitor(
                 // Sync node again
                 info!("Network disconnection detected, resyncing...");
                 *event_graph.synced.write().await = false;
-                sync_task(&p2p, &event_graph, skip_dag_sync).await?;
+                sync_task(&p2p, &event_graph, skip_dag_sync, fast_mode).await?;
             }
             Err(e) => return Err(e),
         }

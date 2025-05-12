@@ -25,7 +25,7 @@ use darkfi::net::transport::{Dialer, Listener};
 #[test]
 fn tcp_transport() {
     let executor = LocalExecutor::new();
-    let url = Url::parse("tcp://127.0.0.1:5432").unwrap();
+    let url = Url::parse("tcp://127.0.0.1:54321").unwrap();
 
     smol::block_on(executor.run(async {
         let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();

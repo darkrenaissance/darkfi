@@ -58,7 +58,7 @@ pub fn closest_epoch(timestamp: u64) -> u64 {
 /// Hash message/event modulo `Fp`
 pub fn hash_event(event: &Event) -> pallas::Base {
     let mut buf = [0u8; 64];
-    buf[..blake3::OUT_LEN].copy_from_slice(event.id().as_bytes());
+    buf[..blake3::OUT_LEN].copy_from_slice(event.header.id().as_bytes());
     pallas::Base::from_uniform_bytes(&buf)
 }
 
@@ -102,7 +102,7 @@ impl RlnIdentity {
         proving_key: &ProvingKey,
     ) -> Result<(Proof, Vec<pallas::Base>)> {
         // 1. Construct share
-        let epoch = pallas::Base::from(closest_epoch(event.timestamp));
+        let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
         let message_id = pallas::Base::from(self.message_id);
         let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
         let a_0 = poseidon_hash([self.nullifier, self.trapdoor]);
@@ -132,7 +132,7 @@ impl RlnIdentity {
         let public_inputs =
             vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
 
-        info!(target: "crypto::rln::create_proof", "[RLN] Creating proof for event {}", event.id());
+        info!(target: "crypto::rln::create_proof", "[RLN] Creating proof for event {}", event.header.id());
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
         let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
 
