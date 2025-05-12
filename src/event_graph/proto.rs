@@ -25,11 +25,11 @@ use std::{
     },
 };
 
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncodable};
 use smol::Executor;
 use tracing::{debug, error, trace, warn};
 
-use super::{Event, EventGraphPtr, NULL_ID};
+use super::{event::Header, Event, EventGraphPtr, NULL_ID};
 use crate::{
     impl_p2p_message,
     net::{
@@ -109,6 +109,12 @@ pub struct ProtocolEventGraph {
     ev_req_sub: MessageSubscription<EventReq>,
     /// `MessageSubscriber` for `EventRep`
     ev_rep_sub: MessageSubscription<EventRep>,
+    /// `MessageSubscriber` for `HeaderPut`
+    _hdr_put_sub: MessageSubscription<HeaderPut>,
+    /// `MessageSubscriber` for `HeaderReq`
+    hdr_req_sub: MessageSubscription<HeaderReq>,
+    /// `MessageSubscriber` for `HeaderRep`
+    _hdr_rep_sub: MessageSubscription<HeaderRep>,
     /// `MessageSubscriber` for `TipReq`
     tip_req_sub: MessageSubscription<TipReq>,
     /// `MessageSubscriber` for `TipRep`
@@ -139,6 +145,21 @@ impl_p2p_message!(EventReq, "EventGraph::EventReq", 0, 0, DEFAULT_METERING_CONFI
 pub struct EventRep(pub Vec<Event>);
 impl_p2p_message!(EventRep, "EventGraph::EventRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
+/// A P2P message representing publishing an event's header on the network
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct HeaderPut(pub Header);
+impl_p2p_message!(HeaderPut, "EventGraph::HeaderPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
+
+/// A P2P message representing a header request
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct HeaderReq {}
+impl_p2p_message!(HeaderReq, "EventGraph::HeaderReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
+
+/// A P2P message representing a header reply
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct HeaderRep(pub Vec<Header>);
+impl_p2p_message!(HeaderRep, "EventGraph::HeaderRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
+
 /// A P2P message representing a request for a peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct TipReq {}
@@ -155,6 +176,9 @@ impl ProtocolBase for ProtocolEventGraph {
         self.jobsman.clone().start(ex.clone());
         self.jobsman.clone().spawn(self.clone().handle_event_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;
+        // self.jobsman.clone().spawn(self.clone().handle_header_put(), ex.clone()).await;
+        // self.jobsman.clone().spawn(self.clone().handle_header_req(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_header_rep(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_tip_req(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().broadcast_rate_limiter(), ex.clone()).await;
         Ok(())
@@ -171,12 +195,18 @@ impl ProtocolEventGraph {
         msg_subsystem.add_dispatch::<EventPut>().await;
         msg_subsystem.add_dispatch::<EventReq>().await;
         msg_subsystem.add_dispatch::<EventRep>().await;
+        msg_subsystem.add_dispatch::<HeaderPut>().await;
+        msg_subsystem.add_dispatch::<HeaderReq>().await;
+        msg_subsystem.add_dispatch::<HeaderRep>().await;
         msg_subsystem.add_dispatch::<TipReq>().await;
         msg_subsystem.add_dispatch::<TipRep>().await;
 
         let ev_put_sub = channel.subscribe_msg::<EventPut>().await?;
         let ev_req_sub = channel.subscribe_msg::<EventReq>().await?;
         let ev_rep_sub = channel.subscribe_msg::<EventRep>().await?;
+        let _hdr_put_sub = channel.subscribe_msg::<HeaderPut>().await?;
+        let hdr_req_sub = channel.subscribe_msg::<HeaderReq>().await?;
+        let _hdr_rep_sub = channel.subscribe_msg::<HeaderRep>().await?;
         let tip_req_sub = channel.subscribe_msg::<TipReq>().await?;
         let _tip_rep_sub = channel.subscribe_msg::<TipRep>().await?;
 
@@ -188,6 +218,9 @@ impl ProtocolEventGraph {
             ev_put_sub,
             ev_req_sub,
             ev_rep_sub,
+            _hdr_put_sub,
+            hdr_req_sub,
+            _hdr_rep_sub,
             tip_req_sub,
             _tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
@@ -231,7 +264,7 @@ impl ProtocolEventGraph {
             };
             trace!(
                  target: "event_graph::protocol::handle_event_put",
-                 "Got EventPut: {} [{}]", event.id(), self.channel.display_address(),
+                 "Got EventPut: {} [{}]", event.header.id(), self.channel.display_address(),
             );
 
             // Check if node has finished syncing its DAG
@@ -244,8 +277,8 @@ impl ProtocolEventGraph {
             }
 
             // If we have already seen the event, we'll stay quiet.
-            let event_id = event.id();
-            if self.event_graph.dag.contains_key(event_id.as_bytes()).unwrap() {
+            let event_id = event.header.id();
+            if self.event_graph.main_dag.contains_key(event_id.as_bytes()).unwrap() {
                 debug!(
                     target: "event_graph::protocol::handle_event_put",
                     "Event {event_id} is already known"
@@ -274,12 +307,12 @@ impl ProtocolEventGraph {
             // The genesis event marks the last time the Dag has been pruned of old
             // events. The pruning interval is defined by the days_rotation field
             // of [`EventGraph`].
-            let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
-            if event.timestamp < genesis_timestamp {
+            let genesis_timestamp = self.event_graph.current_genesis.read().await.header.timestamp;
+            if event.header.timestamp < genesis_timestamp {
                 debug!(
                     target: "event_graph::protocol::handle_event_put",
                     "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{genesis_timestamp}`",
-                event.id(), event.timestamp
+                event.header.id(), event.header.timestamp
                 );
             }
 
@@ -299,14 +332,14 @@ impl ProtocolEventGraph {
             );
 
             let mut missing_parents = HashSet::new();
-            for parent_id in event.parents.iter() {
+            for parent_id in event.header.parents.iter() {
                 // `event.validate_new()` should have already made sure that
                 // not all parents are NULL, and that there are no duplicates.
                 if parent_id == &NULL_ID {
                     continue
                 }
 
-                if !self.event_graph.dag.contains_key(parent_id.as_bytes()).unwrap() {
+                if !self.event_graph.main_dag.contains_key(parent_id.as_bytes()).unwrap() {
                     missing_parents.insert(*parent_id);
                 }
             }
@@ -362,12 +395,12 @@ impl ProtocolEventGraph {
                     let parents = parents.0.clone();
 
                     for parent in parents {
-                        let parent_id = parent.id();
+                        let parent_id = parent.header.id();
                         if !missing_parents.contains(&parent_id) {
                             error!(
                                 target: "event_graph::protocol::handle_event_put",
                                 "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
-                                self.channel.display_address(), parent.id(),
+                                self.channel.display_address(), parent.header.id(),
                             );
                             self.channel.stop().await;
                             return Err(Error::ChannelStopped)
@@ -375,21 +408,21 @@ impl ProtocolEventGraph {
 
                         debug!(
                             target: "event_graph::protocol::handle_event_put",
-                            "Got correct parent event {}", parent.id(),
+                            "Got correct parent event {}", parent.header.id(),
                         );
 
-                        if let Some(layer_events) = received_events.get_mut(&parent.layer) {
+                        if let Some(layer_events) = received_events.get_mut(&parent.header.layer) {
                             layer_events.push(parent.clone());
                         } else {
                             let layer_events = vec![parent.clone()];
-                            received_events.insert(parent.layer, layer_events);
+                            received_events.insert(parent.header.layer, layer_events);
                         }
                         received_events_hashes.insert(parent_id);
 
                         missing_parents.remove(&parent_id);
 
                         // See if we have the upper parents
-                        for upper_parent in parent.parents.iter() {
+                        for upper_parent in parent.header.parents.iter() {
                             if upper_parent == &NULL_ID {
                                 continue
                             }
@@ -398,7 +431,7 @@ impl ProtocolEventGraph {
                                 !received_events_hashes.contains(upper_parent) &&
                                 !self
                                     .event_graph
-                                    .dag
+                                    .main_dag
                                     .contains_key(upper_parent.as_bytes())
                                     .unwrap()
                             {
@@ -509,22 +542,22 @@ impl ProtocolEventGraph {
             // Check if the incoming event is older than the genesis event. If so, something
             // has gone wrong. The event should have been pruned during the last
             // rotation.
-            let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
+            let genesis_timestamp = self.event_graph.current_genesis.read().await.header.timestamp;
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
 
             for event in events.iter() {
-                if event.timestamp < genesis_timestamp {
+                if event.header.timestamp < genesis_timestamp {
                     error!(
                         target: "event_graph::protocol::handle_event_req",
                         "Requested event by peer {} is older than previous rotation period. It should have been pruned.
                     Event timestamp: `{}`. Genesis timestamp: `{genesis_timestamp}`",
-                    event.id(), event.timestamp
+                    event.header.id(), event.header.timestamp
                     );
                 }
 
                 // Now let's get the upper level of event IDs. When we reply, we could
                 // get requests for those IDs as well.
-                for parent_id in event.parents.iter() {
+                for parent_id in event.header.parents.iter() {
                     if parent_id != &NULL_ID {
                         bcast_ids.insert(*parent_id);
                     }
@@ -538,6 +571,51 @@ impl ProtocolEventGraph {
             // Reply with the event
             self.channel.send(&EventRep(events)).await?;
         }
+    }
+
+    /// Protocol function handling `HeaderReq`.
+    /// This is triggered whenever someone requests syncing headers by
+    /// sending their current headers.
+    async fn handle_header_rep(self: Arc<Self>) -> Result<()> {
+        loop {
+            self.hdr_req_sub.receive().await?;
+            trace!(
+                target: "event_graph::protocol::handle_tip_req",
+                "Got TipReq [{}]", self.channel.display_address(),
+            );
+
+            // Check if node has finished syncing its DAG
+            if !*self.event_graph.synced.read().await {
+                debug!(
+                    target: "event_graph::protocol::handle_tip_req",
+                    "DAG is still syncing, skipping..."
+                );
+                continue
+            }
+
+            // TODO: Rate limit
+
+            // We received header request. Let's find them, add them to
+            // our bcast ids list, and reply with them.
+            let mut headers = vec![];
+            for item in self.event_graph.main_dag.iter() {
+                let (_, event) = item.unwrap();
+                let event: Event = deserialize_async(&event).await.unwrap();
+                if !headers.contains(&event.header) || event.header.layer != 0 {
+                    headers.push(event.header);
+                }
+            }
+            // let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
+            // for (_, tips) in layers.iter() {
+            //     for tip in tips {
+            //         bcast_ids.insert(*tip);
+            //     }
+            // }
+            // drop(bcast_ids);
+
+            self.channel.send(&HeaderRep(headers)).await?;
+        }
+        // Ok(())
     }
 
     /// Protocol function handling `TipReq`.

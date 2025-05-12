@@ -919,7 +919,7 @@ impl Client {
         let mut replies = vec![];
 
         for event in dag_events.iter() {
-            let event_id = event.id();
+            let event_id = event.header.id();
             // If it was seen, skip
             match self.is_seen(&event_id).await {
                 Ok(true) => continue,

@@ -229,7 +229,7 @@ impl JsonRpcInterface {
         let dag_events = self.event_graph.order_events().await;
 
         for event in dag_events.iter() {
-            let event_id = event.id();
+            let event_id = event.header.id();
             // Try to deserialize it. (Here we skip errors)
             let genevent: GenEvent = match deserialize_async_partial(event.content()).await {
                 Ok((v, _)) => v,

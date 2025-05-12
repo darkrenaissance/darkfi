@@ -94,6 +94,10 @@ pub struct Args {
     // Whether to pipe notifications or not
     pub piped: bool,
 
+    #[structopt(long)]
+    // Whether to sync headers only or full sync
+    pub fast_mode: bool,
+
     #[structopt(short, long)]
     /// Set log file to ouput into
     pub log: Option<String>,
