@@ -420,7 +420,8 @@ impl HostContainer {
         color: HostColor,
         transports: &[String],
         mixed_transports: &[String],
-        tor_socks5_proxy: Url
+        tor_socks5_proxy: Option<Url>,
+        nym_socks5_proxy: Option<Url>,
     ) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_addrs()", "[START] {color:?}");
         let mut hosts = vec![];
@@ -444,20 +445,23 @@ impl HostContainer {
         }
 
         macro_rules! mix_socks5_transport {
-            ($a:expr, $b:expr) => {
+            ($a:expr, $b:expr, $proxies:expr) => {
                 if transports.contains(&$a.to_string()) &&
                     mixed_transports.contains(&$b.to_string())
                 {
                     let mut a_to_b = self.fetch_with_schemes(index, &[$b.to_string()], None);
                     for (addr, last_seen) in a_to_b.iter_mut() {
-                        let mut endpoint = tor_socks5_proxy.clone();
-                        endpoint.set_path(&format!(
-                            "{}:{}",
-                            addr.host().unwrap(),
-                            addr.port().unwrap()
-                        ));
-                        endpoint.set_scheme($a).unwrap();
-                        hosts.push((endpoint, last_seen.clone()));
+                        for proxy in $proxies {
+                            if let Some(mut endpoint) = proxy {
+                                endpoint.set_path(&format!(
+                                    "{}:{}",
+                                    addr.host().unwrap(),
+                                    addr.port().unwrap()
+                                ));
+                                endpoint.set_scheme($a).unwrap();
+                                hosts.push((endpoint, last_seen.clone()));
+                            }
+                        }
                     }
                 }
             };
@@ -467,10 +471,18 @@ impl HostContainer {
         mix_transport!("tor+tls", "tcp+tls");
         mix_transport!("nym", "tcp");
         mix_transport!("nym+tls", "tcp+tls");
-        mix_socks5_transport!("socks5", "tcp");
-        mix_socks5_transport!("socks5+tls", "tcp+tls");
-        mix_socks5_transport!("socks5", "tor");
-        mix_socks5_transport!("socks5+tls", "tor+tls");
+        mix_socks5_transport!(
+            "socks5",
+            "tcp",
+            [tor_socks5_proxy.clone(), nym_socks5_proxy.clone()]
+        );
+        mix_socks5_transport!(
+            "socks5+tls",
+            "tcp+tls",
+            [tor_socks5_proxy.clone(), nym_socks5_proxy.clone()]
+        );
+        mix_socks5_transport!("socks5", "tor", [tor_socks5_proxy.clone()]);
+        mix_socks5_transport!("socks5+tls", "tor+tls", [tor_socks5_proxy.clone()]);
 
         // Filter out a transport from requested transport if we set it to be mixed as
         // we don't want to connect directly to that host
@@ -1911,6 +1923,10 @@ mod tests {
         assert!(Hosts::is_i2p_host("node.dark.fi.i2p"));
         assert!(!Hosts::is_i2p_host("node.dark.fi"));
     }
+
+    // Test tcp endpoint is changed to tor and tcp will not be used to
+    // connect to any host directly
+    #[test]
     fn test_transport_tor_mixed_with_tcp_fetch() {
         let host_container = HostContainer::new();
         host_container.store_or_update(
@@ -1923,15 +1939,59 @@ mod tests {
             HostColor::Grey,
             &["tor+tls".to_string(), "tcp".to_string(), "tor".to_string()],
             &["tcp".to_string()],
-            Url::parse("socks5://127.0.0.1:9050").unwrap(),
+            Url::parse("socks5://127.0.0.1:9050").ok(),
+            None,
         );
 
-        // test tcp endpoint is changed to tor and tcp will not be used to
-        // connect to any host directly
         assert_eq!(fetched_hosts.len(), 1);
         assert_eq!(fetched_hosts[0].0.to_string(), "tor://dark.fi:28880/");
     }
 
+    // Test when both tor_socks5_proxy and nym_socks5_proxy are passed
+    // tcp+tls endpoint is changed to socks5+tls and the endpoint is changed to two
+    // endpoints where one is routed through tor and another through nym
+    #[test]
+    fn test_transport_socks5_mixed_with_tcp_through_tor_and_nym_proxy_fetch() {
+        let host_container = HostContainer::new();
+        host_container.store_or_update(
+            HostColor::Grey,
+            Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            0,
+        );
+        let tor_socks5_proxy_url = Url::parse("socks5://127.0.0.1:9050").ok();
+        let nym_socks5_proxy_url = Url::parse("socks5://127.0.0.1:1080").ok();
+
+        let fetched_hosts = host_container.fetch(
+            HostColor::Grey,
+            &["socks5".to_string(), "socks5+tls".to_string()],
+            &["tcp+tls".to_string()],
+            tor_socks5_proxy_url.clone(),
+            nym_socks5_proxy_url.clone(),
+        );
+
+        assert_eq!(fetched_hosts.len(), 2);
+        assert!(
+            fetched_hosts[0].0.scheme() == "socks5+tls" &&
+                fetched_hosts[1].0.scheme() == "socks5+tls"
+        );
+        assert_eq!(
+            fetched_hosts
+                .iter()
+                .filter(|h| h.0.port() == tor_socks5_proxy_url.as_ref().unwrap().port())
+                .count(),
+            1
+        );
+        assert_eq!(
+            fetched_hosts
+                .iter()
+                .filter(|h| h.0.port() == nym_socks5_proxy_url.as_ref().unwrap().port())
+                .count(),
+            1
+        );
+    }
+
+    // Test tor endpoint is changed to socks5 and tor will not be used to
+    // connect to any host directly and tor endpoints are not routed through nym
     #[test]
     fn test_transport_socks5_mixed_with_tor_fetch() {
         let host_container = HostContainer::new();
@@ -1941,25 +2001,26 @@ mod tests {
             Url::parse(&format!("tor://{}", addr)).unwrap(),
             0,
         );
-        let socks5_proxy_url = Url::parse("socks5://127.0.0.1:9050").unwrap();
+        let tor_socks5_proxy_url = Url::parse("socks5://127.0.0.1:9050").ok();
+        let nym_socks5_proxy_url = Url::parse("socks5://127.0.0.1:1080").ok();
 
         let fetched_hosts = host_container.fetch(
             HostColor::Grey,
             &["socks5".to_string(), "socks5+tls".to_string(), "tor".to_string()],
             &["tor".to_string()],
-            socks5_proxy_url.clone(),
+            tor_socks5_proxy_url.clone(),
+            nym_socks5_proxy_url,
         );
 
-        // test tor endpoint is changed to socks5 and tor will not be used to
-        // connect to any host directly
         assert_eq!(fetched_hosts.len(), 1);
         let mixed_url = fetched_hosts[0].0.clone();
-        assert_eq!(mixed_url.scheme(), socks5_proxy_url.scheme());
-        assert_eq!(mixed_url.host(), socks5_proxy_url.host());
-        assert_eq!(mixed_url.port(), socks5_proxy_url.port());
+        assert_eq!(mixed_url.scheme(), tor_socks5_proxy_url.as_ref().unwrap().scheme());
+        assert_eq!(mixed_url.host(), tor_socks5_proxy_url.as_ref().unwrap().host());
+        assert_eq!(mixed_url.port(), tor_socks5_proxy_url.as_ref().unwrap().port());
         assert_eq!(mixed_url.path_segments().unwrap().next(), Some(addr));
     }
 
+    // Test the tcp endpoint is changed to two endpoints socks5 and tor.
     #[test]
     fn test_transport_tor_and_socks5_mixed_with_tcp_fetch() {
         let host_container = HostContainer::new();
@@ -1978,10 +2039,10 @@ mod tests {
                 "socks5+tls".to_string(),
             ],
             &["tcp".to_string()],
-            Url::parse("socks5://127.0.0.1:9050").unwrap(),
+            Url::parse("socks5://127.0.0.1:9050").ok(),
+            None,
         );
 
-        // test the tcp endpoint is changed to two endpoints socks5 and tor.
         assert_eq!(fetched_hosts.len(), 2);
         let endpoints: Vec<_> = fetched_hosts.iter().map(|item| item.0.scheme()).collect();
         assert!(endpoints.iter().all(|&scheme| scheme == "tor" || scheme == "socks5"));

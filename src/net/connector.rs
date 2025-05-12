@@ -69,6 +69,7 @@ impl Connector {
         let outbound_connect_timeout = settings.outbound_connect_timeout;
         let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
         let tor_socks5_proxy = settings.tor_socks5_proxy.clone();
+        let nym_socks5_proxy = settings.nym_socks5_proxy.clone();
         drop(settings);
 
         let mut endpoint = url.clone();
@@ -76,7 +77,16 @@ impl Connector {
 
         if mixed_transports.contains(&scheme.to_string()) {
             if transports.contains(&"socks5".to_string()) && (scheme == "tcp" || scheme == "tor") {
-                endpoint = tor_socks5_proxy;
+                // Prioritize connection through nym socks5 proxy for tcp endpoint mixing
+                if scheme == "tcp" && nym_socks5_proxy.is_some() {
+                    endpoint = nym_socks5_proxy.unwrap();
+                } else if tor_socks5_proxy.is_some() {
+                    endpoint = tor_socks5_proxy.unwrap();
+                } else {
+                    warn!(target: "net::connector::connect", "Transport mixing is enabled but tor_socks5_proxy is not set");
+                    return Err(Error::ConnectFailed)
+                }
+
                 endpoint.set_path(&format!(
                     "{}:{}",
                     endpoint.host().unwrap(),
@@ -86,7 +96,16 @@ impl Connector {
             } else if transports.contains(&"socks5+tls".to_string()) &&
                 (scheme == "tcp+tls" || scheme == "tor+tls")
             {
-                endpoint = tor_socks5_proxy;
+                // Prioritize connection through nym socks5 proxy for tcp+tls endpoint mixing
+                if scheme == "tcp+tls" && nym_socks5_proxy.is_some() {
+                    endpoint = nym_socks5_proxy.unwrap();
+                } else if tor_socks5_proxy.is_some() {
+                    endpoint = tor_socks5_proxy.unwrap();
+                } else {
+                    warn!(target: "net::connector::connect", "Transport mixing is enabled but tor_socks5_proxy is not set");
+                    return Err(Error::ConnectFailed)
+                }
+
                 endpoint.set_path(&format!(
                     "{}:{}",
                     endpoint.host().unwrap(),
