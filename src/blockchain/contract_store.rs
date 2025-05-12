@@ -19,7 +19,10 @@ r* This program is distributed in the hope that it will be useful,
 use std::{collections::BTreeMap, io::Cursor};
 
 use darkfi_sdk::{
-    crypto::contract_id::{ContractId, NATIVE_CONTRACT_IDS_BYTES},
+    crypto::contract_id::{
+        ContractId, NATIVE_CONTRACT_IDS_BYTES, NATIVE_CONTRACT_ZKAS_DB_NAMES,
+        SMART_CONTRACT_ZKAS_DB_NAME,
+    },
     monotree::Monotree,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -36,9 +39,6 @@ use super::SledDbOverlayPtr;
 
 pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
-
-/// The hardcoded db name for the zkas circuits database tree
-pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
 /// The `ContractStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's contracts information.
@@ -260,7 +260,7 @@ impl ContractStore {
     /// Generate a Monotree(SMT) containing all contracts states
     /// checksums, along with the wasm bincodes checksum.
     ///
-    /// Note: native contracts wasm bincodes are excluded.
+    /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree> {
         // Initialize the monotree
         let mut root = None;
@@ -272,6 +272,11 @@ impl ContractStore {
             // Iterate over contract states pointers
             let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?)?;
             for state_ptr in state_pointers {
+                // Skip native zkas tree
+                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_ptr) {
+                    continue
+                }
+
                 // Grab the state tree
                 let state_tree = db.open_tree(state_ptr)?;
 
@@ -450,7 +455,7 @@ impl ContractStoreOverlay {
     /// checksums, along with the wasm bincodes checksum.
     /// Be carefull as this will open all states trees in the overlay.
     ///
-    /// Note: native contracts wasm bincodes are excluded.
+    /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree> {
         let mut lock = self.0.lock().unwrap();
 
@@ -459,6 +464,10 @@ impl ContractStoreOverlay {
         for state_record in lock.iter(SLED_CONTRACTS_TREE)? {
             let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?.1)?;
             for state_ptr in state_pointers {
+                // Skip native zkas tree
+                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_ptr) {
+                    continue
+                }
                 states_pointers.push(state_ptr);
             }
         }
@@ -510,6 +519,8 @@ impl ContractStoreOverlay {
     /// Compute all updated contracts states and wasm bincodes
     /// checksums and update their records in the provided
     /// Monotree(SMT).
+    ///
+    /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn update_state_monotree(&self, tree: &mut Monotree) -> Result<()> {
         let lock = self.0.lock().unwrap();
 
@@ -520,11 +531,18 @@ impl ContractStoreOverlay {
             // Check if that cache is a contract state one.
             // Overlay protected trees are all the native/non-contract ones.
             if !lock.state.protected_tree_names.contains(state_key) {
+                let state_key = deserialize(state_key)?;
+
+                // Skip native zkas tree
+                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_key) {
+                    continue
+                }
+
                 // Compute its checksum
-                let checksum = sled_overlay_tree_checksum(&lock, state_key)?;
+                let checksum = sled_overlay_tree_checksum(&lock, &state_key)?;
 
                 // Insert record to monotree
-                root = tree.insert(root.as_ref(), &deserialize(state_key)?, &checksum)?;
+                root = tree.insert(root.as_ref(), &state_key, &checksum)?;
                 tree.set_headroot(root.as_ref());
 
                 continue

@@ -24,7 +24,6 @@ use std::{
 };
 
 use darkfi::{
-    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -41,7 +40,9 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
-use darkfi_sdk::crypto::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
+use darkfi_sdk::crypto::contract_id::{
+    DAO_CONTRACT_ID, MONEY_CONTRACT_ID, SMART_CONTRACT_ZKAS_DB_NAME,
+};
 use darkfi_serial::{deserialize, serialize};
 
 use log::debug;

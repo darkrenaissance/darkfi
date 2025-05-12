@@ -25,6 +25,9 @@ use pasta_curves::{group::ff::PrimeField, pallas};
 use super::{poseidon_hash, PublicKey, SecretKey};
 use crate::error::ContractError;
 
+/// The hardcoded db name for the zkas circuits database tree
+pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
+
 lazy_static! {
     // The idea here is that 0 is not a valid x coordinate for any pallas point,
     // therefore a signature cannot be produced for such IDs. This allows us to
@@ -55,6 +58,13 @@ lazy_static! {
     /// Native contract IDs bytes, for various checks
     pub static ref NATIVE_CONTRACT_IDS_BYTES: [[u8; 32]; 3] =
         [MONEY_CONTRACT_ID.to_bytes(), DAO_CONTRACT_ID.to_bytes(), DEPLOYOOOR_CONTRACT_ID.to_bytes()];
+
+    /// Native contract zkas circuits database trees, for various checks
+    pub static ref NATIVE_CONTRACT_ZKAS_DB_NAMES: [[u8; 32]; 3] = [
+        MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME),
+        DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME),
+        DEPLOYOOOR_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME),
+    ];
 }
 
 /// ContractId represents an on-chain identifier for a certain smart contract.

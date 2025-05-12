@@ -18,13 +18,15 @@
 
 use std::str::FromStr;
 
-use darkfi_sdk::{crypto::ContractId, tx::TransactionHash};
+use darkfi_sdk::{
+    crypto::contract_id::{ContractId, SMART_CONTRACT_ZKAS_DB_NAME},
+    tx::TransactionHash,
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error};
 use tinyjson::JsonValue;
 
 use darkfi::{
-    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,

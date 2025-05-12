@@ -18,14 +18,16 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::{crypto::ContractId, wasm};
+use darkfi_sdk::{
+    crypto::contract_id::{ContractId, SMART_CONTRACT_ZKAS_DB_NAME},
+    wasm,
+};
 use darkfi_serial::{deserialize, serialize, Decodable};
 use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
 use crate::{
-    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     runtime::vm_runtime::{ContractSection, Env},
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,

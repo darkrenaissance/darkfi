@@ -402,7 +402,7 @@ impl Blockchain {
     /// Generate a Monotree(SMT) containing all contracts states
     /// checksums, along with the wasm bincodes checksum.
     ///
-    /// Note: native contracts wasm bincodes are excluded.
+    /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree> {
         self.contracts.get_state_monotree(&self.sled_db)
     }
@@ -607,7 +607,7 @@ impl BlockchainOverlay {
     /// A clone is used so we are not affected by the opened trees
     /// during checksum computing.
     ///
-    /// Note: native contracts wasm bincodes are excluded.
+    /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree> {
         self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
     }

@@ -21,7 +21,11 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, tx::TransactionHash, wasm, AsHex};
+use darkfi_sdk::{
+    crypto::contract_id::{ContractId, SMART_CONTRACT_ZKAS_DB_NAME},
+    tx::TransactionHash,
+    wasm, AsHex,
+};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -35,10 +39,7 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{
-    blockchain::{contract_store::SMART_CONTRACT_ZKAS_DB_NAME, BlockchainOverlayPtr},
-    Error, Result,
-};
+use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
