@@ -33,10 +33,30 @@ the potential to birth new technological concepts centered around
 sovereignty. This can be a creative, regenerative space - the dawn of
 a Dark Renaissance.
 
+## Connect to DarkFi Alpha Testnet
+
+DarkFi Alpha Testnet is a PoW blockchain that provides fully anonymous
+transactions, zero-knowledge contracts, anonymous atomic swaps, a
+self-governing anonymous DAO, and more.
+
+- `darkfid` is the DarkFi fullnode. It validates blockchain
+transactions and stays connected to the p2p network.
+- `drk` is a CLI wallet. It provides an interface to smart contracts
+such as Money and DAO, manages our keys and coins, and scans the
+blockchain to update our balances.
+- `minerd` is the DarkFi mining daemon. It connects to darkfid over
+RPC and triggers commands for it to mine blocks.
+
+To connect to the alpha testnet, [follow the tutorial][tutorial].
+
+[tutorial]: https://darkrenaissance.github.io/darkfi/testnet/node.html
+
 ## Connect to DarkFi IRC
 
-Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html#installation)
-for the P2P IRC daemon.
+Follow the [installation instructions][darkirc-instructions] for the
+P2P IRC daemon.
+
+[darkirc-instructions]: https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html#installation
 
 ## Build
 
