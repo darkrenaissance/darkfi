@@ -32,10 +32,13 @@ the definition of each parameter by running the `help` command like this:
 $ ./drk help dao create
 ```
 
+![dao-help-create](img/dao-help-create.png)
+
+
 Now let's create our DAO. 
 
 ```
-$ ./drk dao create 5 10 10 0.67 MLDY > dao_anon.toml
+$ ./drk dao create 10 5 5 0.67 MLDY > dao_anon.toml
 ```
 
 ```
