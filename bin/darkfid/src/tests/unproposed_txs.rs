@@ -53,7 +53,7 @@ async fn simulate_unproposed_txs(
     let current_block_height = 1;
 
     // Create chain test harness configuration
-    let pow_target = 90;
+    let pow_target = 120;
     let pow_fixed_difficulty = Some(BigUint::one());
     let config = HarnessConfig {
         pow_target,

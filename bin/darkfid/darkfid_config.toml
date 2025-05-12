@@ -9,137 +9,6 @@
 # Blockchain network to use
 network = "testnet"
 
-# Localnet blockchain network configuration
-[network_config."localnet"]
-# Path to the blockchain database directory
-database = "~/.local/share/darkfi/darkfid/localnet"
-
-# Confirmation threshold, denominated by number of blocks
-threshold = 3
-
-# minerd JSON-RPC endpoint
-minerd_endpoint = "tcp://127.0.0.1:28467"
-
-# PoW block production target, in seconds
-pow_target = 10
-
-# Optional fixed PoW difficulty, used for testing
-pow_fixed_difficulty = 1
-
-# Wallet address to receive mining rewards.
-# This is a dummy one so the miner can start,
-# replace with your own one.
-recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
-
-# Optional contract spend hook to use in the mining reward
-#spend_hook = "YOUR_SPEND_HOOK_HERE"
-
-# Optional user data to use in the mining reward
-#user_data = "YOUR_USER_DATA_HERE"
-
-# Skip syncing process and start node right away
-skip_sync = true
-
-# Disable transaction's fee verification, used for testing
-skip_fees = false
-
-# Optional sync checkpoint height
-#checkpoint_height = 0
-
-# Optional sync checkpoint hash
-#checkpoint = ""
-
-# Optional bootstrap timestamp
-#bootstrap = 1712581283
-
-# Garbage collection task transactions batch size
-txs_batch_size = 50
-
-## Localnet JSON-RPC settings
-[network_config."localnet".rpc]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8240"
-
-# Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
-
-## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
-#[network_config."localnet".mm_rpc]
-# JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8241"
-
-# Disabled RPC methods (merge mining)
-#rpc_disabled_methods = []
-
-## Localnet P2P network settings
-[network_config."localnet".net]
-# Path to the P2P datastore
-p2p_datastore = "~/.local/share/darkfi/darkfid/localnet"
-
-# Path to a configured hostlist for saving known peers
-hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
-
-# P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp+tls://0.0.0.0:8242"]
-
-# P2P external addresses the instance advertises so other peers can
-# reach us and connect to us, as long as inbound addrs are configured.
-#external_addrs = []
-
-# Peer nodes to manually connect to
-#peers = []
-
-# Seed nodes to connect to for peer discovery and/or adversising our
-# own external addresses
-#seeds = []
-
-# Whitelisted network transports for outbound connections
-#allowed_transports = ["tcp+tls"]
-
-# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = false
-
-# Tor Socks5 proxy
-#tor_socks5_proxy = "socks5://127.0.0.1:9050"
-
-# I2p Socks5 proxy
-#i2p_socks5_proxy = "socks5://127.0.0.1:4447"
-
-# Outbound connection slots number, this many connections will be
-# attempted. (This does not include manual connections)
-#outbound_connections = 8
-
-# Inbound connections slots number, this many active inbound connections
-# will be allowed. (This does not include manual or outbound connections)
-#inbound_connections = 8
-
-## White connection percent
-# gold_connect_count = 2
-
-## White connection percent
-# white_connect_percent = 70
-
-# Manual connections retry limit, 0 for forever looping
-#manual_attempt_limit = 0
-
-# Outbound connection timeout (in seconds)
-#outbound_connect_timeout = 10
-
-# Exchange versions (handshake) timeout (in seconds)
-#channel_handshake_timeout = 4
-
-# Ping-pong exchange execution interval (in seconds)
-#channel_heartbeat_interval = 10
-
-# Allow localnet hosts
-localnet = true
-
-# Cooling off time for peer discovery when unsuccessful
-#outbound_peer_discovery_cooloff_time = 30
-
-# Time between peer discovery attempts
-#outbound_peer_discovery_attempt_time = 5
-
 # Testnet blockchain network configuration
 [network_config."testnet"]
 # Path to the blockchain database directory
@@ -152,7 +21,7 @@ threshold = 6
 #minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
-pow_target = 90
+pow_target = 120
 
 # Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
@@ -286,7 +155,7 @@ threshold = 11
 #minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
-pow_target = 90
+pow_target = 120
 
 # Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
@@ -406,6 +275,137 @@ localnet = false
 
 # Nodes to avoid interacting with for the duration of the program, in the
 # format ["host", ["scheme", "scheme"], [port, port]].
-# If scheme is left empty it will default to "tcp+tls". 
+# If scheme is left empty it will default to "tcp+tls".
 # If ports are left empty all ports from this peer will be blocked.
 #blacklist = [["example.com", ["tcp"], [8551, 23331]]]
+
+# Localnet blockchain network configuration
+[network_config."localnet"]
+# Path to the blockchain database directory
+database = "~/.local/share/darkfi/darkfid/localnet"
+
+# Confirmation threshold, denominated by number of blocks
+threshold = 3
+
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:28467"
+
+# PoW block production target, in seconds
+pow_target = 10
+
+# Optional fixed PoW difficulty, used for testing
+pow_fixed_difficulty = 1
+
+# Wallet address to receive mining rewards.
+# This is a dummy one so the miner can start,
+# replace with your own one.
+recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
+
+# Optional contract spend hook to use in the mining reward
+#spend_hook = "YOUR_SPEND_HOOK_HERE"
+
+# Optional user data to use in the mining reward
+#user_data = "YOUR_USER_DATA_HERE"
+
+# Skip syncing process and start node right away
+skip_sync = true
+
+# Disable transaction's fee verification, used for testing
+skip_fees = false
+
+# Optional sync checkpoint height
+#checkpoint_height = 0
+
+# Optional sync checkpoint hash
+#checkpoint = ""
+
+# Optional bootstrap timestamp
+#bootstrap = 1712581283
+
+# Garbage collection task transactions batch size
+txs_batch_size = 50
+
+## Localnet JSON-RPC settings
+[network_config."localnet".rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8240"
+
+# Disabled RPC methods
+rpc_disabled_methods = ["p2p.get_info"]
+
+## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
+#[network_config."localnet".mm_rpc]
+# JSON-RPC listen URL (merge mining)
+#rpc_listen = "http+tcp://127.0.0.1:8241"
+
+# Disabled RPC methods (merge mining)
+#rpc_disabled_methods = []
+
+## Localnet P2P network settings
+[network_config."localnet".net]
+# Path to the P2P datastore
+p2p_datastore = "~/.local/share/darkfi/darkfid/localnet"
+
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/share/darkfi/darkfid/localnet/p2p_hostlist.tsv"
+
+# P2P accept addresses the instance listens on for inbound connections
+#inbound = ["tcp+tls://0.0.0.0:8242"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+#external_addrs = []
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = []
+
+# Whitelisted network transports for outbound connections
+#allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = false
+
+# Tor Socks5 proxy
+#tor_socks5_proxy = "socks5://127.0.0.1:9050"
+
+# I2p Socks5 proxy
+#i2p_socks5_proxy = "socks5://127.0.0.1:4447"
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Inbound connections slots number, this many active inbound connections
+# will be allowed. (This does not include manual or outbound connections)
+#inbound_connections = 8
+
+## White connection percent
+# gold_connect_count = 2
+
+## White connection percent
+# white_connect_percent = 70
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = true
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5

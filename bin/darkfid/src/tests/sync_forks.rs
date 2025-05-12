@@ -31,7 +31,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
-    let pow_target = 90;
+    let pow_target = 120;
     let pow_fixed_difficulty = Some(BigUint::one());
     let config = HarnessConfig {
         pow_target,

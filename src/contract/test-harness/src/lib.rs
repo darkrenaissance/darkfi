@@ -165,7 +165,7 @@ impl Wallet {
         // Create the `Validator` instance
         let validator_config = ValidatorConfig {
             confirmation_threshold: 3,
-            pow_target: 90,
+            pow_target: 120,
             pow_fixed_difficulty: Some(BigUint::from(1_u8)),
             genesis_block,
             verify_fees,

@@ -95,7 +95,7 @@ pub struct BlockchainNetwork {
     /// Optional JSON-RPC settings for p2pool merge mining requests
     mm_rpc: Option<RpcSettingsOpt>,
 
-    #[structopt(long, default_value = "10")]
+    #[structopt(long, default_value = "120")]
     /// PoW block production target, in seconds
     pow_target: u32,
 

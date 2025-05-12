@@ -73,7 +73,7 @@ enum Subcmd {
         /// Genesis timestamp to use, instead of current one
         genesis_timestamp: Option<u64>,
 
-        #[arg(short, long, default_value = "90")]
+        #[arg(short, long, default_value = "120")]
         /// Configured PoW target
         pow_target: u32,
     },
