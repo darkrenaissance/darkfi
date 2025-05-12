@@ -45,6 +45,8 @@ use {
     tracing::error,
 };
 
+use super::event::Header;
+
 /// MilliSeconds in a day
 pub(super) const DAY: i64 = 86_400_000;
 
@@ -131,12 +133,8 @@ pub fn generate_genesis(days_rotation: u64) -> Event {
         // Calculate the timestamp of the most recent event
         INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
     };
-    Event {
-        timestamp,
-        content: GENESIS_CONTENTS.to_vec(),
-        parents: [NULL_ID; N_EVENT_PARENTS],
-        layer: 0,
-    }
+    let header = Header { timestamp, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
+    Event { header, content: GENESIS_CONTENTS.to_vec() }
 }
 
 pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Result<()> {
@@ -179,7 +177,7 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
             let v = base64::decode(line[1]).unwrap();
             let v: Event = deserialize(&v).unwrap();
             let v_se = serialize(&v);
-            dag.insert(v.id().as_bytes(), v_se).unwrap();
+            dag.insert(v.header.id().as_bytes(), v_se).unwrap();
         }
     }
 

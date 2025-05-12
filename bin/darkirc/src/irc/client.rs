@@ -193,7 +193,7 @@ impl Client {
                         Ok(Some(events)) => {
                             for event in events {
                                 // Update the last sent event.
-                                let event_id = event.id();
+                                let event_id = event.header.id();
                                 *self.last_sent.write().await = event_id;
 
                                 // If it fails for some reason, for now, we just note it and pass.
@@ -210,8 +210,8 @@ impl Client {
                                     // Also I really want GOTO in Rust... Fags.
                                     if let Some(mut rln_identity) = *self.server.rln_identity.write().await {
                                         // If the current epoch is different, we can reset the message counter
-                                        if rln_identity.last_epoch != closest_epoch(event.timestamp) {
-                                            rln_identity.last_epoch = closest_epoch(event.timestamp);
+                                        if rln_identity.last_epoch != closest_epoch(event.header.timestamp) {
+                                            rln_identity.last_epoch = closest_epoch(event.header.timestamp);
                                             rln_identity.message_id = 0;
                                         }
 
@@ -258,7 +258,7 @@ impl Client {
                 // for which the logic for delivery should be kept in sync
                 r = self.incoming.receive().fuse() => {
                     // We will skip this if it's our own message.
-                    let event_id = r.id();
+                    let event_id = r.header.id();
                     if *self.last_sent.read().await == event_id {
                         continue
                     }
@@ -623,7 +623,7 @@ impl Client {
         proof: Proof,
         public_inputs: [pallas::Base; 2],
     ) -> Result<()> {
-        let epoch = pallas::Base::from(closest_epoch(event.timestamp));
+        let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
         let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
         let x = hash_event(event);
         let y = public_inputs[0];

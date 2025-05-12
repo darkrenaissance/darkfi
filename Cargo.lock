@@ -1826,6 +1826,7 @@ name = "darkfi"
 version = "0.5.0"
 dependencies = [
  "arti-client",
+ "async-std",
  "async-trait",
  "blake3",
  "bs58",

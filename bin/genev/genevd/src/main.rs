@@ -78,6 +78,10 @@ struct Args {
     /// Flag to skip syncing the DAG (no history)
     skip_dag_sync: bool,
 
+    #[structopt(long)]
+    // Whether to sync headers only or full sync
+    pub fast_mode: bool,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -92,7 +96,7 @@ async fn start_sync_loop(
     let seen_events = seen.get().unwrap();
     loop {
         let event = incoming.receive().await;
-        let event_id = event.id();
+        let event_id = event.header.id();
         if *last_sent.read().await == event_id {
             continue
         }
@@ -154,7 +158,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     if !settings.skip_dag_sync {
         for i in 1..=6 {
             info!("Syncing event DAG (attempt #{i})");
-            match event_graph.dag_sync().await {
+            match event_graph.dag_sync(settings.fast_mode).await {
                 Ok(()) => break,
                 Err(e) => {
                     if i == 6 {

@@ -16,13 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_std::stream::from_iter;
+use futures::{
+    future,
+    stream::{FuturesOrdered, FuturesUnordered},
+    StreamExt,
+};
+use rand::{rngs::OsRng, seq::SliceRandom};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::Arc,
 };
 
+use blake3::Hash;
 use darkfi_serial::{deserialize_async, serialize_async};
+use event::Header;
 use num_bigint::BigUint;
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
@@ -33,7 +42,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     event_graph::util::replayer_log,
-    net::P2pPtr,
+    net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
@@ -53,7 +62,7 @@ pub use event::Event;
 
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
-use proto::{EventRep, EventReq, TipRep, TipReq};
+use proto::{EventRep, EventReq, HeaderRep, HeaderReq, TipRep, TipReq};
 
 /// Utility functions
 pub mod util;
@@ -77,7 +86,7 @@ pub const N_EVENT_PARENTS: usize = 5;
 /// Allowed timestamp drift in milliseconds
 const EVENT_TIME_DRIFT: u64 = 60_000;
 /// Null event ID
-pub const NULL_ID: blake3::Hash = blake3::Hash::from_bytes([0x00; blake3::OUT_LEN]);
+pub const NULL_ID: Hash = Hash::from_bytes([0x00; blake3::OUT_LEN]);
 
 /// Atomic pointer to an [`EventGraph`] instance.
 pub type EventGraphPtr = Arc<EventGraph>;
@@ -86,21 +95,23 @@ pub type EventGraphPtr = Arc<EventGraph>;
 pub struct EventGraph {
     /// Pointer to the P2P network instance
     p2p: P2pPtr,
-    /// Sled tree containing the DAG
-    dag: sled::Tree,
+    /// Sled tree containing the headers
+    header_dag: sled::Tree,
+    /// Main sled tree containing the events
+    main_dag: sled::Tree,
     /// Replay logs path.
     datastore: PathBuf,
     /// Run in replay_mode where if set we log Sled DB instructions
     /// into `datastore`, useful to reacreate a faulty DAG to debug.
     replay_mode: bool,
     /// The set of unreferenced DAG tips
-    unreferenced_tips: RwLock<BTreeMap<u64, HashSet<blake3::Hash>>>,
+    unreferenced_tips: RwLock<BTreeMap<u64, HashSet<Hash>>>,
     /// A `HashSet` containg event IDs and their 1-level parents.
     /// These come from the events we've sent out using `EventPut`.
     /// They are used with `EventReq` to decide if we should reply
     /// or not. Additionally it is also used when we broadcast the
     /// `TipRep` message telling peers about our unreferenced tips.
-    broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
+    broadcasted_ids: RwLock<HashSet<Hash>>,
     /// DAG Pruning Task
     pub prune_task: OnceCell<StoppableTaskPtr>,
     /// Event publisher, this notifies whenever an event is
@@ -141,6 +152,8 @@ impl EventGraph {
         days_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        let hdr_tree_name = format!("headers_{dag_tree_name}");
+        let hdr_dag = sled_db.open_tree(hdr_tree_name)?;
         let dag = sled_db.open_tree(dag_tree_name)?;
         let unreferenced_tips = RwLock::new(BTreeMap::new());
         let broadcasted_ids = RwLock::new(HashSet::new());
@@ -150,7 +163,8 @@ impl EventGraph {
         let current_genesis = generate_genesis(days_rotation);
         let self_ = Arc::new(Self {
             p2p,
-            dag: dag.clone(),
+            header_dag: hdr_dag.clone(),
+            main_dag: dag.clone(),
             datastore,
             replay_mode,
             unreferenced_tips,
@@ -166,7 +180,7 @@ impl EventGraph {
 
         // Check if we have it in our DAG.
         // If not, we can prune the DAG and insert this new genesis event.
-        if !dag.contains_key(current_genesis.id().as_bytes())? {
+        if !dag.contains_key(current_genesis.header.id().as_bytes())? {
             info!(
                 target: "event_graph::new",
                 "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
@@ -183,16 +197,16 @@ impl EventGraph {
             let _ = self_.prune_task.set(prune_task.clone()).await;
 
             prune_task.clone().start(
-                self_.clone().dag_prune_task(days_rotation),
-                |res| async move {
-                    match res {
-                        Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                        Err(e) => error!(target: "event_graph::_handle_stop", "[EVENTGRAPH] Failed stopping prune task: {e}")
-                    }
-                },
-                Error::DetachedTaskStopped,
-                ex.clone(),
-            );
+                 self_.clone().dag_prune_task(days_rotation),
+                 |res| async move {
+                     match res {
+                         Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                         Err(e) => error!(target: "event_graph::_handle_stop", "[EVENTGRAPH] Failed stopping prune task: {e}")
+                     }
+                 },
+                 Error::DetachedTaskStopped,
+                 ex.clone(),
+             );
         }
 
         Ok(self_)
@@ -202,8 +216,28 @@ impl EventGraph {
         self.days_rotation
     }
 
+    // /// Header sync
+    // async fn retrieve_headers(&self) -> Result<()> {
+    //     let peers = self.p2p.hosts().peers();
+    //     let mut communicated_peers = peers.len();
+    //     info!(target: "event_graph::retrieve_headers()", "Retrieving missing headers from peers...");
+    //     // Communication setup
+    //     let mut peer_subs = vec![];
+    //     for peer in peers {
+    //         match peer.subscribe_msg::<HeaderReq>().await {
+    //             Ok(response_sub) => peer_subs.push(Some(response_sub)),
+    //             Err(e) => {
+    //                 debug!(target: "darkfid::task::sync::retrieve_headers", "Failure during `HeaderSyncResponse` communication setup with peer {peer:?}: {e}");
+    //                 peer_subs.push(None)
+    //             }
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
+
     /// Sync the DAG from connected peers
-    pub async fn dag_sync(&self) -> Result<()> {
+    pub async fn dag_sync(&self, fast_mode: bool) -> Result<()> {
         // We do an optimistic sync where we ask all our connected peers for
         // the latest layer DAG tips (unreferenced events) and then we accept
         // the ones we see the most times.
@@ -227,8 +261,10 @@ impl EventGraph {
             "[EVENTGRAPH] Syncing DAG from {communicated_peers} peers..."
         );
 
+        let comms_timeout = self.p2p.settings().read().await.outbound_connect_timeout_max();
+
         // Here we keep track of the tips, their layers and how many time we've seen them.
-        let mut tips: HashMap<blake3::Hash, (u64, usize)> = HashMap::new();
+        let mut tips: HashMap<Hash, (u64, usize)> = HashMap::new();
 
         // Let's first ask all of our peers for their tips and collect them
         // in our hashmap above.
@@ -256,15 +292,8 @@ impl EventGraph {
                 continue
             };
 
-            let outbound_connect_timeout = self
-                .p2p
-                .settings()
-                .read_arc()
-                .await
-                .outbound_connect_timeout(channel.address().scheme());
             // Node waits for response
-            let Ok(peer_tips) = tip_rep_sub.receive_with_timeout(outbound_connect_timeout).await
-            else {
+            let Ok(peer_tips) = tip_rep_sub.receive_with_timeout(comms_timeout).await else {
                 error!(
                     target: "event_graph::dag_sync",
                     "[EVENTGRAPH] Sync: Peer {url} didn't reply with tips in time, skipping"
@@ -273,7 +302,7 @@ impl EventGraph {
                 continue
             };
 
-            let peer_tips = &peer_tips.0;
+            let peer_tips: &BTreeMap<u64, HashSet<Hash>> = &peer_tips.0;
 
             // Note down the seen tips
             for (layer, layer_tips) in peer_tips {
@@ -313,7 +342,7 @@ impl EventGraph {
         for tip in considered_tips.iter() {
             assert!(tip != &NULL_ID);
 
-            if !self.dag.contains_key(tip.as_bytes()).unwrap() {
+            if !self.main_dag.contains_key(tip.as_bytes()).unwrap() {
                 missing_parents.insert(*tip);
             }
         }
@@ -324,7 +353,92 @@ impl EventGraph {
             return Ok(())
         }
 
-        info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Fetching events");
+        // Header sync first
+        // TODO: requesting headers should be in a way that we wouldn't
+        // recieve the same header(s) again, by sending our tip, other
+        // nodes should send back the ones after it
+        let mut headers_requests = FuturesUnordered::new();
+        for channel in channels.iter() {
+            headers_requests.push(request_header(&channel, comms_timeout))
+        }
+
+        while let Some(peer_headers) = headers_requests.next().await {
+            info!("Received headers {:?}", peer_headers);
+            self.header_dag_insert(peer_headers?).await?
+        }
+
+        let peers = channels.clone().into_iter().collect::<Vec<_>>();
+
+        // start download payload
+        if !fast_mode {
+            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
+            let mut header_sorted = vec![];
+
+            for iter_elem in self.header_dag.iter() {
+                let (_, val) = iter_elem.unwrap();
+                let val: Header = deserialize_async(&val).await.unwrap();
+                header_sorted.push(val);
+            }
+
+            header_sorted.sort_by(|x, y| y.layer.cmp(&x.layer));
+            for i in header_sorted.iter() {
+                info!("header: {}", i.id());
+            }
+            // info!("layer number of last header: {}", header_sorted.last().unwrap().layer);
+
+            // // // 1. Fetch events one by one
+            // let mut events_requests = FuturesOrdered::new();
+            // let peer = peer_selection(peers.clone());
+            // for header in header_sorted.iter() {
+            //     events_requests.push_back(request_event(
+            //         peer.clone(),
+            //         vec![header.id()],
+            //         comms_timeout,
+            //     ))
+            // }
+
+            // let mut rcvd_events = vec![];
+            // while let Some(peer_events) = events_requests.next().await {
+            //     let events = peer_events?;
+            //     info!("Received events {:?}", events);
+            //     for i in events.iter() {
+            //         info!("layer: {}", i.header.layer);
+            //     }
+            //     rcvd_events.extend(events);
+            // }
+
+            // self.dag_insert(&rcvd_events).await?;
+
+            // // 2. split sorted headers into chunks and assign them to each connected peer
+            // let mut responses = vec![];
+            // for header in header_sorted.chunks_exact(peers.len()) {
+            //     // For each peer, create a future that sends a request
+            //     let pairs = peers.iter().zip(header).collect::<Vec<_>>();
+            //     let pair_stream = from_iter(pairs.iter());
+            //     let requests_stream = pair_stream.map(|(peer, header)| send_request(peer, header));
+            //     // Collect all the responses into a vector
+            //     let x = requests_stream.collect::<Vec<_>>().await;
+            //     info!("len of x: {}", x.len());
+            //     // responses.push(x);
+            //     responses.extend(x);
+            // }
+            // // Wait for all the futures to complete
+            // let x = future::join_all(responses).await;
+            // let fetched_parents = x.into_iter().map(|f| f.unwrap()).collect::<Vec<_>>().concat();
+            // info!("fetched parents: {}", fetched_parents.len());
+            // for i in fetched_parents.iter() {
+            //     info!("layer: {}", i.header.layer)
+            // }
+
+            // // 3. Fetch all events at once (just a POC)
+            // let peers = channels.clone().into_iter().collect::<Vec<_>>();
+            // let missing = header_sorted.iter().map(|x| x.id()).collect::<Vec<_>>();
+            // info!("first missing: {}", missing[0]);
+            // let parents = send_requests(&peers, &missing).await?.concat();
+            // info!("fetched parents: {}", parents.len());
+        }
+
+        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
         let mut received_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut received_events_hashes = HashSet::new();
 
@@ -359,15 +473,8 @@ impl EventGraph {
                     continue
                 }
 
-                let outbound_connect_timeout = self
-                    .p2p
-                    .settings()
-                    .read_arc()
-                    .await
-                    .outbound_connect_timeout(channel.address().scheme());
                 // Node waits for response
-                let Ok(parent) = ev_rep_sub.receive_with_timeout(outbound_connect_timeout).await
-                else {
+                let Ok(parent) = ev_rep_sub.receive_with_timeout(comms_timeout).await else {
                     error!(
                         target: "event_graph::dag_sync",
                         "[EVENTGRAPH] Sync: Timeout waiting for parents {missing_parents:?} from {url}"
@@ -378,12 +485,12 @@ impl EventGraph {
                 let parents = parent.0.clone();
 
                 for parent in parents {
-                    let parent_id = parent.id();
+                    let parent_id = parent.header.id();
                     if !missing_parents.contains(&parent_id) {
                         error!(
                             target: "event_graph::dag_sync",
                             "[EVENTGRAPH] Sync: Peer {url} replied with a wrong event: {}",
-                            parent.id()
+                            parent.header.id()
                         );
                         continue
                     }
@@ -393,11 +500,11 @@ impl EventGraph {
                         "Got correct parent event {parent_id}"
                     );
 
-                    if let Some(layer_events) = received_events.get_mut(&parent.layer) {
+                    if let Some(layer_events) = received_events.get_mut(&parent.header.layer) {
                         layer_events.push(parent.clone());
                     } else {
                         let layer_events = vec![parent.clone()];
-                        received_events.insert(parent.layer, layer_events);
+                        received_events.insert(parent.header.layer, layer_events);
                     }
                     received_events_hashes.insert(parent_id);
 
@@ -405,14 +512,14 @@ impl EventGraph {
                     found_event = true;
 
                     // See if we have the upper parents
-                    for upper_parent in parent.parents.iter() {
+                    for upper_parent in parent.header.parents.iter() {
                         if upper_parent == &NULL_ID {
                             continue
                         }
 
                         if !missing_parents.contains(upper_parent) &&
                             !received_events_hashes.contains(upper_parent) &&
-                            !self.dag.contains_key(upper_parent.as_bytes()).unwrap()
+                            !self.main_dag.contains_key(upper_parent.as_bytes()).unwrap()
                         {
                             debug!(
                                 target: "event_graph::dag_sync",
@@ -445,6 +552,8 @@ impl EventGraph {
         }
         self.dag_insert(&events).await?;
 
+        // <-- end download payload
+
         *self.synced.write().await = true;
 
         info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
@@ -464,21 +573,37 @@ impl EventGraph {
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
         let mut current_genesis = self.current_genesis.write().await;
 
-        // Atomically clear the DAG and write the new genesis event.
+        // Atomically clear the main and headers DAGs and write the new genesis event.
+        // Header
         let mut batch = sled::Batch::default();
-        for key in self.dag.iter().keys() {
+        for key in self.header_dag.iter().keys() {
             batch.remove(key.unwrap());
         }
-        batch.insert(genesis_event.id().as_bytes(), serialize_async(&genesis_event).await);
+        batch.insert(
+            genesis_event.header.id().as_bytes(),
+            serialize_async(&genesis_event.header).await,
+        );
 
-        debug!(target: "event_graph::dag_prune", "Applying batch...");
-        if let Err(e) = self.dag.apply_batch(batch) {
-            panic!("Failed pruning DAG, sled apply_batch error: {e}");
+        debug!(target: "event_graph::dag_prune", "Applying header batch...");
+        if let Err(e) = self.header_dag.apply_batch(batch) {
+            panic!("Failed pruning header DAG, sled apply_batch error: {}", e);
+        }
+
+        // Main
+        let mut batch = sled::Batch::default();
+        for key in self.main_dag.iter().keys() {
+            batch.remove(key.unwrap());
+        }
+        batch.insert(genesis_event.header.id().as_bytes(), serialize_async(&genesis_event).await);
+
+        debug!(target: "event_graph::dag_prune", "Applying main batch...");
+        if let Err(e) = self.main_dag.apply_batch(batch) {
+            panic!("Failed pruning main DAG, sled apply_batch error: {e}");
         }
 
         // Clear unreferenced tips and bcast ids
         *unreferenced_tips = BTreeMap::new();
-        unreferenced_tips.insert(0, HashSet::from([genesis_event.id()]));
+        unreferenced_tips.insert(0, HashSet::from([genesis_event.header.id()]));
         *current_genesis = genesis_event;
         *broadcasted_ids = HashSet::new();
         drop(unreferenced_tips);
@@ -501,13 +626,10 @@ impl EventGraph {
             // Find the next rotation timestamp:
             let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
 
+            let header =
+                Header { timestamp: next_rotation, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
             // Prepare the new genesis event
-            let current_genesis = Event {
-                timestamp: next_rotation,
-                content: GENESIS_CONTENTS.to_vec(),
-                parents: [NULL_ID; N_EVENT_PARENTS],
-                layer: 0,
-            };
+            let current_genesis = Event { header, content: GENESIS_CONTENTS.to_vec() };
 
             // Sleep until it's time to rotate.
             let s = millis_until_next_rotation(next_rotation);
@@ -531,7 +653,7 @@ impl EventGraph {
     /// knows that any requests for them are actually legitimate.
     /// TODO: The `broadcasted_ids` set should periodically be pruned, when
     /// some sensible time has passed after broadcasting the event.
-    pub async fn dag_insert(&self, events: &[Event]) -> Result<Vec<blake3::Hash>> {
+    pub async fn dag_insert(&self, events: &[Event]) -> Result<Vec<Hash>> {
         // Sanity check
         if events.is_empty() {
             return Ok(vec![])
@@ -545,22 +667,25 @@ impl EventGraph {
         let mut ids = Vec::with_capacity(events.len());
 
         // Create an overlay over the DAG tree
-        let mut overlay = SledTreeOverlay::new(&self.dag);
+        let mut overlay = SledTreeOverlay::new(&self.main_dag);
 
         // Grab genesis timestamp
-        let genesis_timestamp = self.current_genesis.read().await.timestamp;
+        let genesis_timestamp = self.current_genesis.read().await.header.timestamp;
 
         // Iterate over given events to validate them and
         // write them to the overlay
         for event in events {
-            let event_id = event.id();
+            let event_id = event.header.id();
+            if event.header.layer == 0 {
+                continue
+            }
             debug!(
                 target: "event_graph::dag_insert",
                 "Inserting event {event_id} into the DAG"
             );
 
             if !event
-                .validate(&self.dag, genesis_timestamp, self.days_rotation, Some(&overlay))
+                .validate(&self.main_dag, genesis_timestamp, self.days_rotation, Some(&overlay))
                 .await?
             {
                 error!(target: "event_graph::dag_insert", "Event {event_id} is invalid!");
@@ -584,21 +709,21 @@ impl EventGraph {
 
         // Atomically apply the batch.
         // Panic if something is corrupted.
-        if let Err(e) = self.dag.apply_batch(batch) {
+        if let Err(e) = self.main_dag.apply_batch(batch) {
             panic!("Failed applying dag_insert batch to sled: {e}");
         }
 
         // Iterate over given events to update references and
         // send out notifications about them
         for event in events {
-            let event_id = event.id();
+            let event_id = event.header.id();
 
             // Update the unreferenced DAG tips set
             debug!(
                 target: "event_graph::dag_insert",
-                "Event {event_id} parents {:#?}", event.parents,
+                "Event {event_id} parents {:#?}", event.header.parents,
             );
-            for parent_id in event.parents.iter() {
+            for parent_id in event.header.parents.iter() {
                 if parent_id != &NULL_ID {
                     debug!(
                         target: "event_graph::dag_insert",
@@ -611,7 +736,7 @@ impl EventGraph {
                     // assumption is that previous layers unreferenced
                     // tips will be few.
                     for (layer, tips) in unreferenced_tips.iter_mut() {
-                        if layer >= &event.layer {
+                        if layer >= &event.header.layer {
                             continue
                         }
                         tips.remove(parent_id);
@@ -625,12 +750,12 @@ impl EventGraph {
                 "Adding {event_id} to unreferenced tips"
             );
 
-            if let Some(layer_tips) = unreferenced_tips.get_mut(&event.layer) {
+            if let Some(layer_tips) = unreferenced_tips.get_mut(&event.header.layer) {
                 layer_tips.insert(event_id);
             } else {
                 let mut layer_tips = HashSet::new();
                 layer_tips.insert(event_id);
-                unreferenced_tips.insert(event.layer, layer_tips);
+                unreferenced_tips.insert(event.header.layer, layer_tips);
             }
 
             // Send out notifications about the new event
@@ -644,9 +769,55 @@ impl EventGraph {
         Ok(ids)
     }
 
+    async fn header_dag_insert(&self, headers: Vec<Header>) -> Result<()> {
+        // Create an overlay over the DAG tree
+        let mut overlay = SledTreeOverlay::new(&self.header_dag);
+
+        // Grab genesis timestamp
+        let genesis_timestamp = self.current_genesis.read().await.header.timestamp;
+
+        let mut hdrs = headers;
+        hdrs.sort_by(|x, y| x.layer.cmp(&y.layer));
+
+        // Iterate over given events to validate them and
+        // write them to the overlay
+        for header in hdrs {
+            let header_id = header.id();
+            if header.layer == 0 {
+                continue
+            }
+            debug!(
+                target: "event_graph::header_dag_insert()",
+                "Inserting event {} into the DAG", header_id,
+            );
+            if !header
+                .validate(&self.header_dag, genesis_timestamp, self.days_rotation, Some(&overlay))
+                .await?
+            {
+                error!(target: "event_graph::header_dag_insert()", "Header {} is invalid!", header_id);
+                return Err(Error::EventIsInvalid)
+            }
+            let header_se = serialize_async(&header).await;
+
+            // Add the event to the overlay
+            overlay.insert(header_id.as_bytes(), &header_se)?;
+        }
+
+        // Aggregate changes into a single batch
+        let batch = overlay.aggregate().unwrap();
+
+        // Atomically apply the batch.
+        // Panic if something is corrupted.
+        if let Err(e) = self.header_dag.apply_batch(batch) {
+            panic!("Failed applying dag_insert batch to sled: {}", e);
+        }
+
+        Ok(())
+    }
+
     /// Fetch an event from the DAG
-    pub async fn dag_get(&self, event_id: &blake3::Hash) -> Result<Option<Event>> {
-        let Some(bytes) = self.dag.get(event_id.as_bytes())? else { return Ok(None) };
+    pub async fn dag_get(&self, event_id: &Hash) -> Result<Option<Event>> {
+        let Some(bytes) = self.main_dag.get(event_id.as_bytes())? else { return Ok(None) };
         let event: Event = deserialize_async(&bytes).await?;
 
         Ok(Some(event))
@@ -656,7 +827,7 @@ impl EventGraph {
     /// tips of the DAG. Since tips are mapped by their layer, we go backwards
     /// until we fill the vector, ensuring we always use latest layers tips as
     /// parents.
-    async fn get_next_layer_with_parents(&self) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
+    async fn get_next_layer_with_parents(&self) -> (u64, [Hash; N_EVENT_PARENTS]) {
         let unreferenced_tips = self.unreferenced_tips.read().await;
 
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
@@ -666,7 +837,7 @@ impl EventGraph {
                 parents[index] = *tip;
                 index += 1;
                 if index >= N_EVENT_PARENTS {
-                    break 'outer
+                    break 'outer;
                 }
             }
         }
@@ -678,34 +849,34 @@ impl EventGraph {
     }
 
     /// Find the unreferenced tips in the current DAG state, mapped by their layers.
-    async fn find_unreferenced_tips(&self) -> BTreeMap<u64, HashSet<blake3::Hash>> {
+    async fn find_unreferenced_tips(&self) -> BTreeMap<u64, HashSet<Hash>> {
         // First get all the event IDs
         let mut tips = HashSet::new();
-        for iter_elem in self.dag.iter() {
+        for iter_elem in self.main_dag.iter() {
             let (id, _) = iter_elem.unwrap();
-            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let id = Hash::from_bytes((&id as &[u8]).try_into().unwrap());
             tips.insert(id);
         }
 
         // Iterate again to find unreferenced IDs
-        for iter_elem in self.dag.iter() {
+        for iter_elem in self.main_dag.iter() {
             let (_, event) = iter_elem.unwrap();
             let event: Event = deserialize_async(&event).await.unwrap();
-            for parent in event.parents.iter() {
+            for parent in event.header.parents.iter() {
                 tips.remove(parent);
             }
         }
 
         // Build the layers map
-        let mut map: BTreeMap<u64, HashSet<blake3::Hash>> = BTreeMap::new();
+        let mut map: BTreeMap<u64, HashSet<Hash>> = BTreeMap::new();
         for tip in tips {
             let event = self.dag_get(&tip).await.unwrap().unwrap();
-            if let Some(layer_tips) = map.get_mut(&event.layer) {
+            if let Some(layer_tips) = map.get_mut(&event.header.layer) {
                 layer_tips.insert(tip);
             } else {
                 let mut layer_tips = HashSet::new();
                 layer_tips.insert(tip);
-                map.insert(event.layer, layer_tips);
+                map.insert(event.header.layer, layer_tips);
             }
         }
 
@@ -713,7 +884,7 @@ impl EventGraph {
     }
 
     /// Internal function used for DAG sorting.
-    async fn get_unreferenced_tips_sorted(&self) -> [blake3::Hash; N_EVENT_PARENTS] {
+    async fn get_unreferenced_tips_sorted(&self) -> [Hash; N_EVENT_PARENTS] {
         let (_, tips) = self.get_next_layer_with_parents().await;
 
         // Convert the hash to BigUint for sorting
@@ -731,7 +902,7 @@ impl EventGraph {
                 bytes.insert(0, 0);
             }
 
-            tips_sorted[i] = blake3::Hash::from_bytes(bytes.try_into().unwrap());
+            tips_sorted[i] = Hash::from_bytes(bytes.try_into().unwrap());
         }
 
         tips_sorted
@@ -751,8 +922,9 @@ impl EventGraph {
 
         let mut ord_events_vec = ordered_events.make_contiguous().to_vec();
         // Order events based on thier layer numbers, or based on timestamp if they are equal
-        ord_events_vec
-            .sort_unstable_by(|a, b| a.0.cmp(&b.0).then(b.1.timestamp.cmp(&a.1.timestamp)));
+        ord_events_vec.sort_unstable_by(|a, b| {
+            a.0.cmp(&b.0).then(b.1.header.timestamp.cmp(&a.1.header.timestamp))
+        });
 
         ord_events_vec.iter().map(|a| a.1.clone()).collect::<Vec<Event>>()
     }
@@ -762,22 +934,22 @@ impl EventGraph {
     async fn dfs_topological_sort(
         &self,
         event: Event,
-        visited: &mut HashSet<blake3::Hash>,
+        visited: &mut HashSet<Hash>,
     ) -> VecDeque<(u64, Event)> {
         let mut ordered_events = VecDeque::new();
         let mut stack = VecDeque::new();
-        let event_id = event.id();
+        let event_id = event.header.id();
         stack.push_back(event_id);
 
         while let Some(event_id) = stack.pop_front() {
             if !visited.contains(&event_id) && event_id != NULL_ID {
                 visited.insert(event_id);
                 if let Some(event) = self.dag_get(&event_id).await.unwrap() {
-                    for parent in event.parents.iter() {
+                    for parent in event.header.parents.iter() {
                         stack.push_back(*parent);
                     }
 
-                    ordered_events.push_back((event.layer, event))
+                    ordered_events.push_back((event.header.layer, event))
                 }
             }
         }
@@ -810,9 +982,9 @@ impl EventGraph {
     #[cfg(feature = "rpc")]
     pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
         let mut graph = HashMap::new();
-        for iter_elem in self.dag.iter() {
+        for iter_elem in self.main_dag.iter() {
             let (id, val) = iter_elem.unwrap();
-            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let id = Hash::from_bytes((&id as &[u8]).try_into().unwrap());
             let val: Event = deserialize_async(&val).await.unwrap();
             graph.insert(id, val);
         }
@@ -836,7 +1008,7 @@ impl EventGraph {
     /// provided ones.
     pub async fn fetch_successors_of(
         &self,
-        tips: BTreeMap<u64, HashSet<blake3::Hash>>,
+        tips: BTreeMap<u64, HashSet<Hash>>,
     ) -> Result<Vec<Event>> {
         debug!(
              target: "event_graph::fetch_successors_of",
@@ -844,9 +1016,9 @@ impl EventGraph {
         );
 
         let mut graph = HashMap::new();
-        for iter_elem in self.dag.iter() {
+        for iter_elem in self.main_dag.iter() {
             let (id, val) = iter_elem.unwrap();
-            let hash = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let hash = Hash::from_bytes((&id as &[u8]).try_into().unwrap());
             let event: Event = deserialize_async(&val).await.unwrap();
             graph.insert(hash, event);
         }
@@ -861,14 +1033,186 @@ impl EventGraph {
             }
 
             for (_, ev) in graph.iter() {
-                if ev.layer > *tip.0 && !result.contains(ev) {
+                if ev.header.layer > *tip.0 && !result.contains(ev) {
                     result.push(ev.clone())
                 }
             }
         }
 
-        result.sort_by(|a, b| a.layer.cmp(&b.layer));
+        result.sort_by(|a, b| a.header.layer.cmp(&b.header.layer));
 
         Ok(result)
     }
 }
+
+async fn send_request(peer: &Channel, missing: &Header) -> Result<Vec<Event>> {
+    info!("in send_request first missing: {}", missing.id());
+    let url = peer.address();
+    debug!(target: "event_graph::dag_sync()","Requesting {:?} from {}...", missing, url);
+    let ev_rep_sub = match peer.subscribe_msg::<EventRep>().await {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "event_graph::dag_sync()","[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",url, e);
+            return Err(Error::Custom("Couldn't subscribe EventRep".to_string()))
+        }
+    };
+
+    if let Err(e) = peer.send(&EventReq(vec![missing.id()])).await {
+        error!(target: "event_graph::dag_sync()","[EVENTGRAPH] Sync: Failed communicating EventReq({:?}) to {}: {}",missing, url, e);
+        return Err(Error::Custom("Failed communicating EventReq".to_string()))
+    }
+
+    let Ok(parent) = ev_rep_sub.receive_with_timeout(15).await else {
+        error!(
+            target: "event_graph::dag_sync()",
+            "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
+            missing, url,
+        );
+        return Err(().into())
+    };
+
+    Ok(parent.0.clone())
+}
+
+async fn request_header(peer: &Channel, comms_timeout: u64) -> Result<Vec<Header>> {
+    let url = peer.address();
+
+    let hdr_rep_sub = match peer.subscribe_msg::<HeaderRep>().await {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "event_graph::dag_sync()",
+                "[EVENTGRAPH] Sync: Couldn't subscribe HeaderReq for peer {}, skipping ({})",
+                url, e,
+            );
+            return Err(Error::EventNotFound("Couldn't subscribe HeaderReq".to_owned()));
+        }
+    };
+
+    // let local_tips = self
+    //     .unreferenced_tips
+    //     .read()
+    //     .await
+    //     .values()
+    //     .flat_map(|x| x.iter())
+    //     .cloned()
+    //     .collect();
+
+    if let Err(e) = peer.send(&HeaderReq {}).await {
+        error!(
+            target: "event_graph::dag_sync()",
+            "[EVENTGRAPH] Sync: Couldn't contact peer {}, skipping ({})", url, e,
+        );
+        return Err(Error::EventNotFound("Couldn't contact peer".to_owned()));
+    };
+
+    // Node waits for response
+    let Ok(peer_headers) = hdr_rep_sub.receive_with_timeout(comms_timeout).await else {
+        error!(
+            target: "event_graph::dag_sync()",
+            "[EVENTGRAPH] Sync: Peer {} didn't reply with headers in time, skipping", url,
+        );
+        // communicated_peers -= 1;
+        return Err(Error::EventNotFound("Peer didn't reply with headers in time".to_owned()));
+    };
+
+    let peer_headers = &peer_headers.0;
+    Ok(peer_headers.to_vec())
+}
+
+async fn request_event(
+    peer: Arc<Channel>,
+    headers: Vec<Hash>,
+    comms_timeout: u64,
+) -> Result<Vec<Event>> {
+    let url = peer.address();
+
+    debug!(
+        target: "event_graph::dag_sync()",
+        "Requesting {:?} from {}...", headers, url,
+    );
+
+    let ev_rep_sub = match peer.subscribe_msg::<EventRep>().await {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "event_graph::dag_sync()",
+                "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",
+                url, e,
+            );
+            return Err(Error::EventNotFound("Couldn't subscribe EventRep".to_owned()));
+        }
+    };
+
+    // let request_missing_events = missing_parents.clone().into_iter().collect();
+    if let Err(e) = peer.send(&EventReq(headers.clone())).await {
+        error!(
+            target: "event_graph::dag_sync()",
+            "[EVENTGRAPH] Sync: Failed communicating EventReq({:?}) to {}: {}",
+            headers, url, e,
+        );
+        return Err(Error::EventNotFound("Failed communicating EventReq".to_owned()));
+    }
+
+    // Node waits for response
+    let Ok(event) = ev_rep_sub.receive_with_timeout(comms_timeout).await else {
+        error!(
+            target: "event_graph::dag_sync()",
+            "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
+            headers, url,
+        );
+        return Err(Error::EventNotFound("Timeout waiting for parents".to_owned()));
+    };
+
+    Ok(event.0.clone())
+}
+
+fn peer_selection(peers: Vec<Arc<Channel>>) -> Arc<Channel> {
+    peers.choose(&mut OsRng).unwrap().clone()
+}
+
+// async fn send_request(peer: &Channel, missing: &[Hash]) -> Result<Vec<Event>> {
+//     info!("in send_request first missing: {}", missing[0]);
+//     let url = peer.address();
+//     debug!(target: "event_graph::dag_sync()","Requesting {:?} from {}...", missing, url);
+//     let ev_rep_sub = match peer.subscribe_msg::<EventRep>().await {
+//         Ok(v) => v,
+//         Err(e) => {
+//             error!(target: "event_graph::dag_sync()","[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",url, e);
+//             return Err(Error::Custom("Couldn't subscribe EventRep".to_string()))
+//         }
+//     };
+
+//     if let Err(e) = peer.send(&EventReq(missing.to_vec())).await {
+//         error!(target: "event_graph::dag_sync()","[EVENTGRAPH] Sync: Failed communicating EventReq({:?}) to {}: {}",missing, url, e);
+//         return Err(Error::Custom("Failed communicating EventReq".to_string()))
+//     }
+
+//     let Ok(parent) = ev_rep_sub.receive_with_timeout(15).await else {
+//         error!(
+//             target: "event_graph::dag_sync()",
+//             "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
+//             missing, url,
+//         );
+//         return Err(().into())
+//     };
+
+//     Ok(parent.0.clone())
+// }
+
+// // A function that sends requests to multiple peers concurrently
+// async fn send_requests(peers: &[Arc<Channel>], missing: &[Hash]) -> Result<Vec<Vec<Event>>> {
+//     info!("in send_requests first missing: {}", missing[0]);
+//     let chunk_size = (missing.len() as f64 / peers.len() as f64).ceil() as usize;
+//     let pairs = peers.iter().zip(missing.chunks(chunk_size)).collect::<Vec<_>>();
+
+//     // For each peer, create a future that sends a request
+//     let pair_stream = from_iter(pairs.iter());
+//     let requests_stream = pair_stream.map(|(peer, missing)| send_request(peer, missing));
+
+//     // Collect all the responses into a vector
+//     let responses = requests_stream.collect::<Vec<_>>().await;
+
+//     // Wait for all the futures to complete
+//     future::try_join_all(responses).await
+// }

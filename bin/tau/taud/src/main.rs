@@ -332,7 +332,7 @@ async fn start_sync_loop(
             }
             // Process message from the network. These should only be EncryptedTask.
             task_event = incoming.receive().fuse() => {
-                let event_id = task_event.id();
+                let event_id = task_event.header.id();
                 if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
                     continue
                 }
@@ -557,7 +557,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             // We'll attempt to sync for ever
             if !settings.skip_dag_sync {
                 info!(target: "taud", "Syncing event DAG");
-                match event_graph.dag_sync().await {
+                match event_graph.dag_sync(settings.fast_mode).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
@@ -585,7 +585,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let dag_events = event_graph.order_events().await;
 
     for event in dag_events.iter() {
-        let event_id = event.id();
+        let event_id = event.header.id();
         // If it was seen, skip
         if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
             continue
