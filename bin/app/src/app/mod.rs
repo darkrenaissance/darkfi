@@ -113,8 +113,8 @@ impl App {
         let mut window_scale = 1.;
         #[cfg(target_os = "android")]
         {
-            window_scale = android::get_screen_density() / 2.625;
-            d!("Setting window_scale to {window_scale}");
+            //window_scale = android::get_screen_density() / 2.625;
+            //d!("Setting window_scale to {window_scale}");
         }
 
         settings.add_setting("scale", PropertyValue::Float32(window_scale));
