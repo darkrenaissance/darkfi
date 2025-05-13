@@ -252,6 +252,26 @@ can start mining.
 
 ![step12](img/step12.png)
 
+When `darkfid` and `minerd` are correctly connected and you get an error
+like this:
+
+```
+[ERROR] minerd::rpc: Failed mining block f6b4a0f0c8f90905da271ec0add2e856939ef3b0d6cd5b28964d9c2b6d0a0fa9 with error: Miner task stopped
+```
+
+That's expected behavior. It means your setup is correct and you are
+mining blocks. `Failed mining block` happens when a new block was found
+by `darkfid`, so `minerd` stopped mining the current block and started
+mining the next one.
+
+Otherwise, you'll see a notification like this:
+
+```
+[INFO] Mined block b6c7bd3545daa81d0e2e56ee780363beef6eb5b54579f54dca0cdd2a59989b76 with nonce: 266292
+```
+
+Which means a block has been mined succesfully.
+
 ### Wallet sync
 
 In order to receive incoming coins, you'll need to use the `drk`
