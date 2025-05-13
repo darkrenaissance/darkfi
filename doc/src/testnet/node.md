@@ -260,9 +260,10 @@ like this:
 ```
 
 That's expected behavior. It means your setup is correct and you are
-mining blocks. `Failed mining block` happens when a new block was found
-by `darkfid`, so `minerd` stopped mining the current block and started
-mining the next one.
+mining blocks. `Failed mining block` happens when a new block was
+received by `darkfid`, extending the current best fork, so it sends an
+interuption message to `minerd` to stop mining the current block and
+start mining the next height one.
 
 Otherwise, you'll see a notification like this:
 
@@ -270,7 +271,9 @@ Otherwise, you'll see a notification like this:
 [INFO] Mined block b6c7bd3545daa81d0e2e56ee780363beef6eb5b54579f54dca0cdd2a59989b76 with nonce: 266292
 ```
 
-Which means a block has been mined succesfully.
+Which means the current height block has been mined succesfully by
+`minerd` and propagated to `darkfid` so it can broadcast it to the
+network.
 
 ### Wallet sync
 
