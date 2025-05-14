@@ -92,7 +92,7 @@ Tor, you'll need to make some modifications to the `darkfid` config
 file.
 
 For detailed instructions and configuration options on how to do this,
-follow the [Tor Guide](../nodes/tor-guide.md#configure-network-settings).
+follow the [Tor Guide](../misc/nodes/tor-guide.md#configure-network-settings).
 
 ### Wallet initialization
 
