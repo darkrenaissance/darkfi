@@ -420,8 +420,8 @@ impl<'a> RenderContext<'a> {
     }
 
     fn apply_view(&mut self) {
+        // Actual physical view
         let view = self.view * self.scale;
-
         let (_, screen_height) = window::screen_size();
 
         let view_x = view.x.round() as i32;
@@ -468,6 +468,8 @@ impl<'a> RenderContext<'a> {
             match instr {
                 DrawInstruction::SetScale(scale) => {
                     self.scale = *scale;
+                    self.view.w /= self.scale;
+                    self.view.h /= self.scale;
                     if is_debug {
                         debug!(target: "gfx", "{ws}set_scale({scale})");
                     }
@@ -495,12 +497,14 @@ impl<'a> RenderContext<'a> {
                 DrawInstruction::ApplyView(view) => {
                     // Adjust view relative to cursor
                     self.view = *view + self.cursor;
+
                     // We could just skip drawing when clipping rect isn't visible
                     // using an is_visible flag.
                     match self.view.clip(&old_view) {
                         Some(clipped) => self.view = clipped,
                         None => self.view = Rectangle::zero(),
                     }
+
                     // Cursor resets within the view
                     self.cursor = Point::zero();
                     if is_debug {

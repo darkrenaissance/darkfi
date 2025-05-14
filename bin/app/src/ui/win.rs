@@ -430,8 +430,8 @@ impl Window {
         let trace_id = rand::random();
         let timest = unixtime();
 
-        let local = self.screen_size.get() / self.scale.get();
-        let rect = Rectangle::from([0., 0., local.w, local.h]);
+        let virt_size = self.screen_size.get() / self.scale.get();
+        let rect = Rectangle::from([0., 0., virt_size.w, virt_size.h]);
         t!("Window::draw({rect:?}) [timest={timest}, trace_id={trace_id}]");
 
         let mut draw_calls = vec![];
