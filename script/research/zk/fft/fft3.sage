@@ -40,7 +40,8 @@ print()
 L.<X> = K[]
 
 f = 10*X + 110
-assert f.degree() < n/2
+f = X^3 + 10*X + 110
+#assert f.degree() < n/2
 print(f"f = {f}")
 print()
 

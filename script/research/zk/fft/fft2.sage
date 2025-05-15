@@ -26,6 +26,20 @@ def find_ext_order(p, n):
 
         N += 1
 
+# Alternative to the above fn. Technically we still need to loop since
+# discrete_log() is a bruteforce algo.
+def find_ext_order_alt(p, n):
+    # We have that n | p^N - 1 for some n. This is the same as wrtiting:
+    #   p^N - 1 = ns for some s
+    #   => p^N - 1 ≡ 0 (mod n)
+    #   p · p^(N - 1) ≡ 1 (mod n)
+    # But recall that p^(N - 1) ≡ p^-1
+    # So we just take p (mod n), find its inverse then compute N - 1
+    R = Integers(n)
+    p = R(p)
+    N_minus_1 = discrete_log(p^-1, p)
+    return N_minus_1 + 1
+
 def find_nth_root_unity(K, n):
     # It cannot be a quadratic residue if n is odd
     #assert n % 2 == 1
@@ -47,8 +61,6 @@ K.<a> = GF(p^N, repr="int")
 
 L.<X> = K[]
 
-f = 3*X^4 + 7*X^3 + X^2 + 4
-g = 2*X^4 + 2*X^2 + 110
 f = X^2 + 2*X + 4
 g = 2*X^2 + 110
 assert f.degree() < n/2
