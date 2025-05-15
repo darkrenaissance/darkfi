@@ -64,8 +64,8 @@ can also familiarize yourself with our docs by
 If you are having trouble connecting DarkFi applications, please refer to 
 [network troubleshooting](network-troubleshooting.md).
 
-## I tried to run `darkfid` and had issues connecting to the network?
-There is no live testnet for the current codebase.
+## How can I run the testnet?
+Follow the [testnet guide](../testnet/node.md).
 
 ## How can I run my DarkFi nodes over Tor?
 You can setup a Tor enabled node [here](nodes/tor-guide.html).
