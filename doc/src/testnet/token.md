@@ -116,7 +116,7 @@ Generating alias ANON for Token: {TOKEN2}
 $ ./drk alias show
 
  Alias | Token ID
--------+----------------------------------------------
+-------+---------------------------------------------
  ANON  | {TOKEN1}
  DAWN  | {TOKEN2}
  DRK   | 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLss
@@ -172,7 +172,7 @@ new tokens listed when you run:
 $ ./drk wallet --balance
 
  Token ID                                     | Aliases | Balance
-----------------------------------------------+---------+----------------
+----------------------------------------------+---------+-------------
  241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 19.98451279
  {TOKEN1}                                     | ANON    | 42.69
  {TOKEN2}                                     | DAWN    | 20
