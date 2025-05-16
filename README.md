@@ -60,12 +60,21 @@ P2P IRC daemon.
 
 ## Build
 
+First you need to clone DarkFi repo and enter its root folder, if
+you haven't already done it:
+
+```shell
+% git clone https://codeberg.org/darkrenaissance/darkfi
+% cd darkfi
+```
+
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
 You have to install a native toolchain, which is set up during Rust installation,
 and wasm32 target.
 To install wasm32 target, execute:
+
 ```shell
 % rustup target add wasm32-unknown-unknown
 ```
@@ -110,12 +119,12 @@ and install dependencies accordingly. In case it does not find your
 package manager, please consider adding support for it into the script
 and sending a patch.
 
-To build the necessary binaries, we can just clone the repo, and use 
-the provided Makefile to build the project:
+Lastly, we can build the necessary binaries using the provided
+Makefile, to build the project. If you want to build specific ones,
+like `darkfid` or `darkirc`, skip this step, as it will build
+everything, and use their specific targets instead.
 
 ```shell
-% git clone https://codeberg.org/darkrenaissance/darkfi
-% cd darkfi
 % make
 ```
 
@@ -125,7 +134,7 @@ If you want to hack on the source code, make sure to read some
 introductory advice in the
 [DarkFi book](https://darkrenaissance.github.io/darkfi/dev/dev.html).
 
-## Install
+## Installation (Optional)
 
 This will install the binaries on your system (`/usr/local` by
 default). The configuration files for the binaries are bundled with the
