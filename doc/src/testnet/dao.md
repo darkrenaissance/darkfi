@@ -6,64 +6,133 @@ necessary operations.
 
 DarkFi DAOs have several configurable parameters, including:
 
-**Proposer_limit**: the minimum amount of governance tokens needed to
+- **Proposer_limit**: the minimum amount of governance tokens needed to
 open a proposal.
-**Quorum**: The minimal threshold of participating total tokens needed
-for a proposal to pass (expressed as an absolute value).
-**Early execution quorum**: The minimal threshold of participating total
-tokens needed for a proposal to be considered as strongly supported,
-enabling early execution. Must be greater or equal to normal quorum.
-**Approval_ratio**: The ratio of winning/total votes needed for a proposal
-to pass.
-**Governance token**: The DAO's governance token ID.
+- **Quorum**: The minimal threshold of participating total tokens
+needed for a proposal to pass (expressed as an absolute value).
+- **Early execution quorum**: The minimal threshold of participating
+total tokens needed for a proposal to be considered as strongly
+supported, enabling early execution. Must be greater or equal to normal
+quorum.
+- **Approval_ratio**: The ratio of winning/total votes needed for a
+proposal to pass.
+- **Governance token**: The DAO's governance token ID.
 
 Let's create a DAO with the following parameters:
 
-* Proposer limit: `10`
-* Quorum: `5`
-* Early execution quorum: `5`
-* Approval ratio: `0.67`
-* Governance token: `MLDY`
+- **Proposer limit**: `20`
+- **Quorum**: `10`
+- **Early execution quorum**: `10`
+- **Approval ratio**: `0.67`
+- **Governance token**: `ANON`
 
 You can use the tokens we created earlier to create new tokens. Return to
 the definition of each parameter by running the `help` command like this:
 
-```
+```shell
 $ ./drk help dao create
+
+drk-dao-create 0.4.1
+Create DAO parameters
+
+USAGE:
+    drk dao create <proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    <proposer-limit>       The minimum amount of governance tokens needed to open a proposal for this DAO
+    <quorum>               Minimal threshold of participating total tokens needed for a proposal to pass
+    <early-exec-quorum>    Minimal threshold of participating total tokens needed for a proposal to be considered as
+                           strongly supported, enabling early execution. Must be greater or equal to normal quorum
+    <approval-ratio>       The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)
+    <gov-token-id>         DAO's governance token ID
 ```
 
-![dao-help-create](img/dao-help-create.png)
+Now let's create our DAO:
 
-
-Now let's create our DAO. 
-
-```
-$ ./drk dao create 10 5 5 0.67 MLDY > dao_anon.toml
+```shell
+$ ./drk dao create 20 10 10 0.67 ANON > anon_dao.toml
 ```
 
-```
-$ ./drk dao view < dao_anon.toml
+And view it:
+
+```shell
+$ ./drk dao view < anon_dao.toml
+
+DAO Parameters
+==============
+Proposer limit: 20 (2000000000)
+Quorum: 10 (1000000000)
+Early Exec Quorum: 10 (1000000000)
+Approval ratio: 0.67
+Governance Token ID: {TOKEN1}
+Notes Public key: DiVGqk...SHy2zE
+Notes Secret key: ARiqFg...Jg1xZB
+Proposer Public key: F2BLix...9g6xRT
+Proposer Secret key: DA7mgp...Ugk2qF
+Proposals Public key: D1w2hG...7izmnS
+Proposals Secret key: 8d8GG2...TPdGGx
+Votes Public key: CVfKnc...kwKraQ
+Votes Secret key: B5rGPz...7J5uJZ
+Exec Public key: 3ZG5cK...GakTRS
+Exec Secret key: HHVTM4...LhLYQQ
+Early Exec Public key: 5xo4yj...gzCf3W
+Early Exec Secret key: 9r9URX...TZCHPL
+Bulla blind: 6TVkmM...Jjd5zC
 ```
 
 Since its a normal `toml` file, you may open it with you favourite
 editor, modify the keys configuration and/or maintain different config
 versions for different DAO members. By default all keys are different,
-so its up to the DAO founders to chose what configuration they are going
-to use.  After configuring the file(s) properly, it can be shared among
-DAO members, so they hold the generated DAO information and keys.
+so its up to the DAO founders to chose what configuration they are
+going to use. After configuring the file(s) properly, it can be shared
+among DAO members, so they hold the generated DAO information and keys.
 The view command will show us the parameters. If everything looks fine,
 we can now import it into our wallet:
 
-```
-$ ./drk dao import AnonDAO < dao_anon.toml
+```shell
+$ ./drk dao import AnonDAO < anon_dao.toml
+
+Importing "AnonDAO" DAO into the walle
 ```
 
-```
+```shell
 $ ./drk dao list
+
+0. AnonDAO
 ```
 
-```
+```shell
 $ ./drk dao list AnonDAO
+
+DAO Parameters
+==============
+Name: AnonDAO
+Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposer limit: 20 (2000000000)
+Quorum: 10 (1000000000)
+Early Exec Quorum: 10 (1000000000)
+Approval ratio: 0.67
+Governance Token ID: {TOKEN1}
+Notes Public key: DiVGqk...SHy2zE
+Notes Secret key: ARiqFg...Jg1xZB
+Proposer Public key: F2BLix...9g6xRT
+Proposer Secret key: DA7mgp...Ugk2qF
+Proposals Public key: D1w2hG...7izmnS
+Proposals Secret key: 8d8GG2...TPdGGx
+Votes Public key: CVfKnc...kwKraQ
+Votes Secret key: B5rGPz...7J5uJZ
+Exec Public key: 3ZG5cK...GakTRS
+Exec Secret key: HHVTM4...LhLYQQ
+Early Exec Public key: 5xo4yj...gzCf3W
+Early Exec Secret key: 9r9URX...TZCHPL
+Bulla blind: 6TVkmM...Jjd5zC
+Leaf position: None
+Transaction hash: None
+Call index: None
 ```
 
 ## Minting
@@ -73,18 +142,52 @@ into our wallet. We use the DAO name to reference it. Now we can create
 a transaction that will mint the DAO on-chain, if we hold all its keys,
 and broadcast it:
 
-```
-$ ./drk dao mint AnonDAO > dao_anon_mint_tx
+```shell
+$ ./drk dao mint AnonDAO > anon_dao_mint.tx
 ```
 
-```
+```shell
 $ ./drk broadcast < dao_anon_mint_tx
+
+[mark_tx_spend] Processing transaction: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
+[mark_tx_spend] Found Money contract in call 1
+Broadcasting transaction...
+Transaction ID: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
 ```
 
 Now the transaction is broadcasted to the network. Wait for it to
 confirm, and if your `drk` is subscribed, after confirmation you
-should see a leaf position and a transaction hash when running
-`dao list AnonDAO`.
+should see a leaf position and a transaction hash when running:
+
+```shell
+$ ./drk dao list AnonDAO
+
+DAO Parameters
+==============
+Name: AnonDAO
+Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposer limit: 20 (2000000000)
+Quorum: 10 (1000000000)
+Early Exec Quorum: 10 (1000000000)
+Approval ratio: 0.67
+Governance Token ID: {TOKEN1}
+Notes Public key: DiVGqk...SHy2zE
+Notes Secret key: ARiqFg...Jg1xZB
+Proposer Public key: F2BLix...9g6xRT
+Proposer Secret key: DA7mgp...Ugk2qF
+Proposals Public key: D1w2hG...7izmnS
+Proposals Secret key: 8d8GG2...TPdGGx
+Votes Public key: CVfKnc...kwKraQ
+Votes Secret key: B5rGPz...7J5uJZ
+Exec Public key: 3ZG5cK...GakTRS
+Exec Secret key: HHVTM4...LhLYQQ
+Early Exec Public key: 5xo4yj...gzCf3W
+Early Exec Secret key: 9r9URX...TZCHPL
+Bulla blind: 6TVkmM...Jjd5zC
+Leaf position: Position(0)
+Transaction hash: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
+Call index: 0
+```
 
 ## Sending money to the treasury
 
@@ -94,28 +197,65 @@ dao contract spend hook and the DAO notes public key.
 
 Then create a transfer transaction as follows:
 
-```
+```shell
 $ ./drk dao spend-hook
+
+6iW9nywZYvyhcM7P1iLwYkh92rvYtREDsC8hgqf2GLuT
 ```
 
-```
+```shell
 $ ./drk dao list AnonDAO
+
+DAO Parameters
+==============
+Name: AnonDAO
+Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposer limit: 20 (2000000000)
+Quorum: 10 (1000000000)
+Early Exec Quorum: 10 (1000000000)
+Approval ratio: 0.67
+Governance Token ID: {TOKEN1}
+Notes Public key: DiVGqk...SHy2zE
+Notes Secret key: ARiqFg...Jg1xZB
+Proposer Public key: F2BLix...9g6xRT
+Proposer Secret key: DA7mgp...Ugk2qF
+Proposals Public key: D1w2hG...7izmnS
+Proposals Secret key: 8d8GG2...TPdGGx
+Votes Public key: CVfKnc...kwKraQ
+Votes Secret key: B5rGPz...7J5uJZ
+Exec Public key: 3ZG5cK...GakTRS
+Exec Secret key: HHVTM4...LhLYQQ
+Early Exec Public key: 5xo4yj...gzCf3W
+Early Exec Secret key: 9r9URX...TZCHPL
+Bulla blind: 6TVkmM...Jjd5zC
+Leaf position: Position(0)
+Transaction hash: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
+Call index: 0
 ```
 
-```
-$ ./drk transfer 10 WCKD {DAO_NOTES_PUBLIC_KEY} \
-    {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} > dao_anon_transfer_tx
+```shell
+$ ./drk transfer 10 DAWN {DAO_NOTES_PUBLIC_KEY} {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} > anon_dao_transfer.tx
 ```
 
-```
-$ ./drk broadcast < dao_anon_transfer_tx
+```shell
+$ ./drk broadcast < anon_dao_transfer.tx
+
+[mark_tx_spend] Processing transaction: a4db439f75de88457cadd849131394ae37723c943ea5c088b218d6dc0f7982f1
+[mark_tx_spend] Found Money contract in call 0
+[mark_tx_spend] Found Money contract in call 1
+Broadcasting transaction...
+Transaction ID: a4db439f75de88457cadd849131394ae37723c943ea5c088b218d6dc0f7982f1
 ```
 
 Wait for it to confirm. If `drk` is subscribed and you hold the DAO
 notes key, you can view the balance like so:
 
-```
+```shell
 $ ./drk dao balance AnonDAO
+
+ Token ID | Aliases | Balance
+----------+---------+---------
+ {TOKEN2} | DAWN    | 10
 ```
 
 ## Creating a proposal
@@ -126,30 +266,65 @@ for 1 block period, if we hold the DAO proposer key. Let's propose
 to send 5 of the 10 tokens to our address (we can find that with
 `drk wallet --address`):
 
-```
-$ ./drk dao propose-transfer AnonDAO 1 5 WCKD {YOUR_ADDRESS}
+```shell
+$ ./drk dao propose-transfer AnonDAO 1 5 DAWN {YOUR_ADDRESS}
+
+Generated proposal: {PROPOSAL_BULLA}
 ```
 
 After command was executed, it will output the generated proposal
 bulla, which we will use to view the proposal full information:
 
-```
+```shell
 $ ./drk dao proposal {PROPOSAL_BULLA}
+
+Proposal parameters
+===================
+Bulla: {PROPOSAL_BULLA}
+DAO Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposal leaf position: None
+Proposal transaction hash: None
+Proposal call index: None
+Creation block window: 28
+Duration: 1 (Block windows)
+
+Invoked contracts:
+        Contract: Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
+        Function: 4
+        Data:
+                Recipient: {YOUR_ADDRESS}
+                Amount: 500000000 (5)
+                Token: {TOKEN2}
+                Spend hook: -
+                User data: -
+                Blind: 8e9ne7...bVGsbH
+
+        Contract: BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
+        Function: 3
+        Data: -
+
+Votes: No votes found
+Voting status: Ongoing
+Current proposal outcome: Unknown
 ```
 
 We can export this proposal, to share with rest DAO members.
 The exported file will be encrypted using the DAO proposals view key,
 so only its members can decrypt and import it.
 
-```
-$ ./drk dao proposal {PROPOSAL_BULLA} --export > dao_anon_transfer_proposal.dat
-$ ./drk dao proposal-import < dao_anon_transfer_proposal.dat
+```shell
+$ ./drk dao proposal {PROPOSAL_BULLA} --export > anon_dao_transfer_proposal.dat
 ```
 
-Now we can create the proposal mint transaction and broadcast it:
+```shell
+$ ./drk dao proposal-import < anon_dao_transfer_proposal.dat
 ```
-$ ./drk dao proposal {PROPOSAL_BULLA} --mint-proposal > dao_anon_transfer_proposal_mint_tx
-$ ./drk broadcast < dao_anon_transfer_proposal_mint_tx
+
+TODO: FIX STUFF FROM HERE
+Now we can create the proposal mint transaction and broadcast it:
+```shell
+$ ./drk dao proposal {PROPOSAL_BULLA} --mint-proposal > anon_dao_transfer_proposal_mint.tx
+$ ./drk broadcast < anon_dao_transfer_proposal_mint.tx
 ```
 
 Members that didn't receive the encrypted file will receive the

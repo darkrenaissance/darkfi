@@ -117,12 +117,12 @@ $ ./drk wallet --coins
 ```
 
 Here you can see there are two entries for the tokens we used in the
-swap: 20.00 DAWN and 40.00 ANON. The first entry shows the `Spent` flag
-as `true` and the second entry shows the `Spent` flag as `false`. This
-means the transaction was successful. Since we are swapping with
-ourself, we successfully spent the coins in the first half of the
-transaction, and re-minted to ourselves them in the second half of the
-transaction.
+swap: `40.00` `ANON` and `20.00` `DAWN` . The first entry shows the
+`Spent` flag as `true` and the second entry shows the `Spent` flag as
+`false`. This means the transaction was successful. Since we are
+swapping with ourself, we successfully spent the coins in the first
+half of the transaction, and re-minted to ourselves them in the second
+half of the transaction.
 
 If you're testing atomic swaps with a counterparty and you can see
 their tokens, that means the swap was successful.  In case you still
