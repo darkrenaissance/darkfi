@@ -8,63 +8,73 @@ by the community on `darkirc` and/or your comrades. Don't forget to
 tell them to add the `--half-split` flag when they create the transfer
 transaction, so you get more than one coins to play with.
 
-After you request some `DRK` and the other party submitted a transaction
-to the network, it should be in the consensus' mempool, waiting for
-inclusion in the next block(s). Depending on the network, confirmation
-of the blocks could take some time. You'll have to wait for this to happen.
-If your `drk subscribe` is running, then after some time your new balance
-should be in your wallet.
+After you request some `DRK` and the other party submitted a
+transaction to the network, it should be in the consensus' mempool,
+waiting for inclusion in the next block(s). Depending on your network
+configuration, confirmation of the blocks could take some time. You'll
+have to wait for this to happen. If your `drk subscribe` is running,
+then after some time your new balance should be in your wallet.
 
-![pablo-waiting0](pablo0.jpg)
+![pablo-waiting0](img/pablo0.jpg)
 
 You can check your wallet balance using `drk`:
 
-```
+```shell
 $ ./drk wallet --balance
-```
 
-![balance](img/drk-balance.png)
+ Token ID                                     | Aliases | Balance
+----------------------------------------------+---------+---------
+ 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 20
+```
 
 # Creating tokens
 
 On the DarkFi network, we're able to mint custom tokens with some
 supply. To do this, we need to generate a mint authority keypair,
-and derive a token ID from it. We can simply do this by executing the
-following command:
+and derive a token ID from it. The tokens shown in the outputs are
+placeholders for the ones that will be generated from your. We can
+simply create our own tokens by executing the following command:
 
-```
+```shell
 $ ./drk token generate-mint
-```
 
-![generate-mint](img/generate-mint.png)
+Successfully imported mint authority for token ID: {TOKEN1}
+```
 
 This will generate a new token mint authority and will tell you what
 your new token ID is.
 
 You can list your mint authorities with:
 
-```
+```shell
 $ ./drk token list
-```
 
-![token-list](img/token-list.png)
+ Token ID | Aliases | Mint Authority          | Token Blind    | Frozen
+----------+---------+-------------------------+----------------+--------
+ {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false
+
+```
 
 For this tutorial we will need two tokens so execute the command again
 to generate another one.
 
-```
+```shell
 $ ./drk token generate-mint
-```
 
-![generate-mint2](img/generate-mint2.png)
+Successfully imported mint authority for token ID: {TOKEN2}
+```
 
 Verify you have two tokens by running:
 
-```
+```shell
 $ ./drk token list
-```
 
-![token-list](img/token-list2.png)
+ Token ID | Aliases | Mint Authority          | Token Blind    | Frozen
+----------+---------+-------------------------+----------------+--------
+ {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false
+ {TOKEN2} | -       | {TOKEN2_MINT_AUTHORITY} | {TOKEN2_BLIND} | false
+
+```
 
 ## Aliases
 
@@ -72,19 +82,17 @@ To make our life easier, we can create token ID aliases, so when we
 are performing transactions with them, we can use that instead of the
 full token ID. Multiple aliases per token ID are supported.
 
-Example addition:
-
-```
-$ ./drk alias add {ALIAS} {TOKEN}
-```
-
 The native token alias `DRK` should already exist, and we can use that
 to refer to the native token when executing transactions using it.
 
 We can also list all our aliases using:
 
-```
+```shell
 $ ./drk alias show
+
+ Alias | Token ID
+-------+----------------------------------------------
+ DRK   | 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb
 ```
 
 Note: these aliases are only local to your machine. When exchanging
@@ -92,70 +100,80 @@ with other users, always verify that your aliases' token IDs match.
 
 Now let's add the two token IDs generated earlier to our aliases:
 
-```
-$ ./drk alias add WCKD {TOKEN1}
+```shell
+$ ./drk alias add ANON {TOKEN1}
+
+Generating alias ANON for Token: {TOKEN1}
 ```
 
-![alias](img/alias.png)
+```shell
+$ ./drk alias add DAWN {TOKEN2}
 
-```
-$ ./drk alias add MLDY {TOKEN2}
+Generating alias ANON for Token: {TOKEN2}
 ```
 
-![alias2](img/alias2.png)
-
-```
+```shell
 $ ./drk alias show
-```
 
-![alias-show](img/alias-show.png)
+ Alias | Token ID
+-------+----------------------------------------------
+ ANON  | {TOKEN1}
+ DAWN  | {TOKEN2}
+ DRK   | 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLss
+```
 
 ## Mint transaction
 
 Now let's mint some tokens for ourselves. First grab your wallet address,
 and then create the token mint transaction, and finally - broadcast it:
 
-```
+```shell
 $ ./drk wallet --address
+
+{YOUR_ADDRESS}
 ```
 
-![step6](img/step7.png)
-
-```
-$ ./drk token mint WCKD 42.69 {YOUR_ADDRESS} > mint_tx
+```shell
+$ ./drk token mint ANON 42.69 {YOUR_ADDRESS} > mint.tx
 ```
 
-![mint](img/mint.png)
+```shell
+$ ./drk broadcast < mint.tx
 
-```
-$ ./drk broadcast < mint_tx
-```
-
-![broadcast-mint](img/broadcast-mint.png)
-
-```
-$ ./drk token mint MLDY 20.0 {YOUR_ADDRESS} > mint_tx
-```
-
-![mint2](img/mint2.png)
-
-```
-$ ./drk broadcast < mint_tx
+[mark_tx_spend] Processing transaction: e9ded45928f2e2dbcb4f8365653220a8e2346987dd8b75fe1ffdc401ce0362c2
+[mark_tx_spend] Found Money contract in call 0
+[mark_tx_spend] Found Money contract in call 1
+[mark_tx_spend] Found Money contract in call 2
+Broadcasting transaction...
+Transaction ID: e9ded45928f2e2dbcb4f8365653220a8e2346987dd8b75fe1ffdc401ce0362c2
 ```
 
-![broadcast2](img/broadcast2.png)
+```shell
+$ ./drk token mint DAWN 20.0 {YOUR_ADDRESS} > mint.tx
+```
+
+```shell
+$ ./drk broadcast < mint.tx
+
+[mark_tx_spend] Processing transaction: e404241902ba0a8825cf199b3083bff81cd518ca30928ca1267d5e0008f32277
+[mark_tx_spend] Found Money contract in call 0
+[mark_tx_spend] Found Money contract in call 1
+[mark_tx_spend] Found Money contract in call 2
+Broadcasting transaction...
+Transaction ID: e404241902ba0a8825cf199b3083bff81cd518ca30928ca1267d5e0008f32277
+```
 
 Now the transaction should be published to the network. If you have
 an active block subscription (which you can do with `drk subscribe`),
 then when the transaction is confirmed, your wallet should have your
 new tokens listed when you run:
 
-```
+```shell
 $ ./drk wallet --balance
+
+ Token ID                                     | Aliases | Balance
+----------------------------------------------+---------+----------------
+ 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 19.98451279
+ {TOKEN1}                                     | ANON    | 42.69
+ {TOKEN2}                                     | DAWN    | 20
 ```
-
-![balances](img/drk-whackd-mldy.png)
-
-*Note that the WCKD balance in the above image is 2x the expected about
-of 42.69 (i.e.  85.38). This is not a bug, it's because we accidentally
-applied the mint_tx twice. Yay!*
