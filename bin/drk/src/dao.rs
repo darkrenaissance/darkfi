@@ -1198,6 +1198,8 @@ impl Drk {
         let daos = self.get_daos().await?;
         let (mut daos_tree, proposals_tree) = self.get_dao_trees().await?;
         daos_tree.append(MerkleNode::from(new_bulla.inner()));
+
+        let mut wallet_tx = false;
         for dao in &daos {
             if dao.bulla() != new_bulla {
                 continue
@@ -1214,22 +1216,25 @@ impl Drk {
             dao_to_confirm.tx_hash = Some(tx_hash);
             dao_to_confirm.call_index = Some(call_index);
 
-            // Update wallet data
-            if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                return Err(Error::DatabaseError(format!(
-                    "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
-                )))
-            }
+            // Confirm it
             if let Err(e) = self.confirm_dao(&dao_to_confirm).await {
                 return Err(Error::DatabaseError(format!(
                     "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
                 )))
             }
 
-            return Ok(true);
+            wallet_tx = true;
+            break
         }
 
-        Ok(false)
+        // Update wallet data
+        if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
+            return Err(Error::DatabaseError(format!(
+                "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
+            )))
+        }
+
+        Ok(wallet_tx)
     }
 
     /// Auxiliary function to apply `DaoFunction::Propose` call data to the wallet,
@@ -1247,6 +1252,7 @@ impl Drk {
 
         // If we're able to decrypt this note, that's the way to link it
         // to a specific DAO.
+        let mut wallet_tx = false;
         for dao in &daos {
             // Check if we have the proposals key
             let Some(proposals_secret_key) = dao.params.proposals_secret_key else { continue };
@@ -1286,21 +1292,25 @@ impl Drk {
                 },
             };
 
-            if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                return Err(Error::DatabaseError(format!(
-                    "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
-                )))
-            }
+            // Update/store our record
             if let Err(e) = self.put_dao_proposal(&our_proposal).await {
                 return Err(Error::DatabaseError(format!(
                     "[apply_dao_propose_data] Put DAO proposals failed: {e:?}"
                 )))
             }
 
-            return Ok(true);
+            wallet_tx = true;
+            break
         }
 
-        Ok(false)
+        // Update wallet data
+        if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
+            return Err(Error::DatabaseError(format!(
+                "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
+            )))
+        }
+
+        Ok(wallet_tx)
     }
 
     /// Auxiliary function to apply `DaoFunction::Vote` call data to the wallet,
