@@ -320,26 +320,69 @@ $ ./drk dao proposal {PROPOSAL_BULLA} --export > anon_dao_transfer_proposal.dat
 $ ./drk dao proposal-import < anon_dao_transfer_proposal.dat
 ```
 
-TODO: FIX STUFF FROM HERE
-Now we can create the proposal mint transaction and broadcast it:
+Now we can create the proposal mint transaction:
 ```shell
 $ ./drk dao proposal {PROPOSAL_BULLA} --mint-proposal > anon_dao_transfer_proposal_mint.tx
+```
+
+And broadcast it
+```shell
 $ ./drk broadcast < anon_dao_transfer_proposal_mint.tx
+
+[mark_tx_spend] Processing transaction: 2149d7e3a60be12c96b6c6fc7ba009717d8b229b815dd4006bbe120c31681f38
+[mark_tx_spend] Found Money contract in call 1
+Broadcasting transaction...
+Transaction ID: 2149d7e3a60be12c96b6c6fc7ba009717d8b229b815dd4006bbe120c31681f38
 ```
 
 Members that didn't receive the encrypted file will receive the
 proposal when they scan the corresponding block, but its plaintext
 data will be missing, so they should ask the DAO for it.
 Once confirmed and scanned, you should see a leaf position and a
-transaction hash when running `dao proposal {PROPOSAL_BULLA}`.
+transaction hash when running:
+
+```shell
+$ ./drk dao proposal {PROPOSAL_BULLA}
+
+Proposal parameters
+===================
+Bulla: G9FUrWn6PLieNuPpYdzUmfd1UP9tUVMpimmu7mwMukcU
+DAO Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposal leaf position: Position(0)
+Proposal transaction hash: 2149d7e3a60be12c96b6c6fc7ba009717d8b229b815dd4006bbe120c31681f38
+Proposal call index: 0
+Creation block window: 28
+Duration: 1 (Block windows)
+
+Invoked contracts:
+        Contract: Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
+        Function: 4
+        Data:
+                Recipient: {YOUR_ADDRESS}
+                Amount: 500000000 (5)
+                Token: {TOKEN2}
+                Spend hook: -
+                User data: -
+                Blind: 8e9ne7...bVGsbH
+
+        Contract: BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
+        Function: 3
+        Data: -
+
+Votes: No votes found
+Voting status: Ongoing
+Current proposal outcome: Unknown
+```
 
 ## Voting on a proposal
 
 Now the DAO members are ready to cast their votes.
 First lets check the `dao vote` subcommand usage.
 
-```
+```shell
 $ ./drk help dao vote
+
+drk-dao-vote 0.5.0
 Vote on a given proposal
 
 USAGE:
@@ -355,45 +398,126 @@ ARGS:
     <vote-weight>    Optional vote weight (amount of governance tokens)
 ```
 
-Lets use our `MLDY` governance tokens to vote yes to the proposal.
+Lets use our `ANON` governance tokens to vote yes to the proposal.
 
+```shell
+$ ./drk dao vote {PROPOSAL_BULLA} 1 > anon_dao_transfer_proposal_vote.tx
 ```
-$ ./drk dao vote {PROPOSAL_BULLA} 1 > dao_anon_transfer_proposal_vote_tx
-$ ./drk broadcast < dao_anon_transfer_proposal_vote_tx
+
+And broadcast our vote:
+
+```shell
+$ ./drk broadcast < anon_dao_transfer_proposal_vote.tx
+
+[mark_tx_spend] Processing transaction: 060468c5676a52a8b59b464dc959906b762a2108fa6f9d0db0b88c9d200eb612
+[mark_tx_spend] Found Money contract in call 1
+Broadcasting transaction...
+Transaction ID: 060468c5676a52a8b59b464dc959906b762a2108fa6f9d0db0b88c9d200eb612
 ```
 
 Once confirmed and scanned, you should see votes information and
-current status when running `dao proposal {PROPOSAL_BULLA}`,
-assuming you hold the votes view key.
+current status, assuming you hold the votes view key, by running:
+
+```shell
+$ ./drk dao proposal {PROPOSAL_BULLA}
+
+Proposal parameters
+===================
+Bulla: G9FUrWn6PLieNuPpYdzUmfd1UP9tUVMpimmu7mwMukcU
+DAO Bulla: AWnAra8wXPxKfJ6qBqXt3Kto83RLCrC32wWZCZUMfwgy
+Proposal leaf position: Position(0)
+Proposal transaction hash: 2149d7e3a60be12c96b6c6fc7ba009717d8b229b815dd4006bbe120c31681f38
+Proposal call index: 0
+Creation block window: 28
+Duration: 1 (Block windows)
+
+Invoked contracts:
+        Contract: Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
+        Function: 4
+        Data:
+                Recipient: {YOUR_ADDRESS}
+                Amount: 500000000 (5)
+                Token: {TOKEN2}
+                Spend hook: -
+                User data: -
+                Blind: 8e9ne7...bVGsbH
+
+        Contract: BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
+        Function: 3
+        Data: -
+
+Votes:
+ Transaction                                                      | Tokens | Vote
+------------------------------------------------------------------+--------+------
+ 060468c5676a52a8b59b464dc959906b762a2108fa6f9d0db0b88c9d200eb612 | 40     | Yes
+
+Total tokens votes: 40
+Total tokens Yes votes: 40 (100.00%)
+Total tokens No votes: 0 (0.00%)
+Voting status: Ongoing
+Current proposal outcome: Approved
+```
 
 ## Executing the proposal
 
-Once the block period has passed(~4h) and enough votes have been cast that
-meet the required minimum (quorum), and assuming the yes:no votes ratio
+Once the block period has passed(~4h) and enough votes have been cast
+that meet the required minimum (quorum), and assuming the yes:no votes
 ratio is bigger than the approval ratio, then we are ready to confirm
-the vote. Only DAO members with the executor key can perform this action.
+the vote. Only DAO members with the executor key can perform this
+action.
 
-```
-$ ./drk dao exec {PROPOSAL_BULLA} > dao_anon_transfer_proposal_exec_tx
-$ ./drk broadcast < dao_anon_transfer_proposal_exec_tx
-```
-
-Since in our tutorial the `MLDY` governance tokens we used surpass the
-early execution quorum, we can execute the proposal right away, if we hold
-both the DAO executor and early executor keys:
-
-```
-$ ./drk dao exec --early {PROPOSAL_BULLA} > dao_anon_transfer_proposal_exec_tx
-$ ./drk broadcast < dao_anon_transfer_proposal_exec_tx
+```shell
+$ ./drk dao exec {PROPOSAL_BULLA} > anon_dao_transfer_proposal_exec.tx
 ```
 
-After the proposal has been executed on chain, we will see that
-the DAO balance has been reduced by 5 `WCKD`, if we hold the DAO notes key,
+```shell
+$ ./drk broadcast < anon_dao_transfer_proposal_exec.tx
+
+[mark_tx_spend] Processing transaction: 808b75685d91c766574dd5a3d46206b8e145b29f3647736161d2e2b2db051444
+[mark_tx_spend] Found Money contract in call 1
+[mark_tx_spend] Found Money contract in call 3
+Broadcasting transaction...
+Transaction ID: 808b75685d91c766574dd5a3d46206b8e145b29f3647736161d2e2b2db051444
+```
+
+Since in our tutorial the `ANON` governance tokens we used surpass the
+early execution quorum, we can execute the proposal right away, if we
+hold both the DAO executor and early executor keys:
+
+```shell
+$ ./drk dao exec --early {PROPOSAL_BULLA} > anon_dao_transfer_proposal_exec.tx
+```
+
+```shell
+$ ./drk broadcast < anon_dao_transfer_proposal_exec.tx
+
+[mark_tx_spend] Processing transaction: 808b75685d91c766574dd5a3d46206b8e145b29f3647736161d2e2b2db051444
+[mark_tx_spend] Found Money contract in call 1
+[mark_tx_spend] Found Money contract in call 3
+Broadcasting transaction...
+Transaction ID: 808b75685d91c766574dd5a3d46206b8e145b29f3647736161d2e2b2db051444
+```
+
+After the proposal has been executed on chain, we will see that the DAO
+balance has been reduced by 5 `DAWN`, if we hold the DAO notes key,
 while our own balance has been increased by the same amount:
 
-```
+```shell
 $ ./drk dao balance AnonDAO
+
+ Token ID | Aliases | Balance
+----------+---------+---------
+ {TOKEN2} | DAWN    | 5
+```
+
+```shell
 $ ./drk wallet --balance
+
+ Token ID                                     | Aliases | Balance
+----------------------------------------------+---------+-------------
+ 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 19.93153568
+ {TOKEN1}                                     | ANON    | 40
+ {TOKEN2}                                     | DAWN    | 15
 ```
 
 ## Generic proposal
