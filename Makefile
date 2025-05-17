@@ -186,7 +186,6 @@ clean:
 	$(MAKE) -C src/contract/deployooor clean
 	$(MAKE) -C bin/zkas clean
 	$(MAKE) -C bin/darkfid clean
-	$(MAKE) -C bin/darkfi-mmproxy clean
 	$(MAKE) -C bin/minerd clean
 	$(MAKE) -C bin/drk clean
 	$(MAKE) -C bin/darkirc clean
