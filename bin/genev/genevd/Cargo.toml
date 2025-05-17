@@ -28,7 +28,7 @@ darkfi-serial = "0.4.2"
 blake3 = "1.8.2"
 
 # Event Graph DB
-sled-overlay = "0.1.7"
+sled-overlay = "0.1.8"
 
 # Misc
 async-trait = "0.1.88"

@@ -22,7 +22,7 @@ bs58 = "0.5.1"
 log = "0.4.27"
 num-bigint = "0.4.6"
 rand = "0.8.5"
-sled-overlay = "0.1.7"
+sled-overlay = "0.1.8"
 toml = "0.8.22"
 
 # JSON-RPC

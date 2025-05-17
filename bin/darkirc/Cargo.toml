@@ -24,7 +24,7 @@ darkfi-serial = {version = "0.4.2", features = ["async"]}
 libc = "0.2.172"
 
 # Event Graph DB
-sled-overlay = "0.1.7"
+sled-overlay = "0.1.8"
 
 # TLS
 async-trait = "0.1.88"
