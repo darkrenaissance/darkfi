@@ -112,7 +112,8 @@ pub struct BlockchainNetwork {
     spend_hook: Option<String>,
 
     #[structopt(long)]
-    /// Optional user data to use in the mining reward
+    /// Optional contract user data to use in the mining reward.
+    /// This is not arbitrary data.
     user_data: Option<String>,
 
     #[structopt(long)]

@@ -29,7 +29,8 @@ pow_target = 120
 # Optional contract spend hook to use in the mining reward
 #spend_hook = "YOUR_SPEND_HOOK_HERE"
 
-# Optional user data to use in the mining reward
+# Optional contract user data to use in the mining reward.
+# This is not arbitrary data.
 #user_data = "YOUR_USER_DATA_HERE"
 
 # Skip syncing process and start node right away
@@ -163,7 +164,8 @@ pow_target = 120
 # Optional contract spend hook to use in the mining reward
 #spend_hook = "YOUR_SPEND_HOOK_HERE"
 
-# Optional user data to use in the mining reward
+# Optional contract user data to use in the mining reward.
+# This is not arbitrary data.
 #user_data = "YOUR_USER_DATA_HERE"
 
 # Skip syncing process and start node right away
@@ -304,7 +306,8 @@ recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
 # Optional contract spend hook to use in the mining reward
 #spend_hook = "YOUR_SPEND_HOOK_HERE"
 
-# Optional user data to use in the mining reward
+# Optional contract user data to use in the mining reward.
+# This is not arbitrary data.
 #user_data = "YOUR_USER_DATA_HERE"
 
 # Skip syncing process and start node right away
