@@ -18,12 +18,12 @@
 
 use async_trait::async_trait;
 use log::{debug, error, info};
-use smol::{fs::File, Executor};
+use smol::Executor;
 use std::sync::Arc;
 
 use darkfi::{
     dht::{DhtHandler, DhtNode, DhtRouterItem},
-    geode::{hash_to_string, read_until_filled, MAX_CHUNK_SIZE},
+    geode::hash_to_string,
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -79,6 +79,7 @@ impl_p2p_message!(FudPingReply, "FudPingReply", 0, 0, DEFAULT_METERING_CONFIGURA
 /// Message representing a find file/chunk request from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindRequest {
+    pub info: Option<blake3::Hash>,
     pub key: blake3::Hash,
 }
 impl_p2p_message!(FudFindRequest, "FudFindRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
@@ -202,61 +203,85 @@ impl ProtocolFud {
                 self.fud.update_node(&node).await;
             }
 
-            // Chunk
-            {
-                let chunk_res = self.fud.geode.get_chunk(&request.key).await;
-
-                // TODO: Run geode GC
-
-                if let Ok(chunk_path) = chunk_res {
-                    let mut buf = vec![0u8; MAX_CHUNK_SIZE];
-                    let mut chunk_fd = File::open(&chunk_path).await.unwrap();
-                    let bytes_read = read_until_filled(&mut chunk_fd, &mut buf).await.unwrap();
-                    let chunk_slice = &buf[..bytes_read];
-                    let reply = FudChunkReply { chunk: chunk_slice.to_vec() };
-                    info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk");
-                    let _ = self.channel.send(&reply).await;
-                    continue;
-                }
+            if self.handle_fud_chunk_request(&request).await {
+                continue;
             }
 
-            // File
-            {
-                let file_res = self.fud.geode.get(&request.key).await;
-
-                // TODO: Run geode GC
-
-                if let Ok(chunked_file) = file_res {
-                    // If the file has a single chunk, just reply with the chunk
-                    if chunked_file.len() == 1 {
-                        let chunk_res =
-                            self.fud.geode.get_chunk(&chunked_file.iter().next().unwrap().0).await;
-                        if let Ok(chunk_path) = chunk_res {
-                            let mut buf = vec![0u8; MAX_CHUNK_SIZE];
-                            let mut chunk_fd = File::open(&chunk_path).await.unwrap();
-                            let bytes_read =
-                                read_until_filled(&mut chunk_fd, &mut buf).await.unwrap();
-                            let chunk_slice = &buf[..bytes_read];
-                            let reply = FudChunkReply { chunk: chunk_slice.to_vec() };
-                            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk (file has a single chunk)");
-                            let _ = self.channel.send(&reply).await;
-                            continue;
-                        }
-                    }
-                    // Otherwise reply with the file metadata
-                    let reply = FudFileReply {
-                        chunk_hashes: chunked_file.iter().map(|(chunk, _)| *chunk).collect(),
-                    };
-                    info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending file");
-                    let _ = self.channel.send(&reply).await;
-                    continue;
-                }
+            if self.handle_fud_file_request(&request).await {
+                continue;
             }
 
+            // Request did not match anything we have
             let reply = FudNotFound {};
             info!(target: "fud::ProtocolFud::handle_fud_find_request()", "We do not have {}", hash_to_string(&request.key));
             let _ = self.channel.send(&reply).await;
         }
+    }
+
+    /// If the FudFindRequest matches a chunk we have, handle it.
+    /// Returns true if the chunk was found.
+    async fn handle_fud_chunk_request(&self, request: &FudFindRequest) -> bool {
+        let file_hash = request.info;
+        if file_hash.is_none() {
+            return false;
+        }
+        let file_hash = file_hash.unwrap();
+
+        let file_path = self.fud.hash_to_path(&file_hash).ok().flatten();
+        if file_path.is_none() {
+            return false;
+        }
+        let file_path = file_path.unwrap();
+
+        let chunk = self.fud.geode.get_chunk(&request.key, &file_hash, &file_path).await;
+        if let Ok(chunk) = chunk {
+            // TODO: Run geode GC
+            let reply = FudChunkReply { chunk };
+            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk");
+            let _ = self.channel.send(&reply).await;
+            return true;
+        }
+        false
+    }
+
+    /// If the FudFindRequest matches a file we have, handle it
+    /// Returns true if the file was found.
+    async fn handle_fud_file_request(&self, request: &FudFindRequest) -> bool {
+        let file_path = self.fud.hash_to_path(&request.key).ok().flatten();
+        if file_path.is_none() {
+            return false;
+        }
+        let file_path = file_path.unwrap();
+
+        let chunked_file = self.fud.geode.get(&request.key, &file_path).await.ok();
+        if chunked_file.is_none() {
+            return false;
+        }
+        let chunked_file = chunked_file.unwrap();
+
+        // If the file has a single chunk, just reply with the chunk
+        if chunked_file.len() == 1 {
+            let chunk = self
+                .fud
+                .geode
+                .get_chunk(&chunked_file.iter().next().unwrap().0, &request.key, &file_path)
+                .await;
+            if let Ok(chunk) = chunk {
+                // TODO: Run geode GC
+                let reply = FudChunkReply { chunk };
+                info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk (file has a single chunk)");
+                let _ = self.channel.send(&reply).await;
+                return true;
+            }
+            return false;
+        }
+
+        // Otherwise reply with the file metadata
+        let reply =
+            FudFileReply { chunk_hashes: chunked_file.iter().map(|(chunk, _)| *chunk).collect() };
+        info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending file");
+        let _ = self.channel.send(&reply).await;
+        true
     }
 
     async fn handle_fud_find_nodes_request(self: Arc<Self>) -> Result<()> {

@@ -46,7 +46,7 @@ pub enum FetchReply {
 pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
     info!(target: "fud::fetch_file_task()", "Started background file fetch task");
     loop {
-        let (nodes, file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
+        let (nodes, file_hash, file_path, _) = fud.file_fetch_rx.recv().await.unwrap();
         info!(target: "fud::fetch_file_task()", "Fetching file {}", hash_to_string(&file_hash));
 
         let result = fud.fetch_file_metadata(nodes, file_hash).await;
@@ -69,7 +69,7 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
                         info!(target: "fud::fetch_file_task()", "File fits in a single chunk");
                         let chunk_hash = blake3::hash(&chunk);
                         let _ = fud.geode.insert_file(&file_hash, &[chunk_hash]).await;
-                        match fud.geode.insert_chunk(&chunk).await {
+                        match fud.geode.write_chunk(&file_hash, &file_path, &chunk).await {
                             Ok(_) => {}
                             Err(e) => {
                                 error!(
@@ -104,7 +104,7 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
         let seeders = vec![fud.dht().node().await.into()];
 
         info!(target: "fud::announce_task()", "Verifying seeds...");
-        let seeding_resources = match fud.get_seeding_resources().await {
+        let seeding_resources = match fud.verify_resources(None).await {
             Ok(resources) => resources,
             Err(e) => {
                 error!(target: "fud::announce_task()", "Error while verifying seeding resources: {}", e);

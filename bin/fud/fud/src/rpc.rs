@@ -35,7 +35,6 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         p2p_method::HandlerP2p,
         server::RequestHandler,
-        util::{json_map, json_str},
     },
     system::StoppableTaskPtr,
     util::path::expand_path,
@@ -43,6 +42,7 @@ use darkfi::{
 };
 
 use crate::{
+    event::{self, FudEvent},
     proto::FudAnnounce,
     resource::{Resource, ResourceStatus},
     Fud,
@@ -61,6 +61,7 @@ impl RequestHandler<()> for Fud {
             "list_resources" => self.list_resources(req.id, req.params).await,
             "list_buckets" => self.list_buckets(req.id, req.params).await,
             "list_seeders" => self.list_seeders(req.id, req.params).await,
+            "verify" => self.verify(req.id, req.params).await,
 
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
@@ -116,7 +117,7 @@ impl Fud {
             }
         };
 
-        let (file_hash, _) = match self.geode.insert(fd).await {
+        let (file_hash, chunk_hashes) = match self.geode.insert(fd).await {
             Ok(v) => v,
             Err(e) => {
                 let error_str = format!("Failed inserting file {:?} to geode: {}", path, e);
@@ -124,6 +125,29 @@ impl Fud {
                 return JsonError::new(ErrorCode::InternalError, Some(error_str), id).into()
             }
         };
+
+        // Add path to the sled db
+        if let Err(e) = self
+            .path_tree
+            .insert(file_hash.as_bytes(), path.to_string_lossy().to_string().as_bytes())
+        {
+            error!(target: "fud::put()", "Failed inserting new file into sled: {}", e);
+            return JsonError::new(ErrorCode::InternalError, None, id).into()
+        }
+
+        // Add resource
+        let mut resources_write = self.resources.write().await;
+        resources_write.insert(
+            file_hash,
+            Resource {
+                hash: file_hash,
+                path,
+                status: ResourceStatus::Seeding,
+                chunks_total: chunk_hashes.len() as u64,
+                chunks_downloaded: chunk_hashes.len() as u64,
+            },
+        );
+        drop(resources_write);
 
         // Announce file
         let fud_announce = FudAnnounce { key: file_hash, seeders: vec![self_node.into()] };
@@ -137,7 +161,7 @@ impl Fud {
     // Returns the path where the file will be located once downloaded.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg"], "id": 42}
-    // <-- {"jsonrpc": "2.0", "method": "get", "params": "/home/user/myfile.jpg"}
+    // <-- {"jsonrpc": "2.0", "result": "/home/user/myfile.jpg", "id": 42}
     async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
@@ -186,7 +210,7 @@ impl Fud {
     // Subscribe to download events.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "method": "get", "params": `event`}
+    // <-- {"jsonrpc": "2.0", "result": `event`, "id": 42}
     async fn subscribe(&self, _id: u16, _params: JsonValue) -> JsonResult {
         self.event_sub.clone().into()
     }
@@ -232,7 +256,7 @@ impl Fud {
     }
 
     // RPCAPI:
-    // Returns resources from the database.
+    // Returns resources.
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:13337"]]]], "id": 1}
@@ -326,177 +350,49 @@ impl Fud {
         drop(resources_write);
 
         self.event_publisher
-            .notify(FudEvent::ResourceRemoved(ResourceRemoved { file_hash: hash }))
+            .notify(FudEvent::ResourceRemoved(event::ResourceRemoved { hash }))
             .await;
 
         JsonResponse::new(JsonValue::Array(vec![]), id).into()
     }
-}
 
-#[derive(Clone, Debug)]
-pub struct DownloadStarted {
-    pub file_hash: blake3::Hash,
-    pub file_path: PathBuf,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct ChunkDownloadCompleted {
-    pub file_hash: blake3::Hash,
-    pub chunk_hash: blake3::Hash,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct FileDownloadCompleted {
-    pub file_hash: blake3::Hash,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct DownloadCompleted {
-    pub file_hash: blake3::Hash,
-    pub file_path: PathBuf,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct ResourceRemoved {
-    pub file_hash: blake3::Hash,
-}
-#[derive(Clone, Debug)]
-pub struct ChunkNotFound {
-    pub file_hash: blake3::Hash,
-    pub chunk_hash: blake3::Hash,
-}
-#[derive(Clone, Debug)]
-pub struct FileNotFound {
-    pub file_hash: blake3::Hash,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct MissingChunks {
-    pub file_hash: blake3::Hash,
-    pub resource: Resource,
-}
-#[derive(Clone, Debug)]
-pub struct DownloadError {
-    pub file_hash: blake3::Hash,
-    pub error: String,
-}
-
-#[derive(Clone, Debug)]
-pub enum FudEvent {
-    DownloadStarted(DownloadStarted),
-    ChunkDownloadCompleted(ChunkDownloadCompleted),
-    FileDownloadCompleted(FileDownloadCompleted),
-    DownloadCompleted(DownloadCompleted),
-    ResourceRemoved(ResourceRemoved),
-    ChunkNotFound(ChunkNotFound),
-    FileNotFound(FileNotFound),
-    MissingChunks(MissingChunks),
-    DownloadError(DownloadError),
-}
-
-impl From<DownloadStarted> for JsonValue {
-    fn from(info: DownloadStarted) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("file_path", JsonValue::String(info.file_path.to_string_lossy().to_string())),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<ChunkDownloadCompleted> for JsonValue {
-    fn from(info: ChunkDownloadCompleted) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("chunk_hash", JsonValue::String(hash_to_string(&info.chunk_hash))),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<FileDownloadCompleted> for JsonValue {
-    fn from(info: FileDownloadCompleted) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<DownloadCompleted> for JsonValue {
-    fn from(info: DownloadCompleted) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("file_path", JsonValue::String(info.file_path.to_string_lossy().to_string())),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<ResourceRemoved> for JsonValue {
-    fn from(info: ResourceRemoved) -> JsonValue {
-        json_map([("file_hash", JsonValue::String(hash_to_string(&info.file_hash)))])
-    }
-}
-impl From<ChunkNotFound> for JsonValue {
-    fn from(info: ChunkNotFound) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("chunk_hash", JsonValue::String(hash_to_string(&info.chunk_hash))),
-        ])
-    }
-}
-impl From<FileNotFound> for JsonValue {
-    fn from(info: FileNotFound) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<MissingChunks> for JsonValue {
-    fn from(info: MissingChunks) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("resource", info.resource.into()),
-        ])
-    }
-}
-impl From<DownloadError> for JsonValue {
-    fn from(info: DownloadError) -> JsonValue {
-        json_map([
-            ("file_hash", JsonValue::String(hash_to_string(&info.file_hash))),
-            ("error", JsonValue::String(info.error)),
-        ])
-    }
-}
-impl From<FudEvent> for JsonValue {
-    fn from(event: FudEvent) -> JsonValue {
-        match event {
-            FudEvent::DownloadStarted(info) => {
-                json_map([("event", json_str("download_started")), ("info", info.into())])
-            }
-            FudEvent::ChunkDownloadCompleted(info) => {
-                json_map([("event", json_str("chunk_download_completed")), ("info", info.into())])
-            }
-            FudEvent::FileDownloadCompleted(info) => {
-                json_map([("event", json_str("file_download_completed")), ("info", info.into())])
-            }
-            FudEvent::DownloadCompleted(info) => {
-                json_map([("event", json_str("download_completed")), ("info", info.into())])
-            }
-            FudEvent::ResourceRemoved(info) => {
-                json_map([("event", json_str("resource_removed")), ("info", info.into())])
-            }
-            FudEvent::ChunkNotFound(info) => {
-                json_map([("event", json_str("chunk_not_found")), ("info", info.into())])
-            }
-            FudEvent::FileNotFound(info) => {
-                json_map([("event", json_str("file_not_found")), ("info", info.into())])
-            }
-            FudEvent::MissingChunks(info) => {
-                json_map([("event", json_str("missing_chunks")), ("info", info.into())])
-            }
-            FudEvent::DownloadError(info) => {
-                json_map([("event", json_str("download_error")), ("info", info.into())])
-            }
+    // RPCAPI:
+    // Verifies local files. Takes a list of file hashes as parameters.
+    // An empty list means all known files.
+    // Returns the path where the file will be located once downloaded.
+    //
+    // --> {"jsonrpc": "2.0", "method": "verify", "params": ["1211...abfd"], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": [], "id": 1}
+    async fn verify(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.iter().all(|param| param.is_string()) {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
+        let hashes = if params.is_empty() {
+            None
+        } else {
+            let hashes_str: Vec<String> =
+                params.iter().map(|param| param.get::<String>().unwrap().clone()).collect();
+            let hashes: Result<Vec<blake3::Hash>> = hashes_str
+                .into_iter()
+                .map(|hash_str| {
+                    let mut buf = [0u8; 32];
+                    bs58::decode(hash_str).onto(&mut buf)?;
+                    Ok(blake3::Hash::from_bytes(buf))
+                })
+                .collect();
+            if hashes.is_err() {
+                return JsonError::new(ErrorCode::InvalidParams, None, id).into();
+            }
+            Some(hashes.unwrap())
+        };
+
+        if let Err(e) = self.verify_resources(hashes).await {
+            error!(target: "fud::verify()", "Could not verify resources: {}", e);
+            return JsonError::new(ErrorCode::InternalError, None, id).into();
+        }
+
+        JsonResponse::new(JsonValue::Array(vec![]), id).into()
     }
 }
 
@@ -504,10 +400,16 @@ impl Fud {
     /// Handle `get` RPC request
     pub async fn handle_get(&self, file_hash: &blake3::Hash, file_path: &PathBuf) -> Result<()> {
         let self_node = self.dht().node().await;
+        let mut closest_nodes = vec![];
+
+        // Add path to the sled db
+        self.path_tree
+            .insert(file_hash.as_bytes(), file_path.to_string_lossy().to_string().as_bytes())?;
 
         // Add resource to `self.resources`
         let resource = Resource {
             hash: *file_hash,
+            path: file_path.clone(),
             status: ResourceStatus::Discovering,
             chunks_total: 0,
             chunks_downloaded: 0,
@@ -516,28 +418,37 @@ impl Fud {
         resources_write.insert(*file_hash, resource.clone());
         drop(resources_write);
 
+        // Send a DownloadStarted event
         self.event_publisher
-            .notify(FudEvent::DownloadStarted(DownloadStarted {
-                file_hash: *file_hash,
-                file_path: file_path.clone(),
+            .notify(FudEvent::DownloadStarted(event::DownloadStarted {
+                hash: *file_hash,
                 resource,
             }))
             .await;
 
-        let mut closest_nodes = vec![];
-
-        let chunked_file = match self.geode.get(file_hash).await {
+        // Try to get the chunked file from geode
+        let chunked_file = match self.geode.get(file_hash, file_path).await {
+            // We already know the list of chunk hashes for this file
             Ok(v) => v,
+            // The metadata in geode is invalid or corrupted
             Err(Error::GeodeNeedsGc) => todo!(),
+            // If we could not find the file in geode, get the file metadata from the network
             Err(Error::GeodeFileNotFound) => {
+                // Find nodes close to the file hash
                 info!(target: "self::get()", "Requested file {} not found in Geode, triggering fetch", hash_to_string(file_hash));
                 closest_nodes = self.lookup_nodes(file_hash).await.unwrap_or_default();
-                self.file_fetch_tx.send((closest_nodes.clone(), *file_hash, Ok(()))).await.unwrap();
+
+                // Fetch file metadata (list of chunk hashes)
+                self.file_fetch_tx
+                    .send((closest_nodes.clone(), *file_hash, file_path.clone(), Ok(())))
+                    .await
+                    .unwrap();
                 info!(target: "self::get()", "Waiting for background file fetch task...");
                 let (i_file_hash, status) = self.file_fetch_end_rx.recv().await.unwrap();
                 match status {
-                    Ok(()) => self.geode.get(&i_file_hash).await.unwrap(),
-
+                    // The file metadata was found and inserted into geode
+                    Ok(()) => self.geode.get(&i_file_hash, file_path).await.unwrap(),
+                    // We could not find the file metadata
                     Err(Error::GeodeFileRouteNotFound) => {
                         // Set resource status to `Incomplete` and send FudEvent::FileNotFound
                         let mut resources_write = self.resources.write().await;
@@ -545,8 +456,8 @@ impl Fud {
                             resource.status = ResourceStatus::Incomplete;
 
                             self.event_publisher
-                                .notify(FudEvent::FileNotFound(FileNotFound {
-                                    file_hash: *file_hash,
+                                .notify(FudEvent::FileNotFound(event::FileNotFound {
+                                    hash: *file_hash,
                                     resource: resource.clone(),
                                 }))
                                 .await;
@@ -581,60 +492,57 @@ impl Fud {
         };
         drop(resources_write);
 
+        // Send a FileDownloadCompleted event
         self.event_publisher
-            .notify(FudEvent::FileDownloadCompleted(FileDownloadCompleted {
-                file_hash: *file_hash,
+            .notify(FudEvent::FileDownloadCompleted(event::FileDownloadCompleted {
+                hash: *file_hash,
                 resource: resource.clone(),
             }))
             .await;
 
+        // If the file is already complete, we don't need to download any chunk
         if chunked_file.is_complete() {
+            // Announce the file
             let self_announce =
                 FudAnnounce { key: *file_hash, seeders: vec![self_node.clone().into()] };
             let _ = self.announce(file_hash, &self_announce, self.seeders_router.clone()).await;
 
-            return match self.geode.assemble_file(file_hash, &chunked_file, file_path).await {
-                Ok(_) => {
-                    // Set resource status to `Seeding`
-                    let mut resources_write = self.resources.write().await;
-                    let resource = match resources_write.get_mut(file_hash) {
-                        Some(resource) => {
-                            resource.status = ResourceStatus::Seeding;
-                            resource.chunks_downloaded = chunked_file.len() as u64;
-                            resource.clone()
-                        }
-                        None => return Ok(()), // Resource was removed, abort
-                    };
-                    drop(resources_write);
-
-                    self.event_publisher
-                        .notify(FudEvent::DownloadCompleted(DownloadCompleted {
-                            file_hash: *file_hash,
-                            file_path: file_path.clone(),
-                            resource,
-                        }))
-                        .await;
-
-                    Ok(())
+            // Set resource status to `Seeding`
+            let mut resources_write = self.resources.write().await;
+            let resource = match resources_write.get_mut(file_hash) {
+                Some(resource) => {
+                    resource.status = ResourceStatus::Seeding;
+                    resource.chunks_downloaded = chunked_file.len() as u64;
+                    resource.clone()
                 }
-                Err(e) => {
-                    error!(target: "fud::handle_get()", "{}", e);
-                    self.event_publisher
-                        .notify(FudEvent::DownloadError(DownloadError {
-                            file_hash: *file_hash,
-                            error: e.to_string(),
-                        }))
-                        .await;
-
-                    Err(e)
-                }
+                None => return Ok(()), // Resource was removed, abort
             };
+            drop(resources_write);
+
+            // Send a DownloadCompleted event
+            self.event_publisher
+                .notify(FudEvent::DownloadCompleted(event::DownloadCompleted {
+                    hash: *file_hash,
+                    resource,
+                }))
+                .await;
+
+            return Ok(());
         }
 
+        // Find nodes close to the file hash if we didn't previously fetched them
         if closest_nodes.is_empty() {
             closest_nodes = self.lookup_nodes(file_hash).await.unwrap_or_default();
         }
-        let seeders = self.fetch_seeders(&closest_nodes, file_hash).await;
+
+        // Find seeders and remove ourselves from the result
+        let seeders = self
+            .fetch_seeders(&closest_nodes, file_hash)
+            .await
+            .iter()
+            .filter(|seeder| seeder.node.id != self_node.id)
+            .cloned()
+            .collect();
 
         // List missing chunks
         let mut missing_chunks = HashSet::new();
@@ -645,9 +553,10 @@ impl Fud {
         }
 
         // Fetch missing chunks from seeders
-        self.fetch_chunks(file_hash, &missing_chunks, &seeders).await?;
+        self.fetch_chunks(file_path, file_hash, &missing_chunks, &seeders).await?;
 
-        let chunked_file = match self.geode.get(file_hash).await {
+        // Get chunked file from geode
+        let chunked_file = match self.geode.get(file_hash, file_path).await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "fud::handle_get()", "{}", e);
@@ -669,12 +578,17 @@ impl Fud {
             };
             drop(resources_write);
 
+            // Send a MissingChunks event
             self.event_publisher
-                .notify(FudEvent::MissingChunks(MissingChunks { file_hash: *file_hash, resource }))
+                .notify(FudEvent::MissingChunks(event::MissingChunks {
+                    hash: *file_hash,
+                    resource,
+                }))
                 .await;
             return Ok(());
         }
 
+        // Announce the file
         let self_announce =
             FudAnnounce { key: *file_hash, seeders: vec![self_node.clone().into()] };
         let _ = self.announce(file_hash, &self_announce, self.seeders_router.clone()).await;
@@ -691,26 +605,13 @@ impl Fud {
         };
         drop(resources_write);
 
-        match self.geode.assemble_file(file_hash, &chunked_file, file_path).await {
-            Ok(_) => {
-                self.event_publisher
-                    .notify(FudEvent::DownloadCompleted(DownloadCompleted {
-                        file_hash: *file_hash,
-                        file_path: file_path.clone(),
-                        resource,
-                    }))
-                    .await;
-            }
-            Err(e) => {
-                error!(target: "fud::handle_get()", "{}", e);
-                self.event_publisher
-                    .notify(FudEvent::DownloadError(DownloadError {
-                        file_hash: *file_hash,
-                        error: e.to_string(),
-                    }))
-                    .await;
-            }
-        };
+        // Send a DownloadCompleted event
+        self.event_publisher
+            .notify(FudEvent::DownloadCompleted(event::DownloadCompleted {
+                hash: *file_hash,
+                resource,
+            }))
+            .await;
 
         Ok(())
     }

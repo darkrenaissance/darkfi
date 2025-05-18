@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "sled-overlay"]}
 darkfi-serial = {version = "0.4.2", features = ["hash"]}
 
 # Misc
@@ -29,6 +29,9 @@ signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
 smol = "2.0.2"
+
+# Database
+sled-overlay = "0.1.8"
 
 # Argument parsing
 serde = {version = "1.0.219", features = ["derive"]}

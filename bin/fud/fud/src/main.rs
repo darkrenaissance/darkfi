@@ -21,6 +21,7 @@ use futures::{future::FutureExt, pin_mut, select};
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom, RngCore};
+use sled_overlay::sled;
 use smol::{
     channel,
     fs::{File, OpenOptions},
@@ -56,8 +57,8 @@ use darkfi::{
     Error, Result,
 };
 
+use event::{ChunkDownloadCompleted, ChunkNotFound, FudEvent, ResourceUpdated};
 use resource::{Resource, ResourceStatus};
-use rpc::{ChunkDownloadCompleted, ChunkNotFound, FudEvent};
 use tasks::FetchReply;
 
 /// P2P protocols
@@ -68,6 +69,7 @@ use proto::{
     FudPingRequest, ProtocolFud,
 };
 
+mod event;
 mod resource;
 mod rpc;
 mod tasks;
@@ -101,7 +103,7 @@ struct Args {
     /// Default path to store downloaded files (defaults to <base_dir>/downloads)
     downloads_path: Option<String>,
 
-    #[structopt(short, long, default_value = "60")]
+    #[structopt(long, default_value = "60")]
     /// Chunk transfer timeout in seconds
     chunk_timeout: u64,
 
@@ -140,10 +142,13 @@ pub struct Fud {
     /// Resources (current status of all downloads/seeds)
     resources: Arc<RwLock<HashMap<blake3::Hash, Resource>>>,
 
+    /// Sled tree containing "resource hash -> path on the filesystem"
+    path_tree: sled::Tree,
+
     get_tx: channel::Sender<(u16, blake3::Hash, PathBuf, Result<()>)>,
     get_rx: channel::Receiver<(u16, blake3::Hash, PathBuf, Result<()>)>,
-    file_fetch_tx: channel::Sender<(Vec<DhtNode>, blake3::Hash, Result<()>)>,
-    file_fetch_rx: channel::Receiver<(Vec<DhtNode>, blake3::Hash, Result<()>)>,
+    file_fetch_tx: channel::Sender<(Vec<DhtNode>, blake3::Hash, PathBuf, Result<()>)>,
+    file_fetch_rx: channel::Receiver<(Vec<DhtNode>, blake3::Hash, PathBuf, Result<()>)>,
     file_fetch_end_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     file_fetch_end_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
 
@@ -242,13 +247,37 @@ impl Fud {
     /// Skipped if we have no external address.
     async fn init(&self) -> Result<()> {
         info!(target: "fud::init()", "Finding resources...");
-        let hashes = self.geode.list_files().await?;
         let mut resources_write = self.resources.write().await;
-        for hash in hashes {
+        for result in self.path_tree.iter() {
+            if result.is_err() {
+                continue;
+            }
+
+            // Parse hash
+            let (hash, path) = result.unwrap();
+            let hash_bytes: [u8; 32] = match hash.to_vec().try_into() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let hash = blake3::Hash::from_bytes(hash_bytes);
+
+            // Parse path
+            let path_bytes = path.to_vec();
+            let path_str = match std::str::from_utf8(&path_bytes) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let path: PathBuf = match expand_path(path_str) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            // Add resource
             resources_write.insert(
                 hash,
                 Resource {
                     hash,
+                    path,
                     status: ResourceStatus::Incomplete,
                     chunks_total: 0,
                     chunks_downloaded: 0,
@@ -258,7 +287,7 @@ impl Fud {
         drop(resources_write);
 
         info!(target: "fud::init()", "Verifying resources...");
-        let resources = self.get_seeding_resources().await?;
+        let resources = self.verify_resources(None).await?;
 
         let self_node = self.dht().node().await;
 
@@ -281,11 +310,23 @@ impl Fud {
         Ok(())
     }
 
+    /// Get resource path from hash using the sled db
+    fn hash_to_path(&self, hash: &blake3::Hash) -> Result<Option<PathBuf>> {
+        if let Some(value) = self.path_tree.get(hash.as_bytes())? {
+            let path: PathBuf = expand_path(std::str::from_utf8(&value)?)?;
+            return Ok(Some(path));
+        }
+
+        Ok(None)
+    }
+
     /// Verify if resources are complete and uncorrupted.
     /// If a resource is incomplete or corrupted, its status is changed to Incomplete.
     /// If a resource is complete, its status is changed to Seeding.
+    /// Takes an optional list of hashes.
+    /// If no hash is given (None), it verifies all resources.
     /// Returns the list of verified and uncorrupted/complete seeding resources.
-    async fn get_seeding_resources(&self) -> Result<Vec<Resource>> {
+    async fn verify_resources(&self, hashes: Option<Vec<blake3::Hash>>) -> Result<Vec<Resource>> {
         let mut resources_write = self.resources.write().await;
 
         let update_resource =
@@ -301,10 +342,23 @@ impl Fud {
                     Some(chunked_file) => chunked_file.local_chunks() as u64,
                     None => 0,
                 };
+
+                self.event_publisher
+                    .notify(FudEvent::ResourceUpdated(ResourceUpdated {
+                        hash: resource.hash,
+                        resource: resource.clone(),
+                    }))
+                    .await;
             };
 
         let mut seeding_resources: Vec<Resource> = vec![];
         for (_, mut resource) in resources_write.iter_mut() {
+            if let Some(ref hashes_list) = hashes {
+                if !hashes_list.contains(&resource.hash) {
+                    continue;
+                }
+            }
+
             match resource.status {
                 ResourceStatus::Seeding => {}
                 ResourceStatus::Incomplete => {}
@@ -312,7 +366,14 @@ impl Fud {
             };
 
             // Make sure the resource is not corrupted or incomplete
-            let chunked_file = match self.geode.get(&resource.hash).await {
+            let resource_path = match self.hash_to_path(&resource.hash) {
+                Ok(Some(v)) => v,
+                Ok(None) | Err(_) => {
+                    update_resource(&mut resource, ResourceStatus::Incomplete, None).await;
+                    continue;
+                }
+            };
+            let chunked_file = match self.geode.get(&resource.hash, &resource_path).await {
                 Ok(v) => v,
                 Err(_) => {
                     update_resource(&mut resource, ResourceStatus::Incomplete, None).await;
@@ -388,6 +449,7 @@ impl Fud {
     /// Fetch chunks for a file from `seeders`
     async fn fetch_chunks(
         &self,
+        file_path: &PathBuf,
         file_hash: &blake3::Hash,
         chunk_hashes: &HashSet<blake3::Hash>,
         seeders: &HashSet<DhtRouterItem>,
@@ -407,6 +469,7 @@ impl Fud {
                     continue;
                 }
             };
+            let mut chunks_to_query = remaining_chunks.clone();
             info!("Requesting chunks from seeder {}", hash_to_string(&seeder.node.id));
             loop {
                 let msg_subsystem = channel.message_subsystem();
@@ -414,8 +477,6 @@ impl Fud {
                 msg_subsystem.add_dispatch::<FudNotFound>().await;
                 let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
                 let msg_subscriber_notfound = channel.subscribe_msg::<FudNotFound>().await.unwrap();
-
-                let mut chunks_to_query = remaining_chunks.clone();
 
                 // Select a chunk to request
                 let mut chunk_hash: Option<blake3::Hash> = None;
@@ -428,8 +489,10 @@ impl Fud {
                     break; // Switch to another seeder
                 }
                 let chunk_hash = chunk_hash.unwrap();
+                chunks_to_query.remove(&chunk_hash);
 
-                let send_res = channel.send(&FudFindRequest { key: chunk_hash }).await;
+                let send_res =
+                    channel.send(&FudFindRequest { info: Some(*file_hash), key: chunk_hash }).await;
                 if let Err(e) = send_res {
                     warn!(target: "fud::fetch_chunks()", "Error while sending FudFindRequest: {}", e);
                     break; // Switch to another seeder
@@ -449,10 +512,9 @@ impl Fud {
                             warn!(target: "fud::fetch_chunks()", "Error waiting for chunk reply: {}", e);
                             break; // Switch to another seeder
                         }
-                        chunks_to_query.remove(&chunk_hash);
                         let reply = chunk_reply.unwrap();
 
-                        match self.geode.insert_chunk(&reply.chunk).await {
+                        match self.geode.write_chunk(file_hash, file_path, &reply.chunk).await {
                             Ok(inserted_hash) => {
                                 if inserted_hash != chunk_hash {
                                     warn!("Received chunk does not match requested chunk");
@@ -461,7 +523,7 @@ impl Fud {
                                     continue; // Skip to next chunk, will retry this chunk later
                                 }
 
-                                // Upade resource `chunks_downloaded`
+                                // Update resource `chunks_downloaded`
                                 let mut resources_write = self.resources.write().await;
                                 let resource = match resources_write.get_mut(file_hash) {
                                     Some(resource) => {
@@ -476,7 +538,7 @@ impl Fud {
                                 info!(target: "fud::fetch_chunks()", "Received chunk {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
                                 self.event_publisher
                                     .notify(FudEvent::ChunkDownloadCompleted(ChunkDownloadCompleted {
-                                        file_hash: *file_hash,
+                                        hash: *file_hash,
                                         chunk_hash,
                                         resource,
                                     }))
@@ -498,11 +560,10 @@ impl Fud {
                         info!(target: "fud::fetch_chunks()", "Received NOTFOUND {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
                         self.event_publisher
                             .notify(FudEvent::ChunkNotFound(ChunkNotFound {
-                                file_hash: *file_hash,
+                                hash: *file_hash,
                                 chunk_hash,
                             }))
                         .await;
-                        chunks_to_query.remove(&chunk_hash);
                     }
                 };
 
@@ -593,7 +654,8 @@ impl Fud {
                     let msg_subscriber_notfound =
                         channel.subscribe_msg::<FudNotFound>().await.unwrap();
 
-                    let send_res = channel.send(&FudFindRequest { key: file_hash }).await;
+                    let send_res =
+                        channel.send(&FudFindRequest { info: None, key: file_hash }).await;
                     if let Err(e) = send_res {
                         warn!(target: "fud::fetch_file_metadata()", "Error while sending FudFindRequest: {}", e);
                         msg_subscriber_chunk.unsubscribe().await;
@@ -697,8 +759,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Hashmap used for routing
     let seeders_router = Arc::new(RwLock::new(HashMap::new()));
 
+    // Sled database init
+    info!("Instantiating database");
+    let sled_db = sled::open(basedir.join("db"))?;
+
     info!("Instantiating Geode instance");
-    let geode = Geode::new(&basedir).await?;
+    let geode = Geode::new(&basedir /*, sled_db, "geode"*/).await?;
 
     info!("Instantiating P2P network");
     let net_settings: NetSettings = args.net.into();
@@ -771,6 +837,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         downloads_path,
         chunk_timeout: args.chunk_timeout,
         dht: dht.clone(),
+        path_tree: sled_db.open_tree("path")?,
         resources: Arc::new(RwLock::new(HashMap::new())),
         get_tx,
         get_rx,

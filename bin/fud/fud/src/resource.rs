@@ -17,6 +17,7 @@
  */
 
 use darkfi::{geode::hash_to_string, rpc::util::json_map};
+use std::path::PathBuf;
 use tinyjson::JsonValue;
 
 #[derive(Clone, Debug)]
@@ -30,6 +31,7 @@ pub enum ResourceStatus {
 #[derive(Clone, Debug)]
 pub struct Resource {
     pub hash: blake3::Hash,
+    pub path: PathBuf,
     pub status: ResourceStatus,
     pub chunks_total: u64,
     pub chunks_downloaded: u64,
@@ -39,6 +41,13 @@ impl From<Resource> for JsonValue {
     fn from(rs: Resource) -> JsonValue {
         json_map([
             ("hash", JsonValue::String(hash_to_string(&rs.hash))),
+            (
+                "path",
+                JsonValue::String(match rs.path.into_os_string().into_string() {
+                    Ok(path) => path,
+                    Err(_) => "".to_string(),
+                }),
+            ),
             (
                 "status",
                 JsonValue::String(
