@@ -300,7 +300,19 @@ impl ExplorerService {
                 idx as u8,
             )?;
 
-            let metadata = runtime.metadata(&payload)?;
+            // TODO: This is duck taping so explorer doesn't error out and hang.
+            // This whole process needs to be refactored, as explorer doesn't keep
+            // state, therefore this can fail. Apart from that, exec and apply
+            // contract functions are not counted in the gas consumption.
+            let Ok(metadata) = runtime.metadata(&payload) else {
+                return Ok(GasData {
+                    paid: 0,
+                    wasm: 0,
+                    zk_circuits: 0,
+                    signatures: 0,
+                    deployments: 0,
+                })
+            };
 
             // Decode the metadata retrieved from the execution
             let mut decoder = Cursor::new(&metadata);
