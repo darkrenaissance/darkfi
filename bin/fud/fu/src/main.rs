@@ -72,6 +72,9 @@ enum Subcmd {
         file: String,
     },
 
+    /// List resources
+    Ls {},
+
     /// Watch
     Watch {},
 
@@ -86,6 +89,12 @@ enum Subcmd {
 
     /// Get the router state
     ListSeeders {},
+
+    /// Verify local files
+    Verify {
+        /// File hashes
+        files: Option<Vec<String>>,
+    },
 }
 
 struct Fu {
@@ -172,7 +181,7 @@ impl Fu {
                     let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
                     let info =
                         params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
-                    let hash = info.get("file_hash").unwrap().get::<String>().unwrap();
+                    let hash = info.get("hash").unwrap().get::<String>().unwrap();
                     if *hash != file_hash_ {
                         continue;
                     }
@@ -183,7 +192,12 @@ impl Fu {
                             print_progress_bar(info);
                         }
                         "download_completed" => {
-                            let file_path = info.get("file_path").unwrap().get::<String>().unwrap();
+                            let resource = info
+                                .get("resource")
+                                .unwrap()
+                                .get::<HashMap<String, JsonValue>>()
+                                .unwrap();
+                            let file_path = resource.get("path").unwrap().get::<String>().unwrap();
                             print_progress_bar(info);
                             println!("\nDownload completed:\n{}", file_path);
                             return Ok(());
@@ -235,6 +249,30 @@ impl Fu {
             }
             _ => Err(Error::ParseFailed("File ID is not a string")),
         }
+    }
+
+    async fn list_resources(&self) -> Result<()> {
+        let req = JsonRequest::new("list_resources", JsonValue::Array(vec![]));
+        let rep = self.rpc_client.request(req).await?;
+
+        let resources: Vec<JsonValue> = rep.clone().try_into().unwrap();
+
+        for rs in resources.iter() {
+            let resource = rs.get::<HashMap<String, JsonValue>>().unwrap();
+            let path = resource.get("path").unwrap().get::<String>().unwrap().as_str();
+            let hash = resource.get("hash").unwrap().get::<String>().unwrap().as_str();
+            let chunks_downloaded =
+                *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap() as usize;
+            let chunks_total =
+                *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
+            let status = resource.get("status").unwrap().get::<String>().unwrap().as_str();
+            println!("{}", path);
+            println!("\tID: {}", hash);
+            println!("\tStatus: {}", status);
+            println!("\tChunks: {}/{}", chunks_downloaded, chunks_total);
+        }
+
+        Ok(())
     }
 
     async fn list_buckets(&self) -> Result<()> {
@@ -424,7 +462,8 @@ impl Fu {
                         "chunk_download_completed" |
                         "download_completed" |
                         "missing_chunks" |
-                        "file_not_found" => {
+                        "file_not_found" |
+                        "resource_updated" => {
                             let resource = info
                                 .get("resource")
                                 .unwrap()
@@ -434,7 +473,7 @@ impl Fu {
                         }
                         "resource_removed" => {
                             {
-                                let hash = info.get("file_hash").unwrap().get::<String>().unwrap();
+                                let hash = info.get("hash").unwrap().get::<String>().unwrap();
                                 let mut resources_write = resources.write().await;
                                 let i = resources_write.iter().position(|r| {
                                     r.get("hash").unwrap().get::<String>().unwrap() == hash
@@ -475,6 +514,13 @@ impl Fu {
         self.rpc_client.request(req).await?;
         Ok(())
     }
+
+    async fn verify(&self, files: Option<Vec<String>>) -> Result<()> {
+        let files = files.unwrap_or_default().into_iter().map(JsonValue::String).collect();
+        let req = JsonRequest::new("verify", JsonValue::Array(files));
+        self.rpc_client.request(req).await?;
+        Ok(())
+    }
 }
 
 fn main() -> Result<()> {
@@ -493,10 +539,12 @@ fn main() -> Result<()> {
             match args.command {
                 Subcmd::Get { file, name } => fu.get(file, name, ex.clone()).await,
                 Subcmd::Put { file } => fu.put(file).await,
+                Subcmd::Ls {} => fu.list_resources().await,
                 Subcmd::Watch {} => fu.watch(ex.clone()).await,
                 Subcmd::Rm { hash } => fu.remove(hash).await,
                 Subcmd::ListBuckets {} => fu.list_buckets().await,
                 Subcmd::ListSeeders {} => fu.list_seeders().await,
+                Subcmd::Verify { files } => fu.verify(files).await,
             }?;
 
             Ok(())
