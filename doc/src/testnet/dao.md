@@ -96,7 +96,7 @@ we can now import it into our wallet:
 ```shell
 $ ./drk dao import AnonDAO < anon_dao.toml
 
-Importing "AnonDAO" DAO into the walle
+Importing "AnonDAO" DAO into the wallet
 ```
 
 ```shell
@@ -147,7 +147,7 @@ $ ./drk dao mint AnonDAO > anon_dao_mint.tx
 ```
 
 ```shell
-$ ./drk broadcast < dao_anon_mint.tx
+$ ./drk broadcast < anon_dao_mint.tx
 
 [mark_tx_spend] Processing transaction: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
 [mark_tx_spend] Found Money contract in call 1
