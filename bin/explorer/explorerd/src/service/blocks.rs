@@ -22,13 +22,18 @@ use tinyjson::JsonValue;
 
 use darkfi::{
     blockchain::{
-        BlockInfo, BlockchainOverlay, HeaderHash, SLED_BLOCK_DIFFICULTY_TREE,
-        SLED_BLOCK_ORDER_TREE, SLED_BLOCK_TREE,
+        block_store::append_tx_to_merkle_tree, BlockInfo, BlockchainOverlay, HeaderHash,
+        SLED_BLOCK_DIFFICULTY_TREE, SLED_BLOCK_ORDER_TREE, SLED_BLOCK_TREE,
     },
+    runtime::vm_runtime::Runtime,
     util::time::Timestamp,
     Error, Result,
 };
-use darkfi_sdk::{crypto::schnorr::Signature, tx::TransactionHash};
+use darkfi_sdk::{
+    crypto::{schnorr::Signature, MerkleTree},
+    tx::TransactionHash,
+};
+use darkfi_serial::AsyncEncodable;
 
 use crate::{error::ExplorerdError, ExplorerService};
 
@@ -114,24 +119,59 @@ impl ExplorerService {
     ///
     /// This function processes each transaction in the block, calculating and updating the
     /// latest [`GasMetrics`] for non-genesis blocks and for transactions that are not
-    /// PoW rewards. After processing all transactions, the block is permanently persisted to
+    /// PoW rewards. PoW reward transactions update the contract runtime state as required.
+    /// After processing all transactions, the block is permanently persisted to
     /// the explorer database.
     pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
         let blockchain_overlay = BlockchainOverlay::new(&self.db.blockchain)?;
+        let mut tree = MerkleTree::new(1);
 
-        // Initialize collections to hold gas data and transactions that have gas data
+        // Initialize collections that store gas related data
         let mut tx_gas_data = Vec::with_capacity(block.txs.len());
         let mut txs_hashes_with_gas_data = Vec::with_capacity(block.txs.len());
 
-        // Calculate gas data for non-PoW reward transactions and non-genesis blocks
-        for (i, tx) in block.txs.iter().enumerate() {
-            if !tx.is_pow_reward() && block.header.height != 0 {
-                tx_gas_data.insert(i, self.calculate_tx_gas_data(tx, false).await?);
-                txs_hashes_with_gas_data.insert(i, tx.hash());
+        // Apply transactions to WASM runtime for PoW rewards or calculate fees
+        for (idx, tx) in block.txs.iter().enumerate() {
+            // Apply PoW reward transactions to update contract runtime state
+            if tx.is_pow_reward() {
+                let mut payload = vec![];
+                tx.calls.encode_async(&mut payload).await?;
+
+                let call = &tx.calls[0];
+                let wasm =
+                    blockchain_overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+                let block_target = self.db.blockchain.blocks.get_last()?.0 + 1;
+
+                let mut runtime = Runtime::new(
+                    &wasm,
+                    blockchain_overlay.clone(),
+                    call.data.contract_id,
+                    block.header.height,
+                    block_target,
+                    tx.hash(),
+                    0,
+                )?;
+
+                // Execute and apply state changes
+                let mut state_update = vec![call.data.data[0]];
+                state_update.append(&mut runtime.exec(&payload)?);
+                runtime.apply(&state_update)?;
+
+                // Append transaction hash to the Merkle tree
+                append_tx_to_merkle_tree(&mut tree, tx);
+
+                // No gas calculations needed for PoW rewards, proceed to next transaction
+                continue;
+            }
+
+            // Calculate gas data for non-PoW reward transactions and non-genesis blocks
+            if block.header.height != 0 {
+                tx_gas_data.insert(idx, self.calculate_tx_gas_data(tx, true).await?);
+                txs_hashes_with_gas_data.insert(idx, tx.hash());
             }
         }
 
-        // If the block contains transaction gas data, insert the gas metrics into the metrics store
+        // Insert gas metrics into the store
         if !tx_gas_data.is_empty() {
             self.db.metrics_store.insert_gas_metrics(
                 block.header.height,

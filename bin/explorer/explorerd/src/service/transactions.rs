@@ -265,6 +265,10 @@ impl ExplorerService {
         // Index of the Fee-paying call
         let fee_call_idx = 0;
 
+        // Write the transaction calls payload data
+        let mut payload = vec![];
+        tx.calls.encode_async(&mut payload).await?;
+
         // Map of ZK proof verifying keys for the transaction
         let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
         for call in &tx.calls {
@@ -278,18 +282,13 @@ impl ExplorerService {
 
         // Iterate over all calls to get the metadata
         for (idx, call) in tx.calls.iter().enumerate() {
-            // Transaction must not contain a Money::PoWReward(0x02) call
+            // Transaction must not contain a Pow reward call
             if call.data.is_money_pow_reward() {
-                error!(target: "block_explorer::calculate_tx_gas_data", "Reward transaction detected");
+                error!(target: "explorerd::calculate_tx_gas_data", "Reward transaction detected");
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
 
-            // Write the actual payload data
-            let mut payload = vec![];
-            tx.calls.encode_async(&mut payload).await?;
-
             let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
-
             let mut runtime = Runtime::new(
                 &wasm,
                 overlay.clone(),
@@ -352,7 +351,14 @@ impl ExplorerService {
             zkp_table.push(zkp_pub);
             sig_table.push(sig_pub);
 
-            // Contracts are not included within blocks. They need to be deployed off-chain so that they can be accessed and utilized for fee data computation
+            // Execute the contract
+            let mut state_update = vec![call.data.data[0]];
+            state_update.append(&mut runtime.exec(&payload)?);
+
+            // Apply contract state update
+            runtime.apply(&state_update)?;
+
+            // Contracts are not included within blocks. They need to be deployed so that they can be accessed and utilized for fee data computation
             if call.data.is_deployment()
             /* DeployV1 */
             {
