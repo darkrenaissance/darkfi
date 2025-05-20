@@ -45,7 +45,7 @@ use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
 const MEMORY: &str = "memory";
 
 /// Gas limit for a single contract call (Single WASM instance)
-const GAS_LIMIT: u64 = 400_000_000;
+pub const GAS_LIMIT: u64 = 400_000_000;
 
 // ANCHOR: contract-section
 #[derive(Clone, Copy, PartialEq)]

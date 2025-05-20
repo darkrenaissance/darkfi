@@ -43,7 +43,7 @@ use crate::{
     runtime::vm_runtime::Runtime,
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
-        consensus::{Consensus, Fork, Proposal, GAS_LIMIT_UNPROPOSED_TXS},
+        consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
         fees::{circuit_gas_use, compute_fee, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
     },
@@ -997,8 +997,12 @@ pub async fn verify_transactions(
         let accumulated_gas_usage = total_gas_used + tx_gas_used;
 
         // Check gas limit - if accumulated gas used exceeds it, break out of loop
-        if accumulated_gas_usage > GAS_LIMIT_UNPROPOSED_TXS {
-            warn!(target: "validator::verification::verify_transactions", "Transaction {} exceeds configured transaction gas limit: {} - {}", tx.hash(), accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS);
+        if accumulated_gas_usage > BLOCK_GAS_LIMIT {
+            warn!(
+                target: "validator::verification::verify_transactions",
+                "Transaction {} exceeds configured transaction gas limit: {} - {}",
+                tx.hash(), accumulated_gas_usage, BLOCK_GAS_LIMIT,
+            );
             erroneous_txs.push(tx.clone());
             overlay.lock().unwrap().revert_to_checkpoint()?;
             break

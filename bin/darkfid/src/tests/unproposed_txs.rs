@@ -19,20 +19,16 @@
 //! Test cases for unproprosed transactions.
 //!
 //! The following are supported test cases:
-//! - Verifying the processing of unproposed transactions that are within the unproposed transactions gas limit.
-//! - Verifying the processing of unproposed transactions that exceed the unproposed transactions gas limit.
+//! - Verifying the processing of unproposed transactions that are within the block transactions gas limit.
+//! - Verifying the processing of unproposed transactions that exceed the block transactions gas limit.
 //!
-//! The tests were written with a 'GAS_LIMIT_UNPROPOSED_TXS' set to `23_822_290 * 50`. The number `23_822_290` is derived
-//! from the average gas used per transaction, yielding an overall limit of 1_191_114_500 for the pool
-//! of unproposed transactions.
-//!
-//! Please update the test to reflect any changes to the unproposed transactions gas limit value.
+//! Please update the test to reflect any changes to the block transactions gas limit value.
 
 use darkfi::Result;
 use std::sync::Arc;
 
 use crate::tests::{Harness, HarnessConfig};
-use darkfi::validator::{consensus::GAS_LIMIT_UNPROPOSED_TXS, utils::best_fork_index};
+use darkfi::validator::{consensus::BLOCK_GAS_LIMIT, utils::best_fork_index};
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_sdk::{crypto::BaseBlind, num_traits::One};
 use num_bigint::BigUint;
@@ -107,10 +103,10 @@ async fn simulate_unproposed_txs(
     Ok((tx.len() as u64, total_gas_used))
 }
 
-/// Tests the processing of unproposed transactions within `GAS_LIMIT_UNPROPOSED_TXS`.
+/// Tests the processing of unproposed transactions within `BLOCK_GAS_LIMIT`.
 ///
 /// Note: In this test scenario, the mempool is populated with 5 pending transactions that each use roughly 9_851_908 gas,
-/// falling within `GAS_LIMIT_UNPROPOSED_TXS`.
+/// falling within `BLOCK_GAS_LIMIT`.
 #[test]
 fn test_unproposed_txs_within_gas_limit() -> Result<()> {
     let ex = Arc::new(Executor::new());
@@ -141,14 +137,14 @@ fn test_unproposed_txs_within_gas_limit() -> Result<()> {
     Ok(())
 }
 
-/// Tests the processing of unproposed transactions with a mempool of transactions that collectively exceed `GAS_LIMIT_UNPROPOSED_TXS`.
+/// Tests the processing of unproposed transactions with a mempool of transactions that collectively exceed `BLOCK_GAS_LIMIT`.
 ///
-/// Note: In this test scenario, the mempool is populated with 135 pending transactions, with an average gas usage of 9_851_647 gas.
-/// The total estimated gas usage of these transactions exceeds `GAS_LIMIT_UNPROPOSED_TXS`.
+/// Note: In this test scenario, the mempool is populated by pending transactions with an average gas usage of 9_851_647 gas.
+/// The total estimated gas usage of these transactions exceeds `BLOCK_GAS_LIMIT`.
 #[test]
 fn test_unproposed_txs_exceeding_gas_limit() -> Result<()> {
     let avg_gas_usage = 9_851_647;
-    let min_expected = GAS_LIMIT_UNPROPOSED_TXS / avg_gas_usage;
+    let min_expected = BLOCK_GAS_LIMIT / avg_gas_usage;
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
@@ -172,7 +168,7 @@ fn test_unproposed_txs_exceeding_gas_limit() -> Result<()> {
                 assert!(num_unproposed_txs >= min_expected);
 
                 // Verify test result falls within gas limit
-                assert!(total_gas_used <= GAS_LIMIT_UNPROPOSED_TXS);
+                assert!(total_gas_used <= BLOCK_GAS_LIMIT);
             });
         },
     );

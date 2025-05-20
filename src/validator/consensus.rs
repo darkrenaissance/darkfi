@@ -30,7 +30,8 @@ use crate::{
         block_store::{BlockDifficulty, BlockRanks},
         BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header, HeaderHash,
     },
-    tx::Transaction,
+    runtime::vm_runtime::GAS_LIMIT,
+    tx::{Transaction, MAX_TX_CALLS},
     validator::{
         pow::PoWModule,
         utils::{best_fork_index, block_rank, find_extended_fork_index},
@@ -40,15 +41,8 @@ use crate::{
     Error, Result,
 };
 
-// Consensus configuration
-/// Average amount of gas consumed during transaction execution, derived by the Gas Analyzer
-const GAS_TX_AVG: u64 = 23_822_290;
-
-/// Multiplier used to calculate the gas limit for unproposed transactions
-const GAS_LIMIT_MULTIPLIER_UNPROPOSED_TXS: u64 = 50;
-
-/// Gas limit for unproposed transactions
-pub const GAS_LIMIT_UNPROPOSED_TXS: u64 = GAS_TX_AVG * GAS_LIMIT_MULTIPLIER_UNPROPOSED_TXS;
+/// Gas limit for total block transactions(50 full transactions).
+pub const BLOCK_GAS_LIMIT: u64 = GAS_LIMIT * MAX_TX_CALLS as u64 * 50;
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
@@ -878,11 +872,11 @@ impl Fork {
             let accumulated_gas_usage = total_gas_used + tx_gas_used;
 
             // Check gas limit - if accumulated gas used exceeds it, break out of loop
-            if accumulated_gas_usage > GAS_LIMIT_UNPROPOSED_TXS {
+            if accumulated_gas_usage > BLOCK_GAS_LIMIT {
                 warn!(
                     target: "validator::consensus::unproposed_txs",
                     "Retrieving transaction {} would exceed configured unproposed transaction gas limit: {} - {}",
-                    tx, accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS,
+                    tx, accumulated_gas_usage, BLOCK_GAS_LIMIT,
                 );
                 overlay.lock().unwrap().revert_to_checkpoint()?;
                 break
