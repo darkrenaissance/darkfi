@@ -879,7 +879,12 @@ impl Fork {
 
             // Check gas limit - if accumulated gas used exceeds it, break out of loop
             if accumulated_gas_usage > GAS_LIMIT_UNPROPOSED_TXS {
-                warn!(target: "validator::consensus::unproposed_txs", "Retrieving transaction {} would exceed configured unproposed transaction gas limit: {} - {}", tx, accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS);
+                warn!(
+                    target: "validator::consensus::unproposed_txs",
+                    "Retrieving transaction {} would exceed configured unproposed transaction gas limit: {} - {}",
+                    tx, accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS,
+                );
+                overlay.lock().unwrap().revert_to_checkpoint()?;
                 break
             }
 
