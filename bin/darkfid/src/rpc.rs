@@ -113,7 +113,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "tx.simulate" => self.tx_simulate(req.id, req.params).await,
             "tx.broadcast" => self.tx_broadcast(req.id, req.params).await,
             "tx.pending" => self.tx_pending(req.id, req.params).await,
-            "tx.clean_pending" => self.tx_pending(req.id, req.params).await,
+            "tx.clean_pending" => self.tx_clean_pending(req.id, req.params).await,
             "tx.calculate_fee" => self.tx_calculate_fee(req.id, req.params).await,
 
             // ==============
