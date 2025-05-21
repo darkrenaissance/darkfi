@@ -62,6 +62,10 @@ impl HeaderHash {
     pub fn as_string(&self) -> String {
         blake3::Hash::from_bytes(self.0).to_string()
     }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
 }
 
 impl FromStr for HeaderHash {
