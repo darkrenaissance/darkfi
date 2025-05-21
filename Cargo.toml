@@ -88,6 +88,7 @@ hex = {version = "0.4.3", optional = true}
 serde = {version = "1.0.219", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
 httparse = {version = "1.10.1", optional = true}
+primitive-types = {version = "0.13.1", optional = true}
 semver = {version = "1.0.26", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
@@ -118,6 +119,7 @@ blake3 = {version = "1.8.2", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 halo2_proofs = {version = "0.3.1", features = ["circuit-params"], optional = true}
 halo2_gadgets = {version = "0.3.1", features = ["circuit-params"], optional = true}
+sha2 = {version = "0.10.9", optional = true}
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
@@ -172,8 +174,10 @@ validator = [
     "hex",
     "lazy_static",
     "monero",
+    "primitive-types",
     "randomx",
     "smol",
+    "sha2",
 
     "blockchain",
     "system",
