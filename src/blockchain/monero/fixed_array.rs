@@ -156,3 +156,28 @@ impl AsyncDecodable for FixedByteArray {
         Ok(Self { elems, len: len as u8 })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assert_size() {
+        assert_eq!(std::mem::size_of::<FixedByteArray>(), MAX_ARR_SIZE + 1);
+    }
+
+    #[test]
+    fn capacity_overflow_does_not_panic() {
+        let data = &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
+        let _result = FixedByteArray::decode(&mut data.as_slice()).unwrap_err();
+    }
+
+    #[test]
+    fn length_check() {
+        let mut buf = [u8::try_from(MAX_ARR_SIZE).unwrap(); MAX_ARR_SIZE + 1];
+        let fixed_byte_array = FixedByteArray::decode(&mut buf.as_slice()).unwrap();
+        assert_eq!(fixed_byte_array.len(), MAX_ARR_SIZE);
+        buf[0] += 1;
+        FixedByteArray::decode(&mut buf.as_slice()).unwrap_err();
+    }
+}
