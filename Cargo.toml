@@ -175,6 +175,7 @@ validator = [
     "randomx",
     "smol",
 
+    "blockchain",
     "system",
     "wasm-runtime",
 ]

@@ -27,7 +27,10 @@ use std::{
 use log::{debug, warn};
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 
-use crate::Result;
+use crate::{
+    system::thread_priority::{set_thread_priority, ThreadPriority},
+    Result,
+};
 
 /// Wrapper for creating a [`RandomXDataset`]
 pub fn init_dataset_wrapper(
@@ -35,17 +38,9 @@ pub fn init_dataset_wrapper(
     cache: RandomXCache,
     start_item: u32,
     item_count: u32,
-    /* priority: i32, */
+    priority: ThreadPriority,
 ) -> Result<RandomXDataset> {
-    /* set_thread_priority(priority); */
-
-    /*
-    if (is_x86_feature_detected!("avx2") && item_count % 5) {
-        let dataset = RandomXDataset::new(flags, cache, start_item, item_count - (item_count % 5))?;
-        let dataset = RandomXDataset::new(flags, cache, start_item + item_count - 5, 5)?;
-    }
-    */
-
+    set_thread_priority(priority);
     Ok(RandomXDataset::new(flags, cache, start_item, item_count)?)
 }
 
