@@ -26,7 +26,7 @@ num-bigint = "0.4.6"
 easy-parallel = "3.3.1"
 futures = "0.3.31"
 signal-hook-async-std = "0.3.0"
-signal-hook = "0.3.17"
+signal-hook = "0.3.18"
 simplelog = "0.12.2"
 smol = "2.0.2"
 

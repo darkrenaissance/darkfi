@@ -15,7 +15,7 @@ async-executor = "1.13.2"
 async-std = "1.13.1"
 async-trait = "0.1.88"
 blake3 = "1.8.2"
-ctrlc = { version = "3.4.6", features = ["termination"] }
+ctrlc = { version = "3.4.7", features = ["termination"] }
 easy-parallel = "3.3.1"
 futures-lite = "2.6.0"
 log = "0.4.27"

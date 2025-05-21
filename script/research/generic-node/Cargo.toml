@@ -18,7 +18,7 @@ rand = "0.8.5"
 easy-parallel = "3.3.1"
 log = "0.4.27"
 signal-hook-async-std = "0.3.0"
-signal-hook = "0.3.17"
+signal-hook = "0.3.18"
 simplelog = "0.12.2"
 smol = "2.0.2"
 
