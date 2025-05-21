@@ -94,6 +94,10 @@ pub enum Error {
     #[error(transparent)]
     Bs58DecodeError(#[from] bs58::decode::Error),
 
+    #[cfg(feature = "hex")]
+    #[error(transparent)]
+    HexDecodeError(#[from] hex::FromHexError),
+
     #[error("Bad operation type byte")]
     BadOperationType,
 
@@ -338,6 +342,12 @@ pub enum Error {
 
     #[error("Hashing of Monero data failed: {0}")]
     MoneroHashingError(String),
+
+    #[error("Cannot have zero merge-mining chains")]
+    MoneroNumberOfChainZero,
+
+    #[error("MergeMineError: {0}")]
+    MoneroMergeMineError(String),
 
     // ===============
     // Database errors
