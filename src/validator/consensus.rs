@@ -214,7 +214,7 @@ impl Consensus {
             let (next_target, next_difficulty) = fork.module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
 
             // Update PoW module
             fork.module.append(block.header.timestamp, &next_difficulty);
@@ -744,7 +744,7 @@ impl Fork {
         let (next_target, next_difficulty) = self.module.next_mine_target_and_difficulty()?;
 
         // Calculate block rank
-        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target);
+        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
 
         // Update fork ranks
         self.targets_rank += target_distance_sq.clone();
