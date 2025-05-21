@@ -70,12 +70,12 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
 
     // Grab the most common tip and the corresponding peers
-    let (mut common_tip_height, mut common_tip_peers) =
+    let (mut common_tip_height, common_tip_hash, mut common_tip_peers) =
         most_common_tip(node, &last.1, checkpoint).await;
 
-    // If the most common tip is the genesis height(0), we skip syncing
+    // If the most common tip is the empty tip, we skip syncing
     // further and will reorg if needed when a new proposal arrives.
-    if common_tip_height == 0 {
+    if common_tip_hash == [0u8; 32] {
         *node.validator.synced.write().await = true;
         info!(target: "darkfid::task::sync_task", "Blockchain synced!");
         return Ok(())
@@ -94,7 +94,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
             info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last.0, last.1);
 
             // Grab synced peers most common tip again
-            (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await;
+            (common_tip_height, _, common_tip_peers) = most_common_tip(node, &last.1, None).await;
         }
     }
 
@@ -116,7 +116,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
         last = last_received;
 
         // Grab synced peers most common tip again
-        (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await;
+        (common_tip_height, _, common_tip_peers) = most_common_tip(node, &last.1, None).await;
     }
 
     // Sync best fork
@@ -242,7 +242,7 @@ async fn most_common_tip(
     node: &DarkfiNodePtr,
     last_tip: &HeaderHash,
     checkpoint: Option<(u32, HeaderHash)>,
-) -> (u32, Vec<ChannelPtr>) {
+) -> (u32, [u8; 32], Vec<ChannelPtr>) {
     // Grab synced peers tips
     let tips = synced_peers(node, last_tip, checkpoint).await;
 
@@ -264,7 +264,7 @@ async fn most_common_tip(
     }
 
     info!(target: "darkfid::task::sync::most_common_tip", "Most common tip: {} - {}", common_tip.0, HeaderHash::new(common_tip.1));
-    (common_tip.0, common_tip.2)
+    common_tip
 }
 
 /// Auxiliary function to retrieve headers backwards until our last known one and verify them.
