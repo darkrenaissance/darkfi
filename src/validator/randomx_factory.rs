@@ -29,6 +29,26 @@ use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 
 use crate::Result;
 
+/// Wrapper for creating a [`RandomXDataset`]
+pub fn init_dataset_wrapper(
+    flags: RandomXFlags,
+    cache: RandomXCache,
+    start_item: u32,
+    item_count: u32,
+    /* priority: i32, */
+) -> Result<RandomXDataset> {
+    /* set_thread_priority(priority); */
+
+    /*
+    if (is_x86_feature_detected!("avx2") && item_count % 5) {
+        let dataset = RandomXDataset::new(flags, cache, start_item, item_count - (item_count % 5))?;
+        let dataset = RandomXDataset::new(flags, cache, start_item + item_count - 5, 5)?;
+    }
+    */
+
+    Ok(RandomXDataset::new(flags, cache, start_item, item_count)?)
+}
+
 /// The RandomX virtual machine instance used to verify mining.
 #[derive(Clone)]
 pub struct RandomXVMInstance {
@@ -56,7 +76,7 @@ impl RandomXVMInstance {
                 Err(err) => {
                     warn!(
                         target: "validator::randomx",
-                        "[VALIDATOR] Error initializing RandomX cache with flags {:?}: {}"
+                        "[VALIDATOR] Error initializing RandomX cache with flags {:?}: {}",
                         flags, err,
                     );
                     warn!(
@@ -77,7 +97,7 @@ impl RandomXVMInstance {
 
     /// Calculate the RandomX mining hash
     pub fn calculate_hash(&self, input: &[u8]) -> Result<Vec<u8>> {
-        let lock = self.instance.write()?;
+        let lock = self.instance.write().unwrap();
         Ok(lock.calculate_hash(input)?)
     }
 }
@@ -119,7 +139,7 @@ impl RandomXFactory {
     ) -> Result<RandomXVMInstance> {
         let res;
         {
-            let mut inner = self.inner.write()?;
+            let mut inner = self.inner.write().unwrap();
             res = inner.create(key, cache, dataset)?;
         }
         Ok(res)
@@ -127,13 +147,13 @@ impl RandomXFactory {
 
     /// Get the number of VMs currently allocated
     pub fn get_count(&self) -> Result<usize> {
-        let inner = self.inner.read()?;
+        let inner = self.inner.read().unwrap();
         Ok(inner.get_count())
     }
 
     /// Get the flags used to create the VMs
     pub fn get_flags(&self) -> Result<RandomXFlags> {
-        let inner = self.inner.read()?;
+        let inner = self.inner.read().unwrap();
         Ok(inner.get_flags())
     }
 }

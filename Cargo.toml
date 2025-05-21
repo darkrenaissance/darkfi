@@ -175,6 +175,7 @@ validator = [
     "randomx",
     "smol",
 
+    "system",
     "wasm-runtime",
 ]
 
@@ -257,6 +258,7 @@ rpc = [
 ]
 
 system = [
+    "futures",
     "pin-project-lite",
     "rand",
     "smol",

@@ -43,6 +43,9 @@ use consensus::{Consensus, Fork, Proposal};
 pub mod pow;
 use pow::PoWModule;
 
+/// RandomX infrastructure
+pub mod randomx_factory;
+
 /// Monero infrastructure
 pub mod xmr;
 
