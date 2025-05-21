@@ -1746,6 +1746,7 @@ dependencies = [
  "futures-rustls",
  "halo2_gadgets",
  "halo2_proofs",
+ "hex",
  "httparse",
  "lazy_static",
  "libc",
