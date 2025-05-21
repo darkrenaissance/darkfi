@@ -200,3 +200,177 @@ impl MerkleProof {
         (((pos - k) << 1) | (path & 1)) + k
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::RngCore;
+    use std::{iter, str::FromStr};
+
+    use super::{
+        super::utils::{create_merkle_proof, tree_hash},
+        *,
+    };
+
+    #[test]
+    fn test_empty_hashset_has_no_proof() {
+        assert!(create_merkle_proof(&[], &Hash::null()).is_none());
+    }
+
+    #[test]
+    fn test_single_hash_is_its_own_proof() {
+        let tx_hashes =
+            &[Hash::from_str("fa58575f7d1d377709f1621fac98c758860ca6dc5f2262be9ce5fd131c370d1a")
+                .unwrap()];
+        let proof = create_merkle_proof(&tx_hashes[..], &tx_hashes[0]).unwrap();
+        assert_eq!(proof.branch.len(), 0);
+        assert_eq!(proof.calculate_root(&tx_hashes[0]), tx_hashes[0]);
+
+        assert!(create_merkle_proof(&tx_hashes[..], &Hash::null()).is_none());
+    }
+
+    #[test]
+    fn test_two_hash_proof_construction() {
+        let tx_hashes = &[
+            "d96756959949db23764592fea0bfe88c790e1fd131dabb676948b343aa9ecc24",
+            "77d1a87df131c36da4832a7ec382db9b8fe947576a60ec82cc1c66a220f6ee42",
+        ]
+        .iter()
+        .map(|hash| Hash::from_str(hash).unwrap())
+        .collect::<Vec<_>>();
+
+        let expected_root = cn_fast_hash2(&tx_hashes[0], &tx_hashes[1]);
+        let proof = create_merkle_proof(tx_hashes, &tx_hashes[0]).unwrap();
+        assert_eq!(proof.branch()[0], tx_hashes[1]);
+        assert_eq!(proof.branch.len(), 1);
+        assert_eq!(proof.branch[0], tx_hashes[1]);
+        assert_eq!(proof.path_bitmap, 0b00000000);
+        assert_eq!(proof.calculate_root(&tx_hashes[0]), expected_root);
+
+        let proof = create_merkle_proof(tx_hashes, &tx_hashes[1]).unwrap();
+        assert_eq!(proof.branch()[0], tx_hashes[0]);
+        assert_eq!(proof.calculate_root(&tx_hashes[1]), expected_root);
+
+        assert!(create_merkle_proof(tx_hashes, &Hash::null()).is_none());
+    }
+
+    #[test]
+    fn test_simple_proof_construction() {
+        //        { root }
+        //      /        \
+        //     h01       h2345
+        //   /    \     /    \
+        //  h0    h1    h23   h45
+        //            /  \    /  \
+        //          h2    h3 h4   h5
+
+        let hashes = (1..=6).map(|i| Hash::from([i - 1; 32])).collect::<Vec<_>>();
+        let h23 = cn_fast_hash2(&hashes[2], &hashes[3]);
+        let h45 = cn_fast_hash2(&hashes[4], &hashes[5]);
+        let h01 = cn_fast_hash2(&hashes[0], &hashes[1]);
+        let h2345 = cn_fast_hash2(&h23, &h45);
+        let expected_root = cn_fast_hash2(&h01, &h2345);
+
+        // Proof for h0
+        let proof = create_merkle_proof(&hashes, &hashes[0]).unwrap();
+        assert_eq!(proof.calculate_root(&hashes[0]), expected_root);
+        assert_eq!(proof.branch().len(), 2);
+        assert_eq!(proof.branch()[0], hashes[1]);
+        assert_eq!(proof.branch()[1], h2345);
+        assert_eq!(proof.path_bitmap, 0b00000000);
+
+        // Proof for h2
+        let proof = create_merkle_proof(&hashes, &hashes[2]).unwrap();
+        assert_eq!(proof.calculate_root(&hashes[2]), expected_root);
+        assert_eq!(proof.path_bitmap, 0b00000001);
+        let branch = proof.branch();
+        assert_eq!(branch[0], hashes[3]);
+        assert_eq!(branch[1], h45);
+        assert_eq!(branch[2], h01);
+        assert_eq!(branch.len(), 3);
+
+        // Proof for h5
+        let proof = create_merkle_proof(&hashes, &hashes[5]).unwrap();
+        assert_eq!(proof.calculate_root(&hashes[5]), expected_root);
+        assert_eq!(proof.branch.len(), 3);
+        assert_eq!(proof.path_bitmap, 0b00000111);
+        let branch = proof.branch();
+        assert_eq!(branch[0], hashes[4]);
+        assert_eq!(branch[1], h23);
+        assert_eq!(branch[2], h01);
+        assert_eq!(branch.len(), 3);
+
+        // Proof for h4
+        let proof = create_merkle_proof(&hashes, &hashes[4]).unwrap();
+        assert_eq!(proof.calculate_root(&hashes[4]), expected_root);
+        assert_eq!(proof.branch.len(), 3);
+        assert_eq!(proof.path_bitmap, 0b00000011);
+        let branch = proof.branch();
+        assert_eq!(branch[0], hashes[5]);
+        assert_eq!(branch[1], h23);
+        assert_eq!(branch[2], h01);
+        assert_eq!(branch.len(), 3);
+    }
+
+    #[test]
+    fn test_complex_proof_construction() {
+        let tx_hashes = &[
+            "d96756959949db23764592fea0bfe88c790e1fd131dabb676948b343aa9ecc24",
+            "77d1a87df131c36da4832a7ec382db9b8fe947576a60ec82cc1c66a220f6ee42",
+            "c723329b1036e4e05313c6ec3bdda3a2e1ab4db17661cad1a6a33512d9b86bcd",
+            "5d863b3d275bacd46dbe8a5f3edce86f88cbc01232bd2788b6f44684076ef8a8",
+            "16d945de6c96ea7f986b6c70ad373a9203a1ddd1c5d12effc3c69b8648826deb",
+            "ccec8f06c5bab1b87bb9af1a3cba94304f87dc037e03b5d2a00406d399316ff7",
+            "c8d52ed0712f0725531f8f72da029201b71e9e215884015f7050dde5f33269e7",
+            "4360ba7fe3872fa8bbc9655486a02738ee000d0c48bda84a15d4730fea178519",
+            "3c8c6b54dcffc75abff89d604ebf1e216bfcb2844b9720ab6040e8e49ae9743c",
+            "6dc19de81e509fba200b652fbdde8fe2aeb99bb9b17e0af79d0c682dff194e08",
+            "3ef031981bc4e2375eebd034ffda4e9e89936962ad2c94cfcc3e6d4cfa8a2e8c",
+            "9e4b865ebe51dcc9cfb09a9b81e354b8f423c59c902d5a866919f053bfbc374e",
+            "fa58575f7d1d377709f1621fac98c758860ca6dc5f2262be9ce5fd131c370d1a",
+        ]
+        .iter()
+        .map(|hash| Hash::from_str(hash).unwrap())
+        .collect::<Vec<_>>();
+
+        let expected_root = tree_hash(tx_hashes).unwrap();
+
+        let hash =
+            Hash::from_str("fa58575f7d1d377709f1621fac98c758860ca6dc5f2262be9ce5fd131c370d1a")
+                .unwrap();
+        let proof = create_merkle_proof(tx_hashes, &hash).unwrap();
+
+        assert_eq!(proof.path_bitmap, 0b00001111);
+
+        assert_eq!(proof.calculate_root(&hash), expected_root);
+
+        assert!(!proof.branch().contains(&hash));
+        assert!(!proof.branch().contains(&expected_root));
+    }
+
+    #[test]
+    fn test_big_proof_construction() {
+        // 65536 txs is beyond what is reasonable to fit in a block
+        let mut thread_rng = rand::thread_rng();
+        let tx_hashes = iter::repeat(())
+            .take(0x10000)
+            .map(|_| {
+                let mut buf = [0u8; 32];
+                thread_rng.fill_bytes(&mut buf[..]);
+                Hash::from_slice(&buf[..])
+            })
+            .collect::<Vec<_>>();
+
+        let expected_root = tree_hash(&tx_hashes).unwrap();
+
+        let hash = tx_hashes.last().unwrap();
+        let proof = create_merkle_proof(&tx_hashes, hash).unwrap();
+
+        assert_eq!(proof.branch.len(), 16);
+        assert_eq!(proof.path_bitmap, 0b1111_1111_1111_1111);
+
+        assert_eq!(proof.calculate_root(hash), expected_root);
+
+        assert!(!proof.branch().contains(hash));
+        assert!(!proof.branch().contains(&expected_root));
+    }
+}
