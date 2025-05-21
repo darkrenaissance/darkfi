@@ -37,7 +37,7 @@ use crate::{
         Blockchain, BlockchainOverlayPtr,
     },
     util::{ringbuffer::RingBuffer, time::Timestamp},
-    validator::utils::median,
+    validator::{randomx_factory::init_dataset_wrapper, utils::median},
     Error, Result,
 };
 
@@ -380,9 +380,9 @@ pub fn mine_block(
         let dataset = if threads > 1 {
             let a = (dataset_item_count * (t as u32)) / (threads as u32);
             let b = (dataset_item_count * (t as u32 + 1)) / (threads as u32);
-            RandomXDataset::new(flags, cache.clone(), a, b - a)?
+            init_dataset_wrapper(flags, cache.clone(), a, b - a)?
         } else {
-            RandomXDataset::new(flags, cache.clone(), 0, dataset_item_count)?
+            init_dataset_wrapper(flags, cache.clone(), 0, dataset_item_count)?
         };
 
         let stop_signal = stop_signal.clone();
