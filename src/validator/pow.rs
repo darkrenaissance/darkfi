@@ -274,14 +274,14 @@ impl PoWModule {
         let target = self.next_mine_target()?;
 
         // Setup verifier
-        let flags = RandomXFlags::default();
-        let cache = RandomXCache::new(flags, block.header.previous.inner()).unwrap();
-        let vm = RandomXVM::new(flags, &cache).unwrap();
+        let flags = RandomXFlags::get_recommended_flags();
+        let cache = RandomXCache::new(flags, block.header.previous.inner())?;
+        let vm = RandomXVM::new(flags, Some(cache), None)?;
         debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
 
         // Compute the output hash
         let verification_time = Instant::now();
-        let out_hash = vm.hash(block.header.hash().inner());
+        let out_hash = vm.calculate_hash(block.header.hash().inner())?;
         let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
@@ -344,13 +344,16 @@ pub fn mine_block(
 ) -> Result<()> {
     let miner_setup = Instant::now();
 
-    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
+    // Calculate page offsets for each thread
+    let dataset_pages = RandomXDataset::count()?;
+
+    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
     // Get the PoW input. The key changes with every mined block.
     let input = miner_block.header.previous;
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {input}");
-    let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
-    debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
-    let dataset = Arc::new(RandomXDataset::new(flags, input.inner(), threads).unwrap());
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input);
+    let flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
+    debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX cache...");
+    let cache = RandomXCache::new(flags, input.inner())?;
     debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 
     // Multithreaded mining setup
@@ -364,13 +367,16 @@ pub fn mine_block(
         let mut block = miner_block.clone();
         let found_block = Arc::clone(&found_block);
         let found_nonce = Arc::clone(&found_nonce);
-        let dataset = Arc::clone(&dataset);
+
+        let page_offset = (dataset_pages / threads as u32) * (t as u32);
+        let dataset = RandomXDataset::new(flags, cache.clone(), page_offset)?;
+
         let stop_signal = stop_signal.clone();
 
         handles.push(thread::spawn(move || {
             debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{t}...");
             let mut miner_nonce = t;
-            let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
+            let vm = RandomXVM::new(flags, None, Some(dataset)).unwrap();
             loop {
                 // Check if stop signal was received
                 if stop_signal.is_full() {
@@ -384,7 +390,7 @@ pub fn mine_block(
                     break
                 }
 
-                let out_hash = vm.hash(block.hash().inner());
+                let out_hash = vm.calculate_hash(block.hash().inner()).unwrap();
                 let out_hash = BigUint::from_bytes_be(&out_hash);
                 if out_hash <= target {
                     found_block.store(true, Ordering::SeqCst);
