@@ -43,6 +43,9 @@ use consensus::{Consensus, Fork, Proposal};
 pub mod pow;
 use pow::PoWModule;
 
+/// Monero infrastructure
+pub mod xmr;
+
 /// Verification functions
 pub mod verification;
 use verification::{
