@@ -27,19 +27,20 @@ use darkfi_serial::{Decodable, Encodable};
 use monero::{
     blockdata::transaction::RawExtraField,
     consensus::{Decodable as XmrDecodable, Encodable as XmrEncodable},
-    cryptonote::hash::Hashable,
-    util::ringct::{RctSigBase, RctType},
     BlockHeader, Hash,
 };
 use tiny_keccak::{Hasher, Keccak};
 
-mod merkle_proof;
+pub mod fixed_array;
+use fixed_array::FixedByteArray;
+
+pub mod merkle_proof;
 use merkle_proof::MerkleProof;
 
-mod keccak;
+pub mod keccak;
 use keccak::{keccak_from_bytes, keccak_to_bytes};
 
-mod utils;
+pub mod utils;
 
 /// This struct represents all the Proof of Work information required
 /// for merge mining.
@@ -49,7 +50,7 @@ pub struct MoneroPowData {
     pub header: BlockHeader,
     /// RandomX VM key - length varies to a max len of 60.
     /// TODO: Implement a type, or use randomx_key[0] to define len.
-    pub randomx_key: [u8; 64],
+    pub randomx_key: FixedByteArray,
     /// The number of transactions included in this Monero block.
     /// This is used to produce the blockhashing_blob.
     pub transaction_count: u16,
@@ -139,11 +140,11 @@ impl Decodable for MoneroPowData {
         let header =
             BlockHeader::consensus_decode(d).map_err(|_| Error::other("Invalid XMR header"))?;
 
-        let randomx_key: [u8; 64] = Decodable::decode(d)?;
+        let randomx_key: FixedByteArray = Decodable::decode(d)?;
         let transaction_count: u16 = Decodable::decode(d)?;
 
         let merkle_root =
-            Hash::consensus_decode(d).map_err(|_| Error::other("Invamid XMR hash"))?;
+            Hash::consensus_decode(d).map_err(|_| Error::other("Invalid XMR hash"))?;
 
         let coinbase_merkle_proof: MerkleProof = Decodable::decode(d)?;
 
@@ -176,7 +177,7 @@ impl AsyncDecodable for MoneroPowData {
         let header = BlockHeader::consensus_decode(&mut buf)
             .map_err(|_| Error::other("Invalid XMR header"))?;
 
-        let randomx_key: [u8; 64] = AsyncDecodable::decode_async(d).await?;
+        let randomx_key: FixedByteArray = AsyncDecodable::decode_async(d).await?;
         let transaction_count: u16 = AsyncDecodable::decode_async(d).await?;
 
         let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
@@ -203,36 +204,5 @@ impl AsyncDecodable for MoneroPowData {
             coinbase_tx_extra,
             aux_chain_merkle_proof,
         })
-    }
-}
-
-impl MoneroPowData {
-    /// Returns true if the coinbase Merkle proof produces the `merkle_root` hash.
-    pub fn is_coinbase_valid_merkle_root(&self) -> bool {
-        let mut finalised_prefix_keccak = self.coinbase_tx_hasher.clone();
-        let mut encoder_extra_field = vec![];
-        self.coinbase_tx_extra.consensus_encode(&mut encoder_extra_field).unwrap();
-        finalised_prefix_keccak.update(&encoder_extra_field);
-        let mut prefix_hash: [u8; 32] = [0; 32];
-        finalised_prefix_keccak.finalize(&mut prefix_hash);
-
-        let final_prefix_hash = Hash::from_slice(&prefix_hash);
-
-        // let mut finalised_keccak = Keccak::v256();
-        let rct_sig_base = RctSigBase {
-            rct_type: RctType::Null,
-            txn_fee: Default::default(),
-            pseudo_outs: vec![],
-            ecdh_info: vec![],
-            out_pk: vec![],
-        };
-
-        let hashes = vec![final_prefix_hash, rct_sig_base.hash(), Hash::null()];
-        let encoder_final: Vec<u8> =
-            hashes.into_iter().flat_map(|h| Vec::from(&h.to_bytes()[..])).collect();
-        let coinbase_hash = Hash::new(encoder_final);
-
-        let merkle_root = self.coinbase_merkle_proof.calculate_root(&coinbase_hash);
-        (self.merkle_root == merkle_root) && self.coinbase_merkle_proof.check_coinbase_path()
     }
 }
