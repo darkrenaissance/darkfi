@@ -478,7 +478,16 @@ async fn handle_receive_tip_request(
                         target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
                         "Node doesn't follow request sequence"
                     );
-                    handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                    handler
+                        .send_action(
+                            channel,
+                            ProtocolGenericAction::Response(TipResponse {
+                                synced: true,
+                                height: None,
+                                hash: None,
+                            }),
+                        )
+                        .await;
                     continue
                 }
             }
@@ -738,13 +747,42 @@ async fn handle_receive_fork_header_hash_request(
             }
         };
 
+        // Send response if header was found
+        if fork_header.is_some() {
+            handler
+                .send_action(
+                    channel,
+                    ProtocolGenericAction::Response(ForkHeaderHashResponse { fork_header }),
+                )
+                .await;
+            continue
+        }
+
+        // If header wasn't found in a fork, check canonical
+        if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
+                "Getting fork header hash failed: {}",
+                e
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        };
+
+        let response = match validator.blockchain.blocks.get_order(&[request.height], false) {
+            Ok(h) => ProtocolGenericAction::Response(ForkHeaderHashResponse { fork_header: h[0] }),
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
+                    "Getting fork header hash failed: {}",
+                    e
+                );
+                ProtocolGenericAction::Skip
+            }
+        };
+
         // Send response
-        handler
-            .send_action(
-                channel,
-                ProtocolGenericAction::Response(ForkHeaderHashResponse { fork_header }),
-            )
-            .await;
+        handler.send_action(channel, response).await;
     }
 }
 
@@ -807,10 +845,44 @@ async fn handle_receive_fork_headers_request(
             }
         };
 
+        // Send response if headers were found
+        if !headers.is_empty() {
+            handler
+                .send_action(
+                    channel,
+                    ProtocolGenericAction::Response(ForkHeadersResponse { headers }),
+                )
+                .await;
+            continue
+        }
+
+        // If headers weren't found in a fork, check canonical
+        if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                "Getting fork header hash failed: {}",
+                e
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        };
+
+        let response = match validator.blockchain.headers.get(&request.headers, true) {
+            Ok(h) => ProtocolGenericAction::Response(ForkHeadersResponse {
+                headers: h.iter().map(|x| x.clone().unwrap()).collect(),
+            }),
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                    "Getting fork headers failed: {}",
+                    e
+                );
+                ProtocolGenericAction::Skip
+            }
+        };
+
         // Send response
-        handler
-            .send_action(channel, ProtocolGenericAction::Response(ForkHeadersResponse { headers }))
-            .await;
+        handler.send_action(channel, response).await;
     }
 }
 
@@ -855,7 +927,7 @@ async fn handle_receive_fork_proposals_request(
 
         debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request", "Received request: {request:?}");
 
-        // Retrieve fork headers
+        // Retrieve fork proposals
         let proposals = match validator
             .consensus
             .get_fork_proposals(&request.headers, &request.fork_header)
@@ -873,12 +945,47 @@ async fn handle_receive_fork_proposals_request(
             }
         };
 
+        // Send response if proposals were found
+        if !proposals.is_empty() {
+            handler
+                .send_action(
+                    channel,
+                    ProtocolGenericAction::Response(ForkProposalsResponse { proposals }),
+                )
+                .await;
+            continue
+        }
+
+        // If proposals weren't found in a fork, check canonical
+        if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                "Getting fork header hash failed: {}",
+                e
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        };
+
+        let response = match validator.blockchain.get_blocks_by_hash(&request.headers) {
+            Ok(blocks) => {
+                let mut proposals = Vec::with_capacity(blocks.len());
+                for block in blocks {
+                    proposals.push(Proposal::new(block));
+                }
+                ProtocolGenericAction::Response(ForkProposalsResponse { proposals })
+            }
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                    "Getting fork proposals failed: {}",
+                    e
+                );
+                ProtocolGenericAction::Skip
+            }
+        };
+
         // Send response
-        handler
-            .send_action(
-                channel,
-                ProtocolGenericAction::Response(ForkProposalsResponse { proposals }),
-            )
-            .await;
+        handler.send_action(channel, response).await;
     }
 }

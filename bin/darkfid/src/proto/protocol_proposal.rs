@@ -207,7 +207,7 @@ async fn handle_receive_proposal(
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { _tasks.write().await.remove(&_task); }
-                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting ProtocolProposal handler task: {e}"),
+                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting unknown proposal handler task: {e}"),
                 }
             },
             Error::DetachedTaskStopped,

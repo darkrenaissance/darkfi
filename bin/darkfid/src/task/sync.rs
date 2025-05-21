@@ -73,6 +73,14 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     let (mut common_tip_height, mut common_tip_peers) =
         most_common_tip(node, &last.1, checkpoint).await;
 
+    // If the most common tip is the genesis height(0), we skip syncing
+    // further and will reorg if needed when a new proposal arrives.
+    if common_tip_height == 0 {
+        *node.validator.synced.write().await = true;
+        info!(target: "darkfid::task::sync_task", "Blockchain synced!");
+        return Ok(())
+    }
+
     // If last known block header is before the checkpoint, we sync until that first.
     if let Some(checkpoint) = checkpoint {
         if checkpoint.0 > last.0 {
@@ -194,8 +202,16 @@ async fn synced_peers(
             };
 
             // Handle response
-            if response.synced && response.height.is_some() && response.hash.is_some() {
-                let tip = (response.height.unwrap(), *response.hash.unwrap().inner());
+            if response.synced {
+                // Grab response tip
+                let tip = if response.height.is_some() && response.hash.is_some() {
+                    (response.height.unwrap(), *response.hash.unwrap().inner())
+                } else {
+                    // Empty response while synced means the peer is on an
+                    // entirely different chain/fork, so we keep track of
+                    // them in the empty tip reference.
+                    (0, [0u8; 32])
+                };
                 let Some(tip_peers) = tips.get_mut(&tip) else {
                     tips.insert(tip, vec![peer.clone()]);
                     continue
