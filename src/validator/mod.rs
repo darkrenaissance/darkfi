@@ -45,6 +45,7 @@ use pow::PoWModule;
 
 /// RandomX infrastructure
 pub mod randomx_factory;
+use randomx_factory::RandomXFactory;
 
 /// Monero infrastructure
 pub mod xmr;
@@ -88,6 +89,10 @@ pub struct Validator {
     pub blockchain: Blockchain,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
+    /// RandomXFactory for native PoW
+    pub darkfi_rx_factory: RandomXFactory,
+    /// RandomXFactory for Monero PoW
+    pub monero_rx_factory: RandomXFactory,
     /// Flag signalling node has finished initial sync
     pub synced: RwLock<bool>,
     /// Flag to enable tx fee verification
@@ -128,6 +133,8 @@ impl Validator {
         let state = Arc::new(Self {
             blockchain,
             consensus,
+            darkfi_rx_factory: RandomXFactory::default(),
+            monero_rx_factory: RandomXFactory::default(),
             synced: RwLock::new(false),
             verify_fees: config.verify_fees,
         });
