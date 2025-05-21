@@ -122,10 +122,10 @@ pub fn header_rank(header: &Header, target: &BigUint) -> Result<(BigUint, BigUin
     // Setup RandomX verifier
     let flags = RandomXFlags::default();
     let cache = RandomXCache::new(flags, header.previous.inner()).unwrap();
-    let vm = RandomXVM::new(flags, &cache).unwrap();
+    let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
 
     // Compute the output hash
-    let out_hash = vm.hash(header.hash().inner());
+    let out_hash = vm.calculate_hash(header.hash().inner())?;
     let out_hash = BigUint::from_bytes_be(&out_hash);
 
     // Verify hash is less than the expected mine target
@@ -152,10 +152,10 @@ pub fn header_rank(header: &Header, target: &BigUint) -> Result<(BigUint, BigUin
 /// Block's rank is the tuple of its squared mining target distance from max 32 bytes int,
 /// along with its squared RandomX hash number distance from max 32 bytes int.
 /// Genesis block has rank (0, 0).
-pub fn block_rank(block: &BlockInfo, target: &BigUint) -> (BigUint, BigUint) {
+pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUint)> {
     // Genesis block has rank 0
     if block.header.height == 0 {
-        return (0u64.into(), 0u64.into())
+        return Ok((0u64.into(), 0u64.into()))
     }
 
     // Grab the max 32 bytes int
@@ -167,16 +167,16 @@ pub fn block_rank(block: &BlockInfo, target: &BigUint) -> (BigUint, BigUint) {
 
     // Setup RandomX verifier
     let flags = RandomXFlags::default();
-    let cache = RandomXCache::new(flags, block.header.previous.inner()).unwrap();
-    let vm = RandomXVM::new(flags, &cache).unwrap();
+    let cache = RandomXCache::new(flags, block.header.previous.inner())?;
+    let vm = RandomXVM::new(flags, Some(cache), None)?;
 
     // Compute the output hash distance
-    let out_hash = vm.hash(block.hash().inner());
+    let out_hash = vm.calculate_hash(block.hash().inner())?;
     let out_hash = BigUint::from_bytes_be(&out_hash);
     let hash_distance = max - out_hash;
     let hash_distance_sq = &hash_distance * &hash_distance;
 
-    (target_distance_sq, hash_distance_sq)
+    Ok((target_distance_sq, hash_distance_sq))
 }
 
 /// Auxiliary function to calculate the middle value between provided u64 numbers

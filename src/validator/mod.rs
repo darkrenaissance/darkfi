@@ -477,7 +477,7 @@ impl Validator {
             let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
@@ -591,7 +591,7 @@ impl Validator {
             let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
