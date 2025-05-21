@@ -120,7 +120,7 @@ pub fn header_rank(header: &Header, target: &BigUint) -> Result<(BigUint, BigUin
     }
 
     // Setup RandomX verifier
-    let flags = RandomXFlags::default();
+    let flags = RandomXFlags::get_recommended_flags();
     let cache = RandomXCache::new(flags, header.previous.inner()).unwrap();
     let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
 
@@ -166,7 +166,7 @@ pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUi
     let target_distance_sq = &target_distance * &target_distance;
 
     // Setup RandomX verifier
-    let flags = RandomXFlags::default();
+    let flags = RandomXFlags::get_recommended_flags();
     let cache = RandomXCache::new(flags, block.header.previous.inner())?;
     let vm = RandomXVM::new(flags, Some(cache), None)?;
 
