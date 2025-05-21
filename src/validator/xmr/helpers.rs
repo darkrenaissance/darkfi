@@ -19,9 +19,18 @@
 
 use std::{io, iter};
 
-use monero::{consensus::Encodable as XmrEncodable, cryptonote::hash::Hashable, VarInt};
+use log::warn;
+use monero::{
+    blockdata::transaction::{ExtraField, RawExtraField, SubField},
+    consensus::Encodable as XmrEncodable,
+    cryptonote::hash::Hashable,
+    VarInt,
+};
+use primitive_types::U256;
+use sha2::{Digest, Sha256};
 use tiny_keccak::{Hasher, Keccak};
 
+use super::merkle_tree_parameters::MerkleTreeParameters;
 use crate::{
     blockchain::{
         header_store::HeaderHash,
@@ -31,6 +40,7 @@ use crate::{
             MoneroPowData,
         },
     },
+    Error,
     Error::MoneroMergeMineError,
     Result,
 };
@@ -135,4 +145,95 @@ pub fn construct_monero_data(
         coinbase_tx_hasher: keccak,
         aux_chain_merkle_proof,
     })
+}
+
+fn check_aux_chains(
+    monero_data: &MoneroPowData,
+    merge_mining_params: VarInt,
+    aux_chain_merkle_root: &monero::Hash,
+    darkfi_hash: HeaderHash,
+    darkfi_genesis_hash: HeaderHash,
+) -> bool {
+    let df_hash = monero::Hash::from_slice(darkfi_hash.as_slice());
+
+    if merge_mining_params == VarInt(0) {
+        // Interpret 0 as only 1 chain
+        if df_hash == *aux_chain_merkle_root {
+            return true
+        }
+    }
+
+    let merkle_tree_params = MerkleTreeParameters::from_varint(merge_mining_params);
+    if merkle_tree_params.number_of_chains() == 0 {
+        return false
+    }
+
+    let hash_position = U256::from_little_endian(
+        &Sha256::new()
+            .chain_update(darkfi_genesis_hash.as_slice())
+            .chain_update(merkle_tree_params.aux_nonce().to_le_bytes())
+            .chain_update((109_u8).to_le_bytes())
+            .finalize(),
+    )
+    .low_u32() %
+        u32::from(merkle_tree_params.number_of_chains());
+
+    let (merkle_root, pos) = monero_data
+        .aux_chain_merkle_proof
+        .calculate_root_with_pos(&df_hash, merkle_tree_params.number_of_chains());
+
+    if hash_position != pos {
+        return false
+    }
+
+    merkle_root == *aux_chain_merkle_root
+}
+
+// Parsing an extra field from bytes will always return an extra field with sub-fields
+// that could be read, even if it does not represent the original extra field. As per
+// Monero consensus rules, an error here will not represent a failure to deserialize a
+// block, so no need to error here.
+fn parse_extra_field_truncate_on_error(raw_extra_field: &RawExtraField) -> ExtraField {
+    match ExtraField::try_parse(raw_extra_field) {
+        Ok(val) => val,
+        Err(val) => {
+            warn!(
+                target: "validator::xmr::helpers",
+                "[MERGEMINING] Some sub-fields could not be parsed from the Monero coinbase",
+            );
+            val
+        }
+    }
+}
+
+/// Extracts the Monero block hash from the coinbase transaction's extra field
+pub fn extract_aux_merkle_root_from_block(monero: &monero::Block) -> Result<Option<monero::Hash>> {
+    // When we extract the merge mining hash, we do not care if
+    // the extra field can be parsed without error.
+    let extra_field = parse_extra_field_truncate_on_error(&monero.miner_tx.prefix.extra);
+
+    // Only one merge mining tag is allowed
+    let merge_mining_hashes: Vec<monero::Hash> = extra_field
+        .0
+        .iter()
+        .filter_map(|item| {
+            if let SubField::MergeMining(_depth, merge_mining_hash) = item {
+                Some(*merge_mining_hash)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if merge_mining_hashes.len() > 1 {
+        return Err(Error::MoneroMergeMineError(
+            "More than one merge mining tag found in coinbase".to_string(),
+        ))
+    }
+
+    if let Some(merge_mining_hash) = merge_mining_hashes.into_iter().next() {
+        Ok(Some(merge_mining_hash))
+    } else {
+        Ok(None)
+    }
 }
