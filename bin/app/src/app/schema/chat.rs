@@ -102,7 +102,7 @@ mod android_ui_consts {
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 200., 160.);
     pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(220., 0., 240., 160.);
     pub const ACTION_SELECT_ALL_RECT: Rectangle = Rectangle::new(480., 0., 400., 160.);
-    pub const ACTION_LABEL_POS: Point = Point::new(40., 40.);
+    pub const ACTION_LABEL_POS: Point = Point::new(55., 50.);
 }
 
 #[cfg(target_os = "android")]

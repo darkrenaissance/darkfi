@@ -64,8 +64,13 @@ use super::{
     DrawUpdate, OnModify, UIObject,
 };
 
-// Minimum dist to update scroll when finger scrolling.
-// Avoid updating too much makes scrolling smoother.
+/// The travel threshold on long hold select before activating select.
+const HOLD_TRAVEL_THRESHOLD_SQ: f32 = 100.;
+/// How long to hold before select is enabled in ms.
+const HOLD_ENABLE_TIME: u128 = 500;
+
+/// Minimum dist to update scroll when finger scrolling.
+/// Avoid updating too much makes scrolling smoother.
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatedit", $($arg)*); } }
@@ -132,13 +137,13 @@ impl TouchInfo {
     fn update(&mut self, pos: &Point) {
         match &self.state {
             TouchStateAction::Started { pos: start_pos, instant } => {
-                let travel_dist = pos.dist_sq(*start_pos);
+                let travel_dist_sq = pos.dist_sq(*start_pos);
                 let grad = (pos.y - start_pos.y) / (pos.x - start_pos.x);
                 let elapsed = instant.elapsed().as_millis();
-                //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist={travel_dist}, grad={grad}]");
+                //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist_sq={travel_dist_sq}, grad={grad}]");
 
-                if travel_dist < 5. {
-                    if elapsed > 1000 {
+                if travel_dist_sq < HOLD_TRAVEL_THRESHOLD_SQ {
+                    if elapsed > HOLD_ENABLE_TIME {
                         debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
