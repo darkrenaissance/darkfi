@@ -84,6 +84,7 @@ x509-parser = {version = "0.17.0", features = ["validate", "verify"], optional =
 
 # Encoding
 bs58 = {version = "0.5.1", optional = true}
+hex = {version = "0.4.3", optional = true}
 serde = {version = "1.0.219", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
 httparse = {version = "1.10.1", optional = true}
@@ -168,7 +169,9 @@ blockchain = [
 
 validator = [
     "crypto_api_chachapoly",
+    "hex",
     "lazy_static",
+    "monero",
     "randomx",
     "smol",
 
