@@ -349,6 +349,10 @@ pub enum Error {
     #[error("MergeMineError: {0}")]
     MoneroMergeMineError(String),
 
+    #[cfg(feature = "randomx")]
+    #[error("RandomX Error: {0}")]
+    RandomXError(String),
+
     // ===============
     // Database errors
     // ===============
@@ -824,5 +828,11 @@ impl From<darkfi_sdk::error::DarkTreeError> for Error {
 impl From<tracing_subscriber::util::TryInitError> for Error {
     fn from(err: tracing_subscriber::util::TryInitError) -> Self {
         Self::LogInitError(err.to_string())
+}
+
+#[cfg(feature = "randomx")]
+impl From<randomx::RandomXError> for Error {
+    fn from(err: randomx::RandomXError) -> Self {
+        Self::RandomXError(err.to_string())
     }
 }
