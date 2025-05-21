@@ -212,7 +212,7 @@ await-startup-no-sync-%:
 # Waits for Darkfid to start
 define wait_for_darkfid_startup
   log_dir=$(strip $(1)); \
-  while ! grep -q "Darkfid P2P handler started successfully!" "$$log_dir/darkfid.log" 2>/dev/null; do \
+  while ! grep -q "Blockchain synced!" "$$log_dir/darkfid.log" 2>/dev/null; do \
     sleep 1; \
   done;
 endef
