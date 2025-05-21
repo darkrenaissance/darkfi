@@ -344,16 +344,22 @@ pub fn mine_block(
 ) -> Result<()> {
     let miner_setup = Instant::now();
 
-    // Calculate page offsets for each thread
-    let dataset_pages = RandomXDataset::count()?;
-
     debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
     // Get the PoW input. The key changes with every mined block.
     let input = miner_block.header.previous;
     debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input);
-    let flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
+
+    let mut flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if is_x86_feature_detected!("avx2") {
+        flags |= RandomXFlags::ARGON2_AVX2;
+    } else if is_x86_feature_detected!("ssse3") {
+        flags |= RandomXFlags::ARGON2_SSSE3;
+    }
+
     debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX cache...");
     let cache = RandomXCache::new(flags, input.inner())?;
+
     debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 
     // Multithreaded mining setup
@@ -362,14 +368,22 @@ pub fn mine_block(
     let found_block = Arc::new(AtomicBool::new(false));
     let found_nonce = Arc::new(AtomicU64::new(0));
     let threads = threads as u64;
+    let dataset_item_count = RandomXDataset::count()?;
+
     for t in 0..threads {
         let target = target.clone();
         let mut block = miner_block.clone();
         let found_block = Arc::clone(&found_block);
         let found_nonce = Arc::clone(&found_nonce);
 
-        let page_offset = (dataset_pages / threads as u32) * (t as u32);
-        let dataset = RandomXDataset::new(flags, cache.clone(), page_offset)?;
+        // TODO: Clean up using RandomXFactory and add wrapper for AVX2
+        let dataset = if threads > 1 {
+            let a = (dataset_item_count * (t as u32)) / (threads as u32);
+            let b = (dataset_item_count * (t as u32 + 1)) / (threads as u32);
+            RandomXDataset::new(flags, cache.clone(), a, b - a)?
+        } else {
+            RandomXDataset::new(flags, cache.clone(), 0, dataset_item_count)?
+        };
 
         let stop_signal = stop_signal.clone();
 
