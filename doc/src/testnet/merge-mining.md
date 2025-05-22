@@ -62,7 +62,7 @@ our work locally. So quit the `monerod` node, and restart it offline
 with fixed difficulty that will make our mining process faster:
 
 ```
-$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 0 --hide-my-port --fixed-difficulty 5000 --disable-rpc-ban --offline --zmq-pub tcp://127.0.0.1:28083
+$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 1 --hide-my-port --fixed-difficulty 20000 --disable-rpc-ban --offline --zmq-pub tcp://127.0.0.1:28083
 ```
 
 Now we should also create a Monero wallet. Run `monero-wallet-cli` and
@@ -105,13 +105,13 @@ blocks.
 ## xmrig setup
 
 xmrig is pretty simple. Just start it with a chosen number of threads
-and point it to p2pool's Stratum port. `-u x+1 5000` is defined by the
+and point it to p2pool's Stratum port. `-u x+1 20000` is defined by the
 `--fixed-difficulty` setting we started `monerod` with. `-t 1` is the
 number of CPU threads to use for mining. With a low difficulty, one
 thread should be enough.
 
 ```
-$ ./xmrig -u x+1 5000 -o 127.0.0.1:3333 -t 1
+$ ./xmrig -u x+1 20000 -o 127.0.0.1:3333 -t 1
 ```
 
 Now we should see blocks being mined in p2pool and submitted to our
