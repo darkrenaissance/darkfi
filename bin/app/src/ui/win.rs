@@ -22,7 +22,10 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GraphicsEventPublisherPtr, Point, Rectangle, RenderApi,
+        GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
+        GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
+        GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
+        GraphicsEventResizeSub, GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
     prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
@@ -94,7 +97,7 @@ impl Window {
         let me2 = me.clone();
         let resize_task = ex.spawn(async move {
             loop {
-                let Ok(size) = ev_sub.receive().await else {
+                let Ok(size) = ev_sub.recv().await else {
                     t!("Event relayer closed");
                     break
                 };
@@ -187,8 +190,8 @@ impl Window {
         }
     }
 
-    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
-        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+    async fn process_char(me: &Weak<Self>, ev_sub: &GraphicsEventCharSub) -> bool {
+        let Ok((key, mods, repeat)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -202,11 +205,8 @@ impl Window {
         true
     }
 
-    async fn process_key_down(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
-    ) -> bool {
-        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+    async fn process_key_down(me: &Weak<Self>, ev_sub: &GraphicsEventKeyDownSub) -> bool {
+        let Ok((key, mods, repeat)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -220,8 +220,8 @@ impl Window {
         true
     }
 
-    async fn process_key_up(me: &Weak<Self>, ev_sub: &Subscription<(KeyCode, KeyMods)>) -> bool {
-        let Ok((key, mods)) = ev_sub.receive().await else {
+    async fn process_key_up(me: &Weak<Self>, ev_sub: &GraphicsEventKeyUpSub) -> bool {
+        let Ok((key, mods)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -237,9 +237,9 @@ impl Window {
 
     async fn process_mouse_btn_down(
         me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, Point)>,
+        ev_sub: &GraphicsEventMouseButtonDownSub,
     ) -> bool {
-        let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
+        let Ok((btn, mouse_pos)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -253,11 +253,8 @@ impl Window {
         true
     }
 
-    async fn process_mouse_btn_up(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, Point)>,
-    ) -> bool {
-        let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
+    async fn process_mouse_btn_up(me: &Weak<Self>, ev_sub: &GraphicsEventMouseButtonUpSub) -> bool {
+        let Ok((btn, mouse_pos)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -271,8 +268,8 @@ impl Window {
         true
     }
 
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
-        let Ok(mouse_pos) = ev_sub.receive().await else {
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &GraphicsEventMouseMoveSub) -> bool {
+        let Ok(mouse_pos) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -286,8 +283,8 @@ impl Window {
         true
     }
 
-    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
-        let Ok(wheel_pos) = ev_sub.receive().await else {
+    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &GraphicsEventMouseWheelSub) -> bool {
+        let Ok(wheel_pos) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };
@@ -301,11 +298,8 @@ impl Window {
         true
     }
 
-    async fn process_touch(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(TouchPhase, u64, Point)>,
-    ) -> bool {
-        let Ok((phase, id, touch_pos)) = ev_sub.receive().await else {
+    async fn process_touch(me: &Weak<Self>, ev_sub: &GraphicsEventTouchSub) -> bool {
+        let Ok((phase, id, touch_pos)) = ev_sub.recv().await else {
             t!("Event relayer closed");
             return false
         };

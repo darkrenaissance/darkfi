@@ -577,32 +577,62 @@ pub enum GraphicsMethod {
     ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
 }
 
+struct EventChannel<T> {
+    sender: async_channel::Sender<T>,
+    recvr: async_channel::Receiver<T>,
+}
+
+impl<T> EventChannel<T> {
+    fn new() -> Self {
+        let (sender, recvr) = async_channel::unbounded();
+        Self { sender, recvr }
+    }
+
+    fn notify(&self, ev: T) {
+        self.sender.try_send(ev).unwrap();
+    }
+
+    fn clone_recvr(&self) -> async_channel::Receiver<T> {
+        self.recvr.clone()
+    }
+}
+
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
 
 pub struct GraphicsEventPublisher {
-    resize: PublisherPtr<Dimension>,
-    key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
-    key_up: PublisherPtr<(KeyCode, KeyMods)>,
-    chr: PublisherPtr<(char, KeyMods, bool)>,
-    mouse_btn_down: PublisherPtr<(MouseButton, Point)>,
-    mouse_btn_up: PublisherPtr<(MouseButton, Point)>,
-    mouse_move: PublisherPtr<Point>,
-    mouse_wheel: PublisherPtr<Point>,
-    touch: PublisherPtr<(TouchPhase, u64, Point)>,
+    resize: EventChannel<Dimension>,
+    key_down: EventChannel<(KeyCode, KeyMods, bool)>,
+    key_up: EventChannel<(KeyCode, KeyMods)>,
+    chr: EventChannel<(char, KeyMods, bool)>,
+    mouse_btn_down: EventChannel<(MouseButton, Point)>,
+    mouse_btn_up: EventChannel<(MouseButton, Point)>,
+    mouse_move: EventChannel<Point>,
+    mouse_wheel: EventChannel<Point>,
+    touch: EventChannel<(TouchPhase, u64, Point)>,
 }
+
+pub type GraphicsEventResizeSub = async_channel::Receiver<Dimension>;
+pub type GraphicsEventKeyDownSub = async_channel::Receiver<(KeyCode, KeyMods, bool)>;
+pub type GraphicsEventKeyUpSub = async_channel::Receiver<(KeyCode, KeyMods)>;
+pub type GraphicsEventCharSub = async_channel::Receiver<(char, KeyMods, bool)>;
+pub type GraphicsEventMouseButtonDownSub = async_channel::Receiver<(MouseButton, Point)>;
+pub type GraphicsEventMouseButtonUpSub = async_channel::Receiver<(MouseButton, Point)>;
+pub type GraphicsEventMouseMoveSub = async_channel::Receiver<Point>;
+pub type GraphicsEventMouseWheelSub = async_channel::Receiver<Point>;
+pub type GraphicsEventTouchSub = async_channel::Receiver<(TouchPhase, u64, Point)>;
 
 impl GraphicsEventPublisher {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            resize: Publisher::new(),
-            key_down: Publisher::new(),
-            key_up: Publisher::new(),
-            chr: Publisher::new(),
-            mouse_btn_down: Publisher::new(),
-            mouse_btn_up: Publisher::new(),
-            mouse_move: Publisher::new(),
-            mouse_wheel: Publisher::new(),
-            touch: Publisher::new(),
+            resize: EventChannel::new(),
+            key_down: EventChannel::new(),
+            key_up: EventChannel::new(),
+            chr: EventChannel::new(),
+            mouse_btn_down: EventChannel::new(),
+            mouse_btn_up: EventChannel::new(),
+            mouse_move: EventChannel::new(),
+            mouse_wheel: EventChannel::new(),
+            touch: EventChannel::new(),
         })
     }
 
@@ -641,32 +671,32 @@ impl GraphicsEventPublisher {
         self.touch.notify(ev);
     }
 
-    pub fn subscribe_resize(&self) -> Subscription<Dimension> {
-        self.resize.clone().subscribe()
+    pub fn subscribe_resize(&self) -> GraphicsEventResizeSub {
+        self.resize.clone_recvr()
     }
-    pub fn subscribe_key_down(&self) -> Subscription<(KeyCode, KeyMods, bool)> {
-        self.key_down.clone().subscribe()
+    pub fn subscribe_key_down(&self) -> GraphicsEventKeyDownSub {
+        self.key_down.clone_recvr()
     }
-    pub fn subscribe_key_up(&self) -> Subscription<(KeyCode, KeyMods)> {
-        self.key_up.clone().subscribe()
+    pub fn subscribe_key_up(&self) -> GraphicsEventKeyUpSub {
+        self.key_up.clone_recvr()
     }
-    pub fn subscribe_char(&self) -> Subscription<(char, KeyMods, bool)> {
-        self.chr.clone().subscribe()
+    pub fn subscribe_char(&self) -> GraphicsEventCharSub {
+        self.chr.clone_recvr()
     }
-    pub fn subscribe_mouse_btn_down(&self) -> Subscription<(MouseButton, Point)> {
-        self.mouse_btn_down.clone().subscribe()
+    pub fn subscribe_mouse_btn_down(&self) -> GraphicsEventMouseButtonDownSub {
+        self.mouse_btn_down.clone_recvr()
     }
-    pub fn subscribe_mouse_btn_up(&self) -> Subscription<(MouseButton, Point)> {
-        self.mouse_btn_up.clone().subscribe()
+    pub fn subscribe_mouse_btn_up(&self) -> GraphicsEventMouseButtonUpSub {
+        self.mouse_btn_up.clone_recvr()
     }
-    pub fn subscribe_mouse_move(&self) -> Subscription<Point> {
-        self.mouse_move.clone().subscribe()
+    pub fn subscribe_mouse_move(&self) -> GraphicsEventMouseMoveSub {
+        self.mouse_move.clone_recvr()
     }
-    pub fn subscribe_mouse_wheel(&self) -> Subscription<Point> {
-        self.mouse_wheel.clone().subscribe()
+    pub fn subscribe_mouse_wheel(&self) -> GraphicsEventMouseWheelSub {
+        self.mouse_wheel.clone_recvr()
     }
-    pub fn subscribe_touch(&self) -> Subscription<(TouchPhase, u64, Point)> {
-        self.touch.clone().subscribe()
+    pub fn subscribe_touch(&self) -> GraphicsEventTouchSub {
+        self.touch.clone_recvr()
     }
 }
 
