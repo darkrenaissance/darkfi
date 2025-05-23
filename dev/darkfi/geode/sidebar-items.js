@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FILES_PATH","MAX_CHUNK_SIZE"],"fn":["hash_to_string","read_until_filled"],"struct":["ChunkedFile","Geode"]};

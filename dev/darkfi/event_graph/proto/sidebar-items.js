@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MALICIOUS_THRESHOLD","RATELIMIT_EXPIRY_TIME","RATELIMIT_MIN_COUNT","RATELIMIT_SAMPLE_IDX","RATELIMIT_SAMPLE_SLEEP","WINDOW_EXPIRY_TIME","WINDOW_MAXSIZE"],"struct":["EventPut","EventRep","EventReq","MovingWindow","ProtocolEventGraph","TipRep","TipReq"]};

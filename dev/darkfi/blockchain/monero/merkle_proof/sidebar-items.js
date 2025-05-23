@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_MERKLE_TREE_PROOF_SIZE"],"struct":["MerkleProof"]};
