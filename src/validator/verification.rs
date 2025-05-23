@@ -185,7 +185,7 @@ pub fn validate_blockchain(
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, None)?;
+    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, Some(0))?;
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.blocks.get_all_order()?;
     for (index, block) in blocks[1..].iter().enumerate() {
@@ -1085,7 +1085,7 @@ pub async fn verify_proposal(
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Verify proposal block (2)
-    if verify_block(
+    if let Err(e) = verify_block(
         &fork.overlay,
         &fork.module,
         &mut fork.state_monotree,
@@ -1094,9 +1094,8 @@ pub async fn verify_proposal(
         verify_fees,
     )
     .await
-    .is_err()
     {
-        error!(target: "validator::verification::verify_proposal", "Erroneous proposal block found");
+        error!(target: "validator::verification::verify_proposal", "Erroneous proposal block found: {e}");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
@@ -1129,7 +1128,7 @@ pub async fn verify_fork_proposal(
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Verify proposal block (2)
-    if verify_block(
+    if let Err(e) = verify_block(
         &fork.overlay,
         &fork.module,
         &mut fork.state_monotree,
@@ -1138,9 +1137,8 @@ pub async fn verify_fork_proposal(
         verify_fees,
     )
     .await
-    .is_err()
     {
-        error!(target: "validator::verification::verify_fork_proposal", "Erroneous proposal block found");
+        error!(target: "validator::verification::verify_fork_proposal", "Erroneous proposal block found: {e}");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };

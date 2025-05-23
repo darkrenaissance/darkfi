@@ -66,6 +66,18 @@ struct Args {
     reset: Option<u32>,
 
     #[structopt(short, long)]
+    /// Purge pending sync headers
+    purge_sync: bool,
+
+    #[structopt(short, long)]
+    /// Fully validates existing blockchain state
+    validate: bool,
+
+    #[structopt(long)]
+    /// Fully rebuild the difficulties database based on existing blockchain state
+    rebuild_difficulties: bool,
+
+    #[structopt(short, long)]
     /// Set log file to ouput into
     log: Option<String>,
 
@@ -206,6 +218,35 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         let validator = Validator::new(&sled_db, &config).await?;
         validator.reset_to_height(height).await?;
         info!(target: "darkfid", "Validator state reset successfully!");
+        return Ok(())
+    }
+
+    // Check if sync headers purge was requested
+    if args.purge_sync {
+        info!(target: "darkfid", "Node will purge all pending sync headers.");
+        let validator = Validator::new(&sled_db, &config).await?;
+        validator.blockchain.headers.remove_all_sync()?;
+        info!(target: "darkfid", "Validator pending sync headers purged successfully!");
+        return Ok(())
+    }
+
+    // Check if validate was requested
+    if args.validate {
+        info!(target: "darkfid", "Node will validate existing blockchain state.");
+        let validator = Validator::new(&sled_db, &config).await?;
+        validator.validate_blockchain(config.pow_target, config.pow_fixed_difficulty).await?;
+        info!(target: "darkfid", "Validator blockchain state validated successfully!");
+        return Ok(())
+    }
+
+    // Check if rebuild difficulties was requested
+    if args.rebuild_difficulties {
+        info!(target: "darkfid", "Node will rebuild difficulties of existing blockchain state.");
+        let validator = Validator::new(&sled_db, &config).await?;
+        validator
+            .rebuild_block_difficulties(config.pow_target, config.pow_fixed_difficulty)
+            .await?;
+        info!(target: "darkfid", "Validator difficulties rebuilt successfully!");
         return Ok(())
     }
 

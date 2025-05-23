@@ -751,10 +751,11 @@ impl Validator {
         pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
-        let blocks = self.blockchain.get_all()?;
-
         // An empty blockchain is considered valid
-        if blocks.is_empty() {
+        let mut blocks_count = self.blockchain.len() as u32;
+        info!(target: "validator::validate_blockchain", "Validating {blocks_count} blocks...");
+        if blocks_count == 0 {
+            info!(target: "validator::validate_blockchain", "Blockchain validated successfully!");
             return Ok(())
         }
 
@@ -764,32 +765,39 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Set previous
-        let mut previous = &blocks[0];
+        let mut previous = self.blockchain.genesis_block()?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, pow_target).await?;
 
         // Validate genesis block
-        verify_genesis_block(&overlay, previous, pow_target).await?;
+        verify_genesis_block(&overlay, &previous, pow_target).await?;
+        info!(target: "validator::validate_blockchain", "Genesis block validated successfully!");
 
         // Write the changes to the in memory db
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Create a PoW module to validate each block
-        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, None)?;
+        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, Some(0))?;
 
         // Grab current contracts states monotree to validate each block
         let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
 
         // Validate and insert each block
-        for block in &blocks[1..] {
+        info!(target: "validator::validate_blockchain", "Validating rest blocks...");
+        blocks_count -= 1;
+        let mut index = 1;
+        while index <= blocks_count {
+            // Grab block
+            let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
+
             // Verify block
             if verify_block(
                 &overlay,
                 &module,
                 &mut state_monotree,
-                block,
-                previous,
+                &block,
+                &previous,
                 self.verify_fees,
             )
             .await
@@ -805,8 +813,12 @@ impl Validator {
 
             // Use last inserted block as next iteration previous
             previous = block;
+
+            info!(target: "validator::validate_blockchain", "Block {index}/{blocks_count} validated successfully!");
+            index += 1;
         }
 
+        info!(target: "validator::validate_blockchain", "Blockchain validated successfully!");
         Ok(())
     }
 
@@ -840,6 +852,93 @@ impl Validator {
         drop(append_lock);
 
         info!(target: "validator::reset_to_height", "Validator reset successfully!");
+
+        Ok(())
+    }
+
+    /// Auxiliary function to rebuild the block difficulties database
+    /// based on current validator blockchain.
+    /// Be careful as this will try to load everything in memory.
+    pub async fn rebuild_block_difficulties(
+        &self,
+        pow_target: u32,
+        pow_fixed_difficulty: Option<BigUint>,
+    ) -> Result<()> {
+        info!(target: "validator::rebuild_block_difficulties", "Rebuilding validator block difficulties...");
+        // Grab append lock so no new proposals can be appended while we execute the rebuild
+        let append_lock = self.consensus.append_lock.write().await;
+
+        // Clear the block difficulties tree
+        self.blockchain.blocks.difficulty.clear()?;
+
+        // An empty blockchain doesn't have difficulty records
+        let mut blocks_count = self.blockchain.len() as u32;
+        info!(target: "validator::rebuild_block_difficulties", "Rebuilding {blocks_count} block difficulties...");
+        if blocks_count == 0 {
+            info!(target: "validator::reset_to_height", "Validator block difficulties rebuilt successfully!");
+            return Ok(())
+        }
+
+        // Create a PoW module and an in memory overlay to compute each
+        // block difficulty.
+        let mut module =
+            PoWModule::new(self.blockchain.clone(), pow_target, pow_fixed_difficulty, Some(0))?;
+
+        // Grab genesis block difficulty to access current ranks
+        let genesis_block = self.blockchain.genesis_block()?;
+        let last_difficulty = BlockDifficulty::genesis(genesis_block.header.timestamp);
+        let mut targets_rank = last_difficulty.ranks.targets_rank;
+        let mut hashes_rank = last_difficulty.ranks.hashes_rank;
+
+        // Grab each block to compute its difficulty
+        blocks_count -= 1;
+        let mut index = 1;
+        while index <= blocks_count {
+            // Grab block
+            let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
+
+            // Grab next mine target and difficulty
+            let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
+
+            // Calculate block rank
+            let (target_distance_sq, hash_distance_sq) = block_rank(&block, &next_target);
+
+            // Update chain ranks
+            targets_rank += target_distance_sq.clone();
+            hashes_rank += hash_distance_sq.clone();
+
+            // Generate block difficulty and update PoW module
+            let cumulative_difficulty =
+                module.cumulative_difficulty.clone() + next_difficulty.clone();
+            let ranks = BlockRanks::new(
+                target_distance_sq,
+                targets_rank.clone(),
+                hash_distance_sq,
+                hashes_rank.clone(),
+            );
+            let block_difficulty = BlockDifficulty::new(
+                block.header.height,
+                block.header.timestamp,
+                next_difficulty,
+                cumulative_difficulty,
+                ranks,
+            );
+            module.append(block_difficulty.timestamp, &block_difficulty.difficulty);
+
+            // Add difficulty to database
+            self.blockchain.blocks.insert_difficulty(&[block_difficulty])?;
+
+            info!(target: "validator::validate_blockchain", "Block {index}/{blocks_count} difficulty added successfully!");
+            index += 1;
+        }
+
+        // Flush the database
+        self.blockchain.sled_db.flush()?;
+
+        // Release append lock
+        drop(append_lock);
+
+        info!(target: "validator::reset_to_height", "Validator block difficulties rebuilt successfully!");
 
         Ok(())
     }
