@@ -522,7 +522,7 @@ impl BlockStore {
         let start_key = start.to_be_bytes();
         let end_key = end.to_be_bytes();
 
-        for block in self.order.range(start_key..end_key) {
+        for block in self.order.range(start_key..=end_key) {
             blocks.push(parse_u32_key_record(block.unwrap())?);
         }
 
