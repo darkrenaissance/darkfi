@@ -511,7 +511,7 @@ impl MetricsStoreOverlay {
 
             // Insert serialized gas data
             lock.insert(SLED_TX_GAS_DATA_TREE, tx_hash.inner(), &serialized_gas_data)?;
-            info!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {}: {gas_data:?}", tx_hash);
+            debug!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {}: {gas_data:?}", tx_hash);
         }
 
         Ok(())
@@ -562,7 +562,7 @@ impl MetricsStoreOverlay {
         for (key, metric) in keys.iter().zip(metrics.iter()) {
             // Insert metric
             lock.insert(SLED_GAS_METRICS_TREE, &key.to_sled_key(), &serialize(metric))?;
-            info!(target: "explorerd::metrics_store::insert", "Added gas metrics using key {key}: {metric:?}");
+            debug!(target: "explorerd::metrics_store::insert", "Added gas metrics using key {key}: {metric:?}");
         }
 
         Ok(())
@@ -597,7 +597,7 @@ impl MetricsStoreOverlay {
                 &height.to_be_bytes(),
                 &serialized_metric,
             )?;
-            info!(target: "explorerd::metrics_store::insert_by_height", "Added gas metrics using height {height}: {metric:?}");
+            debug!(target: "explorerd::metrics_store::insert_by_height", "Added gas metrics using height {height}: {metric:?}");
         }
 
         Ok(())
