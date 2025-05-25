@@ -189,26 +189,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         explorer.connect().await?;
 
         // Sync blocks
-        info!(target: "explorerd", "Syncing blocks from darkfid...");
-        if let Err(e) = explorer.service.sync_blocks(args.reset).await {
-            let error_message = format!("Error syncing blocks: {:?}", e);
-            error!(target: "explorerd", "{error_message}");
-            return Err(Error::DatabaseError(error_message));
-        }
+        sync_blocks(explorer.clone(), args.reset).await?;
 
         // Subscribe blocks
-        info!(target: "explorerd", "Subscribing to new blocks...");
-        match subscribe_sync_blocks(explorer.clone(), config.endpoint.clone(), ex.clone()).await {
-            Ok((sub_task, lst_task)) => {
-                subscriber_task = Some(sub_task);
-                listener_task = Some(lst_task);
-            }
-            Err(e) => {
-                let error_message = format!("Error setting up blocks subscriber: {:?}", e);
-                error!(target: "explorerd", "{error_message}");
-                return Err(Error::DatabaseError(error_message));
-            }
-        };
+        (subscriber_task, listener_task) =
+            subscribe_blocks(explorer.clone(), config.endpoint.clone(), ex.clone(), args.reset)
+                .await?;
     }
 
     log_started_banner(explorer.clone(), &config, &args, &config_path, args.no_sync);
@@ -238,6 +224,49 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let _ = explorer.darkfid_client.stop().await;
 
     Ok(())
+}
+
+/// Synchronizes blocks from the `darkfid` daemon.
+async fn sync_blocks(explorer: Arc<Explorerd>, reset: bool) -> Result<()> {
+    info!(target: "explorerd", "Syncing blocks from darkfid...");
+    if let Err(e) = explorer.service.sync_blocks(reset).await {
+        let error_message = format!("Error syncing blocks: {:?}", e);
+        error!(target: "explorerd", "{error_message}");
+        return Err(Error::DatabaseError(error_message));
+    }
+    Ok(())
+}
+
+/// Subscribes to new blocks from the `darkfid` daemon, returning optional
+/// stoppable tasks for the subscriber and listener.
+async fn subscribe_blocks(
+    explorer: Arc<Explorerd>,
+    endpoint: Url,
+    executor: Arc<smol::Executor<'static>>,
+    reset: bool,
+) -> Result<(Option<StoppableTaskPtr>, Option<StoppableTaskPtr>)> {
+    info!(target: "explorerd", "Subscribing to new blocks...");
+
+    let result = match subscribe_sync_blocks(explorer.clone(), endpoint.clone(), executor.clone())
+        .await
+    {
+        Ok((subscriber_task, listener_task)) => Ok((subscriber_task, listener_task)),
+        Err(e) => {
+            // If out of sync, sync blocks and retry subscription
+            if e.to_string().contains("Blockchain not fully synced") {
+                sync_blocks(explorer.clone(), reset).await?;
+                subscribe_sync_blocks(explorer.clone(), endpoint.clone(), executor.clone()).await
+            } else {
+                let error_message = format!("Error setting up blocks subscriber: {:?}", e);
+                error!(target: "explorerd", "{error_message}");
+                return Err(Error::DatabaseError(error_message));
+            }
+        }
+    };
+
+    let (subscriber_task, listener_task) = result?;
+    info!(target: "explorerd", "Successfully subscribed to new blocks!");
+    Ok((Some(subscriber_task), Some(listener_task)))
 }
 
 /// Logs a banner displaying the startup details of the DarkFi Explorer Node.
