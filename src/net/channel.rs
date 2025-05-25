@@ -241,7 +241,7 @@ impl Channel {
         // Check if we need to sleep
         if let Some(sleep_time) = sleep_time {
             let sleep_time = 2 * sleep_time;
-            warn!(
+            debug!(
                 target: "net::channel::send()",
                 "[P2P] Channel rate limit is active, sleeping before sending for: {} (ms)",
                 sleep_time,
