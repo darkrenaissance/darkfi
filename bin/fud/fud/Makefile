@@ -17,7 +17,7 @@ SRC = \
 	$(shell find src -type f -name '*.rs') \
 	$(shell find ../../../src -type f -name '*.rs') \
 
-BIN = $(shell grep '^name = ' Cargo.toml | cut -d' ' -f3 | tr -d '"')
+BIN = $(shell grep '^name = ' Cargo.toml | sed 1q | cut -d' ' -f3 | tr -d '"')
 
 all: $(BIN)
 

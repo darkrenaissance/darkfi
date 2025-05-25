@@ -8,6 +8,14 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
+[lib]
+name = "fud"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fud"
+path = "src/main.rs"
+
 [dependencies]
 darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "sled-overlay"]}
 darkfi-serial = {version = "0.4.2", features = ["hash"]}

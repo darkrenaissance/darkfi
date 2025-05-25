@@ -239,7 +239,7 @@ impl Geode {
         let mut chunk_hashes = vec![];
 
         loop {
-            let mut buf = [0u8; MAX_CHUNK_SIZE];
+            let mut buf = vec![0u8; MAX_CHUNK_SIZE];
             let bytes_read = read_until_filled(&mut stream, &mut buf).await?;
             if bytes_read == 0 {
                 break
@@ -306,16 +306,32 @@ impl Geode {
         info!(target: "geode::write_chunk()", "[Geode] Writing single chunk");
 
         let mut cursor = Cursor::new(&stream);
-        let mut chunk = [0u8; MAX_CHUNK_SIZE];
+        let mut chunk = vec![0u8; MAX_CHUNK_SIZE];
 
         let bytes_read = read_until_filled(&mut cursor, &mut chunk).await?;
         let chunk_slice = &chunk[..bytes_read];
         let chunk_hash = blake3::hash(chunk_slice);
 
-        let chunked_file = self.get(file_hash, file_path).await?;
+        let file_hash_str = hash_to_string(file_hash);
+        let mut file_metadata_path = self.files_path.clone();
+        file_metadata_path.push(file_hash_str);
+
+        // Try to read the file metadata. If it's corrupt, return an error signalling
+        // that garbage collection needs to run.
+        let chunk_hashes = match Self::read_metadata(&file_metadata_path).await {
+            Ok(v) => v,
+            Err(e) => {
+                return match e {
+                    // If the file is not found, return according error.
+                    Error::Io(std::io::ErrorKind::NotFound) => Err(Error::GeodeFileNotFound),
+                    // Anything else should tell the client to do garbage collection
+                    _ => Err(Error::GeodeNeedsGc),
+                }
+            }
+        };
 
         // Get the chunk index in the file from the chunk hash
-        let chunk_index = match chunked_file.iter().position(|c| c.0 == chunk_hash) {
+        let chunk_index = match chunk_hashes.iter().position(|h| *h == chunk_hash) {
             Some(index) => index,
             None => {
                 return Err(Error::GeodeNeedsGc);
@@ -447,7 +463,7 @@ impl Geode {
         chunk_index: &usize,
     ) -> Result<Vec<u8>> {
         let position = (*chunk_index as u64) * (MAX_CHUNK_SIZE as u64);
-        let mut buf = [0u8; MAX_CHUNK_SIZE];
+        let mut buf = vec![0u8; MAX_CHUNK_SIZE];
         stream.seek(SeekFrom::Start(position)).await?;
         let bytes_read = read_until_filled(stream, &mut buf).await?;
         Ok(buf[..bytes_read].to_vec())

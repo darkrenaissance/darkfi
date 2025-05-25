@@ -26,18 +26,18 @@ use crate::{
     Fud,
 };
 
+pub enum FetchReply {
+    File(FudFileReply),
+    Chunk(FudChunkReply),
+}
+
 /// Triggered when calling the `get` RPC method
 pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
     loop {
         let (_, file_hash, file_path, _) = fud.get_rx.recv().await.unwrap();
 
-        let _ = fud.handle_get(&file_hash, &file_path).await;
+        let _ = fud.get(&file_hash, &file_path).await;
     }
-}
-
-pub enum FetchReply {
-    File(FudFileReply),
-    Chunk(FudChunkReply),
 }
 
 /// Background task that receives file fetch requests and tries to
@@ -93,7 +93,7 @@ pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
     }
 }
 
-/// Background task that announces our files and chunks once every hour.
+/// Background task that announces our files once every hour.
 /// Also removes seeders that did not announce for too long.
 pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
     let interval = 3600; // TODO: Make a setting

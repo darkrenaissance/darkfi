@@ -47,7 +47,7 @@ pub trait DhtHandler {
     /// Send FIND NODES request to a peer to get nodes close to `key`
     async fn fetch_nodes(&self, node: &DhtNode, key: &blake3::Hash) -> Result<Vec<DhtNode>>;
 
-    /// Announce message `m` for a key, and add ourselves to router
+    /// Announce message for a key, and add ourselves to router
     async fn announce<M: Message>(
         &self,
         key: &blake3::Hash,
@@ -85,27 +85,30 @@ pub trait DhtHandler {
             let channel = res.unwrap();
             let channel_cache_lock = self.dht().channel_cache.clone();
             let mut channel_cache = channel_cache_lock.write().await;
-            if !channel.is_stopped() && !channel_cache.values().any(|&v| v == channel.info.id) {
-                // Skip this channel is it's a seed or refine session.
-                if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
-                    continue;
-                }
 
-                let node = self.ping(channel.clone()).await;
+            // Skip this channel if it's stopped or not new.
+            if channel.is_stopped() || channel_cache.values().any(|&v| v == channel.info.id) {
+                continue;
+            }
+            // Skip this channel if it's a seed or refine session.
+            if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+                continue;
+            }
 
-                if let Ok(n) = node {
-                    channel_cache.insert(n.id, channel.info.id);
-                    drop(channel_cache);
+            let node = self.ping(channel.clone()).await;
 
-                    let node_cache_lock = self.dht().node_cache.clone();
-                    let mut node_cache = node_cache_lock.write().await;
-                    node_cache.insert(channel.info.id, n.clone());
-                    drop(node_cache);
+            if let Ok(n) = node {
+                channel_cache.insert(n.id, channel.info.id);
+                drop(channel_cache);
 
-                    if !n.addresses.is_empty() {
-                        self.add_node(n.clone()).await;
-                        let _ = self.on_new_node(&n.clone()).await;
-                    }
+                let node_cache_lock = self.dht().node_cache.clone();
+                let mut node_cache = node_cache_lock.write().await;
+                node_cache.insert(channel.info.id, n.clone());
+                drop(node_cache);
+
+                if !n.addresses.is_empty() {
+                    self.add_node(n.clone()).await;
+                    let _ = self.on_new_node(&n.clone()).await;
                 }
             }
         }
