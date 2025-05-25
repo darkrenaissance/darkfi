@@ -110,26 +110,26 @@ impl ProtocolProposalHandler {
         // Generate the message queue smol channel
         let (sender, receiver) = smol::channel::unbounded::<(Proposal, u32)>();
 
-        // Start the proposals handler task
-        self.proposals_handler.task.clone().start(
-            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), validator.clone(), proposals_sub.clone()),
+        // Start the unkown proposals handler task
+        self.unknown_proposals_handler.clone().start(
+            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting ProtocolProposal handler task: {e}"),
+                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting unknown proposals handler task: {e}"),
                 }
             },
             Error::DetachedTaskStopped,
             executor.clone(),
         );
 
-        // Start the unkown proposals handler task
-        self.unknown_proposals_handler.clone().start(
-            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), validator.clone(), p2p.clone(), proposals_sub, blocks_sub),
+        // Start the proposals handler task
+        self.proposals_handler.task.clone().start(
+            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), validator.clone(), proposals_sub),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting unknown proposals handler task: {e}"),
+                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting ProtocolProposal handler task: {e}"),
                 }
             },
             Error::DetachedTaskStopped,
@@ -147,11 +147,11 @@ impl ProtocolProposalHandler {
     /// Stop the `ProtocolProposal` background tasks.
     pub async fn stop(&self) {
         debug!(target: "darkfid::proto::protocol_proposal::stop", "Terminating ProtocolProposal handler task...");
+        self.unknown_proposals_handler.stop().await;
         self.proposals_handler.task.stop().await;
         let mut unknown_proposals = self.unknown_proposals.write().await;
         *unknown_proposals = HashSet::new();
         drop(unknown_proposals);
-        self.unknown_proposals_handler.stop().await;
         debug!(target: "darkfid::proto::protocol_proposal::stop", "ProtocolProposal handler task terminated!");
     }
 }
