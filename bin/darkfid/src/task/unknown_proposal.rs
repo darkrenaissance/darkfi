@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, error, info, warn};
+use std::{collections::HashSet, sync::Arc};
+
+use log::{debug, error, info};
+use smol::{channel::Receiver, lock::RwLock};
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -42,39 +45,100 @@ use crate::proto::{
 };
 
 /// Background task to handle unknown proposals.
-pub async fn handle_unknown_proposal(
+pub async fn handle_unknown_proposals(
+    receiver: Receiver<(Proposal, u32)>,
+    unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
     validator: ValidatorPtr,
     p2p: P2pPtr,
     proposals_sub: JsonSubscriber,
     blocks_sub: JsonSubscriber,
-    channel: u32,
-    proposal: Proposal,
 ) -> Result<()> {
+    debug!(target: "darkfid::task::handle_unknown_proposal", "START");
+    loop {
+        // Wait for a new unknown proposal trigger
+        let (proposal, channel) = match receiver.recv().await {
+            Ok(m) => m,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::task::handle_unknown_proposal",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if proposal exists in our queue
+        let lock = unknown_proposals.read().await;
+        let contains_proposal = lock.contains(proposal.hash.inner());
+        drop(lock);
+        if !contains_proposal {
+            debug!(
+                target: "darkfid::task::handle_unknown_proposal",
+                "Proposal {} is not in our unknown proposals queue.",
+                proposal.hash,
+            );
+            continue
+        };
+
+        // Handle the unknown proposal
+        if handle_unknown_proposal(
+            &validator,
+            &p2p,
+            &proposals_sub,
+            &blocks_sub,
+            channel,
+            &proposal,
+        )
+        .await
+        {
+            // Ban channel if it exists
+            if let Some(channel) = p2p.get_channel(channel) {
+                channel.ban().await;
+            }
+        };
+
+        // Remove proposal from the queue
+        let mut lock = unknown_proposals.write().await;
+        lock.remove(proposal.hash.inner());
+        drop(lock);
+    }
+}
+
+/// Background task to handle an unknown proposal.
+/// Returns a boolean flag indicate if we should ban the channel.
+async fn handle_unknown_proposal(
+    validator: &ValidatorPtr,
+    p2p: &P2pPtr,
+    proposals_sub: &JsonSubscriber,
+    blocks_sub: &JsonSubscriber,
+    channel: u32,
+    proposal: &Proposal,
+) -> bool {
     // If proposal fork chain was not found, we ask our peer for its sequence
     debug!(target: "darkfid::task::handle_unknown_proposal", "Asking peer for fork sequence");
     let Some(channel) = p2p.get_channel(channel) else {
-        error!(target: "darkfid::task::handle_unknown_proposal", "Channel {channel} wasn't found.");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_unknown_proposal", "Channel {channel} wasn't found.");
+        return false
     };
 
     // Communication setup
     let Ok(response_sub) = channel.subscribe_msg::<ForkSyncResponse>().await else {
-        error!(target: "darkfid::task::handle_unknown_proposal", "Failure during `ForkSyncResponse` communication setup with peer: {channel:?}");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_unknown_proposal", "Failure during `ForkSyncResponse` communication setup with peer: {channel:?}");
+        return true
     };
 
     // Grab last known block to create the request and execute it
     let last = match validator.blockchain.last() {
         Ok(l) => l,
         Err(e) => {
-            debug!(target: "darkfid::task::handle_unknown_proposal", "Blockchain last retriaval failed: {e}");
-            return Ok(())
+            error!(target: "darkfid::task::handle_unknown_proposal", "Blockchain last retriaval failed: {e}");
+            return false
         }
     };
     let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal.hash) };
     if let Err(e) = channel.send(&request).await {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Channel send failed: {e}");
-        return Ok(())
+        return true
     };
 
     // Node waits for response
@@ -85,7 +149,7 @@ pub async fn handle_unknown_proposal(
         Ok(r) => r,
         Err(e) => {
             debug!(target: "darkfid::task::handle_unknown_proposal", "Asking peer for fork sequence failed: {e}");
-            return Ok(())
+            return true
         }
     };
     debug!(target: "darkfid::task::handle_unknown_proposal", "Peer response: {response:?}");
@@ -95,7 +159,7 @@ pub async fn handle_unknown_proposal(
 
     // Response should not be empty
     if response.proposals.is_empty() {
-        warn!(target: "darkfid::task::handle_unknown_proposal", "Peer responded with empty sequence, node might be out of sync!");
+        debug!(target: "darkfid::task::handle_unknown_proposal", "Peer responded with empty sequence, node might be out of sync!");
         return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
     }
 
@@ -125,7 +189,7 @@ pub async fn handle_unknown_proposal(
             // Skip already existing proposals
             Err(Error::ProposalAlreadyExists) => continue,
             Err(e) => {
-                error!(
+                debug!(
                     target: "darkfid::task::handle_unknown_proposal",
                     "Error while appending response proposal: {e}"
                 );
@@ -142,35 +206,36 @@ pub async fn handle_unknown_proposal(
         proposals_sub.notify(vec![enc_prop].into()).await;
     }
 
-    Ok(())
+    false
 }
 
-// TODO; If a reorg trigger is erroneous, disconnect from peer.
 /// Auxiliary function to handle a potential reorg.
 /// We first find our last common block with the peer,
 /// then grab the header sequence from that block until
 /// the proposal and check if it ranks higher than our
 /// current best ranking fork, to perform a reorg.
+/// Returns a boolean flag indicate if we should ban the
+/// channel.
 async fn handle_reorg(
-    validator: ValidatorPtr,
-    p2p: P2pPtr,
-    proposals_sub: JsonSubscriber,
-    blocks_sub: JsonSubscriber,
+    validator: &ValidatorPtr,
+    p2p: &P2pPtr,
+    proposals_sub: &JsonSubscriber,
+    blocks_sub: &JsonSubscriber,
     channel: ChannelPtr,
-    proposal: Proposal,
-) -> Result<()> {
+    proposal: &Proposal,
+) -> bool {
     info!(target: "darkfid::task::handle_reorg", "Checking for potential reorg from proposal {} - {} by peer: {channel:?}", proposal.hash, proposal.block.header.height);
 
     // Check if genesis proposal was provided
     if proposal.block.header.height == 0 {
-        info!(target: "darkfid::task::handle_reorg", "Peer send a genesis proposal, skipping...");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_reorg", "Peer send a genesis proposal, skipping...");
+        return true
     }
 
     // Communication setup
     let Ok(response_sub) = channel.subscribe_msg::<ForkHeaderHashResponse>().await else {
-        error!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeaderHashResponse` communication setup with peer: {channel:?}");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeaderHashResponse` communication setup with peer: {channel:?}");
+        return true
     };
 
     // Keep track of received header hashes sequence
@@ -184,7 +249,7 @@ async fn handle_reorg(
         let request = ForkHeaderHashRequest { height, fork_header: proposal.hash };
         if let Err(e) = channel.send(&request).await {
             debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            return Ok(())
+            return true
         };
 
         // Node waits for response
@@ -195,19 +260,26 @@ async fn handle_reorg(
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for header hash failed: {e}");
-                return Ok(())
+                return true
             }
         };
         debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
 
         // Check if peer returned a header
         let Some(peer_header) = response.fork_header else {
-            info!(target: "darkfid::task::handle_reorg", "Peer responded with an empty header");
-            return Ok(())
+            debug!(target: "darkfid::task::handle_reorg", "Peer responded with an empty header");
+            return true
         };
 
         // Check if we know this header
-        match validator.blockchain.blocks.get_order(&[height], false)?[0] {
+        let headers = match validator.blockchain.blocks.get_order(&[height], false) {
+            Ok(r) => r,
+            Err(e) => {
+                error!(target: "darkfid::task::handle_reorg", "Retrieving headers failed: {e}");
+                return false
+            }
+        };
+        match headers[0] {
             Some(known_header) => {
                 if known_header == peer_header {
                     previous_height = height;
@@ -223,32 +295,51 @@ async fn handle_reorg(
 
     // Check if we have a sequence to process
     if peer_header_hashes.is_empty() {
-        info!(target: "darkfid::task::handle_reorg", "No headers to process, skipping...");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_reorg", "No headers to process, skipping...");
+        return true
     }
 
     // Communication setup
     let Ok(response_sub) = channel.subscribe_msg::<ForkHeadersResponse>().await else {
-        error!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeadersResponse` communication setup with peer: {channel:?}");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeadersResponse` communication setup with peer: {channel:?}");
+        return true
     };
 
     // Grab last common height ranks
     let last_common_height = previous_height;
     let last_difficulty = match previous_height {
-        0 => BlockDifficulty::genesis(validator.blockchain.genesis_block()?.header.timestamp),
-        _ => validator.blockchain.blocks.get_difficulty(&[last_common_height], true)?[0]
-            .clone()
-            .unwrap(),
+        0 => {
+            let genesis_timestamp = match validator.blockchain.genesis_block() {
+                Ok(b) => b.header.timestamp,
+                Err(e) => {
+                    error!(target: "darkfid::task::handle_reorg", "Retrieving genesis block failed: {e}");
+                    return false
+                }
+            };
+            BlockDifficulty::genesis(genesis_timestamp)
+        }
+        _ => match validator.blockchain.blocks.get_difficulty(&[last_common_height], true) {
+            Ok(d) => d[0].clone().unwrap(),
+            Err(e) => {
+                error!(target: "darkfid::task::handle_reorg", "Retrieving block difficulty failed: {e}");
+                return false
+            }
+        },
     };
 
     // Create a new PoW from last common height
-    let module = PoWModule::new(
+    let module = match PoWModule::new(
         validator.consensus.blockchain.clone(),
         validator.consensus.module.read().await.target,
         validator.consensus.module.read().await.fixed_difficulty.clone(),
         Some(last_common_height + 1),
-    )?;
+    ) {
+        Ok(m) => m,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "PoWModule generation failed: {e}");
+            return false
+        }
+    };
 
     // Retrieve the headers of the hashes sequence, in batches, keeping track of the sequence ranking
     info!(target: "darkfid::task::handle_reorg", "Retrieving {} headers from peer...", peer_header_hashes.len());
@@ -270,7 +361,7 @@ async fn handle_reorg(
         let request = ForkHeadersRequest { headers: batch.clone(), fork_header: proposal.hash };
         if let Err(e) = channel.send(&request).await {
             debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            return Ok(())
+            return true
         };
 
         // Node waits for response
@@ -281,37 +372,44 @@ async fn handle_reorg(
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for headers sequence failed: {e}");
-                return Ok(())
+                return true
             }
         };
         debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
 
         // Response sequence must be the same length as the one requested
         if response.headers.len() != batch.len() {
-            error!(target: "darkfid::task::handle_reorg", "Peer responded with a different headers sequence length");
-            return Ok(())
+            debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different headers sequence length");
+            return true
         }
 
         // Process retrieved headers
         for (peer_header_index, peer_header) in response.headers.iter().enumerate() {
             let peer_header_hash = peer_header.hash();
-            info!(target: "darkfid::task::handle_reorg", "Processing header: {peer_header_hash} - {}", peer_header.height);
+            debug!(target: "darkfid::task::handle_reorg", "Processing header: {peer_header_hash} - {}", peer_header.height);
 
             // Validate its the header we requested
             if peer_header_hash != batch[peer_header_index] {
-                error!(target: "darkfid::task::handle_reorg", "Peer responded with a differend header: {} - {peer_header_hash}", batch[peer_header_index]);
-                return Ok(())
+                debug!(target: "darkfid::task::handle_reorg", "Peer responded with a differend header: {} - {peer_header_hash}", batch[peer_header_index]);
+                return true
             }
 
             // Validate sequence is correct
             if peer_header.previous != previous_hash || peer_header.height != previous_height + 1 {
-                error!(target: "darkfid::task::handle_reorg", "Invalid header sequence detected");
-                return Ok(())
+                debug!(target: "darkfid::task::handle_reorg", "Invalid header sequence detected");
+                return true
             }
 
             // Grab next mine target and difficulty
-            let (next_target, next_difficulty) =
-                headers_module.next_mine_target_and_difficulty()?;
+            let (next_target, next_difficulty) = match headers_module
+                .next_mine_target_and_difficulty()
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    debug!(target: "darkfid::task::handle_reorg", "Retrieving next mine target and difficulty failed: {e}");
+                    return false
+                }
+            };
 
             // Verify header hash and calculate its rank
             let (target_distance_sq, hash_distance_sq) = match header_rank(
@@ -320,8 +418,8 @@ async fn handle_reorg(
             ) {
                 Ok(distances) => distances,
                 Err(e) => {
-                    error!(target: "darkfid::task::handle_reorg", "Invalid header hash detected: {e}");
-                    return Ok(())
+                    debug!(target: "darkfid::task::handle_reorg", "Invalid header hash detected: {e}");
+                    return true
                 }
             };
 
@@ -346,36 +444,66 @@ async fn handle_reorg(
 
     // Check if the sequence ranks higher than our current best fork
     let forks = validator.consensus.forks.read().await;
-    let best_fork = &forks[best_fork_index(&forks)?];
+    let index = match best_fork_index(&forks) {
+        Ok(i) => i,
+        Err(e) => {
+            debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
+            return false
+        }
+    };
+    let best_fork = &forks[index];
     if targets_rank < best_fork.targets_rank ||
         (targets_rank == best_fork.targets_rank && hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks lower than our current best fork, skipping...");
         drop(forks);
-        return Ok(())
+        return true
     }
     drop(forks);
 
     // Communication setup
     let Ok(response_sub) = channel.subscribe_msg::<ForkProposalsResponse>().await else {
-        error!(target: "darkfid::task::handle_reorg", "Failure during `ForkProposalsResponse` communication setup with peer: {channel:?}");
-        return Ok(())
+        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkProposalsResponse` communication setup with peer: {channel:?}");
+        return true
     };
 
     // Create a fork from last common height
-    let mut peer_fork = Fork::new(validator.consensus.blockchain.clone(), module).await?;
+    let mut peer_fork = match Fork::new(validator.consensus.blockchain.clone(), module).await {
+        Ok(f) => f,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Generating peer fork failed: {e}");
+            return false
+        }
+    };
     peer_fork.targets_rank = last_difficulty.ranks.targets_rank.clone();
     peer_fork.hashes_rank = last_difficulty.ranks.hashes_rank.clone();
 
     // Grab all state inverse diffs after last common height, and add them to the fork
-    let inverse_diffs =
-        validator.blockchain.blocks.get_state_inverse_diffs_after(last_common_height)?;
+    let inverse_diffs = match validator
+        .blockchain
+        .blocks
+        .get_state_inverse_diffs_after(last_common_height)
+    {
+        Ok(i) => i,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Retrieving state inverse diffs failed: {e}");
+            return false
+        }
+    };
     for inverse_diff in inverse_diffs.iter().rev() {
-        peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)?;
+        if let Err(e) =
+            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)
+        {
+            error!(target: "darkfid::task::handle_reorg", "Applying inverse diff failed: {e}");
+            return false
+        }
     }
 
     // Rebuild fork contracts states monotree
-    peer_fork.compute_monotree()?;
+    if let Err(e) = peer_fork.compute_monotree() {
+        error!(target: "darkfid::task::handle_reorg", "Rebuilding peer fork monotree failed: {e}");
+        return false
+    }
 
     // Retrieve the proposals of the hashes sequence, in batches
     info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", peer_header_hashes.len());
@@ -394,7 +522,7 @@ async fn handle_reorg(
         let request = ForkProposalsRequest { headers: batch.clone(), fork_header: proposal.hash };
         if let Err(e) = channel.send(&request).await {
             debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            return Ok(())
+            return true
         };
 
         // Node waits for response
@@ -405,15 +533,15 @@ async fn handle_reorg(
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for proposals sequence failed: {e}");
-                return Ok(())
+                return true
             }
         };
         debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
 
         // Response sequence must be the same length as the one requested
         if response.proposals.len() != batch.len() {
-            error!(target: "darkfid::task::handle_reorg", "Peer responded with a different proposals sequence length");
-            return Ok(())
+            debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different proposals sequence length");
+            return true
         }
 
         // Process retrieved proposal
@@ -423,7 +551,7 @@ async fn handle_reorg(
             // Validate its the proposal we requested
             if peer_proposal.hash != batch[peer_proposal_index] {
                 error!(target: "darkfid::task::handle_reorg", "Peer responded with a differend proposal: {} - {}", batch[peer_proposal_index], peer_proposal.hash);
-                return Ok(())
+                return true
             }
 
             // Verify proposal
@@ -431,13 +559,13 @@ async fn handle_reorg(
                 verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await
             {
                 error!(target: "darkfid::task::handle_reorg", "Verify fork proposal failed: {e}");
-                return Ok(())
+                return true
             }
 
             // Append proposal
             if let Err(e) = peer_fork.append_proposal(peer_proposal).await {
                 error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-                return Ok(())
+                return true
             }
         }
 
@@ -449,27 +577,34 @@ async fn handle_reorg(
     }
 
     // Verify trigger proposal
-    if let Err(e) = verify_fork_proposal(&mut peer_fork, &proposal, validator.verify_fees).await {
+    if let Err(e) = verify_fork_proposal(&mut peer_fork, proposal, validator.verify_fees).await {
         error!(target: "darkfid::task::handle_reorg", "Verify proposal failed: {e}");
-        return Ok(())
+        return true
     }
 
     // Append trigger proposal
-    if let Err(e) = peer_fork.append_proposal(&proposal).await {
+    if let Err(e) = peer_fork.append_proposal(proposal).await {
         error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-        return Ok(())
+        return true
     }
 
     // Check if the peer fork ranks higher than our current best fork
     let mut forks = validator.consensus.forks.write().await;
-    let best_fork = &forks[best_fork_index(&forks)?];
+    let index = match best_fork_index(&forks) {
+        Ok(i) => i,
+        Err(e) => {
+            debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
+            return false
+        }
+    };
+    let best_fork = &forks[index];
     if peer_fork.targets_rank < best_fork.targets_rank ||
         (peer_fork.targets_rank == best_fork.targets_rank &&
             peer_fork.hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer fork ranks lower than our current best fork, skipping...");
         drop(forks);
-        return Ok(())
+        return true
     }
 
     // Execute the reorg
@@ -482,7 +617,7 @@ async fn handle_reorg(
         Ok(f) => f,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Confirmation failed: {e}");
-            return Ok(())
+            return false
         }
     };
 
@@ -499,8 +634,8 @@ async fn handle_reorg(
     p2p.broadcast(&message).await;
 
     // Notify proposals subscriber
-    let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
+    let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
     proposals_sub.notify(vec![enc_prop].into()).await;
 
-    Ok(())
+    false
 }

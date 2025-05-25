@@ -20,7 +20,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use log::{debug, error};
-use smol::lock::RwLock;
+use smol::{channel::Sender, lock::RwLock};
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -41,7 +41,7 @@ use darkfi::{
 };
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
-use crate::task::handle_unknown_proposal;
+use crate::task::handle_unknown_proposals;
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -69,9 +69,11 @@ pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;
 /// Handler managing [`Proposal`] messages, over a generic P2P protocol.
 pub struct ProtocolProposalHandler {
     /// The generic handler for [`Proposal`] messages.
-    handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
-    /// Background tasks invoked by the handler.
-    tasks: Arc<RwLock<HashSet<StoppableTaskPtr>>>,
+    proposals_handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
+    /// Unknown proposals queue to be checked for reorg.
+    unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
+    /// Handler background task to process unknown proposals queue.
+    unknown_proposals_handler: StoppableTaskPtr,
 }
 
 impl ProtocolProposalHandler {
@@ -83,10 +85,12 @@ impl ProtocolProposalHandler {
             "Adding ProtocolProposal to the protocol registry"
         );
 
-        let handler = ProtocolGenericHandler::new(p2p, "ProtocolProposal", SESSION_DEFAULT).await;
-        let tasks = Arc::new(RwLock::new(HashSet::new()));
+        let proposals_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolProposal", SESSION_DEFAULT).await;
+        let unknown_proposals = Arc::new(RwLock::new(HashSet::new()));
+        let unknown_proposals_handler = StoppableTask::new();
 
-        Arc::new(Self { handler, tasks })
+        Arc::new(Self { proposals_handler, unknown_proposals, unknown_proposals_handler })
     }
 
     /// Start the `ProtocolProposal` background task.
@@ -103,12 +107,29 @@ impl ProtocolProposalHandler {
             "Starting ProtocolProposal handler task..."
         );
 
-        self.handler.task.clone().start(
-            handle_receive_proposal(self.handler.clone(), self.tasks.clone(), validator.clone(), p2p.clone(), proposals_sub, blocks_sub, executor.clone()),
+        // Generate the message queue smol channel
+        let (sender, receiver) = smol::channel::unbounded::<(Proposal, u32)>();
+
+        // Start the proposals handler task
+        self.proposals_handler.task.clone().start(
+            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), validator.clone(), proposals_sub.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting ProtocolProposal handler task: {e}"),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
+
+        // Start the unkown proposals handler task
+        self.unknown_proposals_handler.clone().start(
+            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), validator.clone(), p2p.clone(), proposals_sub, blocks_sub),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting unknown proposals handler task: {e}"),
                 }
             },
             Error::DetachedTaskStopped,
@@ -126,13 +147,11 @@ impl ProtocolProposalHandler {
     /// Stop the `ProtocolProposal` background tasks.
     pub async fn stop(&self) {
         debug!(target: "darkfid::proto::protocol_proposal::stop", "Terminating ProtocolProposal handler task...");
-        self.handler.task.stop().await;
-        let mut tasks = self.tasks.write().await;
-        for task in tasks.iter() {
-            task.stop().await;
-        }
-        *tasks = HashSet::new();
-        drop(tasks);
+        self.proposals_handler.task.stop().await;
+        let mut unknown_proposals = self.unknown_proposals.write().await;
+        *unknown_proposals = HashSet::new();
+        drop(unknown_proposals);
+        self.unknown_proposals_handler.stop().await;
         debug!(target: "darkfid::proto::protocol_proposal::stop", "ProtocolProposal handler task terminated!");
     }
 }
@@ -140,12 +159,10 @@ impl ProtocolProposalHandler {
 /// Background handler function for ProtocolProposal.
 async fn handle_receive_proposal(
     handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
-    tasks: Arc<RwLock<HashSet<StoppableTaskPtr>>>,
+    sender: Sender<(Proposal, u32)>,
+    unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
     validator: ValidatorPtr,
-    p2p: P2pPtr,
     proposals_sub: JsonSubscriber,
-    blocks_sub: JsonSubscriber,
-    executor: ExecutorPtr,
 ) -> Result<()> {
     debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
     loop {
@@ -198,21 +215,29 @@ async fn handle_receive_proposal(
             }
         };
 
-        // Handle unknown proposal in the background
-        let task = StoppableTask::new();
-        let _tasks = tasks.clone();
-        let _task = task.clone();
-        task.clone().start(
-            handle_unknown_proposal(validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub.clone(), channel, proposal.0),
-            |res| async move {
-                match res {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { _tasks.write().await.remove(&_task); }
-                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting unknown proposal handler task: {e}"),
-                }
-            },
-            Error::DetachedTaskStopped,
-            executor.clone(),
-        );
-        tasks.write().await.insert(task);
+        // Check if we already have the unknown proposal record in our
+        // queue.
+        let mut lock = unknown_proposals.write().await;
+        if lock.contains(proposal.0.hash.inner()) {
+            debug!(
+                target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                "Proposal {} is already in our unknown proposals queue.",
+                proposal.0.hash,
+            );
+            drop(lock);
+            continue
+        }
+
+        // Insert new record in our queue
+        lock.insert(proposal.0.hash.0);
+        drop(lock);
+
+        // Notify the unknown proposals handler task
+        if let Err(e) = sender.send((proposal.0, channel)).await {
+            debug!(
+                target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                "Channel {channel} send fail: {e}"
+            );
+        };
     }
 }

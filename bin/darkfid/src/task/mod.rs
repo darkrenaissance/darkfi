@@ -26,7 +26,7 @@ pub mod sync;
 pub use sync::sync_task;
 
 pub mod unknown_proposal;
-pub use unknown_proposal::handle_unknown_proposal;
+pub use unknown_proposal::handle_unknown_proposals;
 
 pub mod garbage_collect;
 pub use garbage_collect::garbage_collect_task;
