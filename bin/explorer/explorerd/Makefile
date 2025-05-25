@@ -55,6 +55,8 @@ help:
 	@echo "  make start-localnet - Start the explorer node environment on localnet"
 	@echo "  make start-testnet  - Start the explorer node environment on testnet"
 	@echo "  make start-mainnet  - Start the explorer node environment on mainnet"
+	@echo "  ** Use VERBOSE=-vv or -vvv for debugging (applies to start-% commands only)"
+	@echo ""
 	@echo "  make stop           - Stop all nodes running within the explorer node environment"
 	@echo ""
 	@echo "Utility targets:"
@@ -126,9 +128,9 @@ start-%: check-darkfid check-explorerd
 		LOG_DIR=$(LOG_HOME)/$*; \
 		mkdir -p "$$LOG_DIR"; \
 		$(if $(filter localnet,$*), $(MINERD_BIN) -c $(MINERD_CONFIG) & echo $$! >> PIDs.txt; sleep 2;) \
-		$(DARKFID_BIN) --log "$$LOG_DIR/darkfid.log" -c $(DARKFID_CONFIG) --network $* & echo $$! >> PIDs.txt; sleep 2; \
+		$(DARKFID_BIN) $(VERBOSE) --log "$$LOG_DIR/darkfid.log" -c $(DARKFID_CONFIG) --network $* & echo $$! >> PIDs.txt; sleep 2; \
 		$(call wait_for_darkfid_startup, $$LOG_DIR) \
-		./$(EXPLORERD_BIN) --log "$$LOG_DIR/explorerd.log" -c $(EXPLORERD_CONFIG) --network $* & echo $$! >> PIDs.txt; \
+		./$(EXPLORERD_BIN) $(VERBOSE) --log "$$LOG_DIR/explorerd.log" -c $(EXPLORERD_CONFIG) --network $* & echo $$! >> PIDs.txt; \
 		$(call wait_for_explorerd_startup, $$LOG_DIR) \
 	'
 
