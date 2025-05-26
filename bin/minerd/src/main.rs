@@ -71,6 +71,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     daemon.stop().await?;
 
-    info!(target: "minerd", "Shut down successfully, waitting background threads to stop...");
+    info!(target: "minerd", "Shut down successfully");
     Ok(())
 }

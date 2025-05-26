@@ -29,7 +29,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
         settings::RpcSettings,
     },
-    system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
+    system::{sleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -134,6 +134,9 @@ impl Minerd {
         // Stop the mining node
         info!(target: "minerd::Minerd::stop", "Stopping miner threads...");
         self.node.sender.send(()).await?;
+        while self.node.stop_signal.receiver_count() > 1 {
+            sleep(1).await;
+        }
 
         // Stop the JSON-RPC task
         info!(target: "minerd::Minerd::stop", "Stopping JSON-RPC server...");
