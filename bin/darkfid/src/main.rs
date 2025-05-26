@@ -69,7 +69,7 @@ struct Args {
     /// Purge pending sync headers
     purge_sync: bool,
 
-    #[structopt(short, long)]
+    #[structopt(long)]
     /// Fully validates existing blockchain state
     validate: bool,
 
