@@ -30,7 +30,7 @@ async fn ping(endpoint: &str) {
     };
     println!("Pinging {endpoint}");
 
-    let dialer = net::transport::Dialer::new(endpoint, None).await.unwrap();
+    let dialer = net::transport::Dialer::new(endpoint, None, None).await.unwrap();
     let timeout = std::time::Duration::from_secs(60);
 
     println!("Connecting...");
