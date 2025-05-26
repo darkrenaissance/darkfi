@@ -32,6 +32,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{schnorr::Signature, MerkleTree},
     tx::TransactionHash,
+    ContractError,
 };
 use darkfi_serial::AsyncEncodable;
 
@@ -154,7 +155,21 @@ impl ExplorerService {
 
                 // Execute and apply state changes
                 let mut state_update = vec![call.data.data[0]];
-                state_update.append(&mut runtime.exec(&payload)?);
+                let exec_result = runtime.exec(&payload);
+
+                // Handle duplicate coin error (thrown as Custom(7)) after a reorg.
+                // Ensures blocks with PoW reward coin already applied to contract state syncs.
+                if let Err(Error::ContractError(ContractError::Custom(7))) = exec_result {
+                    warn!(target: "explorerd::blocks::put_block",
+                        "PoW reward coin already applied to the contract state for contract ID {} at height {} for tx: {}. Skipping re-application.",
+                        call.data.contract_id,
+                        block.header.height,
+                        tx.hash()
+                    );
+                    continue;
+                }
+
+                state_update.append(&mut exec_result?);
                 runtime.apply(&state_update)?;
 
                 // Append transaction hash to the Merkle tree
