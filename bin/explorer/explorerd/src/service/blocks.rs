@@ -124,6 +124,7 @@ impl ExplorerService {
     /// After processing all transactions, the block is permanently persisted to
     /// the explorer database.
     pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
+        let height = block.header.height;
         let blockchain_overlay = BlockchainOverlay::new(&self.db.blockchain)?;
         let mut tree = MerkleTree::new(1);
 
@@ -136,20 +137,22 @@ impl ExplorerService {
             // Apply PoW reward transactions to update contract runtime state
             if tx.is_pow_reward() {
                 let mut payload = vec![];
+                let tx_hash = tx.hash();
+                let call = &tx.calls[0];
+                let contract_id = call.data.contract_id;
+
                 tx.calls.encode_async(&mut payload).await?;
 
-                let call = &tx.calls[0];
-                let wasm =
-                    blockchain_overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+                let wasm = blockchain_overlay.lock().unwrap().contracts.get(contract_id)?;
                 let block_target = self.db.blockchain.blocks.get_last()?.0 + 1;
 
                 let mut runtime = Runtime::new(
                     &wasm,
                     blockchain_overlay.clone(),
-                    call.data.contract_id,
-                    block.header.height,
+                    contract_id,
+                    height,
                     block_target,
-                    tx.hash(),
+                    tx_hash,
                     0,
                 )?;
 
@@ -172,6 +175,14 @@ impl ExplorerService {
                 state_update.append(&mut exec_result?);
                 runtime.apply(&state_update)?;
 
+                // Add the applied contract state to the store to accommodate potential reorgs
+                self.db.contract_meta_store.update_contract_state(
+                    height,
+                    &contract_id,
+                    &tx_hash,
+                    &state_update,
+                )?;
+                
                 // Append transaction hash to the Merkle tree
                 append_tx_to_merkle_tree(&mut tree, tx);
 
@@ -180,8 +191,8 @@ impl ExplorerService {
             }
 
             // Calculate gas data for non-PoW reward transactions and non-genesis blocks
-            if block.header.height != 0 {
-                tx_gas_data.insert(idx, self.calculate_tx_gas_data(tx, true).await?);
+            if height != 0 {
+                tx_gas_data.insert(idx, self.calculate_tx_gas_data(height, tx, true).await?);
                 txs_hashes_with_gas_data.insert(idx, tx.hash());
             }
         }
@@ -189,7 +200,7 @@ impl ExplorerService {
         // Insert gas metrics into the store
         if !tx_gas_data.is_empty() {
             self.db.metrics_store.insert_gas_metrics(
-                block.header.height,
+                height,
                 &block.header.timestamp,
                 &txs_hashes_with_gas_data,
                 &tx_gas_data,

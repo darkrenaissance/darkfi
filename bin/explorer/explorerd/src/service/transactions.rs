@@ -243,6 +243,7 @@ impl ExplorerService {
     /// various aspects of the gas usage.
     pub async fn calculate_tx_gas_data(
         &self,
+        height: u32,
         tx: &Transaction,
         verify_fee: bool,
     ) -> Result<GasData> {
@@ -347,6 +348,14 @@ impl ExplorerService {
             // Apply contract state update
             runtime.apply(&state_update)?;
 
+            // Add the applied contract state to the store to accommodate potential reorgs
+            self.db.contract_meta_store.update_contract_state(
+                height,
+                &call.data.contract_id,
+                &tx_hash,
+                &state_update,
+            )?;
+            
             // Contracts are not included within blocks. They need to be deployed so that they can be accessed and utilized for fee data computation
             if call.data.is_deployment()
             /* DeployV1 */

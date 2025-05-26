@@ -94,6 +94,7 @@ impl ExplorerService {
             // Reset for all other heights
             _ => {
                 self.reset_to_height(height)?;
+                // TODO: Implement and add a call to reset the contract state to specified height 
                 debug!(target: "explorerd::reset_explorer_state", "Reset blocks to height: {height}");
             }
         }
