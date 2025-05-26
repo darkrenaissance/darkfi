@@ -295,14 +295,16 @@ impl ExplorerService {
         let block_store = &self.db.blockchain.blocks;
         let tx_store = &self.db.blockchain.transactions;
 
-        debug!(target: "explorerd::blocks::reset_to_height", "Resetting to height {reset_height}: block_count={}, txs_count={}", block_store.len(), tx_store.len());
-
         // Get the last block height
         let (last_block_height, _) = block_store.get_last().map_err(|e| {
             Error::DatabaseError(format!(
                 "[reset_to_height]: Failed to get the last block height: {e:?}"
             ))
         })?;
+
+        debug!(target: "explorerd::blocks::reset_to_height", 
+            "Resetting to height {reset_height} from last block height {last_block_height}: block_count={}, txs_count={}", 
+            block_store.len(), tx_store.len());
 
         // Skip resetting blocks if `reset_height` is greater than or equal to `last_block_height`
         if reset_height >= last_block_height {
@@ -313,16 +315,22 @@ impl ExplorerService {
 
         // Get the associated block infos in order to obtain transactions to reset
         let block_infos_to_reset =
-            &self.db.blockchain.get_by_range(reset_height, last_block_height).map_err(|e| {
+            &self.db.blockchain.get_by_range(reset_height + 1, last_block_height).map_err(|e| {
                 Error::DatabaseError(format!(
                     "[reset_to_height]: Failed to get the transaction hashes to reset: {e:?}"
                 ))
             })?;
 
         // Collect the transaction hashes from the blocks that need resetting
-        let txs_hashes_to_reset: Vec<TransactionHash> = block_infos_to_reset
+        let txs_hashes_to_reset: Vec<(u32, TransactionHash)> = block_infos_to_reset
             .iter()
-            .flat_map(|block_info| block_info.txs.iter().map(|tx| tx.hash()))
+            .flat_map(|block_info| {
+                let block_height = block_info.header.height;
+                block_info.txs.iter().map(move |tx| {
+                    debug!(target: "explorerd::blocks::reset_to_height", "Adding trx to delete for height {block_height}: {}", tx.hash());
+                    (block_height, tx.hash())
+                })
+            })
             .collect();
 
         // Perform the reset operation atomically using a sled transaction
@@ -351,12 +359,12 @@ impl ExplorerService {
                 }
 
                 // Iterate through the transaction hashes, removing the related transactions
-                for (tx_count, tx_hash) in txs_hashes_to_reset.iter().enumerate() {
+                for (height, tx_hash) in txs_hashes_to_reset.iter() {
                     // Remove transaction from the `main` tree
                     tx_main.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
                     // Remove transaction from the `location` tree
                     tx_location.remove(tx_hash.inner()).map_err(ConflictableTransactionError::Abort)?;
-                    debug!(target: "explorerd::blocks::reset_to_height", "Removed transaction ({tx_count}): {tx_hash}");
+                    debug!(target: "explorerd::blocks::reset_to_height", "Removed transaction at height {height}: {tx_hash}");
                 }
 
                 Ok(())
