@@ -133,7 +133,9 @@ impl Minerd {
 
         // Stop the mining node
         info!(target: "minerd::Minerd::stop", "Stopping miner threads...");
-        self.node.sender.send(()).await?;
+        if self.node.stop_signal.is_empty() {
+            self.node.sender.send(()).await?;
+        }
         while self.node.stop_signal.receiver_count() > 1 {
             sleep(1).await;
         }
@@ -226,7 +228,7 @@ fn minerd_programmatic_control() -> Result<()> {
                 // Send a mining job but stop the daemon after it starts mining
                 smol::future::or(
                     async {
-                        rpc_client.request(mining_job).await.unwrap();
+                        let _ = rpc_client.request(mining_job).await;
                     },
                     async {
                         // Wait node to start mining
