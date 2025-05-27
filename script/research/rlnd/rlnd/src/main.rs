@@ -23,7 +23,7 @@ use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
-use darkfi::{async_daemonize, cli_desc, rpc::settings::RpcSettingsOpt, Result};
+use darkfi::{async_daemonize, cli_desc, rpc::settings::RpcSettingsOpt, Error, Result};
 
 use rlnd::Rlnd;
 
@@ -42,13 +42,21 @@ struct Args {
     /// Path to the database directory
     database: String,
 
-    #[structopt(flatten)]
-    /// Private JSON-RPC settings
-    private_rpc: RpcSettingsOpt,
+    /// Private RPC server listen address
+    #[structopt(long, default_value = "tcp://127.0.0.1:22222")]
+    pub private_rpc_listen: Url,
 
-    #[structopt(flatten)]
-    /// Publicly exposed JSON-RPC settings
-    public_rpc: RpcSettingsOpt,
+    /// Private RPC Disabled JSON-RPC methods
+    #[structopt(long, use_delimiter = true)]
+    pub private_rpc_disabled_methods: Option<Vec<String>>,
+
+    /// Public RPC server listen address
+    #[structopt(long, default_value = "tcp://127.0.0.1:22223")]
+    pub public_rpc_listen: Url,
+
+    /// Public RPC Disabled JSON-RPC methods
+    #[structopt(long, use_delimiter = true)]
+    pub public_rpc_disabled_methods: Option<Vec<String>>,
 
     #[structopt(short, long, default_value = "tcp://127.0.0.1:26660")]
     /// darkirc JSON-RPC endpoint
@@ -70,8 +78,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Generate the daemon
     let daemon = Rlnd::init(&args.database, &args.endpoint, &ex).await?;
 
+    let private_rpc = RpcSettingsOpt {
+        rpc_listen: args.private_rpc_listen.clone(),
+        rpc_disabled_methods: args.private_rpc_disabled_methods.clone(),
+    };
+    let public_rpc = RpcSettingsOpt {
+        rpc_listen: args.public_rpc_listen.clone(),
+        rpc_disabled_methods: args.public_rpc_disabled_methods.clone(),
+    };
+
     // Start the daemon
-    daemon.start(&ex, &args.private_rpc.into(), &args.public_rpc.into()).await?;
+    daemon.start(&ex, &private_rpc.into(), &public_rpc.into()).await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;

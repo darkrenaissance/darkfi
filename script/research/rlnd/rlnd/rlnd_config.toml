@@ -10,20 +10,18 @@
 database = "~/.local/share/darkfi/rlnd"
 
 # Private JSON-RPC settings
-[rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:25637"
+private_rpc_listen = "tcp://127.0.0.1:25637"
 
 # Disabled RPC methods
-#rpc_disabled_methods = []
+#private_rpc_disabled_methods = []
 
 # Publicly exposed JSON-RPC settings
-[public_rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:25638"
+public_rpc_listen = "tcp://127.0.0.1:25638"
 
 # Disabled RPC methods
-#rpc_disabled_methods = []
+#public_rpc_disabled_methods = []
 
 # darkirc JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:26660"
