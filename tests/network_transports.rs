@@ -25,9 +25,14 @@ use darkfi::net::transport::{Dialer, Listener};
 #[test]
 fn tcp_transport() {
     let executor = LocalExecutor::new();
-    let url = Url::parse("tcp://127.0.0.1:5432").unwrap();
+
 
     smol::block_on(executor.run(async {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let url = Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap();
+
         let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
@@ -56,9 +61,13 @@ fn tcp_tls_transport() {
     let _ = CryptoProvider::install_default(ring::default_provider());
 
     let executor = LocalExecutor::new();
-    let url = Url::parse("tcp+tls://127.0.0.1:5433").unwrap();
 
     smol::block_on(executor.run(async {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let url = Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap();
+
         let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
