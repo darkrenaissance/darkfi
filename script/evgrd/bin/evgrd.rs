@@ -239,8 +239,8 @@ async fn send_event(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result<(
     let mut peers_with_matched_version = vec![];
     let mut peers_with_different_version = vec![];
     for peer in connected_peers {
-        let peer_version = peer.version.lock().await.clone();
-        if let Some(ref peer_version) = peer_version {
+        let peer_version = peer.version.get();
+        if let Some(peer_version) = peer_version {
             if self_version == peer_version.version {
                 peers_with_matched_version.push(peer)
             } else {
