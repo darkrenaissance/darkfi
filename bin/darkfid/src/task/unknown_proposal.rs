@@ -468,13 +468,14 @@ async fn handle_reorg(
     };
 
     // Create a fork from last common height
-    let mut peer_fork = match Fork::new(validator.consensus.blockchain.clone(), module).await {
-        Ok(f) => f,
-        Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "Generating peer fork failed: {e}");
-            return false
-        }
-    };
+    let mut peer_fork =
+        match Fork::new(validator.consensus.blockchain.clone(), module.clone()).await {
+            Ok(f) => f,
+            Err(e) => {
+                error!(target: "darkfid::task::handle_reorg", "Generating peer fork failed: {e}");
+                return false
+            }
+        };
     peer_fork.targets_rank = last_difficulty.ranks.targets_rank.clone();
     peer_fork.hashes_rank = last_difficulty.ranks.hashes_rank.clone();
 
@@ -609,6 +610,7 @@ async fn handle_reorg(
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
+    *validator.consensus.module.write().await = module;
     *forks = vec![peer_fork];
     drop(forks);
 
