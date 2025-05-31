@@ -108,13 +108,14 @@ pub type ManagedTexturePtr = Arc<ManagedTexture>;
 #[derive(Clone)]
 pub struct ManagedTexture {
     id: GfxTextureId,
+    epoch: u32,
     render_api: RenderApi,
     tag: DebugTag,
 }
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_texture(self.id, self.tag);
+        self.render_api.delete_unmanaged_texture(self.id, self.epoch, self.tag);
     }
 }
 
@@ -130,6 +131,7 @@ pub type ManagedBufferPtr = Arc<ManagedBuffer>;
 #[derive(Clone)]
 pub struct ManagedBuffer {
     id: GfxBufferId,
+    epoch: u32,
     render_api: RenderApi,
     tag: DebugTag,
     buftype: u8,
@@ -137,7 +139,7 @@ pub struct ManagedBuffer {
 
 impl Drop for ManagedBuffer {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_buffer(self.id, self.tag, self.buftype);
+        self.render_api.delete_unmanaged_buffer(self.id, self.epoch, self.tag, self.buftype);
     }
 }
 
@@ -166,18 +168,22 @@ impl RenderApi {
         self.epoch.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    fn send(&self, method: GraphicsMethod) {
+    fn send(&self, method: GraphicsMethod) -> EpochIndex {
         let epoch = self.epoch.load(Ordering::Relaxed);
+        self.send_with_epoch(method, epoch);
+        epoch
+    }
+    fn send_with_epoch(&self, method: GraphicsMethod, epoch: EpochIndex) {
         let _ = self.method_req.try_send((epoch, method)).unwrap();
     }
 
-    fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
+    fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> (GfxTextureId, EpochIndex) {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
-        self.send(method);
+        let epoch = self.send(method);
 
-        gfx_texture_id
+        (gfx_texture_id, epoch)
     }
 
     pub fn new_texture(
@@ -187,56 +193,62 @@ impl RenderApi {
         data: Vec<u8>,
         tag: DebugTag,
     ) -> ManagedTexturePtr {
+        let (id, epoch) = self.new_unmanaged_texture(width, height, data);
         Arc::new(ManagedTexture {
-            id: self.new_unmanaged_texture(width, height, data),
+            id,
+            epoch,
             render_api: self.clone(),
             tag,
         })
     }
 
-    fn delete_unmanaged_texture(&self, texture: GfxTextureId, tag: DebugTag) {
+    fn delete_unmanaged_texture(&self, texture: GfxTextureId, epoch: EpochIndex, tag: DebugTag) {
         let method = GraphicsMethod::DeleteTexture((texture, tag));
-        self.send(method);
+        self.send_with_epoch(method, epoch);
     }
 
-    fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
+    fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> (GfxBufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
-        self.send(method);
+        let epoch = self.send(method);
 
-        gfx_buffer_id
+        (gfx_buffer_id, epoch)
     }
 
-    fn new_unmanaged_index_buffer(&self, indices: Vec<u16>) -> GfxBufferId {
+    fn new_unmanaged_index_buffer(&self, indices: Vec<u16>) -> (GfxBufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
-        self.send(method);
+        let epoch = self.send(method);
 
-        gfx_buffer_id
+        (gfx_buffer_id, epoch)
     }
 
     pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
+        let (id, epoch) = self.new_unmanaged_vertex_buffer(verts);
         Arc::new(ManagedBuffer {
-            id: self.new_unmanaged_vertex_buffer(verts),
+            id,
+            epoch,
             render_api: self.clone(),
             tag,
             buftype: 0,
         })
     }
     pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
+        let (id, epoch) = self.new_unmanaged_index_buffer(indices);
         Arc::new(ManagedBuffer {
-            id: self.new_unmanaged_index_buffer(indices),
+            id,
+            epoch,
             render_api: self.clone(),
             tag,
             buftype: 1,
         })
     }
 
-    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId, tag: DebugTag, buftype: u8) {
+    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId, epoch: EpochIndex, tag: DebugTag, buftype: u8) {
         let method = GraphicsMethod::DeleteBuffer((buffer, tag, buftype));
-        self.send(method);
+        self.send_with_epoch(method, epoch);
     }
 
     pub fn replace_draw_calls(&self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
