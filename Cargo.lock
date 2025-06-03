@@ -2487,6 +2487,7 @@ dependencies = [
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
+ "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",

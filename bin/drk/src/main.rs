@@ -550,6 +550,10 @@ enum ContractSubcmd {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 struct BlockchainNetwork {
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/cache")]
+    /// Path to blockchain cache database
+    cache_path: String,
+
     #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/wallet.db")]
     /// Path to wallet database
     wallet_path: String,
@@ -608,6 +612,7 @@ async fn parse_blockchain_config(
 
 /// Auxiliary function to create a `Drk` wallet for provided configuration.
 async fn new_wallet(
+    cache_path: String,
     wallet_path: String,
     wallet_pass: String,
     endpoint: Option<Url>,
@@ -620,7 +625,7 @@ async fn new_wallet(
         exit(2);
     }
 
-    match Drk::new(wallet_path, wallet_pass, endpoint, ex, fun).await {
+    match Drk::new(cache_path, wallet_path, wallet_pass, endpoint, ex, fun).await {
         Ok(wallet) => wallet,
         Err(e) => {
             eprintln!("Error initializing wallet: {e:?}");
@@ -654,6 +659,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Ping => {
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
@@ -696,6 +702,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
@@ -927,6 +934,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
@@ -962,6 +970,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             let coin = Coin::from(elem);
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
@@ -979,6 +988,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Transfer { amount, token, recipient, spend_hook, user_data, half_split } => {
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
@@ -1059,6 +1069,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Otc { command } => match command {
             OtcSubcmd::Init { value_pair, token_pair } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1092,6 +1103,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let partial: PartialSwapData = deserialize_async(&bytes).await?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1120,6 +1132,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1139,6 +1152,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut tx = parse_tx_from_stdin().await?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1191,6 +1205,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1256,6 +1271,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let params = DaoParams::from_toml_str(&buf)?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1277,6 +1293,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let params = DaoParams::from_toml_str(&buf)?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1294,6 +1311,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::List { name } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1311,6 +1329,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::Balance { name } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1362,6 +1381,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::Mint { name } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1391,6 +1411,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 user_data,
             } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1472,6 +1493,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::ProposeGeneric { name, duration, user_data } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1516,6 +1538,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::Proposals { name } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1542,6 +1565,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1749,6 +1773,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let encrypted_proposal: AeadEncryptedNote = deserialize_async(&bytes).await?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -1815,6 +1840,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1844,6 +1870,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -1903,6 +1930,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let mut tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
@@ -1932,6 +1960,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
@@ -1965,6 +1994,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Subscribe => {
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint.clone()),
@@ -1983,6 +2013,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Scan { reset } => {
             let drk = new_wallet(
+                blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
@@ -2012,6 +2043,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let tx_hash = TransactionHash(*blake3::Hash::from_hex(&tx_hash)?.as_bytes());
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -2053,6 +2085,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let tx = parse_tx_from_stdin().await?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -2077,6 +2110,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2127,6 +2161,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             ExplorerSubcmd::ClearReverted => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2145,6 +2180,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             ExplorerSubcmd::ScannedBlocks { height } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2210,6 +2246,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2238,6 +2275,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2266,6 +2304,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             AliasSubcmd::Remove { alias } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2301,6 +2340,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2316,6 +2356,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             TokenSubcmd::GenerateMint => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2333,6 +2374,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             TokenSubcmd::List => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2379,6 +2421,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             TokenSubcmd::Mint { token, amount, recipient, spend_hook, user_data } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -2456,6 +2499,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             TokenSubcmd::Freeze { token } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -2488,6 +2532,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Contract { command } => match command {
             ContractSubcmd::GenerateDeploy => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2506,6 +2551,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             ContractSubcmd::List => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
@@ -2538,6 +2584,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let deploy_ix = smol::fs::read(expand_path(&deploy_ix)?).await?;
 
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
@@ -2566,6 +2613,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             ContractSubcmd::Lock { deploy_auth } => {
                 let drk = new_wallet(
+                    blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
