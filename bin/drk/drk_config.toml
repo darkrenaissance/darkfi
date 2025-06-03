@@ -14,6 +14,9 @@ fun = true
 
 # Localnet blockchain network configuration
 [network_config."localnet"]
+# Path to blockchain cache database
+cache_path = "~/.local/share/darkfi/drk/localnet/cache"
+
 # Path to wallet database
 wallet_path = "~/.local/share/darkfi/drk/localnet/wallet.db"
 
@@ -25,6 +28,9 @@ endpoint = "tcp://127.0.0.1:8240"
 
 # Testnet blockchain network configuration
 [network_config."testnet"]
+# Path to blockchain cache database
+cache_path = "~/.local/share/darkfi/drk/testnet/cache"
+
 # Path to wallet database
 wallet_path = "~/.local/share/darkfi/drk/testnet/wallet.db"
 
@@ -36,6 +42,9 @@ endpoint = "tcp://127.0.0.1:8340"
 
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
+# Path to blockchain cache database
+cache_path = "~/.local/share/darkfi/drk/mainnet/cache"
+
 # Path to wallet database
 wallet_path = "~/.local/share/darkfi/drk/mainnet/wallet.db"
 

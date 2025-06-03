@@ -11,6 +11,9 @@ network = "localnet"
 
 # Localnet blockchain network configuration
 [network_config."localnet"]
+# Path to blockchain cache database
+cache_path = "drk/cache"
+
 # Path to wallet database
 wallet_path = "drk/wallet.db"
 

@@ -60,8 +60,14 @@ pub mod scanned_blocks;
 pub mod walletdb;
 use walletdb::{WalletDb, WalletPtr};
 
+/// Blockchain cache database operations handler
+pub mod cache;
+use cache::Cache;
+
 /// CLI-util structure
 pub struct Drk {
+    /// Blockchain cache database operations handler
+    pub cache: Cache,
     /// Wallet database operations handler
     pub wallet: WalletPtr,
     /// JSON-RPC client to execute requests to darkfid daemon
@@ -72,12 +78,20 @@ pub struct Drk {
 
 impl Drk {
     pub async fn new(
+        cache_path: String,
         wallet_path: String,
         wallet_pass: String,
         endpoint: Option<Url>,
         ex: Arc<smol::Executor<'static>>,
         fun: bool,
     ) -> Result<Self> {
+        // Initialize blockchain cache database
+        let db_path = expand_path(&cache_path)?;
+        let sled_db = sled_overlay::sled::open(&db_path)?;
+        let Ok(cache) = Cache::new(&sled_db) else {
+            return Err(Error::DatabaseError(format!("{}", WalletDbError::InitializationFailed)));
+        };
+
         // Initialize wallet
         let wallet_path = expand_path(&wallet_path)?;
         if !wallet_path.exists() {
@@ -96,7 +110,7 @@ impl Drk {
             None
         };
 
-        Ok(Self { wallet, rpc_client, fun })
+        Ok(Self { cache, wallet, rpc_client, fun })
     }
 
     /// Initialize wallet with tables for `Drk`.
