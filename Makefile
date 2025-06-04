@@ -10,6 +10,8 @@ CARGO = cargo
 RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 # Uncomment when doing musl static builds
 #RUSTFLAGS = -C target-feature=+crt-static -C link-self-contained=yes
+# If building natively, this might give you more speed
+#RUSTFLAGS = -C target_cpu=native
 
 # List of zkas circuits to compile, used for tests
 PROOFS_SRC = \
