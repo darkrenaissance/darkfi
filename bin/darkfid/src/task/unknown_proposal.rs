@@ -333,6 +333,8 @@ async fn handle_reorg(
         validator.consensus.module.read().await.target,
         validator.consensus.module.read().await.fixed_difficulty.clone(),
         Some(last_common_height + 1),
+        validator.consensus.darkfi_rx_factory.clone(),
+        validator.consensus.monero_rx_factory.clone(),
     ) {
         Ok(m) => m,
         Err(e) => {
