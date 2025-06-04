@@ -46,6 +46,7 @@ use crate::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
         fees::{circuit_gas_use, compute_fee, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
+        RandomXFactory,
     },
     zk::VerifyingKey,
     Error, Result,
@@ -185,7 +186,17 @@ pub fn validate_blockchain(
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, Some(0))?;
+    let darkfi_rx_factory = RandomXFactory::default();
+    let monero_rx_factory = RandomXFactory::default();
+    let mut module = PoWModule::new(
+        blockchain.clone(),
+        pow_target,
+        pow_fixed_difficulty,
+        Some(0),
+        darkfi_rx_factory,
+        monero_rx_factory,
+    )?;
+
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.blocks.get_all_order()?;
     for (index, block) in blocks[1..].iter().enumerate() {
