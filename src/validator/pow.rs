@@ -283,9 +283,10 @@ impl PoWModule {
         let target = self.next_mine_target()?;
 
         // Setup verifier
+        let randomx_key = block.header.previous.inner();
         let flags = RandomXFlags::get_recommended_flags();
-        let cache = RandomXCache::new(flags, block.header.previous.inner())?;
-        let vm = RandomXVM::new(flags, Some(cache), None)?;
+        let cache = RandomXCache::new(flags, &randomx_key[..])?;
+        let vm = self.darkfi_rx_factory.create(&randomx_key[..], Some(cache), None)?;
         debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
 
         // Compute the output hash
