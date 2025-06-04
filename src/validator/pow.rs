@@ -38,7 +38,7 @@ use crate::{
     },
     system::thread_priority::ThreadPriority,
     util::{ringbuffer::RingBuffer, time::Timestamp},
-    validator::{randomx_factory::init_dataset_wrapper, utils::median},
+    validator::{randomx_factory::init_dataset_wrapper, utils::median, RandomXFactory},
     Error, Result,
 };
 
@@ -90,6 +90,10 @@ pub struct PoWModule {
     /// access(optimization), since its always same as
     /// difficulties buffer last.
     pub cumulative_difficulty: BigUint,
+    /// RandomXFactory for native PoW (Arc from parent)
+    pub darkfi_rx_factory: RandomXFactory,
+    /// RandomXFactory for Monero PoW (Arc from parent)
+    pub monero_rx_factory: RandomXFactory,
 }
 
 impl PoWModule {
@@ -100,6 +104,8 @@ impl PoWModule {
         target: u32,
         fixed_difficulty: Option<BigUint>,
         height: Option<u32>,
+        darkfi_rx_factory: RandomXFactory,
+        monero_rx_factory: RandomXFactory,
     ) -> Result<Self> {
         // Retrieve genesis block timestamp
         let genesis = blockchain.genesis_block()?.header.timestamp;
@@ -130,6 +136,8 @@ impl PoWModule {
             timestamps,
             difficulties,
             cumulative_difficulty,
+            darkfi_rx_factory,
+            monero_rx_factory,
         })
     }
 
@@ -461,7 +469,7 @@ mod tests {
         Result,
     };
 
-    use super::PoWModule;
+    use super::{super::RandomXFactory, PoWModule};
 
     const DEFAULT_TEST_THREADS: usize = 2;
     const DEFAULT_TEST_DIFFICULTY_TARGET: u32 = 120;
@@ -472,7 +480,17 @@ mod tests {
         let blockchain = Blockchain::new(&sled_db)?;
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
-        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
+
+        let darkfi_rx_factory = RandomXFactory::default();
+        let monero_rx_factory = RandomXFactory::default();
+        let mut module = PoWModule::new(
+            blockchain,
+            DEFAULT_TEST_DIFFICULTY_TARGET,
+            None,
+            None,
+            darkfi_rx_factory,
+            monero_rx_factory,
+        )?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -508,7 +526,18 @@ mod tests {
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = 0.into();
         blockchain.add_block(&genesis_block)?;
-        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
+
+        let darkfi_rx_factory = RandomXFactory::default();
+        let monero_rx_factory = RandomXFactory::default();
+        let module = PoWModule::new(
+            blockchain,
+            DEFAULT_TEST_DIFFICULTY_TARGET,
+            None,
+            None,
+            darkfi_rx_factory,
+            monero_rx_factory,
+        )?;
+
         let (_, recvr) = smol::channel::bounded(1);
 
         // Mine next block
