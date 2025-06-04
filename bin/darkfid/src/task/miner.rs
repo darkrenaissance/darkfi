@@ -84,13 +84,6 @@ pub async fn miner_task(
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     let pk = ProvingKey::build(zkbin.k, &circuit);
 
-    // Generate a random master secret key, to derive all signing keys from.
-    // This enables us to deanonimize proposals from reward recipient(miner).
-    // TODO: maybe miner wants to keep this master secret so they can
-    //       verify their signature in the future?
-    info!(target: "darkfid::task::miner_task", "Generating signing key...");
-    let mut secret = SecretKey::random(&mut OsRng);
-
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
 
