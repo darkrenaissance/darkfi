@@ -211,7 +211,7 @@ impl Harness {
             mint_zkbin: zkbin.clone(),
             mint_pk: pk.clone(),
         }
-        .build()?;
+        .build(&keypair.secret)?;
 
         // Generate and sign the actual transaction
         let mut data = vec![MoneyFunction::PoWRewardV1 as u8];

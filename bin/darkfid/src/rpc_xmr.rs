@@ -24,6 +24,8 @@ use tracing::error;
 
 use crate::DarkfiNode;
 
+// https://github.com/SChernykh/p2pool/blob/master/docs/MERGE_MINING.MD
+
 impl DarkfiNode {
     // RPCAPI:
     // Gets a unique ID that identifies this merge mined chain and
@@ -48,7 +50,10 @@ impl DarkfiNode {
             }
         };
 
-        let resp_obj = HashMap::from([("chain_id".to_string(), genesis_hash.to_string().into())]);
+        let genesis_hex = genesis_hash.to_string();
+        assert!(genesis_hex.len() == 32);
+
+        let resp_obj = HashMap::from([("chain_id".to_string(), genesis_hex.into())]);
         JsonResponse::new(resp_obj.into(), id).into()
     }
 

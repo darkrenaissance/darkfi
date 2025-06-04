@@ -57,7 +57,7 @@ pub struct MinerRewardsRecipientConfig {
 /// Async task used for participating in the PoW block production.
 ///
 /// Miner initializes their setup and waits for next confirmation,
-/// by listenning for new proposals from the network, for optimal
+/// by listening for new proposals from the network, for optimal
 /// conditions. After confirmation occurs, they start the actual
 /// miner loop, where they first grab the best ranking fork to extend,
 /// and start mining procedure for its next block. Additionally, they
@@ -83,13 +83,6 @@ pub async fn miner_task(
     )?;
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     let pk = ProvingKey::build(zkbin.k, &circuit);
-
-    // Generate a random master secret key, to derive all signing keys from.
-    // This enables us to deanonimize proposals from reward recipient(miner).
-    // TODO: maybe miner wants to keep this master secret so they can
-    //       verify their signature in the future?
-    info!(target: "darkfid::task::miner_task", "Generating signing key...");
-    let mut secret = SecretKey::random(&mut OsRng);
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
@@ -167,16 +160,7 @@ pub async fn miner_task(
         // Start listenning for network proposals and mining next block for best fork.
         match smol::future::or(
             listen_to_network(node, last_proposal_hash, &subscription, &sender),
-            mine(
-                node,
-                extended_fork,
-                &mut secret,
-                recipient_config,
-                &zkbin,
-                &pk,
-                &stop_signal,
-                skip_sync,
-            ),
+            mine(node, extended_fork, recipient_config, &zkbin, &pk, &stop_signal, skip_sync),
         )
         .await
         {
@@ -276,7 +260,6 @@ async fn listen_to_network(
 async fn mine(
     node: &DarkfiNodePtr,
     extended_fork: Fork,
-    secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
@@ -285,7 +268,7 @@ async fn mine(
 ) -> Result<()> {
     smol::future::or(
         wait_stop_signal(stop_signal),
-        mine_next_block(node, extended_fork, secret, recipient_config, zkbin, pk, skip_sync),
+        mine_next_block(node, extended_fork, recipient_config, zkbin, pk, skip_sync),
     )
     .await
 }
@@ -307,16 +290,14 @@ pub async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
 async fn mine_next_block(
     node: &DarkfiNodePtr,
     mut extended_fork: Fork,
-    secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     skip_sync: bool,
 ) -> Result<()> {
     // Grab next target and block
-    let (next_target, mut next_block) = generate_next_block(
+    let (next_target, mut next_block, block_signing_secret) = generate_next_block(
         &mut extended_fork,
-        secret,
         recipient_config,
         zkbin,
         pk,
@@ -333,7 +314,7 @@ async fn mine_next_block(
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
     // Sign the mined block
-    next_block.sign(secret);
+    next_block.sign(&block_signing_secret);
 
     // Verify it
     extended_fork.module.verify_current_block(&next_block)?;
@@ -357,13 +338,12 @@ async fn mine_next_block(
 /// Auxiliary function to generate next block in an atomic manner.
 async fn generate_next_block(
     extended_fork: &mut Fork,
-    secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     block_target: u32,
     verify_fees: bool,
-) -> Result<(BigUint, BlockInfo)> {
+) -> Result<(BigUint, BlockInfo, SecretKey)> {
     // Grab forks' last block proposal(previous)
     let last_proposal = extended_fork.last_proposal()?;
 
@@ -375,15 +355,20 @@ async fn generate_next_block(
         .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
         .await?;
 
-    // We are deriving the next secret key for optimization.
-    // Next secret is the poseidon hash of:
-    //  [prefix, current(previous) secret, signing(block) height].
-    let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret = poseidon_hash([prefix, secret.inner(), (next_block_height as u64).into()]);
-    *secret = SecretKey::from(next_secret);
+    // Create an ephemeral block signing key. It will be stored in the PowReward
+    // transaction's encrypted note for later retrieval. It is encrypted towards
+    // the recipient's public key.
+    let block_signing_secret = SecretKey::random(&mut OsRng);
 
     // Generate reward transaction
-    let tx = generate_transaction(next_block_height, fees, secret, recipient_config, zkbin, pk)?;
+    let tx = generate_transaction(
+        next_block_height,
+        fees,
+        &block_signing_secret,
+        recipient_config,
+        zkbin,
+        pk,
+    )?;
 
     // Apply producer transaction in the overlay
     let _ = apply_producer_transaction(
@@ -419,21 +404,21 @@ async fn generate_next_block(
     // Grab the next mine target
     let target = extended_fork.module.next_mine_target()?;
 
-    Ok((target, next_block))
+    Ok((target, next_block, block_signing_secret))
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction.
 fn generate_transaction(
     block_height: u32,
     fees: u64,
-    secret: &SecretKey,
+    block_signing_secret: &SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<Transaction> {
     // Build the transaction debris
     let debris = PoWRewardCallBuilder {
-        signature_public: PublicKey::from_secret(*secret),
+        signature_public: PublicKey::from_secret(*block_signing_secret),
         block_height,
         fees,
         recipient: Some(recipient_config.recipient),
@@ -442,7 +427,7 @@ fn generate_transaction(
         mint_zkbin: zkbin.clone(),
         mint_pk: pk.clone(),
     }
-    .build()?;
+    .build(block_signing_secret)?;
 
     // Generate and sign the actual transaction
     let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
@@ -451,7 +436,7 @@ fn generate_transaction(
     let mut tx_builder =
         TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
     let mut tx = tx_builder.build()?;
-    let sigs = tx.create_sigs(&[*secret])?;
+    let sigs = tx.create_sigs(&[*block_signing_secret])?;
     tx.signatures = vec![sigs];
 
     Ok(tx)
