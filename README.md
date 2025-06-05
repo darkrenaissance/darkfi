@@ -67,7 +67,7 @@ endpoint = "tcp://127.0.0.1:8240"
 wallet_path = "/root/.local/share/drk/wallet"
 wallet_pass = "My_password"
 ```
-Save and exit (Ctrl+O, Enter, Ctrl+X in nano).
+Change `My_password` to your password, save and exit (Ctrl+O, Enter, Ctrl+X in nano).
 
 
 ### Step 7: Running the DarkFi Node 🌐
@@ -76,3 +76,41 @@ Start the DarkFi daemon:
 ```bash
 ./darkfid
 ```
+Wait for:
+
+```bash
+[INFO] Blockchain synced!
+```
+
+### Step 8: Creating a DarkFi Wallet 🔑
+
+Initialize your wallet:
+```bash
+./drk wallet --initialize
+```
+Generate a keypair:
+```bash
+./drk wallet --keygen
+```
+Save your public address (displayed after keygen) for mining and transactions.
+
+### Step 9: Starting DarkFi Mining ⛏️
+
+Run the mining daemon:
+```bash
+./minerd
+```
+
+### Step 10: Verify Node Success
+- **Check Node Status**: Look for `[INFO] Blockchain synced!` in `darkfid` logs.
+- **Check Wallet**: Run:
+  ```bash
+  ./drk wallet --address
+  ```
+Verify your public address.
+
+Monitor Mining: Look for hashrate or mined blocks in minerd logs.
+
+Check Balance (optional): Use `./drk wallet --balance` to see rewards.
+
+
