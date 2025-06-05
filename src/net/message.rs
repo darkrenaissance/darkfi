@@ -23,7 +23,7 @@ use darkfi_serial::{
 };
 use url::{Host, Url};
 
-use crate::net::metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION};
+use crate::{net::metering::MeteringConfiguration, util::time::NanoTimestamp};
 
 /// Generic message template.
 pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
@@ -66,19 +66,31 @@ macro_rules! impl_p2p_message {
 /// Maximum command (message name) length in bytes
 pub const MAX_COMMAND_LENGTH: u8 = 255;
 
+/// For each message configs a threshold was calculated by taking the maximum number of messages
+/// in a 10 seconds window and multiply it by 2 not to be strict.
+pub const PING_PONG_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 4,
+    sleep_step: 1000,
+    expiry_time: NanoTimestamp::from_secs(10),
+};
+
+/// Ping-Pong messages fields size
+/// * nonce = 2
+pub const PING_PONG_MAX_BYTES: u64 = 2;
+
 /// Outbound keepalive message.
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PingMessage {
     pub nonce: u16,
 }
-impl_p2p_message!(PingMessage, "ping", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(PingMessage, "ping", PING_PONG_MAX_BYTES, 1, PING_PONG_METERING_CONFIGURATION);
 
 /// Inbound keepalive message.
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PongMessage {
     pub nonce: u16,
 }
-impl_p2p_message!(PongMessage, "pong", 0, 0, DEFAULT_METERING_CONFIGURATION);
+impl_p2p_message!(PongMessage, "pong", PING_PONG_MAX_BYTES, 1, PING_PONG_METERING_CONFIGURATION);
 
 /// Requests address of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -91,15 +103,45 @@ pub struct GetAddrsMessage {
     /// Preferred addresses transports
     pub transports: Vec<String>,
 }
-impl_p2p_message!(GetAddrsMessage, "getaddr", 0, 0, DEFAULT_METERING_CONFIGURATION);
+pub const GET_ADDRS_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 6,
+    sleep_step: 1000,
+    expiry_time: NanoTimestamp::from_secs(10),
+};
+
+/// GetAddrs message fields size
+/// * max = 4
+/// * transports = 1 (vec_len) + 4 + 4 + 4 + 4 + 4 + 8 + 8 + 8 + 8 = 53
+///
+/// Transports is list of all transports to be shared specified in protocol_address
+pub const GET_ADDRS_MAX_BYTES: u64 = 57;
+
+impl_p2p_message!(
+    GetAddrsMessage,
+    "getaddr",
+    GET_ADDRS_MAX_BYTES,
+    1,
+    GET_ADDRS_METERING_CONFIGURATION
+);
 
 /// Sends address information to inbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct AddrsMessage {
     pub addrs: Vec<(Url, u64)>,
 }
+pub const ADDRS_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 6,
+    sleep_step: 1000,
+    expiry_time: NanoTimestamp::from_secs(10),
+};
 
-impl_p2p_message!(AddrsMessage, "addr", 0, 0, DEFAULT_METERING_CONFIGURATION);
+/// Addrs message fields size
+/// * addrs = 1 (vec_len) + (u8::MAX * 2) * 128
+///
+/// Url type is estimated to be max 128 bytes here and for other message below
+pub const ADDRS_MAX_BYTES: u64 = 65281;
+
+impl_p2p_message!(AddrsMessage, "addr", ADDRS_MAX_BYTES, 1, ADDRS_METERING_CONFIGURATION);
 
 /// Requests version information of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -123,7 +165,23 @@ pub struct VersionMessage {
     /// to be enabled for this connection
     pub features: Vec<(String, u32)>,
 }
-impl_p2p_message!(VersionMessage, "version", 0, 0, DEFAULT_METERING_CONFIGURATION);
+pub const VERSION_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 4,
+    sleep_step: 1000,
+    expiry_time: NanoTimestamp::from_secs(10),
+};
+
+/// Version message fields size
+/// * node_id = 8  (this will be empty most of the time)
+/// * version = 128 (look at VerackMessage for the reasoning)
+/// * timestamp = 8
+/// * connect_recv_addr = 128
+/// * resolve_recv_addr = 1 (enum_len) + 128(url) = 129
+/// * ext_send_addr = 1 (vec_len)  + 128 * 10 = 1281 (10 is a reasonable cap for number of external addresses)
+/// * features = 1 (vec_len) + (32 (service_name) + 4 (service_version)) * 10 = 361 (10 features is an estimate)
+pub const VERSION_MAX_BYTES: u64 = 2043;
+
+impl_p2p_message!(VersionMessage, "version", VERSION_MAX_BYTES, 1, VERSION_METERING_CONFIGURATION);
 
 impl VersionMessage {
     pub(in crate::net) fn get_ipv6_addr(&self) -> Option<Ipv6Addr> {
@@ -143,4 +201,16 @@ pub struct VerackMessage {
     /// App version
     pub app_version: semver::Version,
 }
-impl_p2p_message!(VerackMessage, "verack", 0, 0, DEFAULT_METERING_CONFIGURATION);
+pub const VERACK_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
+    threshold: 4,
+    sleep_step: 1000,
+    expiry_time: NanoTimestamp::from_secs(10),
+};
+
+/// Verack message fields size
+/// * app_version = 24 (major = 8, minor = 8, patch = 8) + 52 (prerelease =  1(str_len) + 51(str)) + 52 (build = 1(str_len) + 51(str))
+///
+/// Prerelease and build strings are variable length but shouldn't be larger than 102 bytes
+pub const VERACK_MAX_BYTES: u64 = 128;
+
+impl_p2p_message!(VerackMessage, "verack", VERACK_MAX_BYTES, 1, VERACK_METERING_CONFIGURATION);

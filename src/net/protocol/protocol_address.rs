@@ -291,8 +291,11 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
         // Send get_address message.
-        let get_addrs =
-            GetAddrsMessage { max: outbound_connections as u32, transports: allowed_transports };
+        // We ask for a maximum of u8::MAX addresses from a single node
+        let get_addrs = GetAddrsMessage {
+            max: outbound_connections.min(u8::MAX as usize) as u32,
+            transports: allowed_transports,
+        };
         self.channel.send(&get_addrs).await?;
 
         debug!(
@@ -304,5 +307,25 @@ impl ProtocolBase for ProtocolAddress {
     }
     fn name(&self) -> &'static str {
         PROTO_NAME
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use darkfi_serial::serialize;
+
+    use crate::net::message::GET_ADDRS_MAX_BYTES;
+
+    use super::{GetAddrsMessage, TRANSPORT_COMBOS};
+
+    // Helps to check if the MAX_BYTES for GetAddrs message is valid as new transports are added
+    #[test]
+    fn test_get_addrs_msg_size() {
+        let message = GetAddrsMessage {
+            max: u8::MAX as u32,
+            transports: TRANSPORT_COMBOS.iter().map(|x| x.to_string()).collect(),
+        };
+
+        assert_eq!(serialize(&message).len() as u64, GET_ADDRS_MAX_BYTES);
     }
 }
