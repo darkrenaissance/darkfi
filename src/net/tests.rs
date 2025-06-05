@@ -20,19 +20,21 @@
 
 use std::{collections::HashSet, net::TcpListener, panic, sync::Arc};
 
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{error, info, warn};
 use rand::{prelude::SliceRandom, rngs::ThreadRng, Rng};
 use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    net::{hosts::HostColor, P2p, Settings},
+    net::{
+        hosts::HostColor,
+        message::{GetAddrsMessage, Message},
+        metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        P2p, Settings,
+    },
     system::sleep,
 };
-
-// Number of nodes to spawn and number of peers each node connects to
-const N_NODES: usize = 5;
-const N_CONNS: usize = 4;
 
 fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
@@ -78,23 +80,27 @@ fn get_random_available_port() -> usize {
     port.into()
 }
 
-fn get_unique_ports() -> Vec<usize> {
+fn get_unique_ports(n_nodes: usize) -> Vec<usize> {
     let mut ports = HashSet::new();
 
-    while ports.len() < N_NODES {
+    while ports.len() < n_nodes {
         ports.insert(get_random_available_port());
     }
 
     ports.into_iter().collect()
 }
 
-async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
+async fn spawn_seed_session(
+    seed_addr: Url,
+    ex: Arc<Executor<'static>>,
+    n_nodes: usize,
+) -> Vec<Arc<P2p>> {
     info!("========================================================");
     info!("Initializing outbound nodes...");
     info!("========================================================");
 
     let mut outbound_instances = vec![];
-    let ports = get_unique_ports();
+    let ports = get_unique_ports(n_nodes);
 
     for port in ports {
         let settings = Settings {
@@ -120,19 +126,23 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
     outbound_instances
 }
 
-async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
+async fn spawn_manual_session(
+    ex: Arc<Executor<'static>>,
+    n_nodes: usize,
+    n_conns: usize,
+) -> Vec<Arc<P2p>> {
     info!("========================================================");
     info!("Initializing manual nodes...");
     info!("========================================================");
     let mut manual_instances = vec![];
     let mut rng = rand::thread_rng();
-    let ports = get_unique_ports();
+    let ports = get_unique_ports(n_nodes);
 
-    for i in 0..N_NODES {
-        let mut peer_indexes_copy: Vec<usize> = (0..N_NODES).collect();
+    for i in 0..n_nodes {
+        let mut peer_indexes_copy: Vec<usize> = (0..n_nodes).collect();
         peer_indexes_copy.remove(i);
         let peer_indexes_to_connect: Vec<_> =
-            peer_indexes_copy.choose_multiple(&mut rng, N_CONNS).collect();
+            peer_indexes_copy.choose_multiple(&mut rng, n_conns).collect();
 
         let mut peers = vec![];
         for &peer_index in peer_indexes_to_connect {
@@ -243,7 +253,7 @@ async fn kill_node(outbound_instances: &Vec<Arc<P2p>>, node: Url) {
 }
 
 macro_rules! test_body {
-    ($real_call:ident) => {
+    ($real_call:ident, $threads:expr) => {
         init_logger();
 
         let ex = Arc::new(Executor::new());
@@ -256,7 +266,7 @@ macro_rules! test_body {
 
         // Run a thread for each node.
         easy_parallel::Parallel::new()
-            .each(0..N_NODES, |_| {
+            .each(0..$threads, |_| {
                 let result = std::panic::catch_unwind(|| {
                     let res = future::block_on(ex.run(shutdown.recv()));
                     res
@@ -276,10 +286,13 @@ macro_rules! test_body {
 
 #[test]
 fn p2p_test() {
-    test_body!(p2p_test_real);
+    test_body!(p2p_test_real, 5);
 }
 
 async fn p2p_test_real(ex: Arc<Executor<'static>>) {
+    // Number of nodes to spawn and number of peers each node connects to
+    const N_NODES: usize = 5;
+    const N_CONNS: usize = 4;
     // ============================================================
     // 1. Create a new seed node.
     // ============================================================
@@ -308,7 +321,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     // 2. Spawn outbound nodes that will connect to the seed node.
     // ============================================================
-    let outbound_instances = spawn_seed_session(seed_addr, ex.clone()).await;
+    let outbound_instances = spawn_seed_session(seed_addr, ex.clone(), N_NODES).await;
 
     for p2p in &outbound_instances {
         info!("========================================================");
@@ -435,7 +448,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("Seed test shutdown complete! Starting manual test...");
     info!("========================================================");
 
-    let manual_instances = spawn_manual_session(ex.clone()).await;
+    let manual_instances = spawn_manual_session(ex.clone(), N_NODES, N_CONNS).await;
 
     for p2p in &manual_instances {
         info!("========================================================");
@@ -472,4 +485,114 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     for p2p in manual_instances.clone() {
         p2p.clone().stop().await;
     }
+}
+
+#[test]
+fn p2p_channel_unsupported_message_type_gets_banned() {
+    test_body!(p2p_channel_unsupported_message_type_gets_banned_real, 2);
+}
+
+async fn p2p_channel_unsupported_message_type_gets_banned_real(ex: Arc<Executor<'static>>) {
+    // Test with two nodes directly connected to each other
+    let manual_instances = spawn_manual_session(ex.clone(), 2, 1).await;
+    for p2p in &manual_instances {
+        p2p.clone().start().await.unwrap();
+    }
+
+    // Let's wait for the nodes to connect to each other
+    sleep(5).await;
+
+    let node1_p2p = manual_instances[0].clone();
+    let node2_p2p = manual_instances[1].clone();
+    let channel = node1_p2p.hosts().channels().first().unwrap().clone();
+
+    // Create a new message type
+    #[derive(SerialEncodable, SerialDecodable)]
+    struct CustomMessage(u32);
+    crate::impl_p2p_message!(
+        CustomMessage,
+        "UnsupportedMessage",
+        0,
+        0,
+        DEFAULT_METERING_CONFIGURATION
+    );
+
+    let instance = CustomMessage(23);
+    channel.send(&instance).await.unwrap();
+    sleep(1).await;
+
+    // Node1 should be banned by Node2
+    assert_eq!(node2_p2p.hosts().container.fetch_all(HostColor::Black).len(), 1);
+    node1_p2p.stop().await;
+    node2_p2p.stop().await;
+}
+
+#[test]
+fn p2p_channel_invalid_command_length_gets_banned() {
+    test_body!(p2p_channel_invalid_command_length_gets_banned_real, 2);
+}
+
+async fn p2p_channel_invalid_command_length_gets_banned_real(ex: Arc<Executor<'static>>) {
+    // Test with two nodes directly connected to each other
+    let manual_instances = spawn_manual_session(ex.clone(), 2, 1).await;
+    for p2p in &manual_instances {
+        p2p.clone().start().await.unwrap();
+    }
+
+    // Let's wait for the nodes to connect to each other
+    sleep(5).await;
+
+    let node1_p2p = manual_instances[0].clone();
+    let node2_p2p = manual_instances[1].clone();
+    let channel = node1_p2p.hosts().channels().first().unwrap().clone();
+
+    // Create a custom message that has invalid length command name
+    #[derive(SerialEncodable, SerialDecodable)]
+    struct CustomMessage(u32);
+    // The length of COMMAND_NAME is greater than message::MAX_COMMAND_LENGTH, this one is 256
+    const COMMAND_NAME: &str =
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+    AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+    AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    crate::impl_p2p_message!(CustomMessage, &COMMAND_NAME, 0, 0, DEFAULT_METERING_CONFIGURATION);
+
+    let instance = CustomMessage(23);
+    channel.send(&instance).await.unwrap();
+    sleep(1).await;
+
+    // Node1 should be banned by Node2
+    assert_eq!(node2_p2p.hosts().container.fetch_all(HostColor::Black).len(), 1);
+    node1_p2p.stop().await;
+    node2_p2p.stop().await;
+}
+
+#[test]
+fn p2p_channel_invalid_message_length_gets_banned() {
+    test_body!(p2p_channel_invalid_message_length_gets_banned_real, 2);
+}
+
+async fn p2p_channel_invalid_message_length_gets_banned_real(ex: Arc<Executor<'static>>) {
+    // Test with two nodes directly connected to each other
+    let manual_instances = spawn_manual_session(ex.clone(), 2, 1).await;
+    for p2p in &manual_instances {
+        p2p.clone().start().await.unwrap();
+    }
+
+    // Let's wait for the nodes to connect to each other
+    sleep(5).await;
+
+    let node1_p2p = manual_instances[0].clone();
+    let node2_p2p = manual_instances[1].clone();
+    let channel = node1_p2p.hosts().channels().first().unwrap().clone();
+
+    // Let's create a GetAddrsMessage that will be over the GET_ADDRS_MAX_BYTES threshold
+    let message = GetAddrsMessage { max: 20, transports: vec!["tor".to_string(); 256] };
+    channel.send(&message).await.unwrap();
+    sleep(1).await;
+
+    // Node1 should be banned by Node2
+    assert_eq!(node2_p2p.hosts().container.fetch_all(HostColor::Black).len(), 1);
+    node1_p2p.stop().await;
+    node2_p2p.stop().await;
 }
