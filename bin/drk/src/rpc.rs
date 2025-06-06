@@ -286,12 +286,8 @@ impl Drk {
     }
 
     /// `scan_block` will go over over transactions in a block and handle their calls
-    /// based on the called contract. Additionally, will update `last_scanned_block` to
-    /// the provided block height and will store its height, hash and inverse query.
+    /// based on the called contract.
     async fn scan_block(&self, scan_cache: &mut ScanCache, block: &BlockInfo) -> Result<()> {
-        // Reset wallet inverse cache state
-        self.reset_inverse_cache().await?;
-
         // Keep track of the trees we need to update and our wallet
         // transactions.
         let mut update_money_tree = false;

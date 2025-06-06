@@ -51,25 +51,10 @@ impl Drk {
             WALLET_TXS_HISTORY_COL_TX,
         );
 
-        // Create its inverse query
-        let tx_hash = tx.hash().to_string();
-        // We only need to set the transaction status to "Reverted"
-        let inverse = self.wallet.create_prepared_statement(
-            &format!(
-                "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-                WALLET_TXS_HISTORY_TABLE,
-                WALLET_TXS_HISTORY_COL_STATUS,
-                WALLET_TXS_HISTORY_COL_TX_HASH
-            ),
-            rusqlite::params!["Reverted", tx_hash],
-        )?;
-
         // Execute the query
+        let tx_hash = tx.hash().to_string();
         self.wallet
             .exec_sql(&query, rusqlite::params![tx_hash, status, &serialize_async(tx).await,])?;
-
-        // Store its inverse
-        self.wallet.cache_inverse(inverse)?;
 
         Ok(tx_hash)
     }
