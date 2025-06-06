@@ -91,14 +91,15 @@ conditions on the transaction's structure or other function calls
 {{#include ../../../../src/tx/mod.rs:transaction}}
 ```
 
-Function calls represent mutations of the current active state to a new state.
+Function calls represent mutations of the current active state to a new
+state.
 
 ```rust
 {{#include ../../../../src/sdk/src/tx.rs:contractcall}}
 ```
 
-The `contract_id` corresponds to the top level module for the contract which
-includes the global `State`.
+The `contract_id` corresponds to the top level module for the contract
+which includes the global `State`.
 
 The `func_id` of a function call corresponds to predefined objects
 in the submodules:
@@ -220,20 +221,20 @@ This section of the book documents smart contract development.
 
 ## Invoking Contracts
 
-In Solana and Ethereum, when invoking a contract, the call happens directly
-at the site of calling. That means the calling contract is responsible for
-constructing the params used to process the instruction.
+In Solana and Ethereum, when invoking a contract, the call happens
+directly at the site of calling. That means the calling contract is
+responsible for constructing the params used to process the instruction.
 
-In our case, it's more complicated since a smart contract function invocation
-involves ZK proofs with `get_metadata()` that can be verified in parallel.
-If we used the above model, we would first have to execute
-`process()` before verifying the proofs or signatures.
+In our case, it's more complicated since a smart contract function
+invocation involves ZK proofs with `get_metadata()` that can be
+verified in parallel. If we used the above model, we would first have
+to execute `process()` before verifying the proofs or signatures.
 
 Also arbitrary invocation allows arbitrary infinite recursion.
 
-The alternative method which is close to what we're doing already, is having
-the entire callgraph as a tree. Each `ContractCall`, now has a field called
-`children: Vec<ContractCall>`.
+The alternative method which is close to what we're doing already, is
+having the entire callgraph as a tree. Each `ContractCall`, now has a
+field called `children: Vec<ContractCall>`.
 
 ```rust
 pub struct ContractCall {
@@ -254,41 +255,42 @@ call `invoke()` exactly `n` times.
     let (params, retdat) = invoke(function_id);
 ```
 
-This doesn't actually invoke any function directly, but just iterates to the
-next child call in the current call. We should iterate through the entire list.
-If this doesn't happen, then there's a mismatch and the call fails with an
-error.
+This doesn't actually invoke any function directly, but just iterates
+to the next child call in the current call. We should iterate through
+the entire list. If this doesn't happen, then there's a mismatch and
+the call fails with an error.
 
-This logic is handled completely inside the contract without needing host
-functions.
+This logic is handled completely inside the contract without needing
+host functions.
 
-The downside is that the entire calldata for a smart contract is bundled
-in a tx, and isn't generated on the fly. This makes tx size bigger.
-However since we need ZK proofs, I expect the calldata would need to
-bundle the proofs for all invoked calls anyway.
+The downside is that the entire calldata for a smart contract is
+bundled in a tx, and isn't generated on the fly. This makes tx size
+bigger. However since we need ZK proofs, I expect the calldata would
+need to bundle the proofs for all invoked calls anyway.
 
-Essentially the entire program trace is created ahead of time by the "prover",
-and then the verifier simply checks the trace for correctness. This can be
-done in parallel since we have all the data ahead of time.
+Essentially the entire program trace is created ahead of time by the
+"prover", and then the verifier simply checks the trace for
+correctness. This can be done in parallel since we have all the data
+ahead of time.
 
 ### Depending on State Changes
 
-Another downside of this model is that state changes at the site of invocation
-are not immediate.
+Another downside of this model is that state changes at the site of
+invocation are not immediate.
 
-Currently in DarkFi, we separate contract calls into 2-phases: `process()`
-which verifies the calldata, and `update()` which takes a state update from
-`process()` and writes the changes.
+Currently in DarkFi, we separate contract calls into 2-phases:
+`process()` which verifies the calldata, and `update()` which takes a
+state update from `process()` and writes the changes.
 
 Host functions have permissions:
 
-* `process()` is READONLY, which means state can only be read. For example
-  it can use `db_get()` but *not* `db_set()`.
+* `process()` is READONLY, which means state can only be read. For
+  example it can use `db_get()` but *not* `db_set()`.
 * `update()` is WRITEONLY. It can only write to the state. For example
   it can use `db_set()` but *not* `db_get()`.
 
-Let `A`, `B` be smart contract functions. `A` calls `invoke(B)`. The normal
-flow in Ethereum would be:
+Let `A`, `B` be smart contract functions. `A` calls `invoke(B)`. The
+normal flow in Ethereum would be:
 
 ```
 process(A) ->
@@ -355,56 +357,57 @@ contract ChecksEffectsInteractions {
 }
 ```
 
-Interactions always occur last since they cause unknown effects. Performing
-logic based off state changes from an interacting outside contract (especially
-when user provided) is very risky.
+Interactions always occur last since they cause unknown effects.
+Performing logic based off state changes from an interacting outside
+contract (especially when user provided) is very risky.
 
-With the model of `invoke()` given above, we do not have any possibility of such
-an attack occurring.
+With the model of `invoke()` given above, we do not have any
+possibility of such an attack occurring.
 
 ## ABI
 
-We can do this in Rust through clever use of the serializer. Basically there
-is a special overlay provided for a Model which describes its layout.
-The layout saves the field names and types. Later this can be provided
-via a macro.
+We can do this in Rust through clever use of the serializer. Basically
+there is a special overlay provided for a Model which describes its
+layout. The layout saves the field names and types. Later this can be
+provided via a macro.
 
-Then dynamically in the program code, the params can be serialized/deserialized
-and inspected via this ABI overlay. This enables dynamic calls provided by
-users to be supported in an elegant and simple way.
+Then dynamically in the program code, the params can be (de)serialized
+and inspected via this ABI overlay. This enables dynamic calls provided
+by users to be supported in an elegant and simple way.
 
-The ABI also aids in debugging since when the overlay is loaded, then calldata
-can be inspected. Then we can inspect txs in Python, with exported ABIs saved
-as JSON files per contract documenting each function's params.
+The ABI also aids in debugging since when the overlay is loaded, then
+calldata can be inspected. Then we can inspect txs in Python, with
+exported ABIs saved as JSON files per contract documenting each
+function's params.
 
 ## Events
 
-Custom apps will need to subscribe to blockchain txs, and be able to respond
-to certain events. In Ethereum, there is a custom mechanism called
-[events](https://docs.soliditylang.org/en/latest/abi-spec.html#events).
+Custom apps will need to subscribe to blockchain txs, and be able to
+respond to certain events. In Ethereum, there is a custom mechanism
+called [events](https://docs.soliditylang.org/en/latest/abi-spec.html#events).
 This allows smart contracts to
 [return values to the UI](https://ethereum.stackexchange.com/questions/56879/can-anyone-explain-what-is-the-main-purpose-of-events-in-solidity-and-when-to-us).
 Events are indexed in the database.
 
-An equivalent mechanism in DarkFi, may be the ability to emit events which
-wallets can subscribe to. As for storing them an indexed DB, we already offer
-that functionality with `db_set()` during the update phase.
+An equivalent mechanism in DarkFi, may be the ability to emit events
+which wallets can subscribe to. As for storing them an indexed DB, we
+already offer that functionality with `db_set()` during the update
+phase.
 
-The emitted event could consist of the ContractId/FunctionId, an optional list
-of topics, and a binary blob.
+The emitted event could consist of the ContractId/FunctionId, an
+optional list of topics, and a binary blob.
 
 Alternatively, wallets would have to listen to all calls of a specific
-FunctionId. This allows wallets to only subscribe to some specific aspect of
-those calls.
+FunctionId. This allows wallets to only subscribe to some specific
+aspect of those calls.
 
-Solana by contrast allows the RPC to subscribe to accounts directly. The
-equivalent in our case, is subscribing to `db_set()` calls. Wallets can also
-receive these state changes and reflect them in their UI.
+Solana by contrast allows the RPC to subscribe to accounts directly.
+The equivalent in our case, is subscribing to `db_set()` calls. Wallets
+can also receive these state changes and reflect them in their UI.
 An [EventEmitter](https://github.com/solana-labs/solana/issues/14076)
 was recently added to Solana.
 
-Adding an explicit event emitter allows sending specific events used for
-wallets. This makes dev on the UI side much easier.
-Additionally the cost is low since any events emitted with no subscribers
-for that contract or not matching the filter will just be immediately dropped.
-
+Adding an explicit event emitter allows sending specific events used
+for wallets. This makes dev on the UI side much easier. Additionally
+the cost is low since any events emitted with no subscribers for that
+contract or not matching the filter will just be immediately dropped.

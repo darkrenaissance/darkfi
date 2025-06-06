@@ -1,40 +1,44 @@
 # P2P Network
 
-We instantiate a `p2p` network and call `start()`. This will begin running a single
-p2p network until `stop()` is called.
+We instantiate a `p2p` network and call `start()`. This will begin
+running a single p2p network until `stop()` is called.
 
 There are 3 session types:
 
 * `InboundSession`, concerned with incoming connections
 * `OutboundSession`, concerned with outgoing connections
-* `SeedSession` is a special session type which connects to seed nodes to populate
-  the hosts pool, then finishes once synced.
+* `SeedSession` is a special session type which connects to seed nodes
+  to populate the hosts pool, then finishes once synced.
 
-Connections are made by either `Acceptor` or `Connector` for incoming or outgoing
-respectively. They have multiple transport types; see `src/net/transport/` for the
-full list.
+Connections are made by either `Acceptor` or `Connector` for incoming
+or outgoing respectively. They have multiple transport types; see
+`src/net/transport/` for the full list.
 
 Connections are then wrapped in a `Channel` abstraction which allows
-protocols to be attached. See `src/net/protocol/` and run `fd protocol` for custom
-application specific network protocols. Also see the follow tutorial:
+protocols to be attached. See `src/net/protocol/` and run `fd protocol`
+for custom application specific network protocols. Also see the follow
+tutorial:
 
 * [Understanding Protocols](../../learn/dchat/creating-dchatd/protocols.md)
 
 ## Outbound Session
 
-The outbound session is responsible to ensure the hosts pool is populated, either
-through currently connected nodes or using the seed session.
-It performs this algorithm:
+The outbound session is responsible to ensure the hosts pool is
+populated, either through currently connected nodes or using the seed
+session. It performs this algorithm:
 
 1. Start $N$ slots, and a sleeping peer discovery process
 
 Then each slot performs this algorithm:
 
 1. If no addresses matching our filters are in the hosts pool then:
-    1. Wakeup the peer discovery process. This does nothing if peer discovery is already active.
-    2. Peer discovery tries first 2 times to poll the current network if there are connected nodes,
-       otherwise it will do a seed server sync.
-    3. Peer discovery then wakes any sleeping slots and goes back to sleep.
+    1. Wakeup the peer discovery process. This does nothing if peer
+       discovery is already active.
+    2. Peer discovery tries first 2 times to poll the current network
+       if there are connected nodes, otherwise it will do a seed server
+       sync.
+    3. Peer discovery then wakes any sleeping slots and goes back to
+       sleep.
 
 ## Hostlist filtering
 
@@ -83,109 +87,153 @@ algo](https://eprint.iacr.org/2019/411.pdf)
 
 ### Design Considerations
 
-* Mitigate attacks to a reasonable degree. Ensuring complete coverage against attacks is infeasible and likely
-  introduces significant latency into protocols.
-* Primarily target the p2p network running over anonymity networks like Tor, i2p or Nym.
-  This means we cannot rely on node addresses being reliable. Even on the clearnet, attackers can easily obtain
-  large numbers of proxy addresses.
+* Mitigate attacks to a reasonable degree. Ensuring complete coverage
+  against attacks is infeasible and likely introduces significant
+  latency into protocols.
+* Primarily target the p2p network running over anonymity networks like
+  Tor, i2p or Nym. This means we cannot rely on node addresses being
+  reliable. Even on the clearnet, attackers can easily obtain large
+  numbers of proxy addresses.
 
 The main attacks are:
 
-* **Sybil attack**. A malicious actor tries to subvert the network using sockpuppet nodes. For example
-  false signalling using version messages on the p2p network.
-* **Eclipse attack**. Targets a single node, through a p2p MitM attack where the malicious actor controls all
-  the traffic you see. For example they might send you a payment, then want to doublespend without you
-  knowing about it.
-* **Denial of Service**. Usually happens when a node is overloaded by too much data being sent.
+* **Sybil attack**. A malicious actor tries to subvert the network
+  using sockpuppet nodes. For example false signalling using version
+  messages on the p2p network.
+* **Eclipse attack**. Targets a single node, through a p2p MitM attack
+  where the malicious actor controls all the traffic you see. For
+  example they might send you a payment, then want to doublespend
+  without you knowing about it.
+* **Denial of Service**. Usually happens when a node is overloaded by
+  too much data being sent.
 
 From [libp2p2 DoS mitigation](
-https://docs.libp2p.io/concepts/security/dos-mitigation/): "An attack is
-considered viable if it takes fewer resources to execute than the damage
-it does. In other words, if the payoff is higher than the investment it
-is a viable attack and should be mitigated."
+https://docs.libp2p.io/concepts/security/dos-mitigation/): "An attack
+is considered viable if it takes fewer resources to execute than the
+damage it does. In other words, if the payoff is higher than the
+investment it is a viable attack and should be mitigated."
 
 ### Common Mitigations
 
-* **Backoff/falloff**. This is the strategy implemented in Bitcoin. This can be bad when arbitrary limits are implemented
-  since we slow down traffic for no reason.
-* **Choking controller**. BitTorrent no longer uses naive tit-for-tat, instead libtorrent implements an anti-leech seeding algo
-  from the paper [Improving BitTorrent: A Simple Approach](https://qed.usc.edu/papers/ChowGM08.pdf), which is focused on distributing
-  bandwidth to all peers. See also [libtorrent/src/choker.cpp](https://github.com/arvidn/libtorrent/blob/RC_2_0/src/choker.cpp).
-    * All p2p messages will have a score which represents workload for the node. There is a hard limit, and in general the choker
-      will try to balance the scores between all available channels.
-    * Opening the connection itself has a score with inbound connections assigned more cost than outgoing ones.
-* **Smart ban**. Malicious peers which violate protocols are hard banned. For example sending the wrong data for a chunk.
-    * See the method `channel.ban()` which immediately disconnects and blacklists the address.
-* **uTP congestion control**. BitTorrent implements a UDP protocol with its own congestion control. We could do such a similar strategy
-  with the addition of removing ordering. This reduces protocol latency mitigating attacks. See [libtorrent.org/utp.html](https://libtorrent.org/utp.html)
+* **Backoff/falloff**. This is the strategy implemented in Bitcoin.
+  This can be bad when arbitrary limits are implemented since we slow
+  down traffic for no reason.
+* **Choking controller**. BitTorrent no longer uses naive tit-for-tat,
+  instead libtorrent implements an anti-leech seeding algo from the
+  paper [Improving BitTorrent: A Simple Approach](https://qed.usc.edu/papers/ChowGM08.pdf),
+  which is focused on distributing bandwidth to all peers. See also
+  [libtorrent/src/choker.cpp](https://github.com/arvidn/libtorrent/blob/RC_2_0/src/choker.cpp).
+    * All p2p messages will have a score which represents workload for
+      the node. There is a hard limit, and in general the choker will
+      try to balance the scores between all available channels.
+    * Opening the connection itself has a score with inbound
+      connections assigned more cost than outgoing ones.
+* **Smart ban**. Malicious peers which violate protocols are hard
+  banned. For example sending the wrong data for a chunk.
+    * See the method `channel.ban()` which immediately disconnects and
+      blacklists the address.
+* **uTP congestion control**. BitTorrent implements a UDP protocol with
+  its own congestion control. We could do such a similar strategy
+  with the addition of removing ordering. This reduces protocol latency
+  mitigating attacks. See [libtorrent.org/utp.html](https://libtorrent.org/utp.html)
   for more info.
-    * Maybe less important if we use alternative networks like Tor or i2p.
-* **White, gray and black lists**. See section 2.2 of [Exploring the Monero P2P Network](https://eprint.iacr.org/2019/411.pdf) for
-  details of this algorithm. This aids with network connectivity, avoiding netsplits which could make the network more susceptible to
+    * Maybe less important if we use alternative networks like Tor or
+      i2p.
+* **White, gray and black lists**. See section 2.2 of [Exploring the Monero P2P Network](https://eprint.iacr.org/2019/411.pdf)
+  for details of this algorithm. This aids with network connectivity,
+  avoiding netsplits which could make the network more susceptible to
   eclipse/sybil attacks (large scale MiTM).
     * See: [Refine Session](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/refine_session.rs)
-* **Protocol-level reputation system**. You have a keypair, which accrues more trust from the network. Nodes gossip trust metrics.
+* **Protocol-level reputation system**. You have a keypair, which
+  accrues more trust from the network. Nodes gossip trust metrics.
     * See [AnonRep: Towards Tracking-Resistant Anonymous Reputation](https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-zhai.pdf)
     * Also the discussion in
       [Semaphore RLN, rate limiting nullifier for spam prevention in anonymous p2p setting](https://ethresear.ch/t/semaphore-rln-rate-limiting-nullifier-for-spam-prevention-in-anonymous-p2p-setting/5009)
-* **Reduce blast radius**. The p2p subsystem should run on its own dedicated executor, separate from database lookups or other
-  system operations.
+* **Reduce blast radius**. The p2p subsystem should run on its own
+  dedicated executor, separate from database lookups or other system
+  operations.
 * **fail2ban**
-* **Optimized blockchain database**. Most databases are written for interleaved reads and writes as well as deletion. Blockchains follow
-  a different pattern of infrequent writes being mostly append-only, and requiring weaker guarantees.
+* **Optimized blockchain database**. Most databases are written for
+ interleaved reads and writes as well as deletion. Blockchains follow a
+ different pattern of infrequent writes being mostly append-only, and
+ requiring weaker guarantees.
 
 ### Protocol Suggestions
 
-Core protocols should be modeled and analyzed with DoS protections added. Below are suggestions to start the investigation.
+Core protocols should be modeled and analyzed with DoS protections
+added. Below are suggestions to start the investigation.
 
 * Do not forward orphan txs or blocks.
 * Drop all double spend txs.
-    * Alternatively require a higher fee if we want to enable replace by fee.
+    * Alternatively require a higher fee if we want to enable replace
+      by fee.
     * Do not forward double spend txs.
-* Do not forward the same object (block, transaction .etc) to the same peer twice. Violation results in `channel.ban()`.
+* Do not forward the same object (block, transaction .etc) to the same
+  peer twice. Violation results in `channel.ban()`.
 * Very low fee txs are rate limited.
 * Limit orphan txs.
 * Drop large or unusual orphan transactions to limit damage.
-* Consider a verification cache to prevent attacks that try to trigger re-verification of stored orphan txs. Also limit the size of the cache.
+* Consider a verification cache to prevent attacks that try to trigger
+  re-verification of stored orphan txs. Also limit the size of the
+  cache.
   See [Fixed vulnerability explanation: Why the signature cache is a DoS protection.](https://bitcointalk.org/index.php?topic=136422.0)
 * Perform more expensive checks later in tx validation.
-* Nodes will only relay valid transactions with a certain fee amount. More expensive transactions require a higher fee.
-* Complex operations such as requesting data can be mitigated by tracking the number of requests from a peer.
-    * Attackers may attempt flooding invs for invalid data. The peer responds with get data but that object doesn't exist using
-      up precious bandwidth. Limit both the rate of invs to 2/s and size of items to 35.
-    * Also loops can cause an issue if triggered by the network. This should be carefully analyzed and flattened if possible,
-      otherwise they should be guarded against attack.
+* Nodes will only relay valid transactions with a certain fee amount.
+  More expensive transactions require a higher fee.
+* Complex operations such as requesting data can be mitigated by
+  tracking the number of requests from a peer.
+    * Attackers may attempt flooding invs for invalid data. The peer
+      responds with get data but that object doesn't exist using up
+      precious bandwidth. Limit both the rate of invs to 2/s and size
+      of items to 35.
+    * Also loops can cause an issue if triggered by the network. This
+      should be carefully analyzed and flattened if possible, otherwise
+      they should be guarded against attack.
 
 ### Customizable Policy
 
 Apps should be able to configure:
 
-* Reject hosts, for example based off current overall resource utilization or the host addr.
-    * Note: we have a configurable setting called `blacklist` which allows us to reject hosts by addr.
+* Reject hosts, for example based off current overall resource
+  utilization or the host addr.
+    * Note: we have a configurable setting called `blacklist` which
+      allows us to reject hosts by addr.
 * Accounting abstraction for scoring connections.
 
 ## Swarming
 
-TODO: research how this is handled on bittorrent. How do we lookup nodes in the swarm? Does the network maintain routing tables?
-Is this done through a DHT like Kademlia?
+TODO: research how this is handled on bittorrent. How do we lookup
+nodes in the swarm? Does the network maintain routing tables? Is this
+done through a DHT like Kademlia?
 
-Swarming means more efficient downloading of data specific to a certain subset. A new p2p instance is spawned with a
-clean hosts table. This subnetwork is self contained.
+Swarming means more efficient downloading of data specific to a certain
+subset. A new p2p instance is spawned with a clean hosts table. This
+subnetwork is self contained.
 
-An application is for example DarkIRC where everyday a new event graph is spawned. With swarming, you would connect to nodes
-maintaining this particular day's event graph.
+An application is for example DarkIRC where everyday a new event graph
+is spawned. With swarming, you would connect to nodes maintaining this
+particular day's event graph.
 
-The feature allows overlaying multiple different features in a single network such as tau, darkirc and so on. New networks require
-nodes to bootstrap, but with swarming, we reduce all these networks to a single bootstrap. The overlay network maintaining the
-routing tables is a kind of decentralized lilith which keeps track of all the swarms.
+The feature allows overlaying multiple different features in a single
+network such as tau, darkirc and so on. New networks require nodes to
+bootstrap, but with swarming, we reduce all these networks to a single
+bootstrap. The overlay network maintaining the routing tables is a kind
+of decentralized lilith which keeps track of all the swarms.
 
-Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
+Possibly a post-mainnet feature depending on the scale of architectural
+changes or new code required in the net submodule.
 
-To faciliate this future upgrade, we have made the peer discovery process a generic trait called `PeerDiscoveryBase`. Currently there is only one imeplementation, `PeerDiscovery`, which implements the peer discovery process in outbound sesssion. In the future `PeerDiscoveryBase` can be implemented to make new forms of peer discovery (i.e. subnets vs overlay peer discovery processes).
+To faciliate this future upgrade, we have made the peer discovery
+process a generic trait called `PeerDiscoveryBase`. Currently there is
+only one imeplementation, `PeerDiscovery`, which implements the peer
+discovery process in outbound sesssion. In the future
+`PeerDiscoveryBase` can be implemented to make new forms of peer
+discovery (i.e. subnets vs overlay peer discovery processes).
 
 ## Scoring Subsystem
 
-Connections should maintain a scoring system. Protocols can increment the score.
+Connections should maintain a scoring system. Protocols can increment
+the score.
 
 The score backs off exponentially. If the watermark is crossed then the
 connection is dropped.
@@ -210,12 +258,12 @@ Limits are calculated by measuring the following resources:
 connections)
 
 * Streams: an object of interaction between nodes (~analogous to
-`Channel`). Streams are not metered directly- rather they are constrained
-within the protocol and service scope (defined below). Inbound streams
-are more tightly controlled than outbound streams.
+`Channel`). Streams are not metered directly- rather they are
+constrained within the protocol and service scope (defined below).
+Inbound streams are more tightly controlled than outbound streams.
 
-Resource Management Scopes are hierarchial and downstream resource usage
-is aggregated at higher levels.
+Resource Management Scopes are hierarchial and downstream resource
+usage is aggregated at higher levels.
 
  ```
 System
@@ -232,23 +280,24 @@ System
 ```
 
 * System scope: top level scope. Nests all other scopes and defines
-global hard limits.
+  global hard limits.
 * Transcient scope: scope of resources still being established, e.g. a
-connection prior to a handshake.
+  connection prior to a handshake.
 * Service (analogous to `Session`) scopes. Logical groupings of streams
-that implement protocol flow and may additionally consume resources such
-as memory.
+  that implement protocol flow and may additionally consume resources
+  such memory.
 * Protocol scopes. Faciliates backwards compatiability since nodes can
-run multiple protocols (incl. old ones) with constrained resource usage.
+  run multiple protocols (incl. old ones) with constrained resource
+  usage.
 * Peer scopes. Sets a total limit on the resource usage of an individual
-peer.
-* Connection scopes. Constrains resource usage by a single
-connection. Starts monitoring when the connection begins and ends when
-the connection ends.
-* Stream (analogous to `Channel`) scopes. Begins when a stream is created
-and ends when the stream is closed.
+  peer.
+* Connection scopes. Constrains resource usage by a single connection.
+  Starts monitoring when the connection begins and ends when connection
+  ends.
+* Stream (analogous to `Channel`) scopes. Begins when a stream is
+  created and ends when the stream is closed.
 * User transaction scopes. A generic extension to the resource manager
-that can be implemented by a programmer.
+  that can be implemented by a programmer.
 
 There is also:
 
@@ -257,18 +306,18 @@ There is also:
 
 These are System and Transcient scopes for the `allowlist`, which is a
 list of honest peer anagolous to our `goldlist`. Allowlist scopes can
-continue to use (and meter) resources while the System scope has already
-reached its limit (to protect against ellipse attack).
+continue to use (and meter) resources while the System scope has
+already reached its limit (to protect against ellipse attack).
 
-Limits have a default setting that can be configured. It's also possible
-to scale limits with a particular config that allows for scaling to
-different machines.
+Limits have a default setting that can be configured. It's also
+possible to scale limits with a particular config that allows for
+scaling to different machines.
 
 ### DarkFi p2p resource manager
 
-The goal is to make something simple that we can extend later if necessary
-given how it behaves in the wild. We have simplified the libp2p `Resource
-management scopes` into a straightforward hierarchy:
+The goal is to make something simple that we can extend later if
+necessary given how it behaves in the wild. We have simplified the
+libp2p `Resource management scopes` into a straightforward hierarchy:
 
 ```
             node
@@ -281,8 +330,8 @@ management scopes` into a straightforward hierarchy:
 
 ```
 
-Resource usage is calculated from `Message` and `Protocol` and stored in
-`Channel`. We can sum the total resources by adding the total amount
+Resource usage is calculated from `Message` and `Protocol` and stored
+in `Channel`. We can sum the total resources by adding the total amount
 of resources used by each channel using the `p2p` method `channels()`,
 (this is easy since `Channel` has access to `p2p` via a weak ptr).
 
@@ -294,23 +343,24 @@ The `ScoringSubsystem` monitors scoring actions such as `send_message`
 or `recv_message` (and other actions that make use of resources defined
 by the `AbstractComputer`) and increments the resource usage.
 
-There is also a `Controller` that defines limits and decides on what action
-to take when a given limit has been breached (such as `channel.ban()`,
-`channel.throttle()` (TODO), or `choke()`, `snub()` etc (also TODO). It
-is important that the limits set by the `Controller` are configurable and
-can be injected in at runtime since `Message` and `Protocol` are dynamic,
-user-defined types.
+There is also a `Controller` that defines limits and decides on what
+action to take when a given limit has been breached (such as
+`channel.ban()`, `channel.throttle()` (TODO), or `choke()`, `snub()`
+etc (also TODO). It is important that the limits set by the
+`Controller` are configurable and can be injected in at runtime since
+`Message` and `Protocol` are dynamic, user-defined types.
 
 TODO:
 * implement `ScoringSubsystem`, `AbstractComputer`, and `Controller`.
 
 #### Channel Scoring
 
-We start with a score that keeps track of the resources used. Concretely the
-resources are: CPU, bandwidth, memory, disk space - any computing source.
-But to keep things simple, lets condense these measures into just two:
-work (representing CPU) and bytes (bandwidth/memory). These are primarily
-the main cause of resource starvation anyway (disk space is cheap).
+We start with a score that keeps track of the resources used.
+Concretely the resources are: CPU, bandwidth, memory, disk space - any
+computing source. But to keep things simple, lets condense these
+measures into just two: work (representing CPU) and bytes
+(bandwidth/memory). These are primarily the main cause of resource
+starvation anyway (disk space is cheap).
 
 ```
 struct ScoreTable {
@@ -321,8 +371,8 @@ struct ScoreTable {
 }
 ```
 
-There is an existing trait `Message`. We add a new trait method that takes
-a message and returns its score:
+There is an existing trait `Message`. We add a new trait method that
+takes a message and returns its score:
 
 ```
 impl Message for FooMessage {
@@ -353,33 +403,32 @@ message then:
 
 1. Call `scores.update()` which does:
     1. Apply an exponential decay to all the scores.
-    2. Call `scores.pop_front()` for any scores who are below the threshold (they
-       have expired).
+    2. Call `scores.pop_front()` for any scores who are below the
+      threshold (they have expired).
 2. Get the score of the received message.
 3. Store the score and timestamp in the vec.
 
 This logic is implemented in a `ScoringMetric` class.
 
-Now summing the vec will give you the cumulative score. Depending on how high
-this score is, we will:
+Now summing the vec will give you the cumulative score. Depending on
+how high this score is, we will:
 
 * Throttle the channel's incoming messages before processing them.
 * `channel.ban()`.
 
 #### Protocol Scoring
 
-The same mechanism can also be used by protocols, however mostly we can probably
-just use the channel scoring for most usecases as a good enough approximation.
-However there might be tight edge situations like the current dag sync which
-require more fine grained control.
+The same mechanism can also be used by protocols, however mostly we can
+probably just use the channel scoring for most usecases as a good
+enough approximation. However there might be tight edge situations like
+the current dag sync which require more fine grained control.
 
-In which case the protocol will instantiate its own `ScoringMetric` and keep
-track itself including calling ban on the channel.
+In which case the protocol will instantiate its own `ScoringMetric` and
+keep track itself including calling ban on the channel.
 
 #### Tracking the Remote
 
-The remote will ban us if we cross the limit. So our channel must also have a
-`scores_remote` which keeps track of *our* score (how the remote sees us).
-If we start getting too high then ease up on the messages to avoid getting
-blacklisted `channel.ban()` called on us.
-
+The remote will ban us if we cross the limit. So our channel must also
+have a `scores_remote` which keeps track of *our* score (how the remote
+sees us). If we start getting too high then ease up on the messages to
+avoid getting blacklisted `channel.ban()` called on us.

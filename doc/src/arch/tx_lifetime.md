@@ -40,8 +40,8 @@ chain:
 ## Real-world simulation with non-instant confirmation
 
 The lifetime of a transaction $tx$ that passes verification and whose
-state transition is pending to be applied on top of the canonical (confirmed)
-chain:
+state transition is pending to be applied on top of the canonical
+(confirmed) chain:
 
 1. User creates a transaction $tx$
 2. User broadcasts $tx$ to `S`
@@ -64,8 +64,8 @@ in sequence
 ## Real-world simulation with non-instant confirmation, forks and multiple `CP` nodes
 
 The lifetime of a transaction $tx$ that passes verifications and whose
-state transition is pending to be applied on top of the canonical (confirmed)
-chain:
+state transition is pending to be applied on top of the canonical
+(confirmed) chain:
 
 1. User creates a transaction $tx$
 2. User broadcasts $tx$ to `S`
@@ -76,8 +76,8 @@ chain:
 7. $tx$ enters `M` `mempool`
 8. `M` broadcasts $tx$ to rest `M` nodes
 9. Block producer `SM` finds which fork to extend
-10. `SM` validates all unproposed transactions in its `mempool` in sequence,
-against extended fork state, discarding invalid
+10. `SM` validates all unproposed transactions in its `mempool` in
+  sequence, extended fork state, discarding invalid
 11. `SM` creates a block proposal containing $tx$ extending the fork
 12. `M` receives block proposal and validates its transactions against
 the extended fork state
@@ -92,12 +92,14 @@ transactions in sequence, against canonical state
 20. `S` writes the state updates to their chain
 21. `S` removes $tx$ from their `mempool`
 
-`M` will keep $tx$ in its `mempool` as long as it is a valid state transition
-for any fork(including canonical) or it get confirmed.
+`M` will keep $tx$ in its `mempool` as long as it is a valid state
+transition for any fork(including canonical) or it get confirmed.
 
-Unproposed transactions refers to all $tx$ not included in a proposal of any fork.
+Unproposed transactions refers to all $tx$ not included in a proposal
+of any fork.
 
-If a fork that can be confirmed fails to validate all its transactions(14), it should be dropped.
+If a fork that can be confirmed fails to validate all its
+transactions(14), it should be dropped.
 
 ## The `Transaction` object
 
@@ -134,7 +136,8 @@ For A -> B payments in DarkFi we use the Sapling scheme that originates
 from zcash. A payment transaction has a number of _inputs_ (which are
 coins being burned/spent), and a number of _outputs_ (which are coins
 being minted/created). An explanation for the ZK proofs for this scheme
-can be found [here](../zkas/examples/sapling.md) under the Zkas section of this book.
+can be found [here](../zkas/examples/sapling.md) under the Zkas section
+of this book.
 
 In code, the structs we use are the following:
 

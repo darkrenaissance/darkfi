@@ -1,7 +1,7 @@
 # Services
 
-Nodes and applications are composed out of services. These are long running
-components that may communicate with each other.
+Nodes and applications are composed out of services. These are long
+running components that may communicate with each other.
 
 The standard signature for a service is of the form:
 
@@ -26,12 +26,14 @@ impl Service {
 }
 ```
 
-Both `start()` and `stop()` should return immediately without blocking the caller.
-Any long running tasks they need to perform should be done using `StoppableTask` (see below).
+Both `start()` and `stop()` should return immediately without blocking
+the caller. Any long running tasks they need to perform should be done
+using `StoppableTask` (see below).
 
 ## `StoppableTask`
 
-Services will likely want to start any number of processes. For that you can use `StoppableTask`.
+Services will likely want to start any number of processes. For that
+you can use `StoppableTask`.
 
 For example `ManualSession` looks like this:
 
@@ -78,8 +80,9 @@ impl ManualSession {
 }
 ```
 
-The method in `start()` is a future that returns `Result<()>`. If you do not want
-to return a result (for example with long running processes), then simply use the future:
+The method in `start()` is a future that returns `Result<()>`. If you
+do not want to return a result (for example with long running
+processes), then simply use the future:
 
 ```rust
     async {
@@ -92,7 +95,8 @@ to return a result (for example with long running processes), then simply use th
 
 Another tool in our toolbox is the `subscribe()/notify()` paradigm.
 
-We can use `system::Subscriber`. Then inside our method we can define a method like so:
+We can use `system::Subscriber`. Then inside our method we can define
+a method like so:
 
 ```rust
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
@@ -116,9 +120,10 @@ stop_sub.unsubscribe().await;
 
 ## Parent-Child Relationships
 
-In the async context we are forced to use `Arc<Self>`, but often times we want a parent-child
-relationship where if both parties contain an Arc reference to the other it creates a
-circular loop. For this case, we can use `std::sync::Weak` and `std::sync::Arc::new_cyclic()`.
+In the async context we are forced to use `Arc<Self>`, but often times
+we want a parent-child relationship where if both parties contain an
+Arc reference to the other it creates a circular loop. For this case,
+we can use `std::sync::Weak` and `std::sync::Arc::new_cyclic()`.
 
 ```rust
 pub struct Parent {
@@ -155,11 +160,11 @@ impl Child {
 }
 ```
 
-Otherwise if the relationship is just one way, use `Arc<Foo>`. For example if doing dependency
-injection where component B is dependent on component A, then we could do:
+Otherwise if the relationship is just one way, use `Arc<Foo>`. For
+example if doing dependency injection where component B is dependent
+on component A, then we could do:
 
 ```rust
 let comp_a = Foo::new();
 let comp_b = Bar::new(comp_a);
 ```
-

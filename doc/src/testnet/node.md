@@ -468,4 +468,3 @@ We can now view the log, and grep through it.
 ```shell
 $ tail -n +0 -f /tmp/darkfid.log | grep -a --line-buffered -v DEBUG
 ```
-
