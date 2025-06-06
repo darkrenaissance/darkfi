@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
@@ -46,11 +49,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote,
-        pasta_prelude::PrimeField,
-        smt::{PoseidonFp, EMPTY_NODES_FP},
-        BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind, SecretKey,
-        MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, pasta_prelude::PrimeField, BaseBlind, FuncId, Keypair, MerkleNode,
+        MerkleTree, PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -59,12 +59,12 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
-    cli_util::kaching,
-    convert_named_params,
-    error::WalletDbResult,
-    walletdb::{WalletSmt, WalletStorage},
-    Drk,
+    cache::CacheSmt, cli_util::kaching, convert_named_params, error::WalletDbResult,
+    rpc::ScanCache, Drk,
 };
+
+// Money Merkle tree Sled key
+pub const SLED_MERKLE_TREES_MONEY: &[u8] = b"_money_tree";
 
 // Wallet SQL table constant names. These have to represent the `money.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -405,31 +405,6 @@ impl Drk {
         Ok(owncoins)
     }
 
-    /// Fetch provided transaction coins from the wallet.
-    pub async fn get_transaction_coins(&self, spent_tx_hash: &String) -> Result<Vec<OwnCoin>> {
-        let query = self.wallet.query_multiple(
-            &MONEY_COINS_TABLE,
-            &[],
-            convert_named_params! {(MONEY_COINS_COL_SPENT_TX_HASH, spent_tx_hash)},
-        );
-
-        let rows = match query {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_transaction_coins] Coins retrieval failed: {e:?}"
-                )))
-            }
-        };
-
-        let mut owncoins = Vec::with_capacity(rows.len());
-        for row in rows {
-            owncoins.push(self.parse_coin_record(&row).await?.0)
-        }
-
-        Ok(owncoins)
-    }
-
     /// Fetch provided token unspend balances from the wallet.
     pub async fn get_token_coins(&self, token_id: &TokenId) -> Result<Vec<OwnCoin>> {
         let query = self.wallet.query_multiple(
@@ -742,41 +717,37 @@ impl Drk {
         Ok(smt)
     }
 
-    /// Auxiliary function to grab all the nullifiers, coins, notes and freezes from
-    /// a transaction money call.
+    /// Auxiliary function to grab all the nullifiers, coins with their
+    /// notes and freezes from a transaction money call.
     async fn parse_money_call(
         &self,
-        call_idx: usize,
+        call_idx: &usize,
         calls: &[DarkLeaf<ContractCall>],
-    ) -> Result<(Vec<Nullifier>, Vec<Coin>, Vec<AeadEncryptedNote>, Vec<TokenId>)> {
+    ) -> Result<(Vec<Nullifier>, Vec<(Coin, AeadEncryptedNote)>, Vec<TokenId>)> {
         let mut nullifiers: Vec<Nullifier> = vec![];
-        let mut coins: Vec<Coin> = vec![];
-        let mut notes: Vec<AeadEncryptedNote> = vec![];
+        let mut coins: Vec<(Coin, AeadEncryptedNote)> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
-        let call = &calls[call_idx];
+        let call = &calls[*call_idx];
         let data = &call.data.data;
         match MoneyFunction::try_from(data[0])? {
             MoneyFunction::FeeV1 => {
                 println!("[parse_money_call] Found Money::FeeV1 call");
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
-                coins.push(params.output.coin);
-                notes.push(params.output.note);
+                coins.push((params.output.coin, params.output.note));
             }
             MoneyFunction::GenesisMintV1 => {
                 println!("[parse_money_call] Found Money::GenesisMintV1 call");
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 for output in params.outputs {
-                    coins.push(output.coin);
-                    notes.push(output.note);
+                    coins.push((output.coin, output.note));
                 }
             }
             MoneyFunction::PoWRewardV1 => {
                 println!("[parse_money_call] Found Money::PoWRewardV1 call");
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push(params.output.coin);
-                notes.push(params.output.note);
+                coins.push((params.output.coin, params.output.note));
             }
             MoneyFunction::TransferV1 => {
                 println!("[parse_money_call] Found Money::TransferV1 call");
@@ -787,8 +758,7 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push(output.coin);
-                    notes.push(output.note);
+                    coins.push((output.coin, output.note));
                 }
             }
             MoneyFunction::OtcSwapV1 => {
@@ -800,8 +770,7 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push(output.coin);
-                    notes.push(output.note);
+                    coins.push((output.coin, output.note));
                 }
             }
             MoneyFunction::AuthTokenMintV1 => {
@@ -816,61 +785,69 @@ impl Drk {
             MoneyFunction::TokenMintV1 => {
                 println!("[parse_money_call] Found Money::TokenMintV1 call");
                 let params: MoneyTokenMintParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push(params.coin);
                 // Grab the note from the child auth call
                 let child_idx = call.children_indexes[0];
                 let child_call = &calls[child_idx];
-                let params: MoneyAuthTokenMintParamsV1 =
+                let child_params: MoneyAuthTokenMintParamsV1 =
                     deserialize_async(&child_call.data.data[1..]).await?;
-                notes.push(params.enc_note);
+                coins.push((params.coin, child_params.enc_note));
             }
         }
 
-        Ok((nullifiers, coins, notes, freezes))
+        Ok((nullifiers, coins, freezes))
     }
 
-    /// Append data related to Money contract transactions into the wallet database,
-    /// and store their inverse queries into the cache.
-    /// Returns a flag indicating if the provided data refer to our own wallet.
-    pub async fn apply_tx_money_data(
+    /// Auxiliary function to handle coins with their notes from a
+    /// transaction money call.
+    /// Returns a flag indicating if the money tree should be updated,
+    /// along with found own coins.
+    fn handle_money_call_coins(
         &self,
-        call_idx: usize,
-        calls: &[DarkLeaf<ContractCall>],
-        tx_hash: &String,
-    ) -> Result<bool> {
-        let (nullifiers, coins, notes, freezes) = self.parse_money_call(call_idx, calls).await?;
-        let secrets = self.get_money_secrets().await?;
-        let dao_notes_secrets = self.get_dao_notes_secrets().await?;
-        let mut tree = self.get_money_tree().await?;
-
+        tree: &mut MerkleTree,
+        secrets: &[SecretKey],
+        coins: &[(Coin, AeadEncryptedNote)],
+    ) -> (bool, Vec<OwnCoin>) {
+        // Keep track of our own coins found in the vec
         let mut owncoins = vec![];
 
-        for (coin, note) in coins.iter().zip(notes.iter()) {
-            // Append the new coin to the Merkle tree. Every coin has to be added.
+        // Check if provided coins vec is empty
+        if coins.is_empty() {
+            return (false, owncoins)
+        }
+
+        // Handle provided coins vector and grab our own
+        for (coin, note) in coins {
+            // Append the new coin to the Merkle tree.
+            // Every coin has to be added.
             tree.append(MerkleNode::from(coin.inner()));
 
             // Attempt to decrypt the note
-            for secret in secrets.iter().chain(dao_notes_secrets.iter()) {
-                if let Ok(note) = note.decrypt::<MoneyNote>(secret) {
-                    println!("[apply_tx_money_data] Successfully decrypted a Money Note");
-                    println!("[apply_tx_money_data] Witnessing coin in Merkle tree");
-                    let leaf_position = tree.mark().unwrap();
-
-                    let owncoin =
-                        OwnCoin { coin: *coin, note: note.clone(), secret: *secret, leaf_position };
-
-                    owncoins.push(owncoin);
-                }
+            for secret in secrets {
+                let Ok(note) = note.decrypt::<MoneyNote>(secret) else { continue };
+                println!("[handle_money_call_coins] Successfully decrypted a Money Note");
+                println!("[handle_money_call_coins] Witnessing coin in Merkle tree");
+                let leaf_position = tree.mark().unwrap();
+                let owncoin = OwnCoin { coin: *coin, note, secret: *secret, leaf_position };
+                owncoins.push(owncoin);
             }
         }
 
-        if let Err(e) = self.put_money_tree(&tree).await {
-            return Err(Error::DatabaseError(format!(
-                "[apply_tx_money_data] Put Money tree failed: {e:?}"
-            )))
+        (true, owncoins)
+    }
+
+    /// Auxiliary function to handle own coins from a transaction money
+    /// call.
+    async fn handle_money_call_owncoins(
+        &self,
+        owncoins_nullifiers: &mut BTreeMap<[u8; 32], [u8; 32]>,
+        coins: &[OwnCoin],
+    ) -> Result<()> {
+        println!("Found {} OwnCoin(s) in transaction", coins.len());
+
+        // Check if we have any owncoins to process
+        if coins.is_empty() {
+            return Ok(())
         }
-        self.smt_insert(&nullifiers)?;
-        let wallet_spent_coins = self.mark_spent_coins(&nullifiers, tx_hash).await?;
 
         // This is the SQL query we'll be executing to insert new coins into the wallet
         let query = format!(
@@ -894,11 +871,14 @@ impl Drk {
         let inverse_query =
             format!("DELETE FROM {} WHERE {} = ?1;", *MONEY_COINS_TABLE, MONEY_COINS_COL_COIN);
 
-        println!("Found {} OwnCoin(s) in transaction", owncoins.len());
-        for owncoin in &owncoins {
-            println!("OwnCoin: {:?}", owncoin.coin);
+        // Handle our own coins
+        for coin in coins {
+            println!("OwnCoin: {:?}", coin.coin);
             // Grab coin record key
-            let key = serialize_async(&owncoin.coin).await;
+            let key = coin.coin.to_bytes();
+
+            // Push to our own coins nullifiers cache
+            owncoins_nullifiers.insert(coin.nullifier().to_bytes(), key);
 
             // Create its inverse query
             let inverse =
@@ -907,7 +887,7 @@ impl Drk {
                     Ok(q) => q,
                     Err(e) => {
                         return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Creating Money coin insert inverse query failed: {e:?}"
+                    "[handle_money_call_owncoins] Creating Money coin insert inverse query failed: {e:?}"
                 )))
                     }
                 };
@@ -916,30 +896,41 @@ impl Drk {
             let params = rusqlite::params![
                 key,
                 0, // <-- is_spent
-                serialize_async(&owncoin.note.value).await,
-                serialize_async(&owncoin.note.token_id).await,
-                serialize_async(&owncoin.note.spend_hook).await,
-                serialize_async(&owncoin.note.user_data).await,
-                serialize_async(&owncoin.note.coin_blind).await,
-                serialize_async(&owncoin.note.value_blind).await,
-                serialize_async(&owncoin.note.token_blind).await,
-                serialize_async(&owncoin.secret).await,
-                serialize_async(&owncoin.leaf_position).await,
-                serialize_async(&owncoin.note.memo).await,
+                serialize_async(&coin.note.value).await,
+                serialize_async(&coin.note.token_id).await,
+                serialize_async(&coin.note.spend_hook).await,
+                serialize_async(&coin.note.user_data).await,
+                serialize_async(&coin.note.coin_blind).await,
+                serialize_async(&coin.note.value_blind).await,
+                serialize_async(&coin.note.token_blind).await,
+                serialize_async(&coin.secret).await,
+                serialize_async(&coin.leaf_position).await,
+                serialize_async(&coin.note.memo).await,
             ];
 
             if let Err(e) = self.wallet.exec_sql(&query, params) {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
+                    "[handle_money_call_owncoins] Inserting Money coin failed: {e:?}"
                 )))
             }
 
             // Store its inverse
             if let Err(e) = self.wallet.cache_inverse(inverse) {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Inserting inverse query into cache failed: {e:?}"
+                    "[handle_money_call_owncoins] Inserting inverse query into cache failed: {e:?}"
                 )))
             }
+        }
+
+        Ok(())
+    }
+
+    /// Auxiliary function to handle freezes from a transaction money
+    /// call.
+    async fn handle_money_call_freezes(&self, freezes: &[TokenId]) -> Result<()> {
+        // Check if we have any freezes to process
+        if freezes.is_empty() {
+            return Ok(())
         }
 
         // This is the SQL query we'll be executing to update frozen tokens into the wallet
@@ -954,7 +945,7 @@ impl Drk {
             *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
         );
 
-        for token_id in &freezes {
+        for token_id in freezes {
             // Grab token record key
             let key = serialize_async(token_id).await;
 
@@ -965,7 +956,7 @@ impl Drk {
                     Ok(q) => q,
                     Err(e) => {
                         return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Creating Money token freeze inverse query failed: {e:?}"
+                    "[handle_money_call_freezes] Creating Money token freeze inverse query failed: {e:?}"
                 )))
                     }
                 };
@@ -973,23 +964,62 @@ impl Drk {
             // Execute the query
             if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![key]) {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Update Money token freeze failed: {e:?}"
+                    "[handle_money_call_freezes] Update Money token freeze failed: {e:?}"
                 )))
             }
 
             // Store its inverse
             if let Err(e) = self.wallet.cache_inverse(inverse) {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Inserting inverse query into cache failed: {e:?}"
+                    "[handle_money_call_freezes] Inserting inverse query into cache failed: {e:?}"
                 )))
             }
         }
+
+        Ok(())
+    }
+
+    /// Append data related to Money contract transactions into the
+    /// wallet database, and store their inverse queries into the
+    /// cache.
+    /// Returns a flag indicating if the money tree should be updated
+    /// and one indicating if provided data refer to our own wallet.
+    pub async fn apply_tx_money_data(
+        &self,
+        scan_cache: &mut ScanCache,
+        call_idx: &usize,
+        calls: &[DarkLeaf<ContractCall>],
+        tx_hash: &String,
+    ) -> Result<(bool, bool)> {
+        // Parse the call
+        let (nullifiers, coins, freezes) = self.parse_money_call(call_idx, calls).await?;
+
+        // Parse call coins and grab our own
+        let (update_tree, owncoins) = self.handle_money_call_coins(
+            &mut scan_cache.money_tree,
+            &scan_cache.notes_secrets,
+            &coins,
+        );
+
+        // Update nullifiers smt
+        self.smt_insert(&mut scan_cache.money_smt, &nullifiers)?;
+
+        // Check if we have any spent coins
+        let wallet_spent_coins =
+            self.mark_spent_coins(&scan_cache.owncoins_nullifiers, &nullifiers, tx_hash)?;
+
+        // Handle our own coins
+        self.handle_money_call_owncoins(&mut scan_cache.owncoins_nullifiers, &owncoins).await?;
+
+        // Handle freezes
+        // TODO: this should return flag if we have frozen tokens indeed
+        self.handle_money_call_freezes(&freezes).await?;
 
         if self.fun && !owncoins.is_empty() {
             kaching().await;
         }
 
-        Ok(wallet_spent_coins || !owncoins.is_empty() || !freezes.is_empty())
+        Ok((update_tree, wallet_spent_coins || !owncoins.is_empty() || !freezes.is_empty()))
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.
@@ -1024,6 +1054,12 @@ impl Drk {
 
     /// Mark provided transaction input coins as spent.
     pub async fn mark_tx_spend(&self, tx: &Transaction) -> Result<()> {
+        // Create a cache of all our own nullifiers
+        let mut owncoins_nullifiers = BTreeMap::new();
+        for coin in self.get_coins(true).await? {
+            owncoins_nullifiers.insert(coin.0.nullifier().to_bytes(), coin.0.coin.to_bytes());
+        }
+
         let tx_hash = tx.hash().to_string();
         println!("[mark_tx_spend] Processing transaction: {tx_hash}");
         for (i, call) in tx.calls.iter().enumerate() {
@@ -1033,16 +1069,34 @@ impl Drk {
 
             println!("[mark_tx_spend] Found Money contract in call {i}");
             let nullifiers = self.money_call_nullifiers(call).await?;
-            self.mark_spent_coins(&nullifiers, &tx_hash).await?;
+            self.mark_spent_coins(&owncoins_nullifiers, &nullifiers, &tx_hash)?;
         }
 
         Ok(())
     }
 
-    /// Mark a coin in the wallet as spent, and store its inverse query into the cache.
-    pub async fn mark_spent_coin(&self, coin: &Coin, spent_tx_hash: &String) -> WalletDbResult<()> {
-        // Grab coin record key
-        let key = serialize_async(&coin.inner()).await;
+    /// Marks all coins in the wallet as spent, if their nullifier is in the given set.
+    /// Returns a flag indicating if any of the provided nullifiers refer to our own wallet.
+    pub fn mark_spent_coins(
+        &self,
+        owncoins_nullifiers: &BTreeMap<[u8; 32], [u8; 32]>,
+        nullifiers: &[Nullifier],
+        spent_tx_hash: &String,
+    ) -> Result<bool> {
+        if nullifiers.is_empty() {
+            return Ok(false)
+        }
+
+        // Find our owncoins that where spent
+        let mut spent_owncoins = Vec::new();
+        for nullifier in nullifiers {
+            if let Some(coin_key) = owncoins_nullifiers.get(&nullifier.to_bytes()) {
+                spent_owncoins.push(coin_key);
+            }
+        }
+        if spent_owncoins.is_empty() {
+            return Ok(false)
+        }
 
         // Create an SQL `UPDATE` query to mark rows as spent(1)
         let query = format!(
@@ -1054,76 +1108,51 @@ impl Drk {
         );
 
         // Create its inverse query
-        let inverse = self.wallet.create_prepared_statement(
-            &format!(
-                "UPDATE {} SET {} = 0, {} = '-' WHERE {} = ?1;",
-                *MONEY_COINS_TABLE,
-                MONEY_COINS_COL_IS_SPENT,
-                MONEY_COINS_COL_SPENT_TX_HASH,
-                MONEY_COINS_COL_COIN
-            ),
-            rusqlite::params![key],
-        )?;
+        let inverse_query = format!(
+            "UPDATE {} SET {} = 0, {} = '-' WHERE {} = ?1;",
+            *MONEY_COINS_TABLE,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_TX_HASH,
+            MONEY_COINS_COL_COIN
+        );
 
-        // Execute the query
-        self.wallet.exec_sql(&query, rusqlite::params![spent_tx_hash, key])?;
+        // Mark spent own coins
+        for ownoin in spent_owncoins {
+            // Create its inverse query
+            let inverse = match self
+                .wallet
+                .create_prepared_statement(&inverse_query, rusqlite::params![ownoin])
+            {
+                Ok(i) => i,
+                Err(e) => {
+                    return Err(Error::DatabaseError(format!(
+                        "[mark_spent_coins] Creating inverse query failed: {e:?}"
+                    )))
+                }
+            };
 
-        // Store its inverse
-        self.wallet.cache_inverse(inverse)
-    }
-
-    /// Marks all coins in the wallet as spent, if their nullifier is in the given set.
-    /// Returns a flag indicating if any of the provided nullifiers refer to our own wallet.
-    pub async fn mark_spent_coins(
-        &self,
-        nullifiers: &[Nullifier],
-        spent_tx_hash: &String,
-    ) -> Result<bool> {
-        if nullifiers.is_empty() {
-            return Ok(false)
-        }
-
-        // First we remark transaction spent coins
-        let mut wallet_spent_coins = false;
-        for coin in self.get_transaction_coins(spent_tx_hash).await? {
-            if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
+            // Execute the query
+            if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![spent_tx_hash, ownoin]) {
                 return Err(Error::DatabaseError(format!(
                     "[mark_spent_coins] Marking spent coin failed: {e:?}"
                 )))
             }
-            wallet_spent_coins = true;
-        }
 
-        // Then we mark transaction unspent coins
-        for (coin, _, _) in self.get_coins(false).await? {
-            if !nullifiers.contains(&coin.nullifier()) {
-                continue
-            }
-            if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
+            // Store its inverse
+            if let Err(e) = self.wallet.cache_inverse(inverse) {
                 return Err(Error::DatabaseError(format!(
-                    "[mark_spent_coins] Marking spent coin failed: {e:?}"
+                    "[mark_spent_coins] Storing inverse query failed: {e:?}"
                 )))
             }
-            wallet_spent_coins = true;
         }
 
-        Ok(wallet_spent_coins)
+        Ok(true)
     }
 
     /// Inserts given slice to the wallets nullifiers Sparse Merkle Tree.
-    pub fn smt_insert(&self, nullifiers: &[Nullifier]) -> Result<()> {
-        let store = WalletStorage::new(
-            &self.wallet,
-            &MONEY_SMT_TABLE,
-            MONEY_SMT_COL_KEY,
-            MONEY_SMT_COL_VALUE,
-        );
-        let mut smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
-
+    pub fn smt_insert(&self, smt: &mut CacheSmt, nullifiers: &[Nullifier]) -> Result<()> {
         let leaves: Vec<_> = nullifiers.iter().map(|x| (x.inner(), x.inner())).collect();
-        smt.insert_batch(leaves)?;
-
-        Ok(())
+        Ok(smt.insert_batch(leaves)?)
     }
 
     /// Reset the Money Merkle tree in the wallet.

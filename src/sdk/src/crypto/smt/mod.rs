@@ -150,7 +150,7 @@ pub struct SparseMerkleTree<
     S: StorageAdapter<Value = F>,
 > {
     /// A map from leaf indices to leaf data stored as field elements.
-    store: S,
+    pub store: S,
     /// The hasher used to build the Merkle tree.
     hasher: H,
     /// An array of empty hashes hashed with themselves `N` times.
