@@ -1,17 +1,6 @@
 -- Wallet definitions for this contract.
 -- We store data that is needed to be able to receive and send tokens.
 
--- The Merkle tree containing coins
-CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_tree (
-	tree BLOB NOT NULL
-);
-
--- The Sparse Merkle tree containing coins nullifiers
-CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_smt (
-	smt_key BLOB PRIMARY KEY NOT NULL,
-	smt_value BLOB NOT NULL
-);
-
 -- The keypairs in our wallet
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_keys (
 	key_id INTEGER PRIMARY KEY NOT NULL,

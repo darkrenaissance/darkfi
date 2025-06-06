@@ -125,7 +125,7 @@ impl Drk {
     pub async fn reset(&self) -> WalletDbResult<()> {
         println!("Resetting full wallet state");
         self.reset_scanned_blocks()?;
-        self.reset_money_tree().await?;
+        self.reset_money_tree()?;
         self.reset_money_smt()?;
         self.reset_money_coins()?;
         self.reset_mint_authorities()?;
@@ -139,10 +139,6 @@ impl Drk {
     }
 
     /// Auxiliary function to reset `walletdb` inverse cache state.
-    /// Additionally, set current trees state inverse queries.
-    /// We keep the entire trees state as two distinct inverse queries,
-    /// since we execute per transaction call, so we don't have to update
-    /// them on each iteration.
     pub async fn reset_inverse_cache(&self) -> Result<()> {
         // Reset `walletdb` inverse cache
         if let Err(e) = self.wallet.clear_inverse_cache() {
@@ -150,53 +146,6 @@ impl Drk {
                 "[reset_inverse_cache] Clearing wallet inverse cache failed: {e:?}"
             )))
         }
-
-        // Grab current money tree state query and insert it into inverse cache
-        let query = self.get_money_tree_state_query().await?;
-        if let Err(e) = self.wallet.cache_inverse(query) {
-            return Err(Error::DatabaseError(format!(
-                "[reset_inverse_cache] Inserting money query into inverse cache failed: {e:?}"
-            )))
-        }
-
-        // Grab current DAO trees state query and insert it into inverse cache
-        let query = self.get_dao_trees_state_query().await?;
-        if let Err(e) = self.wallet.cache_inverse(query) {
-            return Err(Error::DatabaseError(format!(
-                "[reset_inverse_cache] Inserting DAO query into inverse cache failed: {e:?}"
-            )))
-        }
-
-        Ok(())
-    }
-
-    /// Auxiliary function to store current `walletdb` inverse cache
-    /// in scanned blocks information for provided block height and hash.
-    /// Additionally, clear `walletdb` inverse cache state.
-    pub fn store_inverse_cache(&self, height: u32, hash: &str) -> Result<()> {
-        // Grab current inverse state rollback query
-        let rollback_query = match self.wallet.grab_inverse_cache_block() {
-            Ok(q) => q,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[store_inverse_cache] Creating rollback query failed: {e:?}"
-                )))
-            }
-        };
-
-        // Store it as a scanned blocks information record
-        if let Err(e) = self.put_scanned_block_record(height, hash, &rollback_query) {
-            return Err(Error::DatabaseError(format!(
-                "[store_inverse_cache] Inserting scanned blocks information record failed: {e:?}"
-            )))
-        };
-
-        // Reset `walletdb` inverse cache
-        if let Err(e) = self.wallet.clear_inverse_cache() {
-            return Err(Error::DatabaseError(format!(
-                "[store_inverse_cache] Clearing wallet inverse cache failed: {e:?}"
-            )))
-        };
 
         Ok(())
     }

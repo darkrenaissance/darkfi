@@ -415,9 +415,6 @@ impl Drk {
             )))
         }
 
-        // Store this block rollback query
-        self.store_inverse_cache(block.header.height, &block.hash().to_string())?;
-
         Ok(())
     }
 
@@ -446,7 +443,7 @@ impl Drk {
             height = height.saturating_sub(1);
             while height != 0 {
                 // Grab our scanned block hash for that height
-                let (_, scanned_block_hash, _) = self.get_scanned_block_record(height)?;
+                let scanned_block_hash = self.get_scanned_block_hash(&height)?;
 
                 // Grab the block from darkfid for that height
                 let block = match self.get_block_by_height(height).await {

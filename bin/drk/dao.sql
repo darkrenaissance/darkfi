@@ -142,12 +142,6 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos
     call_index INTEGER
 );
 
--- The merkle tree containing DAO bullas
-CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_trees (
-	daos_tree BLOB NOT NULL,
-	proposals_tree BLOB NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals (
     -- Bulla identifier of the proposal
     bulla BLOB PRIMARY KEY NOT NULL,
