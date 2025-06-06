@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Instant,
+};
 
 use url::Url;
 
@@ -32,18 +36,85 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
+use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_sdk::{
-    crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        smt::{PoseidonFp, EMPTY_NODES_FP},
+        ContractId, MerkleTree, SecretKey, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
+    },
     tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
+    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, SLED_MONEY_SMT_TREE},
+    dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
+    money::SLED_MERKLE_TREES_MONEY,
     Drk,
 };
 
+/// Auxiliary structure holding various in memory caches to use during scan
+pub struct ScanCache {
+    /// The Money Merkle tree containing coins
+    pub money_tree: MerkleTree,
+    /// The Money Sparse Merkle tree containing coins nullifiers
+    pub money_smt: CacheSmt,
+    /// All our known secrets to decrypt coin notes
+    pub notes_secrets: Vec<SecretKey>,
+    /// Our own coins nullifiers
+    pub owncoins_nullifiers: BTreeMap<[u8; 32], [u8; 32]>,
+    /// The DAO Merkle tree containing DAO bullas
+    pub dao_daos_tree: MerkleTree,
+    /// The DAO Merkle tree containing proposals bullas
+    pub dao_proposals_tree: MerkleTree,
+    /// Our own DAOs with their proposals and votes keys
+    pub own_daos: HashMap<DaoBulla, (Option<SecretKey>, Option<SecretKey>)>,
+    /// Our own DAOs proposals with their corresponding DAO reference
+    pub own_proposals: HashMap<DaoProposalBulla, DaoBulla>,
+}
+
 impl Drk {
+    /// Auxiliarry function to generate a new [`ScanCache`] for the
+    /// wallet.
+    pub async fn scan_cache(&self) -> Result<ScanCache> {
+        let money_tree = self.get_money_tree().await?;
+        let smt_store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let money_smt = CacheSmt::new(smt_store, PoseidonFp::new(), &EMPTY_NODES_FP);
+        let mut notes_secrets = self.get_money_secrets().await?;
+        let mut owncoins_nullifiers = BTreeMap::new();
+        for coin in self.get_coins(true).await? {
+            owncoins_nullifiers.insert(coin.0.nullifier().to_bytes(), coin.0.coin.to_bytes());
+        }
+        let (dao_daos_tree, dao_proposals_tree) = self.get_dao_trees().await?;
+        let mut own_daos = HashMap::new();
+        for dao in self.get_daos().await? {
+            own_daos.insert(
+                dao.bulla(),
+                (dao.params.proposals_secret_key, dao.params.votes_secret_key),
+            );
+            if let Some(secret_key) = dao.params.notes_secret_key {
+                notes_secrets.push(secret_key);
+            }
+        }
+        let mut own_proposals = HashMap::new();
+        for proposal in self.get_proposals().await? {
+            own_proposals.insert(proposal.bulla(), proposal.proposal.dao_bulla);
+        }
+
+        Ok(ScanCache {
+            money_tree,
+            money_smt,
+            notes_secrets,
+            owncoins_nullifiers,
+            dao_daos_tree,
+            dao_proposals_tree,
+            own_daos,
+            own_proposals,
+        })
+    }
+
     /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
     /// new confirmed blocks. Upon receiving them, all the transactions are
     /// scanned and we check if any of them call the money contract, and if
@@ -175,7 +246,9 @@ impl Drk {
                                         )))
                                     }
                                 };
-                                if let Err(e) = self.scan_block(&genesis).await {
+                                if let Err(e) =
+                                    self.scan_block(&mut self.scan_cache().await?, &genesis).await
+                                {
                                     return Err(Error::DatabaseError(format!(
                                         "[subscribe_blocks] Scanning block failed: {e:?}"
                                     )))
@@ -183,7 +256,8 @@ impl Drk {
                             }
                         }
 
-                        if let Err(e) = self.scan_block(&block).await {
+                        if let Err(e) = self.scan_block(&mut self.scan_cache().await?, &block).await
+                        {
                             return Err(Error::DatabaseError(format!(
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
@@ -214,12 +288,18 @@ impl Drk {
     /// `scan_block` will go over over transactions in a block and handle their calls
     /// based on the called contract. Additionally, will update `last_scanned_block` to
     /// the provided block height and will store its height, hash and inverse query.
-    async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+    async fn scan_block(&self, scan_cache: &mut ScanCache, block: &BlockInfo) -> Result<()> {
         // Reset wallet inverse cache state
         self.reset_inverse_cache().await?;
 
-        // Keep track of our wallet transactions
+        // Keep track of the trees we need to update and our wallet
+        // transactions.
+        let mut update_money_tree = false;
+        let mut update_dao_daos_tree = false;
+        let mut update_dao_proposals_tree = false;
         let mut wallet_txs = vec![];
+
+        // Scan the block
         println!("=======================================");
         println!("{}", block.header);
         println!("=======================================");
@@ -232,17 +312,32 @@ impl Drk {
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
-                    if self.apply_tx_money_data(i, &tx.calls, &tx_hash_string).await? {
+                    let (update_tree, own_tx) = self
+                        .apply_tx_money_data(scan_cache, &i, &tx.calls, &tx_hash_string)
+                        .await?;
+                    if update_tree {
+                        update_money_tree = true;
+                    }
+                    if own_tx {
                         wallet_tx = true;
-                    };
+                    }
                     continue
                 }
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
                     println!("[scan_block] Found DAO contract in call {i}");
-                    if self.apply_tx_dao_data(&call.data.data, tx_hash, i as u8).await? {
+                    let (update_daos_tree, update_proposals_tree, own_tx) = self
+                        .apply_tx_dao_data(scan_cache, &call.data.data, &tx_hash, &(i as u8))
+                        .await?;
+                    if update_daos_tree {
+                        update_dao_daos_tree = true;
+                    }
+                    if update_proposals_tree {
+                        update_dao_proposals_tree = true;
+                    }
+                    if own_tx {
                         wallet_tx = true;
-                    };
+                    }
                     continue
                 }
 
@@ -261,6 +356,57 @@ impl Drk {
                 wallet_txs.push(tx);
             }
         }
+
+        // Update money merkle tree, if needed
+        if update_money_tree {
+            scan_cache
+                .money_smt
+                .store
+                .overlay
+                .insert_merkle_tree(SLED_MERKLE_TREES_MONEY, &scan_cache.money_tree)?;
+        }
+
+        // Update dao daos merkle tree, if needed
+        if update_dao_daos_tree {
+            scan_cache
+                .money_smt
+                .store
+                .overlay
+                .insert_merkle_tree(SLED_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree)?;
+        }
+
+        // Update dao proposals merkle tree, if needed
+        if update_dao_proposals_tree {
+            scan_cache.money_smt.store.overlay.insert_merkle_tree(
+                SLED_MERKLE_TREES_DAO_PROPOSALS,
+                &scan_cache.dao_proposals_tree,
+            )?;
+        }
+
+        // Insert the block record
+        scan_cache
+            .money_smt
+            .store
+            .overlay
+            .insert_scanned_block(&block.header.height, &block.header.hash())?;
+
+        // Grab the overlay current diff
+        let diff = scan_cache.money_smt.store.overlay.0.diff(&[])?;
+
+        // Insert the state inverse diff record
+        scan_cache
+            .money_smt
+            .store
+            .overlay
+            .insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
+
+        // Apply the overlay current changes
+        scan_cache
+            .money_smt
+            .store
+            .overlay
+            .0
+            .apply_diff(&scan_cache.money_smt.store.overlay.0.diff(&[])?)?;
 
         // Update wallet transactions records
         if let Err(e) = self.put_tx_history_records(&wallet_txs, "Confirmed").await {
@@ -334,6 +480,15 @@ impl Drk {
             height += 1;
         }
 
+        // Generate a new scan cache
+        let mut scan_cache = match self.scan_cache().await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[scan_blocks] Generating scan cache failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
+        };
+
         loop {
             // Grab last confirmed block
             println!("Requested to scan from block number: {height}");
@@ -361,7 +516,7 @@ impl Drk {
                     }
                 };
                 println!("Block {height} received! Scanning block...");
-                if let Err(e) = self.scan_block(&block).await {
+                if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
                     eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
