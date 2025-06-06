@@ -35,9 +35,6 @@ pub type WalletPtr = Arc<WalletDb>;
 pub struct WalletDb {
     /// Connection to the SQLite database.
     pub conn: Mutex<Connection>,
-    /// Inverse queries cache, in case we want to rollback
-    /// executed queries, stored as raw SQL strings.
-    inverse_cache: Mutex<Vec<String>>,
 }
 
 impl WalletDb {
@@ -62,7 +59,7 @@ impl WalletDb {
         };
 
         debug!(target: "walletdb::new", "[WalletDb] Opened Sqlite connection at \"{path:?}\"");
-        Ok(Arc::new(Self { conn: Mutex::new(conn), inverse_cache: Mutex::new(vec![]) }))
+        Ok(Arc::new(Self { conn: Mutex::new(conn) }))
     }
 
     /// This function executes a given SQL query that contains multiple SQL statements,
@@ -333,60 +330,6 @@ impl WalletDb {
         }
 
         Ok(result)
-    }
-
-    /// Auxiliary function to store provided inverse query into our cache.
-    pub fn cache_inverse(&self, query: String) -> WalletDbResult<()> {
-        debug!(target: "walletdb::cache_inverse", "[WalletDb] Storing query:\n{query}");
-        let Ok(mut cache) = self.inverse_cache.lock() else {
-            return Err(WalletDbError::FailedToAquireLock)
-        };
-
-        // Push the query into the cache
-        cache.push(query);
-
-        // Drop cache lock
-        drop(cache);
-
-        Ok(())
-    }
-
-    /// Auxiliary function to retrieve cached inverse queries into a single SQL execution block.
-    /// The final query will contain the queries in reverse order, and cache is cleared afterwards.
-    pub fn grab_inverse_cache_block(&self) -> WalletDbResult<String> {
-        // Grab cache lock
-        debug!(target: "walletdb::grab_inverse_block", "[WalletDb] Grabbing cached inverse queries");
-        let Ok(cache) = self.inverse_cache.lock() else {
-            return Err(WalletDbError::FailedToAquireLock)
-        };
-
-        // Build the full SQL block query
-        let mut inverse_batch = String::from("BEGIN;");
-        for query in cache.iter().rev() {
-            inverse_batch += query;
-        }
-        inverse_batch += "END;";
-
-        // Drop the lock
-        drop(cache);
-
-        Ok(inverse_batch)
-    }
-
-    /// Auxiliary function to clear inverse queries cache.
-    pub fn clear_inverse_cache(&self) -> WalletDbResult<()> {
-        // Grab cache lock
-        let Ok(mut cache) = self.inverse_cache.lock() else {
-            return Err(WalletDbError::FailedToAquireLock)
-        };
-
-        // Clear cache
-        *cache = vec![];
-
-        // Drop the lock
-        drop(cache);
-
-        Ok(())
     }
 }
 
