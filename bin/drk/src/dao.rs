@@ -72,12 +72,17 @@ use darkfi_serial::{
 };
 
 use crate::{
+    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, SLED_MONEY_SMT_TREE},
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
-    money::{BALANCE_BASE10_DECIMALS, MONEY_SMT_COL_KEY, MONEY_SMT_COL_VALUE, MONEY_SMT_TABLE},
-    walletdb::{WalletSmt, WalletStorage},
+    money::BALANCE_BASE10_DECIMALS,
+    rpc::ScanCache,
     Drk,
 };
+
+// DAO Merkle trees Sled keys
+pub const SLED_MERKLE_TREES_DAO_DAOS: &[u8] = b"_dao_daos";
+pub const SLED_MERKLE_TREES_DAO_PROPOSALS: &[u8] = b"_dao_proposals";
 
 // Wallet SQL table constant names. These have to represent the `dao.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -980,19 +985,6 @@ impl Drk {
         }
     }
 
-    /// Fetch all DAO notes secret keys from the wallet.
-    pub async fn get_dao_notes_secrets(&self) -> Result<Vec<SecretKey>> {
-        let daos = self.get_daos().await?;
-        let mut ret = Vec::with_capacity(daos.len());
-        for dao in daos {
-            if let Some(secret_key) = dao.params.notes_secret_key {
-                ret.push(secret_key);
-            }
-        }
-
-        Ok(ret)
-    }
-
     /// Auxiliary function to parse a `DAO_DAOS_TABLE` record.
     async fn parse_dao_record(&self, row: &[Value]) -> Result<DaoRecord> {
         let Value::Text(ref name) = row[1] else {
@@ -1191,49 +1183,34 @@ impl Drk {
     /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_mint_data(
         &self,
-        new_bulla: DaoBulla,
-        tx_hash: TransactionHash,
-        call_index: u8,
+        scan_cache: &mut ScanCache,
+        new_bulla: &DaoBulla,
+        tx_hash: &TransactionHash,
+        call_index: &u8,
     ) -> Result<bool> {
-        let daos = self.get_daos().await?;
-        let (mut daos_tree, proposals_tree) = self.get_dao_trees().await?;
-        daos_tree.append(MerkleNode::from(new_bulla.inner()));
+        // Append the new dao bulla to the Merkle tree.
+        // Every dao bulla has to be added.
+        scan_cache.dao_daos_tree.append(MerkleNode::from(new_bulla.inner()));
 
-        let mut wallet_tx = false;
-        for dao in &daos {
-            if dao.bulla() != new_bulla {
-                continue
-            }
-
-            println!(
-                "[apply_dao_mint_data] Found minted DAO {new_bulla}, noting down for wallet update"
-            );
-
-            // We have this DAO imported in our wallet. Add the metadata:
-            let mut dao_to_confirm = dao.clone();
-            dao_to_confirm.leaf_position = daos_tree.mark();
-            dao_to_confirm.tx_hash = Some(tx_hash);
-            dao_to_confirm.call_index = Some(call_index);
-
-            // Confirm it
-            if let Err(e) = self.confirm_dao(&dao_to_confirm).await {
-                return Err(Error::DatabaseError(format!(
-                    "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
-                )))
-            }
-
-            wallet_tx = true;
-            break
+        // Check if we have the DAO
+        if !scan_cache.own_daos.contains_key(new_bulla) {
+            return Ok(false)
         }
 
-        // Update wallet data
-        if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
+        // Confirm it
+        println!(
+            "[apply_dao_mint_data] Found minted DAO {new_bulla}, noting down for wallet update"
+        );
+        if let Err(e) = self
+            .confirm_dao(new_bulla, &scan_cache.dao_daos_tree.mark().unwrap(), tx_hash, call_index)
+            .await
+        {
             return Err(Error::DatabaseError(format!(
-                "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
+                "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
             )))
         }
 
-        Ok(wallet_tx)
+        Ok(true)
     }
 
     /// Auxiliary function to apply `DaoFunction::Propose` call data to the wallet,
@@ -1241,54 +1218,53 @@ impl Drk {
     /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_propose_data(
         &self,
-        params: DaoProposeParams,
-        tx_hash: TransactionHash,
-        call_index: u8,
+        scan_cache: &mut ScanCache,
+        params: &DaoProposeParams,
+        tx_hash: &TransactionHash,
+        call_index: &u8,
     ) -> Result<bool> {
-        let daos = self.get_daos().await?;
-        let (daos_tree, mut proposals_tree) = self.get_dao_trees().await?;
-        proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
+        // Append the new proposal bulla to the Merkle tree.
+        // Every proposal bulla has to be added.
+        scan_cache.dao_proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
 
         // If we're able to decrypt this note, that's the way to link it
         // to a specific DAO.
-        let mut wallet_tx = false;
-        for dao in &daos {
+        for (dao, (proposals_secret_key, _)) in &scan_cache.own_daos {
             // Check if we have the proposals key
-            let Some(proposals_secret_key) = dao.params.proposals_secret_key else { continue };
+            let Some(proposals_secret_key) = proposals_secret_key else { continue };
 
             // Try to decrypt the proposal note
-            let Ok(note) = params.note.decrypt::<DaoProposal>(&proposals_secret_key) else {
+            let Ok(note) = params.note.decrypt::<DaoProposal>(proposals_secret_key) else {
                 continue
             };
 
             // We managed to decrypt it. Let's place this in a proper ProposalRecord object
-            println!("[apply_dao_propose_data] Managed to decrypt DAO proposal note");
-
-            // We need to clone the trees here for reproducing the snapshot Merkle roots
-            let money_tree = self.get_money_tree().await?;
-            let nullifiers_smt = self.get_nullifiers_smt().await?;
+            println!("[apply_dao_propose_data] Managed to decrypt proposal note for DAO: {dao}");
 
             // Check if we already got the record
-            let our_proposal = match self.get_dao_proposal_by_bulla(&params.proposal_bulla).await {
-                Ok(p) => {
-                    let mut our_proposal = p;
-                    our_proposal.leaf_position = proposals_tree.mark();
-                    our_proposal.money_snapshot_tree = Some(money_tree);
-                    our_proposal.nullifiers_smt_snapshot = Some(nullifiers_smt);
-                    our_proposal.tx_hash = Some(tx_hash);
-                    our_proposal.call_index = Some(call_index);
-                    our_proposal
-                }
-                Err(_) => ProposalRecord {
+            let our_proposal = if scan_cache.own_proposals.contains_key(&params.proposal_bulla) {
+                // Grab the record from the db
+                let mut our_proposal =
+                    self.get_dao_proposal_by_bulla(&params.proposal_bulla).await?;
+                our_proposal.leaf_position = scan_cache.dao_proposals_tree.mark();
+                our_proposal.money_snapshot_tree = Some(scan_cache.money_tree.clone());
+                our_proposal.nullifiers_smt_snapshot = Some(scan_cache.money_smt.store.snapshot()?);
+                our_proposal.tx_hash = Some(*tx_hash);
+                our_proposal.call_index = Some(*call_index);
+                our_proposal
+            } else {
+                let our_proposal = ProposalRecord {
                     proposal: note,
                     data: None,
-                    leaf_position: proposals_tree.mark(),
-                    money_snapshot_tree: Some(money_tree),
-                    nullifiers_smt_snapshot: Some(nullifiers_smt),
-                    tx_hash: Some(tx_hash),
-                    call_index: Some(call_index),
+                    leaf_position: scan_cache.dao_proposals_tree.mark(),
+                    money_snapshot_tree: Some(scan_cache.money_tree.clone()),
+                    nullifiers_smt_snapshot: Some(scan_cache.money_smt.store.snapshot()?),
+                    tx_hash: Some(*tx_hash),
+                    call_index: Some(*call_index),
                     exec_tx_hash: None,
-                },
+                };
+                scan_cache.own_proposals.insert(params.proposal_bulla, *dao);
+                our_proposal
             };
 
             // Update/store our record
@@ -1298,18 +1274,10 @@ impl Drk {
                 )))
             }
 
-            wallet_tx = true;
-            break
+            return Ok(true)
         }
 
-        // Update wallet data
-        if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-            return Err(Error::DatabaseError(format!(
-                "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
-            )))
-        }
-
-        Ok(wallet_tx)
+        Ok(false)
     }
 
     /// Auxiliary function to apply `DaoFunction::Vote` call data to the wallet,
@@ -1317,38 +1285,34 @@ impl Drk {
     /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_vote_data(
         &self,
-        params: DaoVoteParams,
-        tx_hash: TransactionHash,
-        call_index: u8,
+        scan_cache: &ScanCache,
+        params: &DaoVoteParams,
+        tx_hash: &TransactionHash,
+        call_index: &u8,
     ) -> Result<bool> {
         // Check if we got the corresponding proposal
-        let Ok(proposal) = self.get_dao_proposal_by_bulla(&params.proposal_bulla).await else {
+        let Some(dao_bulla) = scan_cache.own_proposals.get(&params.proposal_bulla) else {
             return Ok(false)
         };
 
-        // Grab the proposal DAO
-        let dao = match self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
-            Ok(d) => d,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[apply_dao_vote_data] Couldn't find proposal {} DAO {}: {e}",
-                    proposal.bulla(),
-                    proposal.proposal.dao_bulla,
-                )))
-            }
+        // Grab the proposal DAO votes key
+        let Some((_, votes_secret_key)) = scan_cache.own_daos.get(dao_bulla) else {
+            return Err(Error::DatabaseError(format!(
+                "[apply_dao_vote_data] Couldn't find proposal {} DAO {}",
+                params.proposal_bulla, dao_bulla,
+            )))
         };
 
-        // Check if we have the votes key
-        let Some(votes_secret_key) = dao.params.votes_secret_key else { return Ok(false) };
+        // Check if we actually have the votes key
+        let Some(votes_secret_key) = votes_secret_key else { return Ok(false) };
 
         // Decrypt the vote note
-        let note = match params.note.decrypt_unsafe(&votes_secret_key) {
+        let note = match params.note.decrypt_unsafe(votes_secret_key) {
             Ok(n) => n,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
                     "[apply_dao_vote_data] Couldn't decrypt proposal {} vote with DAO {} keys: {e}",
-                    proposal.bulla(),
-                    proposal.proposal.dao_bulla,
+                    params.proposal_bulla, dao_bulla,
                 )))
             }
         };
@@ -1358,7 +1322,7 @@ impl Drk {
         if vote_option > 1 {
             return Err(Error::DatabaseError(format!(
                 "[apply_dao_vote_data] Malformed vote for proposal {}: {vote_option}",
-                proposal.bulla(),
+                params.proposal_bulla,
             )))
         }
         let vote_option = vote_option != 0;
@@ -1373,8 +1337,8 @@ impl Drk {
             yes_vote_blind,
             all_vote_value,
             all_vote_blind,
-            tx_hash,
-            call_index,
+            tx_hash: *tx_hash,
+            call_index: *call_index,
             nullifiers: params.inputs.iter().map(|i| i.vote_nullifier).collect(),
         };
 
@@ -1392,13 +1356,14 @@ impl Drk {
     /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_exec_data(
         &self,
-        params: DaoExecParams,
-        tx_hash: TransactionHash,
+        scan_cache: &ScanCache,
+        params: &DaoExecParams,
+        tx_hash: &TransactionHash,
     ) -> Result<bool> {
         // Check if we got the corresponding proposal
-        if self.get_dao_proposal_by_bulla(&params.proposal_bulla).await.is_err() {
+        if !scan_cache.own_proposals.contains_key(&params.proposal_bulla) {
             return Ok(false)
-        };
+        }
 
         // Grab proposal record key
         let key = serialize_async(&params.proposal_bulla).await;
@@ -1428,7 +1393,7 @@ impl Drk {
         // Execute the query
         if let Err(e) = self
             .wallet
-            .exec_sql(&query, rusqlite::params![Some(serialize_async(&tx_hash).await), key])
+            .exec_sql(&query, rusqlite::params![Some(serialize_async(tx_hash).await), key])
         {
             return Err(Error::DatabaseError(format!(
                 "[apply_dao_exec_data] Update DAO proposal failed: {e:?}"
@@ -1447,39 +1412,51 @@ impl Drk {
 
     /// Append data related to DAO contract transactions into the wallet database,
     /// and store their inverse queries into the cache.
-    /// Returns a flag indicating if the provided data refer to our own wallet.
+    /// Returns a flag indicating if the daos tree should be updated,
+    /// one indicating if the proposals tree should be updated and
+    /// another one indicating if provided data refer to our own
+    /// wallet.
     pub async fn apply_tx_dao_data(
         &self,
+        scan_cache: &mut ScanCache,
         data: &[u8],
-        tx_hash: TransactionHash,
-        call_idx: u8,
-    ) -> Result<bool> {
+        tx_hash: &TransactionHash,
+        call_idx: &u8,
+    ) -> Result<(bool, bool, bool)> {
         // Run through the transaction call data and see what we got:
         match DaoFunction::try_from(data[0])? {
             DaoFunction::Mint => {
                 println!("[apply_tx_dao_data] Found Dao::Mint call");
                 let params: DaoMintParams = deserialize_async(&data[1..]).await?;
-                self.apply_dao_mint_data(params.dao_bulla, tx_hash, call_idx).await
+                let own_tx = self
+                    .apply_dao_mint_data(scan_cache, &params.dao_bulla, tx_hash, call_idx)
+                    .await?;
+                Ok((true, false, own_tx))
             }
             DaoFunction::Propose => {
                 println!("[apply_tx_dao_data] Found Dao::Propose call");
                 let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
-                self.apply_dao_propose_data(params, tx_hash, call_idx).await
+                let own_tx =
+                    self.apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx).await?;
+                Ok((false, true, own_tx))
             }
             DaoFunction::Vote => {
                 println!("[apply_tx_dao_data] Found Dao::Vote call");
                 let params: DaoVoteParams = deserialize_async(&data[1..]).await?;
-                self.apply_dao_vote_data(params, tx_hash, call_idx).await
+                let own_tx =
+                    self.apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx).await?;
+                Ok((false, false, own_tx))
             }
             DaoFunction::Exec => {
                 println!("[apply_tx_dao_data] Found Dao::Exec call");
                 let params: DaoExecParams = deserialize_async(&data[1..]).await?;
-                self.apply_dao_exec_data(params, tx_hash).await
+                let own_tx = self.apply_dao_exec_data(scan_cache, &params, tx_hash).await?;
+                Ok((false, false, own_tx))
             }
             DaoFunction::AuthMoneyTransfer => {
                 println!("[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call");
                 // Does nothing, just verifies the other calls are correct
-                Ok(false)
+                Ok((false, false, false))
             }
         }
     }
@@ -1488,9 +1465,15 @@ impl Drk {
     /// and store its inverse query into the cache.
     /// Here we just write the leaf position, tx hash, and call index.
     /// Panics if the fields are None.
-    pub async fn confirm_dao(&self, dao: &DaoRecord) -> WalletDbResult<()> {
+    pub async fn confirm_dao(
+        &self,
+        dao: &DaoBulla,
+        leaf_position: &bridgetree::Position,
+        tx_hash: &TransactionHash,
+        call_index: &u8,
+    ) -> WalletDbResult<()> {
         // Grab dao record key
-        let key = serialize_async(&dao.bulla()).await;
+        let key = serialize_async(dao).await;
 
         // Create an SQL `UPDATE` query
         let query = format!(
@@ -1504,9 +1487,9 @@ impl Drk {
 
         // Create its params
         let params = rusqlite::params![
-            serialize_async(&dao.leaf_position.unwrap()).await,
-            serialize_async(&dao.tx_hash.unwrap()).await,
-            dao.call_index.unwrap(),
+            serialize_async(leaf_position).await,
+            serialize_async(tx_hash).await,
+            call_index,
             key,
         ];
 
@@ -2491,13 +2474,8 @@ impl Drk {
         };
 
         // Generate the Money nullifiers Sparse Merkle Tree
-        let store = WalletStorage::new(
-            &self.wallet,
-            &MONEY_SMT_TABLE,
-            MONEY_SMT_COL_KEY,
-            MONEY_SMT_COL_VALUE,
-        );
-        let money_null_smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
+        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let money_null_smt = CacheSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
 
         // Create the proposal call
         let call = DaoProposeCall {
@@ -2679,13 +2657,8 @@ impl Drk {
         };
 
         // Generate the Money nullifiers Sparse Merkle Tree
-        let store = WalletStorage::new(
-            &self.wallet,
-            &MONEY_SMT_TABLE,
-            MONEY_SMT_COL_KEY,
-            MONEY_SMT_COL_VALUE,
-        );
-        let money_null_smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
+        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let money_null_smt = CacheSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
 
         // Create the proposal call
         let call = DaoProposeCall {
