@@ -1805,9 +1805,9 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2419f39be147184d34144c0cbed3ac3bf7572f0c8703d7a605db5e0f85c66269"
+checksum = "0bb971fa2349ee2404964eb866c0f216c53660d6b589d82bd4f84baa206b4db5"
 dependencies = [
  "darkfi-derive-internal",
  "proc-macro-crate",
@@ -1818,9 +1818,9 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive-internal"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7000d1d42b2af380c7367b5cde93cc8cc3b44898d2c467f6d9de3011df9f6e8"
+checksum = "6623231f21d5757f9127f87bd470cc4c3b239e4323d6f4fbb1f274a6fcc7d77f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1867,9 +1867,9 @@ dependencies = [
 
 [[package]]
 name = "darkfi-serial"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2a240620a7858db545156a1de5b215c9b10344c7ad527eed0fc67efd5cea08a"
+checksum = "0ee73956d969859837d5f09c6d3c6070ae5cd6b1eee53fe96258ccad1caf555d"
 dependencies = [
  "async-trait",
  "blake3",
@@ -6362,9 +6362,9 @@ dependencies = [
 
 [[package]]
 name = "sled-overlay"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e1c76f2c7a298d1f05012072e53df439367e80cc2696e22af6a56bf81a3c1c7"
+checksum = "00eaa12d128bd90a98f77cec83d6d8b5beac8c3eeede31723a0724873da22793"
 dependencies = [
  "darkfi-serial",
  "sled",

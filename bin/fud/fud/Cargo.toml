@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "sled-overlay"]}
-darkfi-serial = {version = "0.4.2", features = ["hash"]}
+darkfi-serial = {version = "0.5.0", features = ["hash"]}
 
 # Misc
 async-trait = "0.1.88"
@@ -39,7 +39,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Database
-sled-overlay = "0.1.8"
+sled-overlay = "0.1.9"
 
 # Argument parsing
 serde = {version = "1.0.219", features = ["derive"]}

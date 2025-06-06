@@ -22,13 +22,13 @@ darkfi = { path = "../../../", features = [
     "event-graph",
     "rpc",
 ] }
-darkfi-serial = "0.4.2"
+darkfi-serial = "0.5.0"
 
 # Crypto
 blake3 = "1.8.2"
 
 # Event Graph DB
-sled-overlay = "0.1.8"
+sled-overlay = "0.1.9"
 
 # Misc
 async-trait = "0.1.88"

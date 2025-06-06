@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 # Darkfi
 darkfi = {path = "../../../../", features = ["async-daemonize", "rpc"]}
-darkfi-serial = "0.4.2"
+darkfi-serial = "0.5.0"
 
 # Misc
 log = "0.4.27"

@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 darkfi = {path = "../../", features = ["net"]}
-darkfi-serial = {version = "0.4.2"}
+darkfi-serial = {version = "0.5.0"}
 url = {version = "2.5.4", features = ["serde"]}
 smol = "2.0.2"
 

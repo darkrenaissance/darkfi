@@ -21,7 +21,7 @@ wasm = []
 thiserror = "2.0.12"
 
 # Serialization
-darkfi-serial = {version = "0.4.2", features = ["crypto"]}
+darkfi-serial = {version = "0.5.0", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.1"

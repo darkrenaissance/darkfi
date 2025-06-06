@@ -66,6 +66,7 @@ you haven't already done it:
 ```shell
 % git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
+% git checkout v0.5.0
 ```
 
 This project requires the Rust compiler to be installed. 
@@ -78,7 +79,7 @@ To install wasm32 target, execute:
 ```shell
 % rustup target add wasm32-unknown-unknown
 ```
-Minimum Rust version supported is **1.77.0**.
+Minimum Rust version supported is **1.86.0**.
 
 The following dependencies are also required:
 

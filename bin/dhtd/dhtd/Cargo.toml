@@ -12,7 +12,7 @@ edition = "2021"
 async-trait = "0.1.88"
 blake3 = "1.8.2"
 darkfi = {path = "../../../", features = ["dht"]}
-darkfi-serial = {version = "0.4.2", features = ["derive", "crypto"]}
+darkfi-serial = {version = "0.5.0", features = ["derive", "crypto"]}
 easy-parallel = "3.3.1"
 log = "0.4.27"
 rand = "0.8.5"
