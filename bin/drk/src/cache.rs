@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{blockchain::HeaderHash, Result};
+use std::collections::HashMap;
+
+use darkfi::{blockchain::HeaderHash, Error, Result};
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::PrimeField,
@@ -77,7 +79,7 @@ impl Cache {
 }
 
 /// Overlay structure over a [`Cache`] instance.
-pub struct CacheOverlay(SledDbOverlay);
+pub struct CacheOverlay(pub SledDbOverlay);
 
 impl CacheOverlay {
     /// Instantiate a new `CacheOverlay` over the given [`Cache`] instance.
@@ -135,25 +137,41 @@ pub type CacheSmt = SparseMerkleTree<
     { SMT_FP_DEPTH + 1 },
     pallas::Base,
     PoseidonFp,
-    CacheOverlay,
+    CacheSmtStorage,
 >;
 
-pub struct CacheSmtStorage<'a> {
-    overlay: &'a mut CacheOverlay,
-    tree: &'a [u8],
+pub struct CacheSmtStorage {
+    pub overlay: CacheOverlay,
+    tree: Vec<u8>,
 }
 
-impl<'a> CacheSmtStorage<'a> {
-    pub fn new(overlay: &'a mut CacheOverlay, tree: &'a [u8]) -> Self {
-        Self { overlay, tree }
+impl CacheSmtStorage {
+    pub fn new(overlay: CacheOverlay, tree: &[u8]) -> Self {
+        Self { overlay, tree: tree.to_vec() }
+    }
+
+    pub fn snapshot(&self) -> Result<HashMap<BigUint, pallas::Base>> {
+        let mut smt = HashMap::new();
+        for record in self.overlay.0.iter(&self.tree)? {
+            let (key, value) = record?;
+            let mut repr = [0; 32];
+            repr.copy_from_slice(&value);
+            let Some(value) = pallas::Base::from_repr(repr).into() else {
+                return Err(Error::ParseFailed(
+                    "[cache::CacheSmtStorage::snapshot] Value conversion failed",
+                ))
+            };
+            smt.insert(BigUint::from_bytes_le(&key), value);
+        }
+        Ok(smt)
     }
 }
 
-impl StorageAdapter for CacheSmtStorage<'_> {
+impl StorageAdapter for CacheSmtStorage {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
-        if let Err(e) = self.overlay.0.insert(self.tree, &key.to_bytes_le(), &value.to_repr()) {
+        if let Err(e) = self.overlay.0.insert(&self.tree, &key.to_bytes_le(), &value.to_repr()) {
             error!(target: "cache::StorageAdapter::put", "Inserting key {key:?}, value {value:?} into DB failed: {e:?}");
             return Err(ContractError::SmtPutFailed)
         }
@@ -161,7 +179,7 @@ impl StorageAdapter for CacheSmtStorage<'_> {
     }
 
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
-        let value = match self.overlay.0.get(self.tree, &key.to_bytes_le()) {
+        let value = match self.overlay.0.get(&self.tree, &key.to_bytes_le()) {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "cache::StorageAdapter::get", "Fetching key {key:?} from DB failed: {e:?}");
@@ -178,7 +196,7 @@ impl StorageAdapter for CacheSmtStorage<'_> {
     }
 
     fn del(&mut self, key: &BigUint) -> ContractResult {
-        if let Err(e) = self.overlay.0.remove(self.tree, &key.to_bytes_le()) {
+        if let Err(e) = self.overlay.0.remove(&self.tree, &key.to_bytes_le()) {
             error!(target: "cache::StorageAdapter::del", "Removing key {key:?} from DB failed: {e:?}");
             return Err(ContractError::SmtDelFailed)
         }
@@ -203,14 +221,14 @@ mod tests {
         // Setup cache and its overlay
         let sled_db = sled::Config::new().temporary(true).open()?;
         let cache = Cache::new(&sled_db)?;
-        let mut overlay = CacheOverlay::new(&cache)?;
+        let overlay = CacheOverlay::new(&cache)?;
 
         // Setup SMT
         const HEIGHT: usize = 3;
         let hasher = PoseidonFp::new();
         let empty_leaf = pallas::Base::ZERO;
         let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
-        let store = CacheSmtStorage::new(&mut overlay, SLED_MONEY_SMT_TREE);
+        let store = CacheSmtStorage::new(overlay, SLED_MONEY_SMT_TREE);
         let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
             store,
             hasher.clone(),
@@ -254,16 +272,16 @@ mod tests {
         assert!(path.verify(&root, &hash3, &pos));
 
         // Grab the overlay diff
-        let diff = overlay.0.diff(&[])?;
+        let diff = smt.store.overlay.0.diff(&[])?;
 
         // Apply the overlay
-        overlay.0.apply_diff(&diff)?;
+        smt.store.overlay.0.apply_diff(&diff)?;
 
         // Verify database contains keys
         assert!(!cache.money_smt.is_empty());
 
         // We are now going to rollback the changes
-        overlay.0.apply_diff(&diff.inverse())?;
+        smt.store.overlay.0.apply_diff(&diff.inverse())?;
 
         // Verify database is empty again
         assert!(cache.money_smt.is_empty());
