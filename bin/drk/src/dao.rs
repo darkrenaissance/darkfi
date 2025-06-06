@@ -88,7 +88,6 @@ pub const SLED_MERKLE_TREES_DAO_PROPOSALS: &[u8] = b"_dao_proposals";
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
 lazy_static! {
     pub static ref DAO_DAOS_TABLE: String = format!("{}_dao_daos", DAO_CONTRACT_ID.to_string());
-    pub static ref DAO_TREES_TABLE: String = format!("{}_dao_trees", DAO_CONTRACT_ID.to_string());
     pub static ref DAO_COINS_TABLE: String = format!("{}_dao_coins", DAO_CONTRACT_ID.to_string());
     pub static ref DAO_PROPOSALS_TABLE: String =
         format!("{}_dao_proposals", DAO_CONTRACT_ID.to_string());
@@ -102,10 +101,6 @@ pub const DAO_DAOS_COL_PARAMS: &str = "params";
 pub const DAO_DAOS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const DAO_DAOS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_DAOS_COL_CALL_INDEX: &str = "call_index";
-
-// DAO_TREES_TABLE
-pub const DAO_TREES_COL_DAOS_TREE: &str = "daos_tree";
-pub const DAO_TREES_COL_PROPOSALS_TREE: &str = "proposals_tree";
 
 // DAO_PROPOSALS_TABLE
 pub const DAO_PROPOSALS_COL_BULLA: &str = "bulla";
@@ -899,90 +894,21 @@ impl Drk {
         let wallet_schema = include_str!("../dao.sql");
         self.wallet.exec_batch_sql(wallet_schema)?;
 
-        // Check if we have to initialize the Merkle trees.
-        // We check if one exists, but we actually create two. This should be written
-        // a bit better and safer.
-        // For now, on success, we don't care what's returned, but in the future
-        // we should actually check it.
-        if self.get_dao_trees().await.is_err() {
-            println!("Initializing DAO Merkle trees");
-            let tree = serialize_async(&MerkleTree::new(1)).await;
-            let query = format!(
-                "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
-                *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
-            );
-            self.wallet.exec_sql(&query, rusqlite::params![tree, tree])?;
-            println!("Successfully initialized Merkle trees for the DAO contract");
-        }
-
         Ok(())
     }
 
-    /// Replace the DAO Merkle trees in the wallet.
-    pub async fn put_dao_trees(
-        &self,
-        daos_tree: &MerkleTree,
-        proposals_tree: &MerkleTree,
-    ) -> WalletDbResult<()> {
-        let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2;",
-            *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
-        );
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                serialize_async(daos_tree).await,
-                serialize_async(proposals_tree).await
-            ],
-        )
-    }
-
     /// Fetch DAO Merkle trees from the wallet.
+    /// If a tree doesn't exists a new Merkle Tree is returned.
     pub async fn get_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
-        let row = match self.wallet.query_single(&DAO_TREES_TABLE, &[], &[]) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_dao_trees] Trees retrieval failed: {e:?}"
-                )))
-            }
+        let daos_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_DAOS)? {
+            Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
+            None => MerkleTree::new(1),
         };
-
-        let Value::Blob(ref daos_tree_bytes) = row[0] else {
-            return Err(Error::ParseFailed("[get_dao_trees] DAO tree bytes parsing failed"))
+        let proposals_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_PROPOSALS)? {
+            Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
+            None => MerkleTree::new(1),
         };
-        let daos_tree = deserialize_async(daos_tree_bytes).await?;
-
-        let Value::Blob(ref proposals_tree_bytes) = row[1] else {
-            return Err(Error::ParseFailed("[get_dao_trees] Proposals tree bytes parsing failed"))
-        };
-        let proposals_tree = deserialize_async(proposals_tree_bytes).await?;
-
         Ok((daos_tree, proposals_tree))
-    }
-
-    /// Auxiliary function to fetch the current DAO Merkle trees state,
-    /// as an update query.
-    pub async fn get_dao_trees_state_query(&self) -> Result<String> {
-        // Grab current DAO trees
-        let (daos_tree, proposals_tree) = self.get_dao_trees().await?;
-
-        // Create the update query
-        match self.wallet.create_prepared_statement(
-            &format!(
-                "UPDATE {} SET {} = ?1, {} = ?2;",
-                *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
-            ),
-            rusqlite::params![
-                serialize_async(&daos_tree).await,
-                serialize_async(&proposals_tree).await
-            ],
-        ) {
-            Ok(q) => Ok(q),
-            Err(e) => Err(Error::DatabaseError(format!(
-                "[get_dao_trees_state_query] Creating query for DAO trees failed: {e:?}"
-            ))),
-        }
     }
 
     /// Auxiliary function to parse a `DAO_DAOS_TABLE` record.
@@ -1706,11 +1632,17 @@ impl Drk {
         Ok(())
     }
 
-    /// Reset the DAO Merkle trees in the wallet.
+    /// Reset the DAO Merkle trees in the cache.
     pub async fn reset_dao_trees(&self) -> WalletDbResult<()> {
         println!("Resetting DAO Merkle trees");
-        let tree = MerkleTree::new(1);
-        self.put_dao_trees(&tree, &tree).await?;
+        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_DAOS) {
+            println!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
+        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_PROPOSALS) {
+            println!("[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
         println!("Successfully reset DAO Merkle trees");
 
         Ok(())

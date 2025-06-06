@@ -16,100 +16,71 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rusqlite::types::Value;
+use darkfi_serial::deserialize;
 
 use crate::{
-    convert_named_params,
     error::{WalletDbError, WalletDbResult},
     Drk,
 };
 
-// Wallet SQL table constant names. These have to represent the `wallet.sql`
-// SQL schema.
-const WALLET_SCANNED_BLOCKS_TABLE: &str = "scanned_blocks";
-const WALLET_SCANNED_BLOCKS_COL_HEIGH: &str = "height";
-const WALLET_SCANNED_BLOCKS_COL_HASH: &str = "hash";
-const WALLET_SCANNED_BLOCKS_COL_ROLLBACK_QUERY: &str = "rollback_query";
-
 impl Drk {
-    /// Insert a scanned block information record into the wallet.
-    pub fn put_scanned_block_record(
-        &self,
-        height: u32,
-        hash: &str,
-        rollback_query: &str,
-    ) -> WalletDbResult<()> {
-        let query = format!(
-            "INSERT INTO {WALLET_SCANNED_BLOCKS_TABLE} ({WALLET_SCANNED_BLOCKS_COL_HEIGH}, {WALLET_SCANNED_BLOCKS_COL_HASH}, {WALLET_SCANNED_BLOCKS_COL_ROLLBACK_QUERY}) VALUES (?1, ?2, ?3);"
-        );
-        self.wallet.exec_sql(&query, rusqlite::params![height, hash, rollback_query])
-    }
-
-    /// Auxiliary function to parse a `WALLET_SCANNED_BLOCKS_TABLE` records.
-    fn parse_scanned_block_record(&self, row: &[Value]) -> WalletDbResult<(u32, String, String)> {
-        let Value::Integer(height) = row[0] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-        let Ok(height) = u32::try_from(height) else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-
-        let Value::Text(ref hash) = row[1] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-
-        let Value::Text(ref rollback_query) = row[2] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-
-        Ok((height, hash.clone(), rollback_query.clone()))
-    }
-
     /// Get a scanned block information record.
-    pub fn get_scanned_block_record(&self, height: u32) -> WalletDbResult<(u32, String, String)> {
-        let row = self.wallet.query_single(
-            WALLET_SCANNED_BLOCKS_TABLE,
-            &[],
-            convert_named_params! {(WALLET_SCANNED_BLOCKS_COL_HEIGH, height)},
-        )?;
-
-        self.parse_scanned_block_record(&row)
+    pub fn get_scanned_block_hash(&self, height: &u32) -> WalletDbResult<String> {
+        let Ok(query_result) = self.cache.scanned_blocks.get(height.to_be_bytes()) else {
+            return Err(WalletDbError::QueryExecutionFailed);
+        };
+        let Some(hash_bytes) = query_result else {
+            return Err(WalletDbError::RowNotFound);
+        };
+        let Ok(hash) = deserialize(&hash_bytes) else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+        Ok(hash)
     }
 
-    /// Fetch all scanned block information record.
-    pub fn get_scanned_block_records(&self) -> WalletDbResult<Vec<(u32, String, String)>> {
-        let rows = self.wallet.query_multiple(WALLET_SCANNED_BLOCKS_TABLE, &[], &[])?;
+    /// Fetch all scanned block information records.
+    pub fn get_scanned_block_records(&self) -> WalletDbResult<Vec<(u32, String)>> {
+        let mut scanned_blocks = vec![];
 
-        let mut ret = Vec::with_capacity(rows.len());
-        for row in rows {
-            ret.push(self.parse_scanned_block_record(&row)?);
+        for record in self.cache.scanned_blocks.iter() {
+            let Ok((key, value)) = record else {
+                return Err(WalletDbError::QueryExecutionFailed);
+            };
+            let Ok(key) = deserialize(&key) else {
+                return Err(WalletDbError::ParseColumnValueError);
+            };
+            let Ok(value) = deserialize(&value) else {
+                return Err(WalletDbError::ParseColumnValueError);
+            };
+            scanned_blocks.push((key, value));
         }
 
-        Ok(ret)
+        Ok(scanned_blocks)
     }
 
     /// Get the last scanned block height and hash from the wallet.
     /// If database is empty default (0, '-') is returned.
     pub fn get_last_scanned_block(&self) -> WalletDbResult<(u32, String)> {
-        let query = format!(
-            "SELECT * FROM {WALLET_SCANNED_BLOCKS_TABLE} ORDER BY {WALLET_SCANNED_BLOCKS_COL_HEIGH} DESC LIMIT 1;"
-        );
-        let ret = self.wallet.query_custom(&query, &[])?;
-
-        if ret.is_empty() {
-            return Ok((0, String::from("-")))
-        }
-
-        let (height, hash, _) = self.parse_scanned_block_record(&ret[0])?;
-
-        Ok((height, hash))
+        let Ok(query_result) = self.cache.scanned_blocks.last() else {
+            return Err(WalletDbError::QueryExecutionFailed);
+        };
+        let Some((key, value)) = query_result else { return Ok((0, String::from("-"))) };
+        let Ok(key) = deserialize(&key) else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+        let Ok(value) = deserialize(&value) else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+        Ok((key, value))
     }
 
     /// Reset the scanned blocks information records in the wallet.
     pub fn reset_scanned_blocks(&self) -> WalletDbResult<()> {
         println!("Resetting scanned blocks");
-        let query = format!("DELETE FROM {WALLET_SCANNED_BLOCKS_TABLE};");
-        self.wallet.exec_sql(&query, &[])?;
+        if let Err(e) = self.cache.scanned_blocks.clear() {
+            println!("[reset_scanned_blocks] Resetting scanned blocks tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
         println!("Successfully reset scanned blocks");
 
         Ok(())
@@ -125,7 +96,8 @@ impl Drk {
         if height == 0 {
             return self.reset().await
         }
-
+        // TODO
+        /*
         // Grab last scanned block height
         let (last, _) = self.get_last_scanned_block()?;
 
@@ -143,7 +115,7 @@ impl Drk {
             let query = format!("DELETE FROM {WALLET_SCANNED_BLOCKS_TABLE} WHERE {WALLET_SCANNED_BLOCKS_COL_HEIGH} = {height};");
             self.wallet.exec_batch_sql(&query)?;
         }
-
+        */
         println!("Successfully reset wallet state");
         Ok(())
     }

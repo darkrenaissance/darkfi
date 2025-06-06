@@ -2189,9 +2189,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 )
                 .await;
 
-                if let Some(h) = height {
-                    let (height, hash, _) = match drk.get_scanned_block_record(h) {
-                        Ok(ret) => ret,
+                if let Some(height) = height {
+                    let hash = match drk.get_scanned_block_hash(&height) {
+                        Ok(h) => h,
                         Err(e) => {
                             eprintln!("Failed to retrieve scanned block record: {e:?}");
                             exit(2);
@@ -2216,7 +2216,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
                 table.set_titles(row!["Height", "Hash"]);
-                for (height, hash, _) in map.iter() {
+                for (height, hash) in map.iter() {
                     table.add_row(row![height, hash]);
                 }
 
