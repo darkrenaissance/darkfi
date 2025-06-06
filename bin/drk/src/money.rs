@@ -783,10 +783,6 @@ impl Drk {
             MONEY_COINS_COL_MEMO,
         );
 
-        // This is its inverse query
-        let inverse_query =
-            format!("DELETE FROM {} WHERE {} = ?1;", *MONEY_COINS_TABLE, MONEY_COINS_COL_COIN);
-
         // Handle our own coins
         for coin in coins {
             println!("OwnCoin: {:?}", coin.coin);
@@ -795,18 +791,6 @@ impl Drk {
 
             // Push to our own coins nullifiers cache
             owncoins_nullifiers.insert(coin.nullifier().to_bytes(), key);
-
-            // Create its inverse query
-            let inverse =
-                match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key])
-                {
-                    Ok(q) => q,
-                    Err(e) => {
-                        return Err(Error::DatabaseError(format!(
-                    "[handle_money_call_owncoins] Creating Money coin insert inverse query failed: {e:?}"
-                )))
-                    }
-                };
 
             // Execute the query
             let params = rusqlite::params![
@@ -829,13 +813,6 @@ impl Drk {
                     "[handle_money_call_owncoins] Inserting Money coin failed: {e:?}"
                 )))
             }
-
-            // Store its inverse
-            if let Err(e) = self.wallet.cache_inverse(inverse) {
-                return Err(Error::DatabaseError(format!(
-                    "[handle_money_call_owncoins] Inserting inverse query into cache failed: {e:?}"
-                )))
-            }
         }
 
         Ok(())
@@ -855,39 +832,14 @@ impl Drk {
             *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
         );
 
-        // This is its inverse query
-        let inverse_query = format!(
-            "UPDATE {} SET {} = 0 WHERE {} = ?1;",
-            *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
-        );
-
         for token_id in freezes {
             // Grab token record key
             let key = serialize_async(token_id).await;
-
-            // Create its inverse query
-            let inverse =
-                match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key])
-                {
-                    Ok(q) => q,
-                    Err(e) => {
-                        return Err(Error::DatabaseError(format!(
-                    "[handle_money_call_freezes] Creating Money token freeze inverse query failed: {e:?}"
-                )))
-                    }
-                };
 
             // Execute the query
             if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![key]) {
                 return Err(Error::DatabaseError(format!(
                     "[handle_money_call_freezes] Update Money token freeze failed: {e:?}"
-                )))
-            }
-
-            // Store its inverse
-            if let Err(e) = self.wallet.cache_inverse(inverse) {
-                return Err(Error::DatabaseError(format!(
-                    "[handle_money_call_freezes] Inserting inverse query into cache failed: {e:?}"
                 )))
             }
         }
@@ -896,8 +848,7 @@ impl Drk {
     }
 
     /// Append data related to Money contract transactions into the
-    /// wallet database, and store their inverse queries into the
-    /// cache.
+    /// wallet database and update the provided scan cache.
     /// Returns a flag indicating if the money tree should be updated
     /// and one indicating if provided data refer to our own wallet.
     pub async fn apply_tx_money_data(
@@ -1023,41 +974,12 @@ impl Drk {
             MONEY_COINS_COL_COIN
         );
 
-        // Create its inverse query
-        let inverse_query = format!(
-            "UPDATE {} SET {} = 0, {} = '-' WHERE {} = ?1;",
-            *MONEY_COINS_TABLE,
-            MONEY_COINS_COL_IS_SPENT,
-            MONEY_COINS_COL_SPENT_TX_HASH,
-            MONEY_COINS_COL_COIN
-        );
-
         // Mark spent own coins
         for ownoin in spent_owncoins {
-            // Create its inverse query
-            let inverse = match self
-                .wallet
-                .create_prepared_statement(&inverse_query, rusqlite::params![ownoin])
-            {
-                Ok(i) => i,
-                Err(e) => {
-                    return Err(Error::DatabaseError(format!(
-                        "[mark_spent_coins] Creating inverse query failed: {e:?}"
-                    )))
-                }
-            };
-
             // Execute the query
             if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![spent_tx_hash, ownoin]) {
                 return Err(Error::DatabaseError(format!(
                     "[mark_spent_coins] Marking spent coin failed: {e:?}"
-                )))
-            }
-
-            // Store its inverse
-            if let Err(e) = self.wallet.cache_inverse(inverse) {
-                return Err(Error::DatabaseError(format!(
-                    "[mark_spent_coins] Storing inverse query failed: {e:?}"
                 )))
             }
         }

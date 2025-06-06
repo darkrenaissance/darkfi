@@ -1104,9 +1104,10 @@ impl Drk {
         Ok(proposals)
     }
 
-    /// Auxiliary function to apply `DaoFunction::Mint` call data to the wallet,
-    /// and store its inverse query into the cache.
-    /// Returns a flag indicating if the provided call refers to our own wallet.
+    /// Auxiliary function to apply `DaoFunction::Mint` call data to
+    /// the wallet and update the provided scan cache.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
     async fn apply_dao_mint_data(
         &self,
         scan_cache: &mut ScanCache,
@@ -1139,9 +1140,10 @@ impl Drk {
         Ok(true)
     }
 
-    /// Auxiliary function to apply `DaoFunction::Propose` call data to the wallet,
-    /// and store its inverse query into the cache.
-    /// Returns a flag indicating if the provided call refers to our own wallet.
+    /// Auxiliary function to apply `DaoFunction::Propose` call data to
+    /// the wallet and update the provided scan cache.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
     async fn apply_dao_propose_data(
         &self,
         scan_cache: &mut ScanCache,
@@ -1206,9 +1208,10 @@ impl Drk {
         Ok(false)
     }
 
-    /// Auxiliary function to apply `DaoFunction::Vote` call data to the wallet,
-    /// and store its inverse query into the cache.
-    /// Returns a flag indicating if the provided call refers to our own wallet.
+    /// Auxiliary function to apply `DaoFunction::Vote` call data to
+    /// the wallet.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
     async fn apply_dao_vote_data(
         &self,
         scan_cache: &ScanCache,
@@ -1277,9 +1280,10 @@ impl Drk {
         Ok(true)
     }
 
-    /// Auxiliary function to apply `DaoFunction::Exec` call data to the wallet,
-    /// and store its inverse query into the cache.
-    /// Returns a flag indicating if the provided call refers to our own wallet.
+    /// Auxiliary function to apply `DaoFunction::Exec` call data to
+    /// the wallet and update the provided scan cache.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
     async fn apply_dao_exec_data(
         &self,
         scan_cache: &ScanCache,
@@ -1300,22 +1304,6 @@ impl Drk {
             *DAO_PROPOSALS_TABLE, DAO_PROPOSALS_COL_EXEC_TX_HASH, DAO_PROPOSALS_COL_BULLA,
         );
 
-        // Create its inverse query
-        let inverse = match self.wallet.create_prepared_statement(
-            &format!(
-                "UPDATE {} SET {} = NULL WHERE {} = ?1;",
-                *DAO_PROPOSALS_TABLE, DAO_PROPOSALS_COL_EXEC_TX_HASH, DAO_PROPOSALS_COL_BULLA,
-            ),
-            rusqlite::params![key],
-        ) {
-            Ok(q) => q,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[apply_dao_exec_data] Creating DAO proposal update inverse query failed: {e:?}"
-                )))
-            }
-        };
-
         // Execute the query
         if let Err(e) = self
             .wallet
@@ -1326,18 +1314,11 @@ impl Drk {
             )))
         }
 
-        // Store its inverse
-        if let Err(e) = self.wallet.cache_inverse(inverse) {
-            return Err(Error::DatabaseError(format!(
-                "[apply_dao_exec_data] Inserting inverse query into cache failed: {e:?}"
-            )))
-        }
-
         Ok(true)
     }
 
-    /// Append data related to DAO contract transactions into the wallet database,
-    /// and store their inverse queries into the cache.
+    /// Append data related to DAO contract transactions into the
+    /// wallet database and update the provided scan cache.
     /// Returns a flag indicating if the daos tree should be updated,
     /// one indicating if the proposals tree should be updated and
     /// another one indicating if provided data refer to our own
@@ -1387,8 +1368,7 @@ impl Drk {
         }
     }
 
-    /// Confirm already imported DAO metadata into the wallet,
-    /// and store its inverse query into the cache.
+    /// Confirm already imported DAO metadata into the wallet.
     /// Here we just write the leaf position, tx hash, and call index.
     /// Panics if the fields are None.
     pub async fn confirm_dao(
@@ -1419,27 +1399,11 @@ impl Drk {
             key,
         ];
 
-        // Create its inverse query
-        let inverse_query = format!(
-            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
-            *DAO_DAOS_TABLE,
-            DAO_DAOS_COL_LEAF_POSITION,
-            DAO_DAOS_COL_TX_HASH,
-            DAO_DAOS_COL_CALL_INDEX,
-            DAO_DAOS_COL_BULLA
-        );
-        let inverse =
-            self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key])?;
-
         // Execute the query
-        self.wallet.exec_sql(&query, params)?;
-
-        // Store its inverse
-        self.wallet.cache_inverse(inverse)
+        self.wallet.exec_sql(&query, params)
     }
 
-    /// Import given DAO proposal into the wallet,
-    /// and store its inverse query into the cache.
+    /// Import given DAO proposal into the wallet.
     pub async fn put_dao_proposal(&self, proposal: &ProposalRecord) -> Result<()> {
         // Check that we already have the proposal DAO
         if let Err(e) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
@@ -1513,39 +1477,10 @@ impl Drk {
             exec_tx_hash,
         ];
 
-        // Create its inverse query
-        let inverse_query = format!(
-            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
-            *DAO_PROPOSALS_TABLE,
-            DAO_PROPOSALS_COL_LEAF_POSITION,
-            DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
-            DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
-            DAO_PROPOSALS_COL_TX_HASH,
-            DAO_PROPOSALS_COL_CALL_INDEX,
-            DAO_PROPOSALS_COL_EXEC_TX_HASH,
-            DAO_PROPOSALS_COL_BULLA
-        );
-        let inverse =
-            match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key]) {
-                Ok(q) => q,
-                Err(e) => {
-                    return Err(Error::DatabaseError(format!(
-                    "[put_dao_proposal] Creating DAO proposal insert inverse query failed: {e:?}"
-                )))
-                }
-            };
-
         // Execute the query
         if let Err(e) = self.wallet.exec_sql(&query, params) {
             return Err(Error::DatabaseError(format!(
                 "[put_dao_proposal] Proposal insert failed: {e:?}"
-            )))
-        };
-
-        // Store its inverse
-        if let Err(e) = self.wallet.cache_inverse(inverse) {
-            return Err(Error::DatabaseError(format!(
-                "[put_dao_proposal] Inserting inverse query into cache failed: {e:?}"
             )))
         }
 
@@ -1573,8 +1508,7 @@ impl Drk {
         Ok(())
     }
 
-    /// Import given DAO vote into the wallet,
-    /// and store its inverse query into the cache.
+    /// Import given DAO vote into the wallet.
     pub async fn put_dao_vote(&self, vote: &VoteRecord) -> WalletDbResult<()> {
         println!("Importing DAO vote into wallet");
 
@@ -1604,28 +1538,8 @@ impl Drk {
             serialize_async(&vote.nullifiers).await,
         ];
 
-        // Create its inverse query.
-        // Since we don't know the record ID we will remove it
-        // using all its fields.
-        let inverse_query = format!(
-            "DELETE FROM {} WHERE {} = ?1 AND {} = ?2 AND {} = ?3 AND {} = ?4 AND {} = ?5 AND {} = ?6 AND {} = ?7 AND {} = ?8;",
-            *DAO_VOTES_TABLE,
-            DAO_VOTES_COL_PROPOSAL_BULLA,
-            DAO_VOTES_COL_VOTE_OPTION,
-            DAO_VOTES_COL_YES_VOTE_BLIND,
-            DAO_VOTES_COL_ALL_VOTE_VALUE,
-            DAO_VOTES_COL_ALL_VOTE_BLIND,
-            DAO_VOTES_COL_TX_HASH,
-            DAO_VOTES_COL_CALL_INDEX,
-            DAO_VOTES_COL_NULLIFIERS,
-        );
-        let inverse = self.wallet.create_prepared_statement(&inverse_query, params)?;
-
         // Execute the query
         self.wallet.exec_sql(&query, params)?;
-
-        // Store its inverse
-        self.wallet.cache_inverse(inverse)?;
 
         println!("DAO vote added to wallet");
 

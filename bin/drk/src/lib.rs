@@ -137,16 +137,4 @@ impl Drk {
         println!("Successfully reset full wallet state");
         Ok(())
     }
-
-    /// Auxiliary function to reset `walletdb` inverse cache state.
-    pub async fn reset_inverse_cache(&self) -> Result<()> {
-        // Reset `walletdb` inverse cache
-        if let Err(e) = self.wallet.clear_inverse_cache() {
-            return Err(Error::DatabaseError(format!(
-                "[reset_inverse_cache] Clearing wallet inverse cache failed: {e:?}"
-            )))
-        }
-
-        Ok(())
-    }
 }
