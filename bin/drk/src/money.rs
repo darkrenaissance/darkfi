@@ -22,7 +22,6 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
@@ -49,8 +48,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::PrimeField, BaseBlind, FuncId, Keypair, MerkleNode,
-        MerkleTree, PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
+        ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -59,8 +58,12 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
-    cache::CacheSmt, cli_util::kaching, convert_named_params, error::WalletDbResult,
-    rpc::ScanCache, Drk,
+    cache::CacheSmt,
+    cli_util::kaching,
+    convert_named_params,
+    error::{WalletDbError, WalletDbResult},
+    rpc::ScanCache,
+    Drk,
 };
 
 // Money Merkle tree Sled key
@@ -69,9 +72,6 @@ pub const SLED_MERKLE_TREES_MONEY: &[u8] = b"_money_tree";
 // Wallet SQL table constant names. These have to represent the `money.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
 lazy_static! {
-    pub static ref MONEY_TREE_TABLE: String =
-        format!("{}_money_tree", MONEY_CONTRACT_ID.to_string());
-    pub static ref MONEY_SMT_TABLE: String = format!("{}_money_smt", MONEY_CONTRACT_ID.to_string());
     pub static ref MONEY_KEYS_TABLE: String =
         format!("{}_money_keys", MONEY_CONTRACT_ID.to_string());
     pub static ref MONEY_COINS_TABLE: String =
@@ -81,13 +81,6 @@ lazy_static! {
     pub static ref MONEY_ALIASES_TABLE: String =
         format!("{}_money_aliases", MONEY_CONTRACT_ID.to_string());
 }
-
-// MONEY_TREE_TABLE
-pub const MONEY_TREE_COL_TREE: &str = "tree";
-
-// MONEY_SMT_TABLE
-pub const MONEY_SMT_COL_KEY: &str = "smt_key";
-pub const MONEY_SMT_COL_VALUE: &str = "smt_value";
 
 // MONEY_KEYS_TABLE
 pub const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
@@ -128,22 +121,6 @@ impl Drk {
         // Initialize Money wallet schema
         let wallet_schema = include_str!("../money.sql");
         self.wallet.exec_batch_sql(wallet_schema)?;
-
-        // Check if we have to initialize the Merkle tree.
-        // We check if we find a row in the tree table, and if not, we create a
-        // new tree and push it into the table.
-        // For now, on success, we don't care what's returned, but in the future
-        // we should actually check it.
-        if self.get_money_tree().await.is_err() {
-            println!("Initializing Money Merkle tree");
-            let mut tree = MerkleTree::new(1);
-            tree.append(MerkleNode::from(pallas::Base::ZERO));
-            let _ = tree.mark().unwrap();
-            let query =
-                format!("INSERT INTO {} ({}) VALUES (?1);", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE);
-            self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&tree).await])?;
-            println!("Successfully initialized Merkle tree for the Money contract");
-        }
 
         // Insert DRK alias
         self.add_alias("DRK".to_string(), *DARK_TOKEN_ID).await?;
@@ -642,79 +619,18 @@ impl Drk {
         )
     }
 
-    /// Replace the Money Merkle tree in the wallet.
-    pub async fn put_money_tree(&self, tree: &MerkleTree) -> WalletDbResult<()> {
-        let query = format!("UPDATE {} SET {} = ?1;", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE);
-        self.wallet.exec_sql(&query, rusqlite::params![serialize_async(tree).await])
-    }
-
-    /// Fetch the Money Merkle tree from the wallet.
+    /// Fetch the Money Merkle tree from the cache.
+    /// If it doesn't exists a new Merkle Tree is returned.
     pub async fn get_money_tree(&self) -> Result<MerkleTree> {
-        let row = match self.wallet.query_single(&MONEY_TREE_TABLE, &[MONEY_TREE_COL_TREE], &[]) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_money_tree] Tree retrieval failed: {e:?}"
-                )))
+        match self.cache.merkle_trees.get(SLED_MERKLE_TREES_MONEY)? {
+            Some(tree_bytes) => Ok(deserialize_async(&tree_bytes).await?),
+            None => {
+                let mut tree = MerkleTree::new(1);
+                tree.append(MerkleNode::from(pallas::Base::ZERO));
+                let _ = tree.mark().unwrap();
+                Ok(tree)
             }
-        };
-
-        let Value::Blob(ref tree_bytes) = row[0] else {
-            return Err(Error::ParseFailed("[get_money_tree] Tree bytes parsing failed"))
-        };
-        let tree = deserialize_async(tree_bytes).await?;
-        Ok(tree)
-    }
-
-    /// Auxiliary function to fetch the current Money Merkle tree state,
-    /// as an update query.
-    pub async fn get_money_tree_state_query(&self) -> Result<String> {
-        // Grab current money tree
-        let tree = self.get_money_tree().await?;
-
-        // Create the update query
-        match self.wallet.create_prepared_statement(
-            &format!("UPDATE {} SET {} = ?1;", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE),
-            rusqlite::params![serialize_async(&tree).await],
-        ) {
-            Ok(q) => Ok(q),
-            Err(e) => Err(Error::DatabaseError(format!(
-                "[get_money_tree_state_query] Creating query for money tree failed: {e:?}"
-            ))),
         }
-    }
-
-    /// Fetch the Money nullifiers SMT from the wallet, as a map.
-    pub async fn get_nullifiers_smt(&self) -> Result<HashMap<BigUint, pallas::Base>> {
-        let rows = match self.wallet.query_multiple(&MONEY_SMT_TABLE, &[], &[]) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_nullifiers_smt] SMT records retrieval failed: {e:?}"
-                )))
-            }
-        };
-
-        let mut smt = HashMap::new();
-        for row in rows {
-            let Value::Blob(ref key_bytes) = row[0] else {
-                return Err(Error::ParseFailed("[get_nullifiers_smt] Key bytes parsing failed"))
-            };
-            let key = BigUint::from_bytes_le(key_bytes);
-
-            let Value::Blob(ref value_bytes) = row[1] else {
-                return Err(Error::ParseFailed("[get_nullifiers_smt] Value bytes parsing failed"))
-            };
-            let mut repr = [0; 32];
-            repr.copy_from_slice(value_bytes);
-            let Some(value) = pallas::Base::from_repr(repr).into() else {
-                return Err(Error::ParseFailed("[get_nullifiers_smt] Value conversion failed"))
-            };
-
-            smt.insert(key, value);
-        }
-
-        Ok(smt)
     }
 
     /// Auxiliary function to grab all the nullifiers, coins with their
@@ -1155,23 +1071,25 @@ impl Drk {
         Ok(smt.insert_batch(leaves)?)
     }
 
-    /// Reset the Money Merkle tree in the wallet.
-    pub async fn reset_money_tree(&self) -> WalletDbResult<()> {
+    /// Reset the Money Merkle tree in the cache.
+    pub fn reset_money_tree(&self) -> WalletDbResult<()> {
         println!("Resetting Money Merkle tree");
-        let mut tree = MerkleTree::new(1);
-        tree.append(MerkleNode::from(pallas::Base::ZERO));
-        let _ = tree.mark().unwrap();
-        self.put_money_tree(&tree).await?;
+        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_MONEY) {
+            println!("[reset_money_tree] Resetting Money Merkle tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
         println!("Successfully reset Money Merkle tree");
 
         Ok(())
     }
 
-    /// Reset the Money nullifiers Sparse Merkle Tree in the wallet.
+    /// Reset the Money nullifiers Sparse Merkle Tree in the cache.
     pub fn reset_money_smt(&self) -> WalletDbResult<()> {
         println!("Resetting Money Sparse Merkle tree");
-        let query = format!("DELETE FROM {};", *MONEY_SMT_TABLE);
-        self.wallet.exec_sql(&query, &[])?;
+        if let Err(e) = self.cache.money_smt.clear() {
+            println!("[reset_money_smt] Resetting Money Sparse Merkle tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
         println!("Successfully reset Money Sparse Merkle tree");
 
         Ok(())

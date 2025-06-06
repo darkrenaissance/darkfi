@@ -57,7 +57,10 @@ pub struct Cache {
     pub merkle_trees: sled::Tree,
     /// The `sled` tree storing the Sparse Merkle Tree of the Money
     /// contract.
+    // TODO: this could be a map of trees so more contracts can open
+    // SMTs if needed
     pub money_smt: sled::Tree,
+    // TODO: Perhaps we should also move transactions history here
 }
 
 impl Cache {
@@ -103,10 +106,14 @@ impl CacheOverlay {
     }
 
     /// Insert a `u32` and a block hash into overlay's scanned blocks
-    /// tree. The block height is used as the key, and the blockhash is
-    /// used as value.
+    /// tree. The block height is used as the key, and the serialized
+    /// blockhash string is used as value.
     pub fn insert_scanned_block(&mut self, height: &u32, hash: &HeaderHash) -> Result<()> {
-        self.0.insert(SLED_SCANNED_BLOCKS_TREE, &height.to_be_bytes(), hash.inner())?;
+        self.0.insert(
+            SLED_SCANNED_BLOCKS_TREE,
+            &height.to_be_bytes(),
+            &serialize(&hash.to_string()),
+        )?;
         Ok(())
     }
 
