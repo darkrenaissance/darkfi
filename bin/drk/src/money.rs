@@ -820,10 +820,29 @@ impl Drk {
 
     /// Auxiliary function to handle freezes from a transaction money
     /// call.
-    async fn handle_money_call_freezes(&self, freezes: &[TokenId]) -> Result<()> {
+    /// Returns a flag indicating if provided freezes refer to our own
+    /// wallet.
+    async fn handle_money_call_freezes(
+        &self,
+        own_tokens: &[TokenId],
+        freezes: &[TokenId],
+    ) -> Result<bool> {
         // Check if we have any freezes to process
         if freezes.is_empty() {
-            return Ok(())
+            return Ok(false)
+        }
+
+        // Find our own tokens that got frozen
+        let mut own_freezes = Vec::with_capacity(freezes.len());
+        for freeze in freezes {
+            if own_tokens.contains(freeze) {
+                own_freezes.push(freeze);
+            }
+        }
+
+        // Check if we need to freeze anything
+        if own_freezes.is_empty() {
+            return Ok(false)
         }
 
         // This is the SQL query we'll be executing to update frozen tokens into the wallet
@@ -832,7 +851,7 @@ impl Drk {
             *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
         );
 
-        for token_id in freezes {
+        for token_id in own_freezes {
             // Grab token record key
             let key = serialize_async(token_id).await;
 
@@ -844,7 +863,7 @@ impl Drk {
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 
     /// Append data related to Money contract transactions into the
@@ -879,14 +898,14 @@ impl Drk {
         self.handle_money_call_owncoins(&mut scan_cache.owncoins_nullifiers, &owncoins).await?;
 
         // Handle freezes
-        // TODO: this should return flag if we have frozen tokens indeed
-        self.handle_money_call_freezes(&freezes).await?;
+        let wallet_freezes =
+            self.handle_money_call_freezes(&scan_cache.own_tokens, &freezes).await?;
 
         if self.fun && !owncoins.is_empty() {
             kaching().await;
         }
 
-        Ok((update_tree, wallet_spent_coins || !owncoins.is_empty() || !freezes.is_empty()))
+        Ok((update_tree, wallet_spent_coins || !owncoins.is_empty() || wallet_freezes))
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.
