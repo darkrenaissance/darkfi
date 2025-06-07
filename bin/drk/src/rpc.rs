@@ -414,7 +414,9 @@ impl Drk {
             .apply_diff(&scan_cache.money_smt.store.overlay.0.diff(&[])?)?;
 
         // Update wallet transactions records
-        if let Err(e) = self.put_tx_history_records(&wallet_txs, "Confirmed").await {
+        if let Err(e) =
+            self.put_tx_history_records(&wallet_txs, "Confirmed", Some(block.header.height)).await
+        {
             return Err(Error::DatabaseError(format!(
                 "[scan_block] Inserting transaction history records failed: {e:?}"
             )))
@@ -565,7 +567,7 @@ impl Drk {
         let txid = rep.get::<String>().unwrap().clone();
 
         // Store transactions history record
-        if let Err(e) = self.put_tx_history_record(tx, "Broadcasted").await {
+        if let Err(e) = self.put_tx_history_record(tx, "Broadcasted", None).await {
             return Err(Error::DatabaseError(format!(
                 "[broadcast_tx] Inserting transaction history record failed: {e:?}"
             )))

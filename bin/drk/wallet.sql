@@ -7,5 +7,6 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS transactions_history (
     transaction_hash TEXT PRIMARY KEY NOT NULL,
     status TEXT NOT NULL,
+    block_height INTEGER,
 	tx BLOB NOT NULL
 );
