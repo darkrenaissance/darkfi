@@ -92,7 +92,7 @@ impl Drk {
         }
         let mint_authorities = self.get_mint_authorities().await?;
         let mut own_tokens = Vec::with_capacity(mint_authorities.len());
-        for (token, _, _, _) in mint_authorities {
+        for (token, _, _, _, _) in mint_authorities {
             own_tokens.push(token);
         }
         let (dao_daos_tree, dao_proposals_tree) = self.get_dao_trees().await?;
@@ -318,7 +318,13 @@ impl Drk {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
                     let (update_tree, own_tx) = self
-                        .apply_tx_money_data(scan_cache, &i, &tx.calls, &tx_hash_string)
+                        .apply_tx_money_data(
+                            scan_cache,
+                            &i,
+                            &tx.calls,
+                            &tx_hash_string,
+                            &block.header.height,
+                        )
                         .await?;
                     if update_tree {
                         update_money_tree = true;
