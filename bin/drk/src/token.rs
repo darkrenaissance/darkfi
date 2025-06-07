@@ -50,8 +50,9 @@ use crate::{
     convert_named_params,
     error::WalletDbResult,
     money::{
-        BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY,
-        MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
+        BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_FREEZE_HEIGHT, MONEY_TOKENS_COL_IS_FROZEN,
+        MONEY_TOKENS_COL_MINT_AUTHORITY, MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID,
+        MONEY_TOKENS_TABLE,
     },
     Drk,
 };
@@ -89,14 +90,16 @@ impl Drk {
     ) -> Result<TokenId> {
         let token_id = self.derive_token_attributes(mint_authority, token_blind).to_token_id();
         let is_frozen = 0;
+        let freeze_height: Option<u32> = None;
 
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5);",
             *MONEY_TOKENS_TABLE,
             MONEY_TOKENS_COL_TOKEN_ID,
             MONEY_TOKENS_COL_MINT_AUTHORITY,
             MONEY_TOKENS_COL_TOKEN_BLIND,
             MONEY_TOKENS_COL_IS_FROZEN,
+            MONEY_TOKENS_COL_FREEZE_HEIGHT,
         );
 
         if let Err(e) = self.wallet.exec_sql(
@@ -106,6 +109,7 @@ impl Drk {
                 serialize_async(&mint_authority).await,
                 serialize_async(&token_blind).await,
                 is_frozen,
+                freeze_height,
             ],
         ) {
             return Err(Error::DatabaseError(format!(
@@ -121,7 +125,7 @@ impl Drk {
     async fn parse_mint_authority_record(
         &self,
         row: &[Value],
-    ) -> Result<(TokenId, SecretKey, BaseBlind, bool)> {
+    ) -> Result<(TokenId, SecretKey, BaseBlind, bool, Option<u32>)> {
         let Value::Blob(ref token_bytes) = row[0] else {
             return Err(Error::ParseFailed(
                 "[parse_mint_authority_record] Token ID bytes parsing failed",
@@ -150,22 +154,44 @@ impl Drk {
             return Err(Error::ParseFailed("[parse_mint_authority_record] Is frozen parsing failed"))
         };
 
-        Ok((token_id, mint_authority, token_blind, frozen != 0))
+        let freeze_height = match row[4] {
+            Value::Integer(freeze_height) => {
+                let Ok(freeze_height) = u32::try_from(freeze_height) else {
+                    return Err(Error::ParseFailed(
+                        "[parse_mint_authority_record] Freeze height parsing failed",
+                    ))
+                };
+                Some(freeze_height)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[parse_mint_authority_record] Freeze height parsing failed",
+                ))
+            }
+        };
+
+        Ok((token_id, mint_authority, token_blind, frozen != 0, freeze_height))
     }
 
     /// Reset all token mint authorities frozen status in the wallet.
     pub fn reset_mint_authorities(&self) -> WalletDbResult<()> {
         println!("Resetting mint authorities frozen status");
-        let query =
-            format!("UPDATE {} SET {} = 0", *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,);
-        self.wallet.exec_sql(&query, &[])?;
+        let freeze_height: Option<u32> = None;
+        let query = format!(
+            "UPDATE {} SET {} = 0, {} = ?1",
+            *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_FREEZE_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![freeze_height])?;
         println!("Successfully mint authorities frozen status");
 
         Ok(())
     }
 
     /// Fetch all token mint authorities from the wallet.
-    pub async fn get_mint_authorities(&self) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool)>> {
+    pub async fn get_mint_authorities(
+        &self,
+    ) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool, Option<u32>)>> {
         let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
@@ -187,7 +213,7 @@ impl Drk {
     async fn get_token_mint_authority(
         &self,
         token_id: &TokenId,
-    ) -> Result<(TokenId, SecretKey, BaseBlind, bool)> {
+    ) -> Result<(TokenId, SecretKey, BaseBlind, bool, Option<u32>)> {
         let row = match self.wallet.query_single(
             &MONEY_TOKENS_TABLE,
             &[],

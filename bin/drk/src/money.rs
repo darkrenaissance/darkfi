@@ -108,6 +108,7 @@ pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
 pub const MONEY_TOKENS_COL_MINT_AUTHORITY: &str = "mint_authority";
 pub const MONEY_TOKENS_COL_TOKEN_BLIND: &str = "token_blind";
 pub const MONEY_TOKENS_COL_IS_FROZEN: &str = "is_frozen";
+pub const MONEY_TOKENS_COL_FREEZE_HEIGHT: &str = "freeze_height";
 
 // MONEY_ALIASES_TABLE
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
@@ -826,6 +827,7 @@ impl Drk {
         &self,
         own_tokens: &[TokenId],
         freezes: &[TokenId],
+        freeze_height: &u32,
     ) -> Result<bool> {
         // Check if we have any freezes to process
         if freezes.is_empty() {
@@ -847,8 +849,11 @@ impl Drk {
 
         // This is the SQL query we'll be executing to update frozen tokens into the wallet
         let query = format!(
-            "UPDATE {} SET {} = 1 WHERE {} = ?1;",
-            *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
+            "UPDATE {} SET {} = 1, {} = ?1 WHERE {} = ?2;",
+            *MONEY_TOKENS_TABLE,
+            MONEY_TOKENS_COL_IS_FROZEN,
+            MONEY_TOKENS_COL_FREEZE_HEIGHT,
+            MONEY_TOKENS_COL_TOKEN_ID,
         );
 
         for token_id in own_freezes {
@@ -856,7 +861,9 @@ impl Drk {
             let key = serialize_async(token_id).await;
 
             // Execute the query
-            if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![key]) {
+            if let Err(e) =
+                self.wallet.exec_sql(&query, rusqlite::params![Some(freeze_height), key])
+            {
                 return Err(Error::DatabaseError(format!(
                     "[handle_money_call_freezes] Update Money token freeze failed: {e:?}"
                 )))
@@ -876,6 +883,7 @@ impl Drk {
         call_idx: &usize,
         calls: &[DarkLeaf<ContractCall>],
         tx_hash: &String,
+        block_height: &u32,
     ) -> Result<(bool, bool)> {
         // Parse the call
         let (nullifiers, coins, freezes) = self.parse_money_call(call_idx, calls).await?;
@@ -899,7 +907,7 @@ impl Drk {
 
         // Handle freezes
         let wallet_freezes =
-            self.handle_money_call_freezes(&scan_cache.own_tokens, &freezes).await?;
+            self.handle_money_call_freezes(&scan_cache.own_tokens, &freezes, block_height).await?;
 
         if self.fun && !owncoins.is_empty() {
             kaching().await;

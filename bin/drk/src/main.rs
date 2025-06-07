@@ -2406,16 +2406,22 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     "Aliases",
                     "Mint Authority",
                     "Token Blind",
-                    "Frozen"
+                    "Frozen",
+                    "Freeze Height"
                 ]);
 
-                for (token_id, authority, blind, frozen) in tokens {
+                for (token_id, authority, blind, frozen, freeze_height) in tokens {
                     let aliases = match aliases_map.get(&token_id.to_string()) {
                         Some(a) => a,
                         None => "-",
                     };
 
-                    table.add_row(row![token_id, aliases, authority, blind, frozen]);
+                    let freeze_height = match freeze_height {
+                        Some(freeze_height) => freeze_height.to_string(),
+                        None => String::from("-"),
+                    };
+
+                    table.add_row(row![token_id, aliases, authority, blind, frozen, freeze_height]);
                 }
 
                 if table.is_empty() {
@@ -2571,7 +2577,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Index", "Contract ID", "Frozen"]);
+                table.set_titles(row!["Index", "Contract ID", "Frozen", "Freeze Height"]);
 
                 for (idx, contract_id, frozen, freeze_height) in auths {
                     let freeze_height = match freeze_height {

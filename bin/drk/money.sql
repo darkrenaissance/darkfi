@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_to
 	token_id BLOB PRIMARY KEY NOT NULL,
 	mint_authority BLOB NOT NULL,
 	token_blind BLOB NOT NULL,
-	is_frozen INTEGER NOT NULL
+	is_frozen INTEGER NOT NULL,
+	freeze_height INTEGER
 );
 
 -- The token aliases in our wallet
