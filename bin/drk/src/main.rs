@@ -2120,7 +2120,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 .await;
 
                 if let Some(c) = tx_hash {
-                    let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
+                    let (tx_hash, status, block_height, tx) = drk.get_tx_history_record(&c).await?;
 
                     if encode {
                         println!("{}", base64::encode(&serialize_async(&tx).await));
@@ -2129,6 +2129,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                     println!("Transaction ID: {tx_hash}");
                     println!("Status: {status}");
+                    match block_height {
+                        Some(block_height) => println!("Block height: {block_height}"),
+                        None => println!("Block height: -"),
+                    }
                     println!("{tx:?}");
 
                     return Ok(())
@@ -2145,9 +2149,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Transaction Hash", "Status"]);
-                for (txs_hash, status) in map.iter() {
-                    table.add_row(row![txs_hash, status]);
+                table.set_titles(row!["Transaction Hash", "Status", "Block Height"]);
+                for (txs_hash, status, block_height) in map.iter() {
+                    let block_height = match block_height {
+                        Some(block_height) => block_height.to_string(),
+                        None => String::from("-"),
+                    };
+                    table.add_row(row![txs_hash, status, block_height]);
                 }
 
                 if table.is_empty() {

@@ -32,6 +32,7 @@ use crate::{
 const WALLET_TXS_HISTORY_TABLE: &str = "transactions_history";
 const WALLET_TXS_HISTORY_COL_TX_HASH: &str = "transaction_hash";
 const WALLET_TXS_HISTORY_COL_STATUS: &str = "status";
+const WALLET_TXS_HISTORY_BLOCK_HEIGHT: &str = "block_height";
 const WALLET_TXS_HISTORY_COL_TX: &str = "tx";
 
 impl Drk {
@@ -41,16 +42,24 @@ impl Drk {
         &self,
         tx: &Transaction,
         status: &str,
+        block_height: Option<u32>,
     ) -> WalletDbResult<String> {
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
-            "INSERT OR REPLACE INTO {WALLET_TXS_HISTORY_TABLE} ({WALLET_TXS_HISTORY_COL_TX_HASH}, {WALLET_TXS_HISTORY_COL_STATUS}, {WALLET_TXS_HISTORY_COL_TX}) VALUES (?1, ?2, ?3);"
+            "INSERT OR REPLACE INTO {} ({}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4);",
+            WALLET_TXS_HISTORY_TABLE,
+            WALLET_TXS_HISTORY_COL_TX_HASH,
+            WALLET_TXS_HISTORY_COL_STATUS,
+            WALLET_TXS_HISTORY_BLOCK_HEIGHT,
+            WALLET_TXS_HISTORY_COL_TX,
         );
 
         // Execute the query
         let tx_hash = tx.hash().to_string();
-        self.wallet
-            .exec_sql(&query, rusqlite::params![tx_hash, status, &serialize_async(tx).await,])?;
+        self.wallet.exec_sql(
+            &query,
+            rusqlite::params![tx_hash, status, block_height, &serialize_async(tx).await],
+        )?;
 
         Ok(tx_hash)
     }
@@ -61,10 +70,11 @@ impl Drk {
         &self,
         txs: &[&Transaction],
         status: &str,
+        block_height: Option<u32>,
     ) -> WalletDbResult<Vec<String>> {
         let mut ret = Vec::with_capacity(txs.len());
         for tx in txs {
-            ret.push(self.put_tx_history_record(tx, status).await?);
+            ret.push(self.put_tx_history_record(tx, status, block_height).await?);
         }
         Ok(ret)
     }
@@ -73,7 +83,7 @@ impl Drk {
     pub async fn get_tx_history_record(
         &self,
         tx_hash: &str,
-    ) -> Result<(String, String, Transaction)> {
+    ) -> Result<(String, String, Option<u32>, Transaction)> {
         let row = match self.wallet.query_single(
             WALLET_TXS_HISTORY_TABLE,
             &[],
@@ -97,21 +107,42 @@ impl Drk {
             return Err(Error::ParseFailed("[get_tx_history_record] Status parsing failed"))
         };
 
-        let Value::Blob(ref bytes) = row[2] else {
+        let block_height = match row[2] {
+            Value::Integer(block_height) => {
+                let Ok(block_height) = u32::try_from(block_height) else {
+                    return Err(Error::ParseFailed(
+                        "[get_tx_history_record] Block height parsing failed",
+                    ))
+                };
+                Some(block_height)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[get_tx_history_record] Block height parsing failed",
+                ))
+            }
+        };
+
+        let Value::Blob(ref bytes) = row[3] else {
             return Err(Error::ParseFailed(
                 "[get_tx_history_record] Transaction bytes parsing failed",
             ))
         };
         let tx: Transaction = deserialize_async(bytes).await?;
 
-        Ok((tx_hash.clone(), status.clone(), tx))
+        Ok((tx_hash.clone(), status.clone(), block_height, tx))
     }
 
     /// Fetch all transactions history records, excluding bytes column.
-    pub fn get_txs_history(&self) -> WalletDbResult<Vec<(String, String)>> {
+    pub fn get_txs_history(&self) -> WalletDbResult<Vec<(String, String, Option<u32>)>> {
         let rows = self.wallet.query_multiple(
             WALLET_TXS_HISTORY_TABLE,
-            &[WALLET_TXS_HISTORY_COL_TX_HASH, WALLET_TXS_HISTORY_COL_STATUS],
+            &[
+                WALLET_TXS_HISTORY_COL_TX_HASH,
+                WALLET_TXS_HISTORY_COL_STATUS,
+                WALLET_TXS_HISTORY_BLOCK_HEIGHT,
+            ],
             &[],
         )?;
 
@@ -125,7 +156,18 @@ impl Drk {
                 return Err(WalletDbError::ParseColumnValueError)
             };
 
-            ret.push((tx_hash.clone(), status.clone()));
+            let block_height = match row[2] {
+                Value::Integer(block_height) => {
+                    let Ok(block_height) = u32::try_from(block_height) else {
+                        return Err(WalletDbError::ParseColumnValueError)
+                    };
+                    Some(block_height)
+                }
+                Value::Null => None,
+                _ => return Err(WalletDbError::ParseColumnValueError),
+            };
+
+            ret.push((tx_hash.clone(), status.clone(), block_height));
         }
 
         Ok(ret)
