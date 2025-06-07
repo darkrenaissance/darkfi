@@ -338,7 +338,13 @@ impl Drk {
                 if call.data.contract_id == *DAO_CONTRACT_ID {
                     println!("[scan_block] Found DAO contract in call {i}");
                     let (update_daos_tree, update_proposals_tree, own_tx) = self
-                        .apply_tx_dao_data(scan_cache, &call.data.data, &tx_hash, &(i as u8))
+                        .apply_tx_dao_data(
+                            scan_cache,
+                            &call.data.data,
+                            &tx_hash,
+                            &(i as u8),
+                            &block.header.height,
+                        )
                         .await?;
                     if update_daos_tree {
                         update_dao_daos_tree = true;
