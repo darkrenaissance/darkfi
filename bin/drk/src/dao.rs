@@ -1587,28 +1587,6 @@ impl Drk {
         Ok(())
     }
 
-    /// Unconfirm imported DAO proposals by removing the leaf position, tx hash, and call index.
-    pub async fn unconfirm_proposals(&self, proposals: &[ProposalRecord]) -> WalletDbResult<()> {
-        for proposal in proposals {
-            let query = format!(
-                "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
-                *DAO_PROPOSALS_TABLE,
-                DAO_PROPOSALS_COL_LEAF_POSITION,
-                DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
-                DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
-                DAO_PROPOSALS_COL_MINT_HEIGHT,
-                DAO_PROPOSALS_COL_TX_HASH,
-                DAO_PROPOSALS_COL_CALL_INDEX,
-                DAO_PROPOSALS_COL_EXEC_TX_HASH,
-                DAO_PROPOSALS_COL_BULLA
-            );
-            self.wallet
-                .exec_sql(&query, rusqlite::params![serialize_async(&proposal.bulla()).await])?;
-        }
-
-        Ok(())
-    }
-
     /// Import given DAO vote into the wallet.
     pub async fn put_dao_vote(&self, vote: &VoteRecord) -> WalletDbResult<()> {
         println!("Importing DAO vote into wallet");
@@ -1685,14 +1663,19 @@ impl Drk {
     /// Reset all DAO proposals in the wallet.
     pub async fn reset_dao_proposals(&self) -> WalletDbResult<()> {
         println!("Resetting DAO proposals confirmations");
-        let proposals = match self.get_proposals().await {
-            Ok(p) => p,
-            Err(e) => {
-                println!("[reset_dao_proposals] DAO proposals retrieval failed: {e:?}");
-                return Err(WalletDbError::GenericError);
-            }
-        };
-        self.unconfirm_proposals(&proposals).await?;
+        let query = format!(
+            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
+            *DAO_PROPOSALS_TABLE,
+            DAO_PROPOSALS_COL_LEAF_POSITION,
+            DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+            DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
+            DAO_PROPOSALS_COL_MINT_HEIGHT,
+            DAO_PROPOSALS_COL_TX_HASH,
+            DAO_PROPOSALS_COL_CALL_INDEX,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
+            DAO_PROPOSALS_COL_EXEC_TX_HASH,
+        );
+        self.wallet.exec_sql(&query, &[])?;
         println!("Successfully unconfirmed DAO proposals");
 
         Ok(())
