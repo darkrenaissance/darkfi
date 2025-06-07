@@ -2573,8 +2573,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
                 table.set_titles(row!["Index", "Contract ID", "Frozen"]);
 
-                for (idx, contract_id, frozen) in auths {
-                    table.add_row(row![idx, contract_id, frozen]);
+                for (idx, contract_id, frozen, freeze_height) in auths {
+                    let freeze_height = match freeze_height {
+                        Some(freeze_height) => freeze_height.to_string(),
+                        None => String::from("-"),
+                    };
+                    table.add_row(row![idx, contract_id, frozen, freeze_height]);
                 }
 
                 if table.is_empty() {

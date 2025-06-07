@@ -47,6 +47,7 @@ lazy_static! {
 pub const DEPLOY_AUTH_COL_ID: &str = "id";
 pub const DEPLOY_AUTH_COL_DEPLOY_AUTHORITY: &str = "deploy_authority";
 pub const DEPLOY_AUTH_COL_IS_FROZEN: &str = "is_frozen";
+pub const DEPLOY_AUTH_COL_FREEZE_HEIGHT: &str = "freeze_height";
 
 impl Drk {
     /// Initialize wallet with tables for the Deployooor contract.
@@ -63,12 +64,19 @@ impl Drk {
         eprintln!("Generating a new keypair");
 
         let keypair = Keypair::random(&mut OsRng);
+        let freeze_height: Option<u32> = None;
 
         let query = format!(
-            "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
-            *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_DEPLOY_AUTHORITY, DEPLOY_AUTH_COL_IS_FROZEN,
+            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            *DEPLOY_AUTH_TABLE,
+            DEPLOY_AUTH_COL_DEPLOY_AUTHORITY,
+            DEPLOY_AUTH_COL_IS_FROZEN,
+            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
         );
-        self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&keypair).await, 0])?;
+        self.wallet.exec_sql(
+            &query,
+            rusqlite::params![serialize_async(&keypair).await, 0, freeze_height],
+        )?;
 
         eprintln!("Created new contract deploy authority");
         println!("Contract ID: {}", ContractId::derive_public(keypair.public));
@@ -77,7 +85,7 @@ impl Drk {
     }
 
     /// List contract deploy authorities from the wallet
-    pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool)>> {
+    pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool, Option<u32>)>> {
         let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
@@ -102,7 +110,29 @@ impl Drk {
                 return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse \"is_frozen\""))
             };
 
-            ret.push((idx, ContractId::derive_public(deploy_auth.public), frozen != 0))
+            let freeze_height = match row[3] {
+                Value::Integer(freeze_height) => {
+                    let Ok(freeze_height) = u32::try_from(freeze_height) else {
+                        return Err(Error::ParseFailed(
+                            "[list_deploy_auth] Freeze height parsing failed",
+                        ))
+                    };
+                    Some(freeze_height)
+                }
+                Value::Null => None,
+                _ => {
+                    return Err(Error::ParseFailed(
+                        "[list_deploy_auth] Freeze height parsing failed",
+                    ))
+                }
+            };
+
+            ret.push((
+                idx,
+                ContractId::derive_public(deploy_auth.public),
+                frozen != 0,
+                freeze_height,
+            ))
         }
 
         Ok(ret)
