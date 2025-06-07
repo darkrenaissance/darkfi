@@ -177,13 +177,29 @@ impl Drk {
     /// Reset all token mint authorities frozen status in the wallet.
     pub fn reset_mint_authorities(&self) -> WalletDbResult<()> {
         println!("Resetting mint authorities frozen status");
-        let freeze_height: Option<u32> = None;
         let query = format!(
-            "UPDATE {} SET {} = 0, {} = ?1",
+            "UPDATE {} SET {} = 0, {} = NULL;",
             *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_FREEZE_HEIGHT
         );
-        self.wallet.exec_sql(&query, rusqlite::params![freeze_height])?;
-        println!("Successfully mint authorities frozen status");
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully reset mint authorities frozen status");
+
+        Ok(())
+    }
+
+    /// Remove token mint authorities frozen status in the wallet that
+    /// where frozen after provided height.
+    pub fn unfreeze_mint_authorities_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Resetting mint authorities frozen status after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = 0, {} = NULL WHERE {} > ?1;",
+            *MONEY_TOKENS_TABLE,
+            MONEY_TOKENS_COL_IS_FROZEN,
+            MONEY_TOKENS_COL_FREEZE_HEIGHT,
+            MONEY_TOKENS_COL_FREEZE_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully reset mint authorities frozen status");
 
         Ok(())
     }

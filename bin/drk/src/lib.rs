@@ -122,17 +122,18 @@ impl Drk {
     }
 
     /// Auxiliary function to completely reset wallet state.
-    pub async fn reset(&self) -> WalletDbResult<()> {
+    pub fn reset(&self) -> WalletDbResult<()> {
         println!("Resetting full wallet state");
         self.reset_scanned_blocks()?;
         self.reset_money_tree()?;
         self.reset_money_smt()?;
         self.reset_money_coins()?;
         self.reset_mint_authorities()?;
-        self.reset_dao_trees().await?;
-        self.reset_daos().await?;
-        self.reset_dao_proposals().await?;
+        self.reset_dao_trees()?;
+        self.reset_daos()?;
+        self.reset_dao_proposals()?;
         self.reset_dao_votes()?;
+        self.reset_deploy_authorities()?;
         self.reset_tx_history()?;
         println!("Successfully reset full wallet state");
         Ok(())

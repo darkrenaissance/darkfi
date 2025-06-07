@@ -84,6 +84,36 @@ impl Drk {
         Ok(())
     }
 
+    /// Reset all token deploy authorities frozen status in the wallet.
+    pub fn reset_deploy_authorities(&self) -> WalletDbResult<()> {
+        println!("Resetting deploy authorities frozen status");
+        let query = format!(
+            "UPDATE {} SET {} = 0, {} = NULL;",
+            *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_IS_FROZEN, DEPLOY_AUTH_COL_FREEZE_HEIGHT
+        );
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully reset deploy authorities frozen status");
+
+        Ok(())
+    }
+
+    /// Remove deploy authorities frozen status in the wallet that
+    /// where frozen after provided height.
+    pub fn unfreeze_deploy_authorities_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Resetting deploy authorities frozen status after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = 0, {} = NULL WHERE {} > ?1;",
+            *DEPLOY_AUTH_TABLE,
+            DEPLOY_AUTH_COL_IS_FROZEN,
+            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
+            DEPLOY_AUTH_COL_FREEZE_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully reset deploy authorities frozen status");
+
+        Ok(())
+    }
+
     /// List contract deploy authorities from the wallet
     pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool, Option<u32>)>> {
         let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {

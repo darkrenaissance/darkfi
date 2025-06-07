@@ -1628,7 +1628,7 @@ impl Drk {
     }
 
     /// Reset the DAO Merkle trees in the cache.
-    pub async fn reset_dao_trees(&self) -> WalletDbResult<()> {
+    pub fn reset_dao_trees(&self) -> WalletDbResult<()> {
         println!("Resetting DAO Merkle trees");
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_DAOS) {
             println!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e:?}");
@@ -1644,7 +1644,7 @@ impl Drk {
     }
 
     /// Reset confirmed DAOs in the wallet.
-    pub async fn reset_daos(&self) -> WalletDbResult<()> {
+    pub fn reset_daos(&self) -> WalletDbResult<()> {
         println!("Resetting DAO confirmations");
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
@@ -1660,8 +1660,27 @@ impl Drk {
         Ok(())
     }
 
+    /// Reset confirmed DAOs in the wallet that were minted after
+    /// provided height.
+    pub fn unconfirm_daos_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Resetting DAO confirmations after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} > ?1;",
+            *DAO_DAOS_TABLE,
+            DAO_DAOS_COL_LEAF_POSITION,
+            DAO_DAOS_COL_MINT_HEIGHT,
+            DAO_DAOS_COL_TX_HASH,
+            DAO_DAOS_COL_CALL_INDEX,
+            DAO_DAOS_COL_MINT_HEIGHT,
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully unconfirmed DAOs");
+
+        Ok(())
+    }
+
     /// Reset all DAO proposals in the wallet.
-    pub async fn reset_dao_proposals(&self) -> WalletDbResult<()> {
+    pub fn reset_dao_proposals(&self) -> WalletDbResult<()> {
         println!("Resetting DAO proposals confirmations");
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
@@ -1681,11 +1700,66 @@ impl Drk {
         Ok(())
     }
 
+    /// Reset DAO proposals in the wallet that were minted after
+    /// provided height.
+    pub fn unconfirm_dao_proposals_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Resetting DAO proposals confirmations after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} > ?1;",
+            *DAO_PROPOSALS_TABLE,
+            DAO_PROPOSALS_COL_LEAF_POSITION,
+            DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+            DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
+            DAO_PROPOSALS_COL_MINT_HEIGHT,
+            DAO_PROPOSALS_COL_TX_HASH,
+            DAO_PROPOSALS_COL_CALL_INDEX,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
+            DAO_PROPOSALS_COL_EXEC_TX_HASH,
+            DAO_PROPOSALS_COL_MINT_HEIGHT,
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully unconfirmed DAO proposals");
+
+        Ok(())
+    }
+
+    /// Reset execution information in the wallet for DAO proposals
+    /// that were executed after provided height.
+    pub fn unexec_dao_proposals_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Resetting DAO proposals execution information after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = NULL, {} = NULL WHERE {} > ?1;",
+            *DAO_PROPOSALS_TABLE,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
+            DAO_PROPOSALS_COL_EXEC_TX_HASH,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully reset DAO proposals execution information");
+
+        Ok(())
+    }
+
     /// Reset all DAO votes in the wallet.
     pub fn reset_dao_votes(&self) -> WalletDbResult<()> {
         println!("Resetting DAO votes");
         let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
-        self.wallet.exec_sql(&query, &[])
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully reset DAO votes");
+
+        Ok(())
+    }
+
+    /// Remove the DAO votes in the wallet that were created after
+    /// provided height.
+    pub fn remove_dao_votes_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Removing DAO votes after: {height}");
+        let query =
+            format!("DELETE FROM {} WHERE {} > ?1;", *DAO_VOTES_TABLE, DAO_VOTES_COL_BLOCK_HEIGHT);
+        self.wallet.exec_sql(&query, rusqlite::params![height])?;
+        println!("Successfully removed DAO votes");
+
+        Ok(())
     }
 
     /// Import given DAO params into the wallet with a given name.

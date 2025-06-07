@@ -239,7 +239,7 @@ impl Drk {
                         // Check if a reorg block was received, to reset to its previous
                         if block.header.height <= last_scanned_height {
                             let reset_height = block.header.height.saturating_sub(1);
-                            if let Err(e) = self.reset_to_height(reset_height).await {
+                            if let Err(e) = self.reset_to_height(reset_height) {
                                 return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Wallet state reset failed: {e:?}"
                                 )))
@@ -483,7 +483,7 @@ impl Drk {
 
                 // Reset to its height
                 println!("Last common block found: {height} - {scanned_block_hash}");
-                self.reset_to_height(height).await?;
+                self.reset_to_height(height)?;
                 break
             }
         }
@@ -491,7 +491,7 @@ impl Drk {
         // If last scanned block is genesis(0) we reset,
         // otherwise continue with the next block height.
         if height == 0 {
-            self.reset().await?;
+            self.reset()?;
         } else {
             height += 1;
         }
