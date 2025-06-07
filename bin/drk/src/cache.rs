@@ -28,7 +28,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     pasta::pallas,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::{deserialize, serialize};
 use log::error;
 use num_bigint::BigUint;
 use sled_overlay::{sled, SledDbOverlay, SledDbOverlayStateDiff};
@@ -78,6 +78,21 @@ impl Cache {
             merkle_trees,
             money_smt,
         })
+    }
+
+    /// Fetch given block height numbers from the store's state inverse
+    /// diffs tree. The function will fail if a block height number was
+    /// not found.
+    pub fn get_state_inverse_diff(&self, heights: &[u32]) -> Result<Vec<SledDbOverlayStateDiff>> {
+        let mut ret = Vec::with_capacity(heights.len());
+        for height in heights {
+            match self.state_inverse_diff.get(height.to_be_bytes())? {
+                Some(found) => ret.push(deserialize(&found)?),
+                None => return Err(Error::BlockStateInverseDiffNotFound(*height)),
+            };
+        }
+
+        Ok(ret)
     }
 }
 
