@@ -411,12 +411,7 @@ impl Drk {
         let diff = scan_cache.money_smt.store.overlay.0.diff(&[])?;
 
         // Apply the overlay current changes
-        scan_cache
-            .money_smt
-            .store
-            .overlay
-            .0
-            .apply_diff(&scan_cache.money_smt.store.overlay.0.diff(&[])?)?;
+        scan_cache.money_smt.store.overlay.0.apply_diff(&diff)?;
 
         // Insert the state inverse diff record
         self.cache.insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
