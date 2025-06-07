@@ -80,19 +80,26 @@ impl Cache {
         })
     }
 
-    /// Fetch given block height numbers from the store's state inverse
-    /// diffs tree. The function will fail if a block height number was
-    /// not found.
-    pub fn get_state_inverse_diff(&self, heights: &[u32]) -> Result<Vec<SledDbOverlayStateDiff>> {
-        let mut ret = Vec::with_capacity(heights.len());
-        for height in heights {
-            match self.state_inverse_diff.get(height.to_be_bytes())? {
-                Some(found) => ret.push(deserialize(&found)?),
-                None => return Err(Error::BlockStateInverseDiffNotFound(*height)),
-            };
-        }
+    /// Insert a `u32` and a block inverse diff into store's inverse
+    /// diffs tree. The block height is used as the key, and the
+    /// serialized database inverse diff is used as value.
+    pub fn insert_state_inverse_diff(
+        &self,
+        height: &u32,
+        diff: &SledDbOverlayStateDiff,
+    ) -> Result<()> {
+        self.state_inverse_diff.insert(height.to_be_bytes(), serialize(diff))?;
+        Ok(())
+    }
 
-        Ok(ret)
+    /// Fetch given block height number from the store's state inverse
+    /// diffs tree. The function will fail if the block height number
+    /// was not found.
+    pub fn get_state_inverse_diff(&self, height: &u32) -> Result<SledDbOverlayStateDiff> {
+        match self.state_inverse_diff.get(height.to_be_bytes())? {
+            Some(found) => Ok(deserialize(&found)?),
+            None => Err(Error::BlockStateInverseDiffNotFound(*height)),
+        }
     }
 }
 
@@ -129,18 +136,6 @@ impl CacheOverlay {
             &height.to_be_bytes(),
             &serialize(&hash.to_string()),
         )?;
-        Ok(())
-    }
-
-    /// Insert a `u32` and a block inverse diff into overlay's inverse
-    /// diffs tree. The block height is used as the key, and the
-    /// serialized database inverse diff is used as value.
-    pub fn insert_state_inverse_diff(
-        &mut self,
-        height: &u32,
-        diff: &SledDbOverlayStateDiff,
-    ) -> Result<()> {
-        self.0.insert(SLED_STATE_INVERSE_DIFF_TREE, &height.to_be_bytes(), &serialize(diff))?;
         Ok(())
     }
 
