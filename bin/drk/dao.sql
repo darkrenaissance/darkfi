@@ -87,6 +87,7 @@
 --    Bulla: f6cae...1f6cf
 --    DAO Bulla: 2Wmyc...zQeke
 --    Proposal leaf position: Position(1)
+--    Proposal mint height: 100
 --    Proposal transaction hash: 07148...52f96
 --    Proposal call index: 0
 --    Creation block window: 0
@@ -136,6 +137,8 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos
     -- These values are NULL until the DAO is minted on chain and received
     -- Leaf position of the DAO in the Merkle tree of DAOs
     leaf_position BLOB,
+    -- Block height of the transaction this DAO was deployed
+    mint_height INTEGER,
     -- The transaction hash where the DAO was deployed
     tx_hash BLOB,
     -- The call index in the transaction where the DAO was deployed

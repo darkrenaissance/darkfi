@@ -99,6 +99,7 @@ pub const DAO_DAOS_COL_BULLA: &str = "bulla";
 pub const DAO_DAOS_COL_NAME: &str = "name";
 pub const DAO_DAOS_COL_PARAMS: &str = "params";
 pub const DAO_DAOS_COL_LEAF_POSITION: &str = "leaf_position";
+pub const DAO_DAOS_COL_MINT_HEIGHT: &str = "mint_height";
 pub const DAO_DAOS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_DAOS_COL_CALL_INDEX: &str = "call_index";
 
@@ -677,6 +678,8 @@ pub struct DaoRecord {
     pub params: DaoParams,
     /// Leaf position of the DAO in the Merkle tree of DAOs
     pub leaf_position: Option<bridgetree::Position>,
+    /// Block height of the transaction this DAO was deployed
+    pub mint_height: Option<u32>,
     /// The transaction hash where the DAO was deployed
     pub tx_hash: Option<TransactionHash>,
     /// The call index in the transaction where the DAO was deployed
@@ -688,10 +691,11 @@ impl DaoRecord {
         name: String,
         params: DaoParams,
         leaf_position: Option<bridgetree::Position>,
+        mint_height: Option<u32>,
         tx_hash: Option<TransactionHash>,
         call_index: Option<u8>,
     ) -> Self {
-        Self { name, params, leaf_position, tx_hash, call_index }
+        Self { name, params, leaf_position, mint_height, tx_hash, call_index }
     }
 
     pub fn bulla(&self) -> DaoBulla {
@@ -732,6 +736,10 @@ impl fmt::Display for DaoRecord {
             Some(p) => format!("{p:?}"),
             None => "None".to_string(),
         };
+        let mint_height = match self.mint_height {
+            Some(h) => format!("{h}"),
+            None => "None".to_string(),
+        };
         let tx_hash = match self.tx_hash {
             Some(t) => format!("{t}"),
             None => "None".to_string(),
@@ -742,7 +750,7 @@ impl fmt::Display for DaoRecord {
         };
 
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
             "DAO Parameters",
             "==============",
             "Name",
@@ -790,6 +798,8 @@ impl fmt::Display for DaoRecord {
             self.params.dao.bulla_blind,
             "Leaf position",
             leaf_position,
+            "Mint height",
+            mint_height,
             "Transaction hash",
             tx_hash,
             "Call index",
@@ -950,7 +960,18 @@ impl Drk {
             }
         };
 
-        let tx_hash = match row[4] {
+        let mint_height = match row[4] {
+            Value::Integer(mint_height) => {
+                let Ok(mint_height) = u32::try_from(mint_height) else {
+                    return Err(Error::ParseFailed("[parse_dao_record] Mint height parsing failed"))
+                };
+                Some(mint_height)
+            }
+            Value::Null => None,
+            _ => return Err(Error::ParseFailed("[parse_dao_record] Mint height parsing failed")),
+        };
+
+        let tx_hash = match row[5] {
             Value::Blob(ref tx_hash_bytes) => Some(deserialize_async(tx_hash_bytes).await?),
             Value::Null => None,
             _ => {
@@ -960,7 +981,7 @@ impl Drk {
             }
         };
 
-        let call_index = match row[5] {
+        let call_index = match row[6] {
             Value::Integer(call_index) => {
                 let Ok(call_index) = u8::try_from(call_index) else {
                     return Err(Error::ParseFailed("[parse_dao_record] Call index parsing failed"))
@@ -971,7 +992,7 @@ impl Drk {
             _ => return Err(Error::ParseFailed("[parse_dao_record] Call index parsing failed")),
         };
 
-        let dao = DaoRecord::new(name, params, leaf_position, tx_hash, call_index);
+        let dao = DaoRecord::new(name, params, leaf_position, mint_height, tx_hash, call_index);
 
         Ok(dao)
     }
@@ -1159,6 +1180,7 @@ impl Drk {
         new_bulla: &DaoBulla,
         tx_hash: &TransactionHash,
         call_index: &u8,
+        mint_height: &u32,
     ) -> Result<bool> {
         // Append the new dao bulla to the Merkle tree.
         // Every dao bulla has to be added.
@@ -1174,7 +1196,13 @@ impl Drk {
             "[apply_dao_mint_data] Found minted DAO {new_bulla}, noting down for wallet update"
         );
         if let Err(e) = self
-            .confirm_dao(new_bulla, &scan_cache.dao_daos_tree.mark().unwrap(), tx_hash, call_index)
+            .confirm_dao(
+                new_bulla,
+                &scan_cache.dao_daos_tree.mark().unwrap(),
+                tx_hash,
+                call_index,
+                mint_height,
+            )
             .await
         {
             return Err(Error::DatabaseError(format!(
@@ -1392,7 +1420,13 @@ impl Drk {
                 println!("[apply_tx_dao_data] Found Dao::Mint call");
                 let params: DaoMintParams = deserialize_async(&data[1..]).await?;
                 let own_tx = self
-                    .apply_dao_mint_data(scan_cache, &params.dao_bulla, tx_hash, call_idx)
+                    .apply_dao_mint_data(
+                        scan_cache,
+                        &params.dao_bulla,
+                        tx_hash,
+                        call_idx,
+                        block_height,
+                    )
                     .await?;
                 Ok((true, false, own_tx))
             }
@@ -1428,23 +1462,25 @@ impl Drk {
     }
 
     /// Confirm already imported DAO metadata into the wallet.
-    /// Here we just write the leaf position, tx hash, and call index.
-    /// Panics if the fields are None.
+    /// Here we just write the leaf position, mint height, tx hash,
+    /// and call index.
     pub async fn confirm_dao(
         &self,
         dao: &DaoBulla,
         leaf_position: &bridgetree::Position,
         tx_hash: &TransactionHash,
         call_index: &u8,
+        mint_height: &u32,
     ) -> WalletDbResult<()> {
         // Grab dao record key
         let key = serialize_async(dao).await;
 
         // Create an SQL `UPDATE` query
         let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = ?4;",
+            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 {} = ?4 WHERE {} = ?5;",
             *DAO_DAOS_TABLE,
             DAO_DAOS_COL_LEAF_POSITION,
+            DAO_DAOS_COL_MINT_HEIGHT,
             DAO_DAOS_COL_TX_HASH,
             DAO_DAOS_COL_CALL_INDEX,
             DAO_DAOS_COL_BULLA
@@ -1453,6 +1489,7 @@ impl Drk {
         // Create its params
         let params = rusqlite::params![
             serialize_async(leaf_position).await,
+            Some(*mint_height),
             serialize_async(tx_hash).await,
             call_index,
             key,
@@ -1632,9 +1669,10 @@ impl Drk {
     pub async fn reset_daos(&self) -> WalletDbResult<()> {
         println!("Resetting DAO confirmations");
         let query = format!(
-            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL;",
+            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
             *DAO_DAOS_TABLE,
             DAO_DAOS_COL_LEAF_POSITION,
+            DAO_DAOS_COL_MINT_HEIGHT,
             DAO_DAOS_COL_TX_HASH,
             DAO_DAOS_COL_CALL_INDEX,
         );
