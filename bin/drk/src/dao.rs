@@ -120,6 +120,7 @@ pub const DAO_VOTES_COL_VOTE_OPTION: &str = "vote_option";
 pub const DAO_VOTES_COL_YES_VOTE_BLIND: &str = "yes_vote_blind";
 pub const DAO_VOTES_COL_ALL_VOTE_VALUE: &str = "all_vote_value";
 pub const DAO_VOTES_COL_ALL_VOTE_BLIND: &str = "all_vote_blind";
+pub const DAO_VOTES_COL_BLOCK_HEIGHT: &str = "block_height";
 pub const DAO_VOTES_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_VOTES_COL_CALL_INDEX: &str = "call_index";
 pub const DAO_VOTES_COL_NULLIFIERS: &str = "nullifiers";
@@ -879,6 +880,8 @@ pub struct VoteRecord {
     pub all_vote_value: u64,
     /// Blinding facfor of all votes
     pub all_vote_blind: ScalarBlind,
+    /// Block height of the transaction this vote was casted
+    pub block_height: u32,
     /// Transaction hash where this vote was casted
     pub tx_hash: TransactionHash,
     /// Call index in the transaction where this vote was casted
@@ -1218,6 +1221,7 @@ impl Drk {
         params: &DaoVoteParams,
         tx_hash: &TransactionHash,
         call_index: &u8,
+        block_height: &u32,
     ) -> Result<bool> {
         // Check if we got the corresponding proposal
         let Some(dao_bulla) = scan_cache.own_proposals.get(&params.proposal_bulla) else {
@@ -1266,6 +1270,7 @@ impl Drk {
             yes_vote_blind,
             all_vote_value,
             all_vote_blind,
+            block_height: *block_height,
             tx_hash: *tx_hash,
             call_index: *call_index,
             nullifiers: params.inputs.iter().map(|i| i.vote_nullifier).collect(),
@@ -1329,6 +1334,7 @@ impl Drk {
         data: &[u8],
         tx_hash: &TransactionHash,
         call_idx: &u8,
+        block_height: &u32,
     ) -> Result<(bool, bool, bool)> {
         // Run through the transaction call data and see what we got:
         match DaoFunction::try_from(data[0])? {
@@ -1350,8 +1356,9 @@ impl Drk {
             DaoFunction::Vote => {
                 println!("[apply_tx_dao_data] Found Dao::Vote call");
                 let params: DaoVoteParams = deserialize_async(&data[1..]).await?;
-                let own_tx =
-                    self.apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx).await?;
+                let own_tx = self
+                    .apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx, block_height)
+                    .await?;
                 Ok((false, false, own_tx))
             }
             DaoFunction::Exec => {
@@ -1514,13 +1521,14 @@ impl Drk {
 
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
             *DAO_VOTES_TABLE,
             DAO_VOTES_COL_PROPOSAL_BULLA,
             DAO_VOTES_COL_VOTE_OPTION,
             DAO_VOTES_COL_YES_VOTE_BLIND,
             DAO_VOTES_COL_ALL_VOTE_VALUE,
             DAO_VOTES_COL_ALL_VOTE_BLIND,
+            DAO_VOTES_COL_BLOCK_HEIGHT,
             DAO_VOTES_COL_TX_HASH,
             DAO_VOTES_COL_CALL_INDEX,
             DAO_VOTES_COL_NULLIFIERS,
@@ -1533,6 +1541,7 @@ impl Drk {
             serialize_async(&vote.yes_vote_blind).await,
             serialize_async(&vote.all_vote_value).await,
             serialize_async(&vote.all_vote_blind).await,
+            vote.block_height,
             serialize_async(&vote.tx_hash).await,
             vote.call_index,
             serialize_async(&vote.nullifiers).await,
@@ -1844,21 +1853,32 @@ impl Drk {
             };
             let all_vote_blind = deserialize_async(all_vote_blind_bytes).await?;
 
-            let Value::Blob(ref tx_hash_bytes) = row[6] else {
+            let Value::Integer(block_height) = row[6] else {
+                return Err(Error::ParseFailed(
+                    "[get_dao_proposal_votes] Block height parsing failed",
+                ))
+            };
+            let Ok(block_height) = u32::try_from(block_height) else {
+                return Err(Error::ParseFailed(
+                    "[get_dao_proposal_votes] Block height parsing failed",
+                ))
+            };
+
+            let Value::Blob(ref tx_hash_bytes) = row[7] else {
                 return Err(Error::ParseFailed(
                     "[get_dao_proposal_votes] Transaction hash bytes parsing failed",
                 ))
             };
             let tx_hash = deserialize_async(tx_hash_bytes).await?;
 
-            let Value::Integer(call_index) = row[7] else {
+            let Value::Integer(call_index) = row[8] else {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
             };
             let Ok(call_index) = u8::try_from(call_index) else {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
             };
 
-            let Value::Blob(ref nullifiers_bytes) = row[8] else {
+            let Value::Blob(ref nullifiers_bytes) = row[9] else {
                 return Err(Error::ParseFailed(
                     "[get_dao_proposal_votes] Nullifiers bytes parsing failed",
                 ))
@@ -1872,6 +1892,7 @@ impl Drk {
                 yes_vote_blind,
                 all_vote_value,
                 all_vote_blind,
+                block_height,
                 tx_hash,
                 call_index,
                 nullifiers,
