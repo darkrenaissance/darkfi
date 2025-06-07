@@ -915,7 +915,7 @@ impl Drk {
 
             // Execute the query
             if let Err(e) =
-                self.wallet.exec_sql(&query, rusqlite::params![Some(freeze_height), key])
+                self.wallet.exec_sql(&query, rusqlite::params![Some(*freeze_height), key])
             {
                 return Err(Error::DatabaseError(format!(
                     "[handle_money_call_freezes] Update Money token freeze failed: {e:?}"
