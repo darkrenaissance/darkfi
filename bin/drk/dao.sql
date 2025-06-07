@@ -181,6 +181,8 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_vote
     all_vote_value BLOB NOT NULL,
     -- Blinding facfor of all votes
     all_vote_blind BLOB NOT NULL,
+    -- Block height of the transaction this vote was casted
+    block_height INTEGER NOT NULL,
     -- Transaction hash where this vote was casted
     tx_hash BLOB NOT NULL,
     -- Call index in the transaction where this vote was casted
