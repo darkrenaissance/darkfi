@@ -876,12 +876,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
                 table.set_titles(row![
                     "Coin",
-                    "Spent",
                     "Token ID",
                     "Aliases",
                     "Value",
                     "Spend Hook",
                     "User Data",
+                    "Creation Height",
+                    "Spent",
+                    "Spent Height",
                     "Spent TX"
                 ]);
                 for coin in coins {
@@ -904,11 +906,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         String::from("-")
                     };
 
+                    let spent_height = match coin.3 {
+                        Some(spent_height) => spent_height.to_string(),
+                        None => String::from("-"),
+                    };
+
                     table.add_row(row![
                         bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
                             .into_string()
                             .to_string(),
-                        coin.1,
                         coin.0.note.token_id,
                         aliases,
                         format!(
@@ -918,7 +924,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         ),
                         spend_hook,
                         user_data,
-                        coin.2
+                        coin.1,
+                        coin.2,
+                        spent_height,
+                        coin.4,
                     ]);
                 }
 

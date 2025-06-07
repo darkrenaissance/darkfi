@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_ke
 -- The coins we have the information to and can spend
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_coins (
 	coin BLOB PRIMARY KEY NOT NULL,
-	is_spent INTEGER NOT NULL,
 	value BLOB NOT NULL,
 	token_id BLOB NOT NULL,
 	spend_hook BLOB NOT NULL,
@@ -23,6 +22,9 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_co
 	secret BLOB NOT NULL,
 	leaf_position BLOB NOT NULL,
 	memo BLOB,
+	creation_height INTEGER NOT NULL,
+	is_spent INTEGER NOT NULL,
+	spent_height INTEGER,
 	spent_tx_hash TEXT DEFAULT '-'
 );
 
