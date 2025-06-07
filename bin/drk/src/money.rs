@@ -90,7 +90,6 @@ pub const MONEY_KEYS_COL_SECRET: &str = "secret";
 
 // MONEY_COINS_TABLE
 pub const MONEY_COINS_COL_COIN: &str = "coin";
-pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
 pub const MONEY_COINS_COL_VALUE: &str = "value";
 pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
 pub const MONEY_COINS_COL_SPEND_HOOK: &str = "spend_hook";
@@ -101,6 +100,9 @@ pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
 pub const MONEY_COINS_COL_SECRET: &str = "secret";
 pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
+pub const MONEY_COINS_COL_CREATION_HEIGHT: &str = "creation_height";
+pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
+pub const MONEY_COINS_COL_SPENT_HEIGHT: &str = "spent_height";
 pub const MONEY_COINS_COL_SPENT_TX_HASH: &str = "spent_tx_hash";
 
 // MONEY_TOKENS_TABLE
@@ -354,8 +356,12 @@ impl Drk {
 
     /// Fetch all coins and their metadata related to the Money contract from the wallet.
     /// Optionally also fetch spent ones.
-    /// The boolean in the returned tuple notes if the coin was marked as spent.
-    pub async fn get_coins(&self, fetch_spent: bool) -> Result<Vec<(OwnCoin, bool, String)>> {
+    /// The boolean in the returned tuple notes if the coin was marked
+    /// as spent, along with the height and tx it was spent in.
+    pub async fn get_coins(
+        &self,
+        fetch_spent: bool,
+    ) -> Result<Vec<(OwnCoin, u32, bool, Option<u32>, String)>> {
         let query = if fetch_spent {
             self.wallet.query_multiple(&MONEY_COINS_TABLE, &[], &[])
         } else {
@@ -388,7 +394,11 @@ impl Drk {
         let query = self.wallet.query_multiple(
             &MONEY_COINS_TABLE,
             &[],
-            convert_named_params! {(MONEY_COINS_COL_IS_SPENT, false), (MONEY_COINS_COL_TOKEN_ID, serialize_async(token_id).await), (MONEY_COINS_COL_SPEND_HOOK, serialize_async(&FuncId::none()).await)},
+            convert_named_params! {
+                (MONEY_COINS_COL_TOKEN_ID, serialize_async(token_id).await),
+                (MONEY_COINS_COL_SPEND_HOOK, serialize_async(&FuncId::none()).await),
+                (MONEY_COINS_COL_IS_SPENT, false),
+            },
         );
 
         let rows = match query {
@@ -418,7 +428,12 @@ impl Drk {
         let query = self.wallet.query_multiple(
             &MONEY_COINS_TABLE,
             &[],
-            convert_named_params! {(MONEY_COINS_COL_IS_SPENT, false), (MONEY_COINS_COL_TOKEN_ID, serialize_async(token_id).await), (MONEY_COINS_COL_SPEND_HOOK, serialize_async(spend_hook).await), (MONEY_COINS_COL_USER_DATA, serialize_async(user_data).await)},
+            convert_named_params! {
+                (MONEY_COINS_COL_TOKEN_ID, serialize_async(token_id).await),
+                (MONEY_COINS_COL_SPEND_HOOK, serialize_async(spend_hook).await),
+                (MONEY_COINS_COL_USER_DATA, serialize_async(user_data).await),
+                (MONEY_COINS_COL_IS_SPENT, false),
+            },
         );
 
         let rows = match query {
@@ -439,14 +454,74 @@ impl Drk {
     }
 
     /// Auxiliary function to parse a `MONEY_COINS_TABLE` record.
-    /// The boolean in the returned tuple notes if the coin was marked as spent.
-    async fn parse_coin_record(&self, row: &[Value]) -> Result<(OwnCoin, bool, String)> {
+    /// The boolean in the returned tuple notes if the coin was marked
+    /// as spent, along with the height and tx it was spent in.
+    async fn parse_coin_record(
+        &self,
+        row: &[Value],
+    ) -> Result<(OwnCoin, u32, bool, Option<u32>, String)> {
         let Value::Blob(ref coin_bytes) = row[0] else {
             return Err(Error::ParseFailed("[parse_coin_record] Coin bytes parsing failed"))
         };
         let coin: Coin = deserialize_async(coin_bytes).await?;
 
-        let Value::Integer(is_spent) = row[1] else {
+        let Value::Blob(ref value_bytes) = row[1] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Value bytes parsing failed"))
+        };
+        let value: u64 = deserialize_async(value_bytes).await?;
+
+        let Value::Blob(ref token_id_bytes) = row[2] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Token ID bytes parsing failed"))
+        };
+        let token_id: TokenId = deserialize_async(token_id_bytes).await?;
+
+        let Value::Blob(ref spend_hook_bytes) = row[3] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Spend hook bytes parsing failed"))
+        };
+        let spend_hook: pallas::Base = deserialize_async(spend_hook_bytes).await?;
+
+        let Value::Blob(ref user_data_bytes) = row[4] else {
+            return Err(Error::ParseFailed("[parse_coin_record] User data bytes parsing failed"))
+        };
+        let user_data: pallas::Base = deserialize_async(user_data_bytes).await?;
+
+        let Value::Blob(ref coin_blind_bytes) = row[5] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Coin blind bytes parsing failed"))
+        };
+        let coin_blind: BaseBlind = deserialize_async(coin_blind_bytes).await?;
+
+        let Value::Blob(ref value_blind_bytes) = row[6] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Value blind bytes parsing failed"))
+        };
+        let value_blind: ScalarBlind = deserialize_async(value_blind_bytes).await?;
+
+        let Value::Blob(ref token_blind_bytes) = row[7] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Token blind bytes parsing failed"))
+        };
+        let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
+
+        let Value::Blob(ref secret_bytes) = row[8] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Secret bytes parsing failed"))
+        };
+        let secret: SecretKey = deserialize_async(secret_bytes).await?;
+
+        let Value::Blob(ref leaf_position_bytes) = row[9] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Leaf position bytes parsing failed"))
+        };
+        let leaf_position: bridgetree::Position = deserialize_async(leaf_position_bytes).await?;
+
+        let Value::Blob(ref memo) = row[10] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
+        };
+
+        let Value::Integer(creation_height) = row[11] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Creation height parsing failed"))
+        };
+        let Ok(creation_height) = u32::try_from(creation_height) else {
+            return Err(Error::ParseFailed("[parse_coin_record] Creation height parsing failed"))
+        };
+
+        let Value::Integer(is_spent) = row[12] else {
             return Err(Error::ParseFailed("[parse_coin_record] Is spent parsing failed"))
         };
         let Ok(is_spent) = u64::try_from(is_spent) else {
@@ -454,56 +529,20 @@ impl Drk {
         };
         let is_spent = is_spent > 0;
 
-        let Value::Blob(ref value_bytes) = row[2] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Value bytes parsing failed"))
-        };
-        let value: u64 = deserialize_async(value_bytes).await?;
-
-        let Value::Blob(ref token_id_bytes) = row[3] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Token ID bytes parsing failed"))
-        };
-        let token_id: TokenId = deserialize_async(token_id_bytes).await?;
-
-        let Value::Blob(ref spend_hook_bytes) = row[4] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Spend hook bytes parsing failed"))
-        };
-        let spend_hook: pallas::Base = deserialize_async(spend_hook_bytes).await?;
-
-        let Value::Blob(ref user_data_bytes) = row[5] else {
-            return Err(Error::ParseFailed("[parse_coin_record] User data bytes parsing failed"))
-        };
-        let user_data: pallas::Base = deserialize_async(user_data_bytes).await?;
-
-        let Value::Blob(ref coin_blind_bytes) = row[6] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Coin blind bytes parsing failed"))
-        };
-        let coin_blind: BaseBlind = deserialize_async(coin_blind_bytes).await?;
-
-        let Value::Blob(ref value_blind_bytes) = row[7] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Value blind bytes parsing failed"))
-        };
-        let value_blind: ScalarBlind = deserialize_async(value_blind_bytes).await?;
-
-        let Value::Blob(ref token_blind_bytes) = row[8] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Token blind bytes parsing failed"))
-        };
-        let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
-
-        let Value::Blob(ref secret_bytes) = row[9] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Secret bytes parsing failed"))
-        };
-        let secret: SecretKey = deserialize_async(secret_bytes).await?;
-
-        let Value::Blob(ref leaf_position_bytes) = row[10] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Leaf position bytes parsing failed"))
-        };
-        let leaf_position: bridgetree::Position = deserialize_async(leaf_position_bytes).await?;
-
-        let Value::Blob(ref memo) = row[11] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
+        let spent_height = match row[13] {
+            Value::Integer(spent_height) => {
+                let Ok(spent_height) = u32::try_from(spent_height) else {
+                    return Err(Error::ParseFailed(
+                        "[parse_coin_record] Spent height parsing failed",
+                    ))
+                };
+                Some(spent_height)
+            }
+            Value::Null => None,
+            _ => return Err(Error::ParseFailed("[parse_coin_record] Spent height parsing failed")),
         };
 
-        let Value::Text(ref spent_tx_hash) = row[12] else {
+        let Value::Text(ref spent_tx_hash) = row[14] else {
             return Err(Error::ParseFailed(
                 "[parse_coin_record] Spent transaction hash parsing failed",
             ))
@@ -520,7 +559,13 @@ impl Drk {
             memo: memo.clone(),
         };
 
-        Ok((OwnCoin { coin, note, secret, leaf_position }, is_spent, spent_tx_hash.clone()))
+        Ok((
+            OwnCoin { coin, note, secret, leaf_position },
+            creation_height,
+            is_spent,
+            spent_height,
+            spent_tx_hash.clone(),
+        ))
     }
 
     /// Create an alias record for provided Token ID.
@@ -607,16 +652,18 @@ impl Drk {
     /// Mark a given coin in the wallet as unspent.
     pub async fn unspend_coin(&self, coin: &Coin) -> WalletDbResult<()> {
         let is_spend = 0;
+        let spent_height: Option<u32> = None;
         let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
+            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = ?4;",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_HEIGHT,
             MONEY_COINS_COL_SPENT_TX_HASH,
             MONEY_COINS_COL_COIN
         );
         self.wallet.exec_sql(
             &query,
-            rusqlite::params![is_spend, "-", serialize_async(&coin.inner()).await],
+            rusqlite::params![is_spend, spent_height, "-", serialize_async(&coin.inner()).await],
         )
     }
 
@@ -758,6 +805,7 @@ impl Drk {
         &self,
         owncoins_nullifiers: &mut BTreeMap<[u8; 32], [u8; 32]>,
         coins: &[OwnCoin],
+        creation_height: &u32,
     ) -> Result<()> {
         println!("Found {} OwnCoin(s) in transaction", coins.len());
 
@@ -768,10 +816,9 @@ impl Drk {
 
         // This is the SQL query we'll be executing to insert new coins into the wallet
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_COIN,
-            MONEY_COINS_COL_IS_SPENT,
             MONEY_COINS_COL_VALUE,
             MONEY_COINS_COL_TOKEN_ID,
             MONEY_COINS_COL_SPEND_HOOK,
@@ -782,9 +829,13 @@ impl Drk {
             MONEY_COINS_COL_SECRET,
             MONEY_COINS_COL_LEAF_POSITION,
             MONEY_COINS_COL_MEMO,
+            MONEY_COINS_COL_CREATION_HEIGHT,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_HEIGHT,
         );
 
         // Handle our own coins
+        let spent_height: Option<u32> = None;
         for coin in coins {
             println!("OwnCoin: {:?}", coin.coin);
             // Grab coin record key
@@ -796,7 +847,6 @@ impl Drk {
             // Execute the query
             let params = rusqlite::params![
                 key,
-                0, // <-- is_spent
                 serialize_async(&coin.note.value).await,
                 serialize_async(&coin.note.token_id).await,
                 serialize_async(&coin.note.spend_hook).await,
@@ -807,6 +857,9 @@ impl Drk {
                 serialize_async(&coin.secret).await,
                 serialize_async(&coin.leaf_position).await,
                 serialize_async(&coin.note.memo).await,
+                creation_height,
+                0, // <-- is_spent
+                spent_height,
             ];
 
             if let Err(e) = self.wallet.exec_sql(&query, params) {
@@ -899,11 +952,20 @@ impl Drk {
         self.smt_insert(&mut scan_cache.money_smt, &nullifiers)?;
 
         // Check if we have any spent coins
-        let wallet_spent_coins =
-            self.mark_spent_coins(&scan_cache.owncoins_nullifiers, &nullifiers, tx_hash)?;
+        let wallet_spent_coins = self.mark_spent_coins(
+            &scan_cache.owncoins_nullifiers,
+            &nullifiers,
+            &Some(*block_height),
+            tx_hash,
+        )?;
 
         // Handle our own coins
-        self.handle_money_call_owncoins(&mut scan_cache.owncoins_nullifiers, &owncoins).await?;
+        self.handle_money_call_owncoins(
+            &mut scan_cache.owncoins_nullifiers,
+            &owncoins,
+            block_height,
+        )
+        .await?;
 
         // Handle freezes
         let wallet_freezes =
@@ -963,7 +1025,7 @@ impl Drk {
 
             println!("[mark_tx_spend] Found Money contract in call {i}");
             let nullifiers = self.money_call_nullifiers(call).await?;
-            self.mark_spent_coins(&owncoins_nullifiers, &nullifiers, &tx_hash)?;
+            self.mark_spent_coins(&owncoins_nullifiers, &nullifiers, &None, &tx_hash)?;
         }
 
         Ok(())
@@ -975,6 +1037,7 @@ impl Drk {
         &self,
         owncoins_nullifiers: &BTreeMap<[u8; 32], [u8; 32]>,
         nullifiers: &[Nullifier],
+        spent_height: &Option<u32>,
         spent_tx_hash: &String,
     ) -> Result<bool> {
         if nullifiers.is_empty() {
@@ -994,9 +1057,10 @@ impl Drk {
 
         // Create an SQL `UPDATE` query to mark rows as spent(1)
         let query = format!(
-            "UPDATE {} SET {} = 1, {} = ?1 WHERE {} = ?2;",
+            "UPDATE {} SET {} = 1, {} = ?1, {} = ?2 WHERE {} = ?3;",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_HEIGHT,
             MONEY_COINS_COL_SPENT_TX_HASH,
             MONEY_COINS_COL_COIN
         );
@@ -1004,7 +1068,9 @@ impl Drk {
         // Mark spent own coins
         for ownoin in spent_owncoins {
             // Execute the query
-            if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![spent_tx_hash, ownoin]) {
+            if let Err(e) =
+                self.wallet.exec_sql(&query, rusqlite::params![spent_height, spent_tx_hash, ownoin])
+            {
                 return Err(Error::DatabaseError(format!(
                     "[mark_spent_coins] Marking spent coin failed: {e:?}"
                 )))
