@@ -410,13 +410,6 @@ impl Drk {
         // Grab the overlay current diff
         let diff = scan_cache.money_smt.store.overlay.0.diff(&[])?;
 
-        // Insert the state inverse diff record
-        scan_cache
-            .money_smt
-            .store
-            .overlay
-            .insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
-
         // Apply the overlay current changes
         scan_cache
             .money_smt
@@ -424,6 +417,12 @@ impl Drk {
             .overlay
             .0
             .apply_diff(&scan_cache.money_smt.store.overlay.0.diff(&[])?)?;
+
+        // Insert the state inverse diff record
+        self.cache.insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
+
+        // Flush sled
+        self.cache.sled_db.flush()?;
 
         // Update wallet transactions records
         if let Err(e) =

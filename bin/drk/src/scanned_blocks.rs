@@ -66,20 +66,26 @@ impl Drk {
             return Err(WalletDbError::QueryExecutionFailed);
         };
         let Some((key, value)) = query_result else { return Ok((0, String::from("-"))) };
-        let Ok(key) = deserialize(&key) else {
-            return Err(WalletDbError::ParseColumnValueError);
+        let key: [u8; 4] = match key.as_ref().try_into() {
+            Ok(k) => k,
+            Err(_) => return Err(WalletDbError::ParseColumnValueError),
         };
+        let key = u32::from_be_bytes(key);
         let Ok(value) = deserialize(&value) else {
             return Err(WalletDbError::ParseColumnValueError);
         };
         Ok((key, value))
     }
 
-    /// Reset the scanned blocks information records in the wallet.
+    /// Reset the scanned blocks information records in the cache.
     pub fn reset_scanned_blocks(&self) -> WalletDbResult<()> {
         println!("Resetting scanned blocks");
         if let Err(e) = self.cache.scanned_blocks.clear() {
             println!("[reset_scanned_blocks] Resetting scanned blocks tree failed: {e:?}");
+            return Err(WalletDbError::GenericError)
+        }
+        if let Err(e) = self.cache.state_inverse_diff.clear() {
+            println!("[reset_scanned_blocks] Resetting state inverse diffs tree failed: {e:?}");
             return Err(WalletDbError::GenericError)
         }
         println!("Successfully reset scanned blocks");
@@ -107,19 +113,6 @@ impl Drk {
             return Ok(())
         }
 
-        // Grab all state inverse diffs until requested height,
-        // going backwards.
-        let heights: Vec<u32> = (height + 1..=last).rev().collect();
-        let inverse_diffs = match self.cache.get_state_inverse_diff(&heights) {
-            Ok(d) => d,
-            Err(e) => {
-                println!(
-                    "[reset_to_height] Retrieving state inverse diffs from cache failed: {e:?}"
-                );
-                return Err(WalletDbError::GenericError)
-            }
-        };
-
         // Create an overlay to apply the reverse diffs
         let mut overlay = match CacheOverlay::new(&self.cache) {
             Ok(o) => o,
@@ -129,8 +122,20 @@ impl Drk {
             }
         };
 
-        // Apply the inverse diffs sequence
-        for inverse_diff in inverse_diffs {
+        // Grab all state inverse diffs until requested height,
+        // going backwards.
+        for height in (height + 1..=last).rev() {
+            let inverse_diff = match self.cache.get_state_inverse_diff(&height) {
+                Ok(d) => d,
+                Err(e) => {
+                    println!(
+                        "[reset_to_height] Retrieving state inverse diff from cache failed: {e:?}"
+                    );
+                    return Err(WalletDbError::GenericError)
+                }
+            };
+
+            // Apply it
             if let Err(e) = overlay.0.add_diff(&inverse_diff) {
                 println!("[reset_to_height] Adding state inverse diff to the cache overlay failed: {e:?}");
                 return Err(WalletDbError::GenericError)
@@ -139,6 +144,16 @@ impl Drk {
                 println!("[reset_to_height] Applying state inverse diff to the cache overlay failed: {e:?}");
                 return Err(WalletDbError::GenericError)
             }
+
+            // Remove it
+            if let Err(e) = self.cache.state_inverse_diff.remove(height.to_be_bytes()) {
+                println!(
+                    "[reset_to_height] Removing state inverse diff from the cache failed: {e:?}"
+                );
+                return Err(WalletDbError::GenericError)
+            }
+
+            // Flush sled
             if let Err(e) = self.cache.sled_db.flush() {
                 println!("[reset_to_height] Flushing cache sled database failed: {e:?}");
                 return Err(WalletDbError::GenericError)
