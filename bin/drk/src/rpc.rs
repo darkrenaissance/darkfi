@@ -37,6 +37,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
+use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::{
     crypto::{
         smt::{PoseidonFp, EMPTY_NODES_FP},
@@ -65,6 +66,8 @@ pub struct ScanCache {
     pub notes_secrets: Vec<SecretKey>,
     /// Our own coins nullifiers
     pub owncoins_nullifiers: BTreeMap<[u8; 32], [u8; 32]>,
+    /// Our own tokens to track freezes
+    pub own_tokens: Vec<TokenId>,
     /// The DAO Merkle tree containing DAO bullas
     pub dao_daos_tree: MerkleTree,
     /// The DAO Merkle tree containing proposals bullas
@@ -87,6 +90,11 @@ impl Drk {
         for coin in self.get_coins(true).await? {
             owncoins_nullifiers.insert(coin.0.nullifier().to_bytes(), coin.0.coin.to_bytes());
         }
+        let mint_authorities = self.get_mint_authorities().await?;
+        let mut own_tokens = Vec::with_capacity(mint_authorities.len());
+        for (token, _, _, _) in mint_authorities {
+            own_tokens.push(token);
+        }
         let (dao_daos_tree, dao_proposals_tree) = self.get_dao_trees().await?;
         let mut own_daos = HashMap::new();
         for dao in self.get_daos().await? {
@@ -108,6 +116,7 @@ impl Drk {
             money_smt,
             notes_secrets,
             owncoins_nullifiers,
+            own_tokens,
             dao_daos_tree,
             dao_proposals_tree,
             own_daos,
