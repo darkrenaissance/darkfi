@@ -19,6 +19,7 @@
 use darkfi_serial::deserialize;
 
 use crate::{
+    cache::CacheOverlay,
     error::{WalletDbError, WalletDbResult},
     Drk,
 };
@@ -88,16 +89,15 @@ impl Drk {
 
     /// Reset state to provided block height.
     /// If genesis block height(0) was provided, perform a full reset.
-    pub async fn reset_to_height(&self, height: u32) -> WalletDbResult<()> {
+    pub fn reset_to_height(&self, height: u32) -> WalletDbResult<()> {
         println!("Resetting wallet state to block: {height}");
 
         // If genesis block height(0) was provided,
         // perform a full reset.
         if height == 0 {
-            return self.reset().await
+            return self.reset()
         }
-        // TODO
-        /*
+
         // Grab last scanned block height
         let (last, _) = self.get_last_scanned_block()?;
 
@@ -107,15 +107,75 @@ impl Drk {
             return Ok(())
         }
 
-        // Iterate the range (height, last] in reverse to grab the corresponding blocks
-        for height in (height + 1..=last).rev() {
-            let (height, hash, query) = self.get_scanned_block_record(height)?;
-            println!("Reverting block: {height} - {hash}");
-            self.wallet.exec_batch_sql(&query)?;
-            let query = format!("DELETE FROM {WALLET_SCANNED_BLOCKS_TABLE} WHERE {WALLET_SCANNED_BLOCKS_COL_HEIGH} = {height};");
-            self.wallet.exec_batch_sql(&query)?;
+        // Grab all state inverse diffs until requested height,
+        // going backwards.
+        let heights: Vec<u32> = (height + 1..=last).rev().collect();
+        let inverse_diffs = match self.cache.get_state_inverse_diff(&heights) {
+            Ok(d) => d,
+            Err(e) => {
+                println!(
+                    "[reset_to_height] Retrieving state inverse diffs from cache failed: {e:?}"
+                );
+                return Err(WalletDbError::GenericError)
+            }
+        };
+
+        // Create an overlay to apply the reverse diffs
+        let mut overlay = match CacheOverlay::new(&self.cache) {
+            Ok(o) => o,
+            Err(e) => {
+                println!("[reset_to_height] Creating cache overlay failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
+        };
+
+        // Apply the inverse diffs sequence
+        for inverse_diff in inverse_diffs {
+            if let Err(e) = overlay.0.add_diff(&inverse_diff) {
+                println!("[reset_to_height] Adding state inverse diff to the cache overlay failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
+            if let Err(e) = overlay.0.apply_diff(&inverse_diff) {
+                println!("[reset_to_height] Applying state inverse diff to the cache overlay failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
+            if let Err(e) = self.cache.sled_db.flush() {
+                println!("[reset_to_height] Flushing cache sled database failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
         }
-        */
+
+        // Remove all wallet coins created after the reset height
+        self.remove_money_coins_after(&height)?;
+
+        // Unspent all wallet coins spent after the reset height
+        self.unspent_money_coins_after(&height)?;
+
+        // Unfreeze tokens mint authorities frozen after the reset
+        // height.
+        self.unfreeze_mint_authorities_after(&height)?;
+
+        // Unconfirm DAOs minted after the reset height
+        self.unconfirm_daos_after(&height)?;
+
+        // Unconfirm DAOs proposals minted after the reset height
+        self.unconfirm_dao_proposals_after(&height)?;
+
+        // Reset execution information for DAOs proposals executed
+        // after the reset height.
+        self.unexec_dao_proposals_after(&height)?;
+
+        // Remove all DAOs proposals votes created after the reset
+        // height.
+        self.remove_dao_votes_after(&height)?;
+
+        // Unfreeze all contracts frozen after the reset height
+        self.unfreeze_deploy_authorities_after(&height)?;
+
+        // Set reverted status to all transactions executed after reset
+        // height.
+        self.revert_transactions_after(&height)?;
+
         println!("Successfully reset wallet state");
         Ok(())
     }

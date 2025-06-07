@@ -183,6 +183,23 @@ impl Drk {
         Ok(())
     }
 
+    /// Set reverted status to the transaction history records in the
+    /// wallet that where executed after provided height.
+    pub fn revert_transactions_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Reverting transactions history after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = 'Reverted', {} = NULL WHERE {} > ?1;",
+            WALLET_TXS_HISTORY_TABLE,
+            WALLET_TXS_HISTORY_COL_STATUS,
+            WALLET_TXS_HISTORY_BLOCK_HEIGHT,
+            WALLET_TXS_HISTORY_BLOCK_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully reverted transactions history");
+
+        Ok(())
+    }
+
     /// Remove the transaction history records in the wallet
     /// that have been reverted.
     pub fn remove_reverted_txs(&self) -> WalletDbResult<()> {

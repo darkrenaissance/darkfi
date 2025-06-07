@@ -651,20 +651,15 @@ impl Drk {
 
     /// Mark a given coin in the wallet as unspent.
     pub async fn unspend_coin(&self, coin: &Coin) -> WalletDbResult<()> {
-        let is_spend = 0;
-        let spent_height: Option<u32> = None;
         let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = ?4;",
+            "UPDATE {} SET {} = 0, {} = NULL, {} = '-' WHERE {} = ?1;",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_IS_SPENT,
             MONEY_COINS_COL_SPENT_HEIGHT,
             MONEY_COINS_COL_SPENT_TX_HASH,
             MONEY_COINS_COL_COIN
         );
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![is_spend, spent_height, "-", serialize_async(&coin.inner()).await],
-        )
+        self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&coin.inner()).await])
     }
 
     /// Fetch the Money Merkle tree from the cache.
@@ -1116,6 +1111,38 @@ impl Drk {
         let query = format!("DELETE FROM {};", *MONEY_COINS_TABLE);
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully reset coins");
+
+        Ok(())
+    }
+
+    /// Remove the Money coins in the wallet that were created after
+    /// provided height.
+    pub fn remove_money_coins_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Removing coins after: {height}");
+        let query = format!(
+            "DELETE FROM {} WHERE {} > ?1;",
+            *MONEY_COINS_TABLE, MONEY_COINS_COL_CREATION_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![height])?;
+        println!("Successfully removed coins");
+
+        Ok(())
+    }
+
+    /// Mark the Money coins in the wallet that were spent after
+    /// provided height as unspent.
+    pub fn unspent_money_coins_after(&self, height: &u32) -> WalletDbResult<()> {
+        println!("Unspenting coins after: {height}");
+        let query = format!(
+            "UPDATE {} SET {} = 0, {} = NULL, {} = '=' WHERE {} > ?1;",
+            *MONEY_COINS_TABLE,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_HEIGHT,
+            MONEY_COINS_COL_SPENT_TX_HASH,
+            MONEY_COINS_COL_SPENT_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        println!("Successfully unspent coins");
 
         Ok(())
     }

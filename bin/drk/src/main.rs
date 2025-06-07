@@ -2032,7 +2032,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             .await;
 
             if let Some(height) = reset {
-                if let Err(e) = drk.reset_to_height(height).await {
+                if let Err(e) = drk.reset_to_height(height) {
                     eprintln!("Failed during wallet reset: {e:?}");
                     exit(2);
                 }
