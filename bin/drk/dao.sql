@@ -158,11 +158,15 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
     money_snapshot_tree BLOB,
     -- Money nullifiers SMT snapshot for reproducing the snapshot Merkle root
     nullifiers_smt_snapshot BLOB,
+    -- Block height of the transaction this proposal was deployed
+    mint_height INTEGER,
     -- The transaction hash where the proposal was deployed
     tx_hash BLOB,
     -- The call index in the transaction where the proposal was deployed
     call_index INTEGER,
-    -- This value is NULL until the proposal is executed on chain and received
+    -- Block height of the transaction this proposal was executed on chain
+    exec_height INTEGER,
+    -- The transaction hash where the proposal is executed on chain
     exec_tx_hash BLOB,
 
     FOREIGN KEY(dao_bulla) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(bulla) ON DELETE CASCADE ON UPDATE CASCADE

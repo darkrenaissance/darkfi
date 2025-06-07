@@ -110,8 +110,10 @@ pub const DAO_PROPOSALS_COL_DATA: &str = "data";
 pub const DAO_PROPOSALS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE: &str = "money_snapshot_tree";
 pub const DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT: &str = "nullifiers_smt_snapshot";
+pub const DAO_PROPOSALS_COL_MINT_HEIGHT: &str = "mint_height";
 pub const DAO_PROPOSALS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_PROPOSALS_COL_CALL_INDEX: &str = "call_index";
+pub const DAO_PROPOSALS_COL_EXEC_HEIGHT: &str = "exec_height";
 pub const DAO_PROPOSALS_COL_EXEC_TX_HASH: &str = "exec_tx_hash";
 
 // DAO_VOTES_TABLE
@@ -811,10 +813,14 @@ pub struct ProposalRecord {
     pub money_snapshot_tree: Option<MerkleTree>,
     /// Money nullifiers SMT snapshot for reproducing the snapshot Merkle root
     pub nullifiers_smt_snapshot: Option<HashMap<BigUint, pallas::Base>>,
+    /// Block height of the transaction this proposal was deployed
+    pub mint_height: Option<u32>,
     /// The transaction hash where the proposal was deployed
     pub tx_hash: Option<TransactionHash>,
     /// The call index in the transaction where the proposal was deployed
     pub call_index: Option<u8>,
+    /// Block height of the transaction this proposal was executed
+    pub exec_height: Option<u32>,
     /// The transaction hash where the proposal was executed
     pub exec_tx_hash: Option<TransactionHash>,
 }
@@ -831,6 +837,10 @@ impl fmt::Display for ProposalRecord {
             Some(p) => format!("{p:?}"),
             None => "None".to_string(),
         };
+        let mint_height = match self.mint_height {
+            Some(h) => format!("{h}"),
+            None => "None".to_string(),
+        };
         let tx_hash = match self.tx_hash {
             Some(t) => format!("{t}"),
             None => "None".to_string(),
@@ -841,7 +851,7 @@ impl fmt::Display for ProposalRecord {
         };
 
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {} ({})",
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {} ({})",
             "Proposal parameters",
             "===================",
             "Bulla",
@@ -850,6 +860,8 @@ impl fmt::Display for ProposalRecord {
             self.proposal.dao_bulla,
             "Proposal leaf position",
             leaf_position,
+            "Proposal mint height",
+            mint_height,
             "Proposal transaction hash",
             tx_hash,
             "Proposal call index",
@@ -1032,7 +1044,18 @@ impl Drk {
             }
         };
 
-        let tx_hash = match row[7] {
+        let mint_height = match row[7] {
+            Value::Integer(mint_height) => {
+                let Ok(mint_height) = u32::try_from(mint_height) else {
+                    return Err(Error::ParseFailed("[get_dao_proposals] Mint height parsing failed"))
+                };
+                Some(mint_height)
+            }
+            Value::Null => None,
+            _ => return Err(Error::ParseFailed("[get_dao_proposals] Mint height parsing failed")),
+        };
+
+        let tx_hash = match row[8] {
             Value::Blob(ref tx_hash_bytes) => Some(deserialize_async(tx_hash_bytes).await?),
             Value::Null => None,
             _ => {
@@ -1042,7 +1065,7 @@ impl Drk {
             }
         };
 
-        let call_index = match row[8] {
+        let call_index = match row[9] {
             Value::Integer(call_index) => {
                 let Ok(call_index) = u8::try_from(call_index) else {
                     return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
@@ -1053,7 +1076,24 @@ impl Drk {
             _ => return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed")),
         };
 
-        let exec_tx_hash = match row[9] {
+        let exec_height = match row[10] {
+            Value::Integer(exec_height) => {
+                let Ok(exec_height) = u32::try_from(exec_height) else {
+                    return Err(Error::ParseFailed(
+                        "[get_dao_proposals] Execution height parsing failed",
+                    ))
+                };
+                Some(exec_height)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[get_dao_proposals] Execution height parsing failed",
+                ))
+            }
+        };
+
+        let exec_tx_hash = match row[11] {
             Value::Blob(ref exec_tx_hash_bytes) => {
                 Some(deserialize_async(exec_tx_hash_bytes).await?)
             }
@@ -1071,8 +1111,10 @@ impl Drk {
             leaf_position,
             money_snapshot_tree,
             nullifiers_smt_snapshot,
+            mint_height,
             tx_hash,
             call_index,
+            exec_height,
             exec_tx_hash,
         })
     }
@@ -1153,6 +1195,7 @@ impl Drk {
         params: &DaoProposeParams,
         tx_hash: &TransactionHash,
         call_index: &u8,
+        mint_height: &u32,
     ) -> Result<bool> {
         // Append the new proposal bulla to the Merkle tree.
         // Every proposal bulla has to be added.
@@ -1180,6 +1223,7 @@ impl Drk {
                 our_proposal.leaf_position = scan_cache.dao_proposals_tree.mark();
                 our_proposal.money_snapshot_tree = Some(scan_cache.money_tree.clone());
                 our_proposal.nullifiers_smt_snapshot = Some(scan_cache.money_smt.store.snapshot()?);
+                our_proposal.mint_height = Some(*mint_height);
                 our_proposal.tx_hash = Some(*tx_hash);
                 our_proposal.call_index = Some(*call_index);
                 our_proposal
@@ -1190,8 +1234,10 @@ impl Drk {
                     leaf_position: scan_cache.dao_proposals_tree.mark(),
                     money_snapshot_tree: Some(scan_cache.money_tree.clone()),
                     nullifiers_smt_snapshot: Some(scan_cache.money_smt.store.snapshot()?),
+                    mint_height: Some(*mint_height),
                     tx_hash: Some(*tx_hash),
                     call_index: Some(*call_index),
+                    exec_height: None,
                     exec_tx_hash: None,
                 };
                 scan_cache.own_proposals.insert(params.proposal_bulla, *dao);
@@ -1294,6 +1340,7 @@ impl Drk {
         scan_cache: &ScanCache,
         params: &DaoExecParams,
         tx_hash: &TransactionHash,
+        exec_height: &u32,
     ) -> Result<bool> {
         // Check if we got the corresponding proposal
         if !scan_cache.own_proposals.contains_key(&params.proposal_bulla) {
@@ -1305,15 +1352,18 @@ impl Drk {
 
         // Create an SQL `UPDATE` query to update proposal exec transaction hash
         let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-            *DAO_PROPOSALS_TABLE, DAO_PROPOSALS_COL_EXEC_TX_HASH, DAO_PROPOSALS_COL_BULLA,
+            "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
+            *DAO_PROPOSALS_TABLE,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
+            DAO_PROPOSALS_COL_EXEC_TX_HASH,
+            DAO_PROPOSALS_COL_BULLA,
         );
 
         // Execute the query
-        if let Err(e) = self
-            .wallet
-            .exec_sql(&query, rusqlite::params![Some(serialize_async(tx_hash).await), key])
-        {
+        if let Err(e) = self.wallet.exec_sql(
+            &query,
+            rusqlite::params![Some(*exec_height), Some(serialize_async(tx_hash).await), key],
+        ) {
             return Err(Error::DatabaseError(format!(
                 "[apply_dao_exec_data] Update DAO proposal failed: {e:?}"
             )))
@@ -1349,8 +1399,9 @@ impl Drk {
             DaoFunction::Propose => {
                 println!("[apply_tx_dao_data] Found Dao::Propose call");
                 let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
-                let own_tx =
-                    self.apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx).await?;
+                let own_tx = self
+                    .apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx, block_height)
+                    .await?;
                 Ok((false, true, own_tx))
             }
             DaoFunction::Vote => {
@@ -1364,7 +1415,8 @@ impl Drk {
             DaoFunction::Exec => {
                 println!("[apply_tx_dao_data] Found Dao::Exec call");
                 let params: DaoExecParams = deserialize_async(&data[1..]).await?;
-                let own_tx = self.apply_dao_exec_data(scan_cache, &params, tx_hash).await?;
+                let own_tx =
+                    self.apply_dao_exec_data(scan_cache, &params, tx_hash, block_height).await?;
                 Ok((false, false, own_tx))
             }
             DaoFunction::AuthMoneyTransfer => {
@@ -1426,7 +1478,7 @@ impl Drk {
 
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
+            "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
             *DAO_PROPOSALS_TABLE,
             DAO_PROPOSALS_COL_BULLA,
             DAO_PROPOSALS_COL_DAO_BULLA,
@@ -1435,8 +1487,10 @@ impl Drk {
             DAO_PROPOSALS_COL_LEAF_POSITION,
             DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
             DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
+            DAO_PROPOSALS_COL_MINT_HEIGHT,
             DAO_PROPOSALS_COL_TX_HASH,
             DAO_PROPOSALS_COL_CALL_INDEX,
+            DAO_PROPOSALS_COL_EXEC_HEIGHT,
             DAO_PROPOSALS_COL_EXEC_TX_HASH,
         );
 
@@ -1479,8 +1533,10 @@ impl Drk {
             leaf_position,
             money_snapshot_tree,
             nullifiers_smt_snapshot,
+            proposal.mint_height,
             tx_hash,
             proposal.call_index,
+            proposal.exec_height,
             exec_tx_hash,
         ];
 
@@ -1498,11 +1554,12 @@ impl Drk {
     pub async fn unconfirm_proposals(&self, proposals: &[ProposalRecord]) -> WalletDbResult<()> {
         for proposal in proposals {
             let query = format!(
-                "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
+                "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
                 DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
                 DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
+                DAO_PROPOSALS_COL_MINT_HEIGHT,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
                 DAO_PROPOSALS_COL_EXEC_TX_HASH,
@@ -2103,8 +2160,10 @@ impl Drk {
             leaf_position: None,
             money_snapshot_tree: None,
             nullifiers_smt_snapshot: None,
+            mint_height: None,
             tx_hash: None,
             call_index: None,
+            exec_height: None,
             exec_tx_hash: None,
         };
 
@@ -2161,8 +2220,10 @@ impl Drk {
             leaf_position: None,
             money_snapshot_tree: None,
             nullifiers_smt_snapshot: None,
+            mint_height: None,
             tx_hash: None,
             call_index: None,
+            exec_height: None,
             exec_tx_hash: None,
         };
 
