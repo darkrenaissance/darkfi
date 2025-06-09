@@ -39,6 +39,7 @@ use darkfi::{
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::{
+    bridgetree::Position,
     crypto::{
         smt::{PoseidonFp, EMPTY_NODES_FP},
         ContractId, MerkleTree, SecretKey, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID,
@@ -64,8 +65,8 @@ pub struct ScanCache {
     pub money_smt: CacheSmt,
     /// All our known secrets to decrypt coin notes
     pub notes_secrets: Vec<SecretKey>,
-    /// Our own coins nullifiers
-    pub owncoins_nullifiers: BTreeMap<[u8; 32], [u8; 32]>,
+    /// Our own coins nullifiers and their leaf positions
+    pub owncoins_nullifiers: BTreeMap<[u8; 32], ([u8; 32], Position)>,
     /// Our own tokens to track freezes
     pub own_tokens: Vec<TokenId>,
     /// The DAO Merkle tree containing DAO bullas
@@ -88,7 +89,10 @@ impl Drk {
         let mut notes_secrets = self.get_money_secrets().await?;
         let mut owncoins_nullifiers = BTreeMap::new();
         for coin in self.get_coins(true).await? {
-            owncoins_nullifiers.insert(coin.0.nullifier().to_bytes(), coin.0.coin.to_bytes());
+            owncoins_nullifiers.insert(
+                coin.0.nullifier().to_bytes(),
+                (coin.0.coin.to_bytes(), coin.0.leaf_position),
+            );
         }
         let mint_authorities = self.get_mint_authorities().await?;
         let mut own_tokens = Vec::with_capacity(mint_authorities.len());
