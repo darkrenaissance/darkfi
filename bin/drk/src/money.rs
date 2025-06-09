@@ -46,7 +46,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
-    bridgetree,
+    bridgetree::Position,
     crypto::{
         note::AeadEncryptedNote, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
         ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
@@ -508,7 +508,7 @@ impl Drk {
         let Value::Blob(ref leaf_position_bytes) = row[9] else {
             return Err(Error::ParseFailed("[parse_coin_record] Leaf position bytes parsing failed"))
         };
-        let leaf_position: bridgetree::Position = deserialize_async(leaf_position_bytes).await?;
+        let leaf_position: Position = deserialize_async(leaf_position_bytes).await?;
 
         let Value::Blob(ref memo) = row[10] else {
             return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
@@ -798,7 +798,7 @@ impl Drk {
     /// call.
     async fn handle_money_call_owncoins(
         &self,
-        owncoins_nullifiers: &mut BTreeMap<[u8; 32], [u8; 32]>,
+        owncoins_nullifiers: &mut BTreeMap<[u8; 32], ([u8; 32], Position)>,
         coins: &[OwnCoin],
         creation_height: &u32,
     ) -> Result<()> {
@@ -837,7 +837,7 @@ impl Drk {
             let key = coin.coin.to_bytes();
 
             // Push to our own coins nullifiers cache
-            owncoins_nullifiers.insert(coin.nullifier().to_bytes(), key);
+            owncoins_nullifiers.insert(coin.nullifier().to_bytes(), (key, coin.leaf_position));
 
             // Execute the query
             let params = rusqlite::params![
@@ -948,6 +948,7 @@ impl Drk {
 
         // Check if we have any spent coins
         let wallet_spent_coins = self.mark_spent_coins(
+            Some(&mut scan_cache.money_tree),
             &scan_cache.owncoins_nullifiers,
             &nullifiers,
             &Some(*block_height),
@@ -970,7 +971,10 @@ impl Drk {
             kaching().await;
         }
 
-        Ok((update_tree, wallet_spent_coins || !owncoins.is_empty() || wallet_freezes))
+        Ok((
+            update_tree || wallet_spent_coins,
+            wallet_spent_coins || !owncoins.is_empty() || wallet_freezes,
+        ))
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.
@@ -1008,7 +1012,10 @@ impl Drk {
         // Create a cache of all our own nullifiers
         let mut owncoins_nullifiers = BTreeMap::new();
         for coin in self.get_coins(true).await? {
-            owncoins_nullifiers.insert(coin.0.nullifier().to_bytes(), coin.0.coin.to_bytes());
+            owncoins_nullifiers.insert(
+                coin.0.nullifier().to_bytes(),
+                (coin.0.coin.to_bytes(), coin.0.leaf_position),
+            );
         }
 
         let tx_hash = tx.hash().to_string();
@@ -1020,7 +1027,7 @@ impl Drk {
 
             println!("[mark_tx_spend] Found Money contract in call {i}");
             let nullifiers = self.money_call_nullifiers(call).await?;
-            self.mark_spent_coins(&owncoins_nullifiers, &nullifiers, &None, &tx_hash)?;
+            self.mark_spent_coins(None, &owncoins_nullifiers, &nullifiers, &None, &tx_hash)?;
         }
 
         Ok(())
@@ -1030,7 +1037,8 @@ impl Drk {
     /// Returns a flag indicating if any of the provided nullifiers refer to our own wallet.
     pub fn mark_spent_coins(
         &self,
-        owncoins_nullifiers: &BTreeMap<[u8; 32], [u8; 32]>,
+        mut tree: Option<&mut MerkleTree>,
+        owncoins_nullifiers: &BTreeMap<[u8; 32], ([u8; 32], Position)>,
         nullifiers: &[Nullifier],
         spent_height: &Option<u32>,
         spent_tx_hash: &String,
@@ -1042,8 +1050,8 @@ impl Drk {
         // Find our owncoins that where spent
         let mut spent_owncoins = Vec::new();
         for nullifier in nullifiers {
-            if let Some(coin_key) = owncoins_nullifiers.get(&nullifier.to_bytes()) {
-                spent_owncoins.push(coin_key);
+            if let Some(coin) = owncoins_nullifiers.get(&nullifier.to_bytes()) {
+                spent_owncoins.push(coin);
             }
         }
         if spent_owncoins.is_empty() {
@@ -1061,7 +1069,7 @@ impl Drk {
         );
 
         // Mark spent own coins
-        for ownoin in spent_owncoins {
+        for (ownoin, leaf_position) in spent_owncoins {
             // Execute the query
             if let Err(e) =
                 self.wallet.exec_sql(&query, rusqlite::params![spent_height, spent_tx_hash, ownoin])
@@ -1069,6 +1077,11 @@ impl Drk {
                 return Err(Error::DatabaseError(format!(
                     "[mark_spent_coins] Marking spent coin failed: {e:?}"
                 )))
+            }
+
+            // Remove the coin mark from the Merkle tree
+            if let Some(ref mut tree) = tree {
+                tree.remove_mark(*leaf_position);
             }
         }
 
