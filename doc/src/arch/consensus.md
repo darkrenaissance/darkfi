@@ -299,6 +299,60 @@ comparison the tx in Bitcoin with the most outputs has 2501.
 | `canonical` | `Blockchain`      | Canonical (confirmed) blockchain       |
 | `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
 
+## Contracts states Monotree(SMT)
+
+DarkFi is using an optimized Sparse Merkle Tree implementation,
+called Monotree.
+This tree is constructed using all contracts states trees checksums,
+along with the wasm bincodes tree checksum, excluding native contracts
+zkas tree and wasm bincodes.
+The checksum of each tree is computed by hashing all its key and values,
+using `blake3` hasher.
+For each block, we compute the current tree root and keep it in its header,
+enabling us to both verify the contacts state after the block insertion,
+and create proofs commiting to that specific state.
+
+## Usage example
+
+In this pseudocode we can see how we can use the Monotree to produce
+a proof for a specific state. First, we will create a random set of
+key-value `blake3` hash pairs, representing our contract states
+checksums:
+
+```
+keys = random_hashes(100);
+values = random_hashes(100);
+```
+
+We compute our monotree, by inserting all the pairs:
+```
+root = None;
+tree = Monotree::new();
+for (key, value) in keys.zip(values) {
+    root = tree.insert(root, key, value);
+    tree.set_headroot(root);
+}
+```
+
+Each node in the network holds a similar tree agains the current
+database state, as described earlier. On each new block, we commit
+to the state by appending the monotree root to the block header.
+Lets assume we now created a block commiting to that state,
+and want to get a Merkle proof for a specific key-value pair
+we want to commit to:
+```
+root = tree.get_headroot()?
+block.header.state_root = root;
+proof = tree.get_merkle_proof(root, our_key);
+```
+
+No matter how many blocks have passed, or how the state/tree has
+mutated, we can always verify that proof against the specific block
+it corresponds, by using its header root:
+```
+assert!(verify_proof(block.header.state_root, our_key_value, proof));
+```
+
 # Appendix: Ranking Blocks
 
 ## Sequences
