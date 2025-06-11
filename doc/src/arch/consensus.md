@@ -307,12 +307,12 @@ This tree is constructed using all contracts states trees checksums,
 along with the wasm bincodes tree checksum, excluding native contracts
 zkas tree and wasm bincodes.
 The checksum of each tree is computed by hashing all its key and values,
-using `blake3` hasher.
+using a `blake3` hasher.
 For each block, we compute the current tree root and keep it in its header,
 enabling us to both verify the contacts state after the block insertion,
 and create proofs commiting to that specific state.
 
-## Usage example
+### Usage example
 
 In this pseudocode we can see how we can use the Monotree to produce
 a proof for a specific state. First, we will create a random set of
