@@ -68,6 +68,7 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../drk_config.toml");
 
 // Dev Note: when adding/modifying args here,
 // don't forget to update cli_util::generate_completions()
+// and interactive::help().
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "drk", about = cli_desc!())]
