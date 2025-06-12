@@ -57,6 +57,7 @@ use drk::{
         generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
     },
     dao::{DaoParams, ProposalRecord},
+    interactive::interactive,
     money::BALANCE_BASE10_DECIMALS,
     swap::PartialSwapData,
     Drk,
@@ -100,6 +101,9 @@ struct Args {
 // don't forget to update cli_util::generate_completions()
 #[derive(Clone, Debug, Deserialize, StructOpt)]
 enum Subcmd {
+    /// Enter Drk interactive shell
+    Interactive,
+
     /// Fun
     Kaching,
 
@@ -565,6 +569,10 @@ struct BlockchainNetwork {
     #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
+
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/history.txt")]
+    /// Path to interactive shell history file
+    history_path: String,
 }
 
 /// Auxiliary function to parse darkfid configuration file and extract requested
@@ -648,6 +656,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     match args.command {
+        Subcmd::Interactive => {
+            let drk = new_wallet(
+                blockchain_config.cache_path,
+                blockchain_config.wallet_path,
+                blockchain_config.wallet_pass,
+                Some(blockchain_config.endpoint),
+                ex,
+                args.fun,
+            )
+            .await;
+            interactive(&drk, &blockchain_config.history_path).await;
+            drk.stop_rpc_client().await
+        }
+
         Subcmd::Kaching => {
             if !args.fun {
                 println!("Apparently you don't like fun...");

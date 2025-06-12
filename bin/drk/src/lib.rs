@@ -41,6 +41,9 @@ pub mod token;
 /// CLI utility functions
 pub mod cli_util;
 
+/// Drk interactive shell
+pub mod interactive;
+
 /// Wallet functionality related to Money
 pub mod money;
 

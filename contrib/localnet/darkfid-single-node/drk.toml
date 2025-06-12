@@ -22,3 +22,6 @@ wallet_pass = "testing"
 
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:48240"
+
+# Path to interactive shell history file
+history_path = "drk/history.txt"

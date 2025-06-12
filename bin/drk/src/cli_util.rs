@@ -113,6 +113,9 @@ pub async fn kaching() {
 pub fn generate_completions(shell: &str) -> Result<()> {
     // Sub-commands
 
+    // Interactive
+    let interactive = SubCommand::with_name("interactive").about("Enter Drk interactive shell");
+
     // Kaching
     let kaching = SubCommand::with_name("kaching").about("Fun");
 
@@ -504,6 +507,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .help("Blockchain network to use");
 
     let command = vec![
+        interactive,
         kaching,
         ping,
         completions,

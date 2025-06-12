@@ -26,6 +26,9 @@ wallet_pass = "changeme"
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:8240"
 
+# Path to interactive shell history file
+history_path = "~/.local/share/darkfi/drk/localnet/history.txt"
+
 # Testnet blockchain network configuration
 [network_config."testnet"]
 # Path to blockchain cache database
@@ -40,6 +43,9 @@ wallet_pass = "changeme"
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:8340"
 
+# Path to interactive shell history file
+history_path = "~/.local/share/darkfi/drk/testnet/history.txt"
+
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
 # Path to blockchain cache database
@@ -53,3 +59,6 @@ wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:8440"
+
+# Path to interactive shell history file
+history_path = "~/.local/share/darkfi/drk/mainnet/history.txt"
