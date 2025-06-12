@@ -21,7 +21,7 @@ use linenoise_rs::{
     linenoise_set_completion_callback, linenoise_set_hints_callback,
 };
 
-use darkfi::{system::StoppableTask, util::path::expand_path};
+use darkfi::{cli_desc, system::StoppableTask, util::path::expand_path};
 
 use crate::{
     cli_util::{generate_completions, kaching},
@@ -29,10 +29,20 @@ use crate::{
 };
 
 // TODO:
-//  1. add rest commands handling, along with their completions and hints.
+//  1. add rest commands handling, along with their completions, hints and help message.
 //  2. add input definitions, so you input from files not just stdin.
 //  3. add output definitions, so you can output to files not just stdout.
 //  4. create a transactions cache in the wallet db, so you can use it to handle them.
+
+/// Auxiliary function to print the help message.
+fn help() {
+    println!("{}", cli_desc!());
+    println!("Commands:");
+    println!("\thelp: Prints the help message");
+    println!("\tkaching: Fun");
+    println!("\tping: Send a ping request to the darkfid RPC endpoint");
+    println!("\tcompletions: Generate a SHELL completion script and print to stdout");
+}
 
 /// Auxiliary function to define the interactive shell completions.
 fn completion(buf: &str, lc: &mut Vec<String>) {
@@ -123,7 +133,7 @@ pub async fn interactive(drk: &Drk, history_path: &str) {
 
         // Handle command
         match parts[0] {
-            "help" => println!("hhhheeeelp"),
+            "help" => help(),
             "kaching" => kaching().await,
             "ping" => handle_ping(drk).await,
             "completions" => handle_completions(&parts),
@@ -144,6 +154,7 @@ fn handle_completions(parts: &[&str]) {
     if parts.len() != 2 {
         println!("Malformed `completions` command");
         println!("Usage: completions {{shell}}");
+        return
     }
 
     if let Err(e) = generate_completions(parts[1]) {
