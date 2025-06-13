@@ -2468,6 +2468,7 @@ dependencies = [
  "darkfi_money_contract",
  "easy-parallel",
  "lazy_static",
+ "libc",
  "linenoise-rs",
  "log",
  "num-bigint",
