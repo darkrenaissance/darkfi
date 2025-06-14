@@ -16,15 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::ErrorKind, mem::zeroed, ptr::null_mut, str::FromStr};
+use std::{io::ErrorKind, str::FromStr};
 
-use libc::{fd_set, select, timeval, FD_SET, FD_ZERO};
+use futures::{select, FutureExt};
+use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use linenoise_rs::{
     linenoise_history_add, linenoise_history_load, linenoise_history_save,
     linenoise_set_completion_callback, linenoise_set_hints_callback, LinenoiseState,
 };
+use smol::channel::{unbounded, Receiver, Sender};
 
-use darkfi::{cli_desc, system::StoppableTask, util::path::expand_path};
+use darkfi::{
+    cli_desc,
+    system::{msleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
+    util::path::expand_path,
+    Error,
+};
 
 use crate::{
     cli_util::{generate_completions, kaching},
@@ -100,7 +107,7 @@ fn hints(buf: &str) -> Option<(String, i32, bool)> {
 
 /// Auxiliary function to start provided Drk as an interactive shell.
 /// Only sane/linenoise terminals are suported.
-pub async fn interactive(drk: &Drk, history_path: &str) {
+pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
     // Expand the history file path
     let history_path = match expand_path(history_path) {
         Ok(p) => p,
@@ -127,87 +134,14 @@ pub async fn interactive(drk: &Drk, history_path: &str) {
     let mut subscription_active = false;
     let subscription_task = StoppableTask::new();
 
-    // Create two bounded smol channels, so we can have 2 way
-    // communication between the shell thread and the background task.
-    let (_shell_sender, shell_receiver) = smol::channel::bounded::<()>(1);
-    let (background_sender, _background_receiver) = smol::channel::bounded::<()>(1);
+    // Create an unbounded smol channel, so we can have a printing
+    // queue the background task can submit messages to the shell.
+    let (shell_sender, shell_receiver) = unbounded();
 
     // Start the interactive shell
     loop {
-        // Generate the linoise state structure
-        let mut state = match LinenoiseState::edit_start(-1, -1, "drk> ") {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error while generating linenoise state: {e}");
-                break
-            }
-        };
-
-        // Read until we get a line to process
-        let mut line = None;
-        loop {
-            let retval = unsafe {
-                // Setup read buffers
-                let mut readfds: fd_set = zeroed();
-                FD_ZERO(&mut readfds);
-                FD_SET(state.get_fd(), &mut readfds);
-
-                // Setup a 1 second timeout to check if background
-                // process wants to print.
-                let mut tv = timeval { tv_sec: 1, tv_usec: 0 };
-
-                // Wait timeout or input
-                select(state.get_fd() + 1, &mut readfds, null_mut(), null_mut(), &mut tv)
-            };
-
-            // Handle error
-            if retval == -1 {
-                eprintln!("Error while reading linenoise buffers");
-                break
-            }
-
-            // Check if background process wants to print anything
-            if shell_receiver.is_full() {
-                // Consume the channel message
-                if let Err(e) = shell_receiver.recv().await {
-                    eprintln!("Error while reading shell receiver channel: {e}");
-                    break
-                }
-
-                // Signal background task it can start printing
-                let _ = state.hide();
-                if let Err(e) = background_sender.send(()).await {
-                    eprintln!("Error while sending to background task channel: {e}");
-                    break
-                }
-
-                // Wait signal that it finished
-                if let Err(e) = shell_receiver.recv().await {
-                    eprintln!("Error while reading shell receiver channel: {e}");
-                    break
-                }
-                let _ = state.show();
-            }
-
-            // Check if we have a line to process
-            if retval <= 0 {
-                continue
-            }
-
-            // Process linenoise feed
-            match state.edit_feed() {
-                Ok(Some(l)) => line = Some(l),
-                Ok(None) => { /* Do nothing */ }
-                Err(e) if e.kind() == ErrorKind::Interrupted => { /* Do nothing */ }
-                Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                    // Need more input, continue
-                    continue;
-                }
-                Err(e) => eprintln!("Error while reading linenoise feed: {e}"),
-            }
-            break
-        }
-        let _ = state.edit_stop();
+        // Wait for next line to process
+        let line = listen_for_line(&shell_receiver).await;
 
         // Grab input or end if Ctrl-D or Ctrl-C was pressed
         let Some(line) = line else { break };
@@ -233,7 +167,14 @@ pub async fn interactive(drk: &Drk, history_path: &str) {
             "ping" => handle_ping(drk).await,
             "completions" => handle_completions(&parts),
             "subscribe" => {
-                handle_subscribe(drk, &mut subscription_active, &subscription_task).await
+                handle_subscribe(
+                    drk,
+                    &mut subscription_active,
+                    &subscription_task,
+                    &shell_sender,
+                    ex,
+                )
+                .await
             }
             "unsubscribe" => handle_unsubscribe(&mut subscription_active, &subscription_task).await,
             "scan" => handle_scan(drk, &subscription_active, &parts).await,
@@ -248,6 +189,97 @@ pub async fn interactive(drk: &Drk, history_path: &str) {
 
     // Write history file
     let _ = linenoise_history_save(history_file);
+}
+
+/// Auxiliary function to listen for linenoise input line and handle
+/// background task messages.
+async fn listen_for_line(shell_receiver: &Receiver<Vec<String>>) -> Option<String> {
+    // Generate the linoise state structure
+    let mut state = match LinenoiseState::edit_start(-1, -1, "drk> ") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error while generating linenoise state: {e}");
+            return None
+        }
+    };
+
+    // Set stdin to non-blocking mode
+    let fd = state.get_fd();
+    unsafe {
+        let flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+
+    // Read until we get a line to process
+    let mut line = None;
+    loop {
+        // Future that polls stdin for input
+        let input_future = async {
+            loop {
+                match state.edit_feed() {
+                    Ok(Some(l)) => {
+                        line = Some(l);
+                        break
+                    }
+                    Ok(None) => break,
+                    Err(e) if e.kind() == ErrorKind::Interrupted => break,
+                    Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                        // No data available, yield and retry
+                        msleep(10).await;
+                        continue
+                    }
+                    Err(e) => {
+                        eprintln!("Error while reading linenoise feed: {e}");
+                        break
+                    }
+                }
+            }
+        };
+
+        // Future that polls the channel
+        let channel_future = async {
+            loop {
+                if !shell_receiver.is_empty() {
+                    break
+                }
+                msleep(1000).await;
+            }
+        };
+
+        // Manage the futures
+        select! {
+            // When input is ready we break out the loop
+            _ = input_future.fuse() => break,
+            // Manage filled channel
+            _ = channel_future.fuse() => {
+                while !shell_receiver.is_empty() {
+                    match shell_receiver.recv().await {
+                        Ok(msg) => {
+                            // Hide prompt, print output, show prompt again
+                            let _ = state.hide();
+                            for line in msg {
+                                println!("{line}\r");
+                            }
+                            let _ = state.show();
+                        }
+                        Err(e) => {
+                            eprintln!("Error while reading shell receiver channel: {e}");
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Restore blocking mode
+    unsafe {
+        let flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags & !O_NONBLOCK);
+    }
+
+    let _ = state.edit_stop();
+    line
 }
 
 /// Auxiliary function to define the ping command handling.
@@ -274,7 +306,9 @@ fn handle_completions(parts: &[&str]) {
 async fn handle_subscribe(
     drk: &Drk,
     subscription_active: &mut bool,
-    _subscription_task: &StoppableTask,
+    subscription_task: &StoppableTaskPtr,
+    shell_sender: &Sender<Vec<String>>,
+    ex: &ExecutorPtr,
 ) {
     if *subscription_active {
         println!("Subscription is already active!")
@@ -286,13 +320,41 @@ async fn handle_subscribe(
     }
     println!("Finished scanning blockchain");
 
-    // TODO: subscribe
+    // Start the subcristion task
+    // TODO: use actual subscribe not a dummy task
+    let shell_sender_ = shell_sender.clone();
+    subscription_task.clone().start(
+        async move {
+            loop {
+                msleep(750).await;
+                let line = String::from("This is a single line dummy message");
+                if shell_sender_.send(vec![line]).await.is_err() {
+                    break;
+                }
+                msleep(750).await;
+                let line0 = String::from("This is the first line of a multiline dummy message");
+                let line1 = String::from("This is the second line of a multiline dummy message");
+                if shell_sender_.send(vec![line0, line1]).await.is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => println!("Failed starting dnet subs task: {e}"),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     *subscription_active = true;
 }
 
 /// Auxiliary function to define the unsubscribe command handling.
-async fn handle_unsubscribe(subscription_active: &mut bool, subscription_task: &StoppableTask) {
+async fn handle_unsubscribe(subscription_active: &mut bool, subscription_task: &StoppableTaskPtr) {
     if !*subscription_active {
         println!("Subscription is already inactive!")
     }

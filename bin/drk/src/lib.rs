@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, sync::Arc};
+use std::fs::create_dir_all;
 
 use url::Url;
 
-use darkfi::{rpc::client::RpcClient, util::path::expand_path, Error, Result};
+use darkfi::{rpc::client::RpcClient, system::ExecutorPtr, util::path::expand_path, Error, Result};
 
 /// Error codes
 pub mod error;
@@ -85,7 +85,7 @@ impl Drk {
         wallet_path: String,
         wallet_pass: String,
         endpoint: Option<Url>,
-        ex: Arc<smol::Executor<'static>>,
+        ex: &ExecutorPtr,
         fun: bool,
     ) -> Result<Self> {
         // Initialize blockchain cache database
@@ -99,7 +99,7 @@ impl Drk {
         let wallet_path = expand_path(&wallet_path)?;
         if !wallet_path.exists() {
             if let Some(parent) = wallet_path.parent() {
-                fs::create_dir_all(parent)?;
+                create_dir_all(parent)?;
             }
         }
         let Ok(wallet) = WalletDb::new(Some(wallet_path), Some(&wallet_pass)) else {
@@ -108,7 +108,7 @@ impl Drk {
 
         // Initialize rpc client
         let rpc_client = if let Some(endpoint) = endpoint {
-            Some(RpcClient::new(endpoint, ex).await?)
+            Some(RpcClient::new(endpoint, ex.clone()).await?)
         } else {
             None
         };

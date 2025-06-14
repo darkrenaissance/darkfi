@@ -2467,6 +2467,7 @@ dependencies = [
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
  "easy-parallel",
+ "futures",
  "lazy_static",
  "libc",
  "linenoise-rs",
