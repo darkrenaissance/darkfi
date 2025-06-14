@@ -18,10 +18,7 @@
 
 use async_trait::async_trait;
 use log::error;
-use smol::{
-    fs::{self, File},
-    lock::{Mutex, MutexGuard},
-};
+use smol::lock::{Mutex, MutexGuard};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -30,7 +27,6 @@ use std::{
 use tinyjson::JsonValue;
 
 use darkfi::{
-    dht::DhtHandler,
     geode::hash_to_string,
     net::P2pPtr,
     rpc::{
@@ -43,12 +39,7 @@ use darkfi::{
     Result,
 };
 
-use crate::{
-    event::{self, FudEvent},
-    proto::FudAnnounce,
-    resource::{Resource, ResourceStatus},
-    Fud,
-};
+use crate::Fud;
 
 pub struct JsonRpcInterface {
     fud: Arc<Fud>,
@@ -66,7 +57,7 @@ impl RequestHandler<()> for JsonRpcInterface {
             "put" => self.put(req.id, req.params).await,
             "get" => self.get(req.id, req.params).await,
             "subscribe" => self.subscribe(req.id, req.params).await,
-            "remove" => self.remove_resource(req.id, req.params).await,
+            "remove" => self.remove(req.id, req.params).await,
             "list_resources" => self.list_resources(req.id, req.params).await,
             "list_buckets" => self.list_buckets(req.id, req.params).await,
             "list_seeders" => self.list_seeders(req.id, req.params).await,
@@ -103,18 +94,6 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
     async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
-        let self_node = self.fud.dht.node().await;
-
-        if self_node.addresses.is_empty() {
-            error!(target: "fud::put()", "Cannot put file, you don't have any external address");
-            return JsonError::new(
-                ErrorCode::InternalError,
-                Some("You don't have any external address".to_string()),
-                id,
-            )
-            .into()
-        }
-
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -128,52 +107,12 @@ impl JsonRpcInterface {
 
         // A valid path was passed. Let's see if we can read it, and if so,
         // add it to Geode.
-        let fd = match File::open(&path).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "fud::put()", "Failed to open {:?}: {}", path, e);
-                return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-            }
-        };
-
-        let (file_hash, chunk_hashes) = match self.fud.geode.insert(fd).await {
-            Ok(v) => v,
-            Err(e) => {
-                let error_str = format!("Failed inserting file {:?} to geode: {}", path, e);
-                error!(target: "fud::put()", "{}", error_str);
-                return JsonError::new(ErrorCode::InternalError, Some(error_str), id).into()
-            }
-        };
-
-        // Add path to the sled db
-        if let Err(e) = self
-            .fud
-            .path_tree
-            .insert(file_hash.as_bytes(), path.to_string_lossy().to_string().as_bytes())
-        {
-            error!(target: "fud::put()", "Failed inserting new file into sled: {}", e);
-            return JsonError::new(ErrorCode::InternalError, None, id).into()
+        let res = self.fud.put(&path).await;
+        if let Err(e) = res {
+            return JsonError::new(ErrorCode::InternalError, Some(format!("{}", e)), id).into()
         }
 
-        // Add resource
-        let mut resources_write = self.fud.resources.write().await;
-        resources_write.insert(
-            file_hash,
-            Resource {
-                hash: file_hash,
-                path,
-                status: ResourceStatus::Seeding,
-                chunks_total: chunk_hashes.len() as u64,
-                chunks_downloaded: chunk_hashes.len() as u64,
-            },
-        );
-        drop(resources_write);
-
-        // Announce file
-        let fud_announce = FudAnnounce { key: file_hash, seeders: vec![self_node.into()] };
-        let _ = self.fud.announce(&file_hash, &fud_announce, self.fud.seeders_router.clone()).await;
-
-        JsonResponse::new(JsonValue::String(hash_to_string(&file_hash)), id).into()
+        JsonResponse::new(JsonValue::String(hash_to_string(&res.unwrap())), id).into()
     }
 
     // RPCAPI:
@@ -201,29 +140,26 @@ impl JsonRpcInterface {
         let mut hash_buf_arr = [0u8; 32];
         hash_buf_arr.copy_from_slice(&hash_buf);
 
-        let file_hash = blake3::Hash::from_bytes(hash_buf_arr);
-        let file_hash_str = hash_to_string(&file_hash);
+        let hash = blake3::Hash::from_bytes(hash_buf_arr);
+        let hash_str = hash_to_string(&hash);
 
-        let file_path = match params[1].get::<String>() {
+        let path = match params[1].get::<String>() {
             Some(path) => match path.is_empty() {
-                true => self.fud.downloads_path.join(&file_hash_str).join(&file_hash_str),
+                true => match self.fud.hash_to_path(&hash).ok().flatten() {
+                    Some(path) => path,
+                    None => self.fud.downloads_path.join(&hash_str),
+                },
                 false => match PathBuf::from(path).is_absolute() {
                     true => PathBuf::from(path),
-                    false => self.fud.downloads_path.join(&file_hash_str).join(path),
+                    false => self.fud.downloads_path.join(path),
                 },
             },
-            None => self.fud.downloads_path.join(&file_hash_str).join(&file_hash_str),
+            None => self.fud.downloads_path.join(&hash_str),
         };
 
-        // Get the parent directory of the file
-        if let Some(parent) = file_path.parent() {
-            // Create all directories leading up to the file
-            let _ = fs::create_dir_all(parent).await;
-        }
+        let _ = self.fud.get_tx.send((hash, path.clone())).await;
 
-        let _ = self.fud.get_tx.send((id, file_hash, file_path.clone(), Ok(()))).await;
-
-        JsonResponse::new(JsonValue::String(file_path.to_string_lossy().to_string()), id).into()
+        JsonResponse::new(JsonValue::String(path.to_string_lossy().to_string()), id).into()
     }
 
     // RPCAPI:
@@ -353,7 +289,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "remove", "params": ["1211...abfd"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [], "id": 1}
-    pub async fn remove_resource(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn remove(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -364,15 +300,7 @@ impl JsonRpcInterface {
             Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
         }
 
-        let hash = blake3::Hash::from_bytes(hash_buf);
-        let mut resources_write = self.fud.resources.write().await;
-        resources_write.remove(&hash);
-        drop(resources_write);
-
-        self.fud
-            .event_publisher
-            .notify(FudEvent::ResourceRemoved(event::ResourceRemoved { hash }))
-            .await;
+        self.fud.remove(&blake3::Hash::from_bytes(hash_buf)).await;
 
         JsonResponse::new(JsonValue::Array(vec![]), id).into()
     }

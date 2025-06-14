@@ -29,8 +29,16 @@ pub enum ResourceStatus {
 }
 
 #[derive(Clone, Debug)]
+pub enum ResourceType {
+    Unknown,
+    File,
+    Directory,
+}
+
+#[derive(Clone, Debug)]
 pub struct Resource {
     pub hash: blake3::Hash,
+    pub rtype: ResourceType,
     pub path: PathBuf,
     pub status: ResourceStatus,
     pub chunks_total: u64,
@@ -41,6 +49,17 @@ impl From<Resource> for JsonValue {
     fn from(rs: Resource) -> JsonValue {
         json_map([
             ("hash", JsonValue::String(hash_to_string(&rs.hash))),
+            (
+                "type",
+                JsonValue::String(
+                    match rs.rtype {
+                        ResourceType::Unknown => "unknown",
+                        ResourceType::File => "file",
+                        ResourceType::Directory => "directory",
+                    }
+                    .to_string(),
+                ),
+            ),
             (
                 "path",
                 JsonValue::String(match rs.path.into_os_string().into_string() {

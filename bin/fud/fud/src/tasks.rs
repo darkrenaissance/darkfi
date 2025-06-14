@@ -17,16 +17,22 @@
  */
 
 use log::{error, info};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
-use darkfi::{dht::DhtHandler, geode::hash_to_string, system::sleep, Error, Result};
+use darkfi::{
+    dht::DhtHandler,
+    geode::{hash_to_string, ChunkedStorage},
+    system::sleep,
+    Error, Result,
+};
 
 use crate::{
-    proto::{FudAnnounce, FudChunkReply, FudFileReply},
+    proto::{FudAnnounce, FudChunkReply, FudDirectoryReply, FudFileReply},
     Fud,
 };
 
 pub enum FetchReply {
+    Directory(FudDirectoryReply),
     File(FudFileReply),
     Chunk(FudChunkReply),
 }
@@ -34,7 +40,7 @@ pub enum FetchReply {
 /// Triggered when calling the `get` RPC method
 pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
     loop {
-        let (_, file_hash, file_path, _) = fud.get_rx.recv().await.unwrap();
+        let (file_hash, file_path) = fud.get_rx.recv().await.unwrap();
 
         let _ = fud.get(&file_hash, &file_path).await;
     }
@@ -43,53 +49,59 @@ pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
 /// Background task that receives file fetch requests and tries to
 /// fetch objects from the network using the routing table.
 /// TODO: This can be optimised a lot for connection reuse, etc.
-pub async fn fetch_file_task(fud: Arc<Fud>) -> Result<()> {
-    info!(target: "fud::fetch_file_task()", "Started background file fetch task");
+pub async fn fetch_metadata_task(fud: Arc<Fud>) -> Result<()> {
+    info!(target: "fud::fetch_metadata_task()", "Started background metadata fetch task");
     loop {
-        let (nodes, file_hash, file_path, _) = fud.file_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_file_task()", "Fetching file {}", hash_to_string(&file_hash));
+        let (nodes, hash, path) = fud.metadata_fetch_rx.recv().await.unwrap();
+        info!(target: "fud::fetch_metadata_task()", "Fetching metadata for {}", hash_to_string(&hash));
 
-        let result = fud.fetch_file_metadata(nodes, file_hash).await;
+        let reply = fud.fetch_metadata(&nodes, &hash).await;
+        if reply.is_none() {
+            fud.metadata_fetch_end_tx.send(Err(Error::GeodeFileRouteNotFound)).await.unwrap();
+            continue
+        }
+        let reply = reply.unwrap();
 
-        match result {
-            Some(reply) => {
-                match reply {
-                    FetchReply::File(FudFileReply { chunk_hashes }) => {
-                        if let Err(e) = fud.geode.insert_file(&file_hash, &chunk_hashes).await {
-                            error!(
-                                "Failed inserting file {} to Geode: {}",
-                                hash_to_string(&file_hash),
-                                e
-                            );
-                        }
-                        fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
-                    }
-                    // Looked for a file but got a chunk: the entire file fits in a single chunk
-                    FetchReply::Chunk(FudChunkReply { chunk }) => {
-                        info!(target: "fud::fetch_file_task()", "File fits in a single chunk");
-                        let chunk_hash = blake3::hash(&chunk);
-                        let _ = fud.geode.insert_file(&file_hash, &[chunk_hash]).await;
-                        match fud.geode.write_chunk(&file_hash, &file_path, &chunk).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!(
-                                    "Failed inserting chunk {} to Geode: {}",
-                                    hash_to_string(&file_hash),
-                                    e
-                                );
-                            }
-                        };
-                        fud.file_fetch_end_tx.send((file_hash, Ok(()))).await.unwrap();
-                    }
+        // At this point the reply content was already verified in `fud.fetch_metadata`
+        match reply {
+            FetchReply::Directory(FudDirectoryReply { files, chunk_hashes }) => {
+                // Convert all file paths from String to PathBuf
+                let mut files: Vec<_> = files
+                    .into_iter()
+                    .map(|(path_str, size)| (PathBuf::from(path_str), size))
+                    .collect();
+
+                fud.geode.sort_files(&mut files);
+                if let Err(e) = fud.geode.insert_metadata(&hash, &chunk_hashes, &files).await {
+                    error!(target: "fud::fetch_metadata_task()", "Failed inserting directory {} to Geode: {}", hash_to_string(&hash), e);
+                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
+                    continue
                 }
+                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
             }
-            None => {
-                fud.file_fetch_end_tx
-                    .send((file_hash, Err(Error::GeodeFileRouteNotFound)))
-                    .await
-                    .unwrap();
+            FetchReply::File(FudFileReply { chunk_hashes }) => {
+                if let Err(e) = fud.geode.insert_metadata(&hash, &chunk_hashes, &[]).await {
+                    error!(target: "fud::fetch_metadata_task()", "Failed inserting file {} to Geode: {}", hash_to_string(&hash), e);
+                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
+                    continue
+                }
+                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
             }
-        };
+            // Looked for a file but got a chunk: the entire file fits in a single chunk
+            FetchReply::Chunk(FudChunkReply { chunk }) => {
+                info!(target: "fud::fetch_metadata_task()", "File fits in a single chunk");
+                let chunk_hash = blake3::hash(&chunk);
+                let _ = fud.geode.insert_metadata(&hash, &[chunk_hash], &[]).await;
+                let mut chunked_file =
+                    ChunkedStorage::new(&[chunk_hash], &[(path, chunk.len() as u64)], false);
+                if let Err(e) = fud.geode.write_chunk(&mut chunked_file, &chunk).await {
+                    error!(target: "fud::fetch_metadata_task()", "Failed inserting chunk {} to Geode: {}", hash_to_string(&chunk_hash), e);
+                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
+                    continue
+                };
+                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
+            }
+        }
     }
 }
 

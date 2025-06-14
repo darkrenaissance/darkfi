@@ -37,7 +37,7 @@ pub struct ChunkDownloadCompleted {
     pub resource: Resource,
 }
 #[derive(Clone, Debug)]
-pub struct FileDownloadCompleted {
+pub struct MetadataDownloadCompleted {
     pub hash: blake3::Hash,
     pub resource: Resource,
 }
@@ -61,7 +61,7 @@ pub struct ChunkNotFound {
     pub chunk_hash: blake3::Hash,
 }
 #[derive(Clone, Debug)]
-pub struct FileNotFound {
+pub struct MetadataNotFound {
     pub hash: blake3::Hash,
     pub resource: Resource,
 }
@@ -80,12 +80,12 @@ pub struct DownloadError {
 pub enum FudEvent {
     DownloadStarted(DownloadStarted),
     ChunkDownloadCompleted(ChunkDownloadCompleted),
-    FileDownloadCompleted(FileDownloadCompleted),
+    MetadataDownloadCompleted(MetadataDownloadCompleted),
     DownloadCompleted(DownloadCompleted),
     ResourceUpdated(ResourceUpdated),
     ResourceRemoved(ResourceRemoved),
     ChunkNotFound(ChunkNotFound),
-    FileNotFound(FileNotFound),
+    MetadataNotFound(MetadataNotFound),
     MissingChunks(MissingChunks),
     DownloadError(DownloadError),
 }
@@ -107,8 +107,8 @@ impl From<ChunkDownloadCompleted> for JsonValue {
         ])
     }
 }
-impl From<FileDownloadCompleted> for JsonValue {
-    fn from(info: FileDownloadCompleted) -> JsonValue {
+impl From<MetadataDownloadCompleted> for JsonValue {
+    fn from(info: MetadataDownloadCompleted) -> JsonValue {
         json_map([
             ("hash", JsonValue::String(hash_to_string(&info.hash))),
             ("resource", info.resource.into()),
@@ -144,8 +144,8 @@ impl From<ChunkNotFound> for JsonValue {
         ])
     }
 }
-impl From<FileNotFound> for JsonValue {
-    fn from(info: FileNotFound) -> JsonValue {
+impl From<MetadataNotFound> for JsonValue {
+    fn from(info: MetadataNotFound) -> JsonValue {
         json_map([
             ("hash", JsonValue::String(hash_to_string(&info.hash))),
             ("resource", info.resource.into()),
@@ -177,9 +177,10 @@ impl From<FudEvent> for JsonValue {
             FudEvent::ChunkDownloadCompleted(info) => {
                 json_map([("event", json_str("chunk_download_completed")), ("info", info.into())])
             }
-            FudEvent::FileDownloadCompleted(info) => {
-                json_map([("event", json_str("file_download_completed")), ("info", info.into())])
-            }
+            FudEvent::MetadataDownloadCompleted(info) => json_map([
+                ("event", json_str("metadata_download_completed")),
+                ("info", info.into()),
+            ]),
             FudEvent::DownloadCompleted(info) => {
                 json_map([("event", json_str("download_completed")), ("info", info.into())])
             }
@@ -192,8 +193,8 @@ impl From<FudEvent> for JsonValue {
             FudEvent::ChunkNotFound(info) => {
                 json_map([("event", json_str("chunk_not_found")), ("info", info.into())])
             }
-            FudEvent::FileNotFound(info) => {
-                json_map([("event", json_str("file_not_found")), ("info", info.into())])
+            FudEvent::MetadataNotFound(info) => {
+                json_map([("event", json_str("metadata_not_found")), ("info", info.into())])
             }
             FudEvent::MissingChunks(info) => {
                 json_map([("event", json_str("missing_chunks")), ("info", info.into())])

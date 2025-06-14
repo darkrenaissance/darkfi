@@ -41,7 +41,7 @@ use fud::{
     get_node_id,
     proto::{FudFindNodesReply, ProtocolFud},
     rpc::JsonRpcInterface,
-    tasks::{announce_seed_task, fetch_file_task, get_task},
+    tasks::{announce_seed_task, fetch_metadata_task, get_task},
     Fud,
 };
 
@@ -179,14 +179,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!(target: "fud", "Starting fetch file task");
+    info!(target: "fud", "Starting fetch metadata task");
     let file_task = StoppableTask::new();
     file_task.clone().start(
-        fetch_file_task(fud.clone()),
+        fetch_metadata_task(fud.clone()),
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting fetch file task: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting fetch metadata task: {}", e),
             }
         },
         Error::DetachedTaskStopped,
