@@ -18,7 +18,6 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::Arc,
     time::Instant,
 };
 
@@ -31,7 +30,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         util::JsonValue,
     },
-    system::{Publisher, StoppableTask},
+    system::{ExecutorPtr, Publisher, StoppableTask},
     tx::Transaction,
     util::encoding::base64,
     Error, Result,
@@ -136,11 +135,7 @@ impl Drk {
     /// to its previous height and then scan it. We assume that the blocks
     /// up to that point are unchanged, since darkfid will just broadcast
     /// the sequence after the reorg.
-    pub async fn subscribe_blocks(
-        &self,
-        endpoint: Url,
-        ex: Arc<smol::Executor<'static>>,
-    ) -> Result<()> {
+    pub async fn subscribe_blocks(&self, endpoint: Url, ex: &ExecutorPtr) -> Result<()> {
         // Grab last confirmed block height
         let (last_confirmed_height, _) = self.get_last_confirmed_block().await?;
 
@@ -204,7 +199,7 @@ impl Drk {
                 }
             },
             Error::RpcServerStopped,
-            ex,
+            ex.clone(),
         );
         println!("Detached subscription to background");
         println!("All is good. Waiting for block notifications...");
