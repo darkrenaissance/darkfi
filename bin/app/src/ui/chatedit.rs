@@ -1011,15 +1011,16 @@ impl ChatEdit {
         let draw_main = vec![
             (
                 self.content_dc_key,
-                GfxDrawCall {
-                    instrs: content_instrs,
-                    dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
-                    z_index: 0,
-                },
+                GfxDrawCall::new(
+                    content_instrs,
+                    vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                    0,
+                    "chatedit_content"
+                ),
             ),
             (
                 self.phone_select_handle_dc_key,
-                GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
+                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll")
             ),
         ];
         self.render_api.replace_draw_calls(timest, draw_main);
@@ -1029,7 +1030,7 @@ impl ChatEdit {
         let timest = unixtime();
         let instrs = self.get_cursor_instrs().await;
         let draw_calls =
-            vec![(self.cursor_dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: 2 })];
+            vec![(self.cursor_dc_key, GfxDrawCall::new(instrs, vec![], 2, "curs_redr"))];
         self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
@@ -1038,10 +1039,10 @@ impl ChatEdit {
         let sel_instrs = self.regen_select_mesh().await;
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
         let draw_calls = vec![
-            (self.select_dc_key, GfxDrawCall { instrs: sel_instrs, dcs: vec![], z_index: 0 }),
+            (self.select_dc_key, GfxDrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
             (
                 self.phone_select_handle_dc_key,
-                GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
+                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
             ),
         ];
         self.render_api.replace_draw_calls(timest, draw_calls);
@@ -1232,29 +1233,31 @@ impl ChatEdit {
             draw_calls: vec![
                 (
                     self.root_dc_key,
-                    GfxDrawCall {
-                        instrs: vec![GfxDrawInstruction::Move(rect.pos())],
-                        dcs: vec![self.content_dc_key, self.phone_select_handle_dc_key],
-                        z_index: self.z_index.get(),
-                    },
+                    GfxDrawCall::new(
+                        vec![GfxDrawInstruction::Move(rect.pos())],
+                        vec![self.content_dc_key, self.phone_select_handle_dc_key],
+                        self.z_index.get(),
+                        "chatedit_root"
+                    ),
                 ),
                 (
                     self.content_dc_key,
-                    GfxDrawCall {
-                        instrs: content_instrs,
-                        dcs: vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
-                        z_index: 0,
-                    },
+                    GfxDrawCall::new(
+                        content_instrs,
+                        vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                        0,
+                        "chatedit_content"
+                    ),
                 ),
-                (self.select_dc_key, GfxDrawCall { instrs: sel_instrs, dcs: vec![], z_index: 0 }),
-                (self.text_dc_key, GfxDrawCall { instrs: txt_instrs, dcs: vec![], z_index: 1 }),
+                (self.select_dc_key, GfxDrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
+                (self.text_dc_key, GfxDrawCall::new(txt_instrs, vec![], 1, "chatedit_text")),
                 (
                     self.cursor_dc_key,
-                    GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: 2 },
+                    GfxDrawCall::new(cursor_instrs, vec![], 2, "chatedit_curs"),
                 ),
                 (
                     self.phone_select_handle_dc_key,
-                    GfxDrawCall { instrs: phone_sel_instrs, dcs: vec![], z_index: 1 },
+                    GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),
                 ),
             ],
         }

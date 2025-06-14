@@ -151,7 +151,7 @@ impl VectorArt {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "vecart")
             )],
         })
     }

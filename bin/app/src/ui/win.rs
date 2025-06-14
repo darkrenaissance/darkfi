@@ -442,11 +442,12 @@ impl Window {
             child_calls.push(draw_update.key);
         }
 
-        let dc = GfxDrawCall {
-            instrs: vec![GfxDrawInstruction::SetScale(self.scale.get())],
-            dcs: child_calls,
-            z_index: 0,
-        };
+        let dc = GfxDrawCall::new(
+            vec![GfxDrawInstruction::SetScale(self.scale.get())],
+            child_calls,
+            0,
+            "win"
+        );
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 

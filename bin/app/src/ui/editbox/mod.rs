@@ -1191,7 +1191,7 @@ impl EditBox {
 
         let draw_calls = vec![(
             self.cursor_dc_key,
-            GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
+            GfxDrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs_redr")
         )];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
@@ -1240,18 +1240,19 @@ impl EditBox {
             draw_calls: vec![
                 (
                     self.text_dc_key,
-                    GfxDrawCall {
-                        instrs: vec![
+                    GfxDrawCall::new(
+                        vec![
                             GfxDrawInstruction::Move(rect.pos()),
                             GfxDrawInstruction::Draw(text_mesh),
                         ],
-                        dcs: vec![self.cursor_dc_key],
-                        z_index: self.z_index.get(),
-                    },
+                        vec![self.cursor_dc_key],
+                        self.z_index.get(),
+                        "editbox_txt"
+                    ),
                 ),
                 (
                     self.cursor_dc_key,
-                    GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
+                    GfxDrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs")
                 ),
             ],
         })

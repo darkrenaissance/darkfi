@@ -702,7 +702,7 @@ impl ChatView {
         instrs.append(&mut mesh_instrs);
 
         let draw_calls =
-            vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
+            vec![(self.dc_key, GfxDrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
         t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
@@ -854,7 +854,7 @@ impl UIObject for ChatView {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "chatview")
             )],
         })
     }

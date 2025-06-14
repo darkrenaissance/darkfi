@@ -270,17 +270,18 @@ impl GfxDrawMesh {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        debug_str: &'static str
     ) -> Option<DrawMesh> {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
         let buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
         let texture = match self.texture {
-            Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture),
+            Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture, debug_str),
             None => None,
         };
         Some(DrawMesh {
-            vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id)?,
-            index_buffer: Self::try_get_buffer(buffers, index_buffer_id)?,
+            vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id, debug_str)?,
+            index_buffer: Self::try_get_buffer(buffers, index_buffer_id, debug_str)?,
             buffers_keep_alive,
             texture,
             num_elements: self.num_elements,
@@ -290,11 +291,12 @@ impl GfxDrawMesh {
     fn try_get_texture(
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         gfx_texture: ManagedTexturePtr,
+        debug_str: &'static str
     ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
         let gfx_texture_id = gfx_texture.id;
 
         let Some(mq_texture_id) = textures.get(&gfx_texture_id) else {
-            error!(target: "gfx", "Serious error: missing texture ID={gfx_texture_id}");
+            error!(target: "gfx", "Serious error: missing texture ID={gfx_texture_id}, debug={debug_str}");
             error!(target: "gfx", "Dumping textures:");
             for (gfx_texture_id, texture_id) in textures {
                 error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
@@ -310,9 +312,10 @@ impl GfxDrawMesh {
     fn try_get_buffer(
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
         gfx_buffer_id: GfxBufferId,
+        debug_str: &'static str
     ) -> Option<miniquad::BufferId> {
         let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
-            error!(target: "gfx", "Serious error: missing buffer ID={gfx_buffer_id}");
+            error!(target: "gfx", "Serious error: missing buffer ID={gfx_buffer_id}, debug={debug_str}");
             error!(target: "gfx", "Dumping buffers:");
             for (gfx_buffer_id, buffer_id) in buffers {
                 error!(target: "gfx", "{gfx_buffer_id} => {buffer_id:?}");
@@ -340,13 +343,14 @@ impl GfxDrawInstruction {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        debug_str: &'static str
     ) -> Option<DrawInstruction> {
         let instr = match self {
             Self::SetScale(scale) => DrawInstruction::SetScale(scale),
             Self::Move(off) => DrawInstruction::Move(off),
             Self::SetPos(pos) => DrawInstruction::SetPos(pos),
             Self::ApplyView(view) => DrawInstruction::ApplyView(view),
-            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)?),
+            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?),
             Self::EnableDebug => DrawInstruction::EnableDebug,
         };
         Some(instr)
@@ -358,6 +362,23 @@ pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
     pub dcs: Vec<u64>,
     pub z_index: u32,
+    pub debug_str: &'static str
+}
+
+impl GfxDrawCall {
+    pub fn new(
+        instrs: Vec<GfxDrawInstruction>,
+        dcs: Vec<u64>,
+        z_index: u32,
+        debug_str: &'static str
+    ) -> Self {
+        Self {
+            instrs,
+            dcs,
+            z_index,
+            debug_str
+        }
+    }
 }
 
 impl GfxDrawCall {
@@ -371,7 +392,7 @@ impl GfxDrawCall {
             instrs: self
                 .instrs
                 .into_iter()
-                .map(|i| i.compile(textures, buffers))
+                .map(|i| i.compile(textures, buffers, self.debug_str))
                 .collect::<Option<Vec<_>>>()?,
             dcs: self.dcs,
             z_index: self.z_index,
@@ -579,7 +600,7 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum GraphicsMethod {
     NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
     DeleteTexture((GfxTextureId, DebugTag)),
@@ -587,6 +608,19 @@ pub enum GraphicsMethod {
     NewIndexBuffer((Vec<u16>, GfxBufferId)),
     DeleteBuffer((GfxBufferId, DebugTag, u8)),
     ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
+}
+
+impl std::fmt::Debug for GraphicsMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NewTexture(_) => write!(f, "NewTexture"),
+            Self::DeleteTexture(_) => write!(f, "DeleteTexture"),
+            Self::NewVertexBuffer(_) => write!(f, "NewVertexBuffer"),
+            Self::NewIndexBuffer(_) => write!(f, "NewIndexBuffer"),
+            Self::DeleteBuffer(_) => write!(f, "DeleteBuffer"),
+            Self::ReplaceDrawCalls { timest: _, dcs: _ } => write!(f, "ReplaceDrawCalls"),
+        }
+    }
 }
 
 struct EventChannel<T> {
@@ -1046,17 +1080,6 @@ impl EventHandler for Stage {
         debug!(target: "gfx", "quit requested");
         let god = GOD.get().unwrap();
         god.stop_app();
-    }
-
-    fn force_reload(&mut self) {
-        t!("force_reload");
-        let god = GOD.get().unwrap();
-        god.stop_app();
-        //god.start_app();
-        drop(god);
-        self.clear();
-        *self = Self::new();
-        t!("force_reload [DONE]");
     }
 }
 

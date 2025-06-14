@@ -140,11 +140,12 @@ impl Layer {
             }
         }
 
-        let dc = GfxDrawCall {
-            instrs: vec![GfxDrawInstruction::ApplyView(rect)],
-            dcs: child_calls,
-            z_index: self.z_index.get(),
-        };
+        let dc = GfxDrawCall::new(
+            vec![GfxDrawInstruction::ApplyView(rect)],
+            child_calls,
+            self.z_index.get(),
+            "layer"
+        );
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls })
     }
