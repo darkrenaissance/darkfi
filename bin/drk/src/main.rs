@@ -20,7 +20,6 @@ use std::{
     io::{stdin, Read},
     process::exit,
     str::FromStr,
-    sync::Arc,
 };
 
 use log::info;
@@ -32,6 +31,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
+    system::ExecutorPtr,
     util::{
         encoding::base64,
         parse::{decode_base10, encode_base10},
@@ -625,7 +625,7 @@ async fn new_wallet(
     wallet_path: String,
     wallet_pass: String,
     endpoint: Option<Url>,
-    ex: Arc<smol::Executor<'static>>,
+    ex: &ExecutorPtr,
     fun: bool,
 ) -> Drk {
     // Script kiddies protection
@@ -644,7 +644,7 @@ async fn new_wallet(
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     // Grab blockchain network configuration
     let blockchain_config = match args.network.as_str() {
         "localnet" => parse_blockchain_config(args.config, "localnet").await?,
@@ -663,11 +663,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
-            interactive(&drk, &blockchain_config.history_path).await;
+            interactive(&drk, &blockchain_config.history_path, &ex).await;
             drk.stop_rpc_client().await
         }
 
@@ -686,7 +686,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -729,7 +729,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -970,7 +970,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -1006,7 +1006,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 None,
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -1024,7 +1024,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -1105,7 +1105,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1139,7 +1139,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1168,7 +1168,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1188,7 +1188,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1241,7 +1241,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1307,7 +1307,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1329,7 +1329,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1347,7 +1347,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1365,7 +1365,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1417,7 +1417,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1447,7 +1447,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1529,7 +1529,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1574,7 +1574,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1601,7 +1601,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1809,7 +1809,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1876,7 +1876,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1906,7 +1906,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -1966,7 +1966,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -1996,7 +1996,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -2030,12 +2030,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint.clone()),
-                ex.clone(),
+                &ex,
                 args.fun,
             )
             .await;
 
-            if let Err(e) = drk.subscribe_blocks(blockchain_config.endpoint, ex).await {
+            if let Err(e) = drk.subscribe_blocks(blockchain_config.endpoint, &ex).await {
                 eprintln!("Block subscription failed: {e:?}");
                 exit(2);
             }
@@ -2049,7 +2049,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
                 Some(blockchain_config.endpoint),
-                ex,
+                &ex,
                 args.fun,
             )
             .await;
@@ -2079,7 +2079,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2121,7 +2121,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2146,7 +2146,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2205,7 +2205,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2224,7 +2224,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2290,7 +2290,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2319,7 +2319,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2348,7 +2348,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2384,7 +2384,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2400,7 +2400,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2418,7 +2418,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2471,7 +2471,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2549,7 +2549,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2582,7 +2582,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2601,7 +2601,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     None,
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2638,7 +2638,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
@@ -2667,7 +2667,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
                     Some(blockchain_config.endpoint),
-                    ex,
+                    &ex,
                     args.fun,
                 )
                 .await;
