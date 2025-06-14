@@ -25,7 +25,7 @@ use std::{
     io::{stdout, Write},
     sync::Arc,
 };
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use termcolor::{ColorSpec, StandardStream, WriteColor};
 use url::Url;
 
 use darkfi::{
@@ -39,6 +39,9 @@ use darkfi::{
     util::cli::{get_log_config, get_log_level},
     Error, Result,
 };
+
+mod util;
+use crate::util::{status_to_colorspec, type_to_colorspec};
 
 #[derive(Parser)]
 #[clap(name = "fu", about = cli_desc!(), version)]
@@ -140,27 +143,41 @@ impl Fu {
         );
 
         let progress_bar_width = 20;
+        let mut started = false;
+        let mut tstdout = StandardStream::stdout(ColorChoice::Auto);
 
-        let print_progress_bar = |info: &HashMap<String, JsonValue>| {
+        let mut print_progress_bar = |info: &HashMap<String, JsonValue>| {
+            started = true;
             let resource =
                 info.get("resource").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
             let chunks_downloaded =
                 *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap() as usize;
             let chunks_total =
                 *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
-            let status = match resource.get("status").unwrap().get::<String>().unwrap().as_str() {
-                "seeding" => "done",
-                s => s,
+            let status = resource.get("status").unwrap().get::<String>().unwrap();
+            let percent = match chunks_total {
+                0 => 0f64,
+                _ => chunks_downloaded as f64 / chunks_total as f64,
             };
-            let completed = if chunks_total > 0 {
-                (chunks_downloaded as f64 / chunks_total as f64 * progress_bar_width as f64)
-                    as usize
-            } else {
-                0
-            };
+            let completed = (percent * progress_bar_width as f64) as usize;
             let remaining = progress_bar_width - completed;
             let bar = "=".repeat(completed) + &" ".repeat(remaining);
-            print!("\x1B[2K\r[{}] {}/{} chunks | {}", bar, chunks_downloaded, chunks_total, status);
+            print!(
+                "\x1B[2K\r[{}] {:.1}% | {}/{} chunks | ",
+                bar,
+                percent * 100.0,
+                chunks_downloaded,
+                chunks_total
+            );
+            tstdout.set_color(&status_to_colorspec(status)).unwrap();
+            print!(
+                "{}",
+                match status.as_str() {
+                    "seeding" => "done",
+                    s => s,
+                }
+            );
+            tstdout.reset().unwrap();
             stdout().flush().unwrap();
         };
 
@@ -187,7 +204,7 @@ impl Fu {
                     }
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
                         "download_started" |
-                        "file_download_completed" |
+                        "metadata_download_completed" |
                         "chunk_download_completed" => {
                             print_progress_bar(info);
                         }
@@ -202,9 +219,9 @@ impl Fu {
                             println!("\nDownload completed:\n{}", file_path);
                             return Ok(());
                         }
-                        "file_not_found" => {
+                        "metadata_not_found" => {
                             println!();
-                            return Err(Error::Custom(format!("Could not find file {}", file_hash)));
+                            return Err(Error::Custom(format!("Could not find {}", file_hash)));
                         }
                         "chunk_not_found" => {
                             // A seeder does not have a chunk we are looking for,
@@ -217,7 +234,9 @@ impl Fu {
                         }
                         "download_error" => {
                             // An error that caused the download to be unsuccessful
-                            println!();
+                            if started {
+                                println!();
+                            }
                             return Err(Error::Custom(
                                 info.get("error").unwrap().get::<String>().unwrap().to_string(),
                             ));
@@ -243,11 +262,11 @@ impl Fu {
         let req = JsonRequest::new("put", JsonValue::Array(vec![JsonValue::String(file)]));
         let rep = self.rpc_client.request(req).await?;
         match rep {
-            JsonValue::String(file_id) => {
-                println!("{}", file_id);
+            JsonValue::String(id) => {
+                println!("{}", id);
                 Ok(())
             }
-            _ => Err(Error::ParseFailed("File ID is not a string")),
+            _ => Err(Error::ParseFailed("ID is not a string")),
         }
     }
 
@@ -257,19 +276,38 @@ impl Fu {
 
         let resources: Vec<JsonValue> = rep.clone().try_into().unwrap();
 
+        let mut tstdout = StandardStream::stdout(ColorChoice::Auto);
+
         for rs in resources.iter() {
             let resource = rs.get::<HashMap<String, JsonValue>>().unwrap();
-            let path = resource.get("path").unwrap().get::<String>().unwrap().as_str();
+            let path = resource.get("path").unwrap().get::<String>().unwrap();
             let hash = resource.get("hash").unwrap().get::<String>().unwrap().as_str();
+            let rtype = resource.get("type").unwrap().get::<String>().unwrap();
             let chunks_downloaded =
                 *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap() as usize;
             let chunks_total =
                 *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
-            let status = resource.get("status").unwrap().get::<String>().unwrap().as_str();
+            let status = resource.get("status").unwrap().get::<String>().unwrap();
+            tstdout.set_color(ColorSpec::new().set_bold(true)).unwrap();
             println!("{}", path);
-            println!("\tID: {}", hash);
-            println!("\tStatus: {}", status);
-            println!("\tChunks: {}/{}", chunks_downloaded, chunks_total);
+            tstdout.reset().unwrap();
+            println!("  ID: {}", hash);
+            print!("  Type: ");
+            tstdout.set_color(&type_to_colorspec(rtype)).unwrap();
+            println!("{}", rtype);
+            tstdout.reset().unwrap();
+            print!("  Status: ");
+            tstdout.set_color(&status_to_colorspec(status)).unwrap();
+            println!("{}", status);
+            tstdout.reset().unwrap();
+            println!(
+                "  Chunks: {}/{}",
+                chunks_downloaded,
+                match chunks_total {
+                    0 => "?".to_string(),
+                    _ => chunks_total.to_string(),
+                }
+            );
         }
 
         Ok(())
@@ -389,23 +427,16 @@ impl Fu {
             print!("\x1b[{};1H\x1B[2K", i + 2);
 
             let hash = resource.get("hash").unwrap().get::<String>().unwrap();
-            print!("\r{:>44} ", hash,);
+            print!("\r{:>44} ", hash);
+
+            let rtype = resource.get("type").unwrap().get::<String>().unwrap();
+            tstdout.set_color(&type_to_colorspec(rtype)).unwrap();
+            print!("{:>9} ", rtype);
+            tstdout.reset().unwrap();
 
             let status = resource.get("status").unwrap().get::<String>().unwrap();
-            tstdout
-                .set_color(
-                    ColorSpec::new()
-                        .set_fg(match status.as_str() {
-                            "downloading" => Some(Color::Blue),
-                            "seeding" => Some(Color::Green),
-                            "discovering" => Some(Color::Magenta),
-                            "incomplete" => Some(Color::Red),
-                            _ => None,
-                        })
-                        .set_bold(true),
-                )
-                .unwrap();
-            print!("{:>11} ", status,);
+            tstdout.set_color(&status_to_colorspec(status)).unwrap();
+            print!("{:>11} ", status);
             tstdout.reset().unwrap();
 
             let chunks_downloaded =
@@ -437,7 +468,10 @@ impl Fu {
             print!("\x1B[2J\x1B[1;1H");
 
             // Print column headers
-            println!("\x1b[4m{:>44} {:>11} {:>5} {:>9}\x1b[0m", "Hash", "Status", "%", "Chunks");
+            println!(
+                "\x1b[4m{:>44} {:>9} {:>11} {:>5} {:>9}\x1b[0m",
+                "Hash", "Type", "Status", "%", "Chunks"
+            );
         };
 
         print_begin().await;
@@ -458,11 +492,11 @@ impl Fu {
                         params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
                         "download_started" |
-                        "file_download_completed" |
+                        "metadata_download_completed" |
                         "chunk_download_completed" |
                         "download_completed" |
                         "missing_chunks" |
-                        "file_not_found" |
+                        "metadata_not_found" |
                         "resource_updated" => {
                             let resource = info
                                 .get("resource")
