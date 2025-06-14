@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_node_id","get_node_id"],"mod":["event","proto","resource","rpc","tasks","util"],"struct":["Fud"]};
