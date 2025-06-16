@@ -666,9 +666,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 &ex,
                 args.fun,
             )
-            .await;
+            .await
+            .into_ptr();
             interactive(&drk, &blockchain_config.history_path, &ex).await;
-            drk.stop_rpc_client().await
+            drk.read().await.stop_rpc_client().await?;
+            Ok(())
         }
 
         Subcmd::Kaching => {
