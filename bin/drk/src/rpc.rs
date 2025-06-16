@@ -21,6 +21,7 @@ use std::{
     time::Instant,
 };
 
+use smol::channel::Sender;
 use url::Url;
 
 use darkfi::{
@@ -53,7 +54,7 @@ use crate::{
     dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
     money::SLED_MERKLE_TREES_MONEY,
-    Drk,
+    Drk, DrkPtr,
 };
 
 /// Auxiliary structure holding various in memory caches to use during scan
@@ -140,177 +141,6 @@ impl Drk {
             own_proposals,
             messages_buffer: vec![],
         })
-    }
-
-    /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
-    /// new confirmed blocks. Upon receiving them, all the transactions are
-    /// scanned and we check if any of them call the money contract, and if
-    /// the payments are intended for us. If so, we decrypt them and append
-    /// the metadata to our wallet. If a reorg block is received, we revert
-    /// to its previous height and then scan it. We assume that the blocks
-    /// up to that point are unchanged, since darkfid will just broadcast
-    /// the sequence after the reorg.
-    pub async fn subscribe_blocks(&self, endpoint: Url, ex: &ExecutorPtr) -> Result<()> {
-        // Grab last confirmed block height
-        let (last_confirmed_height, _) = self.get_last_confirmed_block().await?;
-
-        // Handle genesis(0) block
-        if last_confirmed_height == 0 {
-            if let Err(e) = self.scan_blocks().await {
-                return Err(Error::DatabaseError(format!(
-                    "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
-                )))
-            }
-        }
-
-        // Grab last confirmed block again
-        let (last_confirmed_height, last_confirmed_hash) = self.get_last_confirmed_block().await?;
-
-        // Grab last scanned block
-        let (mut last_scanned_height, last_scanned_hash) = match self.get_last_scanned_block() {
-            Ok(last) => last,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
-                )))
-            }
-        };
-
-        // Check if other blocks have been created
-        if last_confirmed_height != last_scanned_height || last_confirmed_hash != last_scanned_hash
-        {
-            eprintln!("Warning: Last scanned block is not the last confirmed block.");
-            eprintln!("You should first fully scan the blockchain, and then subscribe");
-            return Err(Error::DatabaseError(
-                "[subscribe_blocks] Blockchain not fully scanned".to_string(),
-            ))
-        }
-
-        println!("Subscribing to receive notifications of incoming blocks");
-        let publisher = Publisher::new();
-        let subscription = publisher.clone().subscribe().await;
-        let _publisher = publisher.clone();
-        let _ex = ex.clone();
-        StoppableTask::new().start(
-            // Weird hack to prevent lifetimes hell
-            async move {
-                let rpc_client = RpcClient::new(endpoint, _ex).await?;
-                let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
-                rpc_client.subscribe(req, _publisher).await
-            },
-            |res| async move {
-                match res {
-                    Ok(()) => { /* Do nothing */ }
-                    Err(e) => {
-                        eprintln!("[subscribe_blocks] JSON-RPC server error: {e:?}");
-                        publisher
-                            .notify(JsonResult::Error(JsonError::new(
-                                ErrorCode::InternalError,
-                                None,
-                                0,
-                            )))
-                            .await;
-                    }
-                }
-            },
-            Error::RpcServerStopped,
-            ex.clone(),
-        );
-        println!("Detached subscription to background");
-        println!("All is good. Waiting for block notifications...");
-
-        let e = loop {
-            match subscription.receive().await {
-                JsonResult::Notification(n) => {
-                    println!("Got Block notification from darkfid subscription");
-                    if n.method != "blockchain.subscribe_blocks" {
-                        break Error::UnexpectedJsonRpc(format!(
-                            "Got foreign notification from darkfid: {}",
-                            n.method
-                        ))
-                    }
-
-                    // Verify parameters
-                    if !n.params.is_array() {
-                        break Error::UnexpectedJsonRpc(
-                            "Received notification params are not an array".to_string(),
-                        )
-                    }
-                    let params = n.params.get::<Vec<JsonValue>>().unwrap();
-                    if params.is_empty() {
-                        break Error::UnexpectedJsonRpc(
-                            "Notification parameters are empty".to_string(),
-                        )
-                    }
-
-                    for param in params {
-                        let param = param.get::<String>().unwrap();
-                        let bytes = base64::decode(param).unwrap();
-
-                        let block: BlockInfo = deserialize_async(&bytes).await?;
-                        println!("Deserialized successfully. Scanning block...");
-
-                        // Check if a reorg block was received, to reset to its previous
-                        if block.header.height <= last_scanned_height {
-                            let reset_height = block.header.height.saturating_sub(1);
-                            if let Err(e) = self.reset_to_height(reset_height) {
-                                return Err(Error::DatabaseError(format!(
-                                    "[subscribe_blocks] Wallet state reset failed: {e:?}"
-                                )))
-                            }
-
-                            // Scan genesis again if needed
-                            if reset_height == 0 {
-                                let genesis = match self.get_block_by_height(reset_height).await {
-                                    Ok(b) => b,
-                                    Err(e) => {
-                                        return Err(Error::Custom(format!(
-                                            "[subscribe_blocks] RPC client request failed: {e:?}"
-                                        )))
-                                    }
-                                };
-                                let mut scan_cache = self.scan_cache().await?;
-                                if let Err(e) = self.scan_block(&mut scan_cache, &genesis).await {
-                                    return Err(Error::DatabaseError(format!(
-                                        "[subscribe_blocks] Scanning block failed: {e:?}"
-                                    )))
-                                };
-                                for msg in scan_cache.flush_messages() {
-                                    println!("{msg}");
-                                }
-                            }
-                        }
-
-                        let mut scan_cache = self.scan_cache().await?;
-                        if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
-                            return Err(Error::DatabaseError(format!(
-                                "[subscribe_blocks] Scanning block failed: {e:?}"
-                            )))
-                        }
-                        for msg in scan_cache.flush_messages() {
-                            println!("{msg}");
-                        }
-
-                        // Set new last scanned block height
-                        last_scanned_height = block.header.height;
-                    }
-                }
-
-                JsonResult::Error(e) => {
-                    // Some error happened in the transmission
-                    break Error::UnexpectedJsonRpc(format!("Got error from JSON-RPC: {e:?}"))
-                }
-
-                x => {
-                    // And this is weird
-                    break Error::UnexpectedJsonRpc(format!(
-                        "Got unexpected data from JSON-RPC: {x:?}"
-                    ))
-                }
-            }
-        };
-
-        Err(e)
     }
 
     /// `scan_block` will go over over transactions in a block and handle their calls
@@ -723,4 +553,187 @@ impl Drk {
         };
         Ok(())
     }
+}
+
+/// Subscribes to darkfid's JSON-RPC notification endpoint that serves
+/// new confirmed blocks. Upon receiving them, all the transactions are
+/// scanned and we check if any of them call the money contract, and if
+/// the payments are intended for us. If so, we decrypt them and append
+/// the metadata to our wallet. If a reorg block is received, we revert
+/// to its previous height and then scan it. We assume that the blocks
+/// up to that point are unchanged, since darkfid will just broadcast
+/// the sequence after the reorg.
+pub async fn subscribe_blocks(
+    drk: &DrkPtr,
+    shell_sender: Sender<Vec<String>>,
+    endpoint: Url,
+    ex: &ExecutorPtr,
+) -> Result<()> {
+    // Grab last confirmed block height
+    let lock = drk.read().await;
+    let (last_confirmed_height, _) = lock.get_last_confirmed_block().await?;
+
+    // Handle genesis(0) block
+    if last_confirmed_height == 0 {
+        if let Err(e) = lock.scan_blocks().await {
+            return Err(Error::DatabaseError(format!(
+                "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
+            )))
+        }
+    }
+
+    // Grab last confirmed block again
+    let (last_confirmed_height, last_confirmed_hash) = lock.get_last_confirmed_block().await?;
+
+    // Grab last scanned block
+    let (mut last_scanned_height, last_scanned_hash) = match lock.get_last_scanned_block() {
+        Ok(last) => last,
+        Err(e) => {
+            return Err(Error::DatabaseError(format!(
+                "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
+            )))
+        }
+    };
+
+    // Check if other blocks have been created
+    if last_confirmed_height != last_scanned_height || last_confirmed_hash != last_scanned_hash {
+        shell_sender
+            .send(vec![
+                String::from("Warning: Last scanned block is not the last confirmed block."),
+                String::from("You should first fully scan the blockchain, and then subscribe"),
+            ])
+            .await?;
+        return Err(Error::DatabaseError(
+            "[subscribe_blocks] Blockchain not fully scanned".to_string(),
+        ))
+    }
+
+    let mut shell_message =
+        vec![String::from("Subscribing to receive notifications of incoming blocks")];
+    let publisher = Publisher::new();
+    let subscription = publisher.clone().subscribe().await;
+    let _publisher = publisher.clone();
+    let _ex = ex.clone();
+    StoppableTask::new().start(
+        // Weird hack to prevent lifetimes hell
+        async move {
+            let rpc_client = RpcClient::new(endpoint, _ex).await?;
+            let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
+            rpc_client.subscribe(req, _publisher).await
+        },
+        |res| async move {
+            match res {
+                Ok(()) => { /* Do nothing */ }
+                Err(e) => {
+                    eprintln!("[subscribe_blocks] JSON-RPC server error: {e:?}");
+                    publisher
+                        .notify(JsonResult::Error(JsonError::new(
+                            ErrorCode::InternalError,
+                            None,
+                            0,
+                        )))
+                        .await;
+                }
+            }
+        },
+        Error::RpcServerStopped,
+        ex.clone(),
+    );
+    shell_message.push(String::from("Detached subscription to background"));
+    shell_message.push(String::from("All is good. Waiting for block notifications..."));
+    shell_sender.send(shell_message).await?;
+    drop(lock);
+
+    let e = loop {
+        match subscription.receive().await {
+            JsonResult::Notification(n) => {
+                let mut shell_message =
+                    vec![String::from("Got Block notification from darkfid subscription")];
+                if n.method != "blockchain.subscribe_blocks" {
+                    break Error::UnexpectedJsonRpc(format!(
+                        "Got foreign notification from darkfid: {}",
+                        n.method
+                    ))
+                }
+
+                // Verify parameters
+                if !n.params.is_array() {
+                    break Error::UnexpectedJsonRpc(
+                        "Received notification params are not an array".to_string(),
+                    )
+                }
+                let params = n.params.get::<Vec<JsonValue>>().unwrap();
+                if params.is_empty() {
+                    break Error::UnexpectedJsonRpc("Notification parameters are empty".to_string())
+                }
+
+                for param in params {
+                    let param = param.get::<String>().unwrap();
+                    let bytes = base64::decode(param).unwrap();
+
+                    let block: BlockInfo = deserialize_async(&bytes).await?;
+                    shell_message
+                        .push(String::from("Deserialized successfully. Scanning block..."));
+
+                    // Check if a reorg block was received, to reset to its previous
+                    let lock = drk.read().await;
+                    if block.header.height <= last_scanned_height {
+                        let reset_height = block.header.height.saturating_sub(1);
+                        if let Err(e) = lock.reset_to_height(reset_height) {
+                            return Err(Error::DatabaseError(format!(
+                                "[subscribe_blocks] Wallet state reset failed: {e:?}"
+                            )))
+                        }
+
+                        // Scan genesis again if needed
+                        if reset_height == 0 {
+                            let genesis = match lock.get_block_by_height(reset_height).await {
+                                Ok(b) => b,
+                                Err(e) => {
+                                    return Err(Error::Custom(format!(
+                                        "[subscribe_blocks] RPC client request failed: {e:?}"
+                                    )))
+                                }
+                            };
+                            let mut scan_cache = lock.scan_cache().await?;
+                            if let Err(e) = lock.scan_block(&mut scan_cache, &genesis).await {
+                                return Err(Error::DatabaseError(format!(
+                                    "[subscribe_blocks] Scanning block failed: {e:?}"
+                                )))
+                            };
+                            for msg in scan_cache.flush_messages() {
+                                shell_message.push(msg);
+                            }
+                        }
+                    }
+
+                    let mut scan_cache = lock.scan_cache().await?;
+                    if let Err(e) = lock.scan_block(&mut scan_cache, &block).await {
+                        return Err(Error::DatabaseError(format!(
+                            "[subscribe_blocks] Scanning block failed: {e:?}"
+                        )))
+                    }
+                    for msg in scan_cache.flush_messages() {
+                        shell_message.push(msg);
+                    }
+                    shell_sender.send(shell_message.clone()).await?;
+
+                    // Set new last scanned block height
+                    last_scanned_height = block.header.height;
+                }
+            }
+
+            JsonResult::Error(e) => {
+                // Some error happened in the transmission
+                break Error::UnexpectedJsonRpc(format!("Got error from JSON-RPC: {e:?}"))
+            }
+
+            x => {
+                // And this is weird
+                break Error::UnexpectedJsonRpc(format!("Got unexpected data from JSON-RPC: {x:?}"))
+            }
+        }
+    };
+
+    Err(e)
 }
