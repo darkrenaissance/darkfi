@@ -76,10 +76,24 @@ pub struct ScanCache {
     pub own_daos: HashMap<DaoBulla, (Option<SecretKey>, Option<SecretKey>)>,
     /// Our own DAOs proposals with their corresponding DAO reference
     pub own_proposals: HashMap<DaoProposalBulla, DaoBulla>,
+    /// Messages buffer for better downstream prints handling
+    pub messages_buffer: Vec<String>,
+}
+
+impl ScanCache {
+    /// Auxiliary function to append messages to the buffer.
+    pub fn log(&mut self, msg: String) {
+        self.messages_buffer.push(msg);
+    }
+
+    /// Auxiliary function to consume the messages buffer.
+    pub fn flush_messages(&mut self) -> Vec<String> {
+        self.messages_buffer.drain(..).collect()
+    }
 }
 
 impl Drk {
-    /// Auxiliarry function to generate a new [`ScanCache`] for the
+    /// Auxiliary function to generate a new [`ScanCache`] for the
     /// wallet.
     pub async fn scan_cache(&self) -> Result<ScanCache> {
         let money_tree = self.get_money_tree().await?;
@@ -124,6 +138,7 @@ impl Drk {
             dao_proposals_tree,
             own_daos,
             own_proposals,
+            messages_buffer: vec![],
         })
     }
 
@@ -254,21 +269,26 @@ impl Drk {
                                         )))
                                     }
                                 };
-                                if let Err(e) =
-                                    self.scan_block(&mut self.scan_cache().await?, &genesis).await
-                                {
+                                let mut scan_cache = self.scan_cache().await?;
+                                if let Err(e) = self.scan_block(&mut scan_cache, &genesis).await {
                                     return Err(Error::DatabaseError(format!(
                                         "[subscribe_blocks] Scanning block failed: {e:?}"
                                     )))
                                 };
+                                for msg in scan_cache.flush_messages() {
+                                    println!("{msg}");
+                                }
                             }
                         }
 
-                        if let Err(e) = self.scan_block(&mut self.scan_cache().await?, &block).await
-                        {
+                        let mut scan_cache = self.scan_cache().await?;
+                        if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
                             return Err(Error::DatabaseError(format!(
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
+                        }
+                        for msg in scan_cache.flush_messages() {
+                            println!("{msg}");
                         }
 
                         // Set new last scanned block height
@@ -304,18 +324,18 @@ impl Drk {
         let mut wallet_txs = vec![];
 
         // Scan the block
-        println!("=======================================");
-        println!("{}", block.header);
-        println!("=======================================");
-        println!("[scan_block] Iterating over {} transactions", block.txs.len());
+        scan_cache.log(String::from("======================================="));
+        scan_cache.log(format!("{}", block.header));
+        scan_cache.log(String::from("======================================="));
+        scan_cache.log(format!("[scan_block] Iterating over {} transactions", block.txs.len()));
         for tx in block.txs.iter() {
             let tx_hash = tx.hash();
             let tx_hash_string = tx_hash.to_string();
             let mut wallet_tx = false;
-            println!("[scan_block] Processing transaction: {tx_hash_string}");
+            scan_cache.log(format!("[scan_block] Processing transaction: {tx_hash_string}"));
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
-                    println!("[scan_block] Found Money contract in call {i}");
+                    scan_cache.log(format!("[scan_block] Found Money contract in call {i}"));
                     let (update_tree, own_tx) = self
                         .apply_tx_money_data(
                             scan_cache,
@@ -335,7 +355,7 @@ impl Drk {
                 }
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
-                    println!("[scan_block] Found DAO contract in call {i}");
+                    scan_cache.log(format!("[scan_block] Found DAO contract in call {i}"));
                     let (update_daos_tree, update_proposals_tree, own_tx) = self
                         .apply_tx_dao_data(
                             scan_cache,
@@ -358,13 +378,14 @@ impl Drk {
                 }
 
                 if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID {
-                    println!("[scan_block] Found DeployoOor contract in call {i}");
+                    scan_cache.log(format!("[scan_block] Found DeployoOor contract in call {i}"));
                     // TODO: implement
                     continue
                 }
 
                 // TODO: For now we skip non-native contract calls
-                println!("[scan_block] Found non-native contract in call {i}, skipping.");
+                scan_cache
+                    .log(format!("[scan_block] Found non-native contract in call {i}, skipping."));
             }
 
             // If this is our wallet tx we mark it for update
@@ -529,6 +550,9 @@ impl Drk {
                     eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
+                for msg in scan_cache.flush_messages() {
+                    println!("{msg}");
+                }
                 height += 1;
             }
         }
