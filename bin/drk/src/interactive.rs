@@ -56,11 +56,14 @@ fn help() {
         "\tsubscribe: Perform a scan and then subscribe to darkfid to listen for incoming blocks"
     );
     println!("\tunsubscribe: Stops the background subscription, if its active");
+    println!("\tsnooze: Disables the background subscription messages printing");
+    println!("\tunsnooze: Enables the background subscription messages printing");
     println!("\tscan: Scan the blockchain and parse relevant transactions");
 }
 
 /// Auxiliary function to define the interactive shell completions.
 fn completion(buf: &str, lc: &mut Vec<String>) {
+    // First we define the specific commands prefixes
     if buf.starts_with("h") {
         lc.push("help".to_string());
         return
@@ -86,13 +89,37 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
         return
     }
 
-    if buf.starts_with("u") {
+    if buf.starts_with("unsu") {
         lc.push("unsubscribe".to_string());
+        return
+    }
+
+    if buf.starts_with("sn") {
+        lc.push("snooze".to_string());
+        return
+    }
+
+    if buf.starts_with("unsn") {
+        lc.push("unsnooze".to_string());
         return
     }
 
     if buf.starts_with("sc") {
         lc.push("scan".to_string());
+        return
+    }
+
+    // Now the catch alls
+    if buf.starts_with("s") {
+        lc.push("subscribe".to_string());
+        lc.push("snooze".to_string());
+        lc.push("scan".to_string());
+        return
+    }
+
+    if buf.starts_with("u") {
+        lc.push("unsubscribe".to_string());
+        lc.push("unsnooze".to_string());
     }
 }
 
@@ -132,6 +159,7 @@ pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
 
     // Create a detached task to use for block subscription
     let mut subscription_active = false;
+    let mut snooze_active = false;
     let subscription_task = StoppableTask::new();
 
     // Create an unbounded smol channel, so we can have a printing
@@ -141,7 +169,7 @@ pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
     // Start the interactive shell
     loop {
         // Wait for next line to process
-        let line = listen_for_line(&shell_receiver).await;
+        let line = listen_for_line(&snooze_active, &shell_receiver).await;
 
         // Grab input or end if Ctrl-D or Ctrl-C was pressed
         let Some(line) = line else { break };
@@ -177,6 +205,8 @@ pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
                 .await
             }
             "unsubscribe" => handle_unsubscribe(&mut subscription_active, &subscription_task).await,
+            "snooze" => snooze_active = true,
+            "unsnooze" => snooze_active = false,
             "scan" => handle_scan(drk, &subscription_active, &parts).await,
             _ => println!("Unreconized command: {}", parts[0]),
         }
@@ -193,7 +223,10 @@ pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
 
 /// Auxiliary function to listen for linenoise input line and handle
 /// background task messages.
-async fn listen_for_line(shell_receiver: &Receiver<Vec<String>>) -> Option<String> {
+async fn listen_for_line(
+    snooze_active: &bool,
+    shell_receiver: &Receiver<Vec<String>>,
+) -> Option<String> {
     // Generate the linoise state structure
     let mut state = match LinenoiseState::edit_start(-1, -1, "drk> ") {
         Ok(s) => s,
@@ -255,6 +288,12 @@ async fn listen_for_line(shell_receiver: &Receiver<Vec<String>>) -> Option<Strin
                 while !shell_receiver.is_empty() {
                     match shell_receiver.recv().await {
                         Ok(msg) => {
+                            // We only print if snooze is inactive,
+                            // but have to consume the message regardless,
+                            // so the queue gets empty.
+                            if *snooze_active {
+                                continue
+                            }
                             // Hide prompt, print output, show prompt again
                             let _ = state.hide();
                             for line in msg {
