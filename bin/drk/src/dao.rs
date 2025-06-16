@@ -67,7 +67,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, AsyncEncodable, SerialDecodable,
+    async_trait, deserialize_async, serialize, serialize_async, AsyncEncodable, SerialDecodable,
     SerialEncodable,
 };
 
@@ -1390,10 +1390,10 @@ impl Drk {
         );
 
         // Execute the query
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![Some(*exec_height), Some(serialize_async(tx_hash).await), key],
-        ) {
+        if let Err(e) = self
+            .wallet
+            .exec_sql(&query, rusqlite::params![Some(*exec_height), Some(serialize(tx_hash)), key])
+        {
             return Err(Error::DatabaseError(format!(
                 "[apply_dao_exec_data] Update DAO proposal failed: {e:?}"
             )))
@@ -1491,9 +1491,9 @@ impl Drk {
 
         // Create its params
         let params = rusqlite::params![
-            serialize_async(leaf_position).await,
+            serialize(leaf_position),
             Some(*mint_height),
-            serialize_async(tx_hash).await,
+            serialize(tx_hash),
             call_index,
             key,
         ];
@@ -1567,8 +1567,8 @@ impl Drk {
 
         let params = rusqlite::params![
             key,
-            serialize_async(&proposal.proposal.dao_bulla).await,
-            serialize_async(&proposal.proposal).await,
+            serialize(&proposal.proposal.dao_bulla),
+            serialize(&proposal.proposal),
             data,
             leaf_position,
             money_snapshot_tree,
@@ -1611,15 +1611,15 @@ impl Drk {
 
         // Create its params
         let params = rusqlite::params![
-            serialize_async(&vote.proposal).await,
+            serialize(&vote.proposal),
             vote.vote_option as u64,
-            serialize_async(&vote.yes_vote_blind).await,
-            serialize_async(&vote.all_vote_value).await,
-            serialize_async(&vote.all_vote_blind).await,
+            serialize(&vote.yes_vote_blind),
+            serialize(&vote.all_vote_value),
+            serialize(&vote.all_vote_blind),
             vote.block_height,
-            serialize_async(&vote.tx_hash).await,
+            serialize(&vote.tx_hash),
             vote.call_index,
-            serialize_async(&vote.nullifiers).await,
+            serialize(&vote.nullifiers),
         ];
 
         // Execute the query

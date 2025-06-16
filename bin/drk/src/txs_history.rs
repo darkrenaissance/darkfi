@@ -19,7 +19,7 @@
 use rusqlite::types::Value;
 
 use darkfi::{tx::Transaction, Error, Result};
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::{deserialize_async, serialize};
 
 use crate::{
     convert_named_params,
@@ -56,10 +56,8 @@ impl Drk {
 
         // Execute the query
         let tx_hash = tx.hash().to_string();
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![tx_hash, status, block_height, &serialize_async(tx).await],
-        )?;
+        self.wallet
+            .exec_sql(&query, rusqlite::params![tx_hash, status, block_height, &serialize(tx)])?;
 
         Ok(tx_hash)
     }

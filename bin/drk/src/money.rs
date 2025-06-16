@@ -55,7 +55,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
+use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
 
 use crate::{
     cache::CacheSmt,
@@ -851,16 +851,16 @@ impl Drk {
             // Execute the query
             let params = rusqlite::params![
                 key,
-                serialize_async(&coin.note.value).await,
-                serialize_async(&coin.note.token_id).await,
-                serialize_async(&coin.note.spend_hook).await,
-                serialize_async(&coin.note.user_data).await,
-                serialize_async(&coin.note.coin_blind).await,
-                serialize_async(&coin.note.value_blind).await,
-                serialize_async(&coin.note.token_blind).await,
-                serialize_async(&coin.secret).await,
-                serialize_async(&coin.leaf_position).await,
-                serialize_async(&coin.note.memo).await,
+                serialize(&coin.note.value),
+                serialize(&coin.note.token_id),
+                serialize(&coin.note.spend_hook),
+                serialize(&coin.note.user_data),
+                serialize(&coin.note.coin_blind),
+                serialize(&coin.note.value_blind),
+                serialize(&coin.note.token_blind),
+                serialize(&coin.secret),
+                serialize(&coin.leaf_position),
+                serialize(&coin.note.memo),
                 creation_height,
                 0, // <-- is_spent
                 spent_height,
