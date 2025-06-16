@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fs::create_dir_all;
+use std::{fs::create_dir_all, sync::Arc};
 
+use smol::lock::RwLock;
 use url::Url;
 
 use darkfi::{rpc::client::RpcClient, system::ExecutorPtr, util::path::expand_path, Error, Result};
@@ -67,6 +68,9 @@ use walletdb::{WalletDb, WalletPtr};
 pub mod cache;
 use cache::Cache;
 
+/// Atomic pointer to a `Drk` structure.
+pub type DrkPtr = Arc<RwLock<Drk>>;
+
 /// CLI-util structure
 pub struct Drk {
     /// Blockchain cache database operations handler
@@ -114,6 +118,10 @@ impl Drk {
         };
 
         Ok(Self { cache, wallet, rpc_client, fun })
+    }
+
+    pub fn into_ptr(self) -> DrkPtr {
+        Arc::new(RwLock::new(self))
     }
 
     /// Initialize wallet with tables for `Drk`.

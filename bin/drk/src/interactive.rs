@@ -35,7 +35,7 @@ use darkfi::{
 
 use crate::{
     cli_util::{generate_completions, kaching},
-    Drk,
+    DrkPtr,
 };
 
 // TODO:
@@ -134,7 +134,7 @@ fn hints(buf: &str) -> Option<(String, i32, bool)> {
 
 /// Auxiliary function to start provided Drk as an interactive shell.
 /// Only sane/linenoise terminals are suported.
-pub async fn interactive(drk: &Drk, history_path: &str, ex: &ExecutorPtr) {
+pub async fn interactive(drk: &DrkPtr, history_path: &str, ex: &ExecutorPtr) {
     // Expand the history file path
     let history_path = match expand_path(history_path) {
         Ok(p) => p,
@@ -322,8 +322,8 @@ async fn listen_for_line(
 }
 
 /// Auxiliary function to define the ping command handling.
-async fn handle_ping(drk: &Drk) {
-    if let Err(e) = drk.ping().await {
+async fn handle_ping(drk: &DrkPtr) {
+    if let Err(e) = drk.read().await.ping().await {
         println!("Error while executing ping command: {e}")
     }
 }
@@ -343,7 +343,7 @@ fn handle_completions(parts: &[&str]) {
 
 /// Auxiliary function to define the subscribe command handling.
 async fn handle_subscribe(
-    drk: &Drk,
+    drk: &DrkPtr,
     subscription_active: &mut bool,
     subscription_task: &StoppableTaskPtr,
     shell_sender: &Sender<Vec<String>>,
@@ -353,7 +353,7 @@ async fn handle_subscribe(
         println!("Subscription is already active!")
     }
 
-    if let Err(e) = drk.scan_blocks().await {
+    if let Err(e) = drk.read().await.scan_blocks().await {
         println!("Failed during scanning: {e:?}");
         return
     }
@@ -402,7 +402,7 @@ async fn handle_unsubscribe(subscription_active: &mut bool, subscription_task: &
 }
 
 /// Auxiliary function to define the scan command handling.
-async fn handle_scan(drk: &Drk, subscription_active: &bool, parts: &[&str]) {
+async fn handle_scan(drk: &DrkPtr, subscription_active: &bool, parts: &[&str]) {
     if *subscription_active {
         println!("Subscription is already active!");
         return
@@ -415,6 +415,7 @@ async fn handle_scan(drk: &Drk, subscription_active: &bool, parts: &[&str]) {
     }
 
     // Check if reset was requested
+    let lock = drk.read().await;
     if parts.len() == 3 {
         if parts[1] != "--reset" {
             println!("Malformed `scan` command");
@@ -430,13 +431,13 @@ async fn handle_scan(drk: &Drk, subscription_active: &bool, parts: &[&str]) {
             }
         };
 
-        if let Err(e) = drk.reset_to_height(height) {
+        if let Err(e) = lock.reset_to_height(height) {
             println!("Failed during wallet reset: {e:?}");
             return
         }
     }
 
-    if let Err(e) = drk.scan_blocks().await {
+    if let Err(e) = lock.scan_blocks().await {
         println!("Failed during scanning: {e:?}");
         return
     }
