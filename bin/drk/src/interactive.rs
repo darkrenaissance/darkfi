@@ -25,6 +25,7 @@ use linenoise_rs::{
     linenoise_set_completion_callback, linenoise_set_hints_callback, LinenoiseState,
 };
 use smol::channel::{unbounded, Receiver, Sender};
+use url::Url;
 
 use darkfi::{
     cli_desc,
@@ -35,6 +36,7 @@ use darkfi::{
 
 use crate::{
     cli_util::{generate_completions, kaching},
+    rpc::subscribe_blocks,
     DrkPtr,
 };
 
@@ -134,7 +136,7 @@ fn hints(buf: &str) -> Option<(String, i32, bool)> {
 
 /// Auxiliary function to start provided Drk as an interactive shell.
 /// Only sane/linenoise terminals are suported.
-pub async fn interactive(drk: &DrkPtr, history_path: &str, ex: &ExecutorPtr) {
+pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &ExecutorPtr) {
     // Expand the history file path
     let history_path = match expand_path(history_path) {
         Ok(p) => p,
@@ -197,6 +199,7 @@ pub async fn interactive(drk: &DrkPtr, history_path: &str, ex: &ExecutorPtr) {
             "subscribe" => {
                 handle_subscribe(
                     drk,
+                    endpoint,
                     &mut subscription_active,
                     &subscription_task,
                     &shell_sender,
@@ -297,7 +300,7 @@ async fn listen_for_line(
                             // Hide prompt, print output, show prompt again
                             let _ = state.hide();
                             for line in msg {
-                                println!("{line}\r");
+                                println!("{}\r", line.replace("\n", "\n\r"));
                             }
                             let _ = state.show();
                         }
@@ -344,13 +347,15 @@ fn handle_completions(parts: &[&str]) {
 /// Auxiliary function to define the subscribe command handling.
 async fn handle_subscribe(
     drk: &DrkPtr,
+    endpoint: &Url,
     subscription_active: &mut bool,
     subscription_task: &StoppableTaskPtr,
     shell_sender: &Sender<Vec<String>>,
     ex: &ExecutorPtr,
 ) {
     if *subscription_active {
-        println!("Subscription is already active!")
+        println!("Subscription is already active!");
+        return
     }
 
     if let Err(e) = drk.read().await.scan_blocks().await {
@@ -360,29 +365,16 @@ async fn handle_subscribe(
     println!("Finished scanning blockchain");
 
     // Start the subcristion task
-    // TODO: use actual subscribe not a dummy task
+    let drk_ = drk.clone();
+    let endpoint_ = endpoint.clone();
     let shell_sender_ = shell_sender.clone();
+    let ex_ = ex.clone();
     subscription_task.clone().start(
-        async move {
-            loop {
-                msleep(750).await;
-                let line = String::from("This is a single line dummy message");
-                if shell_sender_.send(vec![line]).await.is_err() {
-                    break;
-                }
-                msleep(750).await;
-                let line0 = String::from("This is the first line of a multiline dummy message");
-                let line1 = String::from("This is the second line of a multiline dummy message");
-                if shell_sender_.send(vec![line0, line1]).await.is_err() {
-                    break;
-                }
-            }
-            Ok(())
-        },
+        async move { subscribe_blocks(&drk_, shell_sender_, endpoint_, &ex_).await },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => println!("Failed starting dnet subs task: {e}"),
+                Err(e) => println!("Failed starting subscription task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -395,7 +387,8 @@ async fn handle_subscribe(
 /// Auxiliary function to define the unsubscribe command handling.
 async fn handle_unsubscribe(subscription_active: &mut bool, subscription_task: &StoppableTaskPtr) {
     if !*subscription_active {
-        println!("Subscription is already inactive!")
+        println!("Subscription is already inactive!");
+        return
     }
     subscription_task.stop().await;
     *subscription_active = false;

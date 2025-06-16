@@ -246,14 +246,6 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let broadcast =
         SubCommand::with_name("broadcast").about("Read a transaction from stdin and broadcast it");
 
-    // Subscribe
-    let subscribe = SubCommand::with_name("subscribe").about(
-        "This subscription will listen for incoming blocks from darkfid and look \
-                    through their transactions to see if there's any that interest us. \
-                    With `drk` we look at transactions calling the money contract so we can \
-                    find coins sent to us and fill our wallet with the necessary metadata.",
-    );
-
     // DAO
     let proposer_limit = Arg::with_name("proposer-limit")
         .help("The minimum amount of governance tokens needed to open a proposal for this DAO");
@@ -516,7 +508,6 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         attach_fee,
         inspect,
         broadcast,
-        subscribe,
         dao,
         scan,
         explorer,

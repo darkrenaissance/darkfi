@@ -207,12 +207,6 @@ enum Subcmd {
     /// Read a transaction from stdin and broadcast it
     Broadcast,
 
-    /// This subscription will listen for incoming blocks from darkfid and look
-    /// through their transactions to see if there's any that interest us.
-    /// With `drk` we look at transactions calling the money contract so we can
-    /// find coins sent to us and fill our wallet with the necessary metadata.
-    Subscribe,
-
     /// DAO functionalities
     Dao {
         #[structopt(subcommand)]
@@ -662,13 +656,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
-                Some(blockchain_config.endpoint),
+                Some(blockchain_config.endpoint.clone()),
                 &ex,
                 args.fun,
             )
             .await
             .into_ptr();
-            interactive(&drk, &blockchain_config.history_path, &ex).await;
+            interactive(&drk, &blockchain_config.endpoint, &blockchain_config.history_path, &ex)
+                .await;
             drk.read().await.stop_rpc_client().await?;
             Ok(())
         }
@@ -2022,25 +2017,6 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             };
 
             println!("Transaction ID: {txid}");
-
-            drk.stop_rpc_client().await
-        }
-
-        Subcmd::Subscribe => {
-            let drk = new_wallet(
-                blockchain_config.cache_path,
-                blockchain_config.wallet_path,
-                blockchain_config.wallet_pass,
-                Some(blockchain_config.endpoint.clone()),
-                &ex,
-                args.fun,
-            )
-            .await;
-
-            if let Err(e) = drk.subscribe_blocks(blockchain_config.endpoint, &ex).await {
-                eprintln!("Block subscription failed: {e:?}");
-                exit(2);
-            }
 
             drk.stop_rpc_client().await
         }
