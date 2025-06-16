@@ -21,12 +21,11 @@ use std::{
     str::FromStr,
 };
 
-use rodio::{source::Source, Decoder, OutputStream};
+use rodio::{Decoder, OutputStream, Sink};
 use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
 use darkfi::{
     cli_desc,
-    system::sleep,
     tx::Transaction,
     util::{encoding::base64, parse::decode_base10},
     Error, Result,
@@ -99,14 +98,12 @@ pub async fn kaching() {
     let cursor = Cursor::new(WALLET_MP3);
 
     let Ok((_stream, stream_handle)) = OutputStream::try_default() else { return };
+    let Ok(sink) = Sink::try_new(&stream_handle) else { return };
 
     let Ok(source) = Decoder::new(cursor) else { return };
+    sink.append(source);
 
-    if stream_handle.play_raw(source.convert_samples()).is_err() {
-        return
-    }
-
-    sleep(2).await;
+    sink.sleep_until_end();
 }
 
 /// Auxiliary function to generate provided shell completions.
