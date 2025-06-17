@@ -43,6 +43,7 @@ class Dnetview:
 
         self.model = Model()
         self.view = View(self.model)
+        self.rpc_conns = []
 
     async def subscribe(self, rpc, node):
         name = node['name']
@@ -68,8 +69,6 @@ class Dnetview:
                     await self.connect_loop(rpc, node, info)
                     await self.get_info(rpc, node, info)
 
-            await rpc.dnet_switch(False)
-    
         if type == 'LILITH':
             while True:
                 await asyncio.sleep(1)
@@ -78,8 +77,6 @@ class Dnetview:
                 except Exception as e:
                     logging.debug(f'{name} RPC on port {port} disconnected {e}')
                     await self.connect_loop(rpc, node, info)
-
-        await rpc.stop()
 
     async def lilith_spawns(self, rpc, node, info):
         name = node['name']
@@ -133,6 +130,7 @@ class Dnetview:
         async with asyncio.TaskGroup() as tg:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
+                self.rpc_conns.append(rpc)
                 subscribe = tg.create_task(self.subscribe(
                             rpc, node))
                 nodes = tg.create_task(self.update_info())
@@ -189,7 +187,11 @@ class Dnetview:
         self.ev.create_task(self.start_connect_slots(nodes))
         self.ev.create_task(self.view.update_view(self.ev, loop))
 
-        loop.run()
+        try:
+            loop.run()
+        finally:
+            self.ev.run_until_complete(self.shutdown())
+
 
     def unhandled_input(self, key):
         if isinstance(key, tuple):
@@ -198,6 +200,14 @@ class Dnetview:
             for task in asyncio.all_tasks():
                 task.cancel()
             raise urwid.ExitMainLoop()
+
+    async def shutdown(self):
+        for rpc in self.rpc_conns:
+            try:
+                await rpc.dnet_switch(False)
+                await rpc.stop()
+            except:
+                pass
 
 if __name__ == '__main__':
     dnet = Dnetview()
