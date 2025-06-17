@@ -886,11 +886,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             if coins {
                 let coins = drk.get_coins(true).await?;
 
-                let aliases_map = drk.get_aliases_mapped_by_token().await?;
-
                 if coins.is_empty() {
                     return Ok(())
                 }
+
+                let aliases_map = drk.get_aliases_mapped_by_token().await?;
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
