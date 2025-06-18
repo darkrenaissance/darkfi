@@ -18,7 +18,7 @@
  */
 
 use super::{
-    tree::verify_proof,
+    tree::{verify_proof, MemoryDb},
     utils::{random_hashes, shuffle},
     Hash, Monotree,
 };
@@ -29,7 +29,8 @@ fn monotree_test_insert_then_verify_values() {
     let values = random_hashes(100);
 
     let mut root = None;
-    let mut tree = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
 
     for (i, (key, value)) in keys.iter().zip(values.iter()).enumerate() {
         root = tree.insert(root.as_ref(), key, value).unwrap();
@@ -49,7 +50,8 @@ fn monotree_test_insert_keys_then_gen_and_verify_proof() {
     let values = random_hashes(100);
 
     let mut root = None;
-    let mut tree = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
 
     for (i, (key, value)) in keys.iter().zip(values.iter()).enumerate() {
         root = tree.insert(root.as_ref(), key, value).unwrap();
@@ -70,7 +72,8 @@ fn monotree_test_insert_keys_then_delete_keys_in_order() {
     let values = random_hashes(100);
 
     let mut root = None;
-    let mut tree = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
@@ -102,7 +105,8 @@ fn monotree_test_insert_then_delete_keys_reverse() {
     let values = random_hashes(100);
 
     let mut root = None;
-    let mut tree = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
@@ -134,7 +138,8 @@ fn monotree_test_insert_then_delete_keys_random() {
     let values = random_hashes(100);
 
     let mut root = None;
-    let mut tree = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
@@ -171,10 +176,12 @@ fn monotree_test_deterministic_ordering() {
     let values = random_hashes(100);
 
     let mut root1 = None;
-    let mut tree1 = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree1 = Monotree::new(db);
 
     let mut root2 = None;
-    let mut tree2 = Monotree::new();
+    let db = MemoryDb::new();
+    let mut tree2 = Monotree::new(db);
 
     // Insert in normal order
     root1 = tree1.inserts(root1.as_ref(), &keys, &values).unwrap();

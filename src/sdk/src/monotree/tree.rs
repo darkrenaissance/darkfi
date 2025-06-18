@@ -18,6 +18,7 @@
  */
 
 use hashbrown::{HashMap, HashSet};
+use sled_overlay::SledTreeOverlay;
 
 use super::{
     bits::Bits,
@@ -25,7 +26,7 @@ use super::{
     utils::{get_sorted_indices, slice_to_hash},
     Hash, Proof, HASH_LEN, ROOT_KEY,
 };
-use crate::GenericResult;
+use crate::{ContractError, GenericResult};
 
 #[derive(Clone, Debug)]
 pub(crate) struct MemCache {
@@ -57,11 +58,26 @@ impl MemCache {
         self.set.remove(key);
     }
 
-    pub(crate) fn delete(&mut self, key: &[u8]) {
+    pub(crate) fn del(&mut self, key: &[u8]) {
         self.set.insert(slice_to_hash(key));
     }
 }
 
+/// Trait for implementing Monotree's storage system
+pub trait MonotreeStorageAdapter {
+    /// Insert a Key/Value pair into the Monotree
+    fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()>;
+    /// Query the Monotree for a Key
+    fn get(&self, key: &[u8]) -> GenericResult<Option<Vec<u8>>>;
+    /// Delete an entry in the Monotree
+    fn del(&mut self, key: &Hash) -> GenericResult<()>;
+    /// Initialize a batch
+    fn init_batch(&mut self) -> GenericResult<()>;
+    /// Finalize and write a batch
+    fn finish_batch(&mut self) -> GenericResult<()>;
+}
+
+/// In-memory storage for Monotree
 #[derive(Clone, Debug)]
 pub struct MemoryDb {
     db: HashMap<Hash, Vec<u8>>,
@@ -69,10 +85,22 @@ pub struct MemoryDb {
     batch_on: bool,
 }
 
-#[allow(dead_code)]
+#[allow(clippy::new_without_default)]
 impl MemoryDb {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { db: HashMap::new(), batch: MemCache::new(), batch_on: false }
+    }
+}
+
+impl MonotreeStorageAdapter for MemoryDb {
+    fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
+        if self.batch_on {
+            self.batch.put(key, value);
+        } else {
+            self.db.insert(slice_to_hash(key), value);
+        }
+
+        Ok(())
     }
 
     fn get(&self, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
@@ -86,21 +114,13 @@ impl MemoryDb {
         }
     }
 
-    fn put(&mut self, key: &[u8], value: Vec<u8>) -> GenericResult<()> {
+    fn del(&mut self, key: &Hash) -> GenericResult<()> {
         if self.batch_on {
-            self.batch.put(key, value);
-        } else {
-            self.db.insert(slice_to_hash(key), value);
-        }
-        Ok(())
-    }
-
-    fn delete(&mut self, key: &[u8]) -> GenericResult<()> {
-        if self.batch_on {
-            self.batch.delete(key);
+            self.batch.del(key);
         } else {
             self.db.remove(key);
         }
+
         Ok(())
     }
 
@@ -109,6 +129,7 @@ impl MemoryDb {
             self.batch.clear();
             self.batch_on = true;
         }
+
         Ok(())
     }
 
@@ -122,25 +143,98 @@ impl MemoryDb {
             }
             self.batch_on = false;
         }
+
+        Ok(())
+    }
+}
+
+/// sled-overlay-based storage for Monotree
+#[derive(Clone, Debug)]
+pub struct SledDb {
+    db: SledTreeOverlay,
+    batch: MemCache,
+    batch_on: bool,
+}
+
+impl SledDb {
+    pub fn new(db: SledTreeOverlay) -> Self {
+        Self { db, batch: MemCache::new(), batch_on: false }
+    }
+}
+
+impl MonotreeStorageAdapter for SledDb {
+    fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
+        if self.batch_on {
+            self.batch.put(key, value);
+        } else if let Err(e) = self.db.insert(&slice_to_hash(key), &value) {
+            return Err(ContractError::IoError(e.to_string()))
+        }
+
+        Ok(())
+    }
+
+    fn get(&self, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
+        if self.batch_on && self.batch.contains(key) {
+            return Ok(self.batch.get(key));
+        }
+
+        match self.db.get(key) {
+            Ok(Some(v)) => Ok(Some(v.to_vec())),
+            Ok(None) => Ok(None),
+            Err(e) => Err(ContractError::IoError(e.to_string())),
+        }
+    }
+
+    fn del(&mut self, key: &Hash) -> GenericResult<()> {
+        if self.batch_on {
+            self.batch.del(key);
+        } else if let Err(e) = self.db.remove(key) {
+            return Err(ContractError::IoError(e.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn init_batch(&mut self) -> GenericResult<()> {
+        if !self.batch_on {
+            self.batch.clear();
+            self.batch_on = true;
+        }
+
+        Ok(())
+    }
+
+    fn finish_batch(&mut self) -> GenericResult<()> {
+        if self.batch_on {
+            for (key, value) in self.batch.map.drain() {
+                if let Err(e) = self.db.insert(&key, &value) {
+                    return Err(ContractError::IoError(e.to_string()))
+                }
+            }
+            for key in self.batch.set.drain() {
+                if let Err(e) = self.db.remove(&key) {
+                    return Err(ContractError::IoError(e.to_string()))
+                }
+            }
+            self.batch_on = false;
+        }
+
         Ok(())
     }
 }
 
 /// A structure for `monotree`
+///
+/// To use this, first create a `MonotreeStorageAdapter` implementor,
+/// and then just manually create this struct with `::new()`.
 #[derive(Clone, Debug)]
-pub struct Monotree {
-    db: MemoryDb,
+pub struct Monotree<D: MonotreeStorageAdapter> {
+    db: D,
 }
 
-impl Default for Monotree {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Monotree {
-    pub fn new() -> Self {
-        Self { db: MemoryDb::new() }
+impl<D: MonotreeStorageAdapter> Monotree<D> {
+    pub fn new(db: D) -> Self {
+        Self { db }
     }
 
     fn hash_digest(bytes: &[u8]) -> Hash {
@@ -403,6 +497,8 @@ impl Monotree {
 }
 
 /// Verify a MerkleProof with the given root and leaf.
+///
+/// NOTE: We use `Monotree::<MemoryDb>` to `hash_digest()` but it doesn't matter.
 pub fn verify_proof(root: Option<&Hash>, leaf: &Hash, proof: Option<&Proof>) -> bool {
     match proof {
         None => false,
@@ -412,10 +508,10 @@ pub fn verify_proof(root: Option<&Hash>, leaf: &Hash, proof: Option<&Proof>) -> 
                 if *right {
                     let l = cut.len();
                     let o = [&cut[..l - 1], &hash[..], &cut[l - 1..]].concat();
-                    hash = Monotree::hash_digest(&o);
+                    hash = Monotree::<MemoryDb>::hash_digest(&o);
                 } else {
                     let o = [&hash[..], &cut[..]].concat();
-                    hash = Monotree::hash_digest(&o);
+                    hash = Monotree::<MemoryDb>::hash_digest(&o);
                 }
             });
             root.expect("verify_proof(): root") == &hash
