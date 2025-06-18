@@ -18,7 +18,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use darkfi_sdk::{monotree::Monotree, tx::TransactionHash};
+use darkfi_sdk::{
+    monotree::{self, Monotree},
+    tx::TransactionHash,
+};
 use sled_overlay::{sled, sled::Transactional};
 use tracing::debug;
 
@@ -403,7 +406,7 @@ impl Blockchain {
     /// checksums, along with the wasm bincodes checksum.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree> {
+    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         self.contracts.get_state_monotree(&self.sled_db)
     }
 }
@@ -608,7 +611,7 @@ impl BlockchainOverlay {
     /// during checksum computing.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree> {
+    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
     }
 }

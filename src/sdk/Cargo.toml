@@ -45,6 +45,9 @@ lazy_static = "1.5.0"
 subtle = "2.6.1"
 hashbrown = "0.15.4"
 
+# Storage
+sled-overlay = "0.1.9"
+
 [dev-dependencies]
 halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.1", features = ["test-dependencies"]}

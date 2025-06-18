@@ -23,7 +23,7 @@ use darkfi_sdk::{
         ContractId, NATIVE_CONTRACT_IDS_BYTES, NATIVE_CONTRACT_ZKAS_DB_NAMES,
         SMART_CONTRACT_ZKAS_DB_NAME,
     },
-    monotree::Monotree,
+    monotree::{self, Monotree},
 };
 use darkfi_serial::{deserialize, serialize};
 use sled_overlay::{serial::parse_record, sled, SledDbOverlay};
@@ -260,10 +260,11 @@ impl ContractStore {
     /// checksums, along with the wasm bincodes checksum.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree> {
+    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<monotree::MemoryDb>> {
         // Initialize the monotree
         let mut root = None;
-        let mut tree = Monotree::new();
+        let monotree_db = monotree::MemoryDb::new();
+        let mut tree = Monotree::new(monotree_db);
 
         // Iterate over current contracts states records
         // TODO: parallelize this with a threadpool
@@ -455,7 +456,7 @@ impl ContractStoreOverlay {
     /// Be carefull as this will open all states trees in the overlay.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree> {
+    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         let mut lock = self.0.lock().unwrap();
 
         // Grab all states pointers
@@ -473,7 +474,8 @@ impl ContractStoreOverlay {
 
         // Initialize the monotree
         let mut root = None;
-        let mut tree = Monotree::new();
+        let monotree_db = monotree::MemoryDb::new();
+        let mut tree = Monotree::new(monotree_db);
 
         // Iterate over contract states pointers
         // TODO: parallelize this with a threadpool
@@ -520,7 +522,7 @@ impl ContractStoreOverlay {
     /// Monotree(SMT).
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn update_state_monotree(&self, tree: &mut Monotree) -> Result<()> {
+    pub fn update_state_monotree(&self, tree: &mut Monotree<monotree::MemoryDb>) -> Result<()> {
         let lock = self.0.lock().unwrap();
 
         // Iterate over overlay's caches

@@ -26,7 +26,7 @@ use darkfi_sdk::{
     },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
-    monotree::Monotree,
+    monotree::{self, Monotree},
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
@@ -214,7 +214,7 @@ pub fn validate_blockchain(
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     module: &PoWModule,
-    state_monotree: &mut Monotree,
+    state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
     previous: &BlockInfo,
     verify_fees: bool,
@@ -297,7 +297,7 @@ pub async fn verify_block(
 /// Verify given checkpoint [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
-    state_monotree: &mut Monotree,
+    state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
     header: &HeaderHash,
     block_target: u32,
