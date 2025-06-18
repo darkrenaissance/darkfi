@@ -18,7 +18,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use darkfi_sdk::{crypto::MerkleTree, monotree::Monotree, tx::TransactionHash};
+use darkfi_sdk::{
+    crypto::MerkleTree,
+    monotree::{self, Monotree},
+    tx::TransactionHash,
+};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayStateDiff;
@@ -726,7 +730,7 @@ pub struct Fork {
     /// Current PoW module state
     pub module: PoWModule,
     /// Current contracts states checksums Monotree(SMT)
-    pub state_monotree: Monotree,
+    pub state_monotree: Monotree<monotree::MemoryDb>,
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence

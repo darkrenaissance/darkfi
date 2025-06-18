@@ -1922,6 +1922,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_core 0.6.4",
  "sha2",
+ "sled-overlay",
  "subtle",
  "thiserror 2.0.12",
 ]
