@@ -62,28 +62,33 @@ use crate::{
 //  4. create a transactions cache in the wallet db, so you can use it to handle them.
 
 /// Auxiliary function to print the help message.
-fn help() {
-    println!("{}", cli_desc!());
-    println!("Commands:");
-    println!("\thelp: Prints the help message");
-    println!("\tkaching: Fun");
-    println!("\tping: Send a ping request to the darkfid RPC endpoint");
-    println!("\tcompletions: Generate a SHELL completion script and print to stdout");
-    println!("\twallet: Wallet operations");
-    println!("\tspend: Read a transaction from stdin and mark its input coins as spent");
-    println!("\tunspend: Unspend a coin");
-    println!("\ttransfer: Create a payment transaction");
-    println!("\totc: OTC atomic swap");
-    println!("\tattach-fee: Attach the fee call to a transaction given from stdin");
-    println!("\tinspect: Inspect a transaction from stdin");
-    println!("\tbroadcast: Read a transaction from stdin and broadcast it");
-    println!(
-        "\tsubscribe: Perform a scan and then subscribe to darkfid to listen for incoming blocks"
-    );
-    println!("\tunsubscribe: Stops the background subscription, if its active");
-    println!("\tsnooze: Disables the background subscription messages printing");
-    println!("\tunsnooze: Enables the background subscription messages printing");
-    println!("\tscan: Scan the blockchain and parse relevant transactions");
+fn help(output: &mut Vec<String>) {
+    output.push(String::from(cli_desc!()));
+    output.push(String::from("Commands:"));
+    output.push(String::from("\thelp: Prints the help message"));
+    output.push(String::from("\tkaching: Fun"));
+    output.push(String::from("\tping: Send a ping request to the darkfid RPC endpoint"));
+    output.push(String::from(
+        "\tcompletions: Generate a SHELL completion script and print to stdout",
+    ));
+    output.push(String::from("\twallet: Wallet operations"));
+    output.push(String::from(
+        "\tspend: Read a transaction from stdin and mark its input coins as spent",
+    ));
+    output.push(String::from("\tunspend: Unspend a coin"));
+    output.push(String::from("\ttransfer: Create a payment transaction"));
+    output.push(String::from("\totc: OTC atomic swap"));
+    output
+        .push(String::from("\tattach-fee: Attach the fee call to a transaction given from stdin"));
+    output.push(String::from("\tinspect: Inspect a transaction from stdin"));
+    output.push(String::from("\tbroadcast: Read a transaction from stdin and broadcast it"));
+    output.push(String::from(
+        "\tsubscribe: Perform a scan and then subscribe to darkfid to listen for incoming blocks",
+    ));
+    output.push(String::from("\tunsubscribe: Stops the background subscription, if its active"));
+    output.push(String::from("\tsnooze: Disables the background subscription messages printing"));
+    output.push(String::from("\tunsnooze: Enables the background subscription messages printing"));
+    output.push(String::from("\tscan: Scan the blockchain and parse relevant transactions"));
 }
 
 /// Auxiliary function to define the interactive shell completions.
@@ -271,42 +276,65 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
         // Add line to history
         linenoise_history_add(&line);
 
-        // Parse command parts
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() {
-            continue
+        // Split commands
+        let commands: Vec<&str> = line.split('|').collect();
+
+        // Process each command
+        let mut input = vec![];
+        for command in commands {
+            // Handle previous command output
+            // TODO: this is examplatory, we will actually use the input
+            // in our commands
+            for line in &input {
+                println!("{line}");
+            }
+
+            // Parse command parts
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            if parts.is_empty() {
+                continue
+            }
+
+            // Handle command
+            let mut output = vec![];
+            match parts[0] {
+                "help" => help(&mut output),
+                "kaching" => kaching().await,
+                "ping" => handle_ping(drk).await,
+                "completions" => handle_completions(&parts),
+                "wallet" => handle_wallet(drk, &parts).await,
+                "spend" => handle_spend(drk).await,
+                "unspend" => handle_unspend(drk, &parts).await,
+                "transfer" => handle_transfer(drk, &parts).await,
+                "otc" => handle_otc(drk, &parts).await,
+                "attach-fee" => handle_attach_fee(drk).await,
+                "inspect" => handle_inspect().await,
+                "broadcast" => handle_broadcast(drk).await,
+                "subscribe" => {
+                    handle_subscribe(
+                        drk,
+                        endpoint,
+                        &mut subscription_active,
+                        &subscription_task,
+                        &shell_sender,
+                        ex,
+                    )
+                    .await
+                }
+                "unsubscribe" => {
+                    handle_unsubscribe(&mut subscription_active, &subscription_task).await
+                }
+                "snooze" => snooze_active = true,
+                "unsnooze" => snooze_active = false,
+                "scan" => handle_scan(drk, &subscription_active, &parts).await,
+                _ => println!("Unreconized command: {}", parts[0]),
+            }
+            input = output
         }
 
-        // Handle command
-        match parts[0] {
-            "help" => help(),
-            "kaching" => kaching().await,
-            "ping" => handle_ping(drk).await,
-            "completions" => handle_completions(&parts),
-            "wallet" => handle_wallet(drk, &parts).await,
-            "spend" => handle_spend(drk).await,
-            "unspend" => handle_unspend(drk, &parts).await,
-            "transfer" => handle_transfer(drk, &parts).await,
-            "otc" => handle_otc(drk, &parts).await,
-            "attach-fee" => handle_attach_fee(drk).await,
-            "inspect" => handle_inspect().await,
-            "broadcast" => handle_broadcast(drk).await,
-            "subscribe" => {
-                handle_subscribe(
-                    drk,
-                    endpoint,
-                    &mut subscription_active,
-                    &subscription_task,
-                    &shell_sender,
-                    ex,
-                )
-                .await
-            }
-            "unsubscribe" => handle_unsubscribe(&mut subscription_active, &subscription_task).await,
-            "snooze" => snooze_active = true,
-            "unsnooze" => snooze_active = false,
-            "scan" => handle_scan(drk, &subscription_active, &parts).await,
-            _ => println!("Unreconized command: {}", parts[0]),
+        // Handle last command output
+        for line in input {
+            println!("{line}");
         }
     }
 
