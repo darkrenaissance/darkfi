@@ -28,7 +28,7 @@ mint_tokens() {
     $DRK alias add WCKD "$TOKEN_ID1"
     $DRK alias add MLDY "$TOKEN_ID2"
 
-    ADDR="$($DRK wallet --address)"
+    ADDR="$($DRK wallet address)"
 
     $DRK token mint WCKD 42 "$ADDR" | tee /tmp/mint-wkcd.tx | $DRK broadcast
     $DRK token mint MLDY 20 "$ADDR" | tee /tmp/mint-mldy.tx | $DRK broadcast
@@ -37,7 +37,7 @@ mint_tokens() {
 }
 
 token_balance() {
-    BALANCE="$($DRK wallet --balance 2>/dev/null)"
+    BALANCE="$($DRK wallet balance 2>/dev/null)"
 
     # No tokens received at all yet
     if echo "$BALANCE" | grep -q "No unspent balances found"; then
@@ -110,7 +110,7 @@ wait_dao_treasury() {
 }
 
 propose() {
-    MY_ADDR=$($DRK wallet --address)
+    MY_ADDR=$($DRK wallet address)
     PROPOSAL="$($DRK dao propose-transfer MiladyMakerDAO 1 5 WCKD "$MY_ADDR" | cut -d' ' -f3)"
     $DRK dao proposal "$PROPOSAL" --mint-proposal > /tmp/propose.tx
     $DRK broadcast < /tmp/propose.tx

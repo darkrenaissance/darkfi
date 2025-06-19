@@ -111,16 +111,16 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
 
     if buf.starts_with("w") {
         lc.push("wallet".to_string());
-        lc.push("wallet --initialize".to_string());
-        lc.push("wallet --keygen".to_string());
-        lc.push("wallet --balance".to_string());
-        lc.push("wallet --address".to_string());
-        lc.push("wallet --addresses".to_string());
-        lc.push("wallet --default-address".to_string());
-        lc.push("wallet --secrets".to_string());
-        lc.push("wallet --import-secrets".to_string());
-        lc.push("wallet --tree".to_string());
-        lc.push("wallet --coins".to_string());
+        lc.push("wallet initialize".to_string());
+        lc.push("wallet keygen".to_string());
+        lc.push("wallet balance".to_string());
+        lc.push("wallet address".to_string());
+        lc.push("wallet addresses".to_string());
+        lc.push("wallet default-address".to_string());
+        lc.push("wallet secrets".to_string());
+        lc.push("wallet import-secrets".to_string());
+        lc.push("wallet tree".to_string());
+        lc.push("wallet coins".to_string());
         return
     }
 
@@ -210,10 +210,8 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
 fn hints(buf: &str) -> Option<(String, i32, bool)> {
     match buf {
         "completions " => Some(("<shell>".to_string(), 35, false)), // 35 = magenta
-        "wallet " => Some(("--(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
-        "wallet -" => Some(("-(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
-        "wallet --" => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
-        "wallet --default-address " => Some(("<address_id>".to_string(), 35, false)),
+        "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
+        "wallet default-address " => Some(("<index>".to_string(), 35, false)),
         "unspend " => Some(("<coin>".to_string(), 35, false)),
         "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), 35, false)),
         "otc " => Some(("(init|join|inspect|sign)".to_string(), 35, false)),
@@ -445,279 +443,284 @@ fn handle_completions(parts: &[&str]) {
 /// Auxiliary function to define the wallet command handling.
 async fn handle_wallet(drk: &DrkPtr, parts: &[&str]) {
     // Check correct command structure
-    if parts.len() != 2 && parts.len() != 3 {
+    if parts.len() < 2 {
         println!("Malformed `wallet` command");
-        println!("Usage: wallet --(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
+        println!("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
         return
     }
 
-    // Handle command flag
-    if parts[1] == "--initialize" {
-        let lock = drk.read().await;
-        if let Err(e) = lock.initialize_wallet().await {
-            println!("Error initializing wallet: {e:?}");
+    // Handle subcommand
+    match parts[1] {
+        "initialize" => handle_wallet_initialize(drk).await,
+        "keygen" => handle_wallet_keygen(drk).await,
+        "balance" => handle_wallet_balance(drk).await,
+        "address" => handle_wallet_address(drk).await,
+        "addresses" => handle_wallet_addresses(drk).await,
+        "default-address" => handle_wallet_default_address(drk, parts).await,
+        "secrets" => handle_wallet_secrets(drk).await,
+        "import-secrets" => handle_wallet_import_secrets(drk).await,
+        "tree" => handle_wallet_tree(drk).await,
+        "coins" => handle_wallet_coins(drk).await,
+        _ => {
+            println!("Unreconized wallet subcommand: {}", parts[1]);
+            println!("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
+        }
+    }
+}
+
+/// Auxiliary function to define the wallet initialize subcommand handling.
+async fn handle_wallet_initialize(drk: &DrkPtr) {
+    let lock = drk.read().await;
+    if let Err(e) = lock.initialize_wallet().await {
+        println!("Error initializing wallet: {e:?}");
+        return
+    }
+    if let Err(e) = lock.initialize_money().await {
+        println!("Failed to initialize Money: {e:?}");
+        return
+    }
+    if let Err(e) = lock.initialize_dao().await {
+        println!("Failed to initialize DAO: {e:?}");
+        return
+    }
+    if let Err(e) = lock.initialize_deployooor() {
+        println!("Failed to initialize Deployooor: {e:?}");
+    }
+}
+
+/// Auxiliary function to define the wallet keygen subcommand handling.
+async fn handle_wallet_keygen(drk: &DrkPtr) {
+    if let Err(e) = drk.read().await.money_keygen().await {
+        println!("Failed to generate keypair: {e:?}");
+    }
+}
+
+/// Auxiliary function to define the wallet balance subcommand handling.
+async fn handle_wallet_balance(drk: &DrkPtr) {
+    let lock = drk.read().await;
+    let balmap = match lock.money_balance().await {
+        Ok(m) => m,
+        Err(e) => {
+            println!("Failed to fetch balances map: {e:?}");
             return
         }
-        if let Err(e) = lock.initialize_money().await {
-            println!("Failed to initialize Money: {e:?}");
+    };
+
+    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+        Ok(m) => m,
+        Err(e) => {
+            println!("Failed to fetch aliases map: {e:?}");
             return
         }
-        if let Err(e) = lock.initialize_dao().await {
-            println!("Failed to initialize DAO: {e:?}");
-            return
-        }
-        if let Err(e) = lock.initialize_deployooor() {
-            println!("Failed to initialize Deployooor: {e:?}");
-        }
-        return
-    }
+    };
 
-    if parts[1] == "--keygen" {
-        if let Err(e) = drk.read().await.money_keygen().await {
-            println!("Failed to generate keypair: {e:?}");
-        }
-        return
-    }
-
-    if parts[1] == "--balance" {
-        let lock = drk.read().await;
-        let balmap = match lock.money_balance().await {
-            Ok(m) => m,
-            Err(e) => {
-                println!("Failed to fetch balances map: {e:?}");
-                return
-            }
+    // Create a prettytable with the new data:
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Token ID", "Aliases", "Balance"]);
+    for (token_id, balance) in balmap.iter() {
+        let aliases = match aliases_map.get(token_id) {
+            Some(a) => a,
+            None => "-",
         };
 
-        let aliases_map = match lock.get_aliases_mapped_by_token().await {
-            Ok(m) => m,
-            Err(e) => {
-                println!("Failed to fetch aliases map: {e:?}");
-                return
-            }
-        };
-
-        // Create a prettytable with the new data:
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-        table.set_titles(row!["Token ID", "Aliases", "Balance"]);
-        for (token_id, balance) in balmap.iter() {
-            let aliases = match aliases_map.get(token_id) {
-                Some(a) => a,
-                None => "-",
-            };
-
-            table.add_row(row![
-                token_id,
-                aliases,
-                encode_base10(*balance, BALANCE_BASE10_DECIMALS)
-            ]);
-        }
-
-        if table.is_empty() {
-            println!("No unspent balances found");
-        } else {
-            println!("{table}");
-        }
-        return
+        table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
     }
 
-    if parts[1] == "--address" {
-        match drk.read().await.default_address().await {
-            Ok(address) => println!("{address}"),
-            Err(e) => println!("Failed to fetch default address: {e:?}"),
-        }
-        return
-    }
-
-    if parts[1] == "--addresses" {
-        let addresses = match drk.read().await.addresses().await {
-            Ok(a) => a,
-            Err(e) => {
-                println!("Failed to fetch addresses: {e:?}");
-                return
-            }
-        };
-
-        // Create a prettytable with the new data:
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-        table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
-        for (key_id, public_key, secret_key, is_default) in addresses {
-            let is_default = match is_default {
-                1 => "*",
-                _ => "",
-            };
-            table.add_row(row![key_id, public_key, secret_key, is_default]);
-        }
-
-        if table.is_empty() {
-            println!("No addresses found");
-        } else {
-            println!("{table}");
-        }
-        return
-    }
-
-    if parts[1] == "--default-address" {
-        if parts.len() != 3 {
-            println!("Malformed `wallet` command");
-            println!("Usage: wallet --default-address <address_id>");
-            return
-        }
-
-        let idx = match usize::from_str(parts[2]) {
-            Ok(i) => i,
-            Err(e) => {
-                println!("Invalid address id: {e:?}");
-                return
-            }
-        };
-
-        if let Err(e) = drk.read().await.set_default_address(idx) {
-            println!("Failed to set default address: {e:?}");
-        }
-        return
-    }
-
-    if parts[1] == "--secrets" {
-        match drk.read().await.get_money_secrets().await {
-            Ok(secrets) => {
-                for secret in secrets {
-                    println!("{secret}");
-                }
-            }
-            Err(e) => println!("Failed to fetch secrets: {e:?}"),
-        }
-        return
-    }
-
-    if parts[1] == "--import-secrets" {
-        let mut secrets = vec![];
-        // TODO: read from a file here not stdin
-        let lines = stdin().lines();
-        for (i, line) in lines.enumerate() {
-            if let Ok(line) = line {
-                let Ok(bytes) = bs58::decode(&line.trim()).into_vec() else {
-                    println!("Warning: Failed to decode secret on line {i}");
-                    continue
-                };
-                let Ok(secret) = deserialize_async(&bytes).await else {
-                    println!("Warning: Failed to deserialize secret on line {i}");
-                    continue
-                };
-                secrets.push(secret);
-            }
-        }
-
-        match drk.read().await.import_money_secrets(secrets).await {
-            Ok(pubkeys) => {
-                for key in pubkeys {
-                    println!("{key}");
-                }
-            }
-            Err(e) => println!("Failed to import secrets: {e:?}"),
-        }
-        return
-    }
-
-    if parts[1] == "--tree" {
-        // TODO: write to a file here not stdout
-        match drk.read().await.get_money_tree().await {
-            Ok(tree) => println!("{tree:#?}"),
-            Err(e) => println!("Failed to fetch tree: {e:?}"),
-        }
-        return
-    }
-
-    if parts[1] == "--coins" {
-        let lock = drk.read().await;
-        let coins = match lock.get_coins(true).await {
-            Ok(c) => c,
-            Err(e) => {
-                println!("Failed to fetch coins: {e:?}");
-                return
-            }
-        };
-
-        if coins.is_empty() {
-            return
-        }
-
-        let aliases_map = match lock.get_aliases_mapped_by_token().await {
-            Ok(m) => m,
-            Err(e) => {
-                println!("Failed to fetch aliases map: {e:?}");
-                return
-            }
-        };
-
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-        table.set_titles(row![
-            "Coin",
-            "Token ID",
-            "Aliases",
-            "Value",
-            "Spend Hook",
-            "User Data",
-            "Creation Height",
-            "Spent",
-            "Spent Height",
-            "Spent TX"
-        ]);
-        for coin in coins {
-            let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
-                Some(a) => a,
-                None => "-",
-            };
-
-            let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-                format!("{}", coin.0.note.spend_hook)
-            } else {
-                String::from("-")
-            };
-
-            let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
-                bs58::encode(&serialize_async(&coin.0.note.user_data).await)
-                    .into_string()
-                    .to_string()
-            } else {
-                String::from("-")
-            };
-
-            let spent_height = match coin.3 {
-                Some(spent_height) => spent_height.to_string(),
-                None => String::from("-"),
-            };
-
-            table.add_row(row![
-                bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
-                    .into_string()
-                    .to_string(),
-                coin.0.note.token_id,
-                aliases,
-                format!(
-                    "{} ({})",
-                    coin.0.note.value,
-                    encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
-                ),
-                spend_hook,
-                user_data,
-                coin.1,
-                coin.2,
-                spent_height,
-                coin.4,
-            ]);
-        }
-
+    if table.is_empty() {
+        println!("No unspent balances found");
+    } else {
         println!("{table}");
+    }
+}
 
+/// Auxiliary function to define the wallet address subcommand handling.
+async fn handle_wallet_address(drk: &DrkPtr) {
+    match drk.read().await.default_address().await {
+        Ok(address) => println!("{address}"),
+        Err(e) => println!("Failed to fetch default address: {e:?}"),
+    }
+}
+
+/// Auxiliary function to define the wallet addresses subcommand handling.
+async fn handle_wallet_addresses(drk: &DrkPtr) {
+    let addresses = match drk.read().await.addresses().await {
+        Ok(a) => a,
+        Err(e) => {
+            println!("Failed to fetch addresses: {e:?}");
+            return
+        }
+    };
+
+    // Create a prettytable with the new data:
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
+    for (key_id, public_key, secret_key, is_default) in addresses {
+        let is_default = match is_default {
+            1 => "*",
+            _ => "",
+        };
+        table.add_row(row![key_id, public_key, secret_key, is_default]);
+    }
+
+    if table.is_empty() {
+        println!("No addresses found");
+    } else {
+        println!("{table}");
+    }
+}
+
+/// Auxiliary function to define the wallet default address subcommand handling.
+async fn handle_wallet_default_address(drk: &DrkPtr, parts: &[&str]) {
+    if parts.len() != 3 {
+        println!("Malformed `wallet default-address` subcommand");
+        println!("Usage: wallet default-address <index>");
         return
     }
 
-    println!("Malformed `wallet` command");
-    println!("Usage: wallet --(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
+    let index = match usize::from_str(parts[2]) {
+        Ok(i) => i,
+        Err(e) => {
+            println!("Invalid address id: {e:?}");
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.set_default_address(index) {
+        println!("Failed to set default address: {e:?}");
+    }
+}
+
+/// Auxiliary function to define the wallet secrets subcommand handling.
+async fn handle_wallet_secrets(drk: &DrkPtr) {
+    match drk.read().await.get_money_secrets().await {
+        Ok(secrets) => {
+            for secret in secrets {
+                println!("{secret}");
+            }
+        }
+        Err(e) => println!("Failed to fetch secrets: {e:?}"),
+    }
+}
+
+/// Auxiliary function to define the wallet import secrets subcommand handling.
+async fn handle_wallet_import_secrets(drk: &DrkPtr) {
+    let mut secrets = vec![];
+    // TODO: read from a file here not stdin
+    let lines = stdin().lines();
+    for (i, line) in lines.enumerate() {
+        if let Ok(line) = line {
+            let Ok(bytes) = bs58::decode(&line.trim()).into_vec() else {
+                println!("Warning: Failed to decode secret on line {i}");
+                continue
+            };
+            let Ok(secret) = deserialize_async(&bytes).await else {
+                println!("Warning: Failed to deserialize secret on line {i}");
+                continue
+            };
+            secrets.push(secret);
+        }
+    }
+
+    match drk.read().await.import_money_secrets(secrets).await {
+        Ok(pubkeys) => {
+            for key in pubkeys {
+                println!("{key}");
+            }
+        }
+        Err(e) => println!("Failed to import secrets: {e:?}"),
+    }
+}
+
+/// Auxiliary function to define the wallet tree subcommand handling.
+async fn handle_wallet_tree(drk: &DrkPtr) {
+    // TODO: write to a file here not stdout
+    match drk.read().await.get_money_tree().await {
+        Ok(tree) => println!("{tree:#?}"),
+        Err(e) => println!("Failed to fetch tree: {e:?}"),
+    }
+}
+
+/// Auxiliary function to define the wallet coins subcommand handling.
+async fn handle_wallet_coins(drk: &DrkPtr) {
+    let lock = drk.read().await;
+    let coins = match lock.get_coins(true).await {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Failed to fetch coins: {e:?}");
+            return
+        }
+    };
+
+    if coins.is_empty() {
+        return
+    }
+
+    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+        Ok(m) => m,
+        Err(e) => {
+            println!("Failed to fetch aliases map: {e:?}");
+            return
+        }
+    };
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row![
+        "Coin",
+        "Token ID",
+        "Aliases",
+        "Value",
+        "Spend Hook",
+        "User Data",
+        "Creation Height",
+        "Spent",
+        "Spent Height",
+        "Spent TX"
+    ]);
+    for coin in coins {
+        let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
+            Some(a) => a,
+            None => "-",
+        };
+
+        let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
+            format!("{}", coin.0.note.spend_hook)
+        } else {
+            String::from("-")
+        };
+
+        let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
+            bs58::encode(&serialize_async(&coin.0.note.user_data).await).into_string().to_string()
+        } else {
+            String::from("-")
+        };
+
+        let spent_height = match coin.3 {
+            Some(spent_height) => spent_height.to_string(),
+            None => String::from("-"),
+        };
+
+        table.add_row(row![
+            bs58::encode(&serialize_async(&coin.0.coin.inner()).await).into_string().to_string(),
+            coin.0.note.token_id,
+            aliases,
+            format!(
+                "{} ({})",
+                coin.0.note.value,
+                encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
+            ),
+            spend_hook,
+            user_data,
+            coin.1,
+            coin.2,
+            spent_height,
+            coin.4,
+        ]);
+    }
+
+    println!("{table}");
 }
 
 /// Auxiliary function to define the spend command handling.

@@ -108,7 +108,7 @@ Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it 
 ```
 
 ```shell
-$ ./drk wallet --address
+$ ./drk wallet address
 
 Config file created in "~/.config/darkfi/drk_config.toml". Please review it and try again.
 ```
@@ -150,7 +150,7 @@ initialize a wallet, and create a keypair. The wallet address shown in
 the outputs is examplatory and will different from the one you get.
 
 ```shell
-$ ./drk wallet --initialize
+$ ./drk wallet initialize
 
 Initializing Money Merkle tree
 Successfully initialized Merkle tree for the Money contract
@@ -160,7 +160,7 @@ Successfully initialized Merkle trees for the DAO contract
 ```
 
 ```shell
-$ ./drk wallet --keygen
+$ ./drk wallet keygen
 
 Generating a new keypair
 New address:
@@ -168,7 +168,7 @@ CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
 ```
 
 ```shell
-$ ./drk wallet --default-address 1
+$ ./drk wallet default-address 1
 ```
 
 The second command will print out your new DarkFi address where you
@@ -176,7 +176,7 @@ can receive payments. Take note of it. Alternatively, you can always
 retrieve your default address using:
 
 ```shell
-$ ./drk wallet --address
+$ ./drk wallet address
 
 CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
 ```
@@ -252,7 +252,7 @@ like this:
 ```toml
 # Put your `minerd` endpoint here (default for testnet is in this example)
 minerd_endpoint = "tcp://127.0.0.1:28467"
-# Put the address from `drk wallet --address` here
+# Put the address from `drk wallet address` here
 recipient = "YOUR_WALLET_ADDRESS_HERE"
 ```
 
@@ -263,7 +263,7 @@ is `~/.config/darkfi/minerd_config.toml`). Finally, replace the
 you can retrieve as follows:
 
 ```shell
-$ ./drk wallet --address
+$ ./drk wallet address
 
 CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
 ```

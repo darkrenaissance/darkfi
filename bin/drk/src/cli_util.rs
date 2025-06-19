@@ -128,38 +128,34 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .arg(shell_arg);
 
     // Wallet
-    let initialize =
-        Arg::with_name("initialize").long("initialize").help("Initialize wallet database");
+    let initialize = SubCommand::with_name("initialize").about("Initialize wallet database");
 
-    let keygen =
-        Arg::with_name("keygen").long("keygen").help("Generate a new keypair in the wallet");
+    let keygen = SubCommand::with_name("keygen").about("Generate a new keypair in the wallet");
 
-    let balance =
-        Arg::with_name("balance").long("balance").help("Query the wallet for known balances");
+    let balance = SubCommand::with_name("balance").about("Query the wallet for known balances");
 
-    let address =
-        Arg::with_name("address").long("address").help("Get the default address in the wallet");
+    let address = SubCommand::with_name("address").about("Get the default address in the wallet");
 
     let addresses =
-        Arg::with_name("addresses").long("addresses").help("Print all the addresses in the wallet");
+        SubCommand::with_name("addresses").about("Print all the addresses in the wallet");
 
-    let default_address = Arg::with_name("default-address")
-        .long("default-address")
-        .takes_value(true)
-        .help("Set the default address in the wallet");
+    let index = Arg::with_name("index").help("Identifier of the address");
+
+    let default_address = SubCommand::with_name("default-address")
+        .about("Set the default address in the wallet")
+        .arg(index);
 
     let secrets =
-        Arg::with_name("secrets").long("secrets").help("Print all the secret keys from the wallet");
+        SubCommand::with_name("secrets").about("Print all the secret keys from the wallet");
 
-    let import_secrets = Arg::with_name("import-secrets")
-        .long("import-secrets")
-        .help("Import secret keys from stdin into the wallet, separated by newlines");
+    let import_secrets = SubCommand::with_name("import-secrets")
+        .about("Import secret keys from stdin into the wallet, separated by newlines");
 
-    let tree = Arg::with_name("tree").long("tree").help("Print the Merkle tree in the wallet");
+    let tree = SubCommand::with_name("tree").about("Print the Merkle tree in the wallet");
 
-    let coins = Arg::with_name("coins").long("coins").help("Print all the coins in the wallet");
+    let coins = SubCommand::with_name("coins").about("Print all the coins in the wallet");
 
-    let wallet = SubCommand::with_name("wallet").about("Wallet operations").args(&vec![
+    let wallet = SubCommand::with_name("wallet").about("Wallet operations").subcommands(vec![
         initialize,
         keygen,
         balance,
