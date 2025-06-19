@@ -20,7 +20,7 @@ then after some time your new balance should be in your wallet.
 You can check your wallet balance using `drk`:
 
 ```shell
-$ ./drk wallet --balance
+$ ./drk wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+---------
@@ -130,7 +130,7 @@ Now let's mint some tokens for ourselves. First grab your wallet address,
 and then create the token mint transaction, and finally - broadcast it:
 
 ```shell
-$ ./drk wallet --address
+$ ./drk wallet address
 
 {YOUR_ADDRESS}
 ```
@@ -171,7 +171,7 @@ then when the transaction is confirmed, your wallet should have your
 new tokens listed when you run:
 
 ```shell
-$ ./drk wallet --balance
+$ ./drk wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------

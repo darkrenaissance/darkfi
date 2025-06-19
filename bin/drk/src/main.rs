@@ -119,45 +119,9 @@ enum Subcmd {
 
     /// Wallet operations
     Wallet {
-        #[structopt(long)]
-        /// Initialize wallet database
-        initialize: bool,
-
-        #[structopt(long)]
-        /// Generate a new keypair in the wallet
-        keygen: bool,
-
-        #[structopt(long)]
-        /// Query the wallet for known balances
-        balance: bool,
-
-        #[structopt(long)]
-        /// Get the default address in the wallet
-        address: bool,
-
-        #[structopt(long)]
-        /// Print all the addresses in the wallet
-        addresses: bool,
-
-        #[structopt(long)]
-        /// Set the default address in the wallet
-        default_address: Option<usize>,
-
-        #[structopt(long)]
-        /// Print all the secret keys from the wallet
-        secrets: bool,
-
-        #[structopt(long)]
-        /// Import secret keys from stdin into the wallet, separated by newlines
-        import_secrets: bool,
-
-        #[structopt(long)]
-        /// Print the Merkle tree in the wallet
-        tree: bool,
-
-        #[structopt(long)]
-        /// Print all the coins in the wallet
-        coins: bool,
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: WalletSubcmd,
     },
 
     /// Read a transaction from stdin and mark its input coins as spent
@@ -248,6 +212,42 @@ enum Subcmd {
         /// Sub command to execute
         command: ContractSubcmd,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum WalletSubcmd {
+    /// Initialize wallet database
+    Initialize,
+
+    /// Generate a new keypair in the wallet
+    Keygen,
+
+    /// Query the wallet for known balances
+    Balance,
+
+    /// Get the default address in the wallet
+    Address,
+
+    /// Print all the addresses in the wallet
+    Addresses,
+
+    /// Set the default address in the wallet
+    DefaultAddress {
+        /// Identifier of the address
+        index: usize,
+    },
+
+    /// Print all the secret keys from the wallet
+    Secrets,
+
+    /// Import secret keys from stdin into the wallet, separated by newlines
+    ImportSecrets,
+
+    /// Print the Merkle tree in the wallet
+    Tree,
+
+    /// Print all the coins in the wallet
+    Coins,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -693,34 +693,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
         Subcmd::Completions { shell } => generate_completions(&shell),
 
-        Subcmd::Wallet {
-            initialize,
-            keygen,
-            balance,
-            address,
-            addresses,
-            default_address,
-            secrets,
-            import_secrets,
-            tree,
-            coins,
-        } => {
-            if !initialize &&
-                !keygen &&
-                !balance &&
-                !address &&
-                !addresses &&
-                default_address.is_none() &&
-                !secrets &&
-                !tree &&
-                !coins &&
-                !import_secrets
-            {
-                eprintln!("Error: You must use at least one flag for this subcommand");
-                eprintln!("Run with \"wallet -h\" to see the subcommand usage.");
-                exit(2);
-            }
-
+        Subcmd::Wallet { command } => {
             let drk = new_wallet(
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
@@ -731,232 +704,209 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
 
-            if initialize {
-                if let Err(e) = drk.initialize_wallet().await {
-                    eprintln!("Error initializing wallet: {e:?}");
-                    exit(2);
-                }
-                if let Err(e) = drk.initialize_money().await {
-                    eprintln!("Failed to initialize Money: {e:?}");
-                    exit(2);
-                }
-                if let Err(e) = drk.initialize_dao().await {
-                    eprintln!("Failed to initialize DAO: {e:?}");
-                    exit(2);
-                }
-                if let Err(e) = drk.initialize_deployooor() {
-                    eprintln!("Failed to initialize Deployooor: {e:?}");
-                    exit(2);
-                }
-                return Ok(())
-            }
-
-            if keygen {
-                if let Err(e) = drk.money_keygen().await {
-                    eprintln!("Failed to generate keypair: {e:?}");
-                    exit(2);
-                }
-                return Ok(())
-            }
-
-            if balance {
-                let balmap = drk.money_balance().await?;
-
-                let aliases_map = drk.get_aliases_mapped_by_token().await?;
-
-                // Create a prettytable with the new data:
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Aliases", "Balance"]);
-                for (token_id, balance) in balmap.iter() {
-                    let aliases = match aliases_map.get(token_id) {
-                        Some(a) => a,
-                        None => "-",
-                    };
-
-                    table.add_row(row![
-                        token_id,
-                        aliases,
-                        encode_base10(*balance, BALANCE_BASE10_DECIMALS)
-                    ]);
+            match command {
+                WalletSubcmd::Initialize => {
+                    if let Err(e) = drk.initialize_wallet().await {
+                        eprintln!("Error initializing wallet: {e:?}");
+                        exit(2);
+                    }
+                    if let Err(e) = drk.initialize_money().await {
+                        eprintln!("Failed to initialize Money: {e:?}");
+                        exit(2);
+                    }
+                    if let Err(e) = drk.initialize_dao().await {
+                        eprintln!("Failed to initialize DAO: {e:?}");
+                        exit(2);
+                    }
+                    if let Err(e) = drk.initialize_deployooor() {
+                        eprintln!("Failed to initialize Deployooor: {e:?}");
+                        exit(2);
+                    }
                 }
 
-                if table.is_empty() {
-                    println!("No unspent balances found");
-                } else {
-                    println!("{table}");
+                WalletSubcmd::Keygen => {
+                    if let Err(e) = drk.money_keygen().await {
+                        eprintln!("Failed to generate keypair: {e:?}");
+                        exit(2);
+                    }
                 }
 
-                return Ok(())
-            }
+                WalletSubcmd::Balance => {
+                    let balmap = drk.money_balance().await?;
 
-            if address {
-                let address = match drk.default_address().await {
-                    Ok(a) => a,
+                    let aliases_map = drk.get_aliases_mapped_by_token().await?;
+
+                    // Create a prettytable with the new data:
+                    let mut table = Table::new();
+                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                    table.set_titles(row!["Token ID", "Aliases", "Balance"]);
+                    for (token_id, balance) in balmap.iter() {
+                        let aliases = match aliases_map.get(token_id) {
+                            Some(a) => a,
+                            None => "-",
+                        };
+
+                        table.add_row(row![
+                            token_id,
+                            aliases,
+                            encode_base10(*balance, BALANCE_BASE10_DECIMALS)
+                        ]);
+                    }
+
+                    if table.is_empty() {
+                        println!("No unspent balances found");
+                    } else {
+                        println!("{table}");
+                    }
+                }
+
+                WalletSubcmd::Address => match drk.default_address().await {
+                    Ok(address) => println!("{address}"),
                     Err(e) => {
                         eprintln!("Failed to fetch default address: {e:?}");
                         exit(2);
                     }
-                };
+                },
 
-                println!("{address}");
+                WalletSubcmd::Addresses => {
+                    let addresses = drk.addresses().await?;
 
-                return Ok(())
-            }
-
-            if addresses {
-                let addresses = drk.addresses().await?;
-
-                // Create a prettytable with the new data:
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
-                for (key_id, public_key, secret_key, is_default) in addresses {
-                    let is_default = match is_default {
-                        1 => "*",
-                        _ => "",
-                    };
-                    table.add_row(row![key_id, public_key, secret_key, is_default]);
-                }
-
-                if table.is_empty() {
-                    println!("No addresses found");
-                } else {
-                    println!("{table}");
-                }
-
-                return Ok(())
-            }
-
-            if let Some(idx) = default_address {
-                if let Err(e) = drk.set_default_address(idx) {
-                    eprintln!("Failed to set default address: {e:?}");
-                    exit(2);
-                }
-                return Ok(())
-            }
-
-            if secrets {
-                let v = drk.get_money_secrets().await?;
-
-                for i in v {
-                    println!("{i}");
-                }
-
-                return Ok(())
-            }
-
-            if import_secrets {
-                let mut secrets = vec![];
-                let lines = stdin().lines();
-                for (i, line) in lines.enumerate() {
-                    if let Ok(line) = line {
-                        let bytes = bs58::decode(&line.trim()).into_vec()?;
-                        let Ok(secret) = deserialize_async(&bytes).await else {
-                            println!("Warning: Failed to deserialize secret on line {i}");
-                            continue
+                    // Create a prettytable with the new data:
+                    let mut table = Table::new();
+                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                    table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
+                    for (key_id, public_key, secret_key, is_default) in addresses {
+                        let is_default = match is_default {
+                            1 => "*",
+                            _ => "",
                         };
-                        secrets.push(secret);
+                        table.add_row(row![key_id, public_key, secret_key, is_default]);
+                    }
+
+                    if table.is_empty() {
+                        println!("No addresses found");
+                    } else {
+                        println!("{table}");
                     }
                 }
 
-                let pubkeys = match drk.import_money_secrets(secrets).await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        eprintln!("Failed to import secret keys into wallet: {e:?}");
+                WalletSubcmd::DefaultAddress { index } => {
+                    if let Err(e) = drk.set_default_address(index) {
+                        eprintln!("Failed to set default address: {e:?}");
                         exit(2);
                     }
-                };
-
-                for key in pubkeys {
-                    println!("{key}");
                 }
 
-                return Ok(())
-            }
-
-            if tree {
-                let tree = drk.get_money_tree().await?;
-
-                println!("{tree:#?}");
-
-                return Ok(())
-            }
-
-            if coins {
-                let coins = drk.get_coins(true).await?;
-
-                if coins.is_empty() {
-                    return Ok(())
+                WalletSubcmd::Secrets => {
+                    for secret in drk.get_money_secrets().await? {
+                        println!("{secret}");
+                    }
                 }
 
-                let aliases_map = drk.get_aliases_mapped_by_token().await?;
+                WalletSubcmd::ImportSecrets => {
+                    let mut secrets = vec![];
+                    let lines = stdin().lines();
+                    for (i, line) in lines.enumerate() {
+                        if let Ok(line) = line {
+                            let bytes = bs58::decode(&line.trim()).into_vec()?;
+                            let Ok(secret) = deserialize_async(&bytes).await else {
+                                println!("Warning: Failed to deserialize secret on line {i}");
+                                continue
+                            };
+                            secrets.push(secret);
+                        }
+                    }
 
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row![
-                    "Coin",
-                    "Token ID",
-                    "Aliases",
-                    "Value",
-                    "Spend Hook",
-                    "User Data",
-                    "Creation Height",
-                    "Spent",
-                    "Spent Height",
-                    "Spent TX"
-                ]);
-                for coin in coins {
-                    let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
-                        Some(a) => a,
-                        None => "-",
+                    let pubkeys = match drk.import_money_secrets(secrets).await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("Failed to import secret keys into wallet: {e:?}");
+                            exit(2);
+                        }
                     };
 
-                    let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-                        format!("{}", coin.0.note.spend_hook)
-                    } else {
-                        String::from("-")
-                    };
+                    for key in pubkeys {
+                        println!("{key}");
+                    }
+                }
 
-                    let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
-                        bs58::encode(&serialize_async(&coin.0.note.user_data).await)
-                            .into_string()
-                            .to_string()
-                    } else {
-                        String::from("-")
-                    };
+                WalletSubcmd::Tree => {
+                    println!("{:#?}", drk.get_money_tree().await?);
+                }
 
-                    let spent_height = match coin.3 {
-                        Some(spent_height) => spent_height.to_string(),
-                        None => String::from("-"),
-                    };
+                WalletSubcmd::Coins => {
+                    let coins = drk.get_coins(true).await?;
 
-                    table.add_row(row![
-                        bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
-                            .into_string()
-                            .to_string(),
-                        coin.0.note.token_id,
-                        aliases,
-                        format!(
-                            "{} ({})",
-                            coin.0.note.value,
-                            encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
-                        ),
-                        spend_hook,
-                        user_data,
-                        coin.1,
-                        coin.2,
-                        spent_height,
-                        coin.4,
+                    if coins.is_empty() {
+                        return Ok(())
+                    }
+
+                    let aliases_map = drk.get_aliases_mapped_by_token().await?;
+
+                    let mut table = Table::new();
+                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                    table.set_titles(row![
+                        "Coin",
+                        "Token ID",
+                        "Aliases",
+                        "Value",
+                        "Spend Hook",
+                        "User Data",
+                        "Creation Height",
+                        "Spent",
+                        "Spent Height",
+                        "Spent TX"
                     ]);
+                    for coin in coins {
+                        let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
+                            Some(a) => a,
+                            None => "-",
+                        };
+
+                        let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
+                            format!("{}", coin.0.note.spend_hook)
+                        } else {
+                            String::from("-")
+                        };
+
+                        let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
+                            bs58::encode(&serialize_async(&coin.0.note.user_data).await)
+                                .into_string()
+                                .to_string()
+                        } else {
+                            String::from("-")
+                        };
+
+                        let spent_height = match coin.3 {
+                            Some(spent_height) => spent_height.to_string(),
+                            None => String::from("-"),
+                        };
+
+                        table.add_row(row![
+                            bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
+                                .into_string()
+                                .to_string(),
+                            coin.0.note.token_id,
+                            aliases,
+                            format!(
+                                "{} ({})",
+                                coin.0.note.value,
+                                encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
+                            ),
+                            spend_hook,
+                            user_data,
+                            coin.1,
+                            coin.2,
+                            spent_height,
+                            coin.4,
+                        ]);
+                    }
+
+                    println!("{table}");
                 }
-
-                println!("{table}");
-
-                return Ok(())
             }
 
-            unreachable!()
+            Ok(())
         }
 
         Subcmd::Spend => {

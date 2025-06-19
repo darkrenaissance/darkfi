@@ -11,4 +11,4 @@ while true; do
 done
 
 $DRK scan
-$DRK wallet --balance
+$DRK wallet balance
