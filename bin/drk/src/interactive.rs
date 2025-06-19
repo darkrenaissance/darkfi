@@ -92,128 +92,141 @@ fn help(output: &mut Vec<String>) {
 }
 
 /// Auxiliary function to define the interactive shell completions.
-fn completion(buf: &str, lc: &mut Vec<String>) {
+fn completion(buffer: &str, lc: &mut Vec<String>) {
+    // Split commands so we always process the last one
+    let commands: Vec<&str> = buffer.split('|').collect();
+    // Grab the prefix
+    let prefix = if commands.len() > 1 {
+        commands[..commands.len() - 1].join("|") + "| "
+    } else {
+        String::from("")
+    };
+    let last = commands.last().unwrap().trim_start();
+
     // First we define the specific commands prefixes
-    if buf.starts_with("h") {
-        lc.push("help".to_string());
+    if last.starts_with("h") {
+        lc.push(prefix + "help");
         return
     }
 
-    if buf.starts_with("k") {
-        lc.push("kaching".to_string());
+    if last.starts_with("k") {
+        lc.push(prefix + "kaching");
         return
     }
 
-    if buf.starts_with("p") {
-        lc.push("ping".to_string());
+    if last.starts_with("p") {
+        lc.push(prefix + "ping");
         return
     }
 
-    if buf.starts_with("c") {
-        lc.push("completions".to_string());
+    if last.starts_with("c") {
+        lc.push(prefix + "completions");
         return
     }
 
-    if buf.starts_with("w") {
-        lc.push("wallet".to_string());
-        lc.push("wallet initialize".to_string());
-        lc.push("wallet keygen".to_string());
-        lc.push("wallet balance".to_string());
-        lc.push("wallet address".to_string());
-        lc.push("wallet addresses".to_string());
-        lc.push("wallet default-address".to_string());
-        lc.push("wallet secrets".to_string());
-        lc.push("wallet import-secrets".to_string());
-        lc.push("wallet tree".to_string());
-        lc.push("wallet coins".to_string());
+    if last.starts_with("w") {
+        lc.push(prefix.clone() + "wallet");
+        lc.push(prefix.clone() + "wallet initialize");
+        lc.push(prefix.clone() + "wallet keygen");
+        lc.push(prefix.clone() + "wallet balance");
+        lc.push(prefix.clone() + "wallet address");
+        lc.push(prefix.clone() + "wallet addresses");
+        lc.push(prefix.clone() + "wallet default-address");
+        lc.push(prefix.clone() + "wallet secrets");
+        lc.push(prefix.clone() + "wallet import-secrets");
+        lc.push(prefix.clone() + "wallet tree");
+        lc.push(prefix + "wallet coins");
         return
     }
 
-    if buf.starts_with("sp") {
-        lc.push("spend".to_string());
+    if last.starts_with("sp") {
+        lc.push(prefix + "spend");
         return
     }
 
-    if buf.starts_with("unsp") {
-        lc.push("unspend".to_string());
+    if last.starts_with("unsp") {
+        lc.push(prefix + "unspend");
         return
     }
 
-    if buf.starts_with("t") {
-        lc.push("transfer".to_string());
+    if last.starts_with("t") {
+        lc.push(prefix + "transfer");
         return
     }
 
-    if buf.starts_with("o") {
-        lc.push("otc".to_string());
-        lc.push("otc init".to_string());
-        lc.push("otc join".to_string());
-        lc.push("otc inspect".to_string());
-        lc.push("otc sign".to_string());
+    if last.starts_with("o") {
+        lc.push(prefix.clone() + "otc");
+        lc.push(prefix.clone() + "otc init");
+        lc.push(prefix.clone() + "otc join");
+        lc.push(prefix.clone() + "otc inspect");
+        lc.push(prefix + "otc sign");
         return
     }
 
-    if buf.starts_with("a") {
-        lc.push("attach-fee".to_string());
+    if last.starts_with("a") {
+        lc.push(prefix + "attach-fee");
         return
     }
 
-    if buf.starts_with("i") {
-        lc.push("inspect".to_string());
+    if last.starts_with("i") {
+        lc.push(prefix + "inspect");
         return
     }
 
-    if buf.starts_with("b") {
-        lc.push("broadcast".to_string());
+    if last.starts_with("b") {
+        lc.push(prefix + "broadcast");
         return
     }
 
-    if buf.starts_with("su") {
-        lc.push("subscribe".to_string());
+    if last.starts_with("su") {
+        lc.push(prefix + "subscribe");
         return
     }
 
-    if buf.starts_with("unsu") {
-        lc.push("unsubscribe".to_string());
+    if last.starts_with("unsu") {
+        lc.push(prefix + "unsubscribe");
         return
     }
 
-    if buf.starts_with("sn") {
-        lc.push("snooze".to_string());
+    if last.starts_with("sn") {
+        lc.push(prefix + "snooze");
         return
     }
 
-    if buf.starts_with("unsn") {
-        lc.push("unsnooze".to_string());
+    if last.starts_with("unsn") {
+        lc.push(prefix + "unsnooze");
         return
     }
 
-    if buf.starts_with("sc") {
-        lc.push("scan".to_string());
-        lc.push("scan --reset".to_string());
+    if last.starts_with("sc") {
+        lc.push(prefix.clone() + "scan");
+        lc.push(prefix + "scan --reset");
         return
     }
 
     // Now the catch alls
-    if buf.starts_with("s") {
-        lc.push("spend".to_string());
-        lc.push("subscribe".to_string());
-        lc.push("snooze".to_string());
-        lc.push("scan".to_string());
-        lc.push("scan --reset".to_string());
+    if last.starts_with("s") {
+        lc.push(prefix.clone() + "spend");
+        lc.push(prefix.clone() + "subscribe");
+        lc.push(prefix.clone() + "snooze");
+        lc.push(prefix.clone() + "scan");
+        lc.push(prefix + "scan --reset");
         return
     }
 
-    if buf.starts_with("u") {
-        lc.push("unspend".to_string());
-        lc.push("unsubscribe".to_string());
-        lc.push("unsnooze".to_string());
+    if last.starts_with("u") {
+        lc.push(prefix.clone() + "unspend");
+        lc.push(prefix.clone() + "unsubscribe");
+        lc.push(prefix + "unsnooze");
     }
 }
 
 /// Auxiliary function to define the interactive shell hints.
-fn hints(buf: &str) -> Option<(String, i32, bool)> {
-    match buf {
+fn hints(buffer: &str) -> Option<(String, i32, bool)> {
+    // Split commands so we always process the last one
+    let commands: Vec<&str> = buffer.split('|').collect();
+    let last = commands.last().unwrap().trim_start();
+    match last {
         "completions " => Some(("<shell>".to_string(), 35, false)), // 35 = magenta
         "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
         "wallet default-address " => Some(("<index>".to_string(), 35, false)),
