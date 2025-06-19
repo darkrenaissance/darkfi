@@ -17,7 +17,7 @@
  */
 
 use std::{
-    io::{stdin, ErrorKind},
+    io::{stdin, ErrorKind, Read},
     str::FromStr,
 };
 
@@ -34,17 +34,24 @@ use url::Url;
 use darkfi::{
     cli_desc,
     system::{msleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    util::{parse::encode_base10, path::expand_path},
+    util::{encoding::base64, parse::encode_base10, path::expand_path},
     zk::halo2::Field,
     Error,
 };
-use darkfi_sdk::{crypto::FuncId, pasta::pallas};
+use darkfi_money_contract::model::Coin;
+use darkfi_sdk::{
+    crypto::{FuncId, PublicKey},
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
-    cli_util::{generate_completions, kaching},
+    cli_util::{
+        generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
+    },
     money::BALANCE_BASE10_DECIMALS,
     rpc::subscribe_blocks,
+    swap::PartialSwapData,
     DrkPtr,
 };
 
@@ -63,6 +70,13 @@ fn help() {
     println!("\tping: Send a ping request to the darkfid RPC endpoint");
     println!("\tcompletions: Generate a SHELL completion script and print to stdout");
     println!("\twallet: Wallet operations");
+    println!("\tspend: Read a transaction from stdin and mark its input coins as spent");
+    println!("\tunspend: Unspend a coin");
+    println!("\ttransfer: Create a payment transaction");
+    println!("\totc: OTC atomic swap");
+    println!("\tattach-fee: Attach the fee call to a transaction given from stdin");
+    println!("\tinspect: Inspect a transaction from stdin");
+    println!("\tbroadcast: Read a transaction from stdin and broadcast it");
     println!(
         "\tsubscribe: Perform a scan and then subscribe to darkfid to listen for incoming blocks"
     );
@@ -102,11 +116,50 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
         lc.push("wallet --balance".to_string());
         lc.push("wallet --address".to_string());
         lc.push("wallet --addresses".to_string());
-        lc.push("wallet --default_address".to_string());
+        lc.push("wallet --default-address".to_string());
         lc.push("wallet --secrets".to_string());
-        lc.push("wallet --import_secrets".to_string());
+        lc.push("wallet --import-secrets".to_string());
         lc.push("wallet --tree".to_string());
         lc.push("wallet --coins".to_string());
+        return
+    }
+
+    if buf.starts_with("sp") {
+        lc.push("spend".to_string());
+        return
+    }
+
+    if buf.starts_with("unsp") {
+        lc.push("unspend".to_string());
+        return
+    }
+
+    if buf.starts_with("t") {
+        lc.push("transfer".to_string());
+        return
+    }
+
+    if buf.starts_with("o") {
+        lc.push("otc".to_string());
+        lc.push("otc init".to_string());
+        lc.push("otc join".to_string());
+        lc.push("otc inspect".to_string());
+        lc.push("otc sign".to_string());
+        return
+    }
+
+    if buf.starts_with("a") {
+        lc.push("attach-fee".to_string());
+        return
+    }
+
+    if buf.starts_with("i") {
+        lc.push("inspect".to_string());
+        return
+    }
+
+    if buf.starts_with("b") {
+        lc.push("broadcast".to_string());
         return
     }
 
@@ -138,6 +191,7 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
 
     // Now the catch alls
     if buf.starts_with("s") {
+        lc.push("spend".to_string());
         lc.push("subscribe".to_string());
         lc.push("snooze".to_string());
         lc.push("scan".to_string());
@@ -146,6 +200,7 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
     }
 
     if buf.starts_with("u") {
+        lc.push("unspend".to_string());
         lc.push("unsubscribe".to_string());
         lc.push("unsnooze".to_string());
     }
@@ -154,12 +209,16 @@ fn completion(buf: &str, lc: &mut Vec<String>) {
 /// Auxiliary function to define the interactive shell hints.
 fn hints(buf: &str) -> Option<(String, i32, bool)> {
     match buf {
-        "completions " => Some(("{shell}".to_string(), 35, false)), // 35 = magenta
-        "wallet " => Some(("--{initialize|keygen|balance|address|addresses|default_address|secrets|import_secrets|tree|coins}".to_string(), 35, false)),
-        "wallet -" => Some(("-{initialize|keygen|balance|address|addresses|default_address|secrets|import_secrets|tree|coins}".to_string(), 35, false)),
-        "wallet --" => Some(("{initialize|keygen|balance|address|addresses|default_address|secrets|import_secrets|tree|coins}".to_string(), 35, false)),
-        "wallet --default_address " => Some(("{address_id}".to_string(), 35, false)),
-        "scan --reset " => Some(("{height}".to_string(), 35, false)),
+        "completions " => Some(("<shell>".to_string(), 35, false)), // 35 = magenta
+        "wallet " => Some(("--(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
+        "wallet -" => Some(("-(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
+        "wallet --" => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
+        "wallet --default-address " => Some(("<address_id>".to_string(), 35, false)),
+        "unspend " => Some(("<coin>".to_string(), 35, false)),
+        "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), 35, false)),
+        "otc " => Some(("(init|join|inspect|sign)".to_string(), 35, false)),
+        "otc init " => Some(("<value_pair> <token_pair>".to_string(), 35, false)),
+        "scan --reset " => Some(("<height>".to_string(), 35, false)),
         _ => None,
     }
 }
@@ -227,6 +286,13 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
             "ping" => handle_ping(drk).await,
             "completions" => handle_completions(&parts),
             "wallet" => handle_wallet(drk, &parts).await,
+            "spend" => handle_spend(drk).await,
+            "unspend" => handle_unspend(drk, &parts).await,
+            "transfer" => handle_transfer(drk, &parts).await,
+            "otc" => handle_otc(drk, &parts).await,
+            "attach-fee" => handle_attach_fee(drk).await,
+            "inspect" => handle_inspect().await,
+            "broadcast" => handle_broadcast(drk).await,
             "subscribe" => {
                 handle_subscribe(
                     drk,
@@ -367,7 +433,7 @@ fn handle_completions(parts: &[&str]) {
     // Check correct command structure
     if parts.len() != 2 {
         println!("Malformed `completions` command");
-        println!("Usage: completions {{shell}}");
+        println!("Usage: completions <shell>");
         return
     }
 
@@ -381,7 +447,7 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str]) {
     // Check correct command structure
     if parts.len() != 2 && parts.len() != 3 {
         println!("Malformed `wallet` command");
-        println!("Usage: wallet --{{initialize|keygen|balance|address|addresses|default_address|secrets|import_secrets|tree|coins}}");
+        println!("Usage: wallet --(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
         return
     }
 
@@ -493,10 +559,11 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str]) {
         return
     }
 
-    if parts[1] == "--default_address" {
+    if parts[1] == "--default-address" {
         if parts.len() != 3 {
             println!("Malformed `wallet` command");
-            println!("Usage: wallet --default_address {{address_id}}");
+            println!("Usage: wallet --default-address <address_id>");
+            return
         }
 
         let idx = match usize::from_str(parts[2]) {
@@ -525,7 +592,7 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str]) {
         return
     }
 
-    if parts[1] == "--import_secrets" {
+    if parts[1] == "--import-secrets" {
         let mut secrets = vec![];
         // TODO: read from a file here not stdin
         let lines = stdin().lines();
@@ -650,7 +717,348 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str]) {
     }
 
     println!("Malformed `wallet` command");
-    println!("Usage: wallet --{{initialize|keygen|balance|address|addresses|default_address|secrets|import_secrets|tree|coins}}");
+    println!("Usage: wallet --(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)");
+}
+
+/// Auxiliary function to define the spend command handling.
+async fn handle_spend(drk: &DrkPtr) {
+    let tx = match parse_tx_from_stdin().await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Error while parsing transaction: {e}");
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.mark_tx_spend(&tx).await {
+        println!("Failed to mark transaction coins as spent: {e}")
+    }
+}
+
+/// Auxiliary function to define the unspend command handling.
+async fn handle_unspend(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct command structure
+    if parts.len() != 2 {
+        println!("Malformed `unspend` command");
+        println!("Usage: unspend <coin>");
+        return
+    }
+
+    let bytes = match bs58::decode(&parts[1]).into_vec() {
+        Ok(b) => b,
+        Err(e) => {
+            println!("Invalid coin: {e}");
+            return
+        }
+    };
+
+    let bytes: [u8; 32] = match bytes.try_into() {
+        Ok(b) => b,
+        Err(e) => {
+            println!("Invalid coin: {e:?}");
+            return
+        }
+    };
+
+    let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+        Some(v) => v,
+        None => {
+            println!("Invalid coin");
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.unspend_coin(&Coin::from(elem)).await {
+        println!("Failed to mark coin as unspent: {e}")
+    }
+}
+
+/// Auxiliary function to define the transfer command handling.
+async fn handle_transfer(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct command structure
+    if parts.len() < 4 || parts.len() > 7 {
+        println!("Malformed `transfer` command");
+        println!(
+            "Usage: transfer [--half-split] <amount> <token> <recipient> [spend_hook] [user_data]"
+        );
+        return
+    }
+
+    // Parse command
+    let mut index = 1;
+    let mut half_split = false;
+    if parts[index] == "--half-split" {
+        half_split = true;
+        index += 1;
+    }
+
+    let amount = String::from(parts[index]);
+    if let Err(e) = f64::from_str(&amount) {
+        println!("Invalid amount: {e}");
+        return
+    }
+    index += 1;
+
+    let lock = drk.read().await;
+    let token_id = match lock.get_token(String::from(parts[index])).await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Invalid token alias: {e}");
+            return
+        }
+    };
+    index += 1;
+
+    let rcpt = match PublicKey::from_str(parts[index]) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("Invalid recipient: {e}");
+            return
+        }
+    };
+    index += 1;
+
+    let spend_hook = if index < parts.len() {
+        match FuncId::from_str(parts[index]) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                println!("Invalid spend hook: {e}");
+                return
+            }
+        }
+    } else {
+        None
+    };
+    index += 1;
+
+    let user_data = if index < parts.len() {
+        let bytes = match bs58::decode(&parts[index]).into_vec() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("Invalid user data: {e}");
+                return
+            }
+        };
+
+        let bytes: [u8; 32] = match bytes.try_into() {
+            Ok(b) => b,
+            Err(e) => {
+                println!("Invalid user data: {e:?}");
+                return
+            }
+        };
+
+        let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+            Some(v) => v,
+            None => {
+                println!("Invalid user data");
+                return
+            }
+        };
+
+        Some(elem)
+    } else {
+        None
+    };
+
+    // TODO: write to a file here not stdout
+    match lock.transfer(&amount, token_id, rcpt, spend_hook, user_data, half_split).await {
+        Ok(t) => println!("{}", base64::encode(&serialize_async(&t).await)),
+        Err(e) => println!("Failed to create payment transaction: {e}"),
+    }
+}
+
+/// Auxiliary function to define the otc command handling.
+async fn handle_otc(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        println!("Malformed `otc` command");
+        println!("Usage: otc (init|join|inspect|sign)");
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "init" => handle_otc_init(drk, parts).await,
+        "join" => handle_otc_join(drk, parts).await,
+        "inspect" => handle_otc_inspect(drk, parts).await,
+        "sign" => handle_otc_sign(drk, parts).await,
+        _ => {
+            println!("Unreconized OTC subcommand: {}", parts[1]);
+            println!("Usage: otc (init|join|inspect|sign)");
+        }
+    }
+}
+
+/// Auxiliary function to define the otc init subcommand handling.
+async fn handle_otc_init(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct subcommand structure
+    if parts.len() != 4 {
+        println!("Malformed `otc init` subcommand");
+        println!("Usage: otc init <value_pair> <token_pair>");
+        return
+    }
+
+    let value_pair = match parse_value_pair(parts[2]) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Invalid value pair: {e}");
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let token_pair = match parse_token_pair(&lock, parts[3]).await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Invalid token pair: {e}");
+            return
+        }
+    };
+
+    match lock.init_swap(value_pair, token_pair, None, None, None).await {
+        Ok(half) => println!("{}", base64::encode(&serialize_async(&half).await)),
+        Err(e) => eprintln!("Failed to create swap transaction half: {e}"),
+    }
+}
+
+/// Auxiliary function to define the otc join subcommand handling.
+async fn handle_otc_join(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        println!("Malformed `otc join` subcommand");
+        println!("Usage: otc join");
+        return
+    }
+
+    // TODO: read from a file here not stdin
+    let mut buf = String::new();
+    if let Err(e) = stdin().read_to_string(&mut buf) {
+        println!("Failed to read from stdin: {e}");
+        return
+    };
+
+    let Some(bytes) = base64::decode(buf.trim()) else {
+        println!("Failed to decode partial swap data");
+        return
+    };
+
+    let partial: PartialSwapData = match deserialize_async(&bytes).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("Failed to deserialize partial swap data: {e}");
+            return
+        }
+    };
+
+    match drk.read().await.join_swap(partial, None, None, None).await {
+        Ok(tx) => println!("{}", base64::encode(&serialize_async(&tx).await)),
+        Err(e) => eprintln!("Failed to create a join swap transaction: {e}"),
+    }
+}
+
+/// Auxiliary function to define the otc inspect subcommand handling.
+async fn handle_otc_inspect(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        println!("Malformed `otc inspect` subcommand");
+        println!("Usage: otc inspect");
+        return
+    }
+
+    // TODO: read from a file here not stdin
+    let mut buf = String::new();
+    if let Err(e) = stdin().read_to_string(&mut buf) {
+        println!("Failed to read from stdin: {e}");
+        return
+    };
+
+    let Some(bytes) = base64::decode(buf.trim()) else {
+        println!("Failed to decode swap transaction");
+        return
+    };
+
+    if let Err(e) = drk.read().await.inspect_swap(bytes).await {
+        println!("Failed to inspect swap: {e}");
+    }
+}
+
+/// Auxiliary function to define the otc sign subcommand handling.
+async fn handle_otc_sign(drk: &DrkPtr, parts: &[&str]) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        println!("Malformed `otc sign` subcommand");
+        println!("Usage: otc sign");
+        return
+    }
+
+    // TODO: read from a file here not stdin
+    let mut tx = match parse_tx_from_stdin().await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Error while parsing transaction: {e}");
+            return
+        }
+    };
+
+    match drk.read().await.sign_swap(&mut tx).await {
+        Ok(_) => println!("{}", base64::encode(&serialize_async(&tx).await)),
+        Err(e) => println!("Failed to sign joined swap transaction: {e}"),
+    }
+}
+
+/// Auxiliary function to define the attach fee command handling.
+async fn handle_attach_fee(drk: &DrkPtr) {
+    // TODO: read from a file here not stdin
+    let mut tx = match parse_tx_from_stdin().await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Error while parsing transaction: {e}");
+            return
+        }
+    };
+
+    match drk.read().await.attach_fee(&mut tx).await {
+        Ok(_) => println!("{}", base64::encode(&serialize_async(&tx).await)),
+        Err(e) => println!("Failed to attach the fee call to the transaction: {e}"),
+    }
+}
+
+/// Auxiliary function to define the inspect command handling.
+async fn handle_inspect() {
+    // TODO: read from a file here not stdin
+    match parse_tx_from_stdin().await {
+        Ok(tx) => println!("{tx:#?}"),
+        Err(e) => println!("Error while parsing transaction: {e}"),
+    }
+}
+
+/// Auxiliary function to define the broadcast command handling.
+async fn handle_broadcast(drk: &DrkPtr) {
+    // TODO: read from a file here not stdin
+    let tx = match parse_tx_from_stdin().await {
+        Ok(t) => t,
+        Err(e) => {
+            println!("Error while parsing transaction: {e}");
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    if let Err(e) = lock.simulate_tx(&tx).await {
+        println!("Failed to simulate tx: {e}");
+        return
+    };
+
+    if let Err(e) = lock.mark_tx_spend(&tx).await {
+        println!("Failed to mark transaction coins as spent: {e}");
+        return
+    };
+
+    match lock.broadcast_tx(&tx).await {
+        Ok(txid) => println!("Transaction ID: {txid}"),
+        Err(e) => println!("Failed to broadcast transaction: {e}"),
+    }
 }
 
 /// Auxiliary function to define the subscribe command handling.
@@ -721,7 +1129,7 @@ async fn handle_scan(drk: &DrkPtr, subscription_active: &bool, parts: &[&str]) {
     if parts.len() == 3 {
         if parts[1] != "--reset" {
             println!("Malformed `scan` command");
-            println!("Usage: scan --reset {{height}}");
+            println!("Usage: scan --reset <height>");
             return
         }
 
