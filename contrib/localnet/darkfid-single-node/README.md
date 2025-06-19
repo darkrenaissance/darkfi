@@ -37,13 +37,13 @@ of the guide can be added for future regressions.
 
 | #  | Description                  | Command                                                         | Status |
 |----|------------------------------|-----------------------------------------------------------------|--------|
-| 0  | Initialization               | wallet --initialize                                             | Pass   |
-| 1  | Key generation               | wallet --keygen                                                 | Pass   |
-| 2  | Set default wallet           | wallet --default-address {ADDR_ID}                              | Pass   |
-| 3  | Default address retrieval    | wallet --address                                                | Pass   |
+| 0  | Initialization               | wallet initialize                                               | Pass   |
+| 1  | Key generation               | wallet keygen                                                   | Pass   |
+| 2  | Set default wallet           | wallet default-address {ADDR_ID}                                | Pass   |
+| 3  | Default address retrieval    | wallet address                                                  | Pass   |
 | 4  | Block scanning               | scan                                                            | Pass   |
 | 5  | Block subscribing            | subscribe                                                       | Pass   |
-| 6  | Balance retrieval            | wallet --balance                                                | Pass   |
+| 6  | Balance retrieval            | wallet balance                                                  | Pass   |
 | 7  | Aliases retrieval            | alias show                                                      | Pass   |
 | 8  | Mint auth generation         | token generate-mint                                             | Pass   |
 | 9  | Mint auths retrieval         | token list                                                      | Pass   |
@@ -52,7 +52,7 @@ of the guide can be added for future regressions.
 | 12 | Mint generation              | token mint {ALIAS} {AMOUNT} {ADDR}                              | Pass   |
 | 13 | Token freeze                 | token freeze {ALIAS}                                            | Pass   |
 | 14 | Transfer                     | transfer {AMOUNT} {ALIAS} {ADDR}                                | Pass   |
-| 15 | Coins retrieval              | wallet --coins                                                  | Pass   |
+| 15 | Coins retrieval              | wallet coins                                                    | Pass   |
 | 16 | OTC initialization           | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS}                | Pass   |
 | 17 | OTC join                     | otc join                                                        | Pass   |
 | 18 | OTC sign                     | otc sign                                                        | Pass   |

@@ -32,7 +32,7 @@ will receive the tokens you've sent.
 We can see the spent coin in our wallet.
 
 ```shell
-$ ./drk wallet --coins
+$ ./drk wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------
@@ -47,7 +47,7 @@ We have to wait until the next block to see our change balance reappear
 in our wallet.
 
 ```shell
-$ ./drk wallet --balance
+$ ./drk wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------

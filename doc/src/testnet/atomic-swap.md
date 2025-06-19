@@ -14,7 +14,7 @@ with. Note that the coin overview might look very different depending
 on your activity:
 
 ```shell
-$ ./drk wallet --coins
+$ ./drk wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------
@@ -88,7 +88,7 @@ also be in the mempool, so you should wait again until it's confirmed.
 After a while you should see the change in balances in your wallet:
 
 ```shell
-$ ./drk wallet --balance
+$ ./drk wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------
@@ -102,7 +102,7 @@ unchanged. We can confirm it actually happened successfully by checking
 our coins:
 
 ```shell
-$ ./drk wallet --coins
+$ ./drk wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------

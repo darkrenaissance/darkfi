@@ -264,7 +264,7 @@ Now that the DAO has something in its treasury, we can generate a
 transfer proposal to send it somewhere, that will be up to vote
 for 1 block period, if we hold the DAO proposer key. Let's propose
 to send 5 of the 10 tokens to our address (we can find that with
-`drk wallet --address`):
+`drk wallet address`):
 
 ```shell
 $ ./drk dao propose-transfer AnonDAO 1 5 DAWN {YOUR_ADDRESS}
@@ -511,7 +511,7 @@ $ ./drk dao balance AnonDAO
 ```
 
 ```shell
-$ ./drk wallet --balance
+$ ./drk wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------
