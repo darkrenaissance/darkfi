@@ -85,22 +85,26 @@ impl Drk {
     }
 
     /// Reset all token deploy authorities frozen status in the wallet.
-    pub fn reset_deploy_authorities(&self) -> WalletDbResult<()> {
-        println!("Resetting deploy authorities frozen status");
+    pub fn reset_deploy_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting deploy authorities frozen status"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL;",
             *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_IS_FROZEN, DEPLOY_AUTH_COL_FREEZE_HEIGHT
         );
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully reset deploy authorities frozen status");
+        output.push(String::from("Successfully reset deploy authorities frozen status"));
 
         Ok(())
     }
 
     /// Remove deploy authorities frozen status in the wallet that
     /// where frozen after provided height.
-    pub fn unfreeze_deploy_authorities_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Resetting deploy authorities frozen status after: {height}");
+    pub fn unfreeze_deploy_authorities_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Resetting deploy authorities frozen status after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL WHERE {} > ?1;",
             *DEPLOY_AUTH_TABLE,
@@ -109,7 +113,7 @@ impl Drk {
             DEPLOY_AUTH_COL_FREEZE_HEIGHT
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully reset deploy authorities frozen status");
+        output.push(String::from("Successfully reset deploy authorities frozen status"));
 
         Ok(())
     }

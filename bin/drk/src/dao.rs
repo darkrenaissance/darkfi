@@ -1631,24 +1631,26 @@ impl Drk {
     }
 
     /// Reset the DAO Merkle trees in the cache.
-    pub fn reset_dao_trees(&self) -> WalletDbResult<()> {
-        println!("Resetting DAO Merkle trees");
+    pub fn reset_dao_trees(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting DAO Merkle trees"));
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_DAOS) {
-            println!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e:?}");
+            output.push(format!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e:?}"));
             return Err(WalletDbError::GenericError)
         }
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_PROPOSALS) {
-            println!("[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e:?}");
+            output.push(format!(
+                "[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e:?}"
+            ));
             return Err(WalletDbError::GenericError)
         }
-        println!("Successfully reset DAO Merkle trees");
+        output.push(String::from("Successfully reset DAO Merkle trees"));
 
         Ok(())
     }
 
     /// Reset confirmed DAOs in the wallet.
-    pub fn reset_daos(&self) -> WalletDbResult<()> {
-        println!("Resetting DAO confirmations");
+    pub fn reset_daos(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting DAO confirmations"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
             *DAO_DAOS_TABLE,
@@ -1658,15 +1660,19 @@ impl Drk {
             DAO_DAOS_COL_CALL_INDEX,
         );
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully unconfirmed DAOs");
+        output.push(String::from("Successfully unconfirmed DAOs"));
 
         Ok(())
     }
 
     /// Reset confirmed DAOs in the wallet that were minted after
     /// provided height.
-    pub fn unconfirm_daos_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Resetting DAO confirmations after: {height}");
+    pub fn unconfirm_daos_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Resetting DAO confirmations after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} > ?1;",
             *DAO_DAOS_TABLE,
@@ -1677,14 +1683,14 @@ impl Drk {
             DAO_DAOS_COL_MINT_HEIGHT,
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully unconfirmed DAOs");
+        output.push(String::from("Successfully unconfirmed DAOs"));
 
         Ok(())
     }
 
     /// Reset all DAO proposals in the wallet.
-    pub fn reset_dao_proposals(&self) -> WalletDbResult<()> {
-        println!("Resetting DAO proposals confirmations");
+    pub fn reset_dao_proposals(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting DAO proposals confirmations"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
             *DAO_PROPOSALS_TABLE,
@@ -1698,15 +1704,19 @@ impl Drk {
             DAO_PROPOSALS_COL_EXEC_TX_HASH,
         );
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully unconfirmed DAO proposals");
+        output.push(String::from("Successfully unconfirmed DAO proposals"));
 
         Ok(())
     }
 
     /// Reset DAO proposals in the wallet that were minted after
     /// provided height.
-    pub fn unconfirm_dao_proposals_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Resetting DAO proposals confirmations after: {height}");
+    pub fn unconfirm_dao_proposals_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Resetting DAO proposals confirmations after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} > ?1;",
             *DAO_PROPOSALS_TABLE,
@@ -1721,15 +1731,19 @@ impl Drk {
             DAO_PROPOSALS_COL_MINT_HEIGHT,
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully unconfirmed DAO proposals");
+        output.push(String::from("Successfully unconfirmed DAO proposals"));
 
         Ok(())
     }
 
     /// Reset execution information in the wallet for DAO proposals
     /// that were executed after provided height.
-    pub fn unexec_dao_proposals_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Resetting DAO proposals execution information after: {height}");
+    pub fn unexec_dao_proposals_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Resetting DAO proposals execution information after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL WHERE {} > ?1;",
             *DAO_PROPOSALS_TABLE,
@@ -1738,29 +1752,33 @@ impl Drk {
             DAO_PROPOSALS_COL_EXEC_HEIGHT,
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully reset DAO proposals execution information");
+        output.push(String::from("Successfully reset DAO proposals execution information"));
 
         Ok(())
     }
 
     /// Reset all DAO votes in the wallet.
-    pub fn reset_dao_votes(&self) -> WalletDbResult<()> {
-        println!("Resetting DAO votes");
+    pub fn reset_dao_votes(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting DAO votes"));
         let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully reset DAO votes");
+        output.push(String::from("Successfully reset DAO votes"));
 
         Ok(())
     }
 
     /// Remove the DAO votes in the wallet that were created after
     /// provided height.
-    pub fn remove_dao_votes_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Removing DAO votes after: {height}");
+    pub fn remove_dao_votes_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Removing DAO votes after: {height}"));
         let query =
             format!("DELETE FROM {} WHERE {} > ?1;", *DAO_VOTES_TABLE, DAO_VOTES_COL_BLOCK_HEIGHT);
         self.wallet.exec_sql(&query, rusqlite::params![height])?;
-        println!("Successfully removed DAO votes");
+        output.push(String::from("Successfully removed DAO votes"));
 
         Ok(())
     }

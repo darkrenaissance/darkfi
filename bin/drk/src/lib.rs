@@ -133,20 +133,20 @@ impl Drk {
     }
 
     /// Auxiliary function to completely reset wallet state.
-    pub fn reset(&self) -> WalletDbResult<()> {
-        println!("Resetting full wallet state");
-        self.reset_scanned_blocks()?;
-        self.reset_money_tree()?;
-        self.reset_money_smt()?;
-        self.reset_money_coins()?;
-        self.reset_mint_authorities()?;
-        self.reset_dao_trees()?;
-        self.reset_daos()?;
-        self.reset_dao_proposals()?;
-        self.reset_dao_votes()?;
-        self.reset_deploy_authorities()?;
-        self.reset_tx_history()?;
-        println!("Successfully reset full wallet state");
+    pub fn reset(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting full wallet state"));
+        self.reset_scanned_blocks(output)?;
+        self.reset_money_tree(output)?;
+        self.reset_money_smt(output)?;
+        self.reset_money_coins(output)?;
+        self.reset_mint_authorities(output)?;
+        self.reset_dao_trees(output)?;
+        self.reset_daos(output)?;
+        self.reset_dao_proposals(output)?;
+        self.reset_dao_votes(output)?;
+        self.reset_deploy_authorities(output)?;
+        self.reset_tx_history(output)?;
+        output.push(String::from("Successfully reset full wallet state"));
         Ok(())
     }
 }
