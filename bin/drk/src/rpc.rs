@@ -284,7 +284,7 @@ impl Drk {
     /// Scans the blockchain for wallet relevant transactions,
     /// starting from the last scanned block. If a reorg has happened,
     /// we revert to its previous height and then scan from there.
-    pub async fn scan_blocks(&self) -> WalletDbResult<()> {
+    pub async fn scan_blocks(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         // Grab last scanned block height
         let (mut height, hash) = self.get_last_scanned_block()?;
 
@@ -294,7 +294,7 @@ impl Drk {
             // Check if block was found
             Err(Error::JsonRpcError((-32121, _))) => None,
             Err(e) => {
-                eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
                 return Err(WalletDbError::GenericError)
             }
         };
@@ -302,7 +302,7 @@ impl Drk {
         // Check if a reorg has happened
         if block.is_none() || hash != block.unwrap().hash().to_string() {
             // Find the exact block height the reorg happened
-            println!("A reorg has happened, finding last known common block...");
+            output.push(String::from("A reorg has happened, finding last known common block..."));
             height = height.saturating_sub(1);
             while height != 0 {
                 // Grab our scanned block hash for that height
@@ -314,7 +314,7 @@ impl Drk {
                     // Check if block was found
                     Err(Error::JsonRpcError((-32121, _))) => None,
                     Err(e) => {
-                        eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                        output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
                         return Err(WalletDbError::GenericError)
                     }
                 };
@@ -326,8 +326,8 @@ impl Drk {
                 }
 
                 // Reset to its height
-                println!("Last common block found: {height} - {scanned_block_hash}");
-                self.reset_to_height(height)?;
+                output.push(format!("Last common block found: {height} - {scanned_block_hash}"));
+                self.reset_to_height(height, output)?;
                 break
             }
         }
@@ -335,7 +335,7 @@ impl Drk {
         // If last scanned block is genesis(0) we reset,
         // otherwise continue with the next block height.
         if height == 0 {
-            self.reset()?;
+            self.reset(output)?;
         } else {
             height += 1;
         }
@@ -344,22 +344,24 @@ impl Drk {
         let mut scan_cache = match self.scan_cache().await {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("[scan_blocks] Generating scan cache failed: {e:?}");
+                output.push(format!("[scan_blocks] Generating scan cache failed: {e:?}"));
                 return Err(WalletDbError::GenericError)
             }
         };
 
         loop {
             // Grab last confirmed block
-            println!("Requested to scan from block number: {height}");
+            output.push(format!("Requested to scan from block number: {height}"));
             let (last_height, last_hash) = match self.get_last_confirmed_block().await {
                 Ok(last) => last,
                 Err(e) => {
-                    eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                    output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
                     return Err(WalletDbError::GenericError)
                 }
             };
-            println!("Last confirmed block reported by darkfid: {last_height} - {last_hash}");
+            output.push(format!(
+                "Last confirmed block reported by darkfid: {last_height} - {last_hash}"
+            ));
 
             // Already scanned last confirmed block
             if height > last_height {
@@ -367,21 +369,21 @@ impl Drk {
             }
 
             while height <= last_height {
-                println!("Requesting block {height}...");
+                output.push(format!("Requesting block {height}..."));
                 let block = match self.get_block_by_height(height).await {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                        output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
                         return Err(WalletDbError::GenericError)
                     }
                 };
-                println!("Block {height} received! Scanning block...");
+                output.push(format!("Block {height} received! Scanning block..."));
                 if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
-                    eprintln!("[scan_blocks] Scan block failed: {e:?}");
+                    output.push(format!("[scan_blocks] Scan block failed: {e:?}"));
                     return Err(WalletDbError::GenericError)
                 };
                 for msg in scan_cache.flush_messages() {
-                    println!("{msg}");
+                    output.push(msg);
                 }
                 height += 1;
             }
@@ -416,8 +418,8 @@ impl Drk {
 
     /// Broadcast a given transaction to darkfid and forward onto the network.
     /// Returns the transaction ID upon success.
-    pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
-        println!("Broadcasting transaction...");
+    pub async fn broadcast_tx(&self, tx: &Transaction, output: &mut Vec<String>) -> Result<String> {
+        output.push(String::from("Broadcasting transaction..."));
 
         let params =
             JsonValue::Array(vec![JsonValue::String(base64::encode(&serialize_async(tx).await))]);
@@ -524,13 +526,13 @@ impl Drk {
     }
 
     /// Auxiliary function to ping configured darkfid daemon for liveness.
-    pub async fn ping(&self) -> Result<()> {
-        println!("Executing ping request to darkfid...");
+    pub async fn ping(&self, output: &mut Vec<String>) -> Result<()> {
+        output.push(String::from("Executing ping request to darkfid..."));
         let latency = Instant::now();
         let rep = self.darkfid_daemon_request("ping", &JsonValue::Array(vec![])).await?;
         let latency = latency.elapsed();
-        println!("Got reply: {rep:?}");
-        println!("Latency: {latency:?}");
+        output.push(format!("Got reply: {rep:?}"));
+        output.push(format!("Latency: {latency:?}"));
         Ok(())
     }
 
@@ -569,17 +571,31 @@ pub async fn subscribe_blocks(
     endpoint: Url,
     ex: &ExecutorPtr,
 ) -> Result<()> {
-    // Grab last confirmed block height
+    // First we do a clean scan
     let lock = drk.read().await;
+    let mut output = vec![];
+    if let Err(e) = lock.scan_blocks(&mut output).await {
+        let err_msg = format!("Failed during scanning: {e:?}");
+        output.push(err_msg.clone());
+        shell_sender.send(output).await?;
+        return Err(Error::Custom(err_msg))
+    }
+    output.push(String::from("Finished scanning blockchain"));
+    shell_sender.send(output).await?;
+
+    // Grab last confirmed block height
     let (last_confirmed_height, _) = lock.get_last_confirmed_block().await?;
 
     // Handle genesis(0) block
     if last_confirmed_height == 0 {
-        if let Err(e) = lock.scan_blocks().await {
-            return Err(Error::DatabaseError(format!(
-                "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
-            )))
+        output = vec![];
+        if let Err(e) = lock.scan_blocks(&mut output).await {
+            let err_msg = format!("[subscribe_blocks] Scanning from genesis block failed: {e:?}");
+            output.push(err_msg.clone());
+            shell_sender.send(output).await?;
+            return Err(Error::Custom(err_msg))
         }
+        shell_sender.send(output).await?;
     }
 
     // Grab last confirmed block again
@@ -589,23 +605,23 @@ pub async fn subscribe_blocks(
     let (mut last_scanned_height, last_scanned_hash) = match lock.get_last_scanned_block() {
         Ok(last) => last,
         Err(e) => {
-            return Err(Error::DatabaseError(format!(
-                "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
-            )))
+            let err_msg = format!("[subscribe_blocks] Retrieving last scanned block failed: {e:?}");
+            shell_sender.send(vec![err_msg.clone()]).await?;
+            return Err(Error::Custom(err_msg))
         }
     };
 
     // Check if other blocks have been created
     if last_confirmed_height != last_scanned_height || last_confirmed_hash != last_scanned_hash {
+        let err_msg = String::from("[subscribe_blocks] Blockchain not fully scanned");
         shell_sender
             .send(vec![
                 String::from("Warning: Last scanned block is not the last confirmed block."),
                 String::from("You should first fully scan the blockchain, and then subscribe"),
+                err_msg.clone(),
             ])
             .await?;
-        return Err(Error::DatabaseError(
-            "[subscribe_blocks] Blockchain not fully scanned".to_string(),
-        ))
+        return Err(Error::Custom(err_msg))
     }
 
     let mut shell_message =
@@ -644,12 +660,13 @@ pub async fn subscribe_blocks(
     shell_sender.send(shell_message).await?;
     drop(lock);
 
-    let e = loop {
+    let e = 'outer: loop {
         match subscription.receive().await {
             JsonResult::Notification(n) => {
                 let mut shell_message =
                     vec![String::from("Got Block notification from darkfid subscription")];
                 if n.method != "blockchain.subscribe_blocks" {
+                    shell_sender.send(shell_message).await?;
                     break Error::UnexpectedJsonRpc(format!(
                         "Got foreign notification from darkfid: {}",
                         n.method
@@ -658,12 +675,14 @@ pub async fn subscribe_blocks(
 
                 // Verify parameters
                 if !n.params.is_array() {
+                    shell_sender.send(shell_message).await?;
                     break Error::UnexpectedJsonRpc(
                         "Received notification params are not an array".to_string(),
                     )
                 }
                 let params = n.params.get::<Vec<JsonValue>>().unwrap();
                 if params.is_empty() {
+                    shell_sender.send(shell_message).await?;
                     break Error::UnexpectedJsonRpc("Notification parameters are empty".to_string())
                 }
 
@@ -679,10 +698,11 @@ pub async fn subscribe_blocks(
                     let lock = drk.read().await;
                     if block.header.height <= last_scanned_height {
                         let reset_height = block.header.height.saturating_sub(1);
-                        if let Err(e) = lock.reset_to_height(reset_height) {
-                            return Err(Error::DatabaseError(format!(
+                        if let Err(e) = lock.reset_to_height(reset_height, &mut shell_message) {
+                            shell_sender.send(shell_message).await?;
+                            break 'outer Error::Custom(format!(
                                 "[subscribe_blocks] Wallet state reset failed: {e:?}"
-                            )))
+                            ))
                         }
 
                         // Scan genesis again if needed
@@ -690,16 +710,18 @@ pub async fn subscribe_blocks(
                             let genesis = match lock.get_block_by_height(reset_height).await {
                                 Ok(b) => b,
                                 Err(e) => {
-                                    return Err(Error::Custom(format!(
+                                    shell_sender.send(shell_message).await?;
+                                    break 'outer Error::Custom(format!(
                                         "[subscribe_blocks] RPC client request failed: {e:?}"
-                                    )))
+                                    ))
                                 }
                             };
                             let mut scan_cache = lock.scan_cache().await?;
                             if let Err(e) = lock.scan_block(&mut scan_cache, &genesis).await {
-                                return Err(Error::DatabaseError(format!(
+                                shell_sender.send(shell_message).await?;
+                                break 'outer Error::Custom(format!(
                                     "[subscribe_blocks] Scanning block failed: {e:?}"
-                                )))
+                                ))
                             };
                             for msg in scan_cache.flush_messages() {
                                 shell_message.push(msg);
@@ -709,9 +731,10 @@ pub async fn subscribe_blocks(
 
                     let mut scan_cache = lock.scan_cache().await?;
                     if let Err(e) = lock.scan_block(&mut scan_cache, &block).await {
-                        return Err(Error::DatabaseError(format!(
+                        shell_sender.send(shell_message).await?;
+                        break 'outer Error::Custom(format!(
                             "[subscribe_blocks] Scanning block failed: {e:?}"
-                        )))
+                        ))
                     }
                     for msg in scan_cache.flush_messages() {
                         shell_message.push(msg);
@@ -735,5 +758,6 @@ pub async fn subscribe_blocks(
         }
     };
 
+    shell_sender.send(vec![format!("[subscribe_blocks] Subscription loop break: {e}")]).await?;
     Err(e)
 }

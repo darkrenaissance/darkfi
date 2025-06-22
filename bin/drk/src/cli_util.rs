@@ -17,7 +17,6 @@
  */
 use std::{
     io::{stdin, Cursor, Read},
-    process::exit,
     str::FromStr,
 };
 
@@ -39,28 +38,37 @@ use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
 pub async fn parse_tx_from_stdin() -> Result<Transaction> {
     let mut buf = String::new();
     stdin().read_to_string(&mut buf)?;
-    let Some(bytes) = base64::decode(buf.trim()) else {
-        eprintln!("Failed to decode transaction");
-        exit(2);
-    };
+    match base64::decode(buf.trim()) {
+        Some(bytes) => Ok(deserialize_async(&bytes).await?),
+        None => Err(Error::ParseFailed("Failed to decode transaction")),
+    }
+}
 
-    Ok(deserialize_async(&bytes).await?)
+/// Auxiliary function to parse a base64 encoded transaction from
+/// provided input or fallback to stdin if its empty.
+pub async fn parse_tx_from_input(input: &[String]) -> Result<Transaction> {
+    match input.len() {
+        0 => parse_tx_from_stdin().await,
+        1 => match base64::decode(input[0].trim()) {
+            Some(bytes) => Ok(deserialize_async(&bytes).await?),
+            None => Err(Error::ParseFailed("Failed to decode transaction")),
+        },
+        _ => Err(Error::ParseFailed("Multiline input provided")),
+    }
 }
 
 /// Auxiliary function to parse provided string into a values pair.
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
-        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
-        exit(2);
+        return Err(Error::ParseFailed("Invalid value pair. Use a pair such as 13.37:11.0"))
     }
 
     let val0 = decode_base10(v[0], BALANCE_BASE10_DECIMALS, true);
     let val1 = decode_base10(v[1], BALANCE_BASE10_DECIMALS, true);
 
     if val0.is_err() || val1.is_err() {
-        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
-        exit(2);
+        return Err(Error::ParseFailed("Invalid value pair. Use a pair such as 13.37:11.0"))
     }
 
     Ok((val0.unwrap(), val1.unwrap()))
@@ -70,22 +78,20 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
 pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
-        eprintln!("Invalid token pair. Use a pair such as:");
-        eprintln!("WCKD:MLDY");
-        eprintln!("or");
-        eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
-        exit(2);
+        return Err(Error::ParseFailed(
+            "Invalid token pair. Use a pair such as:\nWCKD:MLDY\nor\n\
+            A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2"
+        ))
     }
 
     let tok0 = drk.get_token(v[0].to_string()).await;
     let tok1 = drk.get_token(v[1].to_string()).await;
 
     if tok0.is_err() || tok1.is_err() {
-        eprintln!("Invalid token pair. Use a pair such as:");
-        eprintln!("WCKD:MLDY");
-        eprintln!("or");
-        eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
-        exit(2);
+        return Err(Error::ParseFailed(
+            "Invalid token pair. Use a pair such as:\nWCKD:MLDY\nor\n\
+            A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2"
+        ))
     }
 
     Ok((tok0.unwrap(), tok1.unwrap()))
@@ -107,7 +113,7 @@ pub async fn kaching() {
 }
 
 /// Auxiliary function to generate provided shell completions.
-pub fn generate_completions(shell: &str) -> Result<()> {
+pub fn generate_completions(shell: &str) -> Result<String> {
     // Sub-commands
 
     // Interactive
@@ -537,7 +543,15 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         Err(e) => return Err(Error::Custom(e)),
     };
 
-    app.gen_completions_to("./drk", shell, &mut std::io::stdout());
+    let mut buf = vec![];
+    app.gen_completions_to("./drk", shell, &mut buf);
 
-    Ok(())
+    Ok(String::from_utf8(buf)?)
+}
+
+/// Auxiliary function to generate provided shell completions.
+pub fn print_output(buf: &[String]) {
+    for line in buf {
+        println!("{line}");
+    }
 }

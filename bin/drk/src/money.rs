@@ -132,8 +132,8 @@ impl Drk {
     }
 
     /// Generate a new keypair and place it into the wallet.
-    pub async fn money_keygen(&self) -> WalletDbResult<()> {
-        println!("Generating a new keypair");
+    pub async fn money_keygen(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Generating a new keypair"));
 
         // TODO: We might want to have hierarchical deterministic key derivation.
         let keypair = Keypair::random(&mut OsRng);
@@ -155,8 +155,8 @@ impl Drk {
             ],
         )?;
 
-        println!("New address:");
-        println!("{}", keypair.public);
+        output.push(String::from("New address:"));
+        output.push(format!("{}", keypair.public));
 
         Ok(())
     }
@@ -297,7 +297,11 @@ impl Drk {
     /// Import given secret keys into the wallet.
     /// If the key already exists, it will be skipped.
     /// Returns the respective PublicKey objects for the imported keys.
-    pub async fn import_money_secrets(&self, secrets: Vec<SecretKey>) -> Result<Vec<PublicKey>> {
+    pub async fn import_money_secrets(
+        &self,
+        secrets: Vec<SecretKey>,
+        output: &mut Vec<String>,
+    ) -> Result<Vec<PublicKey>> {
         let existing_secrets = self.get_money_secrets().await?;
 
         let mut ret = Vec::with_capacity(secrets.len());
@@ -305,7 +309,7 @@ impl Drk {
         for secret in secrets {
             // Check if secret already exists
             if existing_secrets.contains(&secret) {
-                println!("Existing key found: {secret}");
+                output.push(format!("Existing key found: {secret}"));
                 continue
             }
 
@@ -1014,7 +1018,7 @@ impl Drk {
     }
 
     /// Mark provided transaction input coins as spent.
-    pub async fn mark_tx_spend(&self, tx: &Transaction) -> Result<()> {
+    pub async fn mark_tx_spend(&self, tx: &Transaction, output: &mut Vec<String>) -> Result<()> {
         // Create a cache of all our own nullifiers
         let mut owncoins_nullifiers = BTreeMap::new();
         for coin in self.get_coins(true).await? {
@@ -1025,13 +1029,13 @@ impl Drk {
         }
 
         let tx_hash = tx.hash().to_string();
-        println!("[mark_tx_spend] Processing transaction: {tx_hash}");
+        output.push(format!("[mark_tx_spend] Processing transaction: {tx_hash}"));
         for (i, call) in tx.calls.iter().enumerate() {
             if call.data.contract_id != *MONEY_CONTRACT_ID {
                 continue
             }
 
-            println!("[mark_tx_spend] Found Money contract in call {i}");
+            output.push(format!("[mark_tx_spend] Found Money contract in call {i}"));
             let nullifiers = self.money_call_nullifiers(call).await?;
             self.mark_spent_coins(None, &owncoins_nullifiers, &nullifiers, &None, &tx_hash)?;
         }
@@ -1101,57 +1105,67 @@ impl Drk {
     }
 
     /// Reset the Money Merkle tree in the cache.
-    pub fn reset_money_tree(&self) -> WalletDbResult<()> {
-        println!("Resetting Money Merkle tree");
+    pub fn reset_money_tree(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting Money Merkle tree"));
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_MONEY) {
-            println!("[reset_money_tree] Resetting Money Merkle tree failed: {e:?}");
+            output.push(format!("[reset_money_tree] Resetting Money Merkle tree failed: {e:?}"));
             return Err(WalletDbError::GenericError)
         }
-        println!("Successfully reset Money Merkle tree");
+        output.push(String::from("Successfully reset Money Merkle tree"));
 
         Ok(())
     }
 
     /// Reset the Money nullifiers Sparse Merkle Tree in the cache.
-    pub fn reset_money_smt(&self) -> WalletDbResult<()> {
-        println!("Resetting Money Sparse Merkle tree");
+    pub fn reset_money_smt(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting Money Sparse Merkle tree"));
         if let Err(e) = self.cache.money_smt.clear() {
-            println!("[reset_money_smt] Resetting Money Sparse Merkle tree failed: {e:?}");
+            output.push(format!(
+                "[reset_money_smt] Resetting Money Sparse Merkle tree failed: {e:?}"
+            ));
             return Err(WalletDbError::GenericError)
         }
-        println!("Successfully reset Money Sparse Merkle tree");
+        output.push(String::from("Successfully reset Money Sparse Merkle tree"));
 
         Ok(())
     }
 
     /// Reset the Money coins in the wallet.
-    pub fn reset_money_coins(&self) -> WalletDbResult<()> {
-        println!("Resetting coins");
+    pub fn reset_money_coins(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting coins"));
         let query = format!("DELETE FROM {};", *MONEY_COINS_TABLE);
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully reset coins");
+        output.push(String::from("Successfully reset coins"));
 
         Ok(())
     }
 
     /// Remove the Money coins in the wallet that were created after
     /// provided height.
-    pub fn remove_money_coins_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Removing coins after: {height}");
+    pub fn remove_money_coins_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Removing coins after: {height}"));
         let query = format!(
             "DELETE FROM {} WHERE {} > ?1;",
             *MONEY_COINS_TABLE, MONEY_COINS_COL_CREATION_HEIGHT
         );
         self.wallet.exec_sql(&query, rusqlite::params![height])?;
-        println!("Successfully removed coins");
+        output.push(String::from("Successfully removed coins"));
 
         Ok(())
     }
 
     /// Mark the Money coins in the wallet that were spent after
     /// provided height as unspent.
-    pub fn unspent_money_coins_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Unspenting coins after: {height}");
+    pub fn unspent_money_coins_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Unspenting coins after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL, {} = '=' WHERE {} > ?1;",
             *MONEY_COINS_TABLE,
@@ -1161,7 +1175,7 @@ impl Drk {
             MONEY_COINS_COL_SPENT_HEIGHT
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully unspent coins");
+        output.push(String::from("Successfully unspent coins"));
 
         Ok(())
     }

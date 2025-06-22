@@ -172,19 +172,23 @@ impl Drk {
     }
 
     /// Reset the transaction history records in the wallet.
-    pub fn reset_tx_history(&self) -> WalletDbResult<()> {
-        println!("Resetting transactions history");
+    pub fn reset_tx_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting transactions history"));
         let query = format!("DELETE FROM {WALLET_TXS_HISTORY_TABLE};");
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully reset transactions history");
+        output.push(String::from("Successfully reset transactions history"));
 
         Ok(())
     }
 
     /// Set reverted status to the transaction history records in the
     /// wallet that where executed after provided height.
-    pub fn revert_transactions_after(&self, height: &u32) -> WalletDbResult<()> {
-        println!("Reverting transactions history after: {height}");
+    pub fn revert_transactions_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Reverting transactions history after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = 'Reverted', {} = NULL WHERE {} > ?1;",
             WALLET_TXS_HISTORY_TABLE,
@@ -193,7 +197,7 @@ impl Drk {
             WALLET_TXS_HISTORY_BLOCK_HEIGHT
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        println!("Successfully reverted transactions history");
+        output.push(String::from("Successfully reverted transactions history"));
 
         Ok(())
     }

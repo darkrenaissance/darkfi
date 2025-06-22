@@ -55,6 +55,7 @@ use darkfi_serial::{deserialize_async, serialize_async};
 use drk::{
     cli_util::{
         generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
+        print_output,
     },
     dao::{DaoParams, ProposalRecord},
     interactive::interactive,
@@ -687,11 +688,16 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 args.fun,
             )
             .await;
-            drk.ping().await?;
+            let mut output = vec![];
+            drk.ping(&mut output).await?;
+            print_output(&output);
             drk.stop_rpc_client().await
         }
 
-        Subcmd::Completions { shell } => generate_completions(&shell),
+        Subcmd::Completions { shell } => {
+            println!("{}", generate_completions(&shell)?);
+            Ok(())
+        }
 
         Subcmd::Wallet { command } => {
             let drk = new_wallet(
@@ -725,10 +731,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 }
 
                 WalletSubcmd::Keygen => {
-                    if let Err(e) = drk.money_keygen().await {
+                    let mut output = vec![];
+                    if let Err(e) = drk.money_keygen(&mut output).await {
                         eprintln!("Failed to generate keypair: {e:?}");
                         exit(2);
                     }
+                    print_output(&output);
                 }
 
                 WalletSubcmd::Balance => {
@@ -817,8 +825,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         }
                     }
 
-                    let pubkeys = match drk.import_money_secrets(secrets).await {
-                        Ok(p) => p,
+                    let mut output = vec![];
+                    let pubkeys = match drk.import_money_secrets(secrets, &mut output).await {
+                        Ok(p) => {
+                            print_output(&output);
+                            p
+                        }
                         Err(e) => {
                             eprintln!("Failed to import secret keys into wallet: {e:?}");
                             exit(2);
@@ -922,10 +934,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
 
-            if let Err(e) = drk.mark_tx_spend(&tx).await {
+            let mut output = vec![];
+            if let Err(e) = drk.mark_tx_spend(&tx, &mut output).await {
                 eprintln!("Failed to mark transaction coins as spent: {e:?}");
                 exit(2);
             };
+            print_output(&output);
 
             Ok(())
         }
@@ -1119,10 +1133,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     args.fun,
                 )
                 .await;
-                if let Err(e) = drk.inspect_swap(bytes).await {
+                let mut output = vec![];
+                if let Err(e) = drk.inspect_swap(bytes, &mut output).await {
                     eprintln!("Failed to inspect swap: {e:?}");
                     exit(2);
                 };
+                print_output(&output);
 
                 Ok(())
             }
@@ -1953,18 +1969,20 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 exit(2);
             };
 
-            if let Err(e) = drk.mark_tx_spend(&tx).await {
+            let mut output = vec![];
+            if let Err(e) = drk.mark_tx_spend(&tx, &mut output).await {
                 eprintln!("Failed to mark transaction coins as spent: {e:?}");
                 exit(2);
             };
 
-            let txid = match drk.broadcast_tx(&tx).await {
+            let txid = match drk.broadcast_tx(&tx, &mut output).await {
                 Ok(t) => t,
                 Err(e) => {
                     eprintln!("Failed to broadcast transaction: {e:?}");
                     exit(2);
                 }
             };
+            print_output(&output);
 
             println!("Transaction ID: {txid}");
 
@@ -1982,17 +2000,19 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
 
+            let mut output = vec![];
             if let Some(height) = reset {
-                if let Err(e) = drk.reset_to_height(height) {
+                if let Err(e) = drk.reset_to_height(height, &mut output) {
                     eprintln!("Failed during wallet reset: {e:?}");
                     exit(2);
                 }
             }
 
-            if let Err(e) = drk.scan_blocks().await {
+            if let Err(e) = drk.scan_blocks(&mut output).await {
                 eprintln!("Failed during scanning: {e:?}");
                 exit(2);
             }
+            print_output(&output);
             println!("Finished scanning blockchain");
 
             drk.stop_rpc_client().await

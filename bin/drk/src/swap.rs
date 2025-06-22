@@ -287,11 +287,11 @@ impl Drk {
     }
 
     /// Inspect and verify a given swap (half or full) transaction
-    pub async fn inspect_swap(&self, bytes: Vec<u8>) -> Result<()> {
+    pub async fn inspect_swap(&self, bytes: Vec<u8>, output: &mut Vec<String>) -> Result<()> {
         // First we check if its a partial swap
         if let Ok(partial) = deserialize_async::<PartialSwapData>(&bytes).await {
             // Inspect the PartialSwapData
-            println!("{partial}");
+            output.push(format!("{partial}"));
             return Ok(())
         }
 
@@ -307,23 +307,23 @@ impl Drk {
 
         // We're inspecting a full transaction
         if tx.calls.len() != 1 {
-            eprintln!(
+            output.push(format!(
                 "Found {} contract calls in the transaction, there should be 1",
                 tx.calls.len()
-            );
+            ));
             return insection_error
         }
 
         let params: MoneyTransferParamsV1 = deserialize_async(&tx.calls[0].data.data[1..]).await?;
-        println!("Parameters:\n{params:#?}");
+        output.push(format!("Parameters:\n{params:#?}"));
 
         if params.inputs.len() != 2 {
-            eprintln!("Found {} inputs, there should be 2", params.inputs.len());
+            output.push(format!("Found {} inputs, there should be 2", params.inputs.len()));
             return insection_error
         }
 
         if params.outputs.len() != 2 {
-            eprintln!("Found {} outputs, there should be 2", params.outputs.len());
+            output.push(format!("Found {} outputs, there should be 2", params.outputs.len()));
             return insection_error
         }
 
@@ -331,17 +331,18 @@ impl Drk {
         let secret_keys = self.get_money_secrets().await?;
         let mut skey: Option<SecretKey> = None;
         let mut note: Option<MoneyNote> = None;
-        let mut output_idx = 0;
+        let mut param_output_idx = 0;
 
-        for output in &params.outputs {
-            println!("Trying to decrypt note in output {output_idx}");
+        for param_output in &params.outputs {
+            output.push(format!("Trying to decrypt note in output {param_output_idx}"));
 
             for secret in &secret_keys {
-                if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
+                if let Ok(d_note) = param_output.note.decrypt::<MoneyNote>(secret) {
                     let s: SecretKey = deserialize_async(&d_note.memo).await?;
                     skey = Some(s);
                     note = Some(d_note);
-                    println!("Successfully decrypted and found an ephemeral secret");
+                    output
+                        .push(String::from("Successfully decrypted and found an ephemeral secret"));
                     break
                 }
             }
@@ -350,20 +351,20 @@ impl Drk {
                 break
             }
 
-            output_idx += 1;
+            param_output_idx += 1;
         }
 
         let Some(note) = note else {
-            eprintln!("Error: Could not decrypt notes of either output");
+            output.push(String::from("Error: Could not decrypt notes of either output"));
             return insection_error
         };
 
-        println!(
-            "Output[{output_idx}] value: {} ({})",
+        output.push(format!(
+            "Output[{param_output_idx}] value: {} ({})",
             note.value,
             encode_base10(note.value, BALANCE_BASE10_DECIMALS)
-        );
-        println!("Output[{output_idx}] token ID: {}", note.token_id);
+        ));
+        output.push(format!("Output[{param_output_idx}] token ID: {}", note.token_id));
 
         let skey = skey.unwrap();
         let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
@@ -375,35 +376,43 @@ impl Drk {
             note.coin_blind.inner(),
         ]));
 
-        if coin == params.outputs[output_idx].coin {
-            println!("Output[{output_idx}] coin matches decrypted note metadata");
+        if coin == params.outputs[param_output_idx].coin {
+            output.push(format!("Output[{param_output_idx}] coin matches decrypted note metadata"));
         } else {
-            eprintln!("Error: Output[{output_idx}] coin does not match note metadata");
+            output.push(format!(
+                "Error: Output[{param_output_idx}] coin does not match note metadata"
+            ));
             return insection_error
         }
 
         let valcom = pedersen_commitment_u64(note.value, note.value_blind);
         let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind.inner()]);
 
-        if valcom != params.outputs[output_idx].value_commit {
-            eprintln!("Error: Output[{output_idx}] value commitment does not match note metadata");
+        if valcom != params.outputs[param_output_idx].value_commit {
+            output.push(format!(
+                "Error: Output[{param_output_idx}] value commitment does not match note metadata"
+            ));
             return insection_error
         }
 
-        if tokcom != params.outputs[output_idx].token_commit {
-            eprintln!("Error: Output[{output_idx}] token commitment does not match note metadata");
+        if tokcom != params.outputs[param_output_idx].token_commit {
+            output.push(format!(
+                "Error: Output[{param_output_idx}] token commitment does not match note metadata"
+            ));
             return insection_error
         }
 
-        println!("Value and token commitments match decrypted note metadata");
+        output.push(String::from("Value and token commitments match decrypted note metadata"));
 
-        // Verify that the output commitments match the other input commitments
-        match output_idx {
+        // Verify that the param output commitments match the other input commitments
+        match param_output_idx {
             0 => {
                 if valcom != params.inputs[1].value_commit ||
                     tokcom != params.inputs[1].token_commit
                 {
-                    eprintln!("Error: Value/Token commits of output[0] do not match input[1]");
+                    output.push(String::from(
+                        "Error: Value/Token commits of output[0] do not match input[1]",
+                    ));
                     return insection_error
                 }
             }
@@ -411,14 +420,16 @@ impl Drk {
                 if valcom != params.inputs[0].value_commit ||
                     tokcom != params.inputs[0].token_commit
                 {
-                    eprintln!("Error: Value/Token commits of output[1] do not match input[0]");
+                    output.push(String::from(
+                        "Error: Value/Token commits of output[1] do not match input[0]",
+                    ));
                     return insection_error
                 }
             }
             _ => unreachable!(),
         }
 
-        println!("Found matching pedersen commitments for outputs and inputs");
+        output.push(String::from("Found matching pedersen commitments for outputs and inputs"));
 
         Ok(())
     }
@@ -475,7 +486,6 @@ impl Drk {
         }
 
         if !found {
-            eprintln!("Error: Failed to decrypt note with any of our secret keys");
             return Err(Error::Custom(
                 "Failed to decrypt note with any of our secret keys".to_string(),
             ))
