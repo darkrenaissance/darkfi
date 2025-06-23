@@ -17,7 +17,8 @@
  */
 
 use std::{
-    io::{stdin, ErrorKind, Read},
+    fs::{File, OpenOptions},
+    io::{stdin, BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write},
     str::FromStr,
 };
 
@@ -57,10 +58,9 @@ use crate::{
 };
 
 // TODO:
-//  1. add rest commands handling, along with their completions, hints and help message.
-//  2. add input definitions, so you input from files not just stdin.
-//  3. add output definitions, so you can output to files not just stdout.
-//  4. create a transactions cache in the wallet db, so you can use it to handle them.
+//  1. Add rest commands handling, along with their completions, hints and help message.
+//  2. Subscribe/scan ux is a bit flaky, fix it.
+//  3. Create a transactions cache in the wallet db, so you can use it to handle them.
 
 /// Auxiliary function to print the help message.
 fn help(output: &mut Vec<String>) {
@@ -295,7 +295,83 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
 
         // Process each command
         let mut output = vec![];
-        for command in commands {
+        'commands_loop: for command in commands {
+            let mut input = output;
+            output = vec![];
+
+            // Check if we have to output to a file
+            let (mut command, file, append) = if command.contains('>') {
+                // Check if we write or append to the file
+                let mut split = ">";
+                let mut append = false;
+                if command.contains(">>") {
+                    split = ">>";
+                    append = true;
+                }
+
+                // Parse command parts
+                let parts: Vec<&str> = command.split(split).collect();
+                if parts.len() == 1 || parts[0].contains('>') {
+                    output.push(format!("Malformed command output file definition: {command}"));
+                    continue
+                }
+                let file = String::from(parts[1..].join("").trim());
+                if file.is_empty() || file.contains('>') {
+                    output.push(format!("Malformed command output file definition: {command}"));
+                    continue
+                }
+                (parts[0], Some(file), append)
+            } else {
+                (command, None, false)
+            };
+
+            // Check if we have to use a file as input
+            if command.contains('<') {
+                // Parse command parts
+                let parts: Vec<&str> = command.split('<').collect();
+                if parts.len() == 1 {
+                    output.push(format!("Malformed command input file definition: {command}"));
+                    continue
+                }
+
+                // Read the input file name
+                let file = String::from(parts[1..].join("").trim());
+                if file.is_empty() {
+                    output.push(format!("Malformed command input file definition: {command}"));
+                    continue
+                }
+
+                // Expand the input file path
+                let file_path = match expand_path(&file) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        output.push(format!("Error while expanding input file path: {e}"));
+                        continue
+                    }
+                };
+
+                // Read the file lines
+                let file = match File::open(file_path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        output.push(format!("Error while openning input file: {e}"));
+                        continue
+                    }
+                };
+                input = vec![];
+                for (index, line) in BufReader::new(file).lines().enumerate() {
+                    match line {
+                        Ok(l) => input.push(l),
+                        Err(e) => {
+                            output
+                                .push(format!("Error while reading input file line {index}: {e}"));
+                            continue 'commands_loop
+                        }
+                    }
+                }
+                command = parts[0];
+            }
+
             // Parse command parts
             let parts: Vec<&str> = command.split_whitespace().collect();
             if parts.is_empty() {
@@ -303,8 +379,6 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
             }
 
             // Handle command
-            let input = output;
-            output = vec![];
             match parts[0] {
                 "help" => help(&mut output),
                 "kaching" => kaching().await,
@@ -338,6 +412,47 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 "unsnooze" => snooze_active = false,
                 "scan" => handle_scan(drk, &subscription_active, &parts, &mut output).await,
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
+            }
+
+            // Write output to file, if requested
+            if let Some(file) = file {
+                // Expand the output file path
+                let file_path = match expand_path(&file) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        output.push(format!("Error while expanding output file path: {e}"));
+                        continue
+                    }
+                };
+
+                // Open the file
+                let file = if append {
+                    OpenOptions::new().create(true).append(true).open(&file_path)
+                } else {
+                    File::create(file_path)
+                };
+                let mut file = match file {
+                    Ok(f) => f,
+                    Err(e) => {
+                        output.push(format!("Error while openning output file: {e}"));
+                        continue
+                    }
+                };
+
+                // Seek end if we append to it
+                if append {
+                    if let Err(e) = file.seek(SeekFrom::End(0)) {
+                        output.push(format!("Error while seeking end of output file: {e}"));
+                        continue
+                    }
+                }
+
+                // Write the output
+                if let Err(e) = file.write_all((output.join("\n") + "\n").as_bytes()) {
+                    output.push(format!("Error while writing output file: {e}"));
+                    continue
+                }
+                output = vec![];
             }
         }
 
