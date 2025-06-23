@@ -279,10 +279,10 @@ async fn retrieve_headers(
     let mut peer_subs = vec![];
     for peer in peers {
         match peer.subscribe_msg::<HeaderSyncResponse>().await {
-            Ok(response_sub) => peer_subs.push(Some(response_sub)),
+            Ok(response_sub) => peer_subs.push((Some(response_sub), false)),
             Err(e) => {
                 debug!(target: "darkfid::task::sync::retrieve_headers", "Failure during `HeaderSyncResponse` communication setup with peer {peer:?}: {e}");
-                peer_subs.push(None)
+                peer_subs.push((None, true))
             }
         }
     }
@@ -292,9 +292,25 @@ async fn retrieve_headers(
     let total = tip_height - last_known - 1;
     let mut last_tip_height = tip_height;
     'headers_loop: loop {
+        // Check if all our peers are failing
+        let mut count = 0;
+        for (peer_sub, failed) in &peer_subs {
+            if peer_sub.is_none() || *failed {
+                count += 1;
+            }
+        }
+        if count == peer_subs.len() {
+            debug!(target: "darkfid::task::sync::retrieve_headers", "All peer connections failed.");
+            break
+        }
+
         for (index, peer) in peers.iter().enumerate() {
             // Grab the response sub reference
-            let Some(ref response_sub) = peer_subs[index] else {
+            let (peer_sub, failed) = &mut peer_subs[index];
+            if *failed {
+                continue;
+            }
+            let Some(ref response_sub) = peer_sub else {
                 continue;
             };
 
@@ -302,12 +318,14 @@ async fn retrieve_headers(
             let request = HeaderSyncRequest { height: last_tip_height };
             if let Err(e) = peer.send(&request).await {
                 debug!(target: "darkfid::task::sync::retrieve_headers", "Failure during `HeaderSyncRequest` send to peer {peer:?}: {e}");
+                *failed = true;
                 continue
             };
 
             // Node waits for response
             let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
                 debug!(target: "darkfid::task::sync::retrieve_headers", "Timeout while waiting for `HeaderSyncResponse` from peer: {peer:?}");
+                *failed = true;
                 continue
             };
 
@@ -399,10 +417,10 @@ async fn retrieve_blocks(
     let mut peer_subs = vec![];
     for peer in peers {
         match peer.subscribe_msg::<SyncResponse>().await {
-            Ok(response_sub) => peer_subs.push(Some(response_sub)),
+            Ok(response_sub) => peer_subs.push((Some(response_sub), false)),
             Err(e) => {
                 debug!(target: "darkfid::task::sync::retrieve_blocks", "Failure during `SyncResponse` communication setup with peer {peer:?}: {e}");
-                peer_subs.push(None)
+                peer_subs.push((None, true))
             }
         }
     }
@@ -411,9 +429,25 @@ async fn retrieve_blocks(
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
     'blocks_loop: loop {
+        // Check if all our peers are failing
+        let mut count = 0;
+        for (peer_sub, failed) in &peer_subs {
+            if peer_sub.is_none() || *failed {
+                count += 1;
+            }
+        }
+        if count == peer_subs.len() {
+            debug!(target: "darkfid::task::sync::retrieve_blocks", "All peer connections failed.");
+            break
+        }
+
         'peers_loop: for (index, peer) in peers.iter().enumerate() {
             // Grab the response sub reference
-            let Some(ref response_sub) = peer_subs[index] else {
+            let (peer_sub, failed) = &mut peer_subs[index];
+            if *failed {
+                continue;
+            }
+            let Some(ref response_sub) = peer_sub else {
                 continue;
             };
 
@@ -433,12 +467,14 @@ async fn retrieve_blocks(
             let request = SyncRequest { headers: headers_hashes.clone() };
             if let Err(e) = peer.send(&request).await {
                 debug!(target: "darkfid::task::sync::retrieve_blocks", "Failure during `SyncRequest` send to peer {peer:?}: {e}");
+                *failed = true;
                 continue
             };
 
             // Node waits for response
             let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
                 debug!(target: "darkfid::task::sync::retrieve_blocks", "Timeout while waiting for `SyncResponse` from peer: {peer:?}");
+                *failed = true;
                 continue
             };
 
