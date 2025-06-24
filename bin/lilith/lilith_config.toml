@@ -23,6 +23,7 @@ rpc_listen = "tcp://127.0.0.1:18927"
 #localnet = false
 #hostlist ="~/.local/share/darkfi/lilith/darkfid_sync/hostlist.tsv"
 #datastore = "~/.local/share/darkfi/lilith/darkfid_sync"
+#magic_bytes = [163, 139, 113, 101]
 
 #[network."darkirc_v5"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
@@ -32,6 +33,7 @@ rpc_listen = "tcp://127.0.0.1:18927"
 #localnet = false
 #datastore = "~/.local/share/darkfi/lilith/darkirc"
 #hostlist ="~/.local/share/darkfi/lilith/darkirc/hostlist.tsv"
+#magic_bytes = [251, 229, 199, 181]
 
 #[network."taud_v5"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
@@ -41,3 +43,4 @@ rpc_listen = "tcp://127.0.0.1:18927"
 #localnet = false
 #datastore = "~/.local/share/darkfi/lilith/taud"
 #hostlist ="~/.local/share/darkfi/lilith/taud/hostlist.tsv"
+#magic_bytes = [157, 137, 109, 97]

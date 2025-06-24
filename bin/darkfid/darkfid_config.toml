@@ -61,6 +61,9 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Testnet P2P network settings
 [network_config."testnet".net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [163, 139, 113, 101]
+
 # Path to the P2P datastore
 p2p_datastore = "~/.local/share/darkfi/darkfid/testnet"
 
@@ -192,6 +195,9 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Mainnet P2P network settings
 [network_config."mainnet".net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [101, 79, 61, 43]
+
 # Path to the P2P datastore
 p2p_datastore = "~/.local/share/darkfi/darkfid/mainnet"
 
@@ -328,6 +334,9 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [241, 227, 197, 179]
+
 # Path to the P2P datastore
 p2p_datastore = "~/.local/share/darkfi/darkfid/localnet"
 

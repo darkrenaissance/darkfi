@@ -37,7 +37,7 @@ use std::{
     sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
-
+use darkfi::net::settings::MagicBytes;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
@@ -200,6 +200,7 @@ impl DarkIrc {
         let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
+        p2p_settings.magic_bytes = MagicBytes([251, 229, 199, 181]);
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
         if get_use_tor_filename().exists() {
             i!("Setup P2P network [tor]");

@@ -152,7 +152,8 @@ impl FudPlugin {
 
         let mut fud_settings: FudSettings = Default::default();
         fud_settings.base_dir = basedir.to_string_lossy().to_string();
-        let mut p2p_settings: NetSettings = fud_settings.net.clone().into();
+        let mut p2p_settings: NetSettings = Default::default();
+        p2p_settings.magic_bytes = MagicBytes([73, 59, 41, 23]);
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
         if get_use_tor_filename().exists() {
             i!("Setup P2P network [tor]");

@@ -52,6 +52,9 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 # P2P network settings
 [net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [251, 229, 199, 181]
+
 # Path to the P2P datastore
 p2p_datastore = "~/.local/share/darkfi/darkirc"
 

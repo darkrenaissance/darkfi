@@ -14,6 +14,9 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## Raft net settings
 [net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [251, 229, 199, 181]
+
 ## P2P accept addresses
 inbound = ["127.0.0.1:11002"]
 

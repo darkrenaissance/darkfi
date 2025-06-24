@@ -39,7 +39,12 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::HostColor, settings::BanPolicy, P2p, P2pPtr},
+    net::{
+        self,
+        hosts::HostColor,
+        settings::{BanPolicy, MagicBytes},
+        P2p, P2pPtr,
+    },
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -150,6 +155,8 @@ struct NetInfo {
     pub datastore: String,
     /// Path to hostlist
     pub hostlist: String,
+    /// Magic bytes used to distinguish the p2p network
+    pub magic_bytes: MagicBytes,
 }
 
 /// Struct representing the daemon
@@ -325,8 +332,25 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
 
                 let hostlist: String = table["hostlist"].as_str().unwrap().to_string();
 
-                let net_info =
-                    NetInfo { accept_addrs, seeds, peers, version, localnet, datastore, hostlist };
+                let magic_bytes: [u8; 4] = table["magic_bytes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_integer().unwrap() as u8)
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .expect("Wrong magic bytes value");
+
+                let net_info = NetInfo {
+                    accept_addrs,
+                    seeds,
+                    peers,
+                    version,
+                    localnet,
+                    datastore,
+                    hostlist,
+                    magic_bytes: MagicBytes(magic_bytes),
+                };
                 ret.insert(name, net_info);
             }
         }
@@ -345,6 +369,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
 
     // P2P network settings
     let settings = net::Settings {
+        magic_bytes: info.magic_bytes.clone(),
         inbound_addrs: listen_urls.clone(),
         seeds: info.seeds.clone(),
         peers: info.peers.clone(),

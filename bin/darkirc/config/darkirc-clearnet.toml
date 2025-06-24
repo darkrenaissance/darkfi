@@ -11,6 +11,9 @@ autojoin = [
 
 ## P2P network settings
 [net]
+# Magic Bytes to distinguish the p2p network
+magic_bytes = [251, 229, 199, 181]
+
 ## Path to the P2P datastore
 datastore = "~/.local/share/darkfi/darkirc"
 
