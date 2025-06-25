@@ -2000,19 +2000,20 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
 
-            let mut output = vec![];
             if let Some(height) = reset {
-                if let Err(e) = drk.reset_to_height(height, &mut output) {
+                let mut buf = vec![];
+                if let Err(e) = drk.reset_to_height(height, &mut buf) {
+                    print_output(&buf);
                     eprintln!("Failed during wallet reset: {e:?}");
                     exit(2);
                 }
+                print_output(&buf);
             }
 
-            if let Err(e) = drk.scan_blocks(&mut output).await {
+            if let Err(e) = drk.scan_blocks(&mut vec![], None, &true).await {
                 eprintln!("Failed during scanning: {e:?}");
                 exit(2);
             }
-            print_output(&output);
             println!("Finished scanning blockchain");
 
             drk.stop_rpc_client().await
