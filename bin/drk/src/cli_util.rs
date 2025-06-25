@@ -21,6 +21,7 @@ use std::{
 };
 
 use rodio::{Decoder, OutputStream, Sink};
+use smol::channel::Sender;
 use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
 use darkfi::{
@@ -549,9 +550,45 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     Ok(String::from_utf8(buf)?)
 }
 
-/// Auxiliary function to generate provided shell completions.
+/// Auxiliary function to print provided string buffer.
 pub fn print_output(buf: &[String]) {
     for line in buf {
         println!("{line}");
+    }
+}
+
+/// Auxiliary function to print or insert provided messages to given
+/// buffer reference. If a channel sender is provided, the messages
+/// are send to that instead.
+pub async fn append_or_print(
+    buf: &mut Vec<String>,
+    sender: Option<&Sender<Vec<String>>>,
+    print: &bool,
+    messages: Vec<String>,
+) {
+    // Send the messages to the channel, if provided
+    if let Some(sender) = sender {
+        if let Err(e) = sender.send(messages).await {
+            let err_msg = format!("[append_or_print] Sending messages to channel failed: {e}");
+            if *print {
+                println!("{err_msg}");
+            } else {
+                buf.push(err_msg);
+            }
+        }
+        return
+    }
+
+    // Print the messages
+    if *print {
+        for msg in messages {
+            println!("{msg}");
+        }
+        return
+    }
+
+    // Insert the messages in the buffer
+    for msg in messages {
+        buf.push(msg);
     }
 }

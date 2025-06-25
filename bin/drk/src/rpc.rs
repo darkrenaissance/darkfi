@@ -51,6 +51,7 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     cache::{CacheOverlay, CacheSmt, CacheSmtStorage, SLED_MONEY_SMT_TREE},
+    cli_util::append_or_print,
     dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
     money::SLED_MERKLE_TREES_MONEY,
@@ -284,7 +285,12 @@ impl Drk {
     /// Scans the blockchain for wallet relevant transactions,
     /// starting from the last scanned block. If a reorg has happened,
     /// we revert to its previous height and then scan from there.
-    pub async fn scan_blocks(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn scan_blocks(
+        &self,
+        output: &mut Vec<String>,
+        sender: Option<&Sender<Vec<String>>>,
+        print: &bool,
+    ) -> WalletDbResult<()> {
         // Grab last scanned block height
         let (mut height, hash) = self.get_last_scanned_block()?;
 
@@ -294,7 +300,13 @@ impl Drk {
             // Check if block was found
             Err(Error::JsonRpcError((-32121, _))) => None,
             Err(e) => {
-                output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                append_or_print(
+                    output,
+                    sender,
+                    print,
+                    vec![format!("[scan_blocks] RPC client request failed: {e:?}")],
+                )
+                .await;
                 return Err(WalletDbError::GenericError)
             }
         };
@@ -302,7 +314,8 @@ impl Drk {
         // Check if a reorg has happened
         if block.is_none() || hash != block.unwrap().hash().to_string() {
             // Find the exact block height the reorg happened
-            output.push(String::from("A reorg has happened, finding last known common block..."));
+            let mut buf =
+                vec![String::from("A reorg has happened, finding last known common block...")];
             height = height.saturating_sub(1);
             while height != 0 {
                 // Grab our scanned block hash for that height
@@ -314,7 +327,8 @@ impl Drk {
                     // Check if block was found
                     Err(Error::JsonRpcError((-32121, _))) => None,
                     Err(e) => {
-                        output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        append_or_print(output, sender, print, buf).await;
                         return Err(WalletDbError::GenericError)
                     }
                 };
@@ -326,8 +340,9 @@ impl Drk {
                 }
 
                 // Reset to its height
-                output.push(format!("Last common block found: {height} - {scanned_block_hash}"));
-                self.reset_to_height(height, output)?;
+                buf.push(format!("Last common block found: {height} - {scanned_block_hash}"));
+                self.reset_to_height(height, &mut buf)?;
+                append_or_print(output, sender, print, buf).await;
                 break
             }
         }
@@ -335,7 +350,9 @@ impl Drk {
         // If last scanned block is genesis(0) we reset,
         // otherwise continue with the next block height.
         if height == 0 {
-            self.reset(output)?;
+            let mut buf = vec![];
+            self.reset(&mut buf)?;
+            append_or_print(output, sender, print, buf).await;
         } else {
             height += 1;
         }
@@ -344,24 +361,32 @@ impl Drk {
         let mut scan_cache = match self.scan_cache().await {
             Ok(c) => c,
             Err(e) => {
-                output.push(format!("[scan_blocks] Generating scan cache failed: {e:?}"));
+                append_or_print(
+                    output,
+                    sender,
+                    print,
+                    vec![format!("[scan_blocks] Generating scan cache failed: {e:?}")],
+                )
+                .await;
                 return Err(WalletDbError::GenericError)
             }
         };
 
         loop {
             // Grab last confirmed block
-            output.push(format!("Requested to scan from block number: {height}"));
+            let mut buf = vec![format!("Requested to scan from block number: {height}")];
             let (last_height, last_hash) = match self.get_last_confirmed_block().await {
                 Ok(last) => last,
                 Err(e) => {
-                    output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                    buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                    append_or_print(output, sender, print, buf).await;
                     return Err(WalletDbError::GenericError)
                 }
             };
-            output.push(format!(
+            buf.push(format!(
                 "Last confirmed block reported by darkfid: {last_height} - {last_hash}"
             ));
+            append_or_print(output, sender, print, buf).await;
 
             // Already scanned last confirmed block
             if height > last_height {
@@ -369,22 +394,26 @@ impl Drk {
             }
 
             while height <= last_height {
-                output.push(format!("Requesting block {height}..."));
+                let mut buf = vec![format!("Requesting block {height}...")];
+                buf.push(format!("Requesting block {height}..."));
                 let block = match self.get_block_by_height(height).await {
                     Ok(b) => b,
                     Err(e) => {
-                        output.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        append_or_print(output, sender, print, buf).await;
                         return Err(WalletDbError::GenericError)
                     }
                 };
-                output.push(format!("Block {height} received! Scanning block..."));
+                buf.push(format!("Block {height} received! Scanning block..."));
                 if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
-                    output.push(format!("[scan_blocks] Scan block failed: {e:?}"));
+                    buf.push(format!("[scan_blocks] Scan block failed: {e:?}"));
+                    append_or_print(output, sender, print, buf).await;
                     return Err(WalletDbError::GenericError)
                 };
                 for msg in scan_cache.flush_messages() {
-                    output.push(msg);
+                    buf.push(msg);
                 }
+                append_or_print(output, sender, print, buf).await;
                 height += 1;
             }
         }
@@ -573,29 +602,23 @@ pub async fn subscribe_blocks(
 ) -> Result<()> {
     // First we do a clean scan
     let lock = drk.read().await;
-    let mut output = vec![];
-    if let Err(e) = lock.scan_blocks(&mut output).await {
+    if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
         let err_msg = format!("Failed during scanning: {e:?}");
-        output.push(err_msg.clone());
-        shell_sender.send(output).await?;
+        shell_sender.send(vec![err_msg.clone()]).await?;
         return Err(Error::Custom(err_msg))
     }
-    output.push(String::from("Finished scanning blockchain"));
-    shell_sender.send(output).await?;
+    shell_sender.send(vec![String::from("Finished scanning blockchain")]).await?;
 
     // Grab last confirmed block height
     let (last_confirmed_height, _) = lock.get_last_confirmed_block().await?;
 
     // Handle genesis(0) block
     if last_confirmed_height == 0 {
-        output = vec![];
-        if let Err(e) = lock.scan_blocks(&mut output).await {
+        if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
             let err_msg = format!("[subscribe_blocks] Scanning from genesis block failed: {e:?}");
-            output.push(err_msg.clone());
-            shell_sender.send(output).await?;
+            shell_sender.send(vec![err_msg.clone()]).await?;
             return Err(Error::Custom(err_msg))
         }
-        shell_sender.send(output).await?;
     }
 
     // Grab last confirmed block again

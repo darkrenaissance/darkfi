@@ -48,8 +48,8 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     cli_util::{
-        generate_completions, kaching, parse_token_pair, parse_tx_from_input, parse_value_pair,
-        print_output,
+        append_or_print, generate_completions, kaching, parse_token_pair, parse_tx_from_input,
+        parse_value_pair, print_output,
     },
     money::BALANCE_BASE10_DECIMALS,
     rpc::subscribe_blocks,
@@ -59,8 +59,7 @@ use crate::{
 
 // TODO:
 //  1. Add rest commands handling, along with their completions, hints and help message.
-//  2. Subscribe/scan ux is a bit flaky, fix it.
-//  3. Create a transactions cache in the wallet db, so you can use it to handle them.
+//  2. Create a transactions cache in the wallet db, so you can use it to handle them.
 
 /// Auxiliary function to print the help message.
 fn help(output: &mut Vec<String>) {
@@ -295,7 +294,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
 
         // Process each command
         let mut output = vec![];
-        'commands_loop: for command in commands {
+        'commands_loop: for (command_index, command) in commands.iter().enumerate() {
             let mut input = output;
             output = vec![];
 
@@ -322,7 +321,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 }
                 (parts[0], Some(file), append)
             } else {
-                (command, None, false)
+                (*command, None, false)
             };
 
             // Check if we have to use a file as input
@@ -410,7 +409,16 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 }
                 "snooze" => snooze_active = true,
                 "unsnooze" => snooze_active = false,
-                "scan" => handle_scan(drk, &subscription_active, &parts, &mut output).await,
+                "scan" => {
+                    handle_scan(
+                        drk,
+                        &subscription_active,
+                        &parts,
+                        &mut output,
+                        &(command_index + 1 == commands.len() && file.is_none()),
+                    )
+                    .await
+                }
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
             }
 
@@ -1302,15 +1310,17 @@ async fn handle_scan(
     subscription_active: &bool,
     parts: &[&str],
     output: &mut Vec<String>,
+    print: &bool,
 ) {
     if *subscription_active {
-        output.push(String::from("Subscription is already active!"));
+        append_or_print(output, None, print, vec![String::from("Subscription is already active!")])
+            .await;
         return
     }
 
     // Check correct command structure
     if parts.len() != 1 && parts.len() != 3 {
-        output.push(String::from("Malformed `scan` command"));
+        append_or_print(output, None, print, vec![String::from("Malformed `scan` command")]).await;
         return
     }
 
@@ -1318,28 +1328,40 @@ async fn handle_scan(
     let lock = drk.read().await;
     if parts.len() == 3 {
         if parts[1] != "--reset" {
-            output.push(String::from("Malformed `scan` command"));
-            output.push(String::from("Usage: scan --reset <height>"));
+            append_or_print(
+                output,
+                None,
+                print,
+                vec![
+                    String::from("Malformed `scan` command"),
+                    String::from("Usage: scan --reset <height>"),
+                ],
+            )
+            .await;
             return
         }
 
         let height = match u32::from_str(parts[2]) {
             Ok(h) => h,
             Err(e) => {
-                output.push(format!("Invalid reset height: {e:?}"));
+                append_or_print(output, None, print, vec![format!("Invalid reset height: {e:?}")])
+                    .await;
                 return
             }
         };
 
-        if let Err(e) = lock.reset_to_height(height, output) {
-            output.push(format!("Failed during wallet reset: {e:?}"));
+        let mut buf = vec![];
+        if let Err(e) = lock.reset_to_height(height, &mut buf) {
+            buf.push(format!("Failed during wallet reset: {e:?}"));
+            append_or_print(output, None, print, buf).await;
             return
         }
+        append_or_print(output, None, print, buf).await;
     }
 
-    if let Err(e) = lock.scan_blocks(output).await {
-        output.push(format!("Failed during scanning: {e:?}"));
+    if let Err(e) = lock.scan_blocks(output, None, print).await {
+        append_or_print(output, None, print, vec![format!("Failed during scanning: {e:?}")]).await;
         return
     }
-    output.push(String::from("Finished scanning blockchain"));
+    append_or_print(output, None, print, vec![String::from("Finished scanning blockchain")]).await;
 }
