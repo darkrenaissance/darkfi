@@ -205,7 +205,8 @@ impl Fu {
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
                         "download_started" |
                         "metadata_download_completed" |
-                        "chunk_download_completed" => {
+                        "chunk_download_completed" |
+                        "resource_updated" => {
                             print_progress_bar(info);
                         }
                         "download_completed" => {

@@ -25,6 +25,7 @@ pub fn status_to_colorspec(status: &str) -> ColorSpec {
             "seeding" => Some(Color::Green),
             "discovering" => Some(Color::Magenta),
             "incomplete" => Some(Color::Red),
+            "verifying" => Some(Color::Yellow),
             _ => None,
         })
         .set_bold(true)
