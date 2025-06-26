@@ -110,7 +110,7 @@ impl TextContext {
     ) -> parley::Layout<Color> {
         let mut builder =
             self.layout_ctx.ranged_builder(&mut self.font_ctx, &text, window_scale, false);
-        builder.push_default(parley::StyleProperty::LineHeight(lineheight));
+        builder.push_default(parley::LineHeight::FontSizeRelative(lineheight));
         builder.push_default(parley::StyleProperty::FontSize(font_size));
         builder.push_default(parley::StyleProperty::FontStack(parley::FontStack::List(
             FONT_STACK.into(),
