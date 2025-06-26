@@ -85,6 +85,24 @@ impl From<DhtNode> for DhtRouterItem {
     }
 }
 
+#[derive(Clone)]
+pub struct ChannelCacheItem {
+    /// The DHT node the channel is connected to.
+    node: DhtNode,
+
+    /// Topic is a hash that you set to remember what the channel is about,
+    /// it's not shared with the peer. If you ask for a channel (with
+    /// `handler.get_channel()`) for a specific topic, it will give you a
+    /// channel that has no topic, has the same topic, or a new
+    /// channel.
+    topic: Option<blake3::Hash>,
+
+    /// Usage count increments when you call `handler.get_channel()` and
+    /// decrements when you call `handler.cleanup_channel()`. A channel's
+    /// topic is cleared on cleanup if its usage count is zero.
+    usage_count: u32,
+}
+
 pub struct Dht {
     /// Our own node id
     pub node_id: blake3::Hash,
@@ -94,10 +112,8 @@ pub struct Dht {
     pub buckets: Arc<RwLock<Vec<DhtBucket>>>,
     /// Number of buckets
     pub n_buckets: usize,
-    /// Channel ID -> Node ID
-    pub node_cache: Arc<RwLock<HashMap<u32, DhtNode>>>,
-    /// Node ID -> Channel ID
-    pub channel_cache: Arc<RwLock<HashMap<blake3::Hash, u32>>>,
+    /// Channel ID -> ChannelCacheItem
+    pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem>>>,
     /// Node ID -> Set of keys
     pub router_cache: Arc<RwLock<HashMap<blake3::Hash, HashSet<blake3::Hash>>>>,
 
@@ -125,7 +141,6 @@ impl Dht {
             buckets: Arc::new(RwLock::new(buckets)),
             n_buckets: 256,
             bootstrapped: Arc::new(RwLock::new(false)),
-            node_cache: Arc::new(RwLock::new(HashMap::new())),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
             router_cache: Arc::new(RwLock::new(HashMap::new())),
 
@@ -230,9 +245,13 @@ impl Dht {
 
     /// Channel ID -> DhtNode
     pub async fn get_node_from_channel(&self, channel_id: u32) -> Option<DhtNode> {
-        let node_cache_lock = self.node_cache.clone();
-        let node_cache = node_cache_lock.read().await;
-        node_cache.get(&channel_id).cloned()
+        let channel_cache_lock = self.channel_cache.clone();
+        let channel_cache = channel_cache_lock.read().await;
+        if let Some(cached) = channel_cache.get(&channel_id).cloned() {
+            return Some(cached.node)
+        }
+
+        None
     }
 
     /// Remove nodes in router that are older than expiry_secs

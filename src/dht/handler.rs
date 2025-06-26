@@ -21,9 +21,13 @@ use futures::stream::FuturesUnordered;
 use log::{debug, info, warn};
 use num_bigint::BigUint;
 use smol::{lock::Semaphore, stream::StreamExt};
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
-use super::{Dht, DhtNode, DhtRouterItem, DhtRouterPtr};
+use super::{ChannelCacheItem, Dht, DhtNode, DhtRouterItem, DhtRouterPtr};
 use crate::{
     net::{
         connector::Connector,
@@ -63,9 +67,10 @@ pub trait DhtHandler {
         let nodes = self.lookup_nodes(key).await?;
 
         for node in nodes {
-            let channel = self.get_channel(&node).await;
-            if let Ok(ch) = channel {
-                let _ = ch.send(message).await;
+            let channel_res = self.get_channel(&node, None).await;
+            if let Ok(channel) = channel_res {
+                let _ = channel.send(message).await;
+                self.cleanup_channel(channel).await;
             }
         }
 
@@ -87,7 +92,7 @@ pub trait DhtHandler {
             let mut channel_cache = channel_cache_lock.write().await;
 
             // Skip this channel if it's stopped or not new.
-            if channel.is_stopped() || channel_cache.values().any(|&v| v == channel.info.id) {
+            if channel.is_stopped() || channel_cache.keys().any(|&k| k == channel.info.id) {
                 continue;
             }
             // Skip this channel if it's a seed or refine session.
@@ -95,21 +100,27 @@ pub trait DhtHandler {
                 continue;
             }
 
-            let node = self.ping(channel.clone()).await;
+            sleep(1).await;
+            let ping_res = self.ping(channel.clone()).await;
 
-            if let Ok(n) = node {
-                channel_cache.insert(n.id, channel.info.id);
-                drop(channel_cache);
+            if let Err(e) = ping_res {
+                warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {}", channel.address(), e);
+                channel.stop().await;
+                continue;
+            }
 
-                let node_cache_lock = self.dht().node_cache.clone();
-                let mut node_cache = node_cache_lock.write().await;
-                node_cache.insert(channel.info.id, n.clone());
-                drop(node_cache);
+            let node = ping_res.unwrap();
 
-                if !n.addresses.is_empty() {
-                    self.add_node(n.clone()).await;
-                    let _ = self.on_new_node(&n.clone()).await;
-                }
+            channel_cache.entry(channel.info.id).or_insert_with(|| ChannelCacheItem {
+                node: node.clone(),
+                topic: None,
+                usage_count: 0,
+            });
+            drop(channel_cache);
+
+            if !node.addresses.is_empty() {
+                self.add_node(node.clone()).await;
+                let _ = self.on_new_node(&node.clone()).await;
             }
         }
     }
@@ -121,10 +132,10 @@ pub trait DhtHandler {
 
             let channel_cache_lock = self.dht().channel_cache.clone();
             let mut channel_cache = channel_cache_lock.write().await;
-            for (node_id, channel_id) in channel_cache.clone() {
+            for (channel_id, _) in channel_cache.clone() {
                 let channel = self.dht().p2p.get_channel(channel_id);
-                if channel.is_none() || (channel.is_some() && channel.unwrap().is_stopped()) {
-                    channel_cache.remove(&node_id);
+                if channel.is_none() {
+                    channel_cache.remove(&channel_id);
                 }
             }
         }
@@ -155,9 +166,9 @@ pub trait DhtHandler {
         // Bucket is full
         if bucket.nodes.len() >= self.dht().settings.k {
             // Ping the least recently seen node
-            let channel = self.get_channel(&bucket.nodes[0]).await;
-            if channel.is_ok() {
-                let ping_res = self.ping(channel.unwrap()).await;
+            if let Ok(channel) = self.get_channel(&bucket.nodes[0], None).await {
+                let ping_res = self.ping(channel.clone()).await;
+                self.cleanup_channel(channel).await;
                 if ping_res.is_ok() {
                     // Ping was successful, move the least recently seen node to the tail
                     let n = bucket.nodes.remove(0);
@@ -303,13 +314,43 @@ pub trait DhtHandler {
         return Ok(result.to_vec())
     }
 
-    /// Get an existing channel, or create a new one
-    async fn get_channel(&self, node: &DhtNode) -> Result<ChannelPtr> {
+    /// Get a channel (existing or create a new one) to `node` about `topic`.
+    /// Don't forget to call `cleanup_channel()` once you are done with it.
+    async fn get_channel(&self, node: &DhtNode, topic: Option<blake3::Hash>) -> Result<ChannelPtr> {
         let channel_cache_lock = self.dht().channel_cache.clone();
-        let channel_cache = channel_cache_lock.read().await;
+        let mut channel_cache = channel_cache_lock.write().await;
 
-        if let Some(channel_id) = channel_cache.get(&node.id) {
-            if let Some(channel) = self.dht().p2p.get_channel(*channel_id) {
+        // Get existing channels for this node, regardless of topic
+        let channels: HashMap<u32, ChannelCacheItem> = channel_cache
+            .iter()
+            .filter(|&(_, item)| item.node == *node)
+            .map(|(&key, item)| (key, item.clone()))
+            .collect();
+
+        let (channel_id, topic, usage_count) =
+            // If we already have a channel for this node and topic, use it
+            if let Some((cid, cached)) = channels.iter().find(|&(_, c)| c.topic == topic) {
+                (Some(*cid), cached.topic, cached.usage_count)
+            }
+            // If we have a topicless channel for this node, use it
+            else if let Some((cid, cached)) = channels.iter().find(|&(_, c)| c.topic.is_none()) {
+                (Some(*cid), topic, cached.usage_count)
+            }
+            // If we don't need any specific topic, use the first channel we have
+            else if topic.is_none() {
+                match channels.iter().next() {
+                    Some((cid, cached)) => (Some(*cid), cached.topic, cached.usage_count),
+                    _ => (None, topic, 0),
+                }
+            }
+            // There is no existing channel we can use, we will create one
+            else {
+                (None, topic, 0)
+            };
+
+        // If we found an existing channel we can use, try to use it
+        if let Some(channel_id) = channel_id {
+            if let Some(channel) = self.dht().p2p.get_channel(channel_id) {
                 if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
                     return Err(Error::Custom(
                         "Could not get a channel (for DHT) as this is a seed or refine session"
@@ -320,6 +361,11 @@ pub trait DhtHandler {
                 if channel.is_stopped() {
                     channel.clone().start(self.dht().executor.clone());
                 }
+
+                channel_cache.insert(
+                    channel_id,
+                    ChannelCacheItem { node: node.clone(), topic, usage_count: usage_count + 1 },
+                );
                 return Ok(channel);
             }
         }
@@ -356,10 +402,33 @@ pub trait DhtHandler {
                 continue;
             }
 
+            channel_cache.insert(
+                channel.info.id,
+                ChannelCacheItem { node: node.clone(), topic, usage_count: 1 },
+            );
+
             return Ok(channel)
         }
 
         Err(Error::Custom("Could not create channel".to_string()))
+    }
+
+    /// Decrement the channel usage count, if it becomes 0 then set the topic
+    /// to None, so that this channel is available for another task
+    async fn cleanup_channel(&self, channel: ChannelPtr) {
+        let channel_cache_lock = self.dht().channel_cache.clone();
+        let mut channel_cache = channel_cache_lock.write().await;
+
+        if let Some(cached) = channel_cache.get_mut(&channel.info.id) {
+            if cached.usage_count > 0 {
+                cached.usage_count -= 1;
+            }
+
+            // If the channel is not used by anything, remove the topic
+            if cached.usage_count == 0 {
+                cached.topic = None;
+            }
+        }
     }
 
     /// Add nodes as a provider for a key

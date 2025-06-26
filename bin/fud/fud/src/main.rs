@@ -41,7 +41,7 @@ use fud::{
     get_node_id,
     proto::{FudFindNodesReply, ProtocolFud},
     rpc::JsonRpcInterface,
-    tasks::{announce_seed_task, fetch_metadata_task, get_task},
+    tasks::{announce_seed_task, get_task},
     Fud,
 };
 
@@ -179,24 +179,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!(target: "fud", "Starting fetch metadata task");
-    let file_task = StoppableTask::new();
-    file_task.clone().start(
-        fetch_metadata_task(fud.clone()),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting fetch metadata task: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
     info!(target: "fud", "Starting get task");
     let get_task_ = StoppableTask::new();
     get_task_.clone().start(
-        get_task(fud.clone()),
+        get_task(fud.clone(), ex.clone()),
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -288,8 +274,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "fud", "Caught termination signal, cleaning up and exiting...");
 
-    info!(target: "fud", "Stopping fetch file task...");
-    file_task.stop().await;
+    info!(target: "fud", "Stopping fetch tasks...");
+    fud.stop().await;
 
     info!(target: "fud", "Stopping get task...");
     get_task_.stop().await;

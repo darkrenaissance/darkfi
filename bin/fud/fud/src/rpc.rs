@@ -116,8 +116,8 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Fetch a file from the network. Takes a file hash and file path (absolute or relative) as parameters.
-    // Returns the path where the file will be located once downloaded.
+    // Fetch a resource from the network. Takes a hash and path (absolute or relative) as parameters.
+    // Returns the path where the resource will be located once downloaded.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "/home/user/myfile.jpg", "id": 42}
@@ -157,7 +157,10 @@ impl JsonRpcInterface {
             None => self.fud.downloads_path.join(&hash_str),
         };
 
-        let _ = self.fud.get_tx.send((hash, path.clone())).await;
+        // Start downloading the resource
+        if let Err(e) = self.fud.get(&hash, &path).await {
+            return JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
+        }
 
         JsonResponse::new(JsonValue::String(path.to_string_lossy().to_string()), id).into()
     }

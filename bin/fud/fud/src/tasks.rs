@@ -17,12 +17,11 @@
  */
 
 use log::{error, info};
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use darkfi::{
     dht::DhtHandler,
-    geode::{hash_to_string, ChunkedStorage},
-    system::sleep,
+    system::{sleep, ExecutorPtr, StoppableTask},
     Error, Result,
 };
 
@@ -37,71 +36,40 @@ pub enum FetchReply {
     Chunk(FudChunkReply),
 }
 
-/// Triggered when calling the `get` RPC method
-pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
+/// Triggered when calling the `fud.get()` method.
+/// It creates a new StoppableTask (running `fud.fetch_resource()`) and inserts
+/// it into the `fud.fetch_tasks` hashmap. When the task is stopped it's
+/// removed from the hashmap.
+pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
     loop {
-        let (file_hash, file_path) = fud.get_rx.recv().await.unwrap();
+        let (hash, path) = fud.get_rx.recv().await.unwrap();
 
-        let _ = fud.get(&file_hash, &file_path).await;
-    }
-}
+        // Create the new task
+        let mut fetch_tasks = fud.fetch_tasks.write().await;
+        let task = StoppableTask::new();
+        fetch_tasks.insert(hash, task.clone());
+        drop(fetch_tasks);
 
-/// Background task that receives file fetch requests and tries to
-/// fetch objects from the network using the routing table.
-/// TODO: This can be optimised a lot for connection reuse, etc.
-pub async fn fetch_metadata_task(fud: Arc<Fud>) -> Result<()> {
-    info!(target: "fud::fetch_metadata_task()", "Started background metadata fetch task");
-    loop {
-        let (nodes, hash, path) = fud.metadata_fetch_rx.recv().await.unwrap();
-        info!(target: "fud::fetch_metadata_task()", "Fetching metadata for {}", hash_to_string(&hash));
-
-        let reply = fud.fetch_metadata(&nodes, &hash).await;
-        if reply.is_none() {
-            fud.metadata_fetch_end_tx.send(Err(Error::GeodeFileRouteNotFound)).await.unwrap();
-            continue
-        }
-        let reply = reply.unwrap();
-
-        // At this point the reply content was already verified in `fud.fetch_metadata`
-        match reply {
-            FetchReply::Directory(FudDirectoryReply { files, chunk_hashes }) => {
-                // Convert all file paths from String to PathBuf
-                let mut files: Vec<_> = files
-                    .into_iter()
-                    .map(|(path_str, size)| (PathBuf::from(path_str), size))
-                    .collect();
-
-                fud.geode.sort_files(&mut files);
-                if let Err(e) = fud.geode.insert_metadata(&hash, &chunk_hashes, &files).await {
-                    error!(target: "fud::fetch_metadata_task()", "Failed inserting directory {} to Geode: {}", hash_to_string(&hash), e);
-                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
-                    continue
+        // Start the new task
+        let fud_1 = fud.clone();
+        let fud_2 = fud.clone();
+        task.start(
+            async move { fud_1.fetch_resource(&hash, &path).await },
+            move |res| async move {
+                // Remove the task from the `fud.fetch_tasks` hashmap once it is
+                // stopped (error, manually, or just done).
+                let mut fetch_tasks = fud_2.fetch_tasks.write().await;
+                fetch_tasks.remove(&hash);
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "fud::get_task()", "Error while fetching resource: {}", e)
+                    }
                 }
-                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
-            }
-            FetchReply::File(FudFileReply { chunk_hashes }) => {
-                if let Err(e) = fud.geode.insert_metadata(&hash, &chunk_hashes, &[]).await {
-                    error!(target: "fud::fetch_metadata_task()", "Failed inserting file {} to Geode: {}", hash_to_string(&hash), e);
-                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
-                    continue
-                }
-                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
-            }
-            // Looked for a file but got a chunk: the entire file fits in a single chunk
-            FetchReply::Chunk(FudChunkReply { chunk }) => {
-                info!(target: "fud::fetch_metadata_task()", "File fits in a single chunk");
-                let chunk_hash = blake3::hash(&chunk);
-                let _ = fud.geode.insert_metadata(&hash, &[chunk_hash], &[]).await;
-                let mut chunked_file =
-                    ChunkedStorage::new(&[chunk_hash], &[(path, chunk.len() as u64)], false);
-                if let Err(e) = fud.geode.write_chunk(&mut chunked_file, &chunk).await {
-                    error!(target: "fud::fetch_metadata_task()", "Failed inserting chunk {} to Geode: {}", hash_to_string(&chunk_hash), e);
-                    fud.metadata_fetch_end_tx.send(Err(e)).await.unwrap();
-                    continue
-                };
-                fud.metadata_fetch_end_tx.send(Ok(())).await.unwrap();
-            }
-        }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
     }
 }
 
@@ -115,16 +83,16 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
 
         let seeders = vec![fud.dht().node().await.into()];
 
-        info!(target: "fud::announce_task()", "Verifying seeds...");
+        info!(target: "fud::announce_seed_task()", "Verifying seeds...");
         let seeding_resources = match fud.verify_resources(None).await {
             Ok(resources) => resources,
             Err(e) => {
-                error!(target: "fud::announce_task()", "Error while verifying seeding resources: {}", e);
+                error!(target: "fud::announce_seed_task()", "Error while verifying seeding resources: {}", e);
                 continue;
             }
         };
 
-        info!(target: "fud::announce_task()", "Announcing files...");
+        info!(target: "fud::announce_seed_task()", "Announcing files...");
         for resource in seeding_resources {
             let _ = fud
                 .announce(
@@ -135,7 +103,7 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
                 .await;
         }
 
-        info!(target: "fud::announce_task()", "Pruning seeders...");
+        info!(target: "fud::announce_seed_task()", "Pruning seeders...");
         fud.dht().prune_router(fud.seeders_router.clone(), interval.try_into().unwrap()).await;
     }
 }
