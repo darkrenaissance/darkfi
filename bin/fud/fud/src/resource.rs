@@ -26,6 +26,7 @@ pub enum ResourceStatus {
     Seeding,
     Discovering,
     Incomplete,
+    Verifying,
 }
 
 #[derive(Clone, Debug)]
@@ -75,6 +76,7 @@ impl From<Resource> for JsonValue {
                         ResourceStatus::Seeding => "seeding",
                         ResourceStatus::Discovering => "discovering",
                         ResourceStatus::Incomplete => "incomplete",
+                        ResourceStatus::Verifying => "verifying",
                     }
                     .to_string(),
                 ),
