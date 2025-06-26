@@ -389,8 +389,14 @@ impl Geode {
 
         // Gather all available chunks
         for (chunk_index, (chunk_hash, _)) in chunks.iter().enumerate() {
-            // Read the chunk using the mutable reader
-            let chunk = self.read_chunk(&mut chunked_file.get_fileseq(), &chunk_index).await?;
+            // Read the chunk using the FileSequence
+            let chunk = match self.read_chunk(&mut chunked_file.get_fileseq(), &chunk_index).await {
+                Ok(c) => c,
+                Err(e) => {
+                    warn!("Error while verifying chunks: {}", e);
+                    break
+                }
+            };
 
             // Perform chunk consistency check
             if self.verify_chunk(chunk_hash, &chunk) {
