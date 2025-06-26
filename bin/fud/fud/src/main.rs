@@ -291,6 +291,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     dht_disconnect_task.stop().await;
     announce_task.stop().await;
 
-    info!("Bye!");
+    info!(target: "fud", "Flushing sled database...");
+    let flushed_bytes = sled_db.flush_async().await?;
+    info!(target: "fud", "Flushed {} bytes", flushed_bytes);
+
+    info!(target: "fud", "Shut down successfully");
     Ok(())
 }
