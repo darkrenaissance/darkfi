@@ -33,7 +33,10 @@ use super::super::{
     message_publisher::MessageSubscription,
     settings::Settings,
 };
-use crate::{Error, Result};
+use crate::{
+    net::{session::SESSION_OUTBOUND, BanPolicy},
+    Error, Result,
+};
 
 /// Implements the protocol version handshake sent out by nodes at
 /// the beginning of a connection.
@@ -189,6 +192,13 @@ impl ProtocolVersion {
                 "[P2P] Version mismatch from {}. Disconnecting...",
                 self.channel.display_address(),
             );
+
+            // If it is outbound, ban the host so we don't share it with other nodes
+            if self.channel.session_type_id() & SESSION_OUTBOUND != 0 {
+                if let BanPolicy::Strict = self.channel.p2p().settings().read().await.ban_policy {
+                    self.channel.ban().await;
+                }
+            }
 
             self.channel.stop().await;
             return Err(Error::ChannelStopped)

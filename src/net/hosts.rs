@@ -1600,6 +1600,19 @@ impl Hosts {
         None
     }
 
+    // Checks if we have successful connection with a host on any port
+    pub fn has_existing_connection(&self, url: &Url) -> bool {
+        let host = url.host().unwrap();
+        let colors = [HostColor::Gold, HostColor::White];
+        colors.iter().any(|color| {
+            self.container.hostlists[color.clone() as usize]
+                .read()
+                .unwrap()
+                .iter()
+                .any(|(u, _t)| u.host().unwrap() == host)
+        })
+    }
+
     #[cfg(feature = "p2p-i2p")]
     fn is_i2p_host(host: &str) -> bool {
         if !host.ends_with(".i2p") {

@@ -47,7 +47,8 @@ use super::{
     metering::{MeteringConfiguration, MeteringQueue},
     p2p::P2pPtr,
     session::{
-        Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_REFINE,
+        Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_OUTBOUND,
+        SESSION_REFINE,
     },
     transport::PtStream,
 };
@@ -337,6 +338,14 @@ impl Channel {
         let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
         if magic != magic_bytes {
             error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
+
+            // If it is outbound, ban the host so we don't share it with other nodes
+            if self.session_type_id() & SESSION_OUTBOUND != 0 {
+                if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
+                    self.ban().await;
+                }
+            }
+
             return Err(Error::MalformedPacket)
         }
 
@@ -511,9 +520,16 @@ impl Channel {
                     return
                 }
 
-                let mut addr = self.address().clone();
-                addr.set_port(None).unwrap();
-                addr
+                // If we already have a successful connection with this host on another port,
+                // this might indicate a misconfiguration or unintended overlap between separate P2P networks.
+                // To prevent interference, we block only this specific port rather than the entire host.
+                if self.hosts().has_existing_connection(self.address()) {
+                    self.address().clone()
+                } else {
+                    let mut addr = self.address().clone();
+                    addr.set_port(None).unwrap();
+                    addr
+                }
             } else {
                 self.address().clone()
             }
