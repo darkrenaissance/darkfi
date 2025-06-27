@@ -1018,7 +1018,7 @@ impl Drk {
     async fn parse_dao_proposal(&self, row: &[Value]) -> Result<ProposalRecord> {
         let Value::Blob(ref proposal_bytes) = row[2] else {
             return Err(Error::ParseFailed(
-                "[get_dao_proposals] Proposal bytes bytes parsing failed",
+                "[parse_dao_proposal] Proposal bytes bytes parsing failed",
             ))
         };
         let proposal = deserialize_async(proposal_bytes).await?;
@@ -1026,7 +1026,7 @@ impl Drk {
         let data = match row[3] {
             Value::Blob(ref data_bytes) => Some(data_bytes.clone()),
             Value::Null => None,
-            _ => return Err(Error::ParseFailed("[get_dao_proposals] Data bytes parsing failed")),
+            _ => return Err(Error::ParseFailed("[parse_dao_proposal] Data bytes parsing failed")),
         };
 
         let leaf_position = match row[4] {
@@ -1036,7 +1036,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Leaf position bytes parsing failed",
+                    "[parse_dao_proposal] Leaf position bytes parsing failed",
                 ))
             }
         };
@@ -1048,7 +1048,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Money snapshot tree bytes parsing failed",
+                    "[parse_dao_proposal] Money snapshot tree bytes parsing failed",
                 ))
             }
         };
@@ -1060,7 +1060,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Nullifiers SMT snapshot bytes parsing failed",
+                    "[parse_dao_proposal] Nullifiers SMT snapshot bytes parsing failed",
                 ))
             }
         };
@@ -1068,12 +1068,14 @@ impl Drk {
         let mint_height = match row[7] {
             Value::Integer(mint_height) => {
                 let Ok(mint_height) = u32::try_from(mint_height) else {
-                    return Err(Error::ParseFailed("[get_dao_proposals] Mint height parsing failed"))
+                    return Err(Error::ParseFailed(
+                        "[parse_dao_proposal] Mint height parsing failed",
+                    ))
                 };
                 Some(mint_height)
             }
             Value::Null => None,
-            _ => return Err(Error::ParseFailed("[get_dao_proposals] Mint height parsing failed")),
+            _ => return Err(Error::ParseFailed("[parse_dao_proposal] Mint height parsing failed")),
         };
 
         let tx_hash = match row[8] {
@@ -1081,7 +1083,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Transaction hash bytes parsing failed",
+                    "[parse_dao_proposal] Transaction hash bytes parsing failed",
                 ))
             }
         };
@@ -1089,19 +1091,19 @@ impl Drk {
         let call_index = match row[9] {
             Value::Integer(call_index) => {
                 let Ok(call_index) = u8::try_from(call_index) else {
-                    return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
+                    return Err(Error::ParseFailed("[parse_dao_proposal] Call index parsing failed"))
                 };
                 Some(call_index)
             }
             Value::Null => None,
-            _ => return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed")),
+            _ => return Err(Error::ParseFailed("[parse_dao_proposal] Call index parsing failed")),
         };
 
         let exec_height = match row[10] {
             Value::Integer(exec_height) => {
                 let Ok(exec_height) = u32::try_from(exec_height) else {
                     return Err(Error::ParseFailed(
-                        "[get_dao_proposals] Execution height parsing failed",
+                        "[parse_dao_proposal] Execution height parsing failed",
                     ))
                 };
                 Some(exec_height)
@@ -1109,7 +1111,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Execution height parsing failed",
+                    "[parse_dao_proposal] Execution height parsing failed",
                 ))
             }
         };
@@ -1121,7 +1123,7 @@ impl Drk {
             Value::Null => None,
             _ => {
                 return Err(Error::ParseFailed(
-                    "[get_dao_proposals] Execution transaction hash bytes parsing failed",
+                    "[parse_dao_proposal] Execution transaction hash bytes parsing failed",
                 ))
             }
         };
@@ -1784,7 +1786,12 @@ impl Drk {
     }
 
     /// Import given DAO params into the wallet with a given name.
-    pub async fn import_dao(&self, name: &str, params: &DaoParams) -> Result<()> {
+    pub async fn import_dao(
+        &self,
+        name: &str,
+        params: &DaoParams,
+        output: &mut Vec<String>,
+    ) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
         if self.get_dao_by_name(name).await.is_ok() {
             return Err(Error::DatabaseError(
@@ -1792,7 +1799,7 @@ impl Drk {
             ))
         }
 
-        println!("Importing \"{name}\" DAO into the wallet");
+        output.push(format!("Importing \"{name}\" DAO into the wallet"));
 
         let query = format!(
             "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
@@ -1813,14 +1820,18 @@ impl Drk {
     }
 
     /// Update given DAO params into the wallet, if the corresponding DAO exists.
-    pub async fn update_dao_keys(&self, params: &DaoParams) -> Result<()> {
+    pub async fn update_dao_keys(
+        &self,
+        params: &DaoParams,
+        output: &mut Vec<String>,
+    ) -> Result<()> {
         // Grab the params DAO
         let bulla = params.dao.to_bulla();
         let Ok(dao) = self.get_dao_by_bulla(&bulla).await else {
             return Err(Error::DatabaseError(format!("[import_dao] DAO {bulla} was not found")))
         };
 
-        println!("Updating \"{}\" DAO keys into the wallet", dao.name);
+        output.push(format!("Updating \"{}\" DAO keys into the wallet", dao.name));
 
         let query = format!(
             "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
@@ -1874,16 +1885,16 @@ impl Drk {
 
     /// List DAO(s) imported in the wallet. If a name is given, just print the
     /// metadata for that specific one, if found.
-    pub async fn dao_list(&self, name: &Option<String>) -> Result<()> {
+    pub async fn dao_list(&self, name: &Option<String>, output: &mut Vec<String>) -> Result<()> {
         if let Some(name) = name {
             let dao = self.get_dao_by_name(name).await?;
-            println!("{dao}");
+            output.push(format!("{dao}"));
             return Ok(());
         }
 
         let daos = self.get_daos().await?;
         for (i, dao) in daos.iter().enumerate() {
-            println!("{i}. {}", dao.name);
+            output.push(format!("{i}. {}", dao.name));
         }
 
         Ok(())
