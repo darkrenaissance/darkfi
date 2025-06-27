@@ -1015,12 +1015,12 @@ impl ChatEdit {
                     content_instrs,
                     vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                     0,
-                    "chatedit_content"
+                    "chatedit_content",
                 ),
             ),
             (
                 self.phone_select_handle_dc_key,
-                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll")
+                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll"),
             ),
         ];
         self.render_api.replace_draw_calls(timest, draw_main);
@@ -1237,7 +1237,7 @@ impl ChatEdit {
                         vec![GfxDrawInstruction::Move(rect.pos())],
                         vec![self.content_dc_key, self.phone_select_handle_dc_key],
                         self.z_index.get(),
-                        "chatedit_root"
+                        "chatedit_root",
                     ),
                 ),
                 (
@@ -1246,15 +1246,12 @@ impl ChatEdit {
                         content_instrs,
                         vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                         0,
-                        "chatedit_content"
+                        "chatedit_content",
                     ),
                 ),
                 (self.select_dc_key, GfxDrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
                 (self.text_dc_key, GfxDrawCall::new(txt_instrs, vec![], 1, "chatedit_text")),
-                (
-                    self.cursor_dc_key,
-                    GfxDrawCall::new(cursor_instrs, vec![], 2, "chatedit_curs"),
-                ),
+                (self.cursor_dc_key, GfxDrawCall::new(cursor_instrs, vec![], 2, "chatedit_curs")),
                 (
                     self.phone_select_handle_dc_key,
                     GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),

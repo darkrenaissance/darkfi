@@ -177,7 +177,12 @@ impl RenderApi {
         let _ = self.method_req.try_send((epoch, method)).unwrap();
     }
 
-    fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> (GfxTextureId, EpochIndex) {
+    fn new_unmanaged_texture(
+        &self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+    ) -> (GfxTextureId, EpochIndex) {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
@@ -194,12 +199,7 @@ impl RenderApi {
         tag: DebugTag,
     ) -> ManagedTexturePtr {
         let (id, epoch) = self.new_unmanaged_texture(width, height, data);
-        Arc::new(ManagedTexture {
-            id,
-            epoch,
-            render_api: self.clone(),
-            tag,
-        })
+        Arc::new(ManagedTexture { id, epoch, render_api: self.clone(), tag })
     }
 
     fn delete_unmanaged_texture(&self, texture: GfxTextureId, epoch: EpochIndex, tag: DebugTag) {
@@ -227,26 +227,20 @@ impl RenderApi {
 
     pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
         let (id, epoch) = self.new_unmanaged_vertex_buffer(verts);
-        Arc::new(ManagedBuffer {
-            id,
-            epoch,
-            render_api: self.clone(),
-            tag,
-            buftype: 0,
-        })
+        Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 0 })
     }
     pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
         let (id, epoch) = self.new_unmanaged_index_buffer(indices);
-        Arc::new(ManagedBuffer {
-            id,
-            epoch,
-            render_api: self.clone(),
-            tag,
-            buftype: 1,
-        })
+        Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 1 })
     }
 
-    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId, epoch: EpochIndex, tag: DebugTag, buftype: u8) {
+    fn delete_unmanaged_buffer(
+        &self,
+        buffer: GfxBufferId,
+        epoch: EpochIndex,
+        tag: DebugTag,
+        buftype: u8,
+    ) {
         let method = GraphicsMethod::DeleteBuffer((buffer, tag, buftype));
         self.send_with_epoch(method, epoch);
     }
@@ -270,7 +264,7 @@ impl GfxDrawMesh {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-        debug_str: &'static str
+        debug_str: &'static str,
     ) -> Option<DrawMesh> {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
@@ -291,7 +285,7 @@ impl GfxDrawMesh {
     fn try_get_texture(
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         gfx_texture: ManagedTexturePtr,
-        debug_str: &'static str
+        debug_str: &'static str,
     ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
         let gfx_texture_id = gfx_texture.id;
 
@@ -312,7 +306,7 @@ impl GfxDrawMesh {
     fn try_get_buffer(
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
         gfx_buffer_id: GfxBufferId,
-        debug_str: &'static str
+        debug_str: &'static str,
     ) -> Option<miniquad::BufferId> {
         let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
             error!(target: "gfx", "Serious error: missing buffer ID={gfx_buffer_id}, debug={debug_str}");
@@ -343,7 +337,7 @@ impl GfxDrawInstruction {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-        debug_str: &'static str
+        debug_str: &'static str,
     ) -> Option<DrawInstruction> {
         let instr = match self {
             Self::SetScale(scale) => DrawInstruction::SetScale(scale),
@@ -362,7 +356,7 @@ pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
     pub dcs: Vec<u64>,
     pub z_index: u32,
-    pub debug_str: &'static str
+    pub debug_str: &'static str,
 }
 
 impl GfxDrawCall {
@@ -370,14 +364,9 @@ impl GfxDrawCall {
         instrs: Vec<GfxDrawInstruction>,
         dcs: Vec<u64>,
         z_index: u32,
-        debug_str: &'static str
+        debug_str: &'static str,
     ) -> Self {
-        Self {
-            instrs,
-            dcs,
-            z_index,
-            debug_str
-        }
+        Self { instrs, dcs, z_index, debug_str }
     }
 }
 

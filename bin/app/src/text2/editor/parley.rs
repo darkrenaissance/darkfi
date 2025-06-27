@@ -75,7 +75,9 @@ impl Editor {
 
         self.editor.set_scale(window_scale);
         let mut styles = parley::StyleSet::new(font_size);
-        styles.insert(parley::StyleProperty::LineHeight(parley::LineHeight::FontSizeRelative(lineheight)));
+        styles.insert(parley::StyleProperty::LineHeight(parley::LineHeight::FontSizeRelative(
+            lineheight,
+        )));
         styles.insert(parley::StyleProperty::FontStack(parley::FontStack::List(FONT_STACK.into())));
         styles.insert(parley::StyleProperty::Brush(text_color));
         *self.editor.edit_styles() = styles;

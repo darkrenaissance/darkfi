@@ -268,7 +268,7 @@ impl EmojiPicker {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "emoji")
+                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "emoji"),
             )],
         })
     }

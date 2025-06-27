@@ -144,7 +144,7 @@ impl Layer {
             vec![GfxDrawInstruction::ApplyView(rect)],
             child_calls,
             self.z_index.get(),
-            "layer"
+            "layer",
         );
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls })

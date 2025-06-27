@@ -166,7 +166,7 @@ impl Text {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "text")
+                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "text"),
             )],
         })
     }

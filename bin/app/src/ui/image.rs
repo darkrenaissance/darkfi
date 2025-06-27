@@ -173,13 +173,10 @@ impl Image {
             draw_calls: vec![(
                 self.dc_key,
                 GfxDrawCall::new(
-                    vec![
-                        GfxDrawInstruction::Move(rect.pos()),
-                        GfxDrawInstruction::Draw(mesh),
-                    ],
+                    vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)],
                     vec![],
                     self.z_index.get(),
-                    "img"
+                    "img",
                 ),
             )],
         })

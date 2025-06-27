@@ -446,7 +446,7 @@ impl Window {
             vec![GfxDrawInstruction::SetScale(self.scale.get())],
             child_calls,
             0,
-            "win"
+            "win",
         );
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
