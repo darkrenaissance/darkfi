@@ -238,17 +238,6 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("OTC atomic swap")
         .subcommands(vec![init, join, inspect, sign]);
 
-    // AttachFee
-    let attach_fee = SubCommand::with_name("attach-fee")
-        .about("Attach the fee call to a transaction given from stdin");
-
-    // Inspect
-    let inspect = SubCommand::with_name("inspect").about("Inspect a transaction from stdin");
-
-    // Broadcast
-    let broadcast =
-        SubCommand::with_name("broadcast").about("Read a transaction from stdin and broadcast it");
-
     // DAO
     let proposer_limit = Arg::with_name("proposer-limit")
         .help("The minimum amount of governance tokens needed to open a proposal for this DAO");
@@ -368,6 +357,17 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         exec,
         spend_hook_cmd,
     ]);
+
+    // AttachFee
+    let attach_fee = SubCommand::with_name("attach-fee")
+        .about("Attach the fee call to a transaction given from stdin");
+
+    // Inspect
+    let inspect = SubCommand::with_name("inspect").about("Inspect a transaction from stdin");
+
+    // Broadcast
+    let broadcast =
+        SubCommand::with_name("broadcast").about("Read a transaction from stdin and broadcast it");
 
     // Scan
     let reset = Arg::with_name("reset")

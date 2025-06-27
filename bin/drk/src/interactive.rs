@@ -29,19 +29,27 @@ use linenoise_rs::{
     linenoise_set_completion_callback, linenoise_set_hints_callback, LinenoiseState,
 };
 use prettytable::{format, row, Table};
+use rand::rngs::OsRng;
 use smol::channel::{unbounded, Receiver, Sender};
 use url::Url;
 
 use darkfi::{
     cli_desc,
     system::{msleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    util::{encoding::base64, parse::encode_base10, path::expand_path},
+    util::{
+        encoding::base64,
+        parse::{decode_base10, encode_base10},
+        path::expand_path,
+    },
     zk::halo2::Field,
     Error,
 };
-use darkfi_money_contract::model::Coin;
+use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
+use darkfi_money_contract::model::{Coin, CoinAttributes};
 use darkfi_sdk::{
-    crypto::{FuncId, PublicKey},
+    crypto::{
+        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, DAO_CONTRACT_ID,
+    },
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize_async, serialize_async};
@@ -51,6 +59,7 @@ use crate::{
         append_or_print, generate_completions, kaching, parse_token_pair, parse_tx_from_input,
         parse_value_pair, print_output,
     },
+    dao::{DaoParams, ProposalRecord},
     money::BALANCE_BASE10_DECIMALS,
     rpc::subscribe_blocks,
     swap::PartialSwapData,
@@ -78,6 +87,7 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\tunspend: Unspend a coin"));
     output.push(String::from("\ttransfer: Create a payment transaction"));
     output.push(String::from("\totc: OTC atomic swap"));
+    output.push(String::from("\tdao: DAO functionalities"));
     output
         .push(String::from("\tattach-fee: Attach the fee call to a transaction given from stdin"));
     output.push(String::from("\tinspect: Inspect a transaction from stdin"));
@@ -163,6 +173,26 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
+    if last.starts_with("d") {
+        lc.push(prefix.clone() + "dao");
+        lc.push(prefix.clone() + "dao create");
+        lc.push(prefix.clone() + "dao view");
+        lc.push(prefix.clone() + "dao import");
+        lc.push(prefix.clone() + "dao update-keys");
+        lc.push(prefix.clone() + "dao list");
+        lc.push(prefix.clone() + "dao balance");
+        lc.push(prefix.clone() + "dao mint");
+        lc.push(prefix.clone() + "dao propose-transfer");
+        lc.push(prefix.clone() + "dao propose-generic");
+        lc.push(prefix.clone() + "dao proposals");
+        lc.push(prefix.clone() + "dao proposal");
+        lc.push(prefix.clone() + "dao proposal-import");
+        lc.push(prefix.clone() + "dao vote");
+        lc.push(prefix.clone() + "dao exec");
+        lc.push(prefix + "dao spend-hook");
+        return
+    }
+
     if last.starts_with("a") {
         lc.push(prefix + "attach-fee");
         return
@@ -234,6 +264,19 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), 35, false)),
         "otc " => Some(("(init|join|inspect|sign)".to_string(), 35, false)),
         "otc init " => Some(("<value_pair> <token_pair>".to_string(), 35, false)),
+        "dao " => Some(("(create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), 35, false)),
+        "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), 35, false)),
+        "dao import " => Some(("<name>".to_string(), 35, false)),
+        "dao list " => Some(("[name]".to_string(), 35, false)),
+        "dao balance " => Some(("<name>".to_string(), 35, false)),
+        "dao mint " => Some(("<name>".to_string(), 35, false)),
+        "dao propose-transfer " => Some(("<name> <duration> <amount> <token> <recipient> [spend-hook] [user-data]".to_string(), 35, false)),
+        "dao propose-generic" => Some(("<name> <duration> [user-data]".to_string(), 35, false)),
+        "dao proposals " => Some(("<name>".to_string(), 35, false)),
+        "dao proposal " => Some(("[--(export|mint-proposal)] <bulla>".to_string(), 35, false)),
+        "dao vote " => Some(("<bulla> <vote> [vote-weight]".to_string(), 35, false)),
+        "dao exec " => Some(("[--early] <bulla>".to_string(), 35, false)),
+        "scan " => Some(("[--reset]".to_string(), 35, false)),
         "scan --reset " => Some(("<height>".to_string(), 35, false)),
         _ => None,
     }
@@ -388,6 +431,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 "unspend" => handle_unspend(drk, &parts, &mut output).await,
                 "transfer" => handle_transfer(drk, &parts, &mut output).await,
                 "otc" => handle_otc(drk, &parts, &input, &mut output).await,
+                "dao" => handle_dao(drk, &parts, &input, &mut output).await,
                 "attach-fee" => handle_attach_fee(drk, &input, &mut output).await,
                 "inspect" => handle_inspect(&input, &mut output).await,
                 "broadcast" => handle_broadcast(drk, &input, &mut output).await,
@@ -1202,6 +1246,964 @@ async fn handle_otc_sign(drk: &DrkPtr, parts: &[&str], input: &[String], output:
         Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
         Err(e) => output.push(format!("Failed to sign joined swap transaction: {e}")),
     }
+}
+
+/// Auxiliary function to define the dao command handling.
+async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        output.push(String::from("Malformed `dao` command"));
+        output.push(String::from("Usage: dao (create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "create" => handle_dao_create(drk, parts, output).await,
+        "view" => handle_dao_view(parts, input, output).await,
+        "import" => handle_dao_import(drk, parts, input, output).await,
+        "update-keys" => handle_dao_update_keys(drk, parts, input, output).await,
+        "list" => handle_dao_list(drk, parts, output).await,
+        "balance" => handle_dao_balance(drk, parts, output).await,
+        "mint" => handle_dao_mint(drk, parts, output).await,
+        "propose-transfer" => handle_dao_propose_transfer(drk, parts, output).await,
+        "propose-generic" => handle_dao_propose_generic(drk, parts, output).await,
+        "proposals" => handle_dao_proposals(drk, parts, output).await,
+        "proposal" => handle_dao_proposal(drk, parts, output).await,
+        "proposal-import" => handle_dao_proposal_import(drk, parts, input, output).await,
+        "vote" => handle_dao_vote(drk, parts, output).await,
+        "exec" => handle_dao_exec(drk, parts, output).await,
+        "spend-hook" => handle_dao_spend_hook(parts, output).await,
+        _ => {
+            output.push(format!("Unreconized DAO subcommand: {}", parts[1]));
+            output.push(String::from("Usage: dao (create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+        }
+    }
+}
+
+/// Auxiliary function to define the dao create subcommand handling.
+async fn handle_dao_create(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 7 {
+        output.push(String::from("Malformed `dao create` subcommand"));
+        output.push(String::from("Usage: dao create <proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>"));
+        return
+    }
+
+    if let Err(e) = f64::from_str(parts[2]) {
+        output.push(format!("Invalid proposer limit: {e}"));
+        return
+    }
+    let proposer_limit = match decode_base10(parts[2], BALANCE_BASE10_DECIMALS, true) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while parsing proposer limit: {e}"));
+            return
+        }
+    };
+
+    if let Err(e) = f64::from_str(parts[3]) {
+        output.push(format!("Invalid quorum: {e}"));
+        return
+    }
+    let quorum = match decode_base10(parts[3], BALANCE_BASE10_DECIMALS, true) {
+        Ok(q) => q,
+        Err(e) => {
+            output.push(format!("Error while parsing quorum: {e}"));
+            return
+        }
+    };
+
+    if let Err(e) = f64::from_str(parts[4]) {
+        output.push(format!("Invalid early exec quorum: {e}"));
+        return
+    }
+    let early_exec_quorum = match decode_base10(parts[4], BALANCE_BASE10_DECIMALS, true) {
+        Ok(e) => e,
+        Err(e) => {
+            output.push(format!("Error while parsing early exec quorum: {e}"));
+            return
+        }
+    };
+
+    let approval_ratio = match f64::from_str(parts[5]) {
+        Ok(a) => {
+            if a > 1.0 {
+                output.push(String::from("Error: Approval ratio cannot be >1.0"));
+                return
+            }
+            a
+        }
+        Err(e) => {
+            output.push(format!("Invalid approval ratio: {e}"));
+            return
+        }
+    };
+    let approval_ratio_base = 100_u64;
+    let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
+
+    let gov_token_id = match drk.read().await.get_token(String::from(parts[6])).await {
+        Ok(g) => g,
+        Err(e) => {
+            output.push(format!("Invalid Token ID: {e}"));
+            return
+        }
+    };
+
+    let notes_keypair = Keypair::random(&mut OsRng);
+    let proposer_keypair = Keypair::random(&mut OsRng);
+    let proposals_keypair = Keypair::random(&mut OsRng);
+    let votes_keypair = Keypair::random(&mut OsRng);
+    let exec_keypair = Keypair::random(&mut OsRng);
+    let early_exec_keypair = Keypair::random(&mut OsRng);
+    let bulla_blind = BaseBlind::random(&mut OsRng);
+
+    let params = DaoParams::new(
+        proposer_limit,
+        quorum,
+        early_exec_quorum,
+        approval_ratio_base,
+        approval_ratio_quot,
+        gov_token_id,
+        Some(notes_keypair.secret),
+        notes_keypair.public,
+        Some(proposer_keypair.secret),
+        proposer_keypair.public,
+        Some(proposals_keypair.secret),
+        proposals_keypair.public,
+        Some(votes_keypair.secret),
+        votes_keypair.public,
+        Some(exec_keypair.secret),
+        exec_keypair.public,
+        Some(early_exec_keypair.secret),
+        early_exec_keypair.public,
+        bulla_blind,
+    );
+
+    output.push(params.toml_str());
+}
+
+/// Auxiliary function to define the dao view subcommand handling.
+async fn handle_dao_view(parts: &[&str], input: &[String], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `dao view` subcommand"));
+        output.push(String::from("Usage: dao view"));
+        return
+    }
+
+    // Parse line from input or fallback to stdin if its empty
+    let buf = match input.len() {
+        0 => {
+            let mut buf = String::new();
+            if let Err(e) = stdin().read_to_string(&mut buf) {
+                output.push(format!("Failed to read from stdin: {e}"));
+                return
+            };
+            buf
+        }
+        1 => input[0].clone(),
+        _ => {
+            output.push(String::from("Multiline input provided"));
+            return
+        }
+    };
+
+    let params = match DaoParams::from_toml_str(&buf) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while parsing DAO params: {e}"));
+            return
+        }
+    };
+
+    output.push(format!("{params}"));
+}
+
+/// Auxiliary function to define the dao import subcommand handling.
+async fn handle_dao_import(
+    drk: &DrkPtr,
+    parts: &[&str],
+    input: &[String],
+    output: &mut Vec<String>,
+) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao import` subcommand"));
+        output.push(String::from("Usage: dao import <name>"));
+        return
+    }
+
+    // Parse line from input or fallback to stdin if its empty
+    let buf = match input.len() {
+        0 => {
+            let mut buf = String::new();
+            if let Err(e) = stdin().read_to_string(&mut buf) {
+                output.push(format!("Failed to read from stdin: {e}"));
+                return
+            };
+            buf
+        }
+        1 => input[0].clone(),
+        _ => {
+            output.push(String::from("Multiline input provided"));
+            return
+        }
+    };
+
+    let params = match DaoParams::from_toml_str(&buf) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while parsing DAO params: {e}"));
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.import_dao(parts[2], &params, output).await {
+        output.push(format!("Failed to import DAO: {e}"))
+    }
+}
+
+/// Auxiliary function to define the dao update keys subcommand handling.
+async fn handle_dao_update_keys(
+    drk: &DrkPtr,
+    parts: &[&str],
+    input: &[String],
+    output: &mut Vec<String>,
+) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `dao update-keys` subcommand"));
+        output.push(String::from("Usage: dao update-keys"));
+        return
+    }
+
+    // Parse line from input or fallback to stdin if its empty
+    let buf = match input.len() {
+        0 => {
+            let mut buf = String::new();
+            if let Err(e) = stdin().read_to_string(&mut buf) {
+                output.push(format!("Failed to read from stdin: {e}"));
+                return
+            };
+            buf
+        }
+        1 => input[0].clone(),
+        _ => {
+            output.push(String::from("Multiline input provided"));
+            return
+        }
+    };
+
+    let params = match DaoParams::from_toml_str(&buf) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while parsing DAO params: {e}"));
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.update_dao_keys(&params, output).await {
+        output.push(format!("Failed to update DAO keys: {e}"))
+    }
+}
+
+/// Auxiliary function to define the dao list subcommand handling.
+async fn handle_dao_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 || parts.len() != 3 {
+        output.push(String::from("Malformed `dao list` subcommand"));
+        output.push(String::from("Usage: dao list [name]"));
+        return
+    }
+
+    let name = if parts.len() == 3 { Some(String::from(parts[2])) } else { None };
+
+    if let Err(e) = drk.read().await.dao_list(&name, output).await {
+        output.push(format!("Failed to list DAO: {e}"))
+    }
+}
+
+/// Auxiliary function to define the dao balance subcommand handling.
+async fn handle_dao_balance(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao balance` subcommand"));
+        output.push(String::from("Usage: dao balance <name>"));
+        return
+    }
+
+    let lock = drk.read().await;
+    let balmap = match lock.dao_balance(parts[2]).await {
+        Ok(b) => b,
+        Err(e) => {
+            output.push(format!("Failed to fetch DAO balance: {e:?}"));
+            return
+        }
+    };
+
+    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            return
+        }
+    };
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Token ID", "Aliases", "Balance"]);
+    for (token_id, balance) in balmap.iter() {
+        let aliases = match aliases_map.get(token_id) {
+            Some(a) => a,
+            None => "-",
+        };
+
+        table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No unspent balances found"))
+    } else {
+        output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the dao mint subcommand handling.
+async fn handle_dao_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao mint` subcommand"));
+        output.push(String::from("Usage: dao mint <name>"));
+        return
+    }
+
+    match drk.read().await.dao_mint(parts[2]).await {
+        Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+        Err(e) => output.push(format!("Failed to mint DAO: {e}")),
+    }
+}
+
+/// Auxiliary function to define the dao propose transfer subcommand handling.
+async fn handle_dao_propose_transfer(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() < 7 || parts.len() > 9 {
+        output.push(String::from("Malformed `dao proposal-transfer` subcommand"));
+        output.push(String::from("Usage: dao proposal-transfer <name> <duration> <amount> <token> <recipient> [spend-hook] [user-data]"));
+        return
+    }
+
+    let duration = match u64::from_str(parts[3]) {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Invalid duration: {e}"));
+            return
+        }
+    };
+
+    let amount = String::from(parts[4]);
+    if let Err(e) = f64::from_str(&amount) {
+        output.push(format!("Invalid amount: {e}"));
+        return
+    }
+
+    let lock = drk.read().await;
+    let token_id = match lock.get_token(String::from(parts[5])).await {
+        Ok(t) => t,
+        Err(e) => {
+            output.push(format!("Invalid token alias: {e}"));
+            return
+        }
+    };
+
+    let rcpt = match PublicKey::from_str(parts[6]) {
+        Ok(r) => r,
+        Err(e) => {
+            output.push(format!("Invalid recipient: {e}"));
+            return
+        }
+    };
+
+    let mut index = 7;
+    let spend_hook = if index < parts.len() {
+        match FuncId::from_str(parts[index]) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                output.push(format!("Invalid spend hook: {e}"));
+                return
+            }
+        }
+    } else {
+        None
+    };
+    index += 1;
+
+    let user_data = if index < parts.len() {
+        let bytes = match bs58::decode(&parts[index]).into_vec() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e}"));
+                return
+            }
+        };
+
+        let bytes: [u8; 32] = match bytes.try_into() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e:?}"));
+                return
+            }
+        };
+
+        let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+            Some(v) => v,
+            None => {
+                output.push(String::from("Invalid user data"));
+                return
+            }
+        };
+
+        Some(elem)
+    } else {
+        None
+    };
+
+    match drk
+        .read()
+        .await
+        .dao_propose_transfer(parts[2], duration, &amount, token_id, rcpt, spend_hook, user_data)
+        .await
+    {
+        Ok(proposal) => output.push(format!("Generated proposal: {}", proposal.bulla())),
+        Err(e) => output.push(format!("Failed to create DAO transfer proposal: {e}")),
+    }
+}
+
+/// Auxiliary function to define the dao propose generic subcommand handling.
+async fn handle_dao_propose_generic(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 4 || parts.len() != 5 {
+        output.push(String::from("Malformed `dao proposal-generic` subcommand"));
+        output.push(String::from("Usage: dao proposal-generic <name> <duration> [user-data]"));
+        return
+    }
+
+    let duration = match u64::from_str(parts[3]) {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Invalid duration: {e}"));
+            return
+        }
+    };
+
+    let user_data = if parts.len() == 5 {
+        let bytes = match bs58::decode(&parts[4]).into_vec() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e}"));
+                return
+            }
+        };
+
+        let bytes: [u8; 32] = match bytes.try_into() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e:?}"));
+                return
+            }
+        };
+
+        let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+            Some(v) => v,
+            None => {
+                output.push(String::from("Invalid user data"));
+                return
+            }
+        };
+
+        Some(elem)
+    } else {
+        None
+    };
+
+    match drk.read().await.dao_propose_generic(parts[2], duration, user_data).await {
+        Ok(proposal) => output.push(format!("Generated proposal: {}", proposal.bulla())),
+        Err(e) => output.push(format!("Failed to create DAO generic proposal: {e}")),
+    }
+}
+
+/// Auxiliary function to define the dao proposals subcommand handling.
+async fn handle_dao_proposals(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao proposals` subcommand"));
+        output.push(String::from("Usage: dao proposals <name>"));
+        return
+    }
+
+    match drk.read().await.get_dao_proposals(parts[2]).await {
+        Ok(proposals) => {
+            for (i, proposal) in proposals.iter().enumerate() {
+                output.push(format!("{i}. {}", proposal.bulla()));
+            }
+        }
+        Err(e) => output.push(format!("Failed to retrieve DAO proposals: {e}")),
+    }
+}
+
+/// Auxiliary function to define the dao proposal subcommand handling.
+async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 || parts.len() != 4 {
+        output.push(String::from("Malformed `dao proposal` subcommand"));
+        output.push(String::from("Usage: dao proposal [--(export|mint-proposal)] <bulla>"));
+        return
+    }
+
+    let mut index = 2;
+    let (export, mint_proposal) = if parts.len() == 4 {
+        index += 1;
+        match parts[index] {
+            "--export" => (true, false),
+            "--mint-proposal" => (false, true),
+            _ => {
+                output.push(String::from("Malformed `dao proposal` subcommand"));
+                output.push(String::from("Usage: dao proposal [--(export|mint-proposal)] <bulla>"));
+                return
+            }
+        }
+    } else {
+        (false, false)
+    };
+
+    let bulla = match DaoProposalBulla::from_str(parts[index]) {
+        Ok(b) => b,
+        Err(e) => {
+            output.push(format!("Invalid proposal bulla: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let proposal = match lock.get_dao_proposal_by_bulla(&bulla).await {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Failed to fetch DAO proposal: {e}"));
+            return
+        }
+    };
+
+    if export {
+        // Retrieve the DAO
+        let dao = match lock.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
+            Ok(d) => d,
+            Err(e) => {
+                output.push(format!("Failed to fetch DAO: {e}"));
+                return
+            }
+        };
+
+        // Encypt the proposal
+        let enc_note =
+            AeadEncryptedNote::encrypt(&proposal, &dao.params.dao.proposals_public_key, &mut OsRng)
+                .unwrap();
+
+        // Export it to base64
+        output.push(base64::encode(&serialize_async(&enc_note).await));
+        return
+    }
+
+    if mint_proposal {
+        // Identify proposal type by its auth calls
+        for call in &proposal.proposal.auth_calls {
+            // We only support transfer right now
+            if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+                match lock.dao_transfer_proposal_tx(&proposal).await {
+                    Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+                    Err(e) => output.push(format!("Failed to create DAO transfer proposal: {e}")),
+                }
+                return
+            }
+        }
+
+        // If proposal has no auth calls, we consider it a generic one
+        if proposal.proposal.auth_calls.is_empty() {
+            match lock.dao_generic_proposal_tx(&proposal).await {
+                Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+                Err(e) => output.push(format!("Failed to create DAO generic proposal: {e}")),
+            }
+            return
+        }
+
+        output.push(String::from("Unsuported DAO proposal"));
+        return
+    }
+
+    output.push(format!("{proposal}"));
+
+    let mut contract_calls = "\nInvoked contracts:\n".to_string();
+    for call in proposal.proposal.auth_calls {
+        contract_calls.push_str(&format!(
+            "\tContract: {}\n\tFunction: {}\n\tData: ",
+            call.contract_id, call.function_code
+        ));
+
+        if call.auth_data.is_empty() {
+            contract_calls.push_str("-\n");
+            continue;
+        }
+
+        if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+            // We know that the plaintext data live in the data plaintext vec
+            if proposal.data.is_none() {
+                contract_calls.push_str("-\n");
+                continue;
+            }
+            let coin: CoinAttributes = match deserialize_async(proposal.data.as_ref().unwrap())
+                .await
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    output.push(format!("Failed to deserialize transfer proposal coin data: {e}"));
+                    return
+                }
+            };
+            let spend_hook = if coin.spend_hook == FuncId::none() {
+                "-".to_string()
+            } else {
+                format!("{}", coin.spend_hook)
+            };
+
+            let user_data = if coin.user_data == pallas::Base::ZERO {
+                "-".to_string()
+            } else {
+                format!("{:?}", coin.user_data)
+            };
+
+            contract_calls.push_str(&format!(
+                "\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
+                "Recipient",
+                coin.public_key,
+                "Amount",
+                coin.value,
+                encode_base10(coin.value, BALANCE_BASE10_DECIMALS),
+                "Token",
+                coin.token_id,
+                "Spend hook",
+                spend_hook,
+                "User data",
+                user_data,
+                "Blind",
+                coin.blind
+            ));
+        }
+    }
+
+    output.push(contract_calls);
+
+    let votes = match lock.get_dao_proposal_votes(&bulla).await {
+        Ok(v) => v,
+        Err(e) => {
+            output.push(format!("Failed to fetch DAO proposal votes: {e}"));
+            return
+        }
+    };
+    let mut total_yes_vote_value = 0;
+    let mut total_no_vote_value = 0;
+    let mut total_all_vote_value = 0;
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Transaction", "Tokens", "Vote"]);
+    for vote in votes {
+        let vote_option = if vote.vote_option {
+            total_yes_vote_value += vote.all_vote_value;
+            "Yes"
+        } else {
+            total_no_vote_value += vote.all_vote_value;
+            "No"
+        };
+        total_all_vote_value += vote.all_vote_value;
+
+        table.add_row(row![
+            vote.tx_hash,
+            encode_base10(vote.all_vote_value, BALANCE_BASE10_DECIMALS),
+            vote_option
+        ]);
+    }
+
+    let outcome = if table.is_empty() {
+        output.push(String::from("Votes: No votes found"));
+        "Unknown"
+    } else {
+        output.push(String::from("Votes:"));
+        output.push(format!("{table}"));
+        output.push(format!(
+            "Total tokens votes: {}",
+            encode_base10(total_all_vote_value, BALANCE_BASE10_DECIMALS)
+        ));
+        let approval_ratio = (total_yes_vote_value as f64 * 100.0) / total_all_vote_value as f64;
+        output.push(format!(
+            "Total tokens Yes votes: {} ({approval_ratio:.2}%)",
+            encode_base10(total_yes_vote_value, BALANCE_BASE10_DECIMALS)
+        ));
+        output.push(format!(
+            "Total tokens No votes: {} ({:.2}%)",
+            encode_base10(total_no_vote_value, BALANCE_BASE10_DECIMALS),
+            (total_no_vote_value as f64 * 100.0) / total_all_vote_value as f64
+        ));
+
+        let dao = match lock.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
+            Ok(d) => d,
+            Err(e) => {
+                output.push(format!("Failed to fetch DAO: {e}"));
+                return
+            }
+        };
+        if total_all_vote_value >= dao.params.dao.quorum &&
+            approval_ratio >=
+                (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base)
+                    as f64
+        {
+            "Approved"
+        } else {
+            "Rejected"
+        }
+    };
+
+    if let Some(exec_tx_hash) = proposal.exec_tx_hash {
+        output.push(format!("Proposal was executed on transaction: {exec_tx_hash}"));
+        return
+    }
+
+    // Retrieve next block height and current block time target,
+    // to compute their window.
+    let next_block_height = match lock.get_next_block_height().await {
+        Ok(n) => n,
+        Err(e) => {
+            output.push(format!("Failed to fetch next block height: {e}"));
+            return
+        }
+    };
+    let block_target = match lock.get_block_target().await {
+        Ok(b) => b,
+        Err(e) => {
+            output.push(format!("Failed to fetch block target: {e}"));
+            return
+        }
+    };
+    let current_window = blockwindow(next_block_height, block_target);
+    let end_time = proposal.proposal.creation_blockwindow + proposal.proposal.duration_blockwindows;
+    let (voting_status, proposal_status_message) = if current_window < end_time {
+        ("Ongoing", format!("Current proposal outcome: {outcome}"))
+    } else {
+        ("Concluded", format!("Proposal outcome: {outcome}"))
+    };
+    output.push(format!("Voting status: {voting_status}"));
+    output.push(proposal_status_message);
+}
+
+/// Auxiliary function to define the dao proposal import subcommand handling.
+async fn handle_dao_proposal_import(
+    drk: &DrkPtr,
+    parts: &[&str],
+    input: &[String],
+    output: &mut Vec<String>,
+) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `dao proposal-import` subcommand"));
+        output.push(String::from("Usage: dao proposal-import"));
+        return
+    }
+
+    // Parse line from input or fallback to stdin if its empty
+    let buf = match input.len() {
+        0 => {
+            let mut buf = String::new();
+            if let Err(e) = stdin().read_to_string(&mut buf) {
+                output.push(format!("Failed to read from stdin: {e}"));
+                return
+            };
+            buf
+        }
+        1 => input[0].clone(),
+        _ => {
+            output.push(String::from("Multiline input provided"));
+            return
+        }
+    };
+
+    let Some(bytes) = base64::decode(buf.trim()) else {
+        output.push(String::from("Failed to decode encrypted proposal data"));
+        return
+    };
+
+    let encrypted_proposal: AeadEncryptedNote = match deserialize_async(&bytes).await {
+        Ok(e) => e,
+        Err(e) => {
+            output.push(format!("Failed to deserialize encrypted proposal data: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let daos = match lock.get_daos().await {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Failed to retrieve DAOs: {e}"));
+            return
+        }
+    };
+
+    for dao in &daos {
+        // Check if we have the proposals key
+        let Some(proposals_secret_key) = dao.params.proposals_secret_key else { continue };
+
+        // Try to decrypt the proposal
+        let Ok(proposal) = encrypted_proposal.decrypt::<ProposalRecord>(&proposals_secret_key)
+        else {
+            continue
+        };
+
+        let proposal = match lock.get_dao_proposal_by_bulla(&proposal.bulla()).await {
+            Ok(p) => {
+                let mut our_proposal = p;
+                our_proposal.data = proposal.data;
+                our_proposal
+            }
+            Err(_) => proposal,
+        };
+
+        if let Err(e) = lock.put_dao_proposal(&proposal).await {
+            output.push(format!("Failed to put DAO proposal: {e}"));
+        }
+    }
+
+    output.push(String::from("Couldn't decrypt the proposal with out DAO keys"));
+}
+
+/// Auxiliary function to define the dao vote subcommand handling.
+async fn handle_dao_vote(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 4 || parts.len() != 5 {
+        output.push(String::from("Malformed `dao vote` subcommand"));
+        output.push(String::from("Usage: dao vote <bulla> <vote> [vote-weight]"));
+        return
+    }
+
+    let bulla = match DaoProposalBulla::from_str(parts[2]) {
+        Ok(b) => b,
+        Err(e) => {
+            output.push(format!("Invalid proposal bulla: {e}"));
+            return
+        }
+    };
+
+    let vote = match u8::from_str(parts[3]) {
+        Ok(v) => {
+            if v > 1 {
+                output.push(String::from("Vote can be either 0 (NO) or 1 (YES)"));
+                return
+            }
+            v != 0
+        }
+        Err(e) => {
+            output.push(format!("Invalid vote: {e}"));
+            return
+        }
+    };
+
+    let weight = if parts.len() == 5 {
+        if let Err(e) = f64::from_str(parts[4]) {
+            output.push(format!("Invalid vote weight: {e}"));
+            return
+        }
+        match decode_base10(parts[4], BALANCE_BASE10_DECIMALS, true) {
+            Ok(w) => Some(w),
+            Err(e) => {
+                output.push(format!("Error while parsing vote weight: {e}"));
+                return
+            }
+        }
+    } else {
+        None
+    };
+
+    match drk.read().await.dao_vote(&bulla, vote, weight).await {
+        Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+        Err(e) => output.push(format!("Failed to create DAO Vote transaction: {e}")),
+    }
+}
+
+/// Auxiliary function to define the dao exec subcommand handling.
+async fn handle_dao_exec(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 || parts.len() != 4 {
+        output.push(String::from("Malformed `dao exec` subcommand"));
+        output.push(String::from("Usage: dao exec [--early] <bulla>"));
+        return
+    }
+
+    let mut index = 1;
+    let mut early = false;
+    if parts[index] == "--early" {
+        early = true;
+        index += 1;
+    }
+
+    let bulla = match DaoProposalBulla::from_str(parts[index]) {
+        Ok(b) => b,
+        Err(e) => {
+            output.push(format!("Invalid proposal bulla: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let proposal = match lock.get_dao_proposal_by_bulla(&bulla).await {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Failed to fetch DAO proposal: {e}"));
+            return
+        }
+    };
+
+    // Identify proposal type by its auth calls
+    for call in &proposal.proposal.auth_calls {
+        // We only support transfer right now
+        if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+            match lock.dao_exec_transfer(&proposal, early).await {
+                Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+                Err(e) => output.push(format!("Failed to execute DAO transfer proposal: {e}")),
+            };
+            return
+        }
+    }
+
+    // If proposal has no auth calls, we consider it a generic one
+    if proposal.proposal.auth_calls.is_empty() {
+        match lock.dao_exec_generic(&proposal, early).await {
+            Ok(tx) => output.push(base64::encode(&serialize_async(&tx).await)),
+            Err(e) => output.push(format!("Failed to execute DAO generic proposal: {e}")),
+        };
+        return
+    }
+
+    output.push(String::from("Unsuported DAO proposal"));
+}
+
+/// Auxiliary function to define the dao spent hook subcommand handling.
+async fn handle_dao_spend_hook(parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `dao spent-hook` subcommand"));
+        output.push(String::from("Usage: dao spent-hook"));
+        return
+    }
+
+    let spend_hook =
+        FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }.to_func_id();
+    output.push(format!("{spend_hook}"));
 }
 
 /// Auxiliary function to define the attach fee command handling.
