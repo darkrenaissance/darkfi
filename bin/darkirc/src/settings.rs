@@ -154,7 +154,7 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
             return Err(ParseFailed("Duplicate contact found"))
         }
 
-        info!("Instantiated ChaChaBox for contact \"{}\"", name);
+        info!("Instantiated ChaChaBox for contact \"{name}\"");
         ret.insert(name.to_string(), IrcContact { saltbox, self_saltbox });
     }
 
@@ -263,7 +263,7 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
 
         if let Some(topic) = items.get("topic") {
             if let Some(topic) = topic.as_str() {
-                info!("Found configured topic for {}: {}", name, topic);
+                info!("Found configured topic for {name}: {topic}");
                 chan.topic = topic.to_string();
             } else {
                 return Err(ParseFailed("Channel topic not a string"))
@@ -284,13 +284,13 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
                 let secret = crypto_box::SecretKey::from(secret_bytes);
                 let public = secret.public_key();
                 chan.saltbox = Some(Arc::new(crypto_box::ChaChaBox::new(&public, &secret)));
-                info!("Configured NaCl box for channel {}", name);
+                info!("Configured NaCl box for channel {name}");
             } else {
                 return Err(ParseFailed("Channel secret not a string"))
             }
         }
 
-        info!("Configured channel {}", name);
+        info!("Configured channel {name}");
         ret.insert(name.to_string(), chan);
     }
 

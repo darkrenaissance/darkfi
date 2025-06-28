@@ -201,8 +201,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         );
         println!("[contact.\"satoshi\"]");
         println!("dm_chacha_public = \"YOUR_CONTACT_PUBLIC_KEY\"");
-        println!("my_dm_chacha_secret = \"{}\"", secret);
-        println!("#my_dm_chacha_public = \"{}\"", public);
+        println!("my_dm_chacha_secret = \"{secret}\"");
+        println!("#my_dm_chacha_public = \"{public}\"");
         return Ok(());
     }
 
@@ -211,7 +211,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let secret = bs58::encode(secret.to_bytes()).into_string();
         println!("Place this in your config file:\n");
         println!("[channel.\"#yourchannelname\"]");
-        println!("secret = \"{}\"", secret);
+        println!("secret = \"{secret}\"");
         return Ok(());
     }
 
@@ -221,8 +221,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
         println!("Place this in your config file:\n");
         println!("[rln]");
-        println!("nullifier = \"{}\"", nullifier);
-        println!("trapdoor = \"{}\"", trapdoor);
+        println!("nullifier = \"{nullifier}\"");
+        println!("trapdoor = \"{trapdoor}\"");
         return Ok(());
     }
 
@@ -230,7 +230,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let bytes = match bs58::decode(chacha_secret).into_vec() {
             Ok(v) => v,
             Err(e) => {
-                println!("Error: {}", e);
+                println!("Error: {e}");
                 return Err(Error::ParseFailed("Secret key parsing failed"));
             }
         };
@@ -249,21 +249,21 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let config_path = match get_config_path(args.config, CONFIG_FILE) {
             Ok(path) => path,
             Err(e) => {
-                error!("Unable to get config path: {}", e);
+                error!("Unable to get config path: {e}");
                 return Err(e);
             }
         };
         let contents = match fs::read_to_string(&config_path).await {
             Ok(c) => c,
             Err(e) => {
-                error!("Unable read path `{config_path:?}`: {}", e);
+                error!("Unable read path `{config_path:?}`: {e}");
                 return Err(e.into());
             }
         };
         let contents = match toml::from_str(&contents) {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed parsing TOML config: {}", e);
+                error!("Failed parsing TOML config: {e}");
                 return Err(Error::ParseFailed("Failed parsing TOML config"));
             }
         };
@@ -272,7 +272,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let contacts = match list_configured_contacts(&contents) {
             Ok(c) => c,
             Err(e) => {
-                error!("List contacts failed `{config_path:?}`: {}", e);
+                error!("List contacts failed `{config_path:?}`: {e}");
                 return Err(e);
             }
         };
@@ -388,14 +388,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!("Got dnet event: {event:?}");
                 dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -412,14 +412,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             let deg_sub = event_graph_.deg_subscribe().await;
             loop {
                 let event = deg_sub.receive().await;
-                debug!("Got deg event: {:?}", event);
+                debug!("Got deg event: {event:?}");
                 deg_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -443,7 +443,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => darkirc_.stop_connections().await,
-                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+                Err(e) => error!("Failed stopping JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,
@@ -483,7 +483,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
-                Err(e) => error!("Failed stopping IRC server: {}", e),
+                Err(e) => error!("Failed stopping IRC server: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -509,7 +509,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
-                Err(e) => error!("Failed sync task: {}", e),
+                Err(e) => error!("Failed sync task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -535,7 +535,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!("Flushed {flushed_bytes} bytes");
 
     info!("Shut down successfully");
     Ok(())
@@ -561,7 +561,7 @@ async fn sync_task(p2p: &P2pPtr, event_graph: &EventGraphPtr, skip_dag_sync: boo
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({}), retrying in {}s...", e, comms_timeout);
+                        error!("Failed syncing DAG ({e}), retrying in {comms_timeout}s...");
                         sleep(comms_timeout).await;
                     }
                 }

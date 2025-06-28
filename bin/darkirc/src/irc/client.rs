@@ -172,7 +172,7 @@ impl Client {
                     }
                     // If something failed during reading, we disconnect.
                     if let Err(e) = r {
-                        error!("[IRC CLIENT] Read failed for {}: {}", self.addr, e);
+                        error!("[IRC CLIENT] Read failed for {}: {e}", self.addr);
                         self.incoming.unsubscribe().await;
                         return Err(Error::ChannelStopped)
                     }
@@ -197,11 +197,11 @@ impl Client {
 
                                 // If it fails for some reason, for now, we just note it and pass.
                                 if let Err(e) = self.server.darkirc.event_graph.dag_insert(&[event.clone()]).await {
-                                    error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
+                                    error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
                                 } else {
                                     // We sent this, so it should be considered seen.
                                     if let Err(e) = self.mark_seen(&event_id).await {
-                                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
                                         return Err(e)
                                     }
 
@@ -220,7 +220,7 @@ impl Client {
                                             Ok(v) => v,
                                             Err(e) => {
                                                 // TODO: Send a message to the IRC client telling that sending went wrong
-                                                error!("[IRC CLIENT] Failed creating RLN signal proof: {}", e);
+                                                error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
                                                 // Just use an empty "proof"
                                                 (Proof::new(vec![]), vec![])
                                             }
@@ -267,7 +267,7 @@ impl Client {
                         Ok(true) => continue,
                         Ok(false) => {},
                         Err(e) => {
-                            error!("[IRC CLIENT] (multiplex_connection) self.is_seen({}) failed: {}", event_id, e);
+                            error!("[IRC CLIENT] (multiplex_connection) self.is_seen({event_id}) failed: {e}");
                             return Err(e)
                         }
                     }
@@ -284,7 +284,7 @@ impl Client {
                             Err(_) => {
                                 // TODO: FIXME: This logic should be better written.
                                 // Right now we don't enforce RLN so we can just fall-through.
-                                //error!("[IRC CLIENT] Failed deserializing event ephemeral data: {}", e);
+                                //error!("[IRC CLIENT] Failed deserializing event ephemeral data: {e}");
                                 break
                             }
                         };
@@ -320,7 +320,7 @@ impl Client {
                         Ok(Msg::V1(old_msg)) => old_msg.into_new(),
                         Ok(Msg::V2(new_msg)) => new_msg,
                         Err(e) => {
-                            error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
+                            error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {e}");
                             continue
                         }
                     };
@@ -360,19 +360,19 @@ impl Client {
                         }
 
                         // Format the message
-                        let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+                        let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
 
                         // Send it to the client
                         let reply = ReplyType::Client((privmsg.nick.clone(), msg));
                         if let Err(e) = self.reply(&mut writer, &reply).await {
-                            error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
+                            error!("[IRC CLIENT] Failed writing PRIVMSG to client: {e}");
                             continue
                         }
                     }
 
                     // Mark the message as seen for this USER
                     if let Err(e) = self.mark_seen(&event_id).await {
-                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
                         return Err(e)
                     }
                 }
@@ -386,16 +386,16 @@ impl Client {
         W: AsyncWrite + Unpin,
     {
         let r = match reply {
-            ReplyType::Server((rpl, msg)) => format!(":{} {:03} {}", SERVER_NAME, rpl, msg),
-            ReplyType::Client((nick, msg)) => format!(":{}!~anon@darkirc {}", nick, msg),
-            ReplyType::Pong(origin) => format!(":{} PONG :{}", SERVER_NAME, origin),
-            ReplyType::Cap(msg) => format!(":{} {}", SERVER_NAME, msg),
+            ReplyType::Server((rpl, msg)) => format!(":{SERVER_NAME} {rpl:03} {msg}"),
+            ReplyType::Client((nick, msg)) => format!(":{nick}!~anon@darkirc {msg}"),
+            ReplyType::Pong(origin) => format!(":{SERVER_NAME} PONG :{origin}"),
+            ReplyType::Cap(msg) => format!(":{SERVER_NAME} {msg}"),
             ReplyType::Notice((src, dst, msg)) => {
-                format!(":{}!~anon@darkirc NOTICE {} :{}", src, dst, msg)
+                format!(":{src}!~anon@darkirc NOTICE {dst} :{msg}")
             }
         };
 
-        debug!("[{}] <-- {}", self.addr, r);
+        debug!("[{}] <-- {r}", self.addr);
 
         writer.write(r.as_bytes()).await?;
         writer.write(b"\r\n").await?;
@@ -454,7 +454,7 @@ impl Client {
         let args = line.replacen(cmd, "", 1);
         let cmd = cmd.to_uppercase();
 
-        debug!("[{}] --> {}{}", self.addr, cmd, args);
+        debug!("[{}] --> {cmd}{args}", self.addr);
 
         // Handle the command. These implementations are in `command.rs`.
         let replies: Vec<ReplyType> = match cmd.as_str() {
@@ -477,7 +477,7 @@ impl Client {
             "VERSION" => self.handle_cmd_version(&args).await?,
             "QUIT" => return Err(Error::ChannelStopped),
             _ => {
-                warn!("[IRC CLIENT] Unimplemented \"{}\" command", cmd);
+                warn!("[IRC CLIENT] Unimplemented \"{cmd}\" command");
                 vec![]
             }
         };
@@ -554,11 +554,11 @@ impl Client {
             .seen
             .get_or_init(|| async {
                 let u = self.username.read().await.to_string();
-                self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", u)).unwrap()
+                self.server.darkirc.sled.open_tree(format!("darkirc_user_{u}")).unwrap()
             })
             .await;
 
-        debug!("Marking event {} as seen", event_id);
+        debug!("Marking event {event_id} as seen");
         let mut batch = sled::Batch::default();
         batch.insert(event_id.as_bytes(), &[]);
         Ok(db.apply_batch(batch)?)
@@ -570,7 +570,7 @@ impl Client {
             .seen
             .get_or_init(|| async {
                 let u = self.username.read().await.to_string();
-                self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", u)).unwrap()
+                self.server.darkirc.sled.open_tree(format!("darkirc_user_{u}")).unwrap()
             })
             .await;
 

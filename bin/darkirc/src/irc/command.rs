@@ -69,22 +69,16 @@ impl Client {
     pub async fn handle_cmd_admin(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
 
         let replies = vec![
-            ReplyType::Server((
-                RPL_ADMINME,
-                format!("{} {} :Administrative info", nick, SERVER_NAME),
-            )),
-            ReplyType::Server((RPL_ADMINLOC1, format!("{} :", nick))),
-            ReplyType::Server((RPL_ADMINLOC2, format!("{} :", nick))),
-            ReplyType::Server((RPL_ADMINEMAIL, format!("{} :anon@darkirc", nick))),
+            ReplyType::Server((RPL_ADMINME, format!("{nick} {SERVER_NAME} :Administrative info"))),
+            ReplyType::Server((RPL_ADMINLOC1, format!("{nick} :"))),
+            ReplyType::Server((RPL_ADMINLOC2, format!("{nick} :"))),
+            ReplyType::Server((RPL_ADMINEMAIL, format!("{nick} :anon@darkirc"))),
         ];
 
         Ok(replies)
@@ -98,7 +92,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} CAP :{}", self.nickname.read().await, INVALID_SYNTAX),
+                format!("{} CAP :{INVALID_SYNTAX}", self.nickname.read().await),
             ))])
         };
 
@@ -111,7 +105,7 @@ impl Client {
                 let Some(_version) = tokens.next() else {
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
-                        format!("{} CAP :{}", self.nickname.read().await, INVALID_SYNTAX),
+                        format!("{} CAP :{INVALID_SYNTAX}", self.nickname.read().await),
                     ))])
                 };
                 */
@@ -124,14 +118,14 @@ impl Client {
                 let Some(substr_idx) = args.find(':') else {
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
-                        format!("{} CAP :{}", nick, INVALID_SYNTAX),
+                        format!("{nick} CAP :{INVALID_SYNTAX}"),
                     ))])
                 };
 
                 if substr_idx >= args.len() {
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
-                        format!("{} CAP :{}", nick, INVALID_SYNTAX),
+                        format!("{nick} CAP :{INVALID_SYNTAX}"),
                     ))])
                 }
 
@@ -153,19 +147,11 @@ impl Client {
                 let mut replies = vec![];
 
                 if !ack_list.is_empty() {
-                    replies.push(ReplyType::Cap(format!(
-                        "CAP {} ACK :{}",
-                        nick,
-                        ack_list.join(" ")
-                    )));
+                    replies.push(ReplyType::Cap(format!("CAP {nick} ACK :{}", ack_list.join(" "))));
                 }
 
                 if !nak_list.is_empty() {
-                    replies.push(ReplyType::Cap(format!(
-                        "CAP {} NAK :{}",
-                        nick,
-                        nak_list.join(" ")
-                    )));
+                    replies.push(ReplyType::Cap(format!("CAP {nick} NAK :{}", nak_list.join(" "))));
                 }
 
                 return Ok(replies)
@@ -183,8 +169,7 @@ impl Client {
                     .collect();
 
                 return Ok(vec![ReplyType::Cap(format!(
-                    "CAP {} LIST :{}",
-                    nick,
+                    "CAP {nick} LIST :{}",
                     enabled_caps.join(" ")
                 ))])
             }
@@ -204,10 +189,7 @@ impl Client {
         }
 
         self.penalty.fetch_add(1, SeqCst);
-        Ok(vec![ReplyType::Server((
-            ERR_NEEDMOREPARAMS,
-            format!("{} CAP :{}", nick, INVALID_SYNTAX),
-        ))])
+        Ok(vec![ReplyType::Server((ERR_NEEDMOREPARAMS, format!("{nick} CAP :{INVALID_SYNTAX}")))])
     }
 
     /// `INFO [<target>]`
@@ -219,19 +201,13 @@ impl Client {
     pub async fn handle_cmd_info(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.clone();
         let replies = vec![
-            ReplyType::Server((
-                RPL_INFO,
-                format!("{} :DarkIRC {}", nick, env!("CARGO_PKG_VERSION")),
-            )),
-            ReplyType::Server((RPL_ENDOFINFO, format!("{} :End of INFO list", nick))),
+            ReplyType::Server((RPL_INFO, format!("{nick} :DarkIRC {}", env!("CARGO_PKG_VERSION")))),
+            ReplyType::Server((RPL_ENDOFINFO, format!("{nick} :End of INFO list"))),
         ];
 
         Ok(replies)
@@ -245,10 +221,7 @@ impl Client {
     pub async fn handle_cmd_join(&self, args: &str, hist: bool) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         // Client's (already) active channels
@@ -265,7 +238,7 @@ impl Client {
                 self.penalty.fetch_add(1, SeqCst);
                 return Ok(vec![ReplyType::Server((
                     ERR_NEEDMOREPARAMS,
-                    format!("{} JOIN :{}", nick, INVALID_SYNTAX),
+                    format!("{nick} JOIN :{INVALID_SYNTAX}"),
                 ))])
             }
 
@@ -284,7 +257,7 @@ impl Client {
                     self.penalty.fetch_add(1, SeqCst);
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
-                        format!("{} JOIN :{}", nick, INVALID_SYNTAX),
+                        format!("{nick} JOIN :{INVALID_SYNTAX}"),
                     ))])
                 }
                 if !active_channels.contains(channel) {
@@ -313,13 +286,13 @@ impl Client {
             }
 
             // Create the replies
-            replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
+            replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{channel}"))));
 
             if let Some(chan) = server_channels.get(channel) {
                 if !chan.topic.is_empty() {
                     replies.push(ReplyType::Client((
                         nick.clone(),
-                        format!("TOPIC {} :{}", channel, chan.topic),
+                        format!("TOPIC {channel} :{}", chan.topic),
                     )));
                 }
             }
@@ -345,25 +318,22 @@ impl Client {
     pub async fn handle_cmd_list(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
 
         let mut list = vec![];
         for (name, channel) in self.server.channels.read().await.iter() {
-            list.push(format!("{} {} {} :{}", nick, name, channel.nicks.len(), channel.topic));
+            list.push(format!("{nick} {name} {} :{}", channel.nicks.len(), channel.topic));
         }
 
         let mut replies = vec![];
-        replies.push(ReplyType::Server((RPL_LISTSTART, format!("{} Channel :Users  Name", nick))));
+        replies.push(ReplyType::Server((RPL_LISTSTART, format!("{nick} Channel :Users  Name"))));
         for chan in list {
             replies.push(ReplyType::Server((RPL_LIST, chan)));
         }
-        replies.push(ReplyType::Server((RPL_LISTEND, format!("{} :End of /LIST", nick))));
+        replies.push(ReplyType::Server((RPL_LISTEND, format!("{nick} :End of /LIST"))));
 
         Ok(replies)
     }
@@ -376,10 +346,7 @@ impl Client {
     pub async fn handle_cmd_mode(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
@@ -390,29 +357,29 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} MODE :{}", nick, INVALID_SYNTAX),
+                format!("{nick} MODE :{INVALID_SYNTAX}"),
             ))])
         };
 
         if target == nick {
-            return Ok(vec![ReplyType::Server((RPL_UMODEIS, format!("{} +", nick)))])
+            return Ok(vec![ReplyType::Server((RPL_UMODEIS, format!("{nick} +")))])
         }
 
         if !target.starts_with('#') {
             return Ok(vec![ReplyType::Server((
                 ERR_USERSDONTMATCH,
-                format!("{} :Can't set/get mode for other users", nick),
+                format!("{nick} :Can't set/get mode for other users"),
             ))])
         }
 
         if !self.server.channels.read().await.contains_key(target) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHNICK,
-                format!("{} {} :No such nick or channel name", nick, target),
+                format!("{nick} {target} :No such nick or channel name"),
             ))])
         }
 
-        Ok(vec![ReplyType::Server((RPL_CHANNELMODEIS, format!("{} {} +", nick, target)))])
+        Ok(vec![ReplyType::Server((RPL_CHANNELMODEIS, format!("{nick} {target} +")))])
     }
 
     /// `MOTD [<server>]`
@@ -425,10 +392,10 @@ impl Client {
         Ok(vec![
             ReplyType::Server((
                 RPL_MOTDSTART,
-                format!("{} :- {} message of the day", nick, SERVER_NAME),
+                format!("{nick} :- {SERVER_NAME} message of the day"),
             )),
-            ReplyType::Server((RPL_MOTD, format!("{} :Let there be dark!", nick))),
-            ReplyType::Server((RPL_ENDOFMOTD, format!("{} :End of /MOTD command.", nick))),
+            ReplyType::Server((RPL_MOTD, format!("{nick} :Let there be dark!"))),
+            ReplyType::Server((RPL_ENDOFMOTD, format!("{nick} :End of /MOTD command."))),
         ])
     }
 
@@ -441,10 +408,7 @@ impl Client {
     pub async fn handle_cmd_names(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
@@ -459,13 +423,13 @@ impl Client {
 
                 replies.push(ReplyType::Server((
                     RPL_NAMREPLY,
-                    format!("{} = {} :{}", nick, req_chan, nicks.join(" ")),
+                    format!("{nick} = {req_chan} :{}", nicks.join(" ")),
                 )));
             }
 
             replies.push(ReplyType::Server((
                 RPL_ENDOFNAMES,
-                format!("{} {} :End of NAMES list", nick, req_chan),
+                format!("{nick} {req_chan} :End of NAMES list"),
             )));
 
             Ok(replies)
@@ -475,14 +439,12 @@ impl Client {
 
                 replies.push(ReplyType::Server((
                     RPL_NAMREPLY,
-                    format!("{} = {} :{}", nick, name, nicks.join(" ")),
+                    format!("{nick} = {name} :{}", nicks.join(" ")),
                 )));
             }
 
-            replies.push(ReplyType::Server((
-                RPL_ENDOFNAMES,
-                format!("{} * :End of NAMES list", nick),
-            )));
+            replies
+                .push(ReplyType::Server((RPL_ENDOFNAMES, format!("{nick} * :End of NAMES list"))));
 
             Ok(replies)
         }
@@ -502,7 +464,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} NICK :{}", old_nick, INVALID_SYNTAX),
+                format!("{old_nick} NICK :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -512,7 +474,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ERRONEOUSNICKNAME,
-                format!("{} {} :Erroneous nickname", old_nick, nickname),
+                format!("{old_nick} {nickname} :Erroneous nickname"),
             ))])
         }
 
@@ -521,7 +483,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ERRONEOUSNICKNAME,
-                format!("{} {} :Nickname too long", old_nick, nickname),
+                format!("{old_nick} {nickname} :Nickname too long"),
             ))])
         }
 
@@ -543,7 +505,7 @@ impl Client {
 
         // If we were registered, we send a client reply about it.
         if self.registered.load(SeqCst) {
-            Ok(vec![ReplyType::Client((old_nick, format!("NICK :{}", nickname)))])
+            Ok(vec![ReplyType::Client((old_nick, format!("NICK :{nickname}")))])
         } else {
             // Otherwise, we don't reply.
             Ok(vec![])
@@ -556,10 +518,7 @@ impl Client {
     pub async fn handle_cmd_part(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
@@ -569,7 +528,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} PART :{}", nick, INVALID_SYNTAX),
+                format!("{nick} PART :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -577,7 +536,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} PART :{}", nick, INVALID_SYNTAX),
+                format!("{nick} PART :{INVALID_SYNTAX}"),
             ))])
         }
 
@@ -585,14 +544,14 @@ impl Client {
         if !active_channels.contains(channel) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHCHANNEL,
-                format!("{} {} :No such channel", nick, channel),
+                format!("{nick} {channel} :No such channel"),
             ))])
         }
 
         // Remove the channel from the client's channel list
         active_channels.remove(channel);
 
-        let replies = vec![ReplyType::Client((nick, format!("PART {} :Bye", channel)))];
+        let replies = vec![ReplyType::Client((nick, format!("PART {channel} :Bye")))];
 
         Ok(replies)
     }
@@ -610,7 +569,7 @@ impl Client {
             // self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} PASS :{}", nick, INVALID_SYNTAX),
+                format!("{nick} PASS :{INVALID_SYNTAX}"),
             ))])
         };
         let mut password = &args[i + 1..];
@@ -624,7 +583,7 @@ impl Client {
             error!("[IRC CLIENT] Password is not correct!");
             return Ok(vec![ReplyType::Server((
                 ERR_PASSWDMISMATCH,
-                format!("{} PASS :{}", nick, PASSWORD_MISMATCH),
+                format!("{nick} PASS :{PASSWORD_MISMATCH}"),
             ))])
         }
 
@@ -637,10 +596,7 @@ impl Client {
     pub async fn handle_cmd_ping(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let mut tokens = args.split_ascii_whitespace();
@@ -663,10 +619,7 @@ impl Client {
     pub async fn handle_cmd_privmsg(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
@@ -675,21 +628,21 @@ impl Client {
         let Some(target) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NORECIPIENT,
-                format!("{} :No recipient given (PRIVMSG)", nick),
+                format!("{nick} :No recipient given (PRIVMSG)"),
             ))])
         };
 
         let Some(message) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
-                format!("{} :No text to send", nick),
+                format!("{nick} :No text to send"),
             ))])
         };
 
         if !message.starts_with(':') || (message.trim() == ":" && tokens.next().is_none()) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
-                format!("{} :No text to send", nick),
+                format!("{nick} :No text to send"),
             ))])
         }
 
@@ -700,7 +653,7 @@ impl Client {
         if target == nick {
             return Ok(vec![ReplyType::Client((
                 target.to_string(),
-                format!("PRIVMSG {} {}", target, message),
+                format!("PRIVMSG {target} {message}"),
             ))])
         }
 
@@ -712,7 +665,7 @@ impl Client {
         // If it's a DM and we don't have an encryption key, we will
         // refuse to send it. Send ERR_NORECIPIENT to the client.
         if !target.starts_with('#') && !self.server.contacts.read().await.contains_key(target) {
-            return Ok(vec![ReplyType::Server((ERR_NOSUCHNICK, format!("{} :{}", nick, target)))])
+            return Ok(vec![ReplyType::Server((ERR_NOSUCHNICK, format!("{nick} :{target}")))])
         }
 
         Ok(vec![])
@@ -724,7 +677,7 @@ impl Client {
     pub async fn handle_cmd_rehash(&self, _args: &str) -> Result<Vec<ReplyType>> {
         info!("Attempting to rehash server...");
         if let Err(e) = self.server.rehash().await {
-            error!("Failed to rehash server: {}", e);
+            error!("Failed to rehash server: {e}");
         }
 
         Ok(vec![ReplyType::Server((RPL_REHASHING, "Config reloaded!".to_string()))])
@@ -737,10 +690,7 @@ impl Client {
     pub async fn handle_cmd_topic(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let nick = self.nickname.read().await.to_string();
@@ -750,14 +700,14 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} TOPIC :{}", nick, INVALID_SYNTAX),
+                format!("{nick} TOPIC :{INVALID_SYNTAX}"),
             ))])
         };
 
         if !self.server.channels.read().await.contains_key(channel) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHCHANNEL,
-                format!("{} {} :No such channel", nick, channel),
+                format!("{nick} {channel} :No such channel"),
             ))])
         }
 
@@ -767,12 +717,12 @@ impl Client {
             if topic.is_empty() {
                 return Ok(vec![ReplyType::Server((
                     RPL_NOTOPIC,
-                    format!("{} {} :No topic is set", nick, channel),
+                    format!("{nick} {channel} :No topic is set"),
                 ))])
             } else {
                 return Ok(vec![ReplyType::Server((
                     RPL_TOPIC,
-                    format!("{} {} :{}", nick, channel, topic),
+                    format!("{nick} {channel} :{topic}"),
                 ))])
             }
         };
@@ -782,7 +732,7 @@ impl Client {
             topic.strip_prefix(':').unwrap().to_string();
 
         // Send reply
-        let replies = vec![ReplyType::Client((nick, format!("TOPIC {} {}", channel, topic)))];
+        let replies = vec![ReplyType::Client((nick, format!("TOPIC {channel} {topic}")))];
 
         Ok(replies)
     }
@@ -798,7 +748,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ALREADYREGISTERED,
-                format!("{} :{}", self.nickname.read().await, ALREADY_REGISTERED),
+                format!("{} :{ALREADY_REGISTERED}", self.nickname.read().await),
             ))])
         }
 
@@ -815,7 +765,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", nick, INVALID_SYNTAX),
+                format!("{nick} USER :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -824,7 +774,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", nick, INVALID_SYNTAX),
+                format!("{nick} USER :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -833,7 +783,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", nick, INVALID_SYNTAX),
+                format!("{nick} USER :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -842,7 +792,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", nick, INVALID_SYNTAX),
+                format!("{nick} USER :{INVALID_SYNTAX}"),
             ))])
         };
 
@@ -850,7 +800,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", nick, INVALID_SYNTAX),
+                format!("{nick} USER :{INVALID_SYNTAX}"),
             ))])
         }
 
@@ -862,7 +812,7 @@ impl Client {
             if !self.is_pass_set.load(SeqCst) {
                 return Ok(vec![ReplyType::Server((
                     ERR_PASSWDMISMATCH,
-                    format!("{} PASS :{}", nick, PASSWORD_MISMATCH),
+                    format!("{nick} PASS :{PASSWORD_MISMATCH}"),
                 ))])
             }
             self.registered.store(true, SeqCst);
@@ -883,19 +833,15 @@ impl Client {
     pub async fn handle_cmd_version(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NOTREGISTERED,
-                format!("* :{}", NOT_REGISTERED),
-            ))])
+            return Ok(vec![ReplyType::Server((ERR_NOTREGISTERED, format!("* :{NOT_REGISTERED}")))])
         }
 
         let replies = vec![ReplyType::Server((
             RPL_VERSION,
             format!(
-                "{} {} {} :Let there be dark!",
+                "{} {} {SERVER_NAME} :Let there be dark!",
                 self.nickname.read().await,
-                env!("CARGO_PKG_VERSION"),
-                SERVER_NAME
+                env!("CARGO_PKG_VERSION")
             ),
         ))];
 
@@ -907,12 +853,11 @@ impl Client {
         let nick = self.nickname.read().await.to_string();
 
         let mut replies = vec![
-            ReplyType::Server((RPL_WELCOME, format!("{} :{}", nick, WELCOME))),
+            ReplyType::Server((RPL_WELCOME, format!("{nick} :{WELCOME}"))),
             ReplyType::Server((
                 RPL_YOURHOST,
                 format!(
-                    "{} :Your host is irc.dark.fi, running version {}",
-                    nick,
+                    "{nick} :Your host is irc.dark.fi, running version {}",
                     env!("CARGO_PKG_VERSION")
                 ),
             )),
@@ -943,13 +888,13 @@ impl Client {
 
                     replies.push(ReplyType::Server((
                         RPL_NAMREPLY,
-                        format!("{} = {} :{}", nick, channel, nicks.join(" ")),
+                        format!("{nick} = {channel} :{}", nicks.join(" ")),
                     )));
                 }
 
                 replies.push(ReplyType::Server((
                     RPL_ENDOFNAMES,
-                    format!("{} {} :End of NAMES list", nick, channel),
+                    format!("{nick} {channel} :End of NAMES list"),
                 )));
             }
         }
@@ -980,7 +925,7 @@ impl Client {
                 Ok(true) => continue,
                 Ok(false) => {}
                 Err(e) => {
-                    error!("[IRC CLIENT] (get_history) self.is_seen({}) failed: {}", event_id, e);
+                    error!("[IRC CLIENT] (get_history) self.is_seen({event_id}) failed: {e}");
                     return Err(e)
                 }
             }
@@ -1021,7 +966,7 @@ impl Client {
                 }
 
                 // Format the message
-                let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+                let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
 
                 // Send it to the client
                 replies.push(ReplyType::Client((privmsg.nick.clone(), msg)));
@@ -1029,7 +974,7 @@ impl Client {
 
             // Mark the message as seen for this USER
             if let Err(e) = self.mark_seen(&event_id).await {
-                error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
+                error!("[IRC CLIENT] (get_history) self.mark_seen({event_id}) failed: {e}");
                 return Err(e)
             }
         }

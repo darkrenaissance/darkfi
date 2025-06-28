@@ -236,7 +236,7 @@ impl IrcServer {
         let contents = match toml::from_str(&contents) {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed parsing TOML config: {}", e);
+                error!("Failed parsing TOML config: {e}");
                 return Err(Error::ParseFailed("Failed parsing TOML config"))
             }
         };
@@ -282,13 +282,13 @@ impl IrcServer {
                 Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
                     libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
                     _ => {
-                        error!("[IRC SERVER] Failed accepting connection: {}", e);
+                        error!("[IRC SERVER] Failed accepting connection: {e}");
                         return Err(e.into())
                     }
                 },
 
                 Err(e) => {
-                    error!("[IRC SERVER] Failed accepting new connection: {}", e);
+                    error!("[IRC SERVER] Failed accepting new connection: {e}");
                     continue
                 }
             };
@@ -299,7 +299,7 @@ impl IrcServer {
                     let stream = match acceptor.accept(stream).await {
                         Ok(s) => s,
                         Err(e) => {
-                            error!("[IRC SERVER] Failed accepting new TLS connection: {}", e);
+                            error!("[IRC SERVER] Failed accepting new TLS connection: {e}");
                             continue
                         }
                     };
@@ -311,7 +311,7 @@ impl IrcServer {
                         .process_connection(stream, peer_addr, incoming, ex.clone())
                         .await
                     {
-                        error!("[IRC SERVER] Failed processing new connection: {}", e);
+                        error!("[IRC SERVER] Failed processing new connection: {e}");
                         continue
                     };
                 }
@@ -325,13 +325,13 @@ impl IrcServer {
                         .process_connection(stream, peer_addr, incoming, ex.clone())
                         .await
                     {
-                        error!("[IRC SERVER] Failed processing new connection: {}", e);
+                        error!("[IRC SERVER] Failed processing new connection: {e}");
                         continue
                     };
                 }
             }
 
-            info!("[IRC SERVER] Accepted new client connection at: {}", peer_addr);
+            info!("[IRC SERVER] Accepted new client connection at: {peer_addr}");
         }
     }
 
@@ -355,8 +355,8 @@ impl IrcServer {
             async move { client.multiplex_connection(stream).await },
             move |res| async move {
                 match res {
-                    Ok(()) => info!("[IRC SERVER] Disconnected client from {}", peer_addr),
-                    Err(e) => error!("[IRC SERVER] Disconnected client from {}: {}", peer_addr, e),
+                    Ok(()) => info!("[IRC SERVER] Disconnected client from {peer_addr}"),
+                    Err(e) => error!("[IRC SERVER] Disconnected client from {peer_addr}: {e}"),
                 }
 
                 self.clone().clients.lock().await.remove(&port);
@@ -391,7 +391,7 @@ impl IrcServer {
                 // We will pad the name to MAX_NICK_LEN so they all look the same
                 *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
                 *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
-                debug!("Successfully encrypted message for {}", name);
+                debug!("Successfully encrypted message for {name}");
                 return
             }
         };
@@ -404,7 +404,7 @@ impl IrcServer {
             // so we can identify our messages.
             *privmsg.nick() = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
             *privmsg.msg() = saltbox::encrypt(&contact.saltbox, privmsg.msg().as_bytes());
-            debug!("Successfully encrypted message for {}", name);
+            debug!("Successfully encrypted message for {name}");
         };
     }
 
@@ -451,7 +451,7 @@ impl IrcServer {
             privmsg.channel = name.to_string();
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-            debug!("Successfully decrypted message for {}", name);
+            debug!("Successfully decrypted message for {name}");
             return
         }
 
@@ -476,7 +476,7 @@ impl IrcServer {
             privmsg.channel = name.to_string();
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-            debug!("Successfully decrypted message from {}", name);
+            debug!("Successfully decrypted message from {name}");
             return
         }
     }

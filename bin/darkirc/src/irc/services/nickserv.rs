@@ -82,7 +82,7 @@ impl NickServ {
         let Some(command) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
-                format!("{} :No text to send", nick),
+                format!("{nick} :No text to send"),
             ))])
         };
 
@@ -143,11 +143,8 @@ impl NickServ {
         let leaf_pos = leaf_pos.unwrap();
 
         // Open the sled tree
-        let db = self
-            .server
-            .darkirc
-            .sled
-            .open_tree(format!("{}{}", ACCOUNTS_DB_PREFIX, account_name))?;
+        let db =
+            self.server.darkirc.sled.open_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
 
         if !db.is_empty() {
             return Ok(vec![ReplyType::Notice((
@@ -165,7 +162,7 @@ impl NickServ {
                 return Ok(vec![ReplyType::Notice((
                     "NickServ".to_string(),
                     nick.to_string(),
-                    format!("Invalid identity_nullifier: {}", e),
+                    format!("Invalid identity_nullifier: {e}"),
                 ))])
             }
         };
@@ -176,7 +173,7 @@ impl NickServ {
                 return Ok(vec![ReplyType::Notice((
                     "NickServ".to_string(),
                     nick.to_string(),
-                    format!("Invalid identity_trapdoor: {}", e),
+                    format!("Invalid identity_trapdoor: {e}"),
                 ))])
             }
         };
@@ -187,7 +184,7 @@ impl NickServ {
                 return Ok(vec![ReplyType::Notice((
                     "NickServ".to_string(),
                     nick.to_string(),
-                    format!("Invalid leaf_pos: {}", e),
+                    format!("Invalid leaf_pos: {e}"),
                 ))])
             }
         };
@@ -200,7 +197,7 @@ impl NickServ {
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),
             nick.to_string(),
-            format!("Successfully registered account \"{}\"", account_name),
+            format!("Successfully registered account \"{account_name}\""),
         ))])
     }
 
@@ -219,12 +216,12 @@ impl NickServ {
         };
 
         // Drop the tree
-        self.server.darkirc.sled.drop_tree(format!("{}{}", ACCOUNTS_DB_PREFIX, account_name))?;
+        self.server.darkirc.sled.drop_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
 
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),
             nick.to_string(),
-            format!("Successfully deregistered account \"{}\"", account_name),
+            format!("Successfully deregistered account \"{account_name}\""),
         ))])
     }
 
