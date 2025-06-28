@@ -209,7 +209,7 @@ impl JsonRpcInterface {
         let event = Event::new(serialize_async(&genevent).await, &self.event_graph).await;
 
         if let Err(e) = self.event_graph.dag_insert(&[event.clone()]).await {
-            error!("Failed inserting new event to DAG: {}", e);
+            error!("Failed inserting new event to DAG: {e}");
         } else {
             // Otherwise, broadcast it
             self.p2p.broadcast(&EventPut(event)).await;
@@ -234,12 +234,12 @@ impl JsonRpcInterface {
             let genevent: GenEvent = match deserialize_async_partial(event.content()).await {
                 Ok((v, _)) => v,
                 Err(e) => {
-                    error!("Failed deserializing incoming event: {}", e);
+                    error!("Failed deserializing incoming event: {e}");
                     continue
                 }
             };
 
-            debug!("Marking event {} as seen", event_id);
+            debug!("Marking event {event_id} as seen");
             seen_events.push(genevent);
         }
 

@@ -42,7 +42,7 @@ impl Gen {
         let req = JsonRequest::new("add", JsonValue::Array([event].to_vec()));
         let rep = self.rpc_client.request(req).await?;
 
-        debug!("Got reply: {:?}", rep);
+        debug!("Got reply: {rep:?}");
         Ok(())
     }
 
@@ -51,7 +51,7 @@ impl Gen {
         let req = JsonRequest::new("list", JsonValue::Array([].to_vec()));
         let rep = self.rpc_client.request(req).await?;
 
-        debug!("reply: {:?}", rep);
+        debug!("reply: {rep:?}");
 
         let bytes: Vec<u8> = base64::decode(rep.get::<String>().unwrap()).unwrap();
         let events: Vec<GenEvent> = deserialize(&bytes)?;

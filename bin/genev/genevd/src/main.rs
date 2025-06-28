@@ -101,7 +101,7 @@ async fn start_sync_loop(
             continue
         }
 
-        debug!("new event: {:?}", event);
+        debug!("new event: {event:?}");
     }
 }
 
@@ -151,7 +151,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     // We'll attempt to sync 5 times
     if !settings.skip_dag_sync {
         for i in 1..=6 {
-            info!("Syncing event DAG (attempt #{})", i);
+            info!("Syncing event DAG (attempt #{i})");
             match event_graph.dag_sync().await {
                 Ok(()) => break,
                 Err(e) => {
@@ -162,7 +162,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                     } else {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                        error!("Failed syncing DAG ({e}), retrying in 10s...");
                         sleep(10).await;
                     }
                 }
@@ -186,7 +186,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "genevd", "Failed starting sync loop task: {}", e),
+                Err(e) => error!(target: "genevd", "Failed starting sync loop task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -203,14 +203,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!("Got dnet event: {event:?}");
                 dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -227,14 +227,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let deg_sub = event_graph_.deg_subscribe().await;
             loop {
                 let event = deg_sub.receive().await;
-                debug!("Got deg event: {:?}", event);
+                debug!("Got deg event: {event:?}");
                 deg_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -258,7 +258,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
-                Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {}", e),
+                Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,
