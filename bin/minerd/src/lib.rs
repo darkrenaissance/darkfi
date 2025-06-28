@@ -117,7 +117,7 @@ impl Minerd {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => node_.stop_connections().await,
-                    Err(e) => error!(target: "minerd::Minerd::start", "Failed starting JSON-RPC server: {}", e),
+                    Err(e) => error!(target: "minerd::Minerd::start", "Failed starting JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,

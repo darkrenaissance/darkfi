@@ -102,7 +102,7 @@ impl MinerNode {
             return server_error(RpcError::BlockParseError, id, None)
         };
         let block_hash = block.hash();
-        info!(target: "minerd::rpc", "Received request to mine block {} for target: {}", block_hash, target);
+        info!(target: "minerd::rpc", "Received request to mine block {block_hash} for target: {target}");
 
         // If we have a requested mining height, we'll keep dropping here.
         if self.stop_at_height > 0 && block.header.height >= self.stop_at_height {
@@ -116,12 +116,12 @@ impl MinerNode {
         };
 
         // Mine provided block
-        info!(target: "minerd::rpc", "Mining block {} for target: {}", block_hash, target);
+        info!(target: "minerd::rpc", "Mining block {block_hash} for target: {target}");
         if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal.clone()) {
-            error!(target: "minerd::rpc", "Failed mining block {} with error: {}", block_hash, e);
+            error!(target: "minerd::rpc", "Failed mining block {block_hash} with error: {e}");
             return server_error(RpcError::MiningFailed, id, None)
         }
-        info!(target: "minerd::rpc", "Mined block {} with nonce: {}", block_hash, block.header.nonce);
+        info!(target: "minerd::rpc", "Mined block {block_hash} with nonce: {}", block.header.nonce);
 
         // Return block nonce
         JsonResponse::new(JsonValue::Number(block.header.nonce as f64), id).into()
