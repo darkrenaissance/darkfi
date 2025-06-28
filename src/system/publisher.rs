@@ -45,7 +45,7 @@ impl<T: Clone> Subscription<T> {
         match message_result {
             Ok(message_result) => message_result,
             Err(err) => {
-                panic!("Subscription::receive() recv_queue failed! {}", err);
+                panic!("Subscription::receive() recv_queue failed! {err}");
             }
         }
     }
@@ -110,7 +110,7 @@ impl<T: Clone> Publisher<T> {
             if let Err(e) = sub.send(message_result.clone()).await {
                 warn!(
                     target: "system::publisher",
-                    "[system::publisher] Error returned sending message in notify_with_exclude() call! {}", e,
+                    "[system::publisher] Error returned sending message in notify_with_exclude() call! {e}"
                 );
             }
         }

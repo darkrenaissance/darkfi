@@ -136,7 +136,7 @@ impl Geode {
     /// This works for both file metadata and directory metadata.
     /// Returns (chunk hashes, [(file path, file size)]).
     async fn read_metadata(path: &PathBuf) -> Result<(Vec<blake3::Hash>, Vec<(PathBuf, u64)>)> {
-        debug!(target: "geode::read_dir_metadata()", "Reading chunks from {:?} (dir)", path);
+        debug!(target: "geode::read_dir_metadata()", "Reading chunks from {path:?} (dir)");
 
         let mut chunk_hashes = vec![];
         let mut files = vec![];
@@ -230,7 +230,7 @@ impl Geode {
                 if let Err(e) = fs::remove_file(path).await {
                     warn!(
                        target: "geode::garbage_collect()",
-                       "[Geode] Garbage collect failed to remove corrupted metadata: {}", e,
+                       "[Geode] Garbage collect failed to remove corrupted metadata: {e}"
                     );
                 }
 
@@ -393,7 +393,7 @@ impl Geode {
             let chunk = match self.read_chunk(&mut chunked_file.get_fileseq(), &chunk_index).await {
                 Ok(c) => c,
                 Err(e) => {
-                    warn!("Error while verifying chunks: {}", e);
+                    warn!("Error while verifying chunks: {e}");
                     break
                 }
             };
@@ -416,7 +416,7 @@ impl Geode {
     /// the read failed in any way (could also be the file does not exist).
     pub async fn get(&self, hash: &blake3::Hash, path: &Path) -> Result<ChunkedStorage> {
         let hash_str = hash_to_string(hash);
-        info!(target: "geode::get()", "[Geode] Getting chunks for {}...", hash_str);
+        info!(target: "geode::get()", "[Geode] Getting chunks for {hash_str}...");
 
         // Try to read the file or dir metadata. If it's corrupt, return an error signalling
         // that garbage collection needs to run.

@@ -112,14 +112,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!("Got dnet event: {event:?}");
                 dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -141,7 +141,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => dchat.stop_connections().await,
-                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+                Err(e) => error!("Failed stopping JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,

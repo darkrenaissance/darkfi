@@ -61,14 +61,14 @@ pub async fn check_clock(peers: &[Url]) -> Result<()> {
     let mut r = 0;
     while r < RETRIES {
         if let Err(e) = clock_check(peers).await {
-            debug!(target: "rpc::clock_sync", "Error during clock check: {:#?}", e);
+            debug!(target: "rpc::clock_sync", "Error during clock check: {e:#?}");
             r += 1;
             continue
         };
         break
     }
 
-    debug!(target: "rpc::clock_sync", "System clock check finished. Retries: {}", r);
+    debug!(target: "rpc::clock_sync", "System clock check finished. Retries: {r}");
     if r == RETRIES {
         return Err(Error::InvalidClock)
     }
@@ -102,9 +102,9 @@ async fn clock_check(_peers: &[Url]) -> Result<()> {
         Some(p) => Some(p.checked_add(requests_elapsed_time)?),
     };
 
-    debug!(target: "rpc::clock_sync", "peer_time: {:#?}", peer_time);
-    debug!(target: "rpc::clock_sync", "ntp_time: {:#?}", ntp_time);
-    debug!(target: "rpc::clock_sync", "system_time: {:#?}", system_time);
+    debug!(target: "rpc::clock_sync", "peer_time: {peer_time:#?}");
+    debug!(target: "rpc::clock_sync", "ntp_time: {ntp_time:#?}");
+    debug!(target: "rpc::clock_sync", "system_time: {system_time:#?}");
 
     // We verify that system time is equal to peer (if exists) and ntp times
     let check = match peer_time {

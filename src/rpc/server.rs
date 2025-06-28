@@ -71,7 +71,7 @@ pub trait RequestHandler<T>: Sync + Send {
     async fn stop_connections(&self) {
         info!(target: "rpc::server", "[RPC] Server stopped, closing connections");
         for (i, task) in self.connections().await.iter().enumerate() {
-            debug!(target: "rpc::server", "Stopping connection #{}", i);
+            debug!(target: "rpc::server", "Stopping connection #{i}");
             task.stop().await;
         }
     }
@@ -115,7 +115,7 @@ async fn handle_request<T>(
                         let notification = subscription.receive().await;
 
                         // Push notification
-                        debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
+                        debug!(target: "rpc::server", "{addr_} <-- {}", notification.stringify().unwrap());
                         let notification = JsonResult::Notification(notification);
 
                         let mut writer_lock = writer_.lock().await;
@@ -153,7 +153,7 @@ async fn handle_request<T>(
 
         JsonResult::SubscriberWithReply(subscriber, reply) => {
             // Write the response
-            debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
+            debug!(target: "rpc::server", "{addr} <-- {}", reply.stringify()?);
             let mut writer_lock = writer.lock().await;
             if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &reply.into()).await?;
@@ -179,7 +179,7 @@ async fn handle_request<T>(
                         let notification = subscription.receive().await;
 
                         // Push notification
-                        debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
+                        debug!(target: "rpc::server", "{addr_} <-- {}", notification.stringify().unwrap());
                         let notification = JsonResult::Notification(notification);
 
                         let mut writer_lock = writer_.lock().await;
@@ -220,7 +220,7 @@ async fn handle_request<T>(
         }
 
         JsonResult::Response(ref v) => {
-            debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+            debug!(target: "rpc::server", "{addr} <-- {}", v.stringify()?);
             let mut writer_lock = writer.lock().await;
             if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &rep).await?;
@@ -231,7 +231,7 @@ async fn handle_request<T>(
         }
 
         JsonResult::Error(ref v) => {
-            debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+            debug!(target: "rpc::server", "{addr} <-- {}", v.stringify()?);
             let mut writer_lock = writer.lock().await;
             if settings.use_http() {
                 http_write_to_stream(&mut writer_lock, &rep).await?;
@@ -288,7 +288,7 @@ pub async fn accept<'a, T: 'a>(
             Err(e) => {
                 error!(
                     target: "rpc::server::accept()",
-                    "[RPC SERVER] Failed parsing string from read buffer: {}", e,
+                    "[RPC SERVER] Failed parsing string from read buffer: {e}"
                 );
                 return Err(e.into())
             }
@@ -300,7 +300,7 @@ pub async fn accept<'a, T: 'a>(
             Err(e) => {
                 error!(
                     target: "rpc::server::accept()",
-                    "[RPC SERVER] Failed parsing JSON string: {}", e,
+                    "[RPC SERVER] Failed parsing JSON string: {e}"
                 );
                 return Err(e.into())
             }
@@ -312,13 +312,13 @@ pub async fn accept<'a, T: 'a>(
             Err(e) => {
                 error!(
                     target: "rpc::server::accept()",
-                    "[RPC SERVER] Failed casting JSON to a JsonRequest: {}", e,
+                    "[RPC SERVER] Failed casting JSON to a JsonRequest: {e}"
                 );
                 return Err(e.into())
             }
         };
 
-        debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);
+        debug!(target: "rpc::server", "{addr} --> {}", val.stringify()?);
 
         // Create a new task to handle request in the background
         let task = StoppableTask::new();
@@ -367,7 +367,7 @@ async fn run_accept_loop<'a, T: 'a>(
         match listener.next().await {
             Ok((stream, url)) => {
                 let rh_ = rh.clone();
-                info!(target: "rpc::server", "[RPC] Server accepted conn from {}", url);
+                info!(target: "rpc::server", "[RPC] Server accepted conn from {url}");
 
                 let (reader, writer) = smol::io::split(stream);
                 let reader = Arc::new(Mutex::new(BufReader::new(reader)));
@@ -387,7 +387,7 @@ async fn run_accept_loop<'a, T: 'a>(
                         ex_,
                     ),
                     |_| async move {
-                        info!(target: "rpc::server", "[RPC] Closed conn from {}", url);
+                        info!(target: "rpc::server", "[RPC] Closed conn from {url}");
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
                     Error::ChannelStopped,
@@ -403,7 +403,7 @@ async fn run_accept_loop<'a, T: 'a>(
                 _ => {
                     error!(
                         target: "rpc::server::run_accept_loop()",
-                        "[RPC] Server failed listening: {}", e,
+                        "[RPC] Server failed listening: {e}"
                     );
                     error!(
                         target: "rpc::server::run_accept_loop()",
@@ -420,7 +420,7 @@ async fn run_accept_loop<'a, T: 'a>(
             Err(e) => {
                 error!(
                     target: "rpc::server::run_accept_loop()",
-                    "[RPC] Unhandled listener.next() error: {}", e,
+                    "[RPC] Unhandled listener.next() error: {e}"
                 );
                 error!(
                     target: "rpc::server::run_accept_loop()",
@@ -510,7 +510,7 @@ mod tests {
                         Ok(()) | Err(Error::RpcServerStopped) => {
                             rpc_server_.stop_connections().await
                         }
-                        Err(e) => panic!("{}", e),
+                        Err(e) => panic!("{e}"),
                     }
                 },
                 Error::RpcServerStopped,

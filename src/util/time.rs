@@ -103,7 +103,7 @@ impl From<u64> for Timestamp {
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let date = timestamp_to_date(self.0, DateFormat::DateTime);
-        write!(f, "{}", date)
+        write!(f, "{date}")
     }
 }
 
@@ -138,7 +138,7 @@ impl NanoTimestamp {
 impl fmt::Display for NanoTimestamp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let date = timestamp_to_date(self.0.try_into().unwrap(), DateFormat::Nanos);
-        write!(f, "{}", date)
+        write!(f, "{date}")
     }
 }
 
@@ -350,20 +350,20 @@ pub fn fmt_duration(duration: Duration) -> String {
 
     // Include non-zero components for dys, hours and minutes
     if days > 0 {
-        parts.push(format!("{}d", days));
+        parts.push(format!("{days}d"));
     }
     if hours > 0 {
-        parts.push(format!("{}h", hours));
+        parts.push(format!("{hours}h"));
     }
     if minutes > 0 {
-        parts.push(format!("{}m", minutes));
+        parts.push(format!("{minutes}m"));
     }
 
     // Include seconds if they are non-zero or if all other components are zero (i.e., 0s)
     if seconds > 0.0 || (days == 0 && hours == 0 && minutes == 0) {
         // For durations shorter than 1 minute, include fractional seconds up to 9 decimal places
         if days == 0 && hours == 0 && minutes == 0 && seconds.fract() != 0.0 {
-            parts.push(format!("{:.9}s", seconds));
+            parts.push(format!("{seconds:.9}s"));
         } else {
             // Otherwise, include rounded whole seconds
             parts.push(format!("{}s", seconds.round() as u64));
@@ -454,7 +454,7 @@ mod tests {
 
         for timestamp_str in invalid_timestamps {
             let result = DateTime::from_timestamp_str(timestamp_str);
-            assert!(result.is_err(), "Expected error for invalid timestamp '{}'", timestamp_str);
+            assert!(result.is_err(), "Expected error for invalid timestamp '{timestamp_str}'");
         }
     }
     #[test]

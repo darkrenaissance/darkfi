@@ -104,7 +104,7 @@ pub trait DhtHandler {
             let ping_res = self.ping(channel.clone()).await;
 
             if let Err(e) = ping_res {
-                warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {}", channel.address(), e);
+                warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
                 channel.stop().await;
                 continue;
             }
@@ -305,7 +305,7 @@ pub trait DhtHandler {
                     }
                 }
                 Err(e) => {
-                    warn!(target: "dht::DhtHandler::lookup_nodes", "Error looking for nodes: {}", e);
+                    warn!(target: "dht::DhtHandler::lookup_nodes", "Error looking for nodes: {e}");
                 }
             }
         }
@@ -378,11 +378,11 @@ pub trait DhtHandler {
             let connector = Connector::new(self.dht().p2p.settings(), session_weak);
             let dur = Duration::from_secs(self.dht().settings.timeout);
             let Ok(connect_res) = timeout(dur, connector.connect(&addr)).await else {
-                warn!(target: "dht::DhtHandler::get_channel()", "Timeout trying to connect to {}", addr);
+                warn!(target: "dht::DhtHandler::get_channel()", "Timeout trying to connect to {addr}");
                 return Err(Error::ConnectTimeout);
             };
             if connect_res.is_err() {
-                warn!(target: "dht::DhtHandler::get_channel()", "Error while connecting to {}: {}", addr, connect_res.unwrap_err());
+                warn!(target: "dht::DhtHandler::get_channel()", "Error while connecting to {addr}: {}", connect_res.unwrap_err());
                 continue;
             }
             let (_, channel) = connect_res.unwrap();

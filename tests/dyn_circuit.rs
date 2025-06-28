@@ -115,7 +115,7 @@ fn dyn_circuit() {
         let prover = MockProver::run(K, &circuit, vec![public_inputs]).unwrap();
         prover.assert_satisfied();
 
-        let title = format!("target/dynamic_circuit_{:0>2}.png", i);
+        let title = format!("target/dynamic_circuit_{i:0>2}.png");
         let root = BitMapBackend::new(&title, (800, 600)).into_drawing_area();
         CircuitLayout::default().render(K, &circuit, &root).unwrap();
     }

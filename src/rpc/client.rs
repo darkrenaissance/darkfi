@@ -82,7 +82,7 @@ impl RpcClient {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
-                    Err(e) => error!(target: "rpc::client", "[RPC] Client error: {}", e),
+                    Err(e) => error!(target: "rpc::client", "[RPC] Client error: {e}"),
                 }
             },
             Error::RpcClientStopped,
@@ -334,7 +334,7 @@ impl RpcChadClient {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
-                    Err(e) => error!(target: "rpc::chad_client", "[RPC] Client error: {}", e),
+                    Err(e) => error!(target: "rpc::chad_client", "[RPC] Client error: {e}"),
                 }
             },
             Error::RpcClientStopped,
@@ -419,7 +419,7 @@ impl RpcChadClient {
 
                     // Check if the IDs match
                     if req_id != rep.id {
-                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({})", rep.id, req_id);
+                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({req_id})", rep.id);
                         continue
                     }
 
@@ -431,7 +431,7 @@ impl RpcChadClient {
 
                     // Check if the IDs match
                     if req_id != e.id {
-                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({})", e.id, req_id);
+                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({req_id})", e.id);
                         continue
                     }
 

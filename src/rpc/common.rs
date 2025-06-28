@@ -69,7 +69,7 @@ pub(super) async fn http_read_from_stream_request(
     let _body_offset = match req.parse(buf) {
         Ok(v) => v.unwrap(), // TODO: This should check httparse::Status::is_partial()
         Err(e) => {
-            error!("[RPC] Failed parsing HTTP request: {}", e);
+            error!("[RPC] Failed parsing HTTP request: {e}");
             return Err(io::ErrorKind::InvalidData.into())
         }
     };
@@ -139,7 +139,7 @@ pub(super) async fn http_read_from_stream_response(
     let _body_offset = match resp.parse(buf) {
         Ok(v) => v.unwrap(), // TODO: This should check httparse::Status::is_partial()
         Err(e) => {
-            error!("[RPC] Failed parsing HTTP response: {}", e);
+            error!("[RPC] Failed parsing HTTP response: {e}");
             return Err(io::ErrorKind::InvalidData.into())
         }
     };

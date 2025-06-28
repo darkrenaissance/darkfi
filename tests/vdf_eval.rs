@@ -41,16 +41,16 @@ fn evaluate_vdf() {
 
     for n_steps in steps {
         let now = Instant::now();
-        print!("E with N={} ... ", n_steps);
+        print!("E with N={n_steps} ... ");
         let witness = mimc_vdf::eval(&challenge, n_steps);
         let eval_elapsed = now.elapsed();
-        println!("{:?}", eval_elapsed);
+        println!("{eval_elapsed:?}");
 
         let now = Instant::now();
-        print!("V with N={} ... ", n_steps);
+        print!("V with N={n_steps} ... ");
         assert!(mimc_vdf::verify(&challenge, n_steps, &witness));
         let verify_elapsed = now.elapsed();
-        println!("{:?}", verify_elapsed);
+        println!("{verify_elapsed:?}");
 
         map.insert(n_steps, (eval_elapsed, verify_elapsed));
     }
@@ -60,8 +60,8 @@ fn evaluate_vdf() {
     table.set_titles(row!["n_steps", "eval time", "verify time"]);
     for n_steps in steps {
         let (eval, verify) = map.get(&n_steps).unwrap();
-        table.add_row(row![format!("{}", n_steps), format!("{:?}", eval), format!("{:?}", verify)]);
+        table.add_row(row![format!("{n_steps}"), format!("{eval:?}"), format!("{verify:?}")]);
     }
 
-    println!("\n\n{}", table);
+    println!("\n\n{table}");
 }

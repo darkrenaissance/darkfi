@@ -64,7 +64,7 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
 
         let mut file = fs::File::create(path)?;
         file.write_all(contents)?;
-        println!("Config file created in {:?}. Please review it and try again.", path);
+        println!("Config file created in {path:?}. Please review it and try again.");
         std::process::exit(2);
     }
 
@@ -368,11 +368,11 @@ macro_rules! async_daemonize {
 }
 
 pub fn fg_red(message: &str) -> String {
-    format!("\x1b[31m{}\x1b[0m", message)
+    format!("\x1b[31m{message}\x1b[0m")
 }
 
 pub fn fg_green(message: &str) -> String {
-    format!("\x1b[32m{}\x1b[0m", message)
+    format!("\x1b[32m{message}\x1b[0m")
 }
 
 pub fn fg_reset() -> String {

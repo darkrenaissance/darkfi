@@ -119,7 +119,7 @@ fn jsonrpc_reqrep() -> Result<()> {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
-                    Err(e) => eprintln!("Failed starting JSON-RPC server: {}", e),
+                    Err(e) => eprintln!("Failed starting JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,
@@ -172,7 +172,7 @@ fn http_jsonrpc_reqrep() -> Result<()> {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
-                    Err(e) => eprintln!("Failed starting JSON-RPC server: {}", e),
+                    Err(e) => eprintln!("Failed starting JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,
