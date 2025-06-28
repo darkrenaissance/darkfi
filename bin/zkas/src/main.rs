@@ -48,7 +48,7 @@ Options:
 "#;
 
 fn usage() {
-    print!("{}{}\n{}", ANSI_LOGO, ABOUT, USAGE);
+    print!("{ANSI_LOGO}{ABOUT}\n{USAGE}");
 }
 
 fn main() -> ExitCode {
@@ -82,7 +82,7 @@ fn main() -> ExitCode {
     let source = match read_to_string(filename) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Error: Failed reading from \"{}\". {}", filename, e);
+            eprintln!("Error: Failed reading from \"{filename}\". {e}");
             return ExitCode::FAILURE
         }
     };
@@ -146,18 +146,18 @@ fn main() -> ExitCode {
     };
     // ANCHOR_END: zkas
 
-    let output = if output.is_empty() { format!("{}.bin", filename) } else { output };
+    let output = if output.is_empty() { format!("{filename}.bin") } else { output };
 
     let mut file = match File::create(&output) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Error: Failed to create \"{}\". {}", output, e);
+            eprintln!("Error: Failed to create \"{output}\". {e}");
             return ExitCode::FAILURE
         }
     };
 
     if let Err(e) = file.write_all(&bincode) {
-        eprintln!("Error: Failed to write bincode to \"{}\". {}", output, e);
+        eprintln!("Error: Failed to write bincode to \"{output}\". {e}");
         return ExitCode::FAILURE
     };
 
@@ -165,7 +165,7 @@ fn main() -> ExitCode {
 
     if eflag {
         let zkbin = ZkBinary::decode(&bincode).unwrap();
-        println!("{:#?}", zkbin);
+        println!("{zkbin:#?}");
     }
 
     ExitCode::SUCCESS
