@@ -178,8 +178,7 @@ impl Lilith {
         p2p: P2pPtr,
         refinery_interval: u64,
     ) -> Result<()> {
-        debug!(target: "net::refinery::whitelist_refinery", "Starting whitelist refinery for \"{}\"",
-           network_name);
+        debug!(target: "net::refinery::whitelist_refinery", "Starting whitelist refinery for \"{network_name}\"");
 
         let hosts = p2p.hosts();
 
@@ -200,7 +199,7 @@ impl Lilith {
 
                     if !p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
                         debug!(target: "net::refinery:::whitelist_refinery",
-                       "Host {} is not responsive. Downgrading from whitelist", url);
+                       "Host {url} is not responsive. Downgrading from whitelist");
 
                         hosts.greylist_host(url, *last_seen)?;
 
@@ -208,7 +207,7 @@ impl Lilith {
                     }
 
                     debug!(target: "net::refinery::whitelist_refinery",
-                   "Peer {} is responsive. Updating last_seen", url);
+                   "Peer {url} is responsive. Updating last_seen");
 
                     // This node is active. Update the last seen field.
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
@@ -374,7 +373,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
     let p2p = P2p::new(settings, ex.clone()).await?;
 
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
-    info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
+    info!(target: "lilith", "Starting seed network node for \"{name}\" on {addrs_str:?}");
     p2p.clone().start().await?;
 
     let spawn = Spawn { name, p2p };
@@ -399,7 +398,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         match spawn_net(name.to_string(), info, ex.clone()).await {
             Ok(spawn) => networks.push(spawn),
             Err(e) => {
-                error!(target: "lilith", "Failed to start P2P network seed for \"{}\": {}", name, e);
+                error!(target: "lilith", "Failed to start P2P network seed for \"{name}\": {e}");
                 exit(1);
             }
         }
@@ -416,7 +415,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "lilith", "Failed starting refinery task for \"{}\": {}", name, e),
+                    Err(e) => error!(target: "lilith", "Failed starting refinery task for \"{name}\": {e}"),
                 }
             },
             Error::DetachedTaskStopped,
@@ -435,7 +434,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => lilith_.stop_connections().await,
-                Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
+                Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,
