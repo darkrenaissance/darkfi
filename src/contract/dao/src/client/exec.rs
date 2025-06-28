@@ -134,7 +134,7 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.signature_secret.inner())),
         ]);
 
-        debug!(target: "contract::dao::client::exec", "proposal_bulla: {:?}", proposal_bulla);
+        debug!(target: "contract::dao::client::exec", "proposal_bulla: {proposal_bulla:?}");
         let public_inputs = vec![
             proposal_bulla.inner(),
             proposal_auth_calls_commit,

@@ -130,7 +130,7 @@ impl GenesisMintCallBuilder {
                 blind: Blind::random(&mut OsRng),
             };
 
-            debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output {}", i);
+            debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output {i}");
             let (proof, public_inputs) = create_transfer_mint_proof(
                 &self.mint_zkbin,
                 &self.mint_pk,

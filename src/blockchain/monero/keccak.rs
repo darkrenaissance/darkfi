@@ -100,8 +100,8 @@ fn test_keccak_serde() {
     let mut digest2 = [0u8; 32];
     de.finalize(&mut digest2);
 
-    println!("{:?}", digest1);
-    println!("{:?}", digest2);
+    println!("{digest1:?}");
+    println!("{digest2:?}");
 
     assert_eq!(digest1, digest2);
 }

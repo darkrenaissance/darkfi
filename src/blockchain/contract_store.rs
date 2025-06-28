@@ -91,7 +91,7 @@ impl ContractStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<sled::Tree> {
-        debug!(target: "blockchain::contractstore", "Looking up state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Looking up state tree for {contract_id}:{tree_name}");
 
         // A guard to make sure we went through init()
         let contract_id_bytes = serialize(contract_id);
@@ -122,7 +122,7 @@ impl ContractStore {
     /// NOTE: this function is not used right now, we keep it for future proofing,
     ///       and its obviously untested.
     pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
-        debug!(target: "blockchain::contractstore", "Removing state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Removing state tree for {contract_id}:{tree_name}");
 
         // A guard to make sure we went through init()
         let contract_id_bytes = serialize(contract_id);
@@ -158,7 +158,7 @@ impl ContractStore {
         contract_id: &ContractId,
         zkas_ns: &str,
     ) -> Result<(ZkBinary, VerifyingKey)> {
-        debug!(target: "blockchain::contractstore", "Looking up \"{}:{}\" zkas circuit & vk", contract_id, zkas_ns);
+        debug!(target: "blockchain::contractstore", "Looking up \"{contract_id}:{zkas_ns}\" zkas circuit & vk");
 
         let zkas_tree = self.lookup(db, contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
@@ -219,7 +219,7 @@ impl ContractStore {
         tree_name: &str,
         key: &[u8],
     ) -> Result<Vec<u8>> {
-        debug!(target: "blockchain::contractstore", "Looking up state tree value for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Looking up state tree value for {contract_id}:{tree_name}");
 
         // Grab the state tree
         let state_tree = self.lookup(db, contract_id, tree_name)?;
@@ -228,8 +228,7 @@ impl ContractStore {
         match state_tree.get(key)? {
             Some(value) => Ok(value.to_vec()),
             None => Err(Error::DatabaseError(format!(
-                "State tree {}:{} doesn't contain key: {:?}",
-                contract_id, tree_name, key
+                "State tree {contract_id}:{tree_name} doesn't contain key: {key:?}"
             ))),
         }
     }
@@ -242,7 +241,7 @@ impl ContractStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>> {
-        debug!(target: "blockchain::contractstore", "Looking up state tree records for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Looking up state tree records for {contract_id}:{tree_name}");
 
         // Grab the state tree
         let state_tree = self.lookup(db, contract_id, tree_name)?;
@@ -344,7 +343,7 @@ impl ContractStoreOverlay {
         if let Err(e) =
             self.0.lock().unwrap().insert(SLED_BINCODE_TREE, &serialize(&contract_id), bincode)
         {
-            error!(target: "blockchain::contractstoreoverlay", "Failed to insert bincode to Wasm tree: {}", e);
+            error!(target: "blockchain::contractstoreoverlay", "Failed to insert bincode to Wasm tree: {e}");
             return Err(e.into())
         }
 
@@ -362,7 +361,7 @@ impl ContractStoreOverlay {
     /// the main `ContractStateStoreOverlay` tree and a handle to it will be
     /// returned.
     pub fn init(&self, contract_id: &ContractId, tree_name: &str) -> Result<[u8; 32]> {
-        debug!(target: "blockchain::contractstoreoverlay", "Initializing state overlay tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstoreoverlay", "Initializing state overlay tree for {contract_id}:{tree_name}");
         let mut lock = self.0.lock().unwrap();
 
         // See if there are existing state trees.
@@ -395,7 +394,7 @@ impl ContractStoreOverlay {
     /// state has been found, a handle to it will be returned. Otherwise, we
     /// return an error.
     pub fn lookup(&self, contract_id: &ContractId, tree_name: &str) -> Result<[u8; 32]> {
-        debug!(target: "blockchain::contractstoreoverlay", "Looking up state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstoreoverlay", "Looking up state tree for {contract_id}:{tree_name}");
         let mut lock = self.0.lock().unwrap();
 
         // A guard to make sure we went through init()
@@ -426,7 +425,7 @@ impl ContractStoreOverlay {
         contract_id: &ContractId,
         zkas_ns: &str,
     ) -> Result<(ZkBinary, VerifyingKey)> {
-        debug!(target: "blockchain::contractstore", "Looking up \"{}:{}\" zkas circuit & vk", contract_id, zkas_ns);
+        debug!(target: "blockchain::contractstore", "Looking up \"{contract_id}:{zkas_ns}\" zkas circuit & vk");
 
         let zkas_tree = self.lookup(contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
 

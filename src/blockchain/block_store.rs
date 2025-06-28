@@ -511,10 +511,7 @@ impl BlockStore {
     /// returning a collection of block heights with their associated [`HeaderHash`]s.
     pub fn get_order_by_range(&self, start: u32, end: u32) -> Result<Vec<(u32, HeaderHash)>> {
         if start >= end {
-            return Err(Error::DatabaseError(format!(
-                "Heights range is invalid: {}..{}",
-                start, end
-            )))
+            return Err(Error::DatabaseError(format!("Heights range is invalid: {start}..{end}")))
         }
 
         let mut blocks = vec![];

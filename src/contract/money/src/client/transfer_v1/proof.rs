@@ -175,7 +175,7 @@ pub fn create_transfer_mint_proof(
         user_data,
         blind: coin_blind,
     };
-    debug!(target: "contract::money::client::transfer::proof", "Created coin: {:?}", coin);
+    debug!(target: "contract::money::client::transfer::proof", "Created coin: {coin:?}");
     let coin = coin.to_coin();
 
     let public_inputs = TransferMintRevealed { coin, value_commit, token_commit };

@@ -78,7 +78,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
     let mut vks = None;
 
     if pks_path.exists() {
-        debug!("Found {:?}", pks_path);
+        debug!("Found {pks_path:?}");
         let mut f = File::open(pks_path.clone())?;
         let mut data = vec![];
         f.read_to_end(&mut data)?;
@@ -86,8 +86,8 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         let known_hash = blake3::Hash::from_hex(PKS_HASH)?;
         let found_hash = blake3::hash(&data);
 
-        debug!("Known PKS hash: {}", known_hash);
-        debug!("Found PKS hash: {}", found_hash);
+        debug!("Known PKS hash: {known_hash}");
+        debug!("Found PKS hash: {found_hash}");
 
         if known_hash == found_hash {
             pks = Some(deserialize(&data)?)
@@ -97,7 +97,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
     }
 
     if vks_path.exists() {
-        debug!("Found {:?}", vks_path);
+        debug!("Found {vks_path:?}");
         let mut f = File::open(vks_path.clone())?;
         let mut data = vec![];
         f.read_to_end(&mut data)?;
@@ -105,8 +105,8 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         let known_hash = blake3::Hash::from_hex(VKS_HASH)?;
         let found_hash = blake3::hash(&data);
 
-        debug!("Known VKS hash: {}", known_hash);
-        debug!("Found VKS hash: {}", found_hash);
+        debug!("Known VKS hash: {known_hash}");
+        debug!("Found VKS hash: {found_hash}");
 
         if known_hash == found_hash {
             vks = Some(deserialize(&data)?)
@@ -161,18 +161,18 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         vks.push((bincode.to_vec(), zkbin.namespace.clone(), vk_buf));
     }
 
-    debug!("Writing PKs to {:?}", pks_path);
+    debug!("Writing PKs to {pks_path:?}");
     let mut f = File::create(&pks_path)?;
     let ser = serialize(&pks);
     let hash = blake3::hash(&ser);
-    debug!("{:?} {}", pks_path, hash);
+    debug!("{pks_path:?} {hash}");
     f.write_all(&ser)?;
 
-    debug!("Writing VKs to {:?}", vks_path);
+    debug!("Writing VKs to {vks_path:?}");
     let mut f = File::create(&vks_path)?;
     let ser = serialize(&vks);
     let hash = blake3::hash(&ser);
-    debug!("{:?} {}", vks_path, hash);
+    debug!("{vks_path:?} {hash}");
     f.write_all(&ser)?;
 
     Ok((pks, vks))
@@ -216,7 +216,7 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
                 dao_tree.insert(key, value)?;
             }
 
-            x => panic!("Found unhandled zkas namespace {}", x),
+            x => panic!("Found unhandled zkas namespace {x}"),
         }
     }
 

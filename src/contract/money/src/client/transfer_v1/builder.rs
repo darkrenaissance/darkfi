@@ -99,7 +99,7 @@ impl TransferCallBuilder {
             let signature_secret = SecretKey::random(&mut OsRng);
             signature_secrets.push(signature_secret);
 
-            debug!(target: "contract::money::client::transfer::build", "Creating transfer burn proof for input {}", i);
+            debug!(target: "contract::money::client::transfer::build", "Creating transfer burn proof for input {i}");
             let (proof, public_inputs) = create_transfer_burn_proof(
                 &self.burn_zkbin,
                 &self.burn_pk,
@@ -139,7 +139,7 @@ impl TransferCallBuilder {
 
             output_blinds.push(value_blind);
 
-            debug!(target: "contract::money::client::transfer::build", "Creating transfer mint proof for output {}", i);
+            debug!(target: "contract::money::client::transfer::build", "Creating transfer mint proof for output {i}");
             let (proof, public_inputs) = create_transfer_mint_proof(
                 &self.mint_zkbin,
                 &self.mint_pk,

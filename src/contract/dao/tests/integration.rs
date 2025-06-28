@@ -790,10 +790,10 @@ fn count_votes(
             true => "yes",
             false => "no",
         };
-        info!("Voter {} voted {} with {} tokens in vote", i, vote_result, all_vote_value);
+        info!("Voter {i} voted {vote_result} with {all_vote_value} tokens in vote");
     }
 
-    info!("Vote outcome = {} / {}", total_yes_vote_value, total_all_vote_value);
+    info!("Vote outcome = {total_yes_vote_value} / {total_all_vote_value}");
 
     assert!(
         blind_total_vote.all_vote_commit ==

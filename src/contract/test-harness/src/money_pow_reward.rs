@@ -105,7 +105,7 @@ impl TestHarness {
         holders: &[Holder],
     ) -> Result<Vec<OwnCoin>> {
         // Build the POW reward transaction
-        info!("Building PoWReward transaction for {:?}", miner);
+        info!("Building PoWReward transaction for {miner:?}");
         let (tx, params) = self.pow_reward(miner, None, None, None).await?;
 
         // Fetch the last block in the blockchain

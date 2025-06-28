@@ -187,7 +187,7 @@ impl fmt::Display for Header {
             self.pow_data,
         );
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

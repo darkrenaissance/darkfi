@@ -58,7 +58,7 @@ pub async fn verify_genesis_block(
     block_target: u32,
 ) -> Result<()> {
     let block_hash = block.hash().as_string();
-    debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
+    debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {block_hash}");
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
@@ -136,7 +136,7 @@ pub async fn verify_genesis_block(
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
 
-    debug!(target: "validator::verification::verify_genesis_block", "Genesis block {} verified successfully", block_hash);
+    debug!(target: "validator::verification::verify_genesis_block", "Genesis block {block_hash} verified successfully");
     Ok(())
 }
 
@@ -209,7 +209,7 @@ pub async fn verify_block(
     verify_fees: bool,
 ) -> Result<()> {
     let block_hash = block.hash();
-    debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
+    debug!(target: "validator::verification::verify_block", "Validating block {block_hash}");
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
@@ -279,7 +279,7 @@ pub async fn verify_block(
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
 
-    debug!(target: "validator::verification::verify_block", "Block {} verified successfully", block_hash);
+    debug!(target: "validator::verification::verify_block", "Block {block_hash} verified successfully");
     Ok(())
 }
 
@@ -292,7 +292,7 @@ pub async fn verify_checkpoint_block(
     block_target: u32,
 ) -> Result<()> {
     let block_hash = block.hash();
-    debug!(target: "validator::verification::verify_checkpoint_block", "Validating block {}", block_hash);
+    debug!(target: "validator::verification::verify_checkpoint_block", "Validating block {block_hash}");
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
@@ -357,7 +357,7 @@ pub async fn verify_checkpoint_block(
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
 
-    debug!(target: "validator::verification::verify_checkpoint_block", "Block {} verified successfully", block_hash);
+    debug!(target: "validator::verification::verify_checkpoint_block", "Block {block_hash} verified successfully");
     Ok(())
 }
 
@@ -365,7 +365,7 @@ pub async fn verify_checkpoint_block(
 /// over blocks header hash.
 pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> Result<()> {
     if !public_key.verify(block.header.hash().inner(), &block.signature) {
-        warn!(target: "validator::verification::verify_producer_signature", "Proposer {} signature could not be verified", public_key);
+        warn!(target: "validator::verification::verify_producer_signature", "Proposer {public_key} signature could not be verified");
         return Err(Error::InvalidSignature)
     }
 
@@ -385,7 +385,7 @@ pub async fn verify_producer_transaction(
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash();
-    debug!(target: "validator::verification::verify_producer_transaction", "Validating producer transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Validating producer transaction {tx_hash}");
 
     // Transaction must be a PoW reward one
     if !tx.is_pow_reward() {
@@ -480,24 +480,24 @@ pub async fn verify_producer_transaction(
 
     // When we're done executing over the tx's contract call, we now move on with verification.
     // First we verify the signatures as that's cheaper, and then finally we verify the ZK proofs.
-    debug!(target: "validator::verification::verify_producer_transaction", "Verifying signatures for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Verifying signatures for transaction {tx_hash}");
     if sig_table.len() != tx.signatures.len() {
-        error!(target: "validator::verification::verify_producer_transaction", "Incorrect number of signatures in tx {}", tx_hash);
+        error!(target: "validator::verification::verify_producer_transaction", "Incorrect number of signatures in tx {tx_hash}");
         return Err(TxVerifyFailed::MissingSignatures.into())
     }
 
     // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
 
     if let Err(e) = tx.verify_sigs(sig_table) {
-        error!(target: "validator::verification::verify_producer_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator::verification::verify_producer_transaction", "Signature verification for tx {tx_hash} failed: {e}");
         return Err(TxVerifyFailed::InvalidSignature.into())
     }
 
     debug!(target: "validator::verification::verify_producer_transaction", "Signature verification successful");
 
-    debug!(target: "validator::verification::verify_producer_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Verifying ZK proofs for transaction {tx_hash}");
     if let Err(e) = tx.verify_zkps(&verifying_keys, zkp_table).await {
-        error!(target: "validator::verification::verify_producer_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator::verification::verify_producer_transaction", "ZK proof verification for tx {tx_hash} failed: {e}");
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
     debug!(target: "validator::verification::verify_producer_transaction", "ZK proof verification successful");
@@ -505,7 +505,7 @@ pub async fn verify_producer_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::verify_producer_transaction", "Producer transaction {} verified successfully", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Producer transaction {tx_hash} verified successfully");
 
     Ok(signature_public_key)
 }
@@ -520,7 +520,7 @@ pub async fn apply_producer_transaction(
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash();
-    debug!(target: "validator::verification::apply_producer_transaction", "Applying producer transaction {}", tx_hash);
+    debug!(target: "validator::verification::apply_producer_transaction", "Applying producer transaction {tx_hash}");
 
     // Producer transactions must contain a single, non-empty call
     if !tx.is_single_call() {
@@ -582,7 +582,7 @@ pub async fn apply_producer_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::apply_producer_transaction", "Producer transaction {} executed successfully", tx_hash);
+    debug!(target: "validator::verification::apply_producer_transaction", "Producer transaction {tx_hash} executed successfully");
 
     Ok(signature_public_key)
 }
@@ -600,7 +600,7 @@ pub async fn verify_transaction(
     verify_fee: bool,
 ) -> Result<GasData> {
     let tx_hash = tx.hash();
-    debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "Validating transaction {tx_hash}");
 
     // Create a FeeData instance to hold the calculated fee data
     let mut gas_data = GasData::default();
@@ -638,7 +638,7 @@ pub async fn verify_transaction(
         if !found_fee {
             error!(
                 target: "validator::verification::verify_transcation",
-                "[VALIDATOR] Transaction {} does not contain fee payment call", tx_hash,
+                "[VALIDATOR] Transaction {tx_hash} does not contain fee payment call"
             );
             return Err(TxVerifyFailed::InvalidFee.into())
         }
@@ -653,7 +653,7 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        debug!(target: "validator::verification::verify_transaction", "Executing contract call {}", idx);
+        debug!(target: "validator::verification::verify_transaction", "Executing contract call {idx}");
 
         // Transaction must not contain a Pow reward call
         if call.data.is_money_pow_reward() {
@@ -687,7 +687,7 @@ pub async fn verify_transaction(
         if decoder.position() != metadata.len() as u64 {
             error!(
                 target: "validator::verification::verify_transaction",
-                "[VALIDATOR] Failed decoding entire metadata buffer for {}:{}", tx_hash, idx,
+                "[VALIDATOR] Failed decoding entire metadata buffer for {tx_hash}:{idx}"
             );
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
@@ -754,14 +754,14 @@ pub async fn verify_transaction(
             deploy_runtime.deploy(&deploy_params.ix)?;
 
             let deploy_gas_used = deploy_runtime.gas_used();
-            debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {:?} of transaction {}: {}", call, tx_hash, deploy_gas_used);
+            debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {call:?} of transaction {tx_hash}: {deploy_gas_used}");
             gas_data.deployments += deploy_gas_used;
         }
 
         // At this point we're done with the call and move on to the next one.
         // Accumulate the WASM gas used.
         let wasm_gas_used = runtime.gas_used();
-        debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {:?} of transaction {}: {}", call, tx_hash, wasm_gas_used);
+        debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {call:?} of transaction {tx_hash}: {wasm_gas_used}");
 
         // Append the used wasm gas
         gas_data.wasm += wasm_gas_used;
@@ -770,12 +770,12 @@ pub async fn verify_transaction(
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
     gas_data.signatures = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
         serialize_async(tx).await.len() as u64;
-    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, gas_data.signatures);
+    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {tx_hash}: {}", gas_data.signatures);
 
     // The ZK circuit fee is calculated using a function in validator/fees.rs
     for zkbin in circuits_to_verify.iter() {
         let zk_circuit_gas_used = circuit_gas_use(zkbin);
-        debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {}: {}", zkbin.namespace, tx_hash, zk_circuit_gas_used);
+        debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {tx_hash}: {zk_circuit_gas_used}", zkbin.namespace);
 
         // Append the used zk circuit gas
         gas_data.zk_circuits += zk_circuit_gas_used;
@@ -791,7 +791,7 @@ pub async fn verify_transaction(
             Err(e) => {
                 error!(
                     target: "validator::verification::verify_transaction",
-                    "[VALIDATOR] Failed deserializing tx {} fee call: {}", tx_hash, e,
+                    "[VALIDATOR] Failed deserializing tx {tx_hash} fee call: {e}"
                 );
                 return Err(TxVerifyFailed::InvalidFee.into())
             }
@@ -804,12 +804,11 @@ pub async fn verify_transaction(
         if required_fee > fee {
             error!(
                 target: "validator::verification::verify_transaction",
-                "[VALIDATOR] Transaction {} has insufficient fee. Required: {}, Paid: {}",
-                tx_hash, required_fee, fee,
+                "[VALIDATOR] Transaction {tx_hash} has insufficient fee. Required: {required_fee}, Paid: {fee}"
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
-        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_data.paid);
+        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {tx_hash}: {}", gas_data.paid);
 
         // Store paid fee
         gas_data.paid = fee;
@@ -819,11 +818,11 @@ pub async fn verify_transaction(
     // (optionally) made sure that enough fee was paid, we now move on with
     // verification. First we verify the transaction signatures and then we
     // verify any accompanying ZK proofs.
-    debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {tx_hash}");
     if sig_table.len() != tx.signatures.len() {
         error!(
             target: "validator::verification::verify_transaction",
-            "[VALIDATOR] Incorrect number of signatures in tx {}", tx_hash,
+            "[VALIDATOR] Incorrect number of signatures in tx {tx_hash}"
         );
         return Err(TxVerifyFailed::MissingSignatures.into())
     }
@@ -831,17 +830,17 @@ pub async fn verify_transaction(
     if let Err(e) = tx.verify_sigs(sig_table) {
         error!(
             target: "validator::verification::verify_transaction",
-            "[VALIDATOR] Signature verification for tx {} failed: {}", tx_hash, e,
+            "[VALIDATOR] Signature verification for tx {tx_hash} failed: {e}"
         );
         return Err(TxVerifyFailed::InvalidSignature.into())
     }
     debug!(target: "validator::verification::verify_transaction", "Signature verification successful");
 
-    debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {tx_hash}");
     if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
         error!(
             target: "validator::verification::verify_transaction",
-            "[VALIDATOR] ZK proof verification for tx {} failed: {}", tx_hash, e,
+            "[VALIDATOR] ZK proof verification for tx {tx_hash} failed: {e}"
         );
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
@@ -850,8 +849,8 @@ pub async fn verify_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::verify_transaction", "The total gas used for transaction {}: {}", tx_hash, total_gas_used);
-    debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "The total gas used for transaction {tx_hash}: {total_gas_used}");
+    debug!(target: "validator::verification::verify_transaction", "Transaction {tx_hash} verified successfully");
     Ok(gas_data)
 }
 
@@ -865,7 +864,7 @@ pub async fn apply_transaction(
     tree: &mut MerkleTree,
 ) -> Result<()> {
     let tx_hash = tx.hash();
-    debug!(target: "validator::verification::apply_transaction", "Applying transaction {}", tx_hash);
+    debug!(target: "validator::verification::apply_transaction", "Applying transaction {tx_hash}");
 
     // Write the transaction calls payload data
     let mut payload = vec![];
@@ -873,7 +872,7 @@ pub async fn apply_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        debug!(target: "validator::verification::apply_transaction", "Executing contract call {}", idx);
+        debug!(target: "validator::verification::apply_transaction", "Executing contract call {idx}");
 
         debug!(target: "validator::verification::apply_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
@@ -927,7 +926,7 @@ pub async fn apply_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::apply_transaction", "Transaction {} applied successfully", tx_hash);
+    debug!(target: "validator::verification::apply_transaction", "Transaction {tx_hash} applied successfully");
     Ok(())
 }
 
@@ -983,7 +982,7 @@ pub async fn verify_transactions(
         {
             Ok(gas_values) => gas_values,
             Err(e) => {
-                warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
+                warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {e}");
                 erroneous_txs.push(tx.clone());
                 overlay.lock().unwrap().revert_to_checkpoint()?;
                 continue
@@ -1000,8 +999,8 @@ pub async fn verify_transactions(
         if accumulated_gas_usage > BLOCK_GAS_LIMIT {
             warn!(
                 target: "validator::verification::verify_transactions",
-                "Transaction {} exceeds configured transaction gas limit: {} - {}",
-                tx.hash(), accumulated_gas_usage, BLOCK_GAS_LIMIT,
+                "Transaction {} exceeds configured transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}",
+                tx.hash()
             );
             erroneous_txs.push(tx.clone());
             overlay.lock().unwrap().revert_to_checkpoint()?;
@@ -1044,7 +1043,7 @@ async fn apply_transactions(
         if let Err(e) =
             apply_transaction(overlay, verifying_block_height, block_target, tx, tree).await
         {
-            warn!(target: "validator::verification::apply_transactions", "Transaction apply failed: {}", e);
+            warn!(target: "validator::verification::apply_transactions", "Transaction apply failed: {e}");
             erroneous_txs.push(tx.clone());
             overlay.lock().unwrap().revert_to_checkpoint()?;
         };
@@ -1072,8 +1071,8 @@ pub async fn verify_proposal(
     let proposal_hash = proposal.block.hash();
     if proposal.hash != proposal_hash {
         warn!(
-            target: "validator::verification::verify_proposal", "Received proposal contains mismatched hashes: {} - {}",
-            proposal.hash, proposal_hash
+            target: "validator::verification::verify_proposal", "Received proposal contains mismatched hashes: {} - {proposal_hash}",
+            proposal.hash
         );
         return Err(Error::ProposalHashesMissmatchError)
     }
@@ -1118,8 +1117,8 @@ pub async fn verify_fork_proposal(
     let proposal_hash = proposal.block.hash();
     if proposal.hash != proposal_hash {
         warn!(
-            target: "validator::verification::verify_fork_proposal", "Received proposal contains mismatched hashes: {} - {}",
-            proposal.hash, proposal_hash
+            target: "validator::verification::verify_fork_proposal", "Received proposal contains mismatched hashes: {} - {proposal_hash}",
+            proposal.hash
         );
         return Err(Error::ProposalHashesMissmatchError)
     }

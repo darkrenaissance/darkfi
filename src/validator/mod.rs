@@ -383,7 +383,7 @@ impl Validator {
         let mut state_inverse_diffs = vec![];
         info!(target: "validator::confirmation", "Confirming proposals:");
         for (index, proposal) in confirmed_proposals.iter().enumerate() {
-            info!(target: "validator::confirmation", "\t{} - {}", proposal, confirmed_blocks[index].header.height);
+            info!(target: "validator::confirmation", "\t{proposal} - {}", confirmed_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
             module.append(confirmed_blocks[index].header.timestamp, &next_difficulty);
@@ -464,7 +464,7 @@ impl Validator {
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => continue,
                 Err(e) => {
-                    error!(target: "validator::add_checkpoint_blocks", "Erroneous block found in set: {}", e);
+                    error!(target: "validator::add_checkpoint_blocks", "Erroneous block found in set: {e}");
                     overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                     return Err(Error::BlockIsInvalid(block.hash().as_string()))
                 }
@@ -578,7 +578,7 @@ impl Validator {
                     continue
                 }
                 Err(e) => {
-                    error!(target: "validator::add_test_blocks", "Erroneous block found in set: {}", e);
+                    error!(target: "validator::add_test_blocks", "Erroneous block found in set: {e}");
                     overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                     return Err(Error::BlockIsInvalid(block.hash().as_string()))
                 }
@@ -720,7 +720,7 @@ impl Validator {
         )
         .await
         {
-            warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
+            warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {e}");
             erroneous_txs.push(tx.clone());
         }
 

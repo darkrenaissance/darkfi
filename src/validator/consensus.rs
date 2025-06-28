@@ -252,7 +252,7 @@ impl Consensus {
         // Check its length
         let length = fork.proposals.len();
         if length < self.confirmation_threshold {
-            debug!(target: "validator::consensus::confirmation", "Nothing to confirme yet, best fork size: {}", length);
+            debug!(target: "validator::consensus::confirmation", "Nothing to confirme yet, best fork size: {length}");
             drop(forks);
             return Ok(None)
         }
@@ -859,7 +859,7 @@ impl Fork {
             {
                 Ok(gas_values) => gas_values,
                 Err(e) => {
-                    debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {}", e);
+                    debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
                     overlay.lock().unwrap().revert_to_checkpoint()?;
                     continue
                 }
@@ -875,8 +875,7 @@ impl Fork {
             if accumulated_gas_usage > BLOCK_GAS_LIMIT {
                 warn!(
                     target: "validator::consensus::unproposed_txs",
-                    "Retrieving transaction {} would exceed configured unproposed transaction gas limit: {} - {}",
-                    tx, accumulated_gas_usage, BLOCK_GAS_LIMIT,
+                    "Retrieving transaction {tx} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
                 );
                 overlay.lock().unwrap().revert_to_checkpoint()?;
                 break

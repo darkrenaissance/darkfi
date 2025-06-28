@@ -171,7 +171,7 @@ impl Blockchain {
 
     /// Retrieve [`BlockInfo`]s by given heights. Does not fail if any of them are not found.
     pub fn get_blocks_by_heights(&self, heights: &[u32]) -> Result<Vec<BlockInfo>> {
-        debug!(target: "blockchain", "get_blocks_by_heights(): {:?}", heights);
+        debug!(target: "blockchain", "get_blocks_by_heights(): {heights:?}");
         let blockhashes = self.blocks.get_order(heights, false)?;
 
         let mut hashes = vec![];
@@ -184,7 +184,7 @@ impl Blockchain {
 
     /// Retrieve n headers before given block height.
     pub fn get_headers_before(&self, height: u32, n: usize) -> Result<Vec<Header>> {
-        debug!(target: "blockchain", "get_headers_before(): {} -> {}", height, n);
+        debug!(target: "blockchain", "get_headers_before(): {height} -> {n}");
         let hashes = self.blocks.get_before(height, n)?;
         let headers = self.headers.get(&hashes, true)?;
         Ok(headers.iter().map(|h| h.clone().unwrap()).collect())

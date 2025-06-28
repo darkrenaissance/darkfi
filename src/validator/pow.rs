@@ -344,10 +344,10 @@ pub fn mine_block(
 ) -> Result<()> {
     let miner_setup = Instant::now();
 
-    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
+    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
     // Get the PoW input. The key changes with every mined block.
     let input = miner_block.header.previous;
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input);
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {input}");
     let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
     debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
     let dataset = Arc::new(RandomXDataset::new(flags, input.inner(), threads).unwrap());
@@ -368,19 +368,19 @@ pub fn mine_block(
         let stop_signal = stop_signal.clone();
 
         handles.push(thread::spawn(move || {
-            debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{}...", t);
+            debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{t}...");
             let mut miner_nonce = t;
             let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
             loop {
                 // Check if stop signal was received
                 if stop_signal.is_full() {
-                    debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{} exiting", t);
+                    debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{t} exiting");
                     break
                 }
 
                 block.header.nonce = miner_nonce;
                 if found_block.load(Ordering::SeqCst) {
-                    debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{t} exiting");
                     break
                 }
 
@@ -389,11 +389,9 @@ pub fn mine_block(
                 if out_hash <= target {
                     found_block.store(true, Ordering::SeqCst);
                     found_nonce.store(miner_nonce, Ordering::SeqCst);
-                    debug!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
-                        t, miner_nonce
-                    );
+                    debug!(target: "validator::pow::mine_block", "[MINER] Thread #{t} found block using nonce {miner_nonce}");
                     debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash());
-                    debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
+                    debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{out_hash:064x}");
                     break
                 }
 
@@ -463,9 +461,9 @@ mod tests {
             let res = module.next_difficulty()?;
 
             if res != difficulty {
-                eprintln!("Wrong wide difficulty for block {}", n);
-                eprintln!("Expected: {}", difficulty);
-                eprintln!("Found: {}", res);
+                eprintln!("Wrong wide difficulty for block {n}");
+                eprintln!("Expected: {difficulty}");
+                eprintln!("Found: {res}");
                 assert!(res == difficulty);
             }
 
