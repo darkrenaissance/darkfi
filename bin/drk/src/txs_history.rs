@@ -46,12 +46,7 @@ impl Drk {
     ) -> WalletDbResult<String> {
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4);",
-            WALLET_TXS_HISTORY_TABLE,
-            WALLET_TXS_HISTORY_COL_TX_HASH,
-            WALLET_TXS_HISTORY_COL_STATUS,
-            WALLET_TXS_HISTORY_BLOCK_HEIGHT,
-            WALLET_TXS_HISTORY_COL_TX,
+            "INSERT OR REPLACE INTO {WALLET_TXS_HISTORY_TABLE} ({WALLET_TXS_HISTORY_COL_TX_HASH}, {WALLET_TXS_HISTORY_COL_STATUS}, {WALLET_TXS_HISTORY_BLOCK_HEIGHT}, {WALLET_TXS_HISTORY_COL_TX}) VALUES (?1, ?2, ?3, ?4);"
         );
 
         // Execute the query
@@ -190,11 +185,7 @@ impl Drk {
     ) -> WalletDbResult<()> {
         output.push(format!("Reverting transactions history after: {height}"));
         let query = format!(
-            "UPDATE {} SET {} = 'Reverted', {} = NULL WHERE {} > ?1;",
-            WALLET_TXS_HISTORY_TABLE,
-            WALLET_TXS_HISTORY_COL_STATUS,
-            WALLET_TXS_HISTORY_BLOCK_HEIGHT,
-            WALLET_TXS_HISTORY_BLOCK_HEIGHT
+            "UPDATE {WALLET_TXS_HISTORY_TABLE} SET {WALLET_TXS_HISTORY_COL_STATUS} = 'Reverted', {WALLET_TXS_HISTORY_BLOCK_HEIGHT} = NULL WHERE {WALLET_TXS_HISTORY_BLOCK_HEIGHT} > ?1;"
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
         output.push(String::from("Successfully reverted transactions history"));
