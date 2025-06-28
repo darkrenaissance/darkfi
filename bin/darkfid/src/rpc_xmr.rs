@@ -40,7 +40,7 @@ impl DarkfiNode {
             Err(e) => {
                 error!(
                     target: "darkfid::rpc::xmr_merge_mining_get_chain_id",
-                    "[RPC] Error fetching genesis block hash: {}", e,
+                    "[RPC] Error fetching genesis block hash: {e}"
                 );
                 return JsonError::new(ErrorCode::InternalError, None, id).into()
             }

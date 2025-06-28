@@ -211,7 +211,7 @@ impl DarkfiNode {
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn ping_miner(&self, id: u16, _params: JsonValue) -> JsonResult {
         if let Err(e) = self.ping_miner_daemon().await {
-            error!(target: "darkfid::rpc::ping_miner", "Failed to ping miner daemon: {}", e);
+            error!(target: "darkfid::rpc::ping_miner", "Failed to ping miner daemon: {e}");
             return server_error(RpcError::PingFailed, id, None)
         }
         JsonResponse::new(JsonValue::Boolean(true), id).into()
@@ -231,7 +231,7 @@ impl DarkfiNode {
         params: &JsonValue,
     ) -> Result<JsonValue> {
         let Some(ref rpc_client) = self.rpc_client else { return Err(Error::RpcClientStopped) };
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Executing request {} with params: {:?}", method, params);
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Executing request {method} with params: {params:?}");
         let latency = Instant::now();
         let req = JsonRequest::new(method, params.clone());
         let lock = rpc_client.lock().await;
@@ -239,8 +239,8 @@ impl DarkfiNode {
         let rep = client.request(req).await?;
         drop(lock);
         let latency = latency.elapsed();
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {:?}", rep);
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Latency: {:?}", latency);
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {rep:?}");
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Latency: {latency:?}");
         Ok(rep)
     }
 
@@ -256,7 +256,7 @@ impl DarkfiNode {
             match self.miner_daemon_request(method, params).await {
                 Ok(v) => return v,
                 Err(e) => {
-                    error!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Failed to execute miner daemon request: {}", e);
+                    error!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Failed to execute miner daemon request: {e}");
                 }
             }
             loop {

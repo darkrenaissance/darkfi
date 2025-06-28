@@ -340,7 +340,7 @@ async fn retrieve_headers(
             // Store the headers
             node.validator.blockchain.headers.insert_sync(&response_headers)?;
             last_tip_height = response_headers[0].height;
-            info!(target: "darkfid::task::sync::retrieve_headers", "Headers received: {}/{}", node.validator.blockchain.headers.len_sync(), total);
+            info!(target: "darkfid::task::sync::retrieve_headers", "Headers received: {}/{total}", node.validator.blockchain.headers.len_sync());
         }
     }
 
@@ -372,7 +372,7 @@ async fn retrieve_headers(
         }
         verified_headers += 1;
     }
-    info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {}/{}", verified_headers, total);
+    info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {verified_headers}/{total}");
 
     // Now we verify the rest sequences
     let mut last_checked = headers.last().unwrap().clone();
@@ -396,7 +396,7 @@ async fn retrieve_headers(
         }
         last_checked = headers.last().unwrap().clone();
         headers = node.validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
-        info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {}/{}", verified_headers, total);
+        info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {verified_headers}/{total}");
     }
 
     info!(target: "darkfid::task::sync::retrieve_headers", "Headers sequence verified!");
@@ -528,7 +528,7 @@ async fn retrieve_blocks(
                 }
             }
 
-            info!(target: "darkfid::task::sync::retrieve_blocks", "Blocks received: {}/{}", received_blocks, total);
+            info!(target: "darkfid::task::sync::retrieve_blocks", "Blocks received: {received_blocks}/{total}");
         }
     }
 

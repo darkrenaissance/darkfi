@@ -239,7 +239,7 @@ async fn consensus_task(
                 match res {
                     Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "darkfid", "Failed starting garbage collection task: {}", e)
+                        error!(target: "darkfid", "Failed starting garbage collection task: {e}")
                     }
                 }
             },

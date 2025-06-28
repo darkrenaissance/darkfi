@@ -192,7 +192,7 @@ impl Darkfid {
         // Pinging minerd daemon to verify it listens
         if self.node.rpc_client.is_some() {
             if let Err(e) = self.node.ping_miner_daemon().await {
-                warn!(target: "darkfid::Darkfid::start", "Failed to ping miner daemon: {}", e);
+                warn!(target: "darkfid::Darkfid::start", "Failed to ping miner daemon: {e}");
             }
         }
 
@@ -205,14 +205,14 @@ impl Darkfid {
                 let dnet_sub = p2p_.dnet_subscribe().await;
                 loop {
                     let event = dnet_sub.receive().await;
-                    debug!(target: "darkfid::Darkfid::dnet_task", "Got dnet event: {:?}", event);
+                    debug!(target: "darkfid::Darkfid::dnet_task", "Got dnet event: {event:?}");
                     dnet_sub_.notify(vec![event.into()].into()).await;
                 }
             },
             |res| async {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting dnet subs task: {}", e),
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting dnet subs task: {e}"),
                 }
             },
             Error::DetachedTaskStopped,
@@ -227,7 +227,7 @@ impl Darkfid {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::stop_connections(&node_).await,
-                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting JSON-RPC server: {}", e),
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,
@@ -243,7 +243,7 @@ impl Darkfid {
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<MmRpcHandler>>::stop_connections(&node_).await,
-                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting HTTP JSON-RPC server: {}", e),
+                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting HTTP JSON-RPC server: {e}"),
                     }
                 },
                 Error::RpcServerStopped,
@@ -278,7 +278,7 @@ impl Darkfid {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::ConsensusTaskStopped) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting consensus initialization task: {}", e),
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting consensus initialization task: {e}"),
                 }
             },
             Error::ConsensusTaskStopped,
@@ -316,7 +316,7 @@ impl Darkfid {
         // Flush sled database data
         info!(target: "darkfid::Darkfid::stop", "Flushing sled database...");
         let flushed_bytes = self.node.validator.blockchain.sled_db.flush_async().await?;
-        info!(target: "darkfid::Darkfid::stop", "Flushed {} bytes", flushed_bytes);
+        info!(target: "darkfid::Darkfid::stop", "Flushed {flushed_bytes} bytes");
 
         // Close the JSON-RPC client, if it was initialized
         if let Some(ref rpc_client) = self.node.rpc_client {

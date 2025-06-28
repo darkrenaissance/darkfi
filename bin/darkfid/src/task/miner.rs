@@ -225,7 +225,7 @@ pub async fn miner_task(
                 match res {
                     Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "darkfid", "Failed starting garbage collection task: {}", e)
+                        error!(target: "darkfid", "Failed starting garbage collection task: {e}")
                     }
                 }
             },
@@ -264,7 +264,7 @@ async fn listen_to_network(
     // Signal miner to abort mining
     sender.send(()).await?;
     if let Err(e) = node.miner_daemon_request("abort", &JsonValue::Array(vec![])).await {
-        error!(target: "darkfid::task::miner::listen_to_network", "Failed to execute miner daemon abort request: {}", e);
+        error!(target: "darkfid::task::miner::listen_to_network", "Failed to execute miner daemon abort request: {e}");
     }
 
     Ok(())

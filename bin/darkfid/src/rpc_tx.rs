@@ -64,7 +64,7 @@ impl DarkfiNode {
         let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_simulate", "Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_simulate", "Failed deserializing bytes into Transaction: {e}");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -114,7 +114,7 @@ impl DarkfiNode {
         let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_broadcast", "Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_broadcast", "Failed deserializing bytes into Transaction: {e}");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -129,7 +129,7 @@ impl DarkfiNode {
         };
         // We'll perform the state transition check here.
         if let Err(e) = self.validator.append_tx(&tx, self.rpc_client.is_some()).await {
-            error!(target: "darkfid::rpc::tx_broadcast", "{}: {}", error_message, e);
+            error!(target: "darkfid::rpc::tx_broadcast", "{error_message}: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
@@ -162,7 +162,7 @@ impl DarkfiNode {
         let pending_txs = match self.validator.blockchain.get_pending_txs() {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_pending", "Failed fetching pending txs: {}", e);
+                error!(target: "darkfid::rpc::tx_pending", "Failed fetching pending txs: {e}");
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -193,13 +193,13 @@ impl DarkfiNode {
         let pending_txs = match self.validator.blockchain.get_pending_txs() {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
+                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {e}");
                 return JsonError::new(InternalError, None, id).into()
             }
         };
 
         if let Err(e) = self.validator.blockchain.remove_pending_txs(&pending_txs) {
-            error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
+            error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {e}");
             return JsonError::new(InternalError, None, id).into()
         };
 
@@ -240,7 +240,7 @@ impl DarkfiNode {
         let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::tx_calculate_fee", "Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_calculate_fee", "Failed deserializing bytes into Transaction: {e}");
                 return server_error(RpcError::ParseError, id, None)
             }
         };

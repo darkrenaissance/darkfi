@@ -198,7 +198,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Initialize validator configuration
     let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
-        info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
+        info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {diff}");
         Some(diff.into())
     } else {
         None
@@ -214,7 +214,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Check if reset was requested
     if let Some(height) = args.reset {
-        info!(target: "darkfid", "Node will reset validator state to height: {}", height);
+        info!(target: "darkfid", "Node will reset validator state to height: {height}");
         let validator = Validator::new(&sled_db, &config).await?;
         validator.reset_to_height(height).await?;
         info!(target: "darkfid", "Validator state reset successfully!");
@@ -301,14 +301,14 @@ pub async fn parse_blockchain_config(
 ) -> Result<BlockchainNetwork> {
     // Grab config path
     let config_path = get_config_path(config, CONFIG_FILE)?;
-    debug!(target: "darkfid", "Parsing configuration file: {:?}", config_path);
+    debug!(target: "darkfid", "Parsing configuration file: {config_path:?}");
 
     // Parse TOML file contents
     let contents = read_to_string(&config_path).await?;
     let contents: toml::Value = match toml::from_str(&contents) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "darkfid", "Failed parsing TOML config: {}", e);
+            error!(target: "darkfid", "Failed parsing TOML config: {e}");
             return Err(Error::ParseFailed("Failed parsing TOML config"))
         }
     };
@@ -329,11 +329,11 @@ pub async fn parse_blockchain_config(
         match BlockchainNetwork::from_iter_with_toml::<Vec<String>>(&network_config, vec![]) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid", "Failed parsing requested network configuration: {}", e);
+                error!(target: "darkfid", "Failed parsing requested network configuration: {e}");
                 return Err(Error::ParseFailed("Failed parsing requested network configuration"))
             }
         };
-    debug!(target: "darkfid", "Parsed network configuration: {:?}", network_config);
+    debug!(target: "darkfid", "Parsed network configuration: {network_config:?}");
 
     Ok(network_config)
 }

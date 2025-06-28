@@ -565,8 +565,7 @@ async fn handle_receive_header_request(
             Err(e) => {
                 error!(
                     target: "darkfid::proto::protocol_sync::handle_receive_header_request",
-                    "get_headers_before fail: {}",
-                    e
+                    "get_headers_before fail: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -627,8 +626,7 @@ async fn handle_receive_request(
             Err(e) => {
                 error!(
                     target: "darkfid::proto::protocol_sync::handle_receive_request",
-                    "get_blocks_after fail: {}",
-                    e
+                    "get_blocks_after fail: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -683,8 +681,7 @@ async fn handle_receive_fork_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
-                    "Getting fork proposals failed: {}",
-                    e
+                    "Getting fork proposals failed: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -739,8 +736,7 @@ async fn handle_receive_fork_header_hash_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
-                    "Getting fork header hash failed: {}",
-                    e
+                    "Getting fork header hash failed: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -762,8 +758,7 @@ async fn handle_receive_fork_header_hash_request(
         if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
-                "Getting fork header hash failed: {}",
-                e
+                "Getting fork header hash failed: {e}"
             );
             handler.send_action(channel, ProtocolGenericAction::Skip).await;
             continue
@@ -774,8 +769,7 @@ async fn handle_receive_fork_header_hash_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
-                    "Getting fork header hash failed: {}",
-                    e
+                    "Getting fork header hash failed: {e}"
                 );
                 ProtocolGenericAction::Skip
             }
@@ -837,8 +831,7 @@ async fn handle_receive_fork_headers_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
-                    "Getting fork headers failed: {}",
-                    e
+                    "Getting fork headers failed: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -860,8 +853,7 @@ async fn handle_receive_fork_headers_request(
         if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
-                "Getting fork header hash failed: {}",
-                e
+                "Getting fork header hash failed: {e}"
             );
             handler.send_action(channel, ProtocolGenericAction::Skip).await;
             continue
@@ -874,8 +866,7 @@ async fn handle_receive_fork_headers_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
-                    "Getting fork headers failed: {}",
-                    e
+                    "Getting fork headers failed: {e}"
                 );
                 ProtocolGenericAction::Skip
             }
@@ -937,8 +928,7 @@ async fn handle_receive_fork_proposals_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
-                    "Getting fork proposals failed: {}",
-                    e
+                    "Getting fork proposals failed: {e}"
                 );
                 handler.send_action(channel, ProtocolGenericAction::Skip).await;
                 continue
@@ -960,8 +950,7 @@ async fn handle_receive_fork_proposals_request(
         if let Err(e) = validator.blockchain.headers.get(&[request.fork_header], true) {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
-                "Getting fork header hash failed: {}",
-                e
+                "Getting fork header hash failed: {e}"
             );
             handler.send_action(channel, ProtocolGenericAction::Skip).await;
             continue
@@ -978,8 +967,7 @@ async fn handle_receive_fork_proposals_request(
             Err(e) => {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
-                    "Getting fork proposals failed: {}",
-                    e
+                    "Getting fork proposals failed: {e}"
                 );
                 ProtocolGenericAction::Skip
             }

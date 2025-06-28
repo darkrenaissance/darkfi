@@ -64,7 +64,7 @@ impl DarkfiNode {
         let blocks = match self.validator.blockchain.get_blocks_by_heights(&[block_height]) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_block", "Failed fetching block by height: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_block", "Failed fetching block by height: {e}");
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -105,7 +105,7 @@ impl DarkfiNode {
         let txs = match self.validator.blockchain.transactions.get(&[tx_hash], true) {
             Ok(txs) => txs,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {e}");
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -271,7 +271,7 @@ impl DarkfiNode {
         let contract_id = match ContractId::from_str(contract_id) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Error decoding string to ContractId: {}", e);
+                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Error decoding string to ContractId: {e}");
                 return JsonError::new(InvalidParams, None, id).into()
             }
         };
@@ -281,10 +281,7 @@ impl DarkfiNode {
             &contract_id,
             SMART_CONTRACT_ZKAS_DB_NAME,
         ) else {
-            error!(
-                target: "darkfid::rpc::blockchain_lookup_zkas", "Did not find zkas db for ContractId: {}",
-                contract_id
-            );
+            error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Did not find zkas db for ContractId: {contract_id}");
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
         };
 
@@ -339,7 +336,7 @@ impl DarkfiNode {
         let contract_id = match ContractId::from_str(contract_id) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Error decoding string to ContractId: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Error decoding string to ContractId: {e}");
                 return JsonError::new(InvalidParams, None, id).into()
             }
         };
@@ -357,7 +354,7 @@ impl DarkfiNode {
             )
             .into(),
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Failed fetching contract state records: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_contract_state", "Failed fetching contract state records: {e}");
                 server_error(RpcError::ContractStateNotFound, id, None)
             }
         }
@@ -395,7 +392,7 @@ impl DarkfiNode {
         let contract_id = match ContractId::from_str(contract_id) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Error decoding string to ContractId: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Error decoding string to ContractId: {e}");
                 return JsonError::new(InvalidParams, None, id).into()
             }
         };
@@ -416,7 +413,7 @@ impl DarkfiNode {
         ) {
             Ok(value) => JsonResponse::new(JsonValue::String(base64::encode(&value)), id).into(),
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Failed fetching contract state key value: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Failed fetching contract state key value: {e}");
                 server_error(RpcError::ContractStateKeyNotFound, id, None)
             }
         }
