@@ -65,7 +65,7 @@ pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, le
     if let Err(e) = acl_allow(env, &[ContractSection::Metadata, ContractSection::Exec]) {
         error!(
             target: "runtime::util::set_return_data",
-            "[WASM] [{}] set_return_data(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] set_return_data(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -103,7 +103,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
     {
         error!(
             target: "runtime::util::get_object_bytes()",
-            "[WASM] [{}] get_object_bytes(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_object_bytes(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -113,7 +113,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
     if idx as usize >= objects.len() {
         error!(
             target: "runtime::util::get_object_bytes",
-            "[WASM] [{}] get_object_bytes(): Tried to access object out of bounds", cid,
+            "[WASM] [{cid}] get_object_bytes(): Tried to access object out of bounds"
         );
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
@@ -132,7 +132,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
     let Ok(slice) = ptr.slice(&memory_view, obj.len() as u32) else {
         error!(
             target: "runtime::util::get_object_bytes",
-            "[WASM] [{}] get_object_bytes(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] get_object_bytes(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -141,7 +141,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
     if let Err(e) = slice.write_slice(&obj) {
         error!(
             target: "runtime::util::get_object_bytes",
-            "[WASM] [{}] get_object_bytes(): Failed to write to memory slice: {}", cid, e,
+            "[WASM] [{cid}] get_object_bytes(): Failed to write to memory slice: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -164,7 +164,7 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     {
         error!(
             target: "runtime::util::get_object_size()",
-            "[WASM] [{}] get_object_size(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_object_size(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -174,7 +174,7 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     if idx as usize >= objects.len() {
         error!(
             target: "runtime::util::get_object_size",
-            "[WASM] [{}] get_object_size(): Tried to access object out of bounds", cid,
+            "[WASM] [{cid}] get_object_size(): Tried to access object out of bounds"
         );
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
@@ -206,7 +206,7 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_verifying_block_height",
-            "[WASM] [{}] get_verifying_block_height(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_verifying_block_height(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -230,7 +230,7 @@ pub(crate) fn get_block_target(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_block_target",
-            "[WASM] [{}] get_block_target(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_block_target(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -254,7 +254,7 @@ pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_tx_hash",
-            "[WASM] [{}] get_tx_hash(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_tx_hash(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -281,7 +281,7 @@ pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_call_index",
-            "[WASM] [{}] get_call_index(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_call_index(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -306,7 +306,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_blockchain_time",
-            "[WASM] [{}] get_blockchain_time(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_blockchain_time(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -317,7 +317,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
         Err(e) => {
             error!(
                 target: "runtime::util::get_blockchain_time",
-                "[WASM] [{}] get_blockchain_time(): Internal error getting from blocks tree: {}", cid, e,
+                "[WASM] [{cid}] get_blockchain_time(): Internal error getting from blocks tree: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -358,7 +358,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     {
         error!(
             target: "runtime::util::get_last_block_height",
-            "[WASM] [{}] get_last_block_height(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_last_block_height(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -369,7 +369,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
         Err(e) => {
             error!(
                 target: "runtime::util::get_last_block_height",
-                "[WASM] [{}] get_last_block_height(): Internal error getting from blocks tree: {}", cid, e,
+                "[WASM] [{cid}] get_last_block_height(): Internal error getting from blocks tree: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -410,7 +410,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     {
         error!(
             target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_tx(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -423,7 +423,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     let Ok(mem_slice) = ptr.slice(&memory_view, blake3::OUT_LEN as u32) else {
         error!(
             target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] get_tx(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -432,7 +432,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] get_tx(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -445,7 +445,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
         Err(e) => {
             error!(
                 target: "runtime::util::get_tx",
-                "[WASM] [{}] get_tx(): Failed to decode hash from vec: {}", cid, e,
+                "[WASM] [{cid}] get_tx(): Failed to decode hash from vec: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -456,7 +456,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     if buf_reader.position() != blake3::OUT_LEN as u64 {
         error!(
             target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] get_tx(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
@@ -467,7 +467,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
         Err(e) => {
             error!(
                 target: "runtime::util::get_tx",
-                "[WASM] [{}] get_tx(): Internal error getting from tree: {}", cid, e,
+                "[WASM] [{cid}] get_tx(): Internal error getting from tree: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -477,7 +477,7 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     let Some(return_data) = ret else {
         debug!(
             target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Return data is empty", cid,
+            "[WASM] [{cid}] get_tx(): Return data is empty"
         );
         return darkfi_sdk::error::DB_GET_EMPTY
     };
@@ -518,7 +518,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     {
         error!(
             target: "runtime::util::get_tx_location",
-            "[WASM] [{}] get_tx_location(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] get_tx_location(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -531,7 +531,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     let Ok(mem_slice) = ptr.slice(&memory_view, blake3::OUT_LEN as u32) else {
         error!(
             target: "runtime::util::get_tx_location",
-            "[WASM] [{}] get_tx_location(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] get_tx_location(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -540,7 +540,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::util::get_tx_location",
-            "[WASM] [{}] get_tx_location(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] get_tx_location(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -553,7 +553,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
         Err(e) => {
             error!(
                 target: "runtime::util::get_tx_location",
-                "[WASM] [{}] get_tx_location(): Failed to decode hash from vec: {}", cid, e,
+                "[WASM] [{cid}] get_tx_location(): Failed to decode hash from vec: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -564,7 +564,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     if buf_reader.position() != blake3::OUT_LEN as u64 {
         error!(
             target: "runtime::util::get_tx_location",
-            "[WASM] [{}] get_tx_location(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] get_tx_location(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
@@ -575,7 +575,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
         Err(e) => {
             error!(
                 target: "runtime::util::get_tx_location",
-                "[WASM] [{}] get_tx_location(): Internal error getting from tree: {}", cid, e,
+                "[WASM] [{cid}] get_tx_location(): Internal error getting from tree: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -585,7 +585,7 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     let Some(return_data) = ret else {
         debug!(
             target: "runtime::util::get_tx_location",
-            "[WASM] [{}] get_tx_location(): Return data is empty", cid,
+            "[WASM] [{cid}] get_tx_location(): Return data is empty"
         );
         return darkfi_sdk::error::DB_GET_EMPTY
     };

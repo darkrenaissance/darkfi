@@ -60,7 +60,7 @@ impl Analyzer {
         let mut heap = vec![];
 
         for statement in &self.statements {
-            //println!("{:?}", statement);
+            //println!("{statement:?}");
             let mut stmt = statement.clone();
 
             let (return_types, arg_types) = statement.opcode.arg_types();
@@ -199,8 +199,8 @@ impl Analyzer {
                                 if var_type != f_arg_types[inner_idx] {
                                     return Err(self.error.abort(
                                         &format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                            f_arg_types[inner_idx], var_type
+                                            "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                            f_arg_types[inner_idx]
                                         ),
                                         ln,
                                         col,
@@ -255,8 +255,8 @@ impl Analyzer {
                     heap.push(v.clone());
                     self.heap.clone_from(&heap);
 
-                    //println!("{:#?}", heap);
-                    //println!("{:#?}", statements);
+                    //println!("{heap:#?}");
+                    //println!("{statements:#?}");
                     continue
                 } // <-- Arg::Func
 
@@ -276,9 +276,8 @@ impl Analyzer {
                         if var_type != VarType::Base {
                             return Err(self.error.abort(
                                 &format!(
-                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                    VarType::Base,
-                                    var_type
+                                    "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                    VarType::Base
                                 ),
                                 v.line,
                                 v.column,
@@ -287,9 +286,8 @@ impl Analyzer {
                     } else if arg_types[0] == VarType::ScalarArray && var_type != VarType::Scalar {
                         return Err(self.error.abort(
                             &format!(
-                                "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                VarType::Scalar,
-                                var_type
+                                "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                VarType::Scalar
                             ),
                             v.line,
                             v.column,
@@ -299,8 +297,8 @@ impl Analyzer {
                     if var_type != arg_types[idx] {
                         return Err(self.error.abort(
                             &format!(
-                                "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                arg_types[idx], var_type
+                                "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                arg_types[idx]
                             ),
                             v.line,
                             v.column,
@@ -325,9 +323,8 @@ impl Analyzer {
                             if var_type != VarType::Base {
                                 return Err(self.error.abort(
                                     &format!(
-                                        "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                        VarType::Base,
-                                        var_type
+                                        "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                        VarType::Base
                                     ),
                                     v.line,
                                     v.column,
@@ -337,9 +334,8 @@ impl Analyzer {
                             if var_type != VarType::Scalar {
                                 return Err(self.error.abort(
                                     &format!(
-                                        "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                        VarType::Scalar,
-                                        var_type
+                                        "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                        VarType::Scalar
                                     ),
                                     v.line,
                                     v.column,
@@ -348,8 +344,8 @@ impl Analyzer {
                         } else if var_type != arg_types[idx] && arg_types[idx] != VarType::Any {
                             return Err(self.error.abort(
                                 &format!(
-                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                    arg_types[idx], var_type
+                                    "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                    arg_types[idx]
                                 ),
                                 v.line,
                                 v.column,
@@ -393,7 +389,7 @@ impl Analyzer {
                 self.heap.clone_from(&heap);
             }
 
-            //println!("{:#?}", stmt);
+            //println!("{stmt:#?}");
             statements.push(stmt);
         } // <-- for statement in &self.statements
 
@@ -465,14 +461,14 @@ impl Analyzer {
             heap.push(&i.name);
             Analyzer::pause();
         }
-        println!("Heap:\n{:#?}\n-----", heap);
+        println!("Heap:\n{heap:#?}\n-----");
         println!("Loading witnesses...\n-----");
         for i in &self.witnesses {
             println!("Adding `{}` to heap", i.name);
             heap.push(&i.name);
             Analyzer::pause();
         }
-        println!("Heap:\n{:#?}\n-----", heap);
+        println!("Heap:\n{heap:#?}\n-----");
         println!("Loading circuit...");
         for i in &self.statements {
             let mut argnames = vec![];
@@ -485,7 +481,7 @@ impl Analyzer {
                     unreachable!()
                 }
             }
-            println!("Executing: {:?}({:?})", i.opcode, argnames);
+            println!("Executing: {:?}({argnames:?})", i.opcode);
 
             Analyzer::pause();
 
@@ -493,7 +489,7 @@ impl Analyzer {
                 if let Arg::Var(arg) = arg {
                     print!("Looking up `{}` on the heap... ", arg.name);
                     if let Some(index) = heap.iter().position(|&r| r == &arg.name) {
-                        println!("Found at heap index {}", index);
+                        println!("Found at heap index {index}");
                     } else {
                         return Err(self.error.abort(
                             &format!("Could not find `{}` on the heap", arg.name),
@@ -504,7 +500,7 @@ impl Analyzer {
                 } else if let Arg::Lit(lit) = arg {
                     println!("Using literal `{}`", lit.name);
                 } else {
-                    println!("{:#?}", arg);
+                    println!("{arg:#?}");
                     unreachable!();
                 }
 
@@ -514,7 +510,7 @@ impl Analyzer {
                 StatementType::Assign => {
                     println!("Pushing result as `{}` to heap", &i.lhs.as_ref().unwrap().name);
                     heap.push(&i.lhs.as_ref().unwrap().name);
-                    println!("Heap:\n{:#?}\n-----", heap);
+                    println!("Heap:\n{heap:#?}\n-----");
                 }
                 StatementType::Call => {
                     println!("-----");

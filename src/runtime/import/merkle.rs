@@ -45,7 +45,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if let Err(e) = acl_allow(env, &[ContractSection::Update]) {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] merkle_add(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -61,7 +61,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] merkle_add(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -70,7 +70,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] merkle_add(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -88,7 +88,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Failed to decode db_info DbHandle: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Failed to decode db_info DbHandle: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -100,7 +100,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Failed to decode db_roots DbHandle: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Failed to decode db_roots DbHandle: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -113,7 +113,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if n_dbs <= db_info_index || n_dbs <= db_roots_index {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] merkle_add(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -124,7 +124,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if db_info.contract_id != env.contract_id || db_roots.contract_id != env.contract_id {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Unauthorized to write to DbHandle", cid,
+            "[WASM] [{cid}] merkle_add(): Unauthorized to write to DbHandle"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -135,7 +135,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -147,7 +147,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -159,7 +159,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Failed to decode MerkleNode: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Failed to decode MerkleNode: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -169,7 +169,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if buf_reader.position() != (len as u64) {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Mismatch between given length, and cursor length", cid,
+            "[WASM] [{cid}] merkle_add(): Mismatch between given length, and cursor length"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -183,7 +183,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Internal error getting from tree: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Internal error getting from tree: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -192,7 +192,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     let Some(return_data) = ret else {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Return data is empty", cid,
+            "[WASM] [{cid}] merkle_add(): Return data is empty"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -214,7 +214,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Unable to read set size: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Unable to read set size: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -225,7 +225,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         Err(e) => {
             error!(
                 target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Unable to deserialize Merkle tree: {}", cid, e,
+                "[WASM] [{cid}] merkle_add(): Unable to deserialize Merkle tree: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -244,7 +244,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Couldn't reserialize modified tree", cid,
+            "[WASM] [{cid}] merkle_add(): Couldn't reserialize modified tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -253,7 +253,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if overlay.insert(&db_info.tree, &tree_key, &tree_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Couldn't insert to db_info tree", cid,
+            "[WASM] [{cid}] merkle_add(): Couldn't insert to db_info tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -263,14 +263,14 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     let Some(latest_root) = tree.root(0) else {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Unable to read the root of tree", cid,
+            "[WASM] [{cid}] merkle_add(): Unable to read the root of tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
 
     debug!(
         target: "runtime::merkle::merkle_add",
-        "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, latest_root,
+        "[WASM] [{cid}] merkle_add(): Appending Merkle root to db: {latest_root:?}"
     );
     let latest_root_data = serialize(&latest_root);
     assert_eq!(latest_root_data.len(), 32);
@@ -283,7 +283,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,
+            "[WASM] [{cid}] merkle_add(): Couldn't insert to db_roots tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -291,13 +291,13 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     // Write a pointer to the latest known root
     debug!(
         target: "runtime::merkle::merkle_add",
-        "[WASM] [{}] merkle_add(): Replacing latest Merkle root pointer", cid,
+        "[WASM] [{cid}] merkle_add(): Replacing latest Merkle root pointer"
     );
 
     if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Couldn't insert latest root to db_info tree", cid,
+            "[WASM] [{cid}] merkle_add(): Couldn't insert latest root to db_info tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }

@@ -268,7 +268,7 @@ impl<'a> Lexer<'a> {
                     }
                     _ => {
                         return Err(self.error.abort(
-                            &format!("Invalid token `{}`", c),
+                            &format!("Invalid token `{c}`"),
                             lineno,
                             column - 1,
                         ))
@@ -276,7 +276,7 @@ impl<'a> Lexer<'a> {
                 }
             }
 
-            return Err(self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1))
+            return Err(self.error.abort(&format!("Invalid token `{c}`"), lineno, column - 1))
         }
 
         Ok(tokens)

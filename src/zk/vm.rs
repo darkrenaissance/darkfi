@@ -691,12 +691,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 LitType::Uint64 => match literal.1.parse::<u64>() {
                     Ok(v) => litheap.push(v),
                     Err(e) => {
-                        error!(target: "zk::vm", "Failed converting u64 literal: {}", e);
+                        error!(target: "zk::vm", "Failed converting u64 literal: {e}");
                         return Err(plonk::Error::Synthesis)
                     }
                 },
                 _ => {
-                    error!(target: "zk::vm", "Invalid literal: {:?}", literal);
+                    error!(target: "zk::vm", "Invalid literal: {literal:?}");
                     return Err(plonk::Error::Synthesis)
                 }
             }
@@ -1115,7 +1115,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                             )?;
                         }
                         x => {
-                            error!(target: "zk::vm", "Unsupported bit-range {} for range_check", x);
+                            error!(target: "zk::vm", "Unsupported bit-range {x} for range_check");
                             return Err(plonk::Error::Synthesis)
                         }
                     }

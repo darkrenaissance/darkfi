@@ -86,7 +86,7 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Result<Vec<Witness>> {
             VarType::SparseMerklePath => ret.push(Witness::SparseMerklePath(Value::unknown())),
             VarType::Uint32 => ret.push(Witness::Uint32(Value::unknown())),
             VarType::Uint64 => ret.push(Witness::Uint64(Value::unknown())),
-            x => return Err(ZkasDecoderError(format!("Unsupported witness type: {:?}", x))),
+            x => return Err(ZkasDecoderError(format!("Unsupported witness type: {x:?}"))),
         }
     }
 
@@ -119,7 +119,7 @@ macro_rules! impl_try_from {
                 match value {
                     HeapVar::$variant(v) => Ok(v),
                     x => {
-                        error!("Expected {}, but instead got: {:?}", stringify!($variant), x);
+                        error!("Expected {}, but instead got: {x:?}", stringify!($variant));
                         Err(plonk::Error::Synthesis)
                     }
                 }

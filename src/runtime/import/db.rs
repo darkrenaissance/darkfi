@@ -63,7 +63,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_init(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -80,7 +80,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] db_init(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_INIT_FAILED
     };
@@ -90,7 +90,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Failed to read memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_init(): Failed to read memory slice: {e}"
         );
         return darkfi_sdk::error::DB_INIT_FAILED
     };
@@ -103,7 +103,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         Err(e) => {
             error!(
                 target: "runtime::db::db_init",
-                "[WASM] [{}] db_init(): Failed decoding ContractId: {}", cid, e,
+                "[WASM] [{cid}] db_init(): Failed decoding ContractId: {e}"
             );
             return darkfi_sdk::error::DB_INIT_FAILED
         }
@@ -114,7 +114,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         Err(e) => {
             error!(
                 target: "runtime::db::db_init",
-                "[WASM] [{}] db_init(): Failed decoding db_name: {}", cid, e,
+                "[WASM] [{cid}] db_init(): Failed decoding db_name: {e}"
             );
             return darkfi_sdk::error::DB_INIT_FAILED
         }
@@ -124,7 +124,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_init(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_INIT_FAILED
     }
@@ -133,7 +133,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if read_db_name == SMART_CONTRACT_ZKAS_DB_NAME {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Attempted to init zkas db", cid,
+            "[WASM] [{cid}] db_init(): Attempted to init zkas db"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -142,7 +142,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if cid != read_cid {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): Unauthorized ContractId", cid,
+            "[WASM] [{cid}] db_init(): Unauthorized ContractId"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -158,7 +158,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         Err(e) => {
             error!(
                 target: "runtime::db::db_init",
-                "[WASM] [{}] db_init(): Failed to init db: {}", cid, e,
+                "[WASM] [{cid}] db_init(): Failed to init db: {e}"
             );
             return darkfi_sdk::error::DB_INIT_FAILED
         }
@@ -173,7 +173,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     if db_handles.contains(&db_handle) {
         error!(
             target: "runtime::db::db_init",
-            "[WASM] [{}] db_init(): DbHandle initialized twice during execution", cid,
+            "[WASM] [{cid}] db_init(): DbHandle initialized twice during execution"
         );
         return darkfi_sdk::error::DB_INIT_FAILED
     }
@@ -188,7 +188,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         Err(_) => {
             error!(
                 target: "runtime::db::db_init",
-                "[WASM] [{}] db_init(): Too many open DbHandles", cid,
+                "[WASM] [{cid}] db_init(): Too many open DbHandles"
             );
             darkfi_sdk::error::DB_INIT_FAILED
         }
@@ -220,7 +220,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
     ) {
         error!(
             target: "runtime::db::db_lookup",
-            "[WASM] [{}] db_lookup() called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_lookup() called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -235,7 +235,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_lookup",
-            "[WASM] [{}] db_lookup(): Failed to make slice from ptr.", cid,
+            "[WASM] [{cid}] db_lookup(): Failed to make slice from ptr."
         );
         return darkfi_sdk::error::DB_LOOKUP_FAILED
     };
@@ -244,7 +244,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_lookup",
-            "[WASM] [{}] db_lookup(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_lookup(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_LOOKUP_FAILED
     };
@@ -258,7 +258,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         Err(e) => {
             error!(
                 target: "runtime::db::db_lookup",
-                "[WASM] [{}] db_lookup(): Failed to decode ContractId: {}", cid, e,
+                "[WASM] [{cid}] db_lookup(): Failed to decode ContractId: {e}"
             );
             return darkfi_sdk::error::DB_LOOKUP_FAILED
         }
@@ -270,7 +270,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         Err(e) => {
             error!(
                 target: "runtime::db::db_lookup",
-                "[WASM] [{}] db_lookup(): Failed to decode db_name: {}", cid, e,
+                "[WASM] [{cid}] db_lookup(): Failed to decode db_name: {e}"
             );
             return darkfi_sdk::error::DB_LOOKUP_FAILED
         }
@@ -280,7 +280,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_lookup",
-            "[WASM] [{}] db_lookup(), Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_lookup(), Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_LOOKUP_FAILED
     }
@@ -288,7 +288,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
     if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
         error!(
             target: "runtime::db::db_lookup",
-            "[WASM] [{}] db_lookup(): Attempted to lookup zkas db", cid,
+            "[WASM] [{cid}] db_lookup(): Attempted to lookup zkas db"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -317,7 +317,7 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         Err(_) => {
             error!(
                 target: "runtime::db::db_lookup",
-                "[WASM] [{}] db_lookup(): Too many open DbHandles", cid,
+                "[WASM] [{cid}] db_lookup(): Too many open DbHandles"
             );
             darkfi_sdk::error::DB_LOOKUP_FAILED
         }
@@ -340,7 +340,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_set(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -355,7 +355,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] db_set(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     };
@@ -364,7 +364,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_set(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     };
@@ -377,7 +377,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_set",
-                "[WASM] [{}] db_set(): Failed to decode DbHandle: {}", cid, e,
+                "[WASM] [{cid}] db_set(): Failed to decode DbHandle: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -391,7 +391,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_set",
-                "[WASM] [{}] db_set(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] db_set(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -402,7 +402,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_set",
-                "[WASM] [{}] db_set(): Failed to decode value vec: {}", cid, e,
+                "[WASM] [{cid}] db_set(): Failed to decode value vec: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -412,7 +412,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_set(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -423,7 +423,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if db_handles.len() <= db_handle_index {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] db_set(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -435,7 +435,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if db_handle.contract_id != env.contract_id {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Unauthorized to write to DbHandle", cid,
+            "[WASM] [{cid}] db_set(): Unauthorized to write to DbHandle"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -453,7 +453,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     {
         error!(
             target: "runtime::db::db_set",
-            "[WASM] [{}] db_set(): Couldn't insert to db_handle tree", cid,
+            "[WASM] [{cid}] db_set(): Couldn't insert to db_handle tree"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -474,7 +474,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_del(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -488,7 +488,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] db_del(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     };
@@ -497,7 +497,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_del(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     };
@@ -510,7 +510,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_del",
-                "[WASM] [{}] db_del(): Failed to decode DbHandle: {}", cid, e,
+                "[WASM] [{cid}] db_del(): Failed to decode DbHandle: {e}"
             );
             return darkfi_sdk::error::DB_DEL_FAILED
         }
@@ -523,7 +523,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_del",
-                "[WASM] [{}] db_del(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] db_del(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::DB_DEL_FAILED
         }
@@ -533,7 +533,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_del(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }
@@ -543,7 +543,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if db_handles.len() <= db_handle_index {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] db_del(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }
@@ -555,7 +555,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if db_handle.contract_id != cid {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Unauthorized to write to DbHandle", cid,
+            "[WASM] [{cid}] db_del(): Unauthorized to write to DbHandle"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -565,7 +565,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     {
         error!(
             target: "runtime::db::db_del",
-            "[WASM] [{}] db_del(): Couldn't remove key from db_handle tree", cid,
+            "[WASM] [{cid}] db_del(): Couldn't remove key from db_handle tree"
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }
@@ -590,7 +590,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     {
         error!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_get(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -603,7 +603,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] db_get(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -612,7 +612,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_get(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     };
@@ -625,7 +625,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_get",
-                "[WASM] [{}] db_get(): Failed to decode DbHandle: {}", cid, e,
+                "[WASM] [{cid}] db_get(): Failed to decode DbHandle: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -639,7 +639,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Err(e) => {
             error!(
                 target: "runtime::db::db_get",
-                "[WASM] [{}] db_get(): Failed to decode key from vec: {}", cid, e,
+                "[WASM] [{cid}] db_get(): Failed to decode key from vec: {e}"
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -650,7 +650,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_get(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
@@ -661,7 +661,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     if db_handles.len() <= db_handle_index {
         error!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] db_get(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
@@ -676,7 +676,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
             Err(e) => {
                 error!(
                     target: "runtime::db::db_get",
-                    "[WASM] [{}] db_get(): Internal error getting from tree: {}", cid, e,
+                    "[WASM] [{cid}] db_get(): Internal error getting from tree: {e}"
                 );
                 return darkfi_sdk::error::DB_GET_FAILED
             }
@@ -687,7 +687,7 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     let Some(return_data) = ret else {
         debug!(
             target: "runtime::db::db_get",
-            "[WASM] [{}] db_get(): Return data is empty", cid,
+            "[WASM] [{cid}] db_get(): Return data is empty"
         );
         return darkfi_sdk::error::DB_GET_EMPTY
     };
@@ -727,7 +727,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
     {
         error!(
             target: "runtime::db::db_contains_key",
-            "[WASM] [{}] db_contains_key(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] db_contains_key(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -740,7 +740,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_contains_key",
-            "[WASM] [{}] db_contains_key(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] db_contains_key(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
     };
@@ -749,7 +749,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::db_contains_key",
-            "[WASM] [{}] db_contains_key(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] db_contains_key(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
     };
@@ -762,7 +762,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
         Err(e) => {
             error!(
                 target: "runtime::db::db_contains_key",
-                "[WASM] [{}] db_contains_key(): Failed to decode DbHandle: {}", cid, e,
+                "[WASM] [{cid}] db_contains_key(): Failed to decode DbHandle: {e}"
             );
             return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
         }
@@ -776,7 +776,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
         Err(e) => {
             error!(
                 target: "runtime::db::db_contains_key",
-                "[WASM] [{}] db_contains_key(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] db_contains_key(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
         }
@@ -787,7 +787,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
     if buf_reader.position() != ptr_len as u64 {
         error!(
             target: "runtime::db::db_contains_key",
-            "[WASM] [{}] db_contains_key(): Trailing bytes in argument stream", cid,
+            "[WASM] [{cid}] db_contains_key(): Trailing bytes in argument stream"
         );
         return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
     }
@@ -798,7 +798,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
     if db_handles.len() <= db_handle_index {
         error!(
             target: "runtime::db::db_contains_key",
-            "[WASM] [{}] db_contains_key(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] db_contains_key(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
     }
@@ -813,7 +813,7 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
         Err(e) => {
             error!(
                 target: "runtime::db::db_contains_key",
-                "[WASM] [{}] db_contains_key(): sled.tree.contains_key failed: {}", cid, e,
+                "[WASM] [{cid}] db_contains_key(): sled.tree.contains_key failed: {e}"
             );
             darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
         }
@@ -833,7 +833,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] zkas_db_set(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -844,7 +844,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] zkas_db_set(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     };
@@ -853,7 +853,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] zkas_db_set(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     };
@@ -864,7 +864,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         Err(e) => {
             error!(
                 target: "runtime::db::zkas_db_set",
-                "[WASM] [{}] zkas_db_set(): Could not deserialize bytes from buffer: {}", cid, e,
+                "[WASM] [{cid}] zkas_db_set(): Could not deserialize bytes from buffer: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -876,7 +876,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         Err(e) => {
             error!(
                 target: "runtime::db::zkas_db_set",
-                "[WASM] [{}] zkas_db_set(): Invalid zkas bincode passed to function: {}", cid, e,
+                "[WASM] [{cid}] zkas_db_set(): Invalid zkas bincode passed to function: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -896,7 +896,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     if db_handle.contract_id != cid {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Internal error, zkas db at index 0 incorrect", cid,
+            "[WASM] [{cid}] zkas_db_set(): Internal error, zkas db at index 0 incorrect"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -922,8 +922,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
                 if existing_zkbin == zkbin_bytes {
                     debug!(
                         target: "runtime::db::zkas_db_set",
-                        "[WASM] [{}] zkas_db_set(): Existing zkas bincode is the same. Skipping.",
-                        cid,
+                        "[WASM] [{cid}] zkas_db_set(): Existing zkas bincode is the same. Skipping."
                     );
                     return wasm::entrypoint::SUCCESS
                 }
@@ -932,7 +931,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         Err(e) => {
             error!(
                 target: "runtime::db::zkas_db_set",
-                "[WASM] [{}] zkas_db_set(): Internal error getting from tree: {}", cid, e,
+                "[WASM] [{cid}] zkas_db_set(): Internal error getting from tree: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -941,8 +940,8 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
     info!(
         target: "runtime::db::zkas_db_set",
-        "[WASM] [{}] zkas_db_set(): Creating VerifyingKey for {} zkas circuit",
-        cid, zkbin.namespace,
+        "[WASM] [{cid}] zkas_db_set(): Creating VerifyingKey for {} zkas circuit",
+        zkbin.namespace,
     );
 
     let witnesses = match empty_witnesses(&zkbin) {
@@ -950,7 +949,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         Err(e) => {
             error!(
                 target: "runtime::db::zkas_db_set",
-                "[WASM] [{}] zkas_db_set(): Failed to create empty witnesses: {}", cid, e,
+                "[WASM] [{cid}] zkas_db_set(): Failed to create empty witnesses: {e}"
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -963,7 +962,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     if let Err(e) = vk.write(&mut vk_buf) {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Failed to serialize VerifyingKey: {}", cid, e,
+            "[WASM] [{cid}] zkas_db_set(): Failed to serialize VerifyingKey: {e}"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -983,7 +982,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     {
         error!(
             target: "runtime::db::zkas_db_set",
-            "[WASM] [{}] zkas_db_set(): Couldn't insert to db_handle tree", cid,
+            "[WASM] [{cid}] zkas_db_set(): Couldn't insert to db_handle tree"
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }

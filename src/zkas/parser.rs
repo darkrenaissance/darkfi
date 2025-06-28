@@ -162,7 +162,7 @@ impl Parser {
             Ok(v) => v,
             Err(e) => {
                 return Err(self.error.abort(
-                    &format!("k param is invalid, max allowed is {}. Error: {}", MAX_K, e),
+                    &format!("k param is invalid, max allowed is {MAX_K}. Error: {e}"),
                     number.line,
                     number.column,
                 ))
@@ -171,7 +171,7 @@ impl Parser {
 
         if declared_k > MAX_K {
             return Err(self.error.abort(
-                &format!("k param is too high, max allowed is {}", MAX_K),
+                &format!("k param is too high, max allowed is {MAX_K}"),
                 number.line,
                 number.column,
             ))
@@ -209,8 +209,8 @@ impl Parser {
         if !ALLOWED_FIELDS.contains(&field_name.token.as_str()) {
             return Err(self.error.abort(
                 &format!(
-                    "Declared field \"{}\" is not supported. Use any of: {:?}",
-                    field_name.token, ALLOWED_FIELDS
+                    "Declared field \"{}\" is not supported. Use any of: {ALLOWED_FIELDS:?}",
+                    field_name.token
                 ),
                 field_name.line,
                 field_name.column,
@@ -267,7 +267,7 @@ impl Parser {
 
                     x => {
                         return Err(self.error.abort(
-                            &format!("Section `{}` is not a valid section", x),
+                            &format!("Section `{x}` is not a valid section"),
                             t.line,
                             t.column,
                         ))
@@ -282,7 +282,7 @@ impl Parser {
                     if let Some(ns) = namespace.clone() {
                         if ns != $t[0].token {
                             return Err(self.error.abort(
-                                &format!("Found '{}' namespace, expected '{}'.", $t[0].token, ns),
+                                &format!("Found '{}' namespace, expected '{ns}'.", $t[0].token),
                                 $t[0].line,
                                 $t[0].column,
                             ))
@@ -299,7 +299,7 @@ impl Parser {
                         namespace = Some($t[0].token.clone());
                         if namespace.as_ref().unwrap().as_bytes().len() > MAX_NS_LEN {
                             return Err(self.error.abort(
-                                &format!("Namespace too long, max {} bytes", MAX_NS_LEN),
+                                &format!("Namespace too long, max {MAX_NS_LEN} bytes"),
                                 $t[0].line,
                                 $t[0].column,
                             ))
@@ -513,12 +513,12 @@ impl Parser {
         match section {
             "constant" | "witness" => {
                 if tokens.len() == 3 {
-                    self.error.warn(&format!("{} section is empty.", section), 0, 0);
+                    self.error.warn(&format!("{section} section is empty."), 0, 0);
                 }
 
                 if tokens[2..tokens.len() - 1].len() % 3 != 0 {
                     return Err(self.error.abort(
-                        &format!("Invalid number of elements in '{}' section. Must be pairs of '<Type> <name>' separated with a comma ','.", section),
+                        &format!("Invalid number of elements in '{section}' section. Must be pairs of '<Type> <name>' separated with a comma ','."),
                         tokens[0].line,
                         tokens[0].column
                     ))
@@ -551,7 +551,7 @@ impl Parser {
         for (k, v) in ast.scam_iter() {
             if v.0.token != k {
                 return Err(self.error.abort(
-                    &format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
+                    &format!("Constant name `{}` doesn't match token `{k}`.", v.0.token),
                     v.0.line,
                     v.0.column,
                 ))
@@ -580,9 +580,8 @@ impl Parser {
                     if !VALID_ECFIXEDPOINT.contains(&v.0.token.as_str()) {
                         return Err(self.error.abort(
                             &format!(
-                                "`{}` is not a valid EcFixedPoint constant. Supported: {:?}",
-                                v.0.token.as_str(),
-                                VALID_ECFIXEDPOINT
+                                "`{}` is not a valid EcFixedPoint constant. Supported: {VALID_ECFIXEDPOINT:?}",
+                                v.0.token.as_str()
                             ),
                             v.0.line,
                             v.0.column,
@@ -601,9 +600,8 @@ impl Parser {
                     if !VALID_ECFIXEDPOINTSHORT.contains(&v.0.token.as_str()) {
                         return Err(self.error.abort(
                             &format!(
-                                "`{}` is not a valid EcFixedPointShort constant. Supported: {:?}",
-                                v.0.token.as_str(),
-                                VALID_ECFIXEDPOINTSHORT
+                                "`{}` is not a valid EcFixedPointShort constant. Supported: {VALID_ECFIXEDPOINTSHORT:?}",
+                                v.0.token.as_str()
                             ),
                             v.0.line,
                             v.0.column,
@@ -622,9 +620,8 @@ impl Parser {
                     if !VALID_ECFIXEDPOINTBASE.contains(&v.0.token.as_str()) {
                         return Err(self.error.abort(
                             &format!(
-                                "`{}` is not a valid EcFixedPointBase constant. Supported: {:?}",
-                                v.0.token.as_str(),
-                                VALID_ECFIXEDPOINTBASE
+                                "`{}` is not a valid EcFixedPointBase constant. Supported: {VALID_ECFIXEDPOINTBASE:?}",
+                                v.0.token.as_str()
                             ),
                             v.0.line,
                             v.0.column,
@@ -641,7 +638,7 @@ impl Parser {
 
                 x => {
                     return Err(self.error.abort(
-                        &format!("`{}` is an unsupported constant type.", x),
+                        &format!("`{x}` is an unsupported constant type."),
                         v.1.line,
                         v.1.column,
                     ))
@@ -660,7 +657,7 @@ impl Parser {
         for (k, v) in ast.scam_iter() {
             if v.0.token != k {
                 return Err(self.error.abort(
-                    &format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
+                    &format!("Witness name `{}` doesn't match token `{k}`.", v.0.token),
                     v.0.line,
                     v.0.column,
                 ))
@@ -759,7 +756,7 @@ impl Parser {
 
                 x => {
                     return Err(self.error.abort(
-                        &format!("`{}` is an unsupported witness type.", x),
+                        &format!("`{x}` is an unsupported witness type."),
                         v.1.line,
                         v.1.column,
                     ))
@@ -961,7 +958,7 @@ impl Parser {
                     stmt.rhs = rhs;
                 } else {
                     return Err(self.error.abort(
-                        &format!("Unimplemented opcode `{}`.", func_name),
+                        &format!("Unimplemented opcode `{func_name}`."),
                         token.line,
                         token.column,
                     ))
@@ -1098,7 +1095,7 @@ impl Parser {
                             Ok(_) => {}
                             Err(e) => {
                                 return Err(self.error.abort(
-                                    &format!("Failed to convert literal into u64: {}", e),
+                                    &format!("Failed to convert literal into u64: {e}"),
                                     arg.line,
                                     arg.column,
                                 ))
@@ -1126,7 +1123,7 @@ impl Parser {
                     // This assists with fuzz testing as existing features can still be tested
                     // without causing the fuzzer to choke due to the panic created
                     // by unimplmented!().
-                    // x => unimplemented!("{:#?}", x),
+                    // x => unimplemented!("{x:#?}"),
                     _ => {
                         return Err(self.error.abort(
                             "Character is illegal/unimplemented in this context",

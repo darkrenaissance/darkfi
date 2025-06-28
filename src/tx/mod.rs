@@ -90,27 +90,27 @@ impl Transaction {
             for (proof, (zk_ns, public_vals)) in proofs.iter().zip(pubvals.iter()) {
                 if let Some(vk) = contract_map.get(zk_ns) {
                     // We have a verifying key for this
-                    debug!(target: "tx::verify_zkps", "[TX] public inputs: {:#?}", public_vals);
+                    debug!(target: "tx::verify_zkps", "[TX] public inputs: {public_vals:#?}");
                     if let Err(e) = proof.verify(vk, public_vals) {
                         error!(
                             target: "tx::verify_zkps",
-                            "[TX] Failed verifying {}::{} ZK proof: {:#?}",
-                            call.data.contract_id, zk_ns, e
+                            "[TX] Failed verifying {}::{zk_ns} ZK proof: {e:#?}",
+                            call.data.contract_id
                         );
                         return Err(TxVerifyFailed::InvalidZkProof.into())
                     }
                     debug!(
                         target: "tx::verify_zkps",
-                        "[TX] Successfully verified {}::{} ZK proof",
-                        call.data.contract_id, zk_ns,
+                        "[TX] Successfully verified {}::{zk_ns} ZK proof",
+                        call.data.contract_id
                     );
                     continue
                 }
 
                 error!(
                     target: "tx::verify_zkps",
-                    "[TX] {}::{} circuit VK nonexistent",
-                    call.data.contract_id, zk_ns,
+                    "[TX] {}::{zk_ns} circuit VK nonexistent",
+                    call.data.contract_id
                 );
                 return Err(TxVerifyFailed::InvalidZkProof.into())
             }
@@ -202,7 +202,7 @@ impl std::fmt::Debug for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Transaction {{")?;
         for (i, call) in self.calls.iter().enumerate() {
-            writeln!(f, "  Call {} {{", i)?;
+            writeln!(f, "  Call {i} {{")?;
             writeln!(f, "    contract_id: {:?}", call.data.contract_id.inner())?;
             let calldata = &call.data.data;
             if !calldata.is_empty() {

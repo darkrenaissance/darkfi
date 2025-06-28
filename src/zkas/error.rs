@@ -33,14 +33,14 @@ impl ErrorEmitter {
         let (err_msg, dbg_msg, caret) = match ln {
             0 => (msg, "".to_string(), "".to_string()),
             _ => {
-                let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-                let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
+                let err_msg = format!("{msg} (line {ln}, column {col})");
+                let dbg_msg = format!("{}:{ln}:{col}: {}", self.file, self.lines[ln - 1]);
                 let pad = dbg_msg.split(": ").next().unwrap().len() + col + 1;
                 let caret = format!("{:width$}^", "", width = pad);
                 (err_msg, dbg_msg, caret)
             }
         };
-        format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret)
+        format!("{err_msg}\n{dbg_msg}\n{caret}\n")
     }
 
     pub fn abort(&self, msg: &str, ln: usize, col: usize) -> Error {
@@ -63,12 +63,10 @@ impl ErrorEmitter {
         let mut handle = stderr.lock();
 
         match typ {
-            "error" => {
-                write!(handle, "\x1b[31;1m{} error:\x1b[0m {}", self.namespace, msg).unwrap()
-            }
+            "error" => write!(handle, "\x1b[31;1m{} error:\x1b[0m {msg}", self.namespace).unwrap(),
 
             "warning" => {
-                write!(handle, "\x1b[33;1m{} warning:\x1b[0m {}", self.namespace, msg).unwrap()
+                write!(handle, "\x1b[33;1m{} warning:\x1b[0m {msg}", self.namespace).unwrap()
             }
 
             _ => unreachable!(),

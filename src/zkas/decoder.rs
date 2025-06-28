@@ -247,7 +247,7 @@ impl ZkBinary {
                 let heap_type = match HeapType::from_repr(heap_type) {
                     Some(v) => v,
                     None => {
-                        return Err(ZkasErr(format!("Could not decode HeapType from {}", heap_type)))
+                        return Err(ZkasErr(format!("Could not decode HeapType from {heap_type}")))
                     }
                 };
                 args.push((heap_type, heap_index.0 as usize));

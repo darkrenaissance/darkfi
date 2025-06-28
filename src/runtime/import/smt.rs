@@ -48,8 +48,8 @@ impl StorageAdapter for SledStorage<'_> {
         if let Err(e) = self.overlay.insert(self.tree_key, &key.to_bytes_le(), &value.to_repr()) {
             error!(
                 target: "runtime::smt::SledStorage::put",
-                "[WASM] SledStorage::put(): inserting key {:?}, value {:?} into DB tree: {:?}: {}",
-                key, value, self.tree_key, e,
+                "[WASM] SledStorage::put(): inserting key {key:?}, value {value:?} into DB tree: {:?}: {e}",
+                self.tree_key
             );
             return Err(ContractError::SmtPutFailed)
         }
@@ -63,8 +63,8 @@ impl StorageAdapter for SledStorage<'_> {
             Err(e) => {
                 error!(
                     target: "runtime::smt::SledStorage::get",
-                    "[WASM] SledStorage::get(): Fetching key {:?} from DB tree: {:?}: {}",
-                    key, self.tree_key, e,
+                    "[WASM] SledStorage::get(): Fetching key {key:?} from DB tree: {:?}: {e}",
+                    self.tree_key
                 );
                 return None
             }
@@ -81,8 +81,8 @@ impl StorageAdapter for SledStorage<'_> {
         if let Err(e) = self.overlay.remove(self.tree_key, &key.to_bytes_le()) {
             error!(
                 target: "runtime::smt::SledStorage::del",
-                "[WASM] SledStorage::del(): Removing key {:?} from DB tree: {:?}: {}",
-                key, self.tree_key, e,
+                "[WASM] SledStorage::del(): Removing key {key:?} from DB tree: {:?}: {e}",
+                self.tree_key
             );
             return Err(ContractError::SmtDelFailed)
         }
@@ -110,7 +110,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if let Err(e) = acl_allow(env, &[ContractSection::Update]) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Called in unauthorized section: {}", cid, e,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -123,7 +123,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to make slice from ptr", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to make slice from ptr"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -132,7 +132,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to read from memory slice: {}", cid, e,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to read from memory slice: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -147,7 +147,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
                 target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode db_info DbHandle: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to decode db_info DbHandle: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -159,7 +159,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode db_smt DbHandle: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to decode db_smt DbHandle: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -171,7 +171,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
                 target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode db_roots DbHandle: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to decode db_roots DbHandle: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -184,7 +184,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if n_dbs <= db_info_index || n_dbs <= db_smt_index || n_dbs <= db_roots_index {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Requested DbHandle that is out of bounds", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Requested DbHandle that is out of bounds"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -199,7 +199,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Unauthorized to write to DbHandle", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Unauthorized to write to DbHandle"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -210,7 +210,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
                 target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode key vec: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to decode key vec: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -222,7 +222,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
                 target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode pallas::Base: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to decode pallas::Base: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -232,7 +232,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if buf_reader.position() != (len as u64) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Mismatch between given length, and cursor length", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Mismatch between given length, and cursor length"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -258,7 +258,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if let Err(e) = smt.insert_batch(leaves) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): SMT failed to insert batch: {}", cid, e,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): SMT failed to insert batch: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
@@ -272,7 +272,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     if latest_root_data.len() != 32 {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Latest root data length missmatch: {}", cid, latest_root_data.len(),
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Latest root data length missmatch: {}", latest_root_data.len(),
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -282,21 +282,21 @@ pub(crate) fn sparse_merkle_insert_batch(
     if let Err(e) = env.tx_hash.inner().encode(&mut new_value_data) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to serialize transaction hash: {}", cid, e,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to serialize transaction hash: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
     if let Err(e) = env.call_idx.encode(&mut new_value_data) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to serialize call index: {}", cid, e,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to serialize call index: {e}"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
     if new_value_data.len() != 32 + 1 {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): New value data length missmatch: {}", cid, new_value_data.len(),
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): New value data length missmatch: {}", new_value_data.len(),
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -307,7 +307,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         Err(e) => {
             error!(
                 target: "runtime::smt::sparse_merkle_insert_batch",
-                "[WASM] [{}] sparse_merkle_insert_batch(): SMT failed to retrieve current root snapshot: {}", cid, e,
+                "[WASM] [{cid}] sparse_merkle_insert_batch(): SMT failed to retrieve current root snapshot: {e}"
             );
             return darkfi_sdk::error::INTERNAL_ERROR
         }
@@ -322,7 +322,7 @@ pub(crate) fn sparse_merkle_insert_batch(
                 Err(e) => {
                     error!(
                         target: "runtime::smt::sparse_merkle_insert_batch",
-                        "[WASM] [{}] sparse_merkle_insert_batch(): Failed to deserialize current root snapshot: {}", cid, e,
+                        "[WASM] [{cid}] sparse_merkle_insert_batch(): Failed to deserialize current root snapshot: {e}"
                     );
                     return darkfi_sdk::error::INTERNAL_ERROR
                 }
@@ -340,13 +340,13 @@ pub(crate) fn sparse_merkle_insert_batch(
     // Write the latest root snapshot
     debug!(
         target: "runtime::smt::sparse_merkle_insert_batch",
-        "[WASM] [{}] sparse_merkle_insert_batch(): Appending SMT root to db: {:?}", cid, latest_root,
+        "[WASM] [{cid}] sparse_merkle_insert_batch(): Appending SMT root to db: {latest_root:?}"
     );
     if overlay.insert(&db_roots.tree, &latest_root_data, &serialize(&root_value_data_set)).is_err()
     {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Couldn't insert to db_roots tree", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Couldn't insert to db_roots tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
@@ -354,12 +354,12 @@ pub(crate) fn sparse_merkle_insert_batch(
     // Update the pointer to the latest known root
     debug!(
         target: "runtime::smt::sparse_merkle_insert_batch",
-        "[WASM] [{}] sparse_merkle_insert_batch(): Replacing latest SMT root pointer", cid,
+        "[WASM] [{cid}] sparse_merkle_insert_batch(): Replacing latest SMT root pointer"
     );
     if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Couldn't insert latest root to db_info tree", cid,
+            "[WASM] [{cid}] sparse_merkle_insert_batch(): Couldn't insert latest root to db_info tree"
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }

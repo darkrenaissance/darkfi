@@ -131,11 +131,11 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> NativeRangeCheckChip<WINDO
         k_values_table: TableColumn,
     ) -> Result<(), plonk::Error> {
         layouter.assign_table(
-            || format!("{} window table", WINDOW_SIZE),
+            || format!("{WINDOW_SIZE} window table"),
             |mut table| {
                 for index in 0..(1 << WINDOW_SIZE) {
                     table.assign_cell(
-                        || format!("{} window assign", WINDOW_SIZE),
+                        || format!("{WINDOW_SIZE} window assign"),
                         k_values_table,
                         index,
                         || Value::known(pallas::Base::from(index as u64)),
@@ -280,7 +280,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> NativeRangeCheckChip<WINDO
         value: Value<pallas::Base>,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
-            || format!("witness {}-bit native range check", NUM_BITS),
+            || format!("witness {NUM_BITS}-bit native range check"),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = region.assign_advice(|| "z_0", self.config.z, 0, || value)?;
                 self.decompose(&mut region, z_0, 0)?;
@@ -295,7 +295,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> NativeRangeCheckChip<WINDO
         value: AssignedCell<pallas::Base, pallas::Base>,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
-            || format!("copy {}-bit native range check", NUM_BITS),
+            || format!("copy {NUM_BITS}-bit native range check"),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = value.copy_advice(|| "z_0", &mut region, self.config.z, 0)?;
                 self.decompose(&mut region, z_0, 0)?;

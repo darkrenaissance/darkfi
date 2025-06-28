@@ -391,7 +391,7 @@ impl Runtime {
                 self.print_logs();
                 info!(target: "runtime::vm_runtime", "[WASM] {}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                error!(target: "runtime::vm_runtime", "[WASM] Wasmer Runtime Error: {:#?}", e);
+                error!(target: "runtime::vm_runtime", "[WASM] Wasmer Runtime Error: {e:#?}");
                 return Err(e.into())
             }
         };
@@ -420,7 +420,7 @@ impl Runtime {
                     }
                     // The only supported return type is i64, so panic if another
                     // value is returned.
-                    _ => unreachable!("Got unexpected result return value: {:?}", ret),
+                    _ => unreachable!("Got unexpected result return value: {ret:?}"),
                 }
             }
         };
@@ -432,7 +432,7 @@ impl Runtime {
             wasm::entrypoint::SUCCESS => Ok(retdata),
             _ => {
                 let err = darkfi_sdk::error::ContractError::from(retval);
-                error!(target: "runtime::vm_runtime", "[WASM] Contract returned: {:?}", err);
+                error!(target: "runtime::vm_runtime", "[WASM] Contract returned: {err:?}");
                 Err(Error::ContractError(err))
             }
         }
@@ -450,7 +450,7 @@ impl Runtime {
     /// assume that the contract is only able to do write operations on its own overlay trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         let cid = self.ctx.as_ref(&self.store).contract_id;
-        info!(target: "runtime::vm_runtime", "[WASM] Running deploy() for ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Running deploy() for ContractID: {cid}");
 
         // Scoped for borrows
         {
@@ -470,7 +470,7 @@ impl Runtime {
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
         }
 
-        //debug!(target: "runtime::vm_runtime", "[WASM] payload: {:?}", payload);
+        //debug!(target: "runtime::vm_runtime", "[WASM] payload: {payload:?}");
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // Update the wasm bincode in the ContractStore wasm tree if the deploy exec passed successfully.
@@ -482,7 +482,7 @@ impl Runtime {
             .contracts
             .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
-        info!(target: "runtime::vm_runtime", "[WASM] Successfully deployed ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully deployed ContractID: {cid}");
         Ok(())
     }
 
@@ -494,13 +494,13 @@ impl Runtime {
     /// call/transaction signatures.
     pub fn metadata(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
         let cid = self.ctx.as_ref(&self.store).contract_id;
-        info!(target: "runtime::vm_runtime", "[WASM] Running metadata() for ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Running metadata() for ContractID: {cid}");
 
         debug!(target: "runtime::vm_runtime", "metadata payload: {}", payload.hex());
         let ret = self.call(ContractSection::Metadata, payload)?;
         debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret.hex());
 
-        info!(target: "runtime::vm_runtime", "[WASM] Successfully got metadata ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully got metadata ContractID: {cid}");
         Ok(ret)
     }
 
@@ -511,13 +511,13 @@ impl Runtime {
     /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
         let cid = self.ctx.as_ref(&self.store).contract_id;
-        info!(target: "runtime::vm_runtime", "[WASM] Running exec() for ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Running exec() for ContractID: {cid}");
 
         debug!(target: "runtime::vm_runtime", "exec payload: {}", payload.hex());
         let ret = self.call(ContractSection::Exec, payload)?;
         debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret.hex());
 
-        info!(target: "runtime::vm_runtime", "[WASM] Successfully executed ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully executed ContractID: {cid}");
         Ok(ret)
     }
 
@@ -529,13 +529,13 @@ impl Runtime {
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
         let cid = self.ctx.as_ref(&self.store).contract_id;
-        info!(target: "runtime::vm_runtime", "[WASM] Running apply() for ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Running apply() for ContractID: {cid}");
 
         debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update.hex());
         let ret = self.call(ContractSection::Update, update)?;
         debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret.hex());
 
-        info!(target: "runtime::vm_runtime", "[WASM] Successfully applied ContractID: {}", cid);
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully applied ContractID: {cid}");
         Ok(())
     }
 
@@ -543,7 +543,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
-            info!(target: "runtime::vm_runtime", "[WASM] Contract log: {}", msg);
+            info!(target: "runtime::vm_runtime", "[WASM] Contract log: {msg}");
         }
     }
 
@@ -573,9 +573,9 @@ impl Runtime {
         let gas_used = self.gas_used();
 
         if gas_used > GAS_LIMIT {
-            format!("Gas fully exhausted: {}/{}", gas_used, GAS_LIMIT)
+            format!("Gas fully exhausted: {gas_used}/{GAS_LIMIT}")
         } else {
-            format!("Gas used: {}/{}", gas_used, GAS_LIMIT)
+            format!("Gas used: {gas_used}/{GAS_LIMIT}")
         }
     }
 
