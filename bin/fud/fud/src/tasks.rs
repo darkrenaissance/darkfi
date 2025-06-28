@@ -63,7 +63,7 @@ pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "fud::get_task()", "Error while fetching resource: {}", e)
+                        error!(target: "fud::get_task()", "Error while fetching resource: {e}")
                     }
                 }
             },
@@ -87,7 +87,7 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
         let seeding_resources = match fud.verify_resources(None).await {
             Ok(resources) => resources,
             Err(e) => {
-                error!(target: "fud::announce_seed_task()", "Error while verifying seeding resources: {}", e);
+                error!(target: "fud::announce_seed_task()", "Error while verifying seeding resources: {e}");
                 continue;
             }
         };

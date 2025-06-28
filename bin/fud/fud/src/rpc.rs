@@ -109,7 +109,7 @@ impl JsonRpcInterface {
         // add it to Geode.
         let res = self.fud.put(&path).await;
         if let Err(e) = res {
-            return JsonError::new(ErrorCode::InternalError, Some(format!("{}", e)), id).into()
+            return JsonError::new(ErrorCode::InternalError, Some(format!("{e}")), id).into()
         }
 
         JsonResponse::new(JsonValue::String(hash_to_string(&res.unwrap())), id).into()
@@ -340,7 +340,7 @@ impl JsonRpcInterface {
         };
 
         if let Err(e) = self.fud.verify_resources(hashes).await {
-            error!(target: "fud::verify()", "Could not verify resources: {}", e);
+            error!(target: "fud::verify()", "Could not verify resources: {e}");
             return JsonError::new(ErrorCode::InternalError, None, id).into();
         }
 

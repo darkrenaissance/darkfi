@@ -178,7 +178,7 @@ impl ProtocolFud {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     continue
                 }
             };
@@ -200,7 +200,7 @@ impl ProtocolFud {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     continue
                 }
             };
@@ -310,7 +310,7 @@ impl ProtocolFud {
                     })
                     .collect::<std::result::Result<Vec<_>, StripPrefixError>>();
                 if let Err(e) = files {
-                    error!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Error parsing file paths before sending directory metadata: {}", e);
+                    error!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Error parsing file paths before sending directory metadata: {e}");
                     return false;
                 }
                 let reply = FudDirectoryReply {
@@ -337,7 +337,7 @@ impl ProtocolFud {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     continue
                 }
             };
@@ -366,7 +366,7 @@ impl ProtocolFud {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     continue
                 }
             };
@@ -402,7 +402,7 @@ impl ProtocolFud {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     continue
                 }
             };

@@ -127,7 +127,7 @@ impl Fu {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!("{}", e);
+                        error!("{e}");
                         publisher_
                             .notify(JsonResult::Error(JsonError::new(
                                 ErrorCode::InternalError,
@@ -163,11 +163,8 @@ impl Fu {
             let remaining = progress_bar_width - completed;
             let bar = "=".repeat(completed) + &" ".repeat(remaining);
             print!(
-                "\x1B[2K\r[{}] {:.1}% | {}/{} chunks | ",
-                bar,
-                percent * 100.0,
-                chunks_downloaded,
-                chunks_total
+                "\x1B[2K\r[{bar}] {:.1}% | {chunks_downloaded}/{chunks_total} chunks | ",
+                percent * 100.0
             );
             tstdout.set_color(&status_to_colorspec(status)).unwrap();
             print!(
@@ -217,12 +214,12 @@ impl Fu {
                                 .unwrap();
                             let file_path = resource.get("path").unwrap().get::<String>().unwrap();
                             print_progress_bar(info);
-                            println!("\nDownload completed:\n{}", file_path);
+                            println!("\nDownload completed:\n{file_path}");
                             return Ok(());
                         }
                         "metadata_not_found" => {
                             println!();
-                            return Err(Error::Custom(format!("Could not find {}", file_hash)));
+                            return Err(Error::Custom(format!("Could not find {file_hash}")));
                         }
                         "chunk_not_found" => {
                             // A seeder does not have a chunk we are looking for,
@@ -264,7 +261,7 @@ impl Fu {
         let rep = self.rpc_client.request(req).await?;
         match rep {
             JsonValue::String(id) => {
-                println!("{}", id);
+                println!("{id}");
                 Ok(())
             }
             _ => Err(Error::ParseFailed("ID is not a string")),
@@ -290,20 +287,19 @@ impl Fu {
                 *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
             let status = resource.get("status").unwrap().get::<String>().unwrap();
             tstdout.set_color(ColorSpec::new().set_bold(true)).unwrap();
-            println!("{}", path);
+            println!("{path}");
             tstdout.reset().unwrap();
-            println!("  ID: {}", hash);
+            println!("  ID: {hash}");
             print!("  Type: ");
             tstdout.set_color(&type_to_colorspec(rtype)).unwrap();
-            println!("{}", rtype);
+            println!("{rtype}");
             tstdout.reset().unwrap();
             print!("  Status: ");
             tstdout.set_color(&status_to_colorspec(status)).unwrap();
-            println!("{}", status);
+            println!("{status}");
             tstdout.reset().unwrap();
             println!(
-                "  Chunks: {}/{}",
-                chunks_downloaded,
+                "  Chunks: {chunks_downloaded}/{}",
                 match chunks_total {
                     0 => "?".to_string(),
                     _ => chunks_total.to_string(),
@@ -326,7 +322,7 @@ impl Fu {
             }
             empty = false;
 
-            println!("Bucket {}", bucket_i);
+            println!("Bucket {bucket_i}");
             for n in nodes.clone() {
                 let node: Vec<JsonValue> = n.try_into().unwrap();
                 let node_id: JsonValue = node[0].clone();
@@ -356,11 +352,11 @@ impl Fu {
             println!("No known seeders");
         } else {
             for (file_hash, node_ids) in files {
-                println!("{}", file_hash);
+                println!("{file_hash}");
                 let node_ids: Vec<JsonValue> = node_ids.try_into().unwrap();
                 for node_id in node_ids {
                     let node_id: String = node_id.try_into().unwrap();
-                    println!("\t{}", node_id);
+                    println!("\t{node_id}");
                 }
             }
         }
@@ -389,7 +385,7 @@ impl Fu {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!("{}", e);
+                        error!("{e}");
                         publisher_
                             .notify(JsonResult::Error(JsonError::new(
                                 ErrorCode::InternalError,
@@ -428,16 +424,16 @@ impl Fu {
             print!("\x1b[{};1H\x1B[2K", i + 2);
 
             let hash = resource.get("hash").unwrap().get::<String>().unwrap();
-            print!("\r{:>44} ", hash);
+            print!("\r{hash:>44} ");
 
             let rtype = resource.get("type").unwrap().get::<String>().unwrap();
             tstdout.set_color(&type_to_colorspec(rtype)).unwrap();
-            print!("{:>9} ", rtype);
+            print!("{rtype:>9} ");
             tstdout.reset().unwrap();
 
             let status = resource.get("status").unwrap().get::<String>().unwrap();
             tstdout.set_color(&status_to_colorspec(status)).unwrap();
-            print!("{:>11} ", status);
+            print!("{status:>11} ");
             tstdout.reset().unwrap();
 
             let chunks_downloaded =
@@ -446,15 +442,11 @@ impl Fu {
                 *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
             match chunks_total {
                 0 => {
-                    print!("{:>5.1} {:>9}", 0.0, format!("{}/?", chunks_downloaded));
+                    print!("{:>5.1} {:>9}", 0.0, format!("{chunks_downloaded}/?"));
                 }
                 _ => {
                     let percent = chunks_downloaded as f64 / chunks_total as f64 * 100.0;
-                    print!(
-                        "{:>5.1} {:>9}",
-                        percent,
-                        format!("{}/{}", chunks_downloaded, chunks_total)
-                    );
+                    print!("{:>5.1} {:>9}", percent, format!("{chunks_downloaded}/{chunks_total}"));
                 }
             };
             println!();

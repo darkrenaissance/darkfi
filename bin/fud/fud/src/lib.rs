@@ -404,7 +404,7 @@ impl Fud {
                 }
             };
             if let Err(e) = self.geode.verify_chunks(&mut chunked).await {
-                error!(target: "fud::verify_resources()", "Error while verifying chunks of {}: {}", hash_to_string(&resource.hash), e);
+                error!(target: "fud::verify_resources()", "Error while verifying chunks of {}: {e}", hash_to_string(&resource.hash));
                 update_resource(&mut resource, ResourceStatus::Incomplete, None).await;
                 continue;
             }
@@ -432,7 +432,7 @@ impl Fud {
             let channel = match self.get_channel(node, None).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {}", hash_to_string(&node.id), e);
+                    warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id));
                     continue;
                 }
             };
@@ -442,7 +442,7 @@ impl Fud {
             let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
                 Ok(msg_subscriber) => msg_subscriber,
                 Err(e) => {
-                    warn!(target: "fud::fetch_seeders()", "Error subscribing to msg: {}", e);
+                    warn!(target: "fud::fetch_seeders()", "Error subscribing to msg: {e}");
                     self.cleanup_channel(channel).await;
                     continue;
                 }
@@ -450,7 +450,7 @@ impl Fud {
 
             let send_res = channel.send(&FudFindSeedersRequest { key: *key }).await;
             if let Err(e) = send_res {
-                warn!(target: "fud::fetch_seeders()", "Error while sending FudFindSeedersRequest: {}", e);
+                warn!(target: "fud::fetch_seeders()", "Error while sending FudFindSeedersRequest: {e}");
                 msg_subscriber.unsubscribe().await;
                 self.cleanup_channel(channel).await;
                 continue;
@@ -460,7 +460,7 @@ impl Fud {
             {
                 Ok(reply) => reply,
                 Err(e) => {
-                    warn!(target: "fud::fetch_seeders()", "Error waiting for reply: {}", e);
+                    warn!(target: "fud::fetch_seeders()", "Error waiting for reply: {e}");
                     msg_subscriber.unsubscribe().await;
                     self.cleanup_channel(channel).await;
                     continue;
@@ -505,7 +505,7 @@ impl Fud {
             let channel = match self.get_channel(&seeder.node, Some(*hash)).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_missing_chunks()", "Could not get a channel for node {}: {}", hash_to_string(&seeder.node.id), e);
+                    warn!(target: "fud::fetch_missing_chunks()", "Could not get a channel for node {}: {e}", hash_to_string(&seeder.node.id));
                     continue;
                 }
             };
@@ -534,7 +534,7 @@ impl Fud {
                 let send_res =
                     channel.send(&FudFindRequest { info: Some(*hash), key: chunk_hash }).await;
                 if let Err(e) = send_res {
-                    warn!(target: "fud::fetch_missing_chunks()", "Error while sending FudFindRequest: {}", e);
+                    warn!(target: "fud::fetch_missing_chunks()", "Error while sending FudFindRequest: {e}");
                     break; // Switch to another seeder
                 }
 
@@ -549,7 +549,7 @@ impl Fud {
                 select! {
                     chunk_reply = chunk_recv => {
                         if let Err(e) = chunk_reply {
-                            warn!(target: "fud::fetch_missing_chunks()", "Error waiting for chunk reply: {}", e);
+                            warn!(target: "fud::fetch_missing_chunks()", "Error waiting for chunk reply: {e}");
                             break; // Switch to another seeder
                         }
                         let reply = chunk_reply.unwrap();
@@ -586,13 +586,13 @@ impl Fud {
                                 remaining_chunks.remove(&chunk_hash);
                             }
                             Err(e) => {
-                                error!(target: "fud::fetch_missing_chunks()", "Failed inserting chunk {} to Geode: {}", hash_to_string(&chunk_hash), e);
+                                error!(target: "fud::fetch_missing_chunks()", "Failed inserting chunk {} to Geode: {e}", hash_to_string(&chunk_hash));
                             }
                         };
                     }
                     notfound_reply = notfound_recv => {
                         if let Err(e) = notfound_reply {
-                            warn!(target: "fud::fetch_missing_chunks()", "Error waiting for NOTFOUND reply: {}", e);
+                            warn!(target: "fud::fetch_missing_chunks()", "Error waiting for NOTFOUND reply: {e}");
                             msg_subscriber_chunk.unsubscribe().await;
                             msg_subscriber_notfound.unsubscribe().await;
                             break; // Switch to another seeder
@@ -642,7 +642,7 @@ impl Fud {
             let channel = match self.get_channel(node, Some(*hash)).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_metadata()", "Could not get a channel for node {}: {}", hash_to_string(&node.id), e);
+                    warn!(target: "fud::fetch_metadata()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id));
                     continue;
                 }
             };
@@ -652,14 +652,14 @@ impl Fud {
             let msg_subscriber = match channel.subscribe_msg::<FudFindSeedersReply>().await {
                 Ok(msg_subscriber) => msg_subscriber,
                 Err(e) => {
-                    warn!(target: "fud::fetch_metadata()", "Error subscribing to msg: {}", e);
+                    warn!(target: "fud::fetch_metadata()", "Error subscribing to msg: {e}");
                     continue;
                 }
             };
 
             let send_res = channel.send(&FudFindSeedersRequest { key: *hash }).await;
             if let Err(e) = send_res {
-                warn!(target: "fud::fetch_metadata()", "Error while sending FudFindSeedersRequest: {}", e);
+                warn!(target: "fud::fetch_metadata()", "Error while sending FudFindSeedersRequest: {e}");
                 msg_subscriber.unsubscribe().await;
                 self.cleanup_channel(channel).await;
                 continue;
@@ -669,7 +669,7 @@ impl Fud {
             {
                 Ok(reply) => reply,
                 Err(e) => {
-                    warn!(target: "fud::fetch_metadata()", "Error waiting for reply: {}", e);
+                    warn!(target: "fud::fetch_metadata()", "Error waiting for reply: {e}");
                     msg_subscriber.unsubscribe().await;
                     self.cleanup_channel(channel).await;
                     continue;
@@ -707,7 +707,7 @@ impl Fud {
 
                     let send_res = channel.send(&FudFindRequest { info: None, key: *hash }).await;
                     if let Err(e) = send_res {
-                        warn!(target: "fud::fetch_metadata()", "Error while sending FudFindRequest: {}", e);
+                        warn!(target: "fud::fetch_metadata()", "Error while sending FudFindRequest: {e}");
                         msg_subscriber_chunk.unsubscribe().await;
                         msg_subscriber_file.unsubscribe().await;
                         msg_subscriber_dir.unsubscribe().await;
@@ -742,7 +742,7 @@ impl Fud {
                         chunk_reply = chunk_recv => {
                             cleanup().await;
                             if let Err(e) = chunk_reply {
-                                warn!(target: "fud::fetch_metadata()", "Error waiting for chunk reply: {}", e);
+                                warn!(target: "fud::fetch_metadata()", "Error waiting for chunk reply: {e}");
                                 continue;
                             }
                             let reply = chunk_reply.unwrap();
@@ -759,7 +759,7 @@ impl Fud {
                         file_reply = file_recv => {
                             cleanup().await;
                             if let Err(e) = file_reply {
-                                warn!(target: "fud::fetch_metadata()", "Error waiting for file reply: {}", e);
+                                warn!(target: "fud::fetch_metadata()", "Error waiting for file reply: {e}");
                                 continue;
                             }
                             let reply = file_reply.unwrap();
@@ -774,7 +774,7 @@ impl Fud {
                         dir_reply = dir_recv => {
                             cleanup().await;
                             if let Err(e) = dir_reply {
-                                warn!(target: "fud::fetch_metadata()", "Error waiting for directory reply: {}", e);
+                                warn!(target: "fud::fetch_metadata()", "Error waiting for directory reply: {e}");
                                 continue;
                             }
                             let reply = dir_reply.unwrap();
@@ -795,7 +795,7 @@ impl Fud {
                         notfound_reply = notfound_recv => {
                             cleanup().await;
                             if let Err(e) = notfound_reply {
-                                warn!(target: "fud::fetch_metadata()", "Error waiting for NOTFOUND reply: {}", e);
+                                warn!(target: "fud::fetch_metadata()", "Error waiting for NOTFOUND reply: {e}");
                                 continue;
                             }
                             info!(target: "fud::fetch_metadata()", "Received NOTFOUND {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id));
@@ -826,13 +826,13 @@ impl Fud {
 
                 self.geode.sort_files(&mut files);
                 if let Err(e) = self.geode.insert_metadata(hash, &chunk_hashes, &files).await {
-                    error!(target: "fud::fetch_metadata()", "Failed inserting directory {} to Geode: {}", hash_to_string(hash), e);
+                    error!(target: "fud::fetch_metadata()", "Failed inserting directory {} to Geode: {e}", hash_to_string(hash));
                     return Err(e)
                 }
             }
             FetchReply::File(FudFileReply { chunk_hashes }) => {
                 if let Err(e) = self.geode.insert_metadata(hash, &chunk_hashes, &[]).await {
-                    error!(target: "fud::fetch_metadata()", "Failed inserting file {} to Geode: {}", hash_to_string(hash), e);
+                    error!(target: "fud::fetch_metadata()", "Failed inserting file {} to Geode: {e}", hash_to_string(hash));
                     return Err(e)
                 }
             }
@@ -847,7 +847,7 @@ impl Fud {
                     false,
                 );
                 if let Err(e) = self.geode.write_chunk(&mut chunked_file, &chunk).await {
-                    error!(target: "fud::fetch_metadata()", "Failed inserting chunk {} to Geode: {}", hash_to_string(&chunk_hash), e);
+                    error!(target: "fud::fetch_metadata()", "Failed inserting chunk {} to Geode: {e}", hash_to_string(&chunk_hash));
                     return Err(e)
                 };
             }
@@ -887,7 +887,7 @@ impl Fud {
         for path_item in self.path_tree.iter() {
             let (key, value) = path_item?;
             if key != hash_bytes && value == path_bytes {
-                let err_str = format!("There is already another resource on path {}", path_string);
+                let err_str = format!("There is already another resource on path {path_string}");
                 self.event_publisher
                     .notify(FudEvent::DownloadError(event::DownloadError {
                         hash: *hash,
@@ -956,7 +956,7 @@ impl Fud {
             }
 
             Err(e) => {
-                error!(target: "fud::handle_get()", "{}", e);
+                error!(target: "fud::handle_get()", "{e}");
                 return Err(e);
             }
         };
@@ -992,7 +992,7 @@ impl Fud {
 
         // Mark locally available chunks as such
         if let Err(e) = self.geode.verify_chunks(&mut chunked).await {
-            error!(target: "self::get()", "Error while verifying chunks: {}", e);
+            error!(target: "self::get()", "Error while verifying chunks: {e}");
             return Err(e);
         }
 
@@ -1092,7 +1092,7 @@ impl Fud {
         let mut chunked = match self.geode.get(hash, path).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "fud::handle_get()", "{}", e);
+                error!(target: "fud::handle_get()", "{e}");
                 return Err(e);
             }
         };
@@ -1210,7 +1210,7 @@ impl Fud {
 
         // Create the metadata file in geode
         if let Err(e) = self.geode.insert_metadata(&hash, &chunk_hashes, &relative_files).await {
-            error!(target: "fud::put()", "Failed inserting {:?} to geode: {}", path, e);
+            error!(target: "fud::put()", "Failed inserting {path:?} to geode: {e}");
             return Err(e)
         }
 
@@ -1218,7 +1218,7 @@ impl Fud {
         if let Err(e) =
             self.path_tree.insert(hash.as_bytes(), path.to_string_lossy().to_string().as_bytes())
         {
-            error!(target: "fud::put()", "Failed inserting new resource into sled: {}", e);
+            error!(target: "fud::put()", "Failed inserting new resource into sled: {e}");
             return Err(e.into())
         }
 

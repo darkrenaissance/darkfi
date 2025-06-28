@@ -119,14 +119,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!("Got dnet event: {event:?}");
                 dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -165,14 +165,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             let event_sub = event_pub.clone().subscribe().await;
             loop {
                 let event = event_sub.receive().await;
-                debug!(target: "fud", "Got event: {:?}", event);
+                debug!(target: "fud", "Got event: {event:?}");
                 event_sub_.notify(event.into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -186,7 +186,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting get task: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting get task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -203,7 +203,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
-                Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,
@@ -236,7 +236,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht channel task: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting dht channel task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -249,7 +249,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht disconnect task: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting dht disconnect task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -262,7 +262,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting announce task: {}", e),
+                Err(e) => error!(target: "fud", "Failed starting announce task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -293,7 +293,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "fud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!(target: "fud", "Flushed {} bytes", flushed_bytes);
+    info!(target: "fud", "Flushed {flushed_bytes} bytes");
 
     info!(target: "fud", "Shut down successfully");
     Ok(())
