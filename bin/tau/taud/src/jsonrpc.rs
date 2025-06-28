@@ -247,7 +247,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn add(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::add() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::add() params {params:?}");
 
         if !params[0].is_object() {
             return Err(TaudError::InvalidData("Invalid parameters".to_string()))
@@ -347,7 +347,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn get_ref_ids(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_ids() params {params:?}");
 
         let ws = self.workspace.lock().await.clone();
         let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
@@ -364,7 +364,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn get_archive_ref_ids(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_archive_ref_ids() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_archive_ref_ids() params {params:?}");
 
         let month = match params[0].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
@@ -391,7 +391,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn modify(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::modify() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::modify() params {params:?}");
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_object() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
@@ -423,7 +423,7 @@ impl JsonRpcInterface {
         let states = ["stop", "start", "open", "pause"];
 
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::set_state() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::set_state() params {params:?}");
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
@@ -455,7 +455,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_comment(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::set_comment() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::set_comment() params {params:?}");
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
@@ -486,7 +486,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     async fn get_task_by_ref_id(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_task_by_ref_id() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_task_by_ref_id() params {params:?}");
 
         if params.len() != 1 || !params[0].is_string() {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
@@ -505,7 +505,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     async fn fetch_deactive_tasks(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::fetch_deactive_tasks() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::fetch_deactive_tasks() params {params:?}");
 
         if params.len() != 1 || !params[0].is_string() {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
@@ -531,7 +531,7 @@ impl JsonRpcInterface {
 
     async fn fetch_archive_task(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::fetch_archive_task() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::fetch_archive_task() params {params:?}");
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
@@ -569,7 +569,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn switch_ws(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::switch_ws() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::switch_ws() params {params:?}");
 
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
@@ -585,7 +585,7 @@ impl JsonRpcInterface {
         if self.workspaces.contains_key(ws) {
             *s = ws.to_string()
         } else {
-            warn!("Workspace \"{}\" is not configured", ws);
+            warn!("Workspace \"{ws}\" is not configured");
             return Ok(JsonValue::Boolean(false))
         }
 
@@ -598,7 +598,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "workspace", "id": 1}
     async fn get_ws(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_ws() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_ws() params {params:?}");
         let ws = self.workspace.lock().await.clone();
         Ok(JsonValue::String(ws))
     }
@@ -609,7 +609,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn export_to(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::export_to() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::export_to() params {params:?}");
 
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
@@ -641,7 +641,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
     async fn import_from(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::import_from() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::import_from() params {params:?}");
 
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))

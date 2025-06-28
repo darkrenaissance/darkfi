@@ -200,7 +200,7 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         if let Some(write_pubkey) = items.get("write_public_key") {
             if let Some(write_pubkey) = write_pubkey.as_str() {
                 if !write_pubkey.is_empty() {
-                    info!(target: "taud", "Found configured write_public_key for {} workspace", name);
+                    info!(target: "taud", "Found configured write_public_key for {name} workspace");
                     let write_key = PublicKey::from_str(write_pubkey).unwrap();
                     // let write_pubkey = write_pubkey.to_string();
                     // let decoded_write_pubkey = bs58::decode(write_pubkey).into_vec().unwrap();
@@ -216,7 +216,7 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         if let Some(write_key) = items.get("write_key") {
             if let Some(write_key) = write_key.as_str() {
                 if !write_key.is_empty() {
-                    info!(target: "taud", "Found configured write_key for {} workspace", name);
+                    info!(target: "taud", "Found configured write_key for {name} workspace");
                     let write_key = write_key.to_string();
                     let write_key_bytes = bs58::decode(write_key).into_vec().unwrap();
                     let secret = match darkfi_sdk::crypto::SecretKey::from_bytes(
@@ -224,7 +224,7 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
                     ) {
                         Ok(key) => key,
                         Err(e) => {
-                            error!(target: "taud", "Failed parsing write_key: {}", e);
+                            error!(target: "taud", "Failed parsing write_key: {e}");
                             return Err(Error::ParseFailed("Failed parsing write_key"))
                         }
                     };
@@ -238,12 +238,12 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         if let Some(wrt_key) = ws.write_key.as_ref() {
             let pk = PublicKey::from_secret(*wrt_key);
             if pk != ws.write_pubkey {
-                error!(target: "taud", "Wrong keypair for {} workspace, the workspace is not added!", name);
+                error!(target: "taud", "Wrong keypair for {name} workspace, the workspace is not added!");
                 continue
             }
         }
 
-        info!(target: "taud", "Configured NaCl box for workspace {}", name);
+        info!(target: "taud", "Configured NaCl box for workspace {name}");
         ret.insert(name.to_string(), ws);
     }
 
@@ -256,7 +256,7 @@ async fn get_workspaces(settings: &Args) -> Result<HashMap<String, Workspace>> {
     let contents = match toml::from_str(&contents) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "taud", "Failed parsing TOML config: {}", e);
+            error!(target: "taud", "Failed parsing TOML config: {e}");
             return Err(Error::ParseFailed("Failed parsing TOML config"))
         }
     };
@@ -274,7 +274,7 @@ pub async fn mark_seen(
 ) -> Result<()> {
     let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
 
-    debug!(target: "taud", "Marking event {} as seen", event_id);
+    debug!(target: "taud", "Marking event {event_id} as seen");
     let mut batch = sled::Batch::default();
     batch.insert(event_id.as_bytes(), &[]);
     Ok(db.apply_batch(batch)?)
@@ -322,7 +322,7 @@ async fn start_sync_loop(
                     // If it fails for some reason, for now, we just note it
                     // and pass.
                     if let Err(e) = event_graph.dag_insert(&[event.clone()]).await {
-                        error!(target: "taud", "Failed inserting new event to DAG: {}", e);
+                        error!(target: "taud", "Failed inserting new event to DAG: {e}");
                     } else {
                         // Otherwise, broadcast it
                         p2p.broadcast(&EventPut(event)).await;
@@ -341,7 +341,7 @@ async fn start_sync_loop(
                 let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
                     Ok((v, _)) => v,
                     Err(e) => {
-                        error!(target: "taud", "[TAUD] Failed deserializing incoming EncryptedTask event: {}", e);
+                        error!(target: "taud", "[TAUD] Failed deserializing incoming EncryptedTask event: {e}");
                         continue
                     }
                 };
@@ -362,7 +362,7 @@ async fn on_receive_task(
     for (ws_name, workspace) in workspaces.iter() {
         let signed_task = try_decrypt_task(enc_task, &workspace.read_key);
         if let Err(e) = signed_task {
-            debug!(target: "taud", "Unable to decrypt the task: {}", e);
+            debug!(target: "taud", "Unable to decrypt the task: {e}");
             continue
         }
 
@@ -428,7 +428,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         if settings.nickname.is_some() { settings.nickname.clone() } else { env::var("USER").ok() };
 
     if settings.refresh {
-        println!("Removing local data in: {:?} (yes/no)? ", datastore_path);
+        println!("Removing local data in: {datastore_path:?} (yes/no)? ");
         let mut confirm = String::new();
         stdin().read_line(&mut confirm).expect("Failed to read line");
 
@@ -439,7 +439,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             remove_dir_all(datastore_path).unwrap_or(());
             println!("Local data removed successfully.");
         } else {
-            error!(target: "taud", "Unexpected Value: {}", confirm);
+            error!(target: "taud", "Unexpected Value: {confirm}");
         }
 
         return Ok(())
@@ -488,10 +488,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let pk = format!("{}", keypair.public);
 
             println!("Please add the following to the config file:");
-            println!("[workspace.\"{}\"]", workspace);
+            println!("[workspace.\"{workspace}\"]");
             println!("read_key = \"{}\"", encoded.into_string());
-            println!("write_key = \"{}\"", sk);
-            println!("write_public_key = \"{}\"", pk);
+            println!("write_key = \"{sk}\"");
+            println!("write_public_key = \"{pk}\"");
             break
         }
 
@@ -558,7 +558,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!(target: "taud", "Failed syncing DAG ({}), retrying in {}s...", e, comms_timeout);
+                        error!(target: "taud", "Failed syncing DAG ({e}), retrying in {comms_timeout}s...");
                         sleep(comms_timeout).await;
                     }
                 }
@@ -614,7 +614,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async {
             match res {
                 Ok(()) | Err(TaudError::Darkfi(Error::DetachedTaskStopped)) => { /* Do nothing */ }
-                Err(e) => error!(target: "taud", "Failed stopping sync loop task: {}", e),
+                Err(e) => error!(target: "taud", "Failed stopping sync loop task: {e}"),
             }
         },
         TaudError::Darkfi(Error::DetachedTaskStopped),
@@ -634,7 +634,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!(target: "taud", "Got dnet event: {:?}", event);
+                debug!(target: "taud", "Got dnet event: {event:?}");
                 json_sub_.notify(vec![event.into()].into()).await;
             }
         },
@@ -642,7 +642,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => {
-                    error!(target: "taud", "Failed stopping dnet subs task: {}", e)
+                    error!(target: "taud", "Failed stopping dnet subs task: {e}")
                 }
             }
         },
@@ -660,14 +660,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let deg_sub = event_graph_.deg_subscribe().await;
             loop {
                 let event = deg_sub.receive().await;
-                debug!(target: "taud", "Got deg event: {:?}", event);
+                debug!(target: "taud", "Got deg event: {event:?}");
                 deg_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -693,7 +693,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface.stop_connections().await,
-                Err(e) => error!(target: "taud", "Failed stopping JSON-RPC server: {}", e),
+                Err(e) => error!(target: "taud", "Failed stopping JSON-RPC server: {e}"),
             }
         },
         Error::RpcServerStopped,
@@ -718,7 +718,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!(target: "taud", "Flushed {} bytes", flushed_bytes);
+    info!(target: "taud", "Flushed {flushed_bytes} bytes");
 
     info!(target: "taud", "Shut down successfully");
     Ok(())
