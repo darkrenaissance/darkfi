@@ -99,8 +99,8 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
     for port in ports {
         let settings = Settings {
             localnet: true,
-            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap()],
-            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap()],
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap()],
             outbound_connections: 2,
             outbound_peer_discovery_cooloff_time: 2,
             outbound_connect_timeout: 2,
@@ -137,14 +137,14 @@ async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
         let mut peers = vec![];
         for &peer_index in peer_indexes_to_connect {
             let port = ports[peer_index];
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
         }
 
         let inbound_port = ports[i];
         let settings = Settings {
             localnet: true,
-            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
-            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{inbound_port}")).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{inbound_port}")).unwrap()],
             outbound_connections: 2,
             outbound_peer_discovery_cooloff_time: 2,
             outbound_connect_timeout: 2,
@@ -172,7 +172,7 @@ async fn get_random_gold_host(
     let external_addr = random_node.settings().read().await.external_addrs[0].clone();
 
     info!("========================================================");
-    info!("Getting gold addr from node={}", external_addr);
+    info!("Getting gold addr from node={external_addr}");
     info!("========================================================");
 
     let list = hosts.container.hostlists[HostColor::Gold as usize].read().unwrap();
@@ -188,7 +188,7 @@ async fn _check_random_hostlist(outbound_instances: &[Arc<P2p>], rng: &mut Threa
     let external_addr = random_node.settings().read().await.external_addrs[0].clone();
 
     info!("========================================================");
-    info!("Checking node={}", external_addr);
+    info!("Checking node={external_addr}");
     info!("========================================================");
 
     let greylist = random_node.hosts().container.fetch_all(HostColor::Grey);
@@ -211,7 +211,7 @@ async fn check_all_hostlist(outbound_instances: &Vec<Arc<P2p>>) {
     for node in outbound_instances {
         let external_addr = &node.settings().read().await.external_addrs[0].clone();
         info!("========================================================");
-        info!("Checking node={}", external_addr);
+        info!("Checking node={external_addr}");
         info!("========================================================");
 
         let mut urls = HashSet::new();
@@ -284,7 +284,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // 1. Create a new seed node.
     // ============================================================
     let seed_port = get_random_available_port();
-    let seed_addr = Url::parse(&format!("tcp://127.0.0.1:{}", seed_port)).unwrap();
+    let seed_addr = Url::parse(&format!("tcp://127.0.0.1:{seed_port}")).unwrap();
 
     let settings = Settings {
         localnet: true,
@@ -301,7 +301,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
 
     let seed = P2p::new(settings, ex.clone()).await.unwrap();
     info!("========================================================");
-    info!("Starting seed node on {}", seed_addr);
+    info!("Starting seed node on {seed_addr}");
     info!("========================================================");
     seed.clone().start().await.unwrap();
 
@@ -353,15 +353,15 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     let goldlist = seed.hosts().container.fetch_all(HostColor::Gold);
 
     for (url, _) in greylist {
-        info!("Found grey url: {}", url);
+        info!("Found grey url: {url}");
         assert!(urls.insert(url));
     }
     for (url, _) in whitelist {
-        info!("Found white url: {}", url);
+        info!("Found white url: {url}");
         assert!(urls.insert(url));
     }
     for (url, _) in goldlist {
-        info!("Found gold url: {}", url);
+        info!("Found gold url: {url}");
         assert!(urls.insert(url));
     }
     assert!(!urls.is_empty());

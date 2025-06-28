@@ -139,7 +139,7 @@ impl ServerCertVerifier for ServerCertificateVerifier {
         };
 
         if let Err(e) = public_key.verify(message, &signature) {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {}", e);
+            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {e}");
             return Err(rustls::CertificateError::BadSignature.into())
         }
 
@@ -234,7 +234,7 @@ impl ClientCertVerifier for ClientCertificateVerifier {
         };
 
         if let Err(e) = public_key.verify(message, &signature) {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {}", e);
+            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {e}");
             return Err(rustls::CertificateError::BadSignature.into())
         }
 

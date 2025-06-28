@@ -129,7 +129,7 @@ impl P2p {
 
         // Start the inbound session
         if let Err(err) = self.session_inbound().start().await {
-            error!(target: "net::p2p::start", "Failed to start inbound session!: {}", err);
+            error!(target: "net::p2p::start", "Failed to start inbound session!: {err}");
             return Err(err)
         }
 
@@ -301,8 +301,8 @@ async fn broadcast_serialized_to<M: Message>(
                 .map_err(|e| {
                     error!(
                         target: "net::p2p::broadcast()",
-                        "[P2P] Broadcasting message to {} failed: {}",
-                        channel.address(), e
+                        "[P2P] Broadcasting message to {} failed: {e}",
+                        channel.address()
                     );
                     // If the channel is stopped then it should automatically die
                     // and the session will remove it from p2p.

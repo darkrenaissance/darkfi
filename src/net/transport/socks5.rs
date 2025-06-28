@@ -145,7 +145,7 @@ impl Socks5Client {
         stream.flush().await?;
         debug!(
             target: "net::transport::socks5::connect",
-            "Flushed CONNECT({:?}) request", addr,
+            "Flushed CONNECT({addr:?}) request"
         );
 
         // Handle the SOCKS server reply

@@ -68,14 +68,14 @@ pub async fn remove_sub_on_stop(
 
     debug!(
         target: "net::session::remove_sub_on_stop()",
-        "Received stop event. Removing channel {}", addr,
+        "Received stop event. Removing channel {addr}"
     );
 
     // Downgrade to greylist if this is a outbound session.
     if type_id & SESSION_OUTBOUND != 0 {
         debug!(
             target: "net::session::remove_sub_on_stop()",
-            "Downgrading {}", addr,
+            "Downgrading {addr}"
         );
 
         // If the host we are downgrading has been moved to blacklist,
@@ -85,12 +85,12 @@ pub async fn remove_sub_on_stop(
             Some(last_seen) => {
                 if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey) {
                     error!(target: "net::session::remove_sub_on_stop()",
-            "Failed to move host {} to Greylist! Err={}", addr.clone(), e);
+            "Failed to move host {} to Greylist! Err={e}", addr.clone());
                 }
             }
             None => {
                 error!(target: "net::session::remove_sub_on_stop()",
-               "Failed to fetch last seen for {}", addr);
+               "Failed to fetch last seen for {addr}");
             }
         }
     }
@@ -158,7 +158,7 @@ pub trait Session: Sync {
             }
             Err(e) => {
                 debug!(target: "net::session::register_channel()",
-                "Handshake error {} {}", e, channel.clone().address());
+                "Handshake error {e} {}", channel.clone().address());
 
                 return Err(e)
             }

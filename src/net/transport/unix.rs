@@ -46,7 +46,7 @@ impl UnixDialer {
         &self,
         path: impl AsRef<Path> + core::fmt::Debug,
     ) -> io::Result<UnixStream> {
-        debug!(target: "net::unix::do_dial", "Dialing {:?} Unix socket...", path);
+        debug!(target: "net::unix::do_dial", "Dialing {path:?} Unix socket...");
         let stream = UnixStream::connect(path).await?;
         Ok(stream)
     }
@@ -81,7 +81,7 @@ impl PtListener for SmolUnixListener {
 
         let addr = self.local_addr().unwrap();
         let addr = addr.as_pathname().unwrap().to_str().unwrap();
-        let url = Url::parse(&format!("unix://{}", addr)).unwrap();
+        let url = Url::parse(&format!("unix://{addr}")).unwrap();
 
         Ok((Box::new(stream), url))
     }

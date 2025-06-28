@@ -92,7 +92,7 @@ impl TcpDialer {
         socket_addr: SocketAddr,
         timeout: Option<Duration>,
     ) -> io::Result<TcpStream> {
-        debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
+        debug!(target: "net::tcp::do_dial", "Dialing {socket_addr} with TCP...");
         let socket = self.create_socket(socket_addr).await?;
 
         socket.set_nonblocking(true)?;
@@ -198,7 +198,7 @@ impl PtListener for SmolTcpListener {
             Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp://{}", peer_addr)).unwrap();
+        let url = Url::parse(&format!("tcp://{peer_addr}")).unwrap();
         Ok((Box::new(stream), url))
     }
 }
@@ -216,7 +216,7 @@ impl PtListener for (TlsAcceptor, SmolTcpListener) {
             Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp+tls://{}", peer_addr)).unwrap();
+        let url = Url::parse(&format!("tcp+tls://{peer_addr}")).unwrap();
 
         Ok((Box::new(TlsStream::Server(stream)), url))
     }

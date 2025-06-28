@@ -244,7 +244,7 @@ impl Dialer {
             }
 
             x => {
-                error!("[P2P] Requested unsupported transport: {}", x);
+                error!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
             }
         }
@@ -379,7 +379,7 @@ impl Listener {
             }
 
             x => {
-                error!("[P2P] Requested unsupported transport: {}", x);
+                error!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
             }
         }

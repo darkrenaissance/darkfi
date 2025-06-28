@@ -58,7 +58,7 @@ impl Connector {
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
         if hosts.container.contains(HostColor::Black as usize, url) || hosts.block_all_ports(url) {
-            warn!(target: "net::connector::connect", "Peer {} is blacklisted", url);
+            warn!(target: "net::connector::connect", "Peer {url} is blacklisted");
             return Err(Error::ConnectFailed)
         }
 

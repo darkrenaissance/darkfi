@@ -116,7 +116,7 @@ impl TorDialer {
         port: u16,
         conn_timeout: Option<Duration>,
     ) -> io::Result<DataStream> {
-        debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
+        debug!(target: "net::tor::do_dial", "Dialing {host}:{port} with Tor...");
 
         let mut stream_prefs = StreamPrefs::new();
         stream_prefs.connect_to_onion_services(BoolOrAuto::Explicit(true));
@@ -219,7 +219,7 @@ impl TorListener {
             Err(e) => {
                 error!(
                     target: "net::tor::do_listen",
-                    "[P2P] Failed to create OnionServiceConfig: {}", e,
+                    "[P2P] Failed to create OnionServiceConfig: {e}"
                 );
                 return Err(io::Error::other("Internal Tor error"));
             }
@@ -230,7 +230,7 @@ impl TorListener {
             Err(e) => {
                 error!(
                     target: "net::tor::do_listen",
-                    "[P2P] Failed to launch Onion Service: {}", e,
+                    "[P2P] Failed to launch Onion Service: {e}"
                 );
                 return Err(io::Error::other("Internal Tor error"));
             }
@@ -238,12 +238,12 @@ impl TorListener {
 
         info!(
             target: "net::tor::do_listen",
-            "[P2P] Established Tor listener on tor://{}:{}",
-            onion_service.onion_address().unwrap(), port,
+            "[P2P] Established Tor listener on tor://{}:{port}",
+            onion_service.onion_address().unwrap()
         );
 
         let endpoint =
-            Url::parse(&format!("tor://{}:{}", onion_service.onion_address().unwrap(), port))
+            Url::parse(&format!("tor://{}:{port}", onion_service.onion_address().unwrap()))
                 .unwrap();
         self.endpoint.set(endpoint).await.expect("fatal endpoint already set for TorListener");
 
@@ -281,7 +281,7 @@ impl PtListener for TorListenerIntern {
             Err(e) => {
                 error!(
                     target: "net::tor::PtListener::next",
-                    "[P2P] Failed accepting Tor RendRequest: {}", e,
+                    "[P2P] Failed accepting Tor RendRequest: {e}"
                 );
                 return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
             }
@@ -306,7 +306,7 @@ impl PtListener for TorListenerIntern {
             Err(e) => {
                 error!(
                     target: "net::tor::PtListener::next",
-                    "[P2P] Failed accepting Tor StreamRequest: {}", e,
+                    "[P2P] Failed accepting Tor StreamRequest: {e}"
                 );
                 return Err(io::Error::other("Internal Tor error"));
             }

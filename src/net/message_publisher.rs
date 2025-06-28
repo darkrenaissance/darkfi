@@ -103,9 +103,8 @@ impl<M: Message> MessageDispatcher<M> {
 
         let msg_result_type = if message.is_ok() { "Ok" } else { "Err" };
         debug!(
-            target: "net::message_publisher::_trigger_all()", "START msg={}({}), subs={}",
-            msg_result_type,
-            M::NAME, subs.len(),
+            target: "net::message_publisher::_trigger_all()", "START msg={msg_result_type}({}), subs={}",
+            M::NAME, subs.len()
         );
 
         // Insert metering information and grab potential sleep time
@@ -143,8 +142,7 @@ impl<M: Message> MessageDispatcher<M> {
         }
 
         debug!(
-            target: "net::message_publisher::_trigger_all()", "END msg={}({}), subs={}",
-            msg_result_type,
+            target: "net::message_publisher::_trigger_all()", "END msg={msg_result_type}({}), subs={}",
             M::NAME, subs.len(),
         );
     }
@@ -166,7 +164,7 @@ impl<M: Message> MessageSubscription<M> {
     pub async fn receive(&self) -> MessageResult<M> {
         let (message, sleep_time) = match self.recv_queue.recv().await {
             Ok(pair) => pair,
-            Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {}", e),
+            Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {e}"),
         };
 
         // Check if we need to sleep
@@ -189,7 +187,7 @@ impl<M: Message> MessageSubscription<M> {
         let (message, sleep_time) = match res {
             Ok(pair) => pair,
             Err(e) => {
-                panic!("MessageSubscription::receive_with_timeout(): recv_queue failed! {}", e)
+                panic!("MessageSubscription::receive_with_timeout(): recv_queue failed! {e}")
             }
         };
 
@@ -209,7 +207,7 @@ impl<M: Message> MessageSubscription<M> {
             match self.recv_queue.try_recv() {
                 Ok(_) => continue,
                 Err(smol::channel::TryRecvError::Empty) => return Ok(()),
-                Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {}", e),
+                Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {e}"),
             }
         }
     }
@@ -254,8 +252,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             Err(err) => {
                 error!(
                     target: "net::message_publisher::trigger()",
-                    "Unable to decode VarInt. Dropping...: {}",
-                    err,
+                    "Unable to decode VarInt. Dropping...: {err}"
                 );
                 return Err(Error::MessageInvalid)
             }
@@ -265,8 +262,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         if M::MAX_BYTES > 0 && length > M::MAX_BYTES {
             error!(
                 target: "net::message_publisher::trigger()",
-                "Message length ({}) exceeds configured limit ({}). Dropping...",
-                length, M::MAX_BYTES,
+                "Message length ({length}) exceeds configured limit ({}). Dropping...",
+                M::MAX_BYTES
             );
             return Err(Error::MessageInvalid)
         }
@@ -278,8 +275,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             Err(err) => {
                 error!(
                     target: "net::message_publisher::trigger()",
-                    "Unable to decode data. Dropping...: {}",
-                    err,
+                    "Unable to decode data. Dropping...: {err}"
                 );
                 return Err(Error::MessageInvalid)
             }

@@ -75,7 +75,7 @@ impl Acceptor {
         #[cfg(feature = "p2p-tor")]
         if endpoint.scheme() == "tor" {
             let onion_addr = listener.endpoint().await;
-            info!("[P2P] Adding {} to external_addrs", onion_addr);
+            info!("[P2P] Adding {onion_addr} to external_addrs");
             self.session
                 .upgrade()
                 .unwrap()
@@ -147,7 +147,7 @@ impl Acceptor {
                     if hosts.container.contains(HostColor::Black as usize, &url) ||
                         hosts.block_all_ports(&url)
                     {
-                        warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
+                        warn!(target: "net::acceptor::run_accept_loop()", "Peer {url} is blacklisted");
                         continue
                     }
 
@@ -204,14 +204,14 @@ impl Acceptor {
                     x => {
                         warn!(
                             target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Unhandled OS Error: {} {}", e, x,
+                            "[P2P] Unhandled OS Error: {e} {x}"
                         );
                         continue
 
                         /*
                         error!(
                             target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Acceptor failed listening: {} ({})", e, x,
+                            "[P2P] Acceptor failed listening: {e} ({x})"
                         );
                         error!(
                             target: "net::acceptor::run_accept_loop()",
@@ -231,7 +231,7 @@ impl Acceptor {
                         if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
                             error!(
                                 target: "net::acceptor::run_accept_loop()",
-                                "[P2P] rustls listener error: {:?}", inner,
+                                "[P2P] rustls listener error: {inner:?}"
                             );
                             continue
                         }
@@ -239,7 +239,7 @@ impl Acceptor {
 
                     error!(
                         target: "net::acceptor::run_accept_loop()",
-                        "[P2P] Unhandled ErrorKind::Other error: {:?}", e,
+                        "[P2P] Unhandled ErrorKind::Other error: {e:?}"
                     );
                     return Err(e.into())
                 }
@@ -248,7 +248,7 @@ impl Acceptor {
                 Err(e) => {
                     error!(
                         target: "net::acceptor::run_accept_loop()",
-                        "[P2P] Unhandled listener.next() error: {}", e,
+                        "[P2P] Unhandled listener.next() error: {e}"
                     );
                     /*
                     error!(

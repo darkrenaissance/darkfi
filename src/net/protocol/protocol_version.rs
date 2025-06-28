@@ -86,8 +86,8 @@ impl ProtocolVersion {
             Either::Left((Err(e), _)) => {
                 error!(
                     target: "net::protocol_version::run()",
-                    "[P2P] Version Exchange failed [{}]: {}",
-                    self.channel.address(), e,
+                    "[P2P] Version Exchange failed [{}]: {e}",
+                    self.channel.address()
                 );
 
                 self.channel.stop().await;
@@ -121,7 +121,7 @@ impl ProtocolVersion {
         if let Err(e) = &rets[0] {
             error!(
                 target: "net::protocol_version::exchange_versions()",
-                "send_version() failed: {}", e,
+                "send_version() failed: {e}"
             );
             return Err(e.clone())
         }
@@ -129,7 +129,7 @@ impl ProtocolVersion {
         if let Err(e) = &rets[1] {
             error!(
                 target: "net::protocol_version::exchange_versions()",
-                "recv_version() failed: {}", e,
+                "recv_version() failed: {e}"
             );
             return Err(e.clone())
         }
@@ -176,8 +176,8 @@ impl ProtocolVersion {
         // Validate peer received version against our version.
         debug!(
             target: "net::protocol_version::send_version()",
-            "App version: {}, Recv version: {}",
-            app_version, verack_msg.app_version,
+            "App version: {app_version}, Recv version: {}",
+            verack_msg.app_version,
         );
 
         // MAJOR and MINOR should be the same.

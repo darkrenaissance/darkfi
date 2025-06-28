@@ -81,7 +81,7 @@ impl OutboundSession {
     /// Start the outbound session. Runs the channel connect loop.
     pub(crate) async fn start(self: Arc<Self>) {
         let n_slots = self.p2p().settings().read().await.outbound_connections;
-        info!(target: "net::outbound_session", "[P2P] Starting {} outbound connection slots.", n_slots);
+        info!(target: "net::outbound_session", "[P2P] Starting {n_slots} outbound connection slots.");
 
         // Activate mutex lock on connection slots.
         let mut slots = self.slots.lock().await;
@@ -181,7 +181,7 @@ impl Slot {
             |res| async {
                 match res {
                     Ok(()) | Err(Error::NetworkServiceStopped) => {}
-                    Err(e) => error!("net::outbound_session {}", e),
+                    Err(e) => error!("net::outbound_session {e}"),
                 }
             },
             Error::NetworkServiceStopped,
@@ -300,8 +300,7 @@ impl Slot {
 
             info!(
                 target: "net::outbound_session::try_connect()",
-                "[P2P] Connecting outbound slot #{} [{}]",
-                slot, host,
+                "[P2P] Connecting outbound slot #{slot} [{host}]"
             );
 
             dnetev!(self, OutboundSlotConnecting, {
@@ -314,8 +313,7 @@ impl Slot {
                 Err(err) => {
                     debug!(
                         target: "net::outbound_session::try_connect()",
-                        "[P2P] Outbound slot #{} connection failed: {}",
-                        slot, err
+                        "[P2P] Outbound slot #{slot} connection failed: {err}"
                     );
 
                     dnetev!(self, OutboundSlotDisconnected, {
@@ -334,8 +332,7 @@ impl Slot {
 
             info!(
                 target: "net::outbound_session::try_connect()",
-                "[P2P] Outbound slot #{} connected [{}]",
-                slot, addr
+                "[P2P] Outbound slot #{slot} connected [{addr}]"
             );
 
             dnetev!(self, OutboundSlotConnected, {
@@ -350,8 +347,7 @@ impl Slot {
             {
                 info!(
                     target: "net::outbound_session",
-                    "[P2P] Outbound slot #{} disconnected: {}",
-                    slot, err
+                    "[P2P] Outbound slot #{slot} disconnected: {err}"
                 );
 
                 dnetev!(self, OutboundSlotDisconnected, {
@@ -363,8 +359,7 @@ impl Slot {
 
                 warn!(
                     target: "net::outbound_session::try_connect()",
-                    "[P2P] Suspending addr=[{}] slot #{}",
-                    addr, slot
+                    "[P2P] Suspending addr=[{addr}] slot #{slot}"
                 );
 
                 // Peer disconnected during the registry process. We'll downgrade this peer now.
@@ -399,8 +394,8 @@ impl Slot {
             Err(err) => {
                 info!(
                     target: "net::outbound_session::try_connect()",
-                    "[P2P] Unable to connect outbound slot #{} [{}]: {}",
-                    self.slot, addr, err
+                    "[P2P] Unable to connect outbound slot #{} [{addr}]: {err}",
+                    self.slot
                 );
 
                 // Immediately return if the Connector has stopped.
@@ -588,7 +583,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     Ok(addrs_len) => {
                         info!(
                             target: "net::outbound_session::peer_discovery()",
-                            "[P2P] [PEER DISCOVERY] Discovered {} peers", addrs_len
+                            "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
                     }
                     Err(_) => {

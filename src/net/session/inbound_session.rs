@@ -137,11 +137,11 @@ impl InboundSession {
         acceptor: AcceptorPtr,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{} on {}", index, accept_addr);
+        info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{index} on {accept_addr}");
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
         if let Err(e) = &result {
-            error!(target: "net::inbound_session", "[P2P] Error starting listener #{}: {}", index, e);
+            error!(target: "net::inbound_session", "[P2P] Error starting listener #{index}: {e}");
             acceptor.stop().await;
         } else {
             self.acceptors.lock().await.push(acceptor);
@@ -176,7 +176,7 @@ impl InboundSession {
     ) {
         info!(
              target: "net::inbound_session::setup_channel",
-             "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
+             "[P2P] Connected Inbound #{index} [{}]", channel.address()
         );
 
         dnetev!(self, InboundConnected, {
@@ -201,7 +201,7 @@ impl InboundSession {
             Err(e) => {
                 warn!(
                     target: "net::inbound_session::setup_channel()",
-                    "Channel setup failed! Err={}", e
+                    "Channel setup failed! Err={e}"
                 );
             }
         }

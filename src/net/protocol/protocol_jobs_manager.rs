@@ -85,9 +85,9 @@ impl ProtocolJobsManager {
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)]
         for task in tasks {
-            trace!(target: "net::protocol_jobs_manager", "Cancelling task #{}", i);
+            trace!(target: "net::protocol_jobs_manager", "Cancelling task #{i}");
             let _ = task.cancel().await;
-            trace!(target: "net::protocol_jobs_manager", "Cancelled task #{}", i);
+            trace!(target: "net::protocol_jobs_manager", "Cancelled task #{i}");
             i += 1;
         }
     }

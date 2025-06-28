@@ -204,7 +204,7 @@ impl Slot {
 
             if let Err(e) = hosts.try_register(self.addr.clone(), HostState::Connect) {
                 debug!(target: "net::session::seedsync_session",
-                    "Cannot connect to seed={}, err={}", &self.addr, e);
+                    "Cannot connect to seed={}, err={e}", &self.addr);
 
                 // Reset the CondVar for future use.
                 self.reset();
@@ -216,7 +216,7 @@ impl Slot {
                 Ok((url, ch)) => {
                     info!(
                         target: "net::session::seedsync_session",
-                        "[P2P] Connected seed [{}]", url,
+                        "[P2P] Connected seed [{url}]",
                     );
 
                     match self.session().register_channel(ch.clone(), ex.clone()).await {
@@ -225,8 +225,7 @@ impl Slot {
 
                             info!(
                                 target: "net::session::seedsync_session",
-                                "[P2P] Disconnecting from seed [{}]",
-                                url,
+                                "[P2P] Disconnecting from seed [{url}]"
                             );
                             ch.stop().await;
 
@@ -264,8 +263,8 @@ impl Slot {
     fn handle_failure(&self, error: Error, addr: &Url) {
         warn!(
             target: "net::session::seedsync_session",
-            "[P2P] Unable to connect to seed [{}]: {}",
-            self.addr, error,
+            "[P2P] Unable to connect to seed [{}]: {error}",
+            self.addr
         );
 
         self.failed.store(true, SeqCst);

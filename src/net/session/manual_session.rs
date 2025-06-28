@@ -138,7 +138,7 @@ impl Slot {
             |res| async {
                 match res {
                     Ok(()) | Err(Error::NetworkServiceStopped) => {}
-                    Err(e) => error!("net::manual_session {}", e),
+                    Err(e) => error!("net::manual_session {e}"),
                 }
             },
             Error::NetworkServiceStopped,
@@ -177,7 +177,7 @@ impl Slot {
 
             if let Err(e) = self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect) {
                 debug!(target: "net::manual_session",
-                    "Cannot connect to manual={}, err={}", &self.addr, e);
+                    "Cannot connect to manual={}, err={e}", &self.addr);
 
                 sleep(outbound_connect_timeout).await;
 
@@ -188,7 +188,7 @@ impl Slot {
                 Ok((url, channel)) => {
                     info!(
                         target: "net::manual_session",
-                        "[P2P] Manual outbound connected [{}]", url,
+                        "[P2P] Manual outbound connected [{url}]"
                     );
 
                     let stop_sub = channel.subscribe_stop().await?;
@@ -203,7 +203,7 @@ impl Slot {
 
                             info!(
                                 target: "net::manual_session",
-                                "[P2P] Manual outbound disconnected [{}]", url,
+                                "[P2P] Manual outbound disconnected [{url}]"
                             );
                         }
                         Err(e) => {
@@ -218,8 +218,8 @@ impl Slot {
 
             info!(
                 target: "net::manual_session",
-                "[P2P] Waiting {} seconds until next manual outbound connection attempt [{}]",
-                outbound_connect_timeout, self.addr,
+                "[P2P] Waiting {outbound_connect_timeout} seconds until next manual outbound connection attempt [{}]",
+                self.addr,
             );
 
             sleep(outbound_connect_timeout).await;
@@ -229,8 +229,8 @@ impl Slot {
     fn handle_failure(&self, error: Error, addr: &Url) {
         warn!(
             target: "net::manual_session",
-            "[P2P] Unable to connect to manual outbound [{}]: {}",
-            self.addr, error,
+            "[P2P] Unable to connect to manual outbound [{}]: {error}",
+            self.addr
         );
 
         // Free up this addr for future operations.
