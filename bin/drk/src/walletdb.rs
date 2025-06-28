@@ -165,9 +165,9 @@ impl WalletDb {
         params: &[(&str, &dyn ToSql)],
     ) -> String {
         let mut query = if col_names.is_empty() {
-            format!("SELECT * FROM {}", table)
+            format!("SELECT * FROM {table}")
         } else {
-            format!("SELECT {} FROM {}", col_names.join(", "), table)
+            format!("SELECT {} FROM {table}", col_names.join(", "))
         };
         if params.is_empty() {
             return query

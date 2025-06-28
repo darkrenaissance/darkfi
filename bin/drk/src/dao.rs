@@ -536,7 +536,7 @@ impl DaoParams {
             self.dao.notes_public_key,
         );
         match self.notes_secret_key {
-            Some(secret_key) => toml += &format!("notes_secret_key = \"{}\"\n\n", secret_key),
+            Some(secret_key) => toml += &format!("notes_secret_key = \"{secret_key}\"\n\n"),
             None => toml += "\n",
         }
         toml += &format!(
@@ -545,7 +545,7 @@ impl DaoParams {
             self.dao.proposer_public_key,
         );
         match self.proposer_secret_key {
-            Some(secret_key) => toml += &format!("proposer_secret_key = \"{}\"\n\n", secret_key),
+            Some(secret_key) => toml += &format!("proposer_secret_key = \"{secret_key}\"\n\n"),
             None => toml += "\n",
         }
         toml += &format!(
@@ -554,7 +554,7 @@ impl DaoParams {
             self.dao.proposals_public_key,
         );
         match self.proposals_secret_key {
-            Some(secret_key) => toml += &format!("proposals_secret_key = \"{}\"\n\n", secret_key),
+            Some(secret_key) => toml += &format!("proposals_secret_key = \"{secret_key}\"\n\n"),
             None => toml += "\n",
         }
         toml += &format!(
@@ -563,7 +563,7 @@ impl DaoParams {
             self.dao.votes_public_key,
         );
         match self.votes_secret_key {
-            Some(secret_key) => toml += &format!("votes_secret_key = \"{}\"\n\n", secret_key),
+            Some(secret_key) => toml += &format!("votes_secret_key = \"{secret_key}\"\n\n"),
             None => toml += "\n",
         }
         toml += &format!(
@@ -572,7 +572,7 @@ impl DaoParams {
             self.dao.exec_public_key,
         );
         match self.exec_secret_key {
-            Some(secret_key) => toml += &format!("exec_secret_key = \"{}\"\n\n", secret_key),
+            Some(secret_key) => toml += &format!("exec_secret_key = \"{secret_key}\"\n\n"),
             None => toml += "\n",
         }
         toml += &format!(
@@ -581,7 +581,7 @@ impl DaoParams {
             self.dao.early_exec_public_key,
         );
         if let Some(secret_key) = self.early_exec_secret_key {
-            toml += &format!("\nearly_exec_secret_key = \"{}\"", secret_key)
+            toml += &format!("\nearly_exec_secret_key = \"{secret_key}\"")
         }
 
         toml
@@ -661,7 +661,7 @@ impl fmt::Display for DaoParams {
             self.dao.bulla_blind,
         );
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -793,7 +793,7 @@ impl fmt::Display for DaoRecord {
             call_index,
         );
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -860,7 +860,7 @@ impl fmt::Display for ProposalRecord {
             "Block windows"
         );
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -1206,8 +1206,7 @@ impl Drk {
             }
 
             println!(
-                "[apply_dao_mint_data] Found minted DAO {}, noting down for wallet update",
-                new_bulla
+                "[apply_dao_mint_data] Found minted DAO {new_bulla}, noting down for wallet update"
             );
 
             // We have this DAO imported in our wallet. Add the metadata:

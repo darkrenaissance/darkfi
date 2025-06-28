@@ -2497,7 +2497,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 .await;
 
                 if let Err(e) = drk.deploy_auth_keygen().await {
-                    eprintln!("Error creating deploy auth keypair: {:?}", e);
+                    eprintln!("Error creating deploy auth keypair: {e}");
                     exit(2);
                 }
 
@@ -2549,7 +2549,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
                     Ok(v) => v,
                     Err(e) => {
-                        eprintln!("Error creating contract deployment tx: {}", e);
+                        eprintln!("Error creating contract deployment tx: {e}");
                         exit(2);
                     }
                 };
@@ -2577,7 +2577,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut tx = match drk.lock_contract(deploy_auth).await {
                     Ok(v) => v,
                     Err(e) => {
-                        eprintln!("Error creating contract lock tx: {}", e);
+                        eprintln!("Error creating contract lock tx: {e}");
                         exit(2);
                     }
                 };

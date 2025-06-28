@@ -40,11 +40,7 @@ impl Drk {
         rollback_query: &str,
     ) -> WalletDbResult<()> {
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            WALLET_SCANNED_BLOCKS_TABLE,
-            WALLET_SCANNED_BLOCKS_COL_HEIGH,
-            WALLET_SCANNED_BLOCKS_COL_HASH,
-            WALLET_SCANNED_BLOCKS_COL_ROLLBACK_QUERY,
+            "INSERT INTO {WALLET_SCANNED_BLOCKS_TABLE} ({WALLET_SCANNED_BLOCKS_COL_HEIGH}, {WALLET_SCANNED_BLOCKS_COL_HASH}, {WALLET_SCANNED_BLOCKS_COL_ROLLBACK_QUERY}) VALUES (?1, ?2, ?3);"
         );
         self.wallet.exec_sql(&query, rusqlite::params![height, hash, rollback_query])
     }
@@ -96,8 +92,7 @@ impl Drk {
     /// If database is empty default (0, '-') is returned.
     pub fn get_last_scanned_block(&self) -> WalletDbResult<(u32, String)> {
         let query = format!(
-            "SELECT * FROM {} ORDER BY {} DESC LIMIT 1;",
-            WALLET_SCANNED_BLOCKS_TABLE, WALLET_SCANNED_BLOCKS_COL_HEIGH,
+            "SELECT * FROM {WALLET_SCANNED_BLOCKS_TABLE} ORDER BY {WALLET_SCANNED_BLOCKS_COL_HEIGH} DESC LIMIT 1;"
         );
         let ret = self.wallet.query_custom(&query, &[])?;
 
@@ -113,7 +108,7 @@ impl Drk {
     /// Reset the scanned blocks information records in the wallet.
     pub fn reset_scanned_blocks(&self) -> WalletDbResult<()> {
         println!("Resetting scanned blocks");
-        let query = format!("DELETE FROM {};", WALLET_SCANNED_BLOCKS_TABLE);
+        let query = format!("DELETE FROM {WALLET_SCANNED_BLOCKS_TABLE};");
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully reset scanned blocks");
 
@@ -145,10 +140,7 @@ impl Drk {
             let (height, hash, query) = self.get_scanned_block_record(height)?;
             println!("Reverting block: {height} - {hash}");
             self.wallet.exec_batch_sql(&query)?;
-            let query = format!(
-                "DELETE FROM {} WHERE {} = {};",
-                WALLET_SCANNED_BLOCKS_TABLE, WALLET_SCANNED_BLOCKS_COL_HEIGH, height
-            );
+            let query = format!("DELETE FROM {WALLET_SCANNED_BLOCKS_TABLE} WHERE {WALLET_SCANNED_BLOCKS_COL_HEIGH} = {height};");
             self.wallet.exec_batch_sql(&query)?;
         }
 

@@ -66,7 +66,7 @@ impl fmt::Display for PartialSwapData {
             self.value_blinds, self.token_blinds,
         );
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -315,7 +315,7 @@ impl Drk {
         }
 
         let params: MoneyTransferParamsV1 = deserialize_async(&tx.calls[0].data.data[1..]).await?;
-        println!("Parameters:\n{:#?}", params);
+        println!("Parameters:\n{params:#?}");
 
         if params.inputs.len() != 2 {
             eprintln!("Found {} inputs, there should be 2", params.inputs.len());

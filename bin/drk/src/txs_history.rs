@@ -44,11 +44,7 @@ impl Drk {
     ) -> WalletDbResult<String> {
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            WALLET_TXS_HISTORY_TABLE,
-            WALLET_TXS_HISTORY_COL_TX_HASH,
-            WALLET_TXS_HISTORY_COL_STATUS,
-            WALLET_TXS_HISTORY_COL_TX,
+            "INSERT OR REPLACE INTO {WALLET_TXS_HISTORY_TABLE} ({WALLET_TXS_HISTORY_COL_TX_HASH}, {WALLET_TXS_HISTORY_COL_STATUS}, {WALLET_TXS_HISTORY_COL_TX}) VALUES (?1, ?2, ?3);"
         );
 
         // Create its inverse query
@@ -56,10 +52,7 @@ impl Drk {
         // We only need to set the transaction status to "Reverted"
         let inverse = self.wallet.create_prepared_statement(
             &format!(
-                "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-                WALLET_TXS_HISTORY_TABLE,
-                WALLET_TXS_HISTORY_COL_STATUS,
-                WALLET_TXS_HISTORY_COL_TX_HASH
+                "UPDATE {WALLET_TXS_HISTORY_TABLE} SET {WALLET_TXS_HISTORY_COL_STATUS} = ?1 WHERE {WALLET_TXS_HISTORY_COL_TX_HASH} = ?2;"
             ),
             rusqlite::params!["Reverted", tx_hash],
         )?;
@@ -153,7 +146,7 @@ impl Drk {
     /// Reset the transaction history records in the wallet.
     pub fn reset_tx_history(&self) -> WalletDbResult<()> {
         println!("Resetting transactions history");
-        let query = format!("DELETE FROM {};", WALLET_TXS_HISTORY_TABLE);
+        let query = format!("DELETE FROM {WALLET_TXS_HISTORY_TABLE};");
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully reset transactions history");
 
@@ -165,8 +158,7 @@ impl Drk {
     pub fn remove_reverted_txs(&self) -> WalletDbResult<()> {
         println!("Removing reverted transactions history records");
         let query = format!(
-            "DELETE FROM {} WHERE {} = 'Reverted';",
-            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS
+            "DELETE FROM {WALLET_TXS_HISTORY_TABLE} WHERE {WALLET_TXS_HISTORY_COL_STATUS} = 'Reverted';"
         );
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully removed reverted transactions history records");

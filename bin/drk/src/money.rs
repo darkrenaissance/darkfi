@@ -630,7 +630,7 @@ impl Drk {
         let mut map: HashMap<String, String> = HashMap::new();
         for (alias, token_id) in aliases {
             let aliases_string = if let Some(prev) = map.get(&token_id.to_string()) {
-                format!("{}, {}", prev, alias)
+                format!("{prev}, {alias}")
             } else {
                 alias
             };
