@@ -50,7 +50,7 @@ Options:
 "#;
 
 fn usage() {
-    print!("{}{}\n{}", ANSI_LOGO, ABOUT, USAGE);
+    print!("{ANSI_LOGO}{ABOUT}\n{USAGE}");
 }
 
 struct DrkAddr {
@@ -189,7 +189,7 @@ fn main() -> ExitCode {
         match bs58::decode(prefix).into_vec() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Error: Invalid base58 for prefix #{}: {}", idx, e);
+                eprintln!("Error: Invalid base58 for prefix #{idx}: {e}");
                 return ExitCode::FAILURE
             }
         }
@@ -221,8 +221,8 @@ fn main() -> ExitCode {
             progress_.finish_and_clear();
 
             println!(
-                "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
-                addr.public, attempts, addr.secret,
+                "{{\"address\":\"{}\",\"attempts\":{attempts},\"secret\":\"{}\"}}",
+                addr.public, addr.secret,
             );
         }
 
@@ -237,8 +237,8 @@ fn main() -> ExitCode {
             progress_.finish_and_clear();
 
             println!(
-                "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\",\"blind\":\"{}\"}}",
-                tid.token_id, attempts, tid.secret, tid.blind
+                "{{\"token_id\":\"{}\",\"attempts\":{attempts},\"secret\":\"{}\",\"blind\":\"{}\"}}",
+                tid.token_id, tid.secret, tid.blind
             );
         }
 
@@ -253,8 +253,8 @@ fn main() -> ExitCode {
             progress_.finish_and_clear();
 
             println!(
-                "{{\"contract_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
-                cid.contract_id, attempts, cid.secret,
+                "{{\"contract_id\":\"{attempts}\",\"attempts\":{},\"secret\":\"{}\"}}",
+                cid.contract_id, cid.secret,
             );
         }
 
