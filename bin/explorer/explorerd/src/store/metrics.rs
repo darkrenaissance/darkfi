@@ -511,7 +511,7 @@ impl MetricsStoreOverlay {
 
             // Insert serialized gas data
             lock.insert(SLED_TX_GAS_DATA_TREE, tx_hash.inner(), &serialized_gas_data)?;
-            debug!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {}: {gas_data:?}", tx_hash);
+            debug!(target: "explorerd::metrics_store::insert_tx_gas_data", "Inserted gas data for transaction {tx_hash}: {gas_data:?}");
         }
 
         Ok(())
@@ -642,7 +642,7 @@ impl MetricsStoreOverlay {
 
             // Remove the corresponding entry from the gas metrics tree.
             lock.remove(SLED_GAS_METRICS_TREE, &key_to_revert.to_sled_key())?;
-            info!(target: "explorerd:metrics_store:revert_metrics", "Successfully reverted metrics with key: {}", key_to_revert);
+            info!(target: "explorerd:metrics_store:revert_metrics", "Successfully reverted metrics with key: {key_to_revert}");
 
             // Move to the previous valid timestamp by subtracting the defined time interval
             current_timestamp = current_timestamp.saturating_sub(GAS_METRICS_KEY_TIME_INTERVAL);
@@ -699,7 +699,7 @@ impl MetricsStoreOverlay {
 
             // Remove height being reverted
             lock.remove(SLED_GAS_METRICS_BY_HEIGHT_TREE, &cur_height_bytes)?;
-            info!(target: "explorerd:metrics_store:revert_by_height_metrics", "Successfully reverted metrics with height: {}", cur_height);
+            info!(target: "explorerd:metrics_store:revert_by_height_metrics", "Successfully reverted metrics with height: {cur_height}");
         }
 
         Ok(())
@@ -948,7 +948,7 @@ mod tests {
         // Process remaining heights, verifying that each stored metric matches expected results
         for (height, expected) in (1..).zip(test_data.iter().skip(1)) {
             let actual = store.get_by_height(&[height])?;
-            assert!(!actual.is_empty(), "No metrics found for height {}", height);
+            assert!(!actual.is_empty(), "No metrics found for height {height}");
             assert_eq!(expected, &actual[0]);
         }
 

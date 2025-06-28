@@ -171,7 +171,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,
                 Err(e) => {
-                    error!(target: "explorerd", "Failed starting sync JSON-RPC server: {}", e)
+                    error!(target: "explorerd", "Failed starting sync JSON-RPC server: {e}")
                 }
             }
         },
@@ -230,7 +230,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 async fn sync_blocks(explorer: Arc<Explorerd>, reset: bool) -> Result<()> {
     info!(target: "explorerd", "Syncing blocks from darkfid...");
     if let Err(e) = explorer.service.sync_blocks(reset).await {
-        let error_message = format!("Error syncing blocks: {:?}", e);
+        let error_message = format!("Error syncing blocks: {e:?}");
         error!(target: "explorerd", "{error_message}");
         return Err(Error::DatabaseError(error_message));
     }
@@ -257,7 +257,7 @@ async fn subscribe_blocks(
                 sync_blocks(explorer.clone(), reset).await?;
                 subscribe_sync_blocks(explorer.clone(), endpoint.clone(), executor.clone()).await
             } else {
-                let error_message = format!("Error setting up blocks subscriber: {:?}", e);
+                let error_message = format!("Error setting up blocks subscriber: {e:?}");
                 error!(target: "explorerd", "{error_message}");
                 return Err(Error::DatabaseError(error_message));
             }
@@ -297,6 +297,6 @@ fn log_started_banner(
     info!(target: "explorerd", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     info!(target: "explorerd", "  - Synced Blocks: {}", explorer.service.db.blockchain.len());
     info!(target: "explorerd", "  - Synced Transactions: {}", explorer.service.db.blockchain.len());
-    info!(target: "explorerd", "  - Connected Darkfi Node: {}", connected_node);
+    info!(target: "explorerd", "  - Connected Darkfi Node: {connected_node}");
     info!(target: "explorerd", "========================================================================================");
 }

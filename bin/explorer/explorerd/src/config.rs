@@ -48,21 +48,20 @@ impl ExplorerConfig {
         // Load the configuration file from the specified path
         let config_content = load_file(Path::new(&config_path)).map_err(|err| {
             Error::ConfigError(format!(
-                "Failed to read the configuration file {}: {:?}",
-                config_path, err
+                "Failed to read the configuration file {config_path}: {err:?}"
             ))
         })?;
 
         // Parse the loaded content into a configuration instance
         let mut config = toml::from_str::<Self>(&config_content).map_err(|e| {
-            error!(target: "explorerd::config", "Failed parsing TOML config: {}", e);
-            Error::ConfigError(format!("Failed to parse the configuration file {}", config_path))
+            error!(target: "explorerd::config", "Failed parsing TOML config: {e}");
+            Error::ConfigError(format!("Failed to parse the configuration file {config_path}"))
         })?;
 
         // Set the configuration path
         config.path = Some(config_path);
 
-        debug!(target: "explorerd::config", "Successfully loaded configuration: {:?}", config);
+        debug!(target: "explorerd::config", "Successfully loaded configuration: {config:?}");
 
         Ok(config)
     }
@@ -113,7 +112,7 @@ impl FromStr for ExplorerConfig {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let config: ExplorerConfig =
-            toml::from_str(s).map_err(|e| format!("Failed to parse ExplorerdConfig: {}", e))?;
+            toml::from_str(s).map_err(|e| format!("Failed to parse ExplorerdConfig: {e}"))?;
         Ok(config)
     }
 }
@@ -145,7 +144,7 @@ impl FromStr for NetworkConfigs {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let config: NetworkConfigs =
-            toml::from_str(s).map_err(|e| format!("Failed to parse NetworkConfigs: {}", e))?;
+            toml::from_str(s).map_err(|e| format!("Failed to parse NetworkConfigs: {e}"))?;
         Ok(config)
     }
 }
@@ -211,7 +210,7 @@ impl FromStr for ExplorerNetworkConfig {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let config: ExplorerNetworkConfig = toml::from_str(s)
-            .map_err(|e| format!("Failed to parse ExplorerdNetworkConfig: {}", e))?;
+            .map_err(|e| format!("Failed to parse ExplorerdNetworkConfig: {e}"))?;
         Ok(config)
     }
 }
@@ -287,7 +286,7 @@ mod tests {
                 assert_eq!(config.endpoint.to_string(), expected_endpoint);
                 assert_eq!(config.rpc.rpc_listen.to_string(), expected_rpc);
             } else {
-                assert!(network_config.is_none(), "{} configuration is missing", network);
+                assert!(network_config.is_none(), "{network} configuration is missing");
             }
         }
 

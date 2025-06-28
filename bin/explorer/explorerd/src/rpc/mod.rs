@@ -260,13 +260,13 @@ impl DarkfidRpcClient {
         let rpc_client_guard = self.rpc_client.read().await;
 
         if let Some(ref rpc_client) = *rpc_client_guard {
-            debug!(target: "explorerd::rpc::request", "Executing request {} with params: {:?}", method, params);
+            debug!(target: "explorerd::rpc::request", "Executing request {method} with params: {params:?}");
             let latency = Instant::now();
             let req = JsonRequest::new(method, params.clone());
             let rep = rpc_client.request(req).await?;
             let latency = latency.elapsed();
-            trace!(target: "explorerd::rpc::request", "Got reply: {:?}", rep);
-            debug!(target: "explorerd::rpc::request", "Latency: {:?}", latency);
+            trace!(target: "explorerd::rpc::request", "Got reply: {rep:?}");
+            debug!(target: "explorerd::rpc::request", "Latency: {latency:?}");
             return Ok(rep);
         };
 
@@ -319,25 +319,25 @@ impl Explorerd {
 /// and error, and performs the log operation without returning a value.
 fn log_request_failure(req_method: &str, params: &JsonValue, error: &JsonError) {
     // Generate the log target based on request
-    let log_target = format!("explorerd::rpc::handle_request::{}", req_method);
+    let log_target = format!("explorerd::rpc::handle_request::{req_method}");
 
     // Stringify the params
     let params_stringified = match params.stringify() {
         Ok(params) => params,
-        Err(e) => format!("Failed to stringify params: {:?}", e),
+        Err(e) => format!("Failed to stringify params: {e:?}"),
     };
 
     // Stringfy the error
     let error_stringified = match error.stringify() {
         Ok(err_str) => err_str,
-        Err(e) => format!("Failed to stringify error: {:?}", e),
+        Err(e) => format!("Failed to stringify error: {e:?}"),
     };
 
     // Format the error message for the log
     let error_message = format!("RPC Request Failure: method: {req_method}, params: {params_stringified}, error: {error_stringified}");
 
     // Log the error
-    error!(target: &log_target, "{}", error_message);
+    error!(target: &log_target, "{error_message}");
 }
 
 /// Test module for validating API functions within this `mod.rs` file. It ensures that the core API

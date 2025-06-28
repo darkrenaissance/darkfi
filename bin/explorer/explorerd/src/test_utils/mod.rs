@@ -123,8 +123,7 @@ pub async fn validate_invalid_rpc_parameter(
             assert_eq!(actual_error.error.code, expected_error_code);
         }
         _ => panic!(
-            "Expected a JSON error response for method: {}, but got something else",
-            method_name
+            "Expected a JSON error response for method: {method_name}, but got something else"
         ),
     }
 }
@@ -192,7 +191,7 @@ fn validate_invalid_rpc_hash_parameter(
             method,
             &[],
             ErrorCode::InvalidParams.code(),
-            &format!("Parameter '{}' at index 0 is missing", parameter_name),
+            &format!("Parameter '{parameter_name}' at index 0 is missing"),
         )
         .await;
 
@@ -202,7 +201,7 @@ fn validate_invalid_rpc_hash_parameter(
             method,
             &[JsonValue::Number(123.0)],
             ErrorCode::InvalidParams.code(),
-            &format!("Parameter '{}' is not a valid string", parameter_name),
+            &format!("Parameter '{parameter_name}' is not a valid string"),
         )
         .await;
 
@@ -212,7 +211,7 @@ fn validate_invalid_rpc_hash_parameter(
             method,
             &[JsonValue::String("0x0222".to_string())],
             ErrorCode::InvalidParams.code(),
-            &format!("{}: 0x0222", invalid_hash_value_message),
+            &format!("{invalid_hash_value_message}: 0x0222"),
         )
         .await;
     });

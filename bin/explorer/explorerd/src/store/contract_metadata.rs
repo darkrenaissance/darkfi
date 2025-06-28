@@ -104,7 +104,7 @@ impl ContractMetaStore {
     /// the given contract ID are included. Returns a `Vec` of [`String`]
     /// representing source code paths.
     pub fn get_source_paths(&self, contract_id: &ContractId) -> Result<Vec<String>> {
-        let prefix = format!("{}/", contract_id);
+        let prefix = format!("{contract_id}/");
 
         // Get all the source paths for provided `ContractId`
         let mut entries = self
@@ -129,7 +129,7 @@ impl ContractMetaStore {
         contract_id: &ContractId,
         source_path: &str,
     ) -> Result<Option<String>> {
-        let key = format!("{}/{}", contract_id, source_path);
+        let key = format!("{contract_id}/{source_path}");
         match self.source_code.get(key.as_bytes())? {
             Some(ivec) => Ok(Some(String::from_utf8(ivec.to_vec()).map_err(|e| {
                 Error::Custom(format!(
@@ -214,14 +214,14 @@ impl ContractMetadataStoreOverlay {
         // Insert each source code file
         for source_file in source.iter() {
             // Create key by pre-pending contract id to the source code path
-            let key = format!("{}/{}", contract_id, source_file.path);
+            let key = format!("{contract_id}/{}", source_file.path);
             // Insert the source code
             lock.insert(
                 SLED_CONTRACT_SOURCE_CODE_TREE,
                 key.as_bytes(),
                 source_file.content.as_bytes(),
             )?;
-            debug!(target: "explorerd::contract_meta_store::insert_source", "Inserted contract source for path {}", key);
+            debug!(target: "explorerd::contract_meta_store::insert_source", "Inserted contract source for path {key}");
         }
 
         // Commit the changes
@@ -246,10 +246,10 @@ impl ContractMetadataStoreOverlay {
         // Delete each source file associated with provided paths
         for path in source_paths.iter() {
             // Create key by pre-pending contract id to the source code path
-            let key = format!("{}/{}", contract_id, path);
+            let key = format!("{contract_id}/{path}");
             // Delete the source code
             lock.remove(SLED_CONTRACT_SOURCE_CODE_TREE, key.as_bytes())?;
-            debug!(target: "explorerd::contract_meta_store::delete_source", "Deleted contract source for path {}", key);
+            debug!(target: "explorerd::contract_meta_store::delete_source", "Deleted contract source for path {key}");
         }
 
         Ok(())
@@ -287,7 +287,7 @@ impl ContractMetadataStoreOverlay {
                 &serialized_metadata,
             )?;
             debug!(target: "explorerd::contract_meta_store::insert_metadata",
-                "Inserted contract metadata for contract_id {}: {metadata:?}", contract_id);
+                "Inserted contract metadata for contract_id {contract_id}: {metadata:?}");
         }
 
         // Commit the changes
@@ -363,14 +363,13 @@ mod tests {
             let actual_source = store.get_source_content(contract_id, source_path)?;
 
             // Verify that the source code content is the store
-            assert!(actual_source.is_some(), "No content found for path: {}", source_path);
+            assert!(actual_source.is_some(), "No content found for path: {source_path}");
 
             // Validate that the source content matches expected results
             assert_eq!(
                 actual_source.unwrap(),
                 expected_content.to_string(),
-                "Actual source does not match the expected results for path: {}",
-                source_path
+                "Actual source does not match the expected results for path: {source_path}"
             );
         }
 

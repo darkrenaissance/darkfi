@@ -199,7 +199,7 @@ impl ExplorerService {
         // Add the block and commit the changes to persist it
         let _ = blockchain_overlay.lock().unwrap().add_block(block)?;
         blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
-        debug!(target: "explorerd::blocks::put_block", "Added block {:?}", block);
+        debug!(target: "explorerd::blocks::put_block", "Added block {block:?}");
 
         Ok(())
     }

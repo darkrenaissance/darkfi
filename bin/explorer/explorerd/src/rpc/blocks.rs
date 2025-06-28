@@ -192,7 +192,7 @@ mod tests {
                 rpc_method,
                 &[],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' at index 0 is missing", parameter_name),
+                &format!("Parameter '{parameter_name}' at index 0 is missing"),
             )
             .await;
 
@@ -202,7 +202,7 @@ mod tests {
                 rpc_method,
                 &[JsonValue::String("invalid_number".to_string())],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' is not a supported number type", parameter_name),
+                &format!("Parameter '{parameter_name}' is not a supported number type"),
             )
             .await;
         });
@@ -228,7 +228,7 @@ mod tests {
                 rpc_method,
                 &[],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' at index 0 is missing", start_parameter_name),
+                &format!("Parameter '{start_parameter_name}' at index 0 is missing"),
             )
             .await;
 
@@ -248,7 +248,7 @@ mod tests {
                 rpc_method,
                 &[JsonValue::Number(10.0)],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' at index 1 is missing", end_parameter_name),
+                &format!("Parameter '{end_parameter_name}' at index 1 is missing"),
             )
             .await;
 

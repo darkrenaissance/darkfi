@@ -172,7 +172,7 @@ impl ExplorerService {
 
             // Add source code into the `ContractMetaStore`
             self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
-            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {}", contract_id_str);
+            info!(target: "explorerd: load_native_contract_sources", "Loaded native contract source {contract_id_str}");
         }
         Ok(())
     }
@@ -497,8 +497,7 @@ mod tests {
         // Verify actual source matches expected result
         assert_eq!(
             expected_source_paths, actual_source_paths,
-            "Mismatch between expected and actual source paths for tar file: {}",
-            tar_file
+            "Mismatch between expected and actual source paths for tar file: {tar_file}"
         );
 
         Ok(())
@@ -525,8 +524,7 @@ mod tests {
             // Verify source content exists
             assert!(
                 actual_source.is_some(),
-                "Actual source `{}` is missing in the store.",
-                file_path
+                "Actual source `{file_path}` is missing in the store."
             );
 
             // Read the source content from the tar archive
@@ -536,8 +534,7 @@ mod tests {
             assert_eq!(
                 actual_source.unwrap(),
                 expected_source,
-                "Actual source does not match expected results `{}`.",
-                file_path
+                "Actual source does not match expected results `{file_path}`."
             );
         }
 
@@ -559,7 +556,7 @@ mod tests {
             }
         }
 
-        Err(Custom(format!("File {} not found in tar archive.", file_path)))
+        Err(Custom(format!("File {file_path} not found in tar archive.")))
     }
 
     /// Auxiliary function that extracts all file paths from the given `tar_bytes` tar archive.

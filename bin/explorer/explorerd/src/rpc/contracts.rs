@@ -177,7 +177,7 @@ mod tests {
                 test_method,
                 &[JsonValue::String("BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o".to_string())],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' at index 1 is missing", parameter_name),
+                &format!("Parameter '{parameter_name}' at index 1 is missing"),
             )
             .await;
 
@@ -190,7 +190,7 @@ mod tests {
                     JsonValue::Number(123.0), // Invalid `source_path` type
                 ],
                 ErrorCode::InvalidParams.code(),
-                &format!("Parameter '{}' is not a valid string", parameter_name),
+                &format!("Parameter '{parameter_name}' is not a valid string"),
             )
             .await;
         });

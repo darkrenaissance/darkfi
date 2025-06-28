@@ -167,8 +167,7 @@ impl ExplorerService {
 
         info!(
             target: "explorerd::rpc_blocks::sync_blocks",
-            "Synced {} blocks: explorer blocks total {} [{}]",
-            blocks_synced,
+            "Synced {blocks_synced} blocks: explorer blocks total {} [{}]",
             self.db.blockchain.blocks.len(),
             fmt_duration(sync_start_time.elapsed()),
         );
@@ -204,7 +203,7 @@ impl ExplorerService {
         // Search for an explorer block that matches a darkfi node block
         while cur_height > 0 {
             let synced_block = self.get_block_by_height(cur_height)?;
-            debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Searching for common block: {}", cur_height);
+            debug!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "Searching for common block: {cur_height}");
 
             // Check if we found a synced block for current height being searched
             if let Some(synced_block) = synced_block {
@@ -224,8 +223,7 @@ impl ExplorerService {
                             if cur_height == last_synced_height {
                                 info!(
                                     target: "explorerd::rpc_blocks::process_sync_blocks_reorg",
-                                    "Reorg detected at height {}: explorer.{} != darkfid.{}",
-                                    cur_height,
+                                    "Reorg detected at height {cur_height}: explorer.{} != darkfid.{}",
                                     synced_block.header_hash,
                                     darkfid_block.hash()
                                 );

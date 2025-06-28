@@ -93,8 +93,7 @@ impl ExplorerService {
             // Throw database error if last_block retrievals fails
             .map_err(|e| {
                 Error::DatabaseError(format!(
-                    "[get_base_statistics] Retrieving last block failed: {:?}",
-                    e
+                    "[get_base_statistics] Retrieving last block failed: {e:?}"
                 ))
             })?
             // Calculate base statistics and return result
@@ -112,8 +111,7 @@ impl ExplorerService {
         // Fetch all metrics from the metrics store, handling any potential errors
         let metrics = self.db.metrics_store.get_all_metrics().map_err(|e| {
             Error::DatabaseError(format!(
-                "[get_metrics_statistics] Retrieving metrics failed: {:?}",
-                e
+                "[get_metrics_statistics] Retrieving metrics failed: {e:?}"
             ))
         })?;
 
@@ -130,8 +128,7 @@ impl ExplorerService {
         // Fetch the latest metrics, handling any potential errors
         match self.db.metrics_store.get_last().map_err(|e| {
             Error::DatabaseError(format!(
-                "[get_metrics_statistics] Retrieving latest metrics failed: {:?}",
-                e
+                "[get_metrics_statistics] Retrieving latest metrics failed: {e:?}"
             ))
         })? {
             // Transform metrics into `MetricStatistics` when found

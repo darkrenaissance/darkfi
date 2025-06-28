@@ -313,7 +313,7 @@ impl ExplorerService {
             if decoder.position() != metadata.len() as u64 {
                 error!(
                     target: "block_explorer::calculate_tx_gas_data",
-                    "[BLOCK_EXPLORER] Failed decoding entire metadata buffer for {}:{}", tx_hash, idx,
+                    "[BLOCK_EXPLORER] Failed decoding entire metadata buffer for {tx_hash}:{idx}"
                 );
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
@@ -404,7 +404,7 @@ impl ExplorerService {
                 Err(e) => {
                     error!(
                         target: "block_explorer::calculate_tx_gas_data",
-                        "[VALIDATOR] Failed deserializing tx {} fee call: {}", tx_hash, e,
+                        "[VALIDATOR] Failed deserializing tx {tx_hash} fee call: {e}"
                     );
                     return Err(TxVerifyFailed::InvalidFee.into())
                 }
@@ -415,12 +415,10 @@ impl ExplorerService {
             if total_gas_used > fee {
                 error!(
                     target: "block_explorer::calculate_tx_gas_data",
-                    "[VALIDATOR] Transaction {} has insufficient fee. Required: {}, Paid: {}",
-                    tx_hash, total_gas_used, fee,
-                );
+                    "[VALIDATOR] Transaction {tx_hash} has insufficient fee. Required: {total_gas_used}, Paid: {fee}");
                 return Err(TxVerifyFailed::InsufficientFee.into())
             }
-            debug!(target: "block_explorer::calculate_tx_gas_data", "The gas paid for transaction {}: {}", tx_hash, gas_paid);
+            debug!(target: "block_explorer::calculate_tx_gas_data", "The gas paid for transaction {tx_hash}: {gas_paid}");
 
             // Store paid fee
             gas_paid = fee;
@@ -437,7 +435,7 @@ impl ExplorerService {
             deployments: deploy_gas_used,
         };
 
-        debug!(target: "block_explorer::calculate_tx_gas_data", "The total gas usage for transaction {}: {:?}", tx_hash, fee_data);
+        debug!(target: "block_explorer::calculate_tx_gas_data", "The total gas usage for transaction {tx_hash}: {fee_data:?}");
 
         Ok(fee_data)
     }
