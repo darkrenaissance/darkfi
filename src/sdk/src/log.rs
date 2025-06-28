@@ -33,7 +33,7 @@ pub fn drk_log(message: &str) {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{}", message);
+    println!("{message}");
 }
 
 #[cfg(target_arch = "wasm32")]

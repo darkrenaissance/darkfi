@@ -81,7 +81,7 @@ impl AeadEncryptedNote {
                 let mut cursor = Cursor::new(&plaintext[..ct_len - AEAD_TAG_SIZE]);
                 Ok(D::decode(&mut cursor)?)
             }
-            Err(e) => Err(ContractError::IoError(format!("Note decrypt failed: {}", e))),
+            Err(e) => Err(ContractError::IoError(format!("Note decrypt failed: {e}"))),
         }
     }
 }

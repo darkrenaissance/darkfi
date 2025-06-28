@@ -113,7 +113,7 @@ impl FromStr for SecretKey {
 impl core::fmt::Display for SecretKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_repr()).into_string();
-        write!(f, "{}", disp)
+        write!(f, "{disp}")
     }
 }
 
@@ -207,6 +207,6 @@ impl FromStr for PublicKey {
 impl core::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_bytes()).into_string();
-        write!(f, "{}", disp)
+        write!(f, "{disp}")
     }
 }

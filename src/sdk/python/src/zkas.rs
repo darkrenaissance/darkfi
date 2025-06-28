@@ -346,7 +346,7 @@ impl MockProver {
             Ok(_) => true,
             Err(errs) => {
                 for err in errs {
-                    eprintln!("Error: Verify Failure: {:#?}", err);
+                    eprintln!("Error: Verify Failure: {err:#?}");
                 }
                 false
             }

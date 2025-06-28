@@ -101,7 +101,7 @@ impl FromStr for BaseBlind {
 impl core::fmt::Display for BaseBlind {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_repr()).into_string();
-        write!(f, "{}", disp)
+        write!(f, "{disp}")
     }
 }
 
@@ -135,6 +135,6 @@ impl FromStr for ScalarBlind {
 impl core::fmt::Display for ScalarBlind {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_repr()).into_string();
-        write!(f, "{}", disp)
+        write!(f, "{disp}")
     }
 }

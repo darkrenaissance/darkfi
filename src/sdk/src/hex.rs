@@ -23,7 +23,7 @@ use crate::{util::Itertools, ContractError, GenericResult};
 pub fn hex_from_iter<I: Iterator<Item = u8>>(iter: I) -> String {
     let mut repr = String::new();
     for b in iter {
-        repr += &format!("{:02x}", b);
+        repr += &format!("{b:02x}");
     }
     repr
 }

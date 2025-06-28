@@ -194,13 +194,13 @@ impl From<i64> for ContractError {
 
 impl From<std::io::Error> for ContractError {
     fn from(err: std::io::Error) -> Self {
-        Self::IoError(format!("{}", err))
+        Self::IoError(format!("{err}"))
     }
 }
 
 impl From<bs58::decode::Error> for ContractError {
     fn from(err: bs58::decode::Error) -> Self {
-        Self::IoError(format!("{}", err))
+        Self::IoError(format!("{err}"))
     }
 }
 
