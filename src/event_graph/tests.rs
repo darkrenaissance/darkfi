@@ -130,7 +130,7 @@ async fn bootstrap_nodes(
         let mut peers = vec![];
         for peer_index in peer_indexes_to_connect {
             let port = starting_port + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
         }
 
         let event_graph = spawn_node(
@@ -163,15 +163,12 @@ async fn assert_dags(eg_instances: &[Arc<EventGraph>], expected_len: usize, rng:
             eg.unreferenced_tips.read().await.last_key_value().unwrap().1.clone();
         assert!(
             eg.dag.len() == expected_len,
-            "Node {}, expected {} events, have {}",
-            i,
-            expected_len,
+            "Node {i}, expected {expected_len} events, have {}",
             eg.dag.len()
         );
         assert_eq!(
             node_last_layer_tips, last_layer_tips,
-            "Node {} contains malformed unreferenced tips",
-            i
+            "Node {i} contains malformed unreferenced tips"
         );
     }
 }
@@ -231,7 +228,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     assert_eq!(tips_layers.len(), 1);
     assert!(tips_layers.last_key_value().unwrap().1.get(&event_id).is_some());
     drop(tips_layers);
-    info!("Broadcasting event {}", event_id);
+    info!("Broadcasting event {event_id}");
     random_node.p2p.broadcast(&EventPut(event)).await;
     info!("Waiting 5s for event propagation");
     sleep(5).await;
@@ -263,8 +260,8 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     let event_chain =
         vec![(event0_id, event0.parents), (event1_id, event1.parents), (event2_id, event2.parents)];
 
-    info!("Broadcasting event {}", event2_id);
-    info!("Event chain: {:#?}", event_chain);
+    info!("Broadcasting event {event2_id}");
+    info!("Event chain: {event_chain:#?}");
     random_node.p2p.broadcast(&EventPut(event2)).await;
     info!("Waiting 5s for event propagation");
     sleep(5).await;
@@ -344,7 +341,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
         let mut peers = vec![];
         for peer_index in peer_indexes_to_connect {
             let port = 13200 + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
         }
 
         let event_graph = spawn_node(
@@ -422,7 +419,7 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
         let mut peers = vec![];
         for peer_index in peer_indexes_to_connect {
             let port = 14200 + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
         }
 
         let event_graph = spawn_node(

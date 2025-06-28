@@ -143,7 +143,7 @@ pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Res
     let mut file = OpenOptions::new().append(true).open(&datastore)?;
     let v = base64::encode(&value);
     let f = format!("{cmd} {v}");
-    writeln!(file, "{}", f)?;
+    writeln!(file, "{f}")?;
 
     Ok(())
 }
