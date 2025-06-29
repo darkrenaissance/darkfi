@@ -16,42 +16,34 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
-
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_editbox, create_image,
+            create_button,
             create_layer, create_shortcut, create_text, create_vector_art,
         },
-        populate_tree, App,
+        App,
     },
-    error::Error,
-    expr::{self, Compiler, Op},
-    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
-    mesh::{Color, MeshBuilder},
+    expr,
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
-        PropertyType, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyFloat32,
+        Role,
     },
     scene::{SceneNodePtr, Slot},
-    shape,
-    text::TextShaperPtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Shortcut, Text, VectorArt,
-        VectorShape, Window,
+        Button, Layer, ShapeVertex, Shortcut, Text, VectorArt,
+        VectorShape,
     },
-    ExecutorPtr,
 };
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
     pub const CHANNEL_LABEL_Y: f32 = 35.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
-    pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
 }
 
 #[cfg(target_os = "android")]
@@ -73,7 +65,6 @@ mod ui_consts {
     pub const CHANNEL_LABEL_Y: f32 = 14.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
-    pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
 }
 
 use ui_consts::*;
@@ -88,8 +79,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     .unwrap();
     let atom = &mut PropertyAtomicGuard::new();
 
-    let mut cc = Compiler::new();
-
     // Main view
     let layer_node = create_layer("menu_layer");
     let prop = layer_node.get_property("rect").unwrap();
@@ -100,7 +89,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.link(layer_node.clone());
 
     // Channels label bg
@@ -141,7 +130,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     );
 
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.clone().link(node);
 
     // Create some text
@@ -152,7 +141,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "CHANNELS").unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
@@ -177,8 +165,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
             )
         })
         .await;
@@ -220,7 +206,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         );
 
         let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
             .await;
         layer_node.clone().link(node);
 
@@ -239,7 +225,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
         prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-        node.set_property_f32(atom, Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
         node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
         node.set_property_str(atom, Role::App, "text", text).unwrap();
         //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
@@ -267,8 +252,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
                     me,
                     window_scale.clone(),
                     app.render_api.clone(),
-                    app.text_shaper.clone(),
-                    app.ex.clone(),
                 )
             })
             .await;
@@ -307,7 +290,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         });
         app.tasks.lock().unwrap().push(listen_click);
 
-        let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+        let node = node.setup(|me| Button::new(me)).await;
         layer_node.clone().link(node);
 
         // Create shortcut

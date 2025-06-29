@@ -22,18 +22,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod rt;
 pub use rt::{AsyncRuntime, ExecutorPtr};
 
-pub fn is_whitespace(s: &str) -> bool {
-    s.chars().all(char::is_whitespace)
-}
-
-pub fn min_f32(x: f32, y: f32) -> f32 {
-    if x < y {
-        x
-    } else {
-        y
-    }
-}
-
 /// Use src/util/time.rs Timestamp instead of this.
 pub fn unixtime() -> u64 {
     let timest = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
@@ -128,6 +116,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub fn zip3<X1, X2, X3, I1, I2, I3>(i1: I1, i2: I2, i3: I3) -> TupleIterStruct3<I1, I2, I3>
 where
     I1: Iterator<Item = X1>,
@@ -183,9 +172,11 @@ where
     TupleIterStruct4 { idx: 0, i1, i2, i3, i4 }
 }
 
+#[allow(dead_code)]
 pub fn enumerate<X>(v: Vec<X>) -> impl Iterator<Item = (usize, X)> {
     v.into_iter().enumerate()
 }
+#[allow(dead_code)]
 pub fn enumerate_ref<X>(v: &Vec<X>) -> impl Iterator<Item = (usize, &X)> {
     v.iter().enumerate()
 }

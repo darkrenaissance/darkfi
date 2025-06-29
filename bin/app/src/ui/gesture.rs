@@ -24,10 +24,9 @@ use std::sync::{Arc, Mutex as SyncMutex};
 use crate::{
     gfx::Point,
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
         PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    scene::{Pimpl, SceneNodeWeak},
 };
 
 use super::UIObject;

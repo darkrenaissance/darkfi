@@ -16,11 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    error::Result,
-    gfx::{DebugTag, GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
-    mesh::Color,
-};
+use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi};
 
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly
@@ -161,10 +157,11 @@ impl<'a> Atlas<'a> {
     }
 
     /// Debug method
+    #[allow(dead_code)]
     pub fn dump(&self, output_path: &str) {
         let atlas = self.render();
         let img = image::RgbaImage::from_raw(self.width as u32, self.height as u32, atlas).unwrap();
-        img.save(output_path);
+        img.save(output_path).unwrap();
     }
 
     /// Invalidate this atlas and produce the finalized result.
@@ -237,9 +234,8 @@ fn copy_image(
             for (pixel_y, row) in sprite.data.chunks_exact(row_size).enumerate() {
                 for (pixel_x, pixel) in row.chunks_exact(4).enumerate() {
                     assert_eq!(pixel.len(), 4);
-
-                    let src_y = pixel_y * sprite_width;
-                    let off_src = 4 * (src_y + pixel_x);
+                    //let src_y = pixel_y * sprite_width;
+                    //let off_src = 4 * (src_y + pixel_x);
 
                     let dest_y = (y + pixel_y) * atlas_width;
                     let off_dest = 4 * (dest_y + pixel_x + x);

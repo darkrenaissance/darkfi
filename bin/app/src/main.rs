@@ -16,18 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Use these to incrementally fix warnings with cargo fix
-#![allow(warnings, unused)]
-//#![deny(unused_imports)]
-
-use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use darkfi::system::CondVar;
-use darkfi_serial::{deserialize, Decodable, Encodable};
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use std::{
-    io::Cursor,
-    sync::{mpsc, Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 #[macro_use]
 extern crate log;
@@ -53,12 +43,13 @@ mod expr;
 mod gfx;
 mod logger;
 mod mesh;
+#[cfg(feature = "enable-netdebug")]
 mod net;
 mod plugin;
 mod prop;
 mod pubsub;
 //mod py;
-mod ringbuf;
+//mod ringbuf;
 mod scene;
 mod shape;
 mod text;
@@ -69,25 +60,32 @@ mod util;
 use crate::{
     app::{App, AppPtr},
     gfx::EpochIndex,
-    net::ZeroMQAdapter,
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
-        Role,
+        Property, PropertySubType, PropertyType,
     },
-    scene::{CallArgType, SceneNode, SceneNodePtr, SceneNodeType, Slot},
+    scene::{CallArgType, SceneNode, SceneNodeType},
     text::TextShaper,
-    ui::chatview,
     util::AsyncRuntime,
 };
+#[cfg(feature = "enable-plugins")]
+use {
+    scene::{SceneNodePtr, Slot},
+    prop::{PropertyStr, Role, PropertyAtomicGuard, PropertyBool},
+    ui::chatview,
+    std::io::Cursor,
+    darkfi_serial::{Encodable, Decodable, deserialize},
+};
+#[cfg(feature = "enable-netdebug")]
+use net::ZeroMQAdapter;
 
 // This is historical, but ideally we can fix the entire project and remove this import.
 pub use util::ExecutorPtr;
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "main", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
-macro_rules! i { ($($arg:tt)*) => { info!(target: "main", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "main", $($arg)*); } }
-macro_rules! e { ($($arg:tt)*) => { error!(target: "main", $($arg)*); } }
+#[cfg(feature = "enable-plugins")]
+macro_rules! d { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
+#[cfg(feature = "enable-plugins")]
+macro_rules! i { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 
 // Hides the cmd.exe terminal on Windows.
 // Enable this when making release builds.
@@ -103,11 +101,11 @@ fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
 /// running a foreground service. Everytime the UI restarts main() is called again.
 /// However the global state remains intact.
 struct God {
-    bg_runtime: AsyncRuntime,
-    bg_ex: ExecutorPtr,
+    _bg_runtime: AsyncRuntime,
+    _bg_ex: ExecutorPtr,
 
     fg_runtime: AsyncRuntime,
-    fg_ex: ExecutorPtr,
+    _fg_ex: ExecutorPtr,
 
     /// App must fully finish setup() before start() is allowed to begin.
     cv_app_is_setup: Arc<CondVar>,
@@ -145,7 +143,7 @@ impl God {
 
         let exe_path = std::env::current_exe().unwrap();
         let basename = exe_path.parent().unwrap();
-        std::env::set_current_dir(basename);
+        std::env::set_current_dir(basename).unwrap();
 
         let bg_ex = Arc::new(smol::Executor::new());
         let fg_ex = Arc::new(smol::Executor::new());
@@ -181,7 +179,7 @@ impl God {
         let cv_app_is_setup = Arc::new(CondVar::new());
         let cv = cv_app_is_setup.clone();
         let app_task = fg_ex.spawn(async move {
-            app2.setup().await;
+            app2.setup().await.unwrap();
             cv.notify();
         });
         fg_runtime.push_task(app_task);
@@ -200,11 +198,11 @@ impl God {
         warn!(target: "main", "Plugins are disabled in this build");
 
         Self {
-            bg_runtime,
-            bg_ex,
+            _bg_runtime: bg_runtime,
+            _bg_ex: bg_ex,
 
             fg_runtime,
-            fg_ex,
+            _fg_ex: fg_ex,
             cv_app_is_setup,
             app,
 
@@ -260,7 +258,7 @@ impl std::fmt::Debug for God {
     }
 }
 
-pub static GOD: OnceLock<God> = OnceLock::new();
+static GOD: OnceLock<God> = OnceLock::new();
 
 #[cfg(feature = "enable-plugins")]
 async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) {

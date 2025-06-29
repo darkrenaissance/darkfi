@@ -20,14 +20,14 @@ use async_lock::Mutex;
 use darkfi_serial::{async_trait, deserialize, Decodable, Encodable, SerialDecodable, VarInt};
 use std::{
     io::Cursor,
-    sync::{mpsc, Arc},
+    sync::Arc
 };
 use zeromq::{Socket, SocketRecv, SocketSend};
 
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
+    prop::{PropertyAtomicGuard, PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
 };

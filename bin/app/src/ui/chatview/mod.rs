@@ -19,7 +19,6 @@
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
-use chrono::{Local, TimeZone};
 use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
@@ -28,7 +27,6 @@ use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
 use std::{
     collections::VecDeque,
-    hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -41,18 +39,16 @@ use page::MessageBuffer;
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
+        GfxDrawCall, GfxDrawInstruction, Point, Rectangle,
         RenderApi,
     },
-    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyUint32, Role,
     },
-    pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
-    text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate, is_whitespace, unixtime},
+    text::TextShaperPtr,
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -154,7 +150,6 @@ pub struct ChatView {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     render_api: RenderApi,
-    text_shaper: TextShaperPtr,
 
     tree: sled::Tree,
     msgbuf: AsyncMutex<MessageBuffer>,
@@ -197,7 +192,6 @@ impl ChatView {
         window_scale: PropertyFloat32,
         render_api: RenderApi,
         text_shaper: TextShaperPtr,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("ChatView::new()");
 
@@ -239,11 +233,9 @@ impl ChatView {
             node: node.clone(),
             tasks: SyncMutex::new(vec![]),
             render_api: render_api.clone(),
-            text_shaper: text_shaper.clone(),
 
             tree,
             msgbuf: AsyncMutex::new(MessageBuffer::new(
-                node,
                 font_size,
                 timestamp_font_size,
                 timestamp_width,
@@ -636,7 +628,7 @@ impl ChatView {
         rect_h: f32,
     ) -> Option<f32> {
         // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
-        let nonneg_scroll = max(scroll, 0.);
+        //let nonneg_scroll = max(scroll, 0.);
 
         if scroll < 0. {
             return Some(0.)
@@ -662,8 +654,7 @@ impl ChatView {
         rect: &Rectangle,
     ) -> Vec<GfxDrawInstruction> {
         let scroll = self.scroll.get();
-
-        let total_height = msgbuf.calc_total_height().await;
+        //let total_height = msgbuf.calc_total_height().await;
 
         // Use this to start from the top
         //let start_pos = if total_height < rect.h { total_height } else { rect.h };
@@ -675,14 +666,14 @@ impl ChatView {
 
         let meshes = msgbuf.gen_meshes(rect, scroll).await;
 
-        for (i, (y_pos, mesh)) in enumerate(meshes) {
+        for (y_pos, mesh) in meshes {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (scroll + start_pos - y_pos);
-            let pos = Point::from([0., off_y]);
+            let off_y = scroll + start_pos - y_pos;
+            let pos = Point::from([off_x, off_y]);
 
             instrs.push(GfxDrawInstruction::SetPos(pos));
             instrs.push(GfxDrawInstruction::Draw(mesh));
@@ -835,7 +826,7 @@ impl UIObject for ChatView {
         msgbuf.adjust_width(rect.w);
         msgbuf.clear_meshes();
 
-        let mut scroll = self.scroll.get();
+        let scroll = self.scroll.get();
         if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
             self.scroll.set(atom, scroll);
         }
@@ -859,7 +850,7 @@ impl UIObject for ChatView {
         })
     }
 
-    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_key_down(&self, key: KeyCode, _mods: KeyMods, repeat: bool) -> bool {
         if repeat {
             return false
         }

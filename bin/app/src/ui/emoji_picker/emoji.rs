@@ -26,18 +26,11 @@ use std::{
 
 use crate::{
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
-        Point, Rectangle, RenderApi,
+        gfxtag, GfxDrawMesh,
+        Rectangle, RenderApi,
     },
-    mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
-    prop::{
-        PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
-        PropertyUint32, Role,
-    },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
-    util::unixtime,
-    ExecutorPtr,
+    mesh::{MeshBuilder, COLOR_WHITE},
+    text::{self, TextShaperPtr},
 };
 
 use super::default;

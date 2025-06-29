@@ -35,20 +35,20 @@ pub use netlogo2::create_netlogo2;
 mod netlogo3;
 pub use netlogo3::create_netlogo3;
 
-mod settings;
-pub use settings::{create_right_border, create_settings};
+//mod settings;
+//pub use settings::{create_right_border, create_settings};
 
-mod switch;
-pub use switch::create_switch;
+//mod switch;
+//pub use switch::create_switch;
 
-mod confirm;
-pub use confirm::create_confirm;
+//mod confirm;
+//pub use confirm::create_confirm;
 
-mod circle;
-pub use circle::create_circle;
+//mod circle;
+//pub use circle::create_circle;
 
-mod logo;
-pub use logo::create_logo;
+//mod logo;
+//pub use logo::create_logo;
 
-mod reset;
-pub use reset::create_reset;
+//mod reset;
+//pub use reset::create_reset;

@@ -19,42 +19,32 @@
 use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use crate::{
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
-        Point, Rectangle, RenderApi,
+        gfxtag, GfxDrawCall, GfxDrawInstruction,
+        Rectangle, RenderApi,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyStr, PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
+    scene::{Pimpl, SceneNodeWeak},
     text2::{self, TEXT_CTX},
     util::unixtime,
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::text", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::text", $($arg)*); } }
 
 pub type TextPtr = Arc<Text>;
 
-#[derive(Clone)]
-struct TextRenderInfo {
-    mesh: MeshInfo,
-    texture: ManagedTexturePtr,
-}
-
 pub struct Text {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    text_shaper: TextShaperPtr,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
@@ -65,7 +55,6 @@ pub struct Text {
     text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
-    baseline: PropertyFloat32,
     lineheight: PropertyFloat32,
     debug: PropertyBool,
 
@@ -78,8 +67,6 @@ impl Text {
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
-        text_shaper: TextShaperPtr,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("Text::new()");
 
@@ -90,17 +77,12 @@ impl Text {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
-        let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
-
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let self_ = Arc::new(Self {
             node,
             render_api,
-            text_shaper,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
@@ -110,7 +92,6 @@ impl Text {
             text,
             font_size,
             text_color,
-            baseline,
             lineheight,
             debug,
 
@@ -133,29 +114,29 @@ impl Text {
             txt_ctx.make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[])
         };
 
-        let mut debug_opts = text2::DebugRenderOptions::Off;
+        let mut debug_opts = text2::DebugRenderOptions::OFF;
         if self.debug.get() {
-            debug_opts |= text2::DebugRenderOptions::Baseline;
+            debug_opts |= text2::DebugRenderOptions::BASELINE;
         }
 
         text2::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
     }
 
     async fn redraw(self: Arc<Self>) {
-        let trace_id = rand::random();
+        let trace: DrawTrace = rand::random();
         let timest = unixtime();
-        t!("Text::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
+        t!("Text::redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
-            error!(target: "ui::text", "Text failed to draw [trace_id={trace_id}]");
+        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+            error!(target: "ui::text", "Text failed to draw [trace={trace}]");
             return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("Text::redraw() DONE [trace_id={trace_id}]");
+        t!("Text::redraw() DONE [trace={trace}]");
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
@@ -200,12 +181,12 @@ impl UIObject for Text {
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        trace: DrawTrace,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Text::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
+        t!("Text::draw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, trace_id).await
+        self.get_draw_calls(parent_rect).await
     }
 }
 

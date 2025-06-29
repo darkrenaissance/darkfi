@@ -48,13 +48,6 @@ enum Token {
 }
 
 impl Token {
-    fn is_sub_expr(&self) -> bool {
-        match self {
-            Self::SubExpr(_) => true,
-            _ => false,
-        }
-    }
-
     fn flatten(self) -> Vec<Self> {
         match self {
             Self::NestedExpr(tokens) => {
@@ -206,7 +199,7 @@ impl Compiler {
 /// Convert from infix to reverse polish notation
 fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
     //println!("to_rpn = {tokens:#?}");
-    let mut out = Vec::new();
+    let mut out;
     let mut stack = Vec::new();
 
     // equals
@@ -275,7 +268,7 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
                 // Did we finally reach the closing paren for this subexpr?
                 if paren == 0 {
                     let stack = std::mem::take(&mut stack);
-                    let mut rpn = to_rpn(stack)?;
+                    let rpn = to_rpn(stack)?;
                     out.push(Token::NestedExpr(Box::new(rpn)));
                 } else {
                     stack.push(token);
@@ -318,7 +311,7 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
                 // Did we finally reach the closing paren for this subexpr?
                 if paren == 0 {
                     let stack = std::mem::take(&mut stack);
-                    let mut rpn = to_rpn(stack)?;
+                    let rpn = to_rpn(stack)?;
                     out.push(Token::SubExpr(Box::new(rpn)));
                 } else {
                     stack.push(token);

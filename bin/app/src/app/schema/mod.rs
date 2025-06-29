@@ -16,44 +16,38 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{deserialize, Encodable};
+use darkfi_serial::Encodable;
 use sled_overlay::sled;
 use std::fs::File;
 
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_editbox, create_gesture,
-            create_image, create_layer, create_shortcut, create_text, create_vector_art,
+            create_image, create_layer, create_shortcut, create_vector_art,
         },
-        populate_tree, App,
+        App,
     },
-    error::Error,
-    expr::{self, Compiler, Op},
-    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
-    mesh::{Color, MeshBuilder},
+    expr::{self, Compiler},
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
-        PropertyType, Role,
+        PropertyAtomicGuard, Role,
     },
     scene::{SceneNodePtr, Slot},
     shape,
-    text::TextShaperPtr,
     ui::{
-        emoji_picker, Button, ChatEdit, ChatView, EditBox, Gesture, Image, Layer, ShapeVertex,
-        Shortcut, Text, VectorArt, VectorShape, Window,
+        emoji_picker, Image, Layer,
+        Shortcut, VectorArt, VectorShape,
     },
-    ExecutorPtr,
 };
 
 mod chat;
 mod menu;
-pub mod settings;
-pub mod test;
+//mod settings;
+//mod test;
 
-pub const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
-//pub const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
+const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
+//const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
 
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
@@ -119,8 +113,6 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
-    pub const SETTINGS_ICON_SIZE: f32 = 60.;
-    pub const SETTINGS_LOGO_SCALE: f32 = 25.;
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
@@ -166,7 +158,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             }
 
             let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set_property_f32(atom, Role::User, "value", scale);
+            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -193,7 +185,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             }
 
             let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set_property_f32(atom, Role::User, "value", scale);
+            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -240,7 +232,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let layer_node =
-            layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+            layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
         window.clone().link(layer_node.clone());
 
         // Create a bg image
@@ -253,8 +245,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
         // Image aspect ratio
         //let R = 1.78;
-        let R = 1.555;
-        cc.add_const_f32("R", R);
+        let r = 1.555;
+        cc.add_const_f32("R", r);
 
         let prop = node.get_property("uv").unwrap();
         prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -282,7 +274,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
         node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
+        let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
         layer_node.clone().link(node);
 
         // Create a bg mesh on top to fade the bg image
@@ -297,7 +289,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         //let c = if LIGHTMODE { 1. } else { 0. };
         let c = 0.;
         // Setup the pimpl
-        let node_id = node.id;
         let mut shape = VectorShape::new();
         shape.add_filled_box(
             expr::const_f32(0.),
@@ -307,7 +298,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             [c, c, c, 0.3],
         );
         let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
             .await;
         layer_node.clone().link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
@@ -321,7 +312,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
         let c = 1.;
         // Setup the pimpl
-        let node_id = node.id;
         let mut shape = VectorShape::new();
         shape.add_filled_box(
             expr::const_f32(0.),
@@ -331,7 +321,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             [c, c, c, 0.3],
         );
         let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
             .await;
         window.clone().link(node);
     }
@@ -348,7 +338,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let netlayer_node =
-        netlayer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.clone().link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
@@ -363,7 +353,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net0_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net0_node);
 
     let node = create_vector_art("net1");
@@ -378,7 +368,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net1_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net1_node);
 
     let node = create_vector_art("net2");
@@ -393,7 +383,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net2_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net2_node);
 
     let node = create_vector_art("net3");
@@ -408,7 +398,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net3_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net3_node);
 
     // Navbar Settings Button
@@ -425,7 +415,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let settingslayer_node =
-        settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.clone().link(settingslayer_node.clone());
 
     // Background
@@ -439,7 +429,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     settingslayer_node.clone().link(node);
 
     // Button

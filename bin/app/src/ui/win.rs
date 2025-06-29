@@ -25,14 +25,15 @@ use crate::{
         GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventResizeSub, GraphicsEventTouchSub, Point, Rectangle, RenderApi,
+        GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
-    prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyPtr, Role},
-    pubsub::Subscription,
+    prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
-    AndroidSuggestEvent, ExecutorPtr,
+    ExecutorPtr,
 };
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 

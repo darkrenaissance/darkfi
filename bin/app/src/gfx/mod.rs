@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::system::CondVar;
 use darkfi_serial::{async_trait, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use futures::AsyncWriteExt;
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
@@ -32,9 +30,8 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicU32, Ordering},
-        mpsc, Arc, Mutex as SyncMutex,
+        Arc,
     },
-    time::{Duration, Instant},
 };
 
 mod favico;
@@ -43,10 +40,7 @@ pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
 
 use crate::{
-    app::AppPtr,
     error::{Error, Result},
-    pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
-    util::{ansi_texture, AsyncRuntime},
     GOD,
 };
 
@@ -65,10 +59,7 @@ pub use crate::gfxtag;
 pub type DebugTag = Option<&'static str>;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx", $($arg)*); } }
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx", $($arg)*); } }
-macro_rules! i { ($($arg:tt)*) => { info!(target: "gfx", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "gfx", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "gfx", $($arg)*); } }
 
 #[cfg(target_os = "android")]
 pub fn get_window_size_filename() -> PathBuf {
@@ -268,7 +259,7 @@ impl GfxDrawMesh {
     ) -> Option<DrawMesh> {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
-        let buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
+        let _buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
         let texture = match self.texture {
             Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture, debug_str),
             None => None,
@@ -276,7 +267,7 @@ impl GfxDrawMesh {
         Some(DrawMesh {
             vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id, debug_str)?,
             index_buffer: Self::try_get_buffer(buffers, index_buffer_id, debug_str)?,
-            buffers_keep_alive,
+            _buffers_keep_alive,
             texture,
             num_elements: self.num_elements,
         })
@@ -289,15 +280,14 @@ impl GfxDrawMesh {
     ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
         let gfx_texture_id = gfx_texture.id;
 
-        let Some(mq_texture_id) = textures.get(&gfx_texture_id) else {
+        let Some(_mq_texture_id) = textures.get(&gfx_texture_id) else {
             error!(target: "gfx", "Serious error: missing texture ID={gfx_texture_id}, debug={debug_str}");
             error!(target: "gfx", "Dumping textures:");
             for (gfx_texture_id, texture_id) in textures {
                 error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
             }
 
-            panic!("Missing texture ID={gfx_texture_id}");
-            return None
+            panic!("Missing texture ID={gfx_texture_id}")
         };
 
         Some((gfx_texture, textures[&gfx_texture_id]))
@@ -315,8 +305,7 @@ impl GfxDrawMesh {
                 error!(target: "gfx", "{gfx_buffer_id} => {buffer_id:?}");
             }
 
-            panic!("Missing buffer ID={gfx_buffer_id}");
-            return None
+            panic!("Missing buffer ID={gfx_buffer_id}")
         };
         Some(*mq_buffer_id)
     }
@@ -395,7 +384,7 @@ struct DrawMesh {
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
     /// Keeps the buffers alive for the duration of this draw call
-    buffers_keep_alive: [ManagedBufferPtr; 2],
+    _buffers_keep_alive: [ManagedBufferPtr; 2],
     texture: Option<(ManagedTexturePtr, miniquad::TextureId)>,
     num_elements: i32,
 }
@@ -434,7 +423,6 @@ impl<'a> RenderContext<'a> {
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw()");
         }
-        let curr_pos = Point::zero();
         self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw() [DONE]");
@@ -480,7 +468,7 @@ impl<'a> RenderContext<'a> {
     }
 
     fn draw_call(&mut self, draw_call: &DrawCall, mut indent: u32, mut is_debug: bool) {
-        let mut ws = if is_debug { " ".repeat(indent as usize * 4) } else { String::new() };
+        let ws = if is_debug { " ".repeat(indent as usize * 4) } else { String::new() };
 
         let old_scale = self.scale;
         let old_view = self.view;
@@ -761,7 +749,6 @@ impl Stage {
         god.start_app(epoch);
         let method_rep = god.method_rep.clone();
         let event_pub = god.event_pub.clone();
-        drop(god);
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -818,12 +805,6 @@ impl Stage {
             method_rep,
             event_pub,
         }
-    }
-
-    fn clear(&mut self) {
-        std::mem::take(&mut self.draw_calls);
-        std::mem::take(&mut self.textures);
-        std::mem::take(&mut self.buffers);
     }
 
     fn process_method(&mut self, mut method: GraphicsMethod) {

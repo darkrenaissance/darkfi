@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{ModifyAction, ModifyPublisher, PropertyPtr, Role};
-
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "prop", $($arg)*); } }
+use super::{ModifyAction, PropertyPtr, Role};
 
 /// This schedules all property updates to happen at the end of the scope.
 /// We can therefore have fine-grained control about when property updates are

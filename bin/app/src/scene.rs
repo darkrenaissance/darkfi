@@ -17,7 +17,6 @@
  */
 
 use async_channel::{Receiver, Sender};
-use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use darkfi_serial::{FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -161,7 +160,7 @@ impl SceneNode {
         F: FnOnce(SceneNodeWeak) -> Fut,
         Fut: Future<Output = Pimpl>,
     {
-        let mut self_ = Arc::new(self);
+        let self_ = Arc::new(self);
         let weak_self = Arc::downgrade(&self_);
 
         // Initial props
@@ -176,7 +175,7 @@ impl SceneNode {
     }
 
     pub fn setup_null(self) -> Arc<Self> {
-        let mut self_ = Arc::new(self);
+        let self_ = Arc::new(self);
         let weak_self = Arc::downgrade(&self_);
 
         // Initial props
@@ -185,7 +184,7 @@ impl SceneNode {
         }
 
         assert_eq!(Arc::strong_count(&self_), 1);
-        self_.pimpl.set(Pimpl::Null);
+        self_.pimpl.set(Pimpl::Null).unwrap();
         self_
     }
 
@@ -541,7 +540,7 @@ pub enum Pimpl {
     Layer(ui::LayerPtr),
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
-    EditBox(ui::EditBoxPtr),
+    //EditBox(ui::EditBoxPtr),
     ChatEdit(ui::ChatEditPtr),
     ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),

@@ -16,17 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use harfbuzz_sys::{
-    freetype::hb_ft_font_create_referenced, hb_buffer_add_utf8, hb_buffer_create,
-    hb_buffer_destroy, hb_buffer_get_glyph_infos, hb_buffer_get_glyph_positions,
-    hb_buffer_guess_segment_properties, hb_buffer_set_cluster_level, hb_buffer_set_content_type,
-    hb_font_destroy, hb_glyph_info_t, hb_glyph_position_t, hb_shape,
-    HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES, HB_BUFFER_CONTENT_TYPE_UNICODE,
-};
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    os,
     path::PathBuf,
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
@@ -40,7 +32,7 @@ use ft::{render_glyph, FreetypeFace, Sprite, SpritePtr};
 mod shape;
 use shape::{set_face_size, shape};
 mod wrap;
-pub use wrap::{glyph_str, wrap};
+pub use wrap::wrap;
 
 // Upscale emoji relative to font size
 pub const EMOJI_SCALE_FACT: f32 = 1.6;
@@ -166,7 +158,7 @@ impl TextShaperInternal {
 
 pub struct TextShaper {
     intern: SyncMutex<TextShaperInternal>,
-    fonts_data: Vec<Vec<u8>>,
+    _fonts_data: Vec<Vec<u8>>,
 }
 
 impl TextShaper {
@@ -226,7 +218,7 @@ impl TextShaper {
                 font_faces: FtFaces(faces),
                 cache: HashMap::new(),
             }),
-            fonts_data,
+            _fonts_data: fonts_data,
         })
     }
 
@@ -237,7 +229,7 @@ impl TextShaper {
         ft_face
     }
 
-    pub fn shape(&self, mut text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {
+    pub fn shape(&self, text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {
         //debug!(target: "text", "shape('{}', {})", text, font_size);
         if text.is_empty() {
             return vec![]

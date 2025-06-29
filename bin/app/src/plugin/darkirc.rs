@@ -40,8 +40,8 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyAtomicGuard, PropertyPtr, PropertyStr, PropertyType, PropertyValue, Role},
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
+    prop::{PropertyAtomicGuard, PropertyStr, Role},
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
@@ -171,7 +171,6 @@ pub struct DarkIrc {
 
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
-    db: sled::Db,
 
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
@@ -274,7 +273,6 @@ impl DarkIrc {
 
             p2p,
             event_graph,
-            db,
 
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
@@ -546,6 +544,6 @@ impl DarkIrc {
 
         let mut tasks = vec![send_method_task, ev_task, dag_task];
         tasks.append(&mut on_modify.tasks);
-        self.tasks.set(tasks);
+        self.tasks.set(tasks).unwrap();
     }
 }

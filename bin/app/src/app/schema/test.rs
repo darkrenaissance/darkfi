@@ -16,31 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
-
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_editbox, create_image,
             create_layer, create_text, create_vector_art,
         },
-        populate_tree, App,
+        App,
     },
-    error::Error,
-    expr::{self, Compiler, Op},
-    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
-    mesh::{Color, MeshBuilder, COLOR_PURPLE},
+    expr,
+    mesh::COLOR_PURPLE,
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
-        PropertyType, Role,
+        PropertyAtomicGuard, PropertyFloat32, Role,
     },
-    scene::{SceneNodePtr, Slot},
-    text::TextShaperPtr,
+    scene::SceneNodePtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
-        VectorShape, Window,
+        Layer, Text, VectorArt,
+        VectorShape,
     },
-    ExecutorPtr,
 };
 
 const LIGHTMODE: bool = false;
@@ -69,8 +61,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         0,
     )
     .unwrap();
-
-    let mut cc = Compiler::new();
 
     // Create a layer called view
     let layer_node = create_layer("view");

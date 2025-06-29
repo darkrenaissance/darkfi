@@ -17,13 +17,10 @@
  */
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     expr::{Op, SExprCode, SExprMachine, SExprVal},
-    gfx::{GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, Vertex},
+    gfx::Vertex,
     mesh::Color,
-    prop::{PropertyPtr, PropertyUint32, Role},
-    util::enumerate,
-    ExecutorPtr,
 };
 
 #[derive(Debug)]
@@ -68,13 +65,13 @@ impl VectorShape {
         let mut verts = vec![];
         for shape_vert in &self.verts {
             let mut pos = [0.; 2];
-            for (i, shape_X) in [(0, &shape_vert.x), (1, &shape_vert.y)] {
+            for (i, shape_x) in [(0, &shape_vert.x), (1, &shape_vert.y)] {
                 let mut machine = SExprMachine {
                     globals: vec![
                         ("w".to_string(), SExprVal::Float32(w)),
                         ("h".to_string(), SExprVal::Float32(h)),
                     ],
-                    stmts: shape_X,
+                    stmts: shape_x,
                 };
                 pos[i] = machine.call()?.as_f32()?;
             }

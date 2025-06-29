@@ -27,9 +27,9 @@ use super::atlas::{Atlas, RenderedAtlas};
 pub struct DebugRenderOptions(u32);
 
 impl DebugRenderOptions {
-    pub const Off: DebugRenderOptions = DebugRenderOptions(0b00);
-    pub const Glyph: DebugRenderOptions = DebugRenderOptions(0b01);
-    pub const Baseline: DebugRenderOptions = DebugRenderOptions(0b10);
+    pub const OFF: DebugRenderOptions = DebugRenderOptions(0b00);
+    pub const GLYPH: DebugRenderOptions = DebugRenderOptions(0b01);
+    pub const BASELINE: DebugRenderOptions = DebugRenderOptions(0b10);
 
     pub fn has(self, other: Self) -> bool {
         (self.0 & other.0) == other.0
@@ -54,7 +54,7 @@ pub fn render_layout(
     render_api: &RenderApi,
     tag: DebugTag,
 ) -> Vec<GfxDrawInstruction> {
-    render_layout_with_opts(layout, DebugRenderOptions::Off, render_api, tag)
+    render_layout_with_opts(layout, DebugRenderOptions::OFF, render_api, tag)
 }
 
 pub fn render_layout_with_opts(
@@ -85,7 +85,7 @@ pub fn render_layout_with_opts(
 fn render_glyph_run(
     scale_ctx: &mut swash::scale::ScaleContext,
     glyph_run: &parley::GlyphRun<'_, Color>,
-    run_idx: usize,
+    _run_idx: usize,
     opts: DebugRenderOptions,
     render_api: &RenderApi,
     tag: DebugTag,
@@ -118,7 +118,7 @@ fn render_glyph_run(
             glyph_inf.place.height as f32,
         );
 
-        if opts.has(DebugRenderOptions::Glyph) {
+        if opts.has(DebugRenderOptions::GLYPH) {
             mesh.draw_outline(&glyph_rect, [0., 1., 0., 0.7], 1.);
         }
 
@@ -126,7 +126,7 @@ fn render_glyph_run(
         mesh.draw_box(&glyph_rect, color, &glyph_inf.uv_rect);
     }
 
-    if opts.has(DebugRenderOptions::Baseline) {
+    if opts.has(DebugRenderOptions::BASELINE) {
         mesh.draw_filled_box(
             &Rectangle::new(glyph_run.offset(), glyph_run.baseline(), glyph_run.advance(), 1.),
             [0., 0., 1., 0.7],
@@ -179,7 +179,7 @@ fn create_atlas(
     let normalized_coords = run.normalized_coords();
     let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
 
-    let mut scaler = scale_ctx
+    let scaler = scale_ctx
         .builder(font_ref)
         .size(font_size)
         .hint(true)

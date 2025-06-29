@@ -18,30 +18,24 @@
 
 use async_trait::async_trait;
 use darkfi_serial::Encodable;
-use image::ImageReader;
 use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::{
-    io::Cursor,
-    sync::{
+use std::sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Weak,
-    },
-};
+        Arc,
+    };
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Point,
+        GfxDrawCall, GfxDrawInstruction, Point,
         Rectangle, RenderApi,
     },
-    mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{
-        PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
+        PropertyAtomicGuard, PropertyFloat32, PropertyRect,
         PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
+    scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
 };
@@ -78,7 +72,6 @@ pub struct EmojiPicker {
     emoji_size: PropertyFloat32,
     mouse_scroll_speed: PropertyFloat32,
 
-    window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
     is_mouse_hover: AtomicBool,
     touch_info: SyncMutex<Option<TouchInfo>>,
@@ -87,10 +80,8 @@ pub struct EmojiPicker {
 impl EmojiPicker {
     pub async fn new(
         node: SceneNodeWeak,
-        window_scale: PropertyFloat32,
         render_api: RenderApi,
         emoji_meshes: EmojiMeshesPtr,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("EmojiPicker::new()");
 
@@ -102,9 +93,6 @@ impl EmojiPicker {
         let emoji_size = PropertyFloat32::wrap(node_ref, Role::Internal, "emoji_size", 0).unwrap();
         let mouse_scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "mouse_scroll_speed", 0).unwrap();
-
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let self_ = Arc::new(Self {
             node,
@@ -121,7 +109,6 @@ impl EmojiPicker {
             emoji_size,
             mouse_scroll_speed,
 
-            window_scale,
             parent_rect: SyncMutex::new(None),
             is_mouse_hover: AtomicBool::new(false),
             touch_info: SyncMutex::new(None),
@@ -179,7 +166,7 @@ impl EmojiPicker {
         //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
         let emoji_selected = {
-            let mut emoji_meshes = self.emoji_meshes.lock();
+            let emoji_meshes = self.emoji_meshes.lock();
             let emoji_list = emoji_meshes.get_list();
 
             if idx < emoji_list.len() {
@@ -219,7 +206,7 @@ impl EmojiPicker {
     fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
+        _trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(&parent_rect) {
@@ -310,7 +297,7 @@ impl UIObject for EmojiPicker {
         self.get_draw_calls(parent_rect, trace_id, atom)
     }
 
-    async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         let rect = self.rect.get();
         self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
         false
@@ -333,7 +320,7 @@ impl UIObject for EmojiPicker {
         true
     }
 
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_up(&self, _btn: MouseButton, mut mouse_pos: Point) -> bool {
         let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
@@ -345,7 +332,7 @@ impl UIObject for EmojiPicker {
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         // Ignore multi-touch
         if id != 0 {
             return false

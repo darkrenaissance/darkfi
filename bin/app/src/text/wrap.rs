@@ -26,7 +26,7 @@ enum TokenType {
     Whitespace,
 }
 
-struct Token {
+pub struct Token {
     token_type: TokenType,
     lhs: f32,
     rhs: f32,

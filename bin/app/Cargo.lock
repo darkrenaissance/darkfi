@@ -3177,7 +3177,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "miniquad"
 version = "0.4.8"
-source = "git+https://github.com/narodnik/miniquad#a48953ab76c8f4d918633bd65becdbceeceedacc"
+source = "git+https://github.com/not-fl3/miniquad#d225104a04a88345b5c7b055e1a250ade86c6bb8"
 dependencies = [
  "libc",
  "ndk-sys",

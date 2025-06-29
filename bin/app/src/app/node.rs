@@ -17,13 +17,8 @@
  */
 
 use crate::{
-    error::Error,
-    expr::Op,
-    gfx::{GraphicsEventPublisherPtr, Vertex},
-    prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{CallArgType, SceneNode, SceneNodeType, Slot},
-    text::TextShaperPtr,
-    ExecutorPtr,
+    prop::{Property, PropertySubType, PropertyType},
+    scene::{CallArgType, SceneNode, SceneNodeType},
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app::node", $($arg)*); } }
@@ -110,6 +105,7 @@ pub fn create_shortcut(name: &str) -> SceneNode {
     node
 }
 
+#[allow(dead_code)]
 pub fn create_gesture(name: &str) -> SceneNode {
     t!("create_gesture({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Gesture);
@@ -164,9 +160,6 @@ pub fn create_text(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
-    let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
-    node.add_property(prop).unwrap();
-
     let mut prop = Property::new("lineheight", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Line Height", "Line height/lead (em)");
     prop.set_defaults_f32(vec![1.2]).unwrap();
@@ -196,6 +189,7 @@ pub fn create_text(name: &str) -> SceneNode {
     node
 }
 
+#[allow(dead_code)]
 pub fn create_editbox(name: &str) -> SceneNode {
     t!("create_editbox({name})");
     let mut node = SceneNode::new(name, SceneNodeType::EditBox);

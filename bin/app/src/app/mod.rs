@@ -16,33 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_recursion::async_recursion;
-use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
-use darkfi::system::CondVar;
-use darkfi_serial::{deserialize, Decodable, Encodable};
-use futures::{stream::FuturesUnordered, StreamExt};
+use chrono::{NaiveDate, NaiveDateTime};
+use darkfi_serial::Encodable;
 use sled_overlay::sled;
 use smol::Task;
-use std::{
-    fs::File,
-    io::Cursor,
-    sync::{Arc, Mutex as SyncMutex},
-    thread,
-};
+use std::sync::{Arc, Mutex as SyncMutex};
 
 #[cfg(target_os = "android")]
 use crate::android;
 
 use crate::{
     error::Error,
-    expr::Op,
-    gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi, Vertex},
+    gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi},
     plugin::PluginSettings,
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyStr, PropertySubType, PropertyType,
+        Property, PropertyAtomicGuard, PropertySubType, PropertyType,
         PropertyValue, Role,
     },
-    scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType, Slot},
+    scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
     text::TextShaperPtr,
     ui::{chatview, Window},
     ExecutorPtr,
@@ -50,12 +41,12 @@ use crate::{
 
 mod node;
 mod schema;
-use schema::{get_settingsdb_path, get_window_scale_filename, settings};
+use schema::get_settingsdb_path;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
+//macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 
 //fn print_type_of<T>(_: &T) {
@@ -110,7 +101,7 @@ impl App {
             sled_tree: settings_tree,
         });
 
-        let mut window_scale = 1.;
+        let window_scale = 1.;
         #[cfg(target_os = "android")]
         {
             window_scale = android::get_screen_density() / 2.625;
@@ -150,14 +141,14 @@ impl App {
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
-        let atom = &mut PropertyAtomicGuard::new();
+        let mut atom = PropertyAtomicGuard::new();
 
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
         let prop = window_node.get_property("screen_size").unwrap();
         // We can only do this once the window has been created in miniquad.
         let (screen_width, screen_height) = miniquad::window::screen_size();
-        prop.clone().set_f32(atom, Role::App, 0, screen_width);
-        prop.clone().set_f32(atom, Role::App, 1, screen_height);
+        prop.clone().set_f32(&mut atom, Role::App, 0, screen_width).unwrap();
+        prop.clone().set_f32(&mut atom, Role::App, 1, screen_height).unwrap();
 
         drop(atom);
 
@@ -204,6 +195,7 @@ impl App {
 }
 
 // Just for testing
+#[allow(dead_code)]
 fn populate_tree(tree: &sled::Tree) {
     let chat_txt = include_str!("../../data/chat.txt");
     for line in chat_txt.lines() {

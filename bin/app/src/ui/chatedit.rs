@@ -18,46 +18,40 @@
 
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
-use atomic_float::AtomicF32;
 use darkfi::system::msleep;
-use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
+use darkfi_serial::Decodable;
+use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
-    collections::HashMap,
     io::Cursor,
     ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Weak,
     },
-    time::Instant,
 };
 
 use crate::{
-    error::Result,
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
-        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh,
+        Point, Rectangle, RenderApi, Vertex,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
+    mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
         PropertyRect, PropertyStr, PropertyUint32, Role,
     },
-    pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     text2::{self, Editor},
-    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4},
-    AndroidSuggestEvent, ExecutorPtr,
+    util::unixtime,
+    ExecutorPtr,
 };
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 
 use super::{
-    editbox::{
-        editable::{Editable, RenderedEditable, Selection, TextIdx, TextPos},
-        eol_nudge,
+    baseedit::{
         repeat::{PressedKey, PressedKeysSmoothRepeat},
         ALLOWED_KEYCODES, DISALLOWED_CHARS,
     },
@@ -76,31 +70,6 @@ const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatedit", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatedit", $($arg)*); } }
 
-// You must be careful working with string indexes in Java. They are UTF16 string indexs, not UTF8
-fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
-    let utf16_data: Vec<_> = s.encode_utf16().take(char_idx).collect();
-    let prestr = String::from_utf16(&utf16_data).ok()?;
-    Some(prestr.len())
-}
-fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
-    if byte_idx > s.len() || !s.is_char_boundary(byte_idx) {
-        return None
-    }
-    Some(s[..byte_idx].encode_utf16().count())
-}
-
-#[derive(Clone)]
-struct TouchStartInfo {
-    pos: Point,
-    instant: std::time::Instant,
-}
-
-impl TouchStartInfo {
-    fn new(pos: Point) -> Self {
-        Self { pos, instant: std::time::Instant::now() }
-    }
-}
-
 #[derive(Clone)]
 enum TouchStateAction {
     Inactive,
@@ -114,14 +83,12 @@ enum TouchStateAction {
 
 struct TouchInfo {
     state: TouchStateAction,
-    start: Option<TouchStartInfo>,
-
     scroll: PropertyFloat32,
 }
 
 impl TouchInfo {
     fn new(scroll: PropertyFloat32) -> Self {
-        Self { state: TouchStateAction::Inactive, start: None, scroll }
+        Self { state: TouchStateAction::Inactive, scroll }
     }
 
     fn start(&mut self, pos: Point) {
@@ -227,7 +194,6 @@ pub struct ChatEdit {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     render_api: RenderApi,
-    text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
     // Moves the draw cursor and applies scroll
@@ -255,7 +221,7 @@ pub struct ChatEdit {
     text: PropertyStr,
     text_color: PropertyColor,
     text_hi_color: PropertyColor,
-    text_cmd_color: PropertyColor,
+    //text_cmd_color: PropertyColor,
     cursor_color: PropertyColor,
     cursor_width: PropertyFloat32,
     cursor_ascent: PropertyFloat32,
@@ -263,7 +229,7 @@ pub struct ChatEdit {
     cursor_blink_time: PropertyUint32,
     cursor_idle_time: PropertyUint32,
     hi_bg_color: PropertyColor,
-    cmd_bg_color: PropertyColor,
+    //cmd_bg_color: PropertyColor,
     select_ascent: PropertyFloat32,
     select_descent: PropertyFloat32,
     handle_descent: PropertyFloat32,
@@ -281,7 +247,6 @@ pub struct ChatEdit {
     touch_info: SyncMutex<TouchInfo>,
     is_phone_select: AtomicBool,
 
-    old_window_scale: AtomicF32,
     window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
     is_mouse_hover: AtomicBool,
@@ -294,8 +259,6 @@ impl ChatEdit {
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
-        text_shaper: TextShaperPtr,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("ChatEdit::new()");
 
@@ -319,8 +282,8 @@ impl ChatEdit {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let text_hi_color = PropertyColor::wrap(node_ref, Role::Internal, "text_hi_color").unwrap();
-        let text_cmd_color =
-            PropertyColor::wrap(node_ref, Role::Internal, "text_cmd_color").unwrap();
+        //let text_cmd_color =
+        //    PropertyColor::wrap(node_ref, Role::Internal, "text_cmd_color").unwrap();
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
         let cursor_width =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_width", 0).unwrap();
@@ -329,7 +292,7 @@ impl ChatEdit {
         let cursor_descent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_descent", 0).unwrap();
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
-        let cmd_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "cmd_bg_color").unwrap();
+        //let cmd_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "cmd_bg_color").unwrap();
         let select_ascent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "select_ascent", 0).unwrap();
         let select_descent =
@@ -345,14 +308,10 @@ impl ChatEdit {
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
-
         let self_ = Arc::new(Self {
             node,
             tasks: SyncMutex::new(vec![]),
             render_api,
-            text_shaper: text_shaper.clone(),
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
             root_dc_key: OsRng.gen(),
@@ -378,7 +337,7 @@ impl ChatEdit {
             text: text.clone(),
             text_color: text_color.clone(),
             text_hi_color,
-            text_cmd_color,
+            //text_cmd_color,
             cursor_color,
             cursor_width,
             cursor_ascent,
@@ -386,7 +345,7 @@ impl ChatEdit {
             cursor_blink_time,
             cursor_idle_time,
             hi_bg_color,
-            cmd_bg_color,
+            //cmd_bg_color,
             select_ascent,
             select_descent,
             handle_descent,
@@ -403,7 +362,6 @@ impl ChatEdit {
             touch_info: SyncMutex::new(TouchInfo::new(scroll)),
             is_phone_select: AtomicBool::new(false),
 
-            old_window_scale: AtomicF32::new(window_scale.get()),
             window_scale: window_scale.clone(),
             parent_rect: SyncMutex::new(None),
             is_mouse_hover: AtomicBool::new(false),
@@ -658,7 +616,7 @@ impl ChatEdit {
             KeyCode::Enter | KeyCode::KpEnter => {
                 if mods.shift {
                     drv.insert_or_replace_selection("\n");
-                    editor.on_buffer_changed(atom);
+                    editor.on_buffer_changed(atom).await;
                 } else {
                     //let node = self.node.upgrade().unwrap();
                     //node.trigger("enter_pressed", vec![]).await.unwrap();
@@ -671,7 +629,7 @@ impl ChatEdit {
                 } else {
                     drv.delete();
                 }
-                editor.on_buffer_changed(atom);
+                editor.on_buffer_changed(atom).await;
             }
             KeyCode::Backspace => {
                 if action_mod {
@@ -679,7 +637,7 @@ impl ChatEdit {
                 } else {
                     drv.backdelete();
                 }
-                editor.on_buffer_changed(atom);
+                editor.on_buffer_changed(atom).await;
             }
             KeyCode::Home => {
                 if action_mod {
@@ -746,7 +704,7 @@ impl ChatEdit {
         // }
     }
 
-    async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
+    async fn handle_touch_start(&self, touch_pos: Point) -> bool {
         t!("handle_touch_start({touch_pos:?})");
 
         let rect = self.rect.get();
@@ -845,8 +803,7 @@ impl ChatEdit {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
                 if self.text.get().is_empty() {
-                    let node = self.node.upgrade().unwrap();
-                    node.trigger("paste_request", vec![]).await.unwrap();
+                    self.node().trigger("paste_request", vec![]).await.unwrap();
                 } else {
                     self.abs_to_local(&mut touch_pos);
                     self.start_touch_select(touch_pos, atom).await;
@@ -877,7 +834,7 @@ impl ChatEdit {
 
                 let layout = editor.layout();
                 t!("select  (pre): {:?}", sel.text_range());
-                let mut cursor = parley::Cursor::from_point(layout, pos.x, pos.y).index();
+                let cursor = parley::Cursor::from_point(layout, pos.x, pos.y).index();
                 t!("cursor: {cursor}");
 
                 // The selection is NOT allowed to cross over itself.
@@ -930,13 +887,12 @@ impl ChatEdit {
             _ => {}
         }
 
-        let node = self.node.upgrade().unwrap();
-        node.trigger("focus_request", vec![]).await.unwrap();
+        self.node().trigger("focus_request", vec![]).await.unwrap();
 
         true
     }
 
-    async fn touch_set_cursor_pos(&self, mut touch_pos: Point) {
+    async fn touch_set_cursor_pos(&self, touch_pos: Point) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
         let mut editor = self.lock_editor().await;
@@ -953,7 +909,7 @@ impl ChatEdit {
         self.hide_cursor.store(false, Ordering::Relaxed);
         self.select_text
             .clone()
-            .set_null(&mut PropertyAtomicGuard::new(), Role::Internal, 0)
+            .set_null(atom, Role::Internal, 0)
             .unwrap();
     }
 
@@ -1099,8 +1055,6 @@ impl ChatEdit {
     }
 
     async fn regen_select_mesh(&self) -> Vec<GfxDrawInstruction> {
-        let padding_top = self.padding_top();
-
         let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
 
         let editor = self.lock_editor().await;
@@ -1125,13 +1079,11 @@ impl ChatEdit {
             return vec![]
         }
         //t!("regen_phone_select_handle_mesh()");
-        let (mut first, mut last) = self.get_select_handles().await.unwrap();
+        let (first, last) = self.get_select_handles().await.unwrap();
 
         let scroll = self.scroll.get();
 
         let editor = self.lock_editor().await;
-        let layout = editor.layout();
-
         let sel = editor.selection();
         assert!(!sel.is_collapsed());
 
@@ -1175,7 +1127,7 @@ impl ChatEdit {
         self.content_height.set(atom, content_height);
         let outer_height = content_height + self.padding_top() + self.padding_bottom();
         let rect_h = self.bounded_height(outer_height);
-        self.rect.prop().set_f32(atom, Role::Internal, 3, rect_h);
+        self.rect.prop().set_f32(atom, Role::Internal, 3, rect_h).unwrap();
 
         // Finally calculate the position
         self.rect
@@ -1191,10 +1143,10 @@ impl ChatEdit {
             .unwrap();
     }
 
-    async fn make_draw_calls(&self, trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
+    async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
         self.eval_rect(atom).await;
 
-        let mut rect = self.rect.get();
+        let rect = self.rect.get();
         let max_scroll = self.max_scroll();
         let mut scroll = self.scroll.get();
         if scroll > max_scroll {
@@ -1311,7 +1263,7 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.lock_editor().await;
+        let editor = self_.lock_editor().await;
         editor.focus();
         true
     }
@@ -1330,11 +1282,12 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.lock_editor().await;
+        let editor = self_.lock_editor().await;
         editor.unfocus();
         true
     }
 
+    #[cfg(target_os = "android")]
     async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
         t!("handle_android_event({ev:?})");
         if !self.is_active.get() {
@@ -1475,7 +1428,8 @@ impl UIObject for ChatEdit {
         on_modify.when_change(self.debug.prop(), redraw);
 
         async fn regen_cursor(self_: Arc<ChatEdit>) {
-            let mesh = std::mem::take(&mut *self_.cursor_mesh.lock());
+            // Free the cache
+            *self_.cursor_mesh.lock() = None;
         }
         on_modify.when_change(self.cursor_color.prop(), regen_cursor);
         on_modify.when_change(self.cursor_ascent.prop(), regen_cursor);
@@ -1548,7 +1502,7 @@ impl UIObject for ChatEdit {
         trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("ChatEdit::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
+        t!("ChatEdit::draw({:?}, {trace_id})", self.node());
         *self.parent_rect.lock() = Some(parent_rect);
 
         Some(self.make_draw_calls(trace_id, atom).await)
@@ -1637,8 +1591,7 @@ impl UIObject for ChatEdit {
         if btn != MouseButton::Left {
             if btn == MouseButton::Right && rect.contains(mouse_pos) {
                 if self.text.get().is_empty() {
-                    let node = self.node.upgrade().unwrap();
-                    node.trigger("paste_request", vec![]).await.unwrap();
+                    self.node().trigger("paste_request", vec![]).await.unwrap();
                 }
                 return true
             }
@@ -1682,7 +1635,7 @@ impl UIObject for ChatEdit {
         true
     }
 
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_up(&self, _btn: MouseButton, _mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }

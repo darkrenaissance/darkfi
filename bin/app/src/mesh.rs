@@ -16,13 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    error::Result,
-    gfx::{
+use crate::gfx::{
         DebugTag, GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
         Vertex,
-    },
-};
+    };
 
 pub type Color = [f32; 4];
 
@@ -32,9 +29,11 @@ pub const COLOR_RED: Color = [1., 0., 0., 1.];
 pub const COLOR_DARKGREY: Color = [0.2, 0.2, 0.2, 1.];
 #[allow(dead_code)]
 pub const COLOR_LIGHTGREY: Color = [0.7, 0.7, 0.7, 1.];
+#[allow(dead_code)]
 pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
 pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 pub const COLOR_PINK: Color = [0.8, 0.3, 0.8, 1.];
+#[allow(dead_code)]
 pub const COLOR_PURPLE: Color = [1., 0., 1., 1.];
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
 #[allow(dead_code)]
@@ -70,6 +69,7 @@ impl MeshInfo {
     }
 }
 
+// TODO: remove clipper => simplify impl
 pub struct MeshBuilder {
     pub verts: Vec<Vertex>,
     pub indices: Vec<u16>,
@@ -80,9 +80,6 @@ pub struct MeshBuilder {
 impl MeshBuilder {
     pub fn new(tag: DebugTag) -> Self {
         Self { verts: vec![], indices: vec![], clipper: None, tag }
-    }
-    pub fn with_clip(tag: DebugTag, clipper: Rectangle) -> Self {
-        Self { verts: vec![], indices: vec![], clipper: Some(clipper), tag }
     }
 
     pub fn append(&mut self, mut verts: Vec<Vertex>, indices: Vec<u16>) {
@@ -100,11 +97,11 @@ impl MeshBuilder {
             None => obj.clone(),
         };
 
-        let (x1, y1) = clipped.top_left().unpack();
-        let (x2, y2) = clipped.bottom_right().unpack();
+        let (x1, y1) = clipped.pos().unpack();
+        let (x2, y2) = clipped.corner().unpack();
 
-        let (u1, v1) = uv.top_left().unpack();
-        let (u2, v2) = uv.bottom_right().unpack();
+        let (u1, v1) = uv.pos().unpack();
+        let (u2, v2) = uv.corner().unpack();
 
         // Interpolate UV coords
 
@@ -144,9 +141,9 @@ impl MeshBuilder {
     }
 
     pub fn draw_outline(&mut self, obj: &Rectangle, color: Color, thickness: f32) {
-        let (x1, y1) = obj.top_left().unpack();
+        let (x1, y1) = obj.pos().unpack();
         let (dist_x, dist_y) = (obj.w, obj.h);
-        let (x2, y2) = obj.bottom_right().unpack();
+        let (x2, y2) = obj.corner().unpack();
 
         // top
         self.draw_filled_box(&Rectangle::new(x1, y1, dist_x, thickness), color);

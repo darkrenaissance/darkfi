@@ -17,13 +17,12 @@
  */
 
 use crate::{
-    error::Result,
-    gfx::{DebugTag, GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
+    gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi},
 };
 
 use super::{
     ft::{Sprite, SpritePtr},
-    glyph_str, Glyph,
+    Glyph,
 };
 
 /// Prevents render artifacts from aliasing.

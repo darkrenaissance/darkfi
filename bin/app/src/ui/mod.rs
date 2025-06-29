@@ -18,34 +18,31 @@
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{log_enabled, Level::Trace};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use std::{
-    fmt::Debug,
-    sync::{Arc, Weak},
-};
+use std::sync::{Arc, Weak};
 
 use crate::{
-    error::{Error, Result},
-    expr::{SExprMachine, SExprVal},
-    gfx::{GfxBufferId, GfxDrawCall, GfxDrawMesh, GfxTextureId, Point, Rectangle},
+    gfx::{GfxDrawCall, Point, Rectangle},
     prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
-    scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr, SceneNodeWeak},
-    AndroidSuggestEvent, ExecutorPtr,
+    scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
+    ExecutorPtr,
 };
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 
 mod button;
 pub use button::{Button, ButtonPtr};
 pub mod chatview;
 pub use chatview::{ChatView, ChatViewPtr};
+mod baseedit;
 mod chatedit;
 pub use chatedit::{ChatEdit, ChatEditPtr};
-mod editbox;
-pub use editbox::{EditBox, EditBoxPtr};
+//mod editbox;
+//pub use editbox::{EditBox, EditBoxPtr};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod gesture;
-pub use gesture::{Gesture, GesturePtr};
+pub use gesture::GesturePtr;
 mod image;
 pub use image::{Image, ImagePtr};
 mod vector_art;
@@ -65,48 +62,50 @@ pub use win::{Window, WindowPtr};
 macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
 
+type DrawTrace = u32;
+
 #[async_trait]
 pub trait UIObject: Sync {
     fn priority(&self) -> u32;
 
     fn init(&self) {}
 
-    async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
+    async fn start(self: Arc<Self>, _ex: ExecutorPtr) {}
 
     /// Clear all buffers and caches
     fn stop(&self) {}
 
     async fn draw(
         &self,
-        parent_rect: Rectangle,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        _parent_rect: Rectangle,
+        _trace: DrawTrace,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         None
     }
 
-    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_char(&self, _key: char, _mods: KeyMods, _repeat: bool) -> bool {
         false
     }
-    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_key_down(&self, _key: KeyCode, _mods: KeyMods, _repeat: bool) -> bool {
         false
     }
-    async fn handle_key_up(&self, key: KeyCode, mods: KeyMods) -> bool {
+    async fn handle_key_up(&self, _key: KeyCode, _mods: KeyMods) -> bool {
         false
     }
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_down(&self, _btn: MouseButton, _mouse_pos: Point) -> bool {
         false
     }
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_up(&self, _btn: MouseButton, _mouse_pos: Point) -> bool {
         false
     }
-    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, _mouse_pos: Point) -> bool {
         false
     }
-    async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
+    async fn handle_mouse_wheel(&self, _wheel_pos: Point) -> bool {
         false
     }
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    async fn handle_touch(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
         false
     }
 }
@@ -118,6 +117,7 @@ pub struct DrawUpdate {
 
 pub struct OnModify<T> {
     ex: ExecutorPtr,
+    #[allow(dead_code)]
     node: SceneNodeWeak,
     me: Weak<T>,
     pub tasks: Vec<smol::Task<()>>,
@@ -139,7 +139,6 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         }
 
         let me = self.me.clone();
-        let node = self.node.clone();
         let task = self.ex.spawn(async move {
             loop {
                 let mut poll_queues = FuturesUnordered::new();
@@ -168,7 +167,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     }
                 }
 
-                if (idx == 0) {
+                if idx == 0 {
                     t!("Property {:?} modified [depend_idx={idx}, role={role:?}]", prop);
                 } else {
                     t!(
@@ -196,7 +195,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Layer(obj) => obj.clone(),
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
-        Pimpl::EditBox(obj) => obj.clone(),
+        //Pimpl::EditBox(obj) => obj.clone(),
         Pimpl::ChatEdit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
@@ -212,7 +211,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Layer(obj) => obj.as_ref(),
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
-        Pimpl::EditBox(obj) => obj.as_ref(),
+        //Pimpl::EditBox(obj) => obj.as_ref(),
         Pimpl::ChatEdit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),

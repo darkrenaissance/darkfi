@@ -16,12 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ops::Range;
-
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx::{Dimension, Point, Rectangle},
+    gfx::{Dimension, Rectangle},
     scene::SceneNode as SceneNode3,
 };
 
@@ -66,12 +64,14 @@ pub struct PropertyUint32 {
 }
 
 impl PropertyUint32 {
+    /*
     pub fn from(prop: PropertyPtr, role: Role, idx: usize) -> Result<Self> {
         // Test if it works
         let _ = prop.get_u32(idx)?;
 
         Ok(Self { prop, role, idx })
     }
+    */
 
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
@@ -86,6 +86,7 @@ impl PropertyUint32 {
         self.prop.get_u32(self.idx).unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn set(&self, atom: &mut PropertyAtomicGuard, val: u32) {
         self.prop().set_u32(atom, self.role, self.idx, val).unwrap()
     }
@@ -186,6 +187,7 @@ impl PropertyColor {
         ]
     }
 
+    #[allow(dead_code)]
     pub fn set(&self, atom: &mut PropertyAtomicGuard, val: [f32; 4]) {
         self.prop().set_f32(atom, self.role, 0, val[0]).unwrap();
         self.prop().set_f32(atom, self.role, 1, val[1]).unwrap();
@@ -234,6 +236,7 @@ impl PropertyDimension {
     }
 }
 
+/*
 #[derive(Clone)]
 pub struct PropertyPoint {
     prop: PropertyPtr,
@@ -268,6 +271,7 @@ impl PropertyPoint {
         self.prop.clone()
     }
 }
+*/
 
 #[derive(Clone)]
 pub struct PropertyRect {
@@ -331,7 +335,7 @@ impl PropertyRect {
     }
 
     pub fn get(&self) -> Rectangle {
-        Rectangle::from_array([
+        Rectangle::from([
             self.prop.get_f32(0).unwrap(),
             self.prop.get_f32(1).unwrap(),
             self.prop.get_f32(2).unwrap(),
@@ -346,8 +350,9 @@ impl PropertyRect {
         self.prop.get_f32(3).unwrap()
     }
 
+    /*
     pub fn get_opt(&self) -> Option<Rectangle> {
-        Some(Rectangle::from_array([
+        Some(Rectangle::from([
             self.prop.get_f32(0).ok()?,
             self.prop.get_f32(1).ok()?,
             self.prop.get_f32(2).ok()?,
@@ -361,6 +366,7 @@ impl PropertyRect {
         self.prop().set_f32(atom, self.role, 2, rect.y).unwrap();
         self.prop().set_f32(atom, self.role, 3, rect.y).unwrap();
     }
+    */
 
     #[inline]
     pub fn prop(&self) -> PropertyPtr {

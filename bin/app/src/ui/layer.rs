@@ -16,30 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_recursion::async_recursion;
 use async_trait::async_trait;
-use atomic_float::AtomicF32;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{atomic::Ordering, Arc, Weak};
+use std::sync::Arc;
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect,
+        PropertyAtomicGuard, PropertyBool, PropertyRect,
         PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
-    AndroidSuggestEvent, ExecutorPtr,
+    ExecutorPtr,
 };
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 
 use super::{
     get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, UIObject,
 };
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::layer", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::layer", $($arg)*); } }
 
 pub type LayerPtr = Arc<Layer>;
@@ -59,16 +58,13 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         t!("Layer::new({node_ref:?})");
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
-
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let self_ = Arc::new(Self {
             node,

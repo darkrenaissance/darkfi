@@ -23,8 +23,6 @@ use crate::{
     text2::{TextContext, FONT_STACK, TEXT_CTX},
 };
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor", $($arg)*); } }
-
 pub struct Editor {
     editor: parley::PlainEditor<Color>,
 
@@ -43,14 +41,16 @@ impl Editor {
         window_scale: PropertyFloat32,
         lineheight: PropertyFloat32,
     ) -> Self {
-        let mut editor = parley::PlainEditor::new(1.);
+        let editor = parley::PlainEditor::new(1.);
         //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
         //editor.set_text(atxt);
         Self { text, editor, font_size, text_color, window_scale, lineheight }
     }
 
     // These are android specific
+    #[allow(dead_code)]
     pub fn init(&mut self) {}
+    #[allow(dead_code)]
     pub fn setup(&mut self) {}
     pub fn focus(&self) {}
     pub fn unfocus(&self) {}
@@ -91,10 +91,10 @@ impl Editor {
         self.editor.try_layout().unwrap()
     }
 
-    pub fn move_to_pos(&self, pos: Point) {
+    pub fn move_to_pos(&self, _pos: Point) {
         unimplemented!()
     }
-    pub fn select_word_at_point(&self, pos: Point) {
+    pub fn select_word_at_point(&self, _pos: Point) {
         unimplemented!()
     }
 
@@ -133,8 +133,11 @@ impl Editor {
     pub fn selection(&self) -> parley::Selection {
         *self.editor.raw_selection()
     }
-    pub fn set_selection(&self, select_start: usize, select_end: usize) {}
+    pub fn set_selection(&self, _select_start: usize, _select_end: usize) {
+        unimplemented!()
+    }
 
+    #[allow(dead_code)]
     pub fn buffer(&self) -> String {
         self.editor.raw_text().to_string()
     }

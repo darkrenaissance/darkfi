@@ -20,15 +20,13 @@ use async_trait::async_trait;
 use miniquad::{MouseButton, TouchPhase};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Weak,
+    Arc,
 };
 
 use crate::{
-    gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
-    pubsub::Subscription,
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    ExecutorPtr,
+    gfx::{Point, Rectangle},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    scene::{Pimpl, SceneNodeWeak},
 };
 
 use super::{DrawUpdate, UIObject};
@@ -43,27 +41,24 @@ pub struct Button {
 
     is_active: PropertyBool,
     rect: PropertyRect,
-    z_index: PropertyUint32,
     priority: PropertyUint32,
 
     mouse_btn_held: AtomicBool,
 }
 
 impl Button {
-    pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak) -> Pimpl {
         t!("Button::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
-        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
             is_active,
             rect,
-            z_index,
             priority,
             mouse_btn_held: AtomicBool::new(false),
         });
@@ -81,8 +76,8 @@ impl UIObject for Button {
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        _trace_id: u32,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         let _ = self.rect.eval(&parent_rect);
         None

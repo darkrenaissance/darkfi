@@ -22,10 +22,10 @@ use std::sync::Arc;
 
 use crate::{
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
+        PropertyPtr,
         PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    scene::{Pimpl, SceneNodeWeak},
 };
 
 use super::UIObject;

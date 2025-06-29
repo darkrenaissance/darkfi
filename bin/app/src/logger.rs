@@ -16,15 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use log::{Level, LevelFilter, Log, Metadata, Record};
+use log::{LevelFilter, Log, Metadata, Record};
 use simplelog::{
     ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger, TerminalMode,
-    WriteLogger,
 };
-use std::{path::PathBuf, thread::sleep, time::Duration};
+
+#[cfg(feature = "enable-filelog")]
+use {
+    file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate},
+    simplelog::WriteLogger,
+    std::{path::PathBuf, thread::sleep, time::Duration}
+};
 
 // Measured in bytes
+#[cfg(feature = "enable-filelog")]
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
 static MUTED_TARGETS: &[&'static str] = &[
@@ -47,13 +52,13 @@ static MUTED_TARGETS: &[&'static str] = &[
 
 static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx"];
 
-#[cfg(target_os = "android")]
+#[cfg(all(target_os = "android", feature = "enable-filelog"))]
 fn logfile_path() -> PathBuf {
     use crate::android::get_external_storage_path;
     get_external_storage_path().join("darkfi-app.log")
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), feature = "enable-filelog"))]
 fn logfile_path() -> PathBuf {
     dirs::cache_dir().unwrap().join("darkfi/darkfi-app.log")
 }
@@ -130,7 +135,7 @@ mod desktop {
     }
 
     impl CustomTermLogger {
-        pub fn new(level: LevelFilter, cfg: Config) -> Box<Self> {
+        pub fn new(_level: LevelFilter, cfg: Config) -> Box<Self> {
             let logger =
                 TermLogger::new(LevelFilter::Trace, cfg, TerminalMode::Mixed, ColorChoice::Auto);
             Box::new(Self { logger: *logger })

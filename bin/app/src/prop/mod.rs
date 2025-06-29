@@ -20,7 +20,6 @@ use crate::error::{Error, Result};
 use darkfi_serial::{async_trait, Encodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use std::{
     io::Write,
-    ops::Range,
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -34,7 +33,7 @@ mod guard;
 pub use guard::PropertyAtomicGuard;
 mod wrap;
 pub use wrap::{
-    PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyPoint, PropertyRect,
+    PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyRect,
     PropertyStr, PropertyUint32,
 };
 
@@ -371,7 +370,7 @@ impl Property {
         self.on_modify.notify((role, ModifyAction::Clear));
     }
 
-    pub fn set_raw_value(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
+    fn set_raw_value(&self, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
             return Err(Error::PropertyWrongType)
         }
@@ -429,7 +428,7 @@ impl Property {
         i: usize,
         val: bool,
     ) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::Bool(val))?;
+        self.set_raw_value(i, PropertyValue::Bool(val))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -452,7 +451,7 @@ impl Property {
                 return Err(Error::PropertyOutOfRange)
             }
         }
-        self.set_raw_value(role, i, PropertyValue::Uint32(val))?;
+        self.set_raw_value(i, PropertyValue::Uint32(val))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -475,7 +474,7 @@ impl Property {
                 return Err(Error::PropertyOutOfRange)
             }
         }
-        self.set_raw_value(role, i, PropertyValue::Float32(val))?;
+        self.set_raw_value(i, PropertyValue::Float32(val))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -486,7 +485,7 @@ impl Property {
         i: usize,
         val: S,
     ) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::Str(val.into()))?;
+        self.set_raw_value(i, PropertyValue::Str(val.into()))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -504,7 +503,7 @@ impl Property {
         if !self.enum_items.as_ref().unwrap().contains(&val) {
             return Err(Error::PropertyWrongEnumItem)
         }
-        self.set_raw_value(role, i, PropertyValue::Enum(val.into()))?;
+        self.set_raw_value(i, PropertyValue::Enum(val.into()))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -515,7 +514,7 @@ impl Property {
         i: usize,
         val: SceneNodeId,
     ) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::SceneNodeId(val))?;
+        self.set_raw_value(i, PropertyValue::SceneNodeId(val))?;
         atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
@@ -552,7 +551,7 @@ impl Property {
         Ok(())
     }
 
-    fn set_cache(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
+    fn set_cache(&self, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
             return Err(Error::PropertyWrongType)
         }
@@ -565,12 +564,12 @@ impl Property {
         Ok(())
     }
     pub fn set_cache_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
-        self.set_cache(role, i, PropertyValue::Float32(val))?;
+        self.set_cache(i, PropertyValue::Float32(val))?;
         self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
         Ok(())
     }
     pub fn set_cache_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
-        self.set_cache(role, i, PropertyValue::Uint32(val))?;
+        self.set_cache(i, PropertyValue::Uint32(val))?;
         self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
         Ok(())
     }
@@ -578,7 +577,7 @@ impl Property {
     pub fn set_cache_f32_multi(&self, role: Role, changes: Vec<(usize, f32)>) -> Result<()> {
         let mut idxs = vec![];
         for (idx, val) in changes {
-            self.set_cache(role, idx, PropertyValue::Float32(val))?;
+            self.set_cache(idx, PropertyValue::Float32(val))?;
             idxs.push(idx);
         }
         self.on_modify.notify((role, ModifyAction::SetCache(idxs)));
@@ -587,7 +586,7 @@ impl Property {
     pub fn set_cache_u32_range(&self, role: Role, changes: Vec<(usize, u32)>) -> Result<()> {
         let mut idxs = vec![];
         for (idx, val) in changes {
-            self.set_cache(role, idx, PropertyValue::Uint32(val))?;
+            self.set_cache(idx, PropertyValue::Uint32(val))?;
             idxs.push(idx);
         }
         self.on_modify.notify((role, ModifyAction::SetCache(idxs)));

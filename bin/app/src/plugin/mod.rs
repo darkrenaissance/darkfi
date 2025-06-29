@@ -16,10 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
-use std::sync::Arc;
-
-use crate::ExecutorPtr;
+use std::{sync::Arc,
+array::TryFromSliceError, string::FromUtf8Error};
+use sled_overlay::sled;
 
 pub mod darkirc;
 pub use darkirc::{DarkIrc, DarkIrcPtr};
@@ -28,13 +27,11 @@ use darkfi::net::Settings as NetSettings;
 
 use crate::{
     prop::{
-        Property, PropertyAtomicGuard, PropertyPtr, PropertyStr, PropertySubType, PropertyType,
+        Property, PropertyAtomicGuard, PropertySubType, PropertyType,
         PropertyValue, Role,
     },
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
+    scene::{SceneNode, SceneNodePtr, SceneNodeType},
 };
-use sled_overlay::sled;
-use std::{array::TryFromSliceError, string::FromUtf8Error};
 
 pub struct PluginSettings {
     pub setting_root: SceneNodePtr,
@@ -50,8 +47,8 @@ impl PluginSettings {
                 node.add_property(prop).unwrap();
                 let prop = Property::new("default", PropertyType::Bool, PropertySubType::Null);
                 node.add_property(prop).unwrap();
-                node.set_property_bool(atom, Role::User, "value", b.clone());
-                node.set_property_bool(atom, Role::App, "default", b.clone());
+                node.set_property_bool(atom, Role::User, "value", b.clone()).unwrap();
+                node.set_property_bool(atom, Role::App, "default", b.clone()).unwrap();
                 Some(node)
             }
             PropertyValue::Uint32(u) => {
@@ -60,8 +57,8 @@ impl PluginSettings {
                 node.add_property(prop).unwrap();
                 let prop = Property::new("default", PropertyType::Uint32, PropertySubType::Null);
                 node.add_property(prop).unwrap();
-                node.set_property_u32(atom, Role::User, "value", u.clone());
-                node.set_property_u32(atom, Role::App, "default", u.clone());
+                node.set_property_u32(atom, Role::User, "value", u.clone()).unwrap();
+                node.set_property_u32(atom, Role::App, "default", u.clone()).unwrap();
                 Some(node)
             }
             PropertyValue::Float32(f) => {
@@ -70,8 +67,8 @@ impl PluginSettings {
                 node.add_property(prop).unwrap();
                 let prop = Property::new("default", PropertyType::Float32, PropertySubType::Null);
                 node.add_property(prop).unwrap();
-                node.set_property_f32(atom, Role::User, "value", f.clone());
-                node.set_property_f32(atom, Role::App, "default", f.clone());
+                node.set_property_f32(atom, Role::User, "value", f.clone()).unwrap();
+                node.set_property_f32(atom, Role::App, "default", f.clone()).unwrap();
                 Some(node)
             }
             PropertyValue::Str(s) => {
@@ -80,8 +77,8 @@ impl PluginSettings {
                 node.add_property(prop).unwrap();
                 let prop = Property::new("default", PropertyType::Str, PropertySubType::Null);
                 node.add_property(prop).unwrap();
-                node.set_property_str(atom, Role::User, "value", s.clone());
-                node.set_property_str(atom, Role::App, "default", s.clone());
+                node.set_property_str(atom, Role::User, "value", s.clone()).unwrap();
+                node.set_property_str(atom, Role::App, "default", s.clone()).unwrap();
                 Some(node)
             }
             _ => None,
@@ -115,7 +112,7 @@ impl PluginSettings {
                             Role::User,
                             "value",
                             sled_value[0] != 0,
-                        );
+                        ).unwrap();
                     }
                 }
                 PropertyType::Uint32 => {
@@ -130,7 +127,7 @@ impl PluginSettings {
                                     Role::User,
                                     "value",
                                     u32::from_le_bytes(b),
-                                );
+                                ).unwrap();
                             }
                         }
                     }
@@ -147,7 +144,7 @@ impl PluginSettings {
                                     Role::User,
                                     "value",
                                     f32::from_le_bytes(b),
-                                );
+                                ).unwrap();
                             }
                         }
                     }
@@ -158,7 +155,7 @@ impl PluginSettings {
                         let string: Result<String, FromUtf8Error> =
                             String::from_utf8(sled_value.to_vec());
                         if let Ok(s) = string {
-                            setting_node.set_property_str(atom, Role::User, "value", s);
+                            setting_node.set_property_str(atom, Role::User, "value", s).unwrap();
                         }
                     }
                 }
@@ -179,25 +176,25 @@ impl PluginSettings {
                 PropertyType::Bool => {
                     let value_bytes = if value.get_bool(0).unwrap() { 1u8 } else { 0u8 };
                     self.sled_tree
-                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes]));
+                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes])).unwrap();
                 }
                 PropertyType::Uint32 => {
                     self.sled_tree.insert(
                         setting_node.name.as_str(),
                         sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()),
-                    );
+                    ).unwrap();
                 }
                 PropertyType::Float32 => {
                     self.sled_tree.insert(
                         setting_node.name.as_str(),
                         sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()),
-                    );
+                    ).unwrap();
                 }
                 PropertyType::Str => {
                     self.sled_tree.insert(
                         setting_node.name.as_str(),
                         sled::IVec::from(value.get_str(0).unwrap().as_bytes()),
-                    );
+                    ).unwrap();
                 }
                 _ => {}
             }

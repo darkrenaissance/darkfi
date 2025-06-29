@@ -19,31 +19,26 @@
 use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use crate::{
-    error::{Error, Result},
-    expr::{Op, SExprCode, SExprMachine, SExprVal},
     gfx::{
-        gfxtag, GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi,
-        Vertex,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi,
     },
-    mesh::Color,
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect,
+        PropertyAtomicGuard, PropertyBool, PropertyRect,
         PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::{enumerate, unixtime},
+    scene::{Pimpl, SceneNodeWeak},
+    util::unixtime,
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
 
 pub mod shape;
 use shape::VectorShape;
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::vector_art", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::vector_art", $($arg)*); } }
 
 pub type VectorArtPtr = Arc<VectorArt>;
@@ -69,7 +64,6 @@ impl VectorArt {
         node: SceneNodeWeak,
         shape: VectorShape,
         render_api: RenderApi,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("VectorArt::new()");
 
@@ -78,9 +72,6 @@ impl VectorArt {
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
-
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let self_ = Arc::new(Self {
             node,
@@ -106,13 +97,13 @@ impl VectorArt {
     }
 
     async fn redraw(self: Arc<Self>) {
-        let trace_id = rand::random();
+        let trace = rand::random();
         let timest = unixtime();
-        trace!(target: "ui::vector_art", "VectorArt::redraw({}) [trace_id={trace_id}]", self.node_path());
+        trace!(target: "ui::vector_art", "VectorArt::redraw({}) [trace={trace}]", self.node_path());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
-            error!(target: "ui::vector_art", "Mesh failed to draw [trace_id={trace_id}]");
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace).await else {
+            error!(target: "ui::vector_art", "Mesh failed to draw [trace={trace}]");
             return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
@@ -141,9 +132,9 @@ impl VectorArt {
         vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)]
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle, trace: DrawTrace) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(&parent_rect) {
-            warn!(target: "ui::vector_art", "Rect eval failure: {e} [trace_id={trace_id}]");
+            warn!(target: "ui::vector_art", "Rect eval failure: {e} [trace={trace}]");
             return None
         }
         let instrs = self.get_draw_instrs();
@@ -182,12 +173,12 @@ impl UIObject for VectorArt {
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        trace: DrawTrace,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("VectorArt::draw({}) [trace_id={trace_id}]", self.node_path());
+        t!("VectorArt::draw({}) [trace={trace}]", self.node_path());
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, trace_id).await
+        self.get_draw_calls(parent_rect, trace).await
     }
 }
 

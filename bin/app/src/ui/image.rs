@@ -22,24 +22,23 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 use crate::{
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr,
         Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
-    prop::{PropertyAtomicGuard, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    prop::{PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
+    scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::image", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::image", $($arg)*); } }
 
 pub type ImagePtr = Arc<Image>;
@@ -62,7 +61,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
         t!("Image::new()");
 
         let node_ref = &node.upgrade().unwrap();
@@ -71,9 +70,6 @@ impl Image {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
-
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let self_ = Arc::new(Self {
             node,
@@ -111,8 +107,8 @@ impl Image {
         miniquad::fs::load_file(&path.clone(), move |res| match res {
             Ok(res) => *data2.lock() = res,
             Err(e) => {
-                error!(target: "ui::image", "Unable to open image: {path}");
-                panic!("Resource not found!");
+                error!(target: "ui::image", "Unable to open image: {path}: {e}");
+                panic!("Resource not found! {e}");
             }
         });
         let data = std::mem::take(&mut *data.lock());
@@ -130,17 +126,17 @@ impl Image {
     }
 
     async fn redraw(self: Arc<Self>) {
-        let trace_id = rand::random();
+        let trace: DrawTrace = rand::random();
         let timest = unixtime();
-        t!("redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
+        t!("redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
             error!(target: "ui::image", "Image failed to draw");
             return
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("redraw() DONE [trace_id={trace_id}]");
+        t!("redraw() DONE [trace={trace}]");
     }
 
     /// Called whenever any property changes.
@@ -153,7 +149,7 @@ impl Image {
         mesh.alloc(&self.render_api)
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle, _: u32) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
         self.uv.eval(&rect).ok()?;
@@ -214,12 +210,12 @@ impl UIObject for Image {
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        trace: DrawTrace,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Image::draw() [trace_id={trace_id}]");
+        t!("Image::draw() [trace={trace}]");
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, trace_id).await
+        self.get_draw_calls(parent_rect).await
     }
 }
 

@@ -127,15 +127,6 @@ impl GlyphInfo {
     }
 }
 
-fn is_overlap(parent: &GlyphInfo, child: &GlyphInfo) -> bool {
-    assert!(child.cluster_start <= child.cluster_end);
-    // Handle this weird edgecase
-    if child.cluster_start == child.cluster_end {
-        return child.cluster_end <= parent.cluster_start
-    }
-    child.cluster_start < parent.cluster_end
-}
-
 struct ShapedGlyphs {
     glyphs: Vec<GlyphInfo>,
 }
@@ -194,18 +185,6 @@ impl ShapedGlyphs {
     }
 }
 
-/// Count the number of leading zeros
-fn count_leading_null_glyphs(glyphs: &Vec<GlyphInfo>) -> usize {
-    let mut cnt = 0;
-    for glyph in glyphs {
-        if glyph.id != 0 {
-            break
-        }
-        cnt += 1;
-    }
-    cnt
-}
-
 /*
 fn print_glyphs(ctx: &str, glyphs: &Vec<GlyphInfo>, indent: usize) {
     let ws = " ".repeat(2 * indent);
@@ -227,9 +206,6 @@ fn face_shape(face: &mut FreetypeFace, text: &str, face_idx: usize) -> Vec<Glyph
         // Index within this substr
         let cluster = hbinf.info.cluster as usize;
         //println!("  {i}: glyph_id = {glyph_id}, cluster = {cluster}");
-
-        let remain_text = &text[cluster..];
-        //println!("     remain_text='{remain_text}'");
 
         if i != 0 {
             glyphs.last_mut().unwrap().cluster_end = cluster;

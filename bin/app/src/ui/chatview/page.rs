@@ -17,36 +17,30 @@
  */
 
 use async_gen::{gen as async_gen, AsyncIter};
-use async_lock::Mutex as AsyncMutex;
 use chrono::{Local, NaiveDate, TimeZone};
 use futures::stream::{Stream, StreamExt};
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
-    io::Cursor,
     pin::pin,
-    sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
 use super::{max, MessageId, Timestamp};
 use crate::{
     gfx::{
-        gfxtag, GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
-        GraphicsEventPublisherPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
+        gfxtag, GfxDrawMesh,
+        Rectangle, RenderApi,
     },
-    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK, COLOR_WHITE},
-    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
-    pubsub::Subscription,
-    scene::{SceneNodePtr, SceneNodeWeak},
-    text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
-    util::{enumerate_mut, enumerate_ref},
-    ExecutorPtr,
+    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_PINK, COLOR_WHITE},
+    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
+    text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
+    util::enumerate_mut,
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview::message_buffer", $($arg)*); } }
 
-const PAGE_SIZE: usize = 10;
-const PRELOAD_PAGES: usize = 10;
+//const PAGE_SIZE: usize = 10;
+//const PRELOAD_PAGES: usize = 10;
 
 const UNCONF_COLOR: [f32; 4] = [0.4, 0.4, 0.4, 1.];
 
@@ -244,7 +238,7 @@ impl PrivMessage {
         baseline: f32,
         nick_color: Color,
         mut text_color: Color,
-        debug_render: bool,
+        _debug_render: bool,
     ) {
         //debug!(target: "ui::chatview", "render_line({})", glyph_str(line));
         // Keep track of the 'section'
@@ -453,9 +447,9 @@ impl DateMessage {
         clip: &Rectangle,
         line_height: f32,
         baseline: f32,
-        nick_colors: &[Color],
+        _nick_colors: &[Color],
         timestamp_color: Color,
-        text_color: Color,
+        _text_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
     ) -> GfxDrawMesh {
@@ -495,7 +489,7 @@ impl std::fmt::Debug for DateMessage {
 
 /// Easier than fucking around with traits nonsense
 #[derive(Debug)]
-enum Message {
+pub enum Message {
     Priv(PrivMessage),
     Date(DateMessage),
 }
@@ -598,7 +592,7 @@ impl Message {
 
     fn is_date(&self) -> bool {
         match self {
-            Self::Priv(m) => false,
+            Self::Priv(_) => false,
             Self::Date(_) => true,
         }
     }
@@ -610,12 +604,6 @@ impl Message {
         }
     }
 
-    fn get_privmsg(&self) -> Option<&PrivMessage> {
-        match self {
-            Message::Priv(msg) => Some(msg),
-            _ => None,
-        }
-    }
     fn get_privmsg_mut(&mut self) -> Option<&mut PrivMessage> {
         match self {
             Message::Priv(msg) => Some(msg),
@@ -633,8 +621,6 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
 }
 
 pub struct MessageBuffer {
-    node: SceneNodeWeak,
-
     /// From most recent to older
     msgs: Vec<Message>,
     date_msgs: HashMap<NaiveDate, Message>,
@@ -663,7 +649,6 @@ pub struct MessageBuffer {
 
 impl MessageBuffer {
     pub fn new(
-        node: SceneNodeWeak,
         font_size: PropertyFloat32,
         timestamp_font_size: PropertyFloat32,
         timestamp_width: PropertyFloat32,
@@ -681,8 +666,6 @@ impl MessageBuffer {
     ) -> Self {
         let old_window_scale = window_scale.get();
         Self {
-            node,
-
             msgs: vec![],
             date_msgs: HashMap::new(),
             line_width: 0.,
@@ -710,10 +693,6 @@ impl MessageBuffer {
     pub fn clear(&mut self) {
         self.msgs.clear();
         self.date_msgs.clear();
-    }
-
-    fn node(&self) -> SceneNodePtr {
-        self.node.upgrade().unwrap()
     }
 
     pub fn adjust_window_scale(&mut self) {
@@ -797,7 +776,7 @@ impl MessageBuffer {
     }
 
     fn find_privmsg_mut(&mut self, msg_id: &MessageId) -> Option<&mut PrivMessage> {
-        for (idx, msg) in enumerate_mut(&mut self.msgs) {
+        for msg in &mut self.msgs {
             let Some(privmsg) = msg.get_privmsg_mut() else { continue };
             if privmsg.id == *msg_id {
                 return Some(privmsg)
@@ -843,7 +822,6 @@ impl MessageBuffer {
         );
 
         if self.msgs.is_empty() {
-            let msg_idx = self.msgs.len();
             self.msgs.push(msg);
             return self.msgs.last_mut().unwrap().get_privmsg_mut()
         }
@@ -1031,11 +1009,6 @@ impl MessageBuffer {
     pub fn oldest_timestamp(&self) -> Option<Timestamp> {
         let last_msg = &self.msgs.last()?;
         Some(last_msg.timestamp())
-    }
-
-    pub fn latest_timestamp(&self) -> Option<Timestamp> {
-        let first_msg = &self.msgs.first()?;
-        Some(first_msg.timestamp())
     }
 
     fn read_nick_colors(&self) -> Vec<Color> {

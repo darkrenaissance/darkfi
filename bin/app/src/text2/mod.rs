@@ -17,12 +17,9 @@
  */
 
 use async_lock::Mutex as AsyncMutex;
-use futures::stream::{FuturesUnordered, StreamExt};
 use std::{
-    cell::RefCell,
-    fmt::Debug,
     ops::Range,
-    sync::{atomic::AtomicBool, Arc, OnceLock},
+    sync::{Arc, OnceLock},
 };
 
 use crate::mesh::Color;
@@ -79,17 +76,17 @@ impl TextContext {
         let mut font_ctx = parley::FontContext::new();
 
         let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
-        let font_inf =
+        let _font_inf =
             font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
 
         let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
-        let font_inf =
+        let _font_inf =
             font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
 
-        for (family_id, _) in font_inf {
-            let family_name = font_ctx.collection.family_name(family_id).unwrap();
-            trace!(target: "text", "Loaded font: {family_name}");
-        }
+        //for (family_id, _) in font_inf {
+        //    let family_name = font_ctx.collection.family_name(family_id).unwrap();
+        //    trace!(target: "text", "Loaded font: {family_name}");
+        //}
 
         Self { font_ctx, layout_ctx }
     }
