@@ -415,10 +415,6 @@ enum ExplorerSubcmd {
         tx_hash: String,
 
         #[structopt(long)]
-        /// Print the full transaction information
-        full: bool,
-
-        #[structopt(long)]
         /// Encode transaction to base58
         encode: bool,
     },
@@ -2038,7 +2034,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         }
 
         Subcmd::Explorer { command } => match command {
-            ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
+            ExplorerSubcmd::FetchTx { tx_hash, encode } => {
                 let tx_hash = TransactionHash(*blake3::Hash::from_hex(&tx_hash)?.as_bytes());
 
                 let drk = new_wallet(
@@ -2054,7 +2050,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = match drk.get_tx(&tx_hash).await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to fetch transaction: {e:?}");
+                        eprintln!("Failed to fetch transaction: {e}");
                         exit(2);
                     }
                 };
@@ -2073,9 +2069,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 }
 
                 println!("Transaction ID: {tx_hash}");
-                if full {
-                    println!("{tx:?}");
-                }
+                println!("{tx:?}");
 
                 drk.stop_rpc_client().await
             }
@@ -2096,7 +2090,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let is_valid = match drk.simulate_tx(&tx).await {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Failed to simulate tx: {e:?}");
+                        eprintln!("Failed to simulate tx: {e}");
                         exit(2);
                     }
                 };
@@ -2140,7 +2134,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let map = match drk.get_txs_history() {
                     Ok(m) => m,
                     Err(e) => {
-                        eprintln!("Failed to retrieve transactions history records: {e:?}");
+                        eprintln!("Failed to retrieve transactions history records: {e}");
                         exit(2);
                     }
                 };
@@ -2177,10 +2171,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                if let Err(e) = drk.remove_reverted_txs() {
-                    eprintln!("Failed to remove reverted transactions: {e:?}");
+                let mut output = vec![];
+                if let Err(e) = drk.remove_reverted_txs(&mut output) {
+                    print_output(&output);
+                    eprintln!("Failed to remove reverted transactions: {e}");
                     exit(2);
                 };
+                print_output(&output);
 
                 Ok(())
             }
@@ -2200,7 +2197,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     let hash = match drk.get_scanned_block_hash(&height) {
                         Ok(h) => h,
                         Err(e) => {
-                            eprintln!("Failed to retrieve scanned block record: {e:?}");
+                            eprintln!("Failed to retrieve scanned block record: {e}");
                             exit(2);
                         }
                     };
@@ -2214,7 +2211,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let map = match drk.get_scanned_block_records() {
                     Ok(m) => m,
                     Err(e) => {
-                        eprintln!("Failed to retrieve scanned blocks records: {e:?}");
+                        eprintln!("Failed to retrieve scanned blocks records: {e}");
                         exit(2);
                     }
                 };
