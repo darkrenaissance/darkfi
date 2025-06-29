@@ -2560,10 +2560,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                if let Err(e) = drk.deploy_auth_keygen().await {
+                let mut output = vec![];
+                if let Err(e) = drk.deploy_auth_keygen(&mut output).await {
+                    print_output(&output);
                     eprintln!("Error creating deploy auth keypair: {e}");
                     exit(2);
                 }
+                print_output(&output);
 
                 Ok(())
             }
@@ -2617,7 +2620,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 let mut tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
-                    Ok(v) => v,
+                    Ok(t) => t,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {e}");
                         exit(2);
@@ -2625,7 +2628,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 if let Err(e) = drk.attach_fee(&mut tx).await {
-                    eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                    eprintln!("Failed to attach the fee call to the transaction: {e}");
                     exit(2);
                 };
 
@@ -2646,7 +2649,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 let mut tx = match drk.lock_contract(deploy_auth).await {
-                    Ok(v) => v,
+                    Ok(t) => t,
                     Err(e) => {
                         eprintln!("Error creating contract lock tx: {e}");
                         exit(2);
@@ -2654,7 +2657,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 if let Err(e) = drk.attach_fee(&mut tx).await {
-                    eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                    eprintln!("Failed to attach the fee call to the transaction: {e}");
                     exit(2);
                 };
 

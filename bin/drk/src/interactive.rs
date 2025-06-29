@@ -69,8 +69,7 @@ use crate::{
 };
 
 // TODO:
-//  1. Add rest commands handling, along with their completions, hints and help message.
-//  2. Create a transactions cache in the wallet db, so you can use it to handle them.
+//  1. Create a transactions cache in the wallet db, so you can use it to handle them.
 
 /// Auxiliary function to print the help message.
 fn help(output: &mut Vec<String>) {
@@ -104,6 +103,7 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\texplorer: Explorer related subcommands"));
     output.push(String::from("\talias: Token alias"));
     output.push(String::from("\ttoken: Token functionalities"));
+    output.push(String::from("\tcontract: Contract functionalities"));
 }
 
 /// Auxiliary function to define the interactive shell completions.
@@ -134,7 +134,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
-    if last.starts_with("c") {
+    if last.starts_with("com") {
         lc.push(prefix + "completions");
         return
     }
@@ -267,6 +267,15 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
+    if last.starts_with("con") {
+        lc.push(prefix.clone() + "contract");
+        lc.push(prefix.clone() + "contract generate-deploy");
+        lc.push(prefix.clone() + "contract list");
+        lc.push(prefix.clone() + "contract deploy");
+        lc.push(prefix + "contract lock");
+        return
+    }
+
     // Now the catch alls
     if last.starts_with("a") {
         lc.push(prefix.clone() + "attach-fee");
@@ -274,6 +283,16 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "alias add");
         lc.push(prefix.clone() + "alias show");
         lc.push(prefix + "alias remove");
+        return
+    }
+
+    if last.starts_with("c") {
+        lc.push(prefix.clone() + "completions");
+        lc.push(prefix.clone() + "contract");
+        lc.push(prefix.clone() + "contract generate-deploy");
+        lc.push(prefix.clone() + "contract list");
+        lc.push(prefix.clone() + "contract deploy");
+        lc.push(prefix + "contract lock");
         return
     }
 
@@ -345,6 +364,9 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "token import " => Some(("<secret-key> <token-blind>".to_string(), color, bold)),
         "token mint " => Some(("<token> <amount> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
         "token freeze " => Some(("<token>".to_string(), color, bold)),
+        "contract " => Some(("(generate-deploy|list|deploy|lock)".to_string(), color, bold)),
+        "contract deploy " => Some(("<deploy-auth> <wasm-path> <deploy-ix>".to_string(), color, bold)),
+        "contract lock " => Some(("<deploy-auth>".to_string(), color, bold)),
         _ => None,
     }
 }
@@ -533,6 +555,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 "explorer" => handle_explorer(drk, &parts, &input, &mut output).await,
                 "alias" => handle_alias(drk, &parts, &mut output).await,
                 "token" => handle_token(drk, &parts, &mut output).await,
+                "contract" => handle_contract(drk, &parts, &mut output).await,
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
             }
 
@@ -2892,7 +2915,7 @@ async fn handle_token_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     let tokens = match lock.get_mint_authorities().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch mint autorities: {e:?}"));
+            output.push(format!("Failed to fetch mint authorities: {e:?}"));
             return
         }
     };
@@ -3043,5 +3066,172 @@ async fn handle_token_freeze(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
     match lock.freeze_token(token_id).await {
         Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
         Err(e) => output.push(format!("Failed to create token freeze transaction: {e}")),
+    }
+}
+
+/// Auxiliary function to define the contract command handling.
+async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        output.push(String::from("Malformed `contract` command"));
+        output.push(String::from("Usage: contract (generate-deploy|list|deploy|lock)"));
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "generate-deploy" => handle_contract_generate_deploy(drk, parts, output).await,
+        "list" => handle_contract_list(drk, parts, output).await,
+        "deploy" => handle_contract_deploy(drk, parts, output).await,
+        "lock" => handle_contract_lock(drk, parts, output).await,
+        _ => {
+            output.push(format!("Unreconized contract subcommand: {}", parts[1]));
+            output.push(String::from("Usage: contract (generate-deploy|list|deploy|lock)"));
+        }
+    }
+}
+
+/// Auxiliary function to define the contract generate deploy subcommand handling.
+async fn handle_contract_generate_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `contract generate-deploy` subcommand"));
+        output.push(String::from("Usage: contract generate-deploy"));
+        return
+    }
+
+    if let Err(e) = drk.read().await.deploy_auth_keygen(output).await {
+        output.push(format!("Error creating deploy auth keypair: {e}"));
+    }
+}
+
+/// Auxiliary function to define the contract list subcommand handling.
+async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `contract list` subcommand"));
+        output.push(String::from("Usage: contract list"));
+        return
+    }
+
+    let auths = match drk.read().await.list_deploy_auth().await {
+        Ok(a) => a,
+        Err(e) => {
+            output.push(format!("Failed to fetch deploy authorities: {e}"));
+            return
+        }
+    };
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Index", "Contract ID", "Frozen", "Freeze Height"]);
+
+    for (idx, contract_id, frozen, freeze_height) in auths {
+        let freeze_height = match freeze_height {
+            Some(freeze_height) => freeze_height.to_string(),
+            None => String::from("-"),
+        };
+        table.add_row(row![idx, contract_id, frozen, freeze_height]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No deploy authorities found"));
+    } else {
+        output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the contract deploy subcommand handling.
+async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 5 {
+        output.push(String::from("Malformed `contract deploy` subcommand"));
+        output.push(String::from("Usage: contract deploy <deploy-auth> <wasm-path> <deploy-ix>"));
+        return
+    }
+
+    let deploy_auth = match u64::from_str(parts[2]) {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Invalid deploy authority: {e}"));
+            return
+        }
+    };
+
+    // Read the wasm bincode and deploy instruction
+    let file_path = match expand_path(parts[3]) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while expanding wasm bincode file path: {e}"));
+            return
+        }
+    };
+    let wasm_bin = match smol::fs::read(file_path).await {
+        Ok(w) => w,
+        Err(e) => {
+            output.push(format!("Error while reading wasm bincode file: {e}"));
+            return
+        }
+    };
+
+    let file_path = match expand_path(parts[4]) {
+        Ok(p) => p,
+        Err(e) => {
+            output.push(format!("Error while expanding deploy instruction file path: {e}"));
+            return
+        }
+    };
+    let deploy_ix = match smol::fs::read(file_path).await {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Error while reading deploy instruction file: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let mut tx = match lock.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+        Ok(v) => v,
+        Err(e) => {
+            output.push(format!("Error creating contract deployment tx: {e}"));
+            return
+        }
+    };
+
+    match lock.attach_fee(&mut tx).await {
+        Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
+        Err(e) => output.push(format!("Failed to attach the fee call to the transaction: {e}")),
+    }
+}
+
+/// Auxiliary function to define the contract lock subcommand handling.
+async fn handle_contract_lock(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `contract lock` subcommand"));
+        output.push(String::from("Usage: contract lock <deploy-auth>"));
+        return
+    }
+
+    let deploy_auth = match u64::from_str(parts[2]) {
+        Ok(d) => d,
+        Err(e) => {
+            output.push(format!("Invalid deploy authority: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let mut tx = match lock.lock_contract(deploy_auth).await {
+        Ok(v) => v,
+        Err(e) => {
+            output.push(format!("Error creating contract lock tx: {e}"));
+            return
+        }
+    };
+
+    match lock.attach_fee(&mut tx).await {
+        Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
+        Err(e) => output.push(format!("Failed to attach the fee call to the transaction: {e}")),
     }
 }
