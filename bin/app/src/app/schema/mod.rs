@@ -42,8 +42,8 @@ const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
-    pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
+    pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
 }
@@ -107,6 +107,7 @@ mod ui_consts {
 ))]
 mod ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
+    pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
     pub use super::desktop_paths::*;
@@ -126,7 +127,7 @@ enum ColorScheme {
 pub async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
-    cc.add_const_f32("SETTINGS_ICON_SIZE", NETSTATUS_ICON_SIZE);
+    cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
 
     let atom = &mut PropertyAtomicGuard::new();
 

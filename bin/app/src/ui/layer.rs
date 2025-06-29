@@ -22,8 +22,6 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
-#[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(target_os = "linux")]
 use colored::Colorize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -45,13 +46,10 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
         for j in 0..width {
             let idx = 4 * (i * width + j);
 
-            let r = data[idx];
-            let g = data[idx + 1];
-            let b = data[idx + 2];
-            let a = data[idx + 3];
-
             #[cfg(target_os = "android")]
             {
+                let a = data[idx + 3];
+
                 if a > 204 {
                     out.push('█');
                 } else if a > 153 {
@@ -67,6 +65,11 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
 
             #[cfg(target_os = "linux")]
             {
+                let r = data[idx];
+                let g = data[idx + 1];
+                let b = data[idx + 2];
+                let a = data[idx + 3];
+
                 let r = ((a as f32 * r as f32) / 255.) as u8;
                 let g = ((a as f32 * g as f32) / 255.) as u8;
                 let b = ((a as f32 * b as f32) / 255.) as u8;

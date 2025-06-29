@@ -24,13 +24,9 @@ use crate::{
     text2::{TextContext, TEXT_CTX},
     AndroidSuggestEvent,
 };
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "text::editor::android", $($arg)*) } }
 
 // You must be careful working with string indexes in Java. They are UTF16 string indexs, not UTF8
 fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
@@ -167,7 +163,7 @@ impl Editor {
 
             let compose_start = char16_to_byte_index(&edit.buffer, compose_start).unwrap();
             let compose_end = char16_to_byte_index(&edit.buffer, compose_end).unwrap();
-            underlines.push((compose_start..compose_end));
+            underlines.push(compose_start..compose_end);
         }
 
         let mut txt_ctx = TEXT_CTX.get().await;
@@ -233,7 +229,7 @@ impl Editor {
 
     pub fn driver<'a>(
         &'a mut self,
-        txt_ctx: &'a mut TextContext,
+        _txt_ctx: &'a mut TextContext,
     ) -> Option<parley::PlainEditorDriver<'a, Color>> {
         None
     }
@@ -279,6 +275,7 @@ impl Editor {
         android::set_selection(self.composer_id, select_start, select_end);
     }
 
+    #[allow(dead_code)]
     pub fn buffer(&self) -> String {
         let edit = android::get_editable(self.composer_id).unwrap();
         edit.buffer

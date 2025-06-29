@@ -17,9 +17,7 @@
  */
 
 use log::{LevelFilter, Log, Metadata, Record};
-use simplelog::{
-    ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger, TerminalMode,
-};
+use simplelog::{CombinedLogger, Config, ConfigBuilder, SharedLogger};
 
 #[cfg(feature = "enable-filelog")]
 use {
@@ -128,6 +126,7 @@ mod android {
 #[cfg(not(target_os = "android"))]
 mod desktop {
     use super::*;
+    use simplelog::{ColorChoice, TermLogger, TerminalMode};
 
     /// Implements a wrapper around the android logger so it's compatible with simplelog.
     pub struct CustomTermLogger {

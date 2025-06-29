@@ -20,7 +20,9 @@ use sled_overlay::sled;
 use std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc};
 
 pub mod darkirc;
-pub use darkirc::{DarkIrc, DarkIrcPtr};
+#[cfg(feature = "enable-plugins")]
+pub use darkirc::DarkIrc;
+pub use darkirc::DarkIrcPtr;
 
 use darkfi::net::Settings as NetSettings;
 

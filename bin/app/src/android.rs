@@ -75,7 +75,7 @@ static GLOBALS: LazyLock<SyncMutex<GlobalData>> =
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_darkfi_darkfi_1app_MainActivity_onInitEdit(
-    env: *mut ndk_sys::JNIEnv,
+    _env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
 ) {
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn Java_darkfi_darkfi_1app_MainActivity_onInitEdit(
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_InvisibleInputView_onCreateInputConnect(
-    env: *mut ndk_sys::JNIEnv,
+    _env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
 ) {
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCompose(
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onSetComposeRegion(
-    env: *mut ndk_sys::JNIEnv,
+    _env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
     start: ndk_sys::jint,
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onSetComposeRegi
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onFinishCompose(
-    env: *mut ndk_sys::JNIEnv,
+    _env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
 ) {
@@ -140,7 +140,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onFinishCompose(
 }
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onDeleteSurroundingText(
-    env: *mut ndk_sys::JNIEnv,
+    _env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     id: ndk_sys::jint,
     left: ndk_sys::jint,

@@ -75,10 +75,10 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     sg_root: SceneNodePtr,
-    ex: ExecutorPtr,
+    _ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
-    zmq_pub: Mutex<zeromq::PubSocket>,
+    _zmq_pub: Mutex<zeromq::PubSocket>,
 }
 
 impl ZeroMQAdapter {
@@ -89,7 +89,12 @@ impl ZeroMQAdapter {
         let mut zmq_pub = zeromq::PubSocket::new();
         zmq_pub.bind("tcp://0.0.0.0:9485").await.unwrap();
 
-        Arc::new(Self { sg_root, ex, zmq_rep: Mutex::new(zmq_rep), zmq_pub: Mutex::new(zmq_pub) })
+        Arc::new(Self {
+            sg_root,
+            _ex: ex,
+            zmq_rep: Mutex::new(zmq_rep),
+            _zmq_pub: Mutex::new(zmq_pub),
+        })
     }
 
     pub async fn run(self: Arc<Self>) {

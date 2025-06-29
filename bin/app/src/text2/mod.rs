@@ -91,6 +91,7 @@ impl TextContext {
         Self { font_ctx, layout_ctx }
     }
 
+    #[cfg(not(target_os = "android"))]
     pub fn borrow(&mut self) -> (&mut parley::FontContext, &mut parley::LayoutContext<Color>) {
         (&mut self.font_ctx, &mut self.layout_ctx)
     }

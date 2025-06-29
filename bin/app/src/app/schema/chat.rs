@@ -172,6 +172,7 @@ fn android_keyboard_height() -> f32 {
     #[cfg(target_os = "android")]
     return crate::android::get_keyboard_height() as f32;
 
+    #[cfg(not(target_os = "android"))]
     unreachable!()
 }
 

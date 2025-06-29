@@ -21,8 +21,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
-#[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
 use crate::{
     gfx::{GfxDrawCall, Point, Rectangle},
     prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
