@@ -484,6 +484,31 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         freeze,
     ]);
 
+    // Contract
+    let generate_deploy =
+        SubCommand::with_name("generate-deploy").about("Generate a new deploy authority");
+
+    let list = SubCommand::with_name("list").about("List deploy authorities in the wallet");
+
+    let deploy_auth = Arg::with_name("deploy-auth").help("Contract ID (deploy authority)");
+
+    let wasm_path = Arg::with_name("wasm-path").help("Path to contract wasm bincode");
+
+    let deploy_ix = Arg::with_name("deploy-ix").help("Path to serialized deploy instruction");
+
+    let deploy = SubCommand::with_name("deploy").about("Deploy a smart contract").args(&vec![
+        deploy_auth.clone(),
+        wasm_path,
+        deploy_ix,
+    ]);
+
+    let lock =
+        SubCommand::with_name("lock").about("Lock a smart contract").args(&vec![deploy_auth]);
+
+    let contract = SubCommand::with_name("contract")
+        .about("Contract functionalities")
+        .subcommands(vec![generate_deploy, list, deploy, lock]);
+
     // Main arguments
     let config = Arg::with_name("config")
         .short("c")
@@ -514,6 +539,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         explorer,
         alias,
         token,
+        contract,
     ];
 
     let fun = Arg::with_name("fun")

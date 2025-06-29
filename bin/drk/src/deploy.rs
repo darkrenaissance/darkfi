@@ -60,8 +60,8 @@ impl Drk {
     }
 
     /// Generate a new deploy authority keypair and place it into the wallet
-    pub async fn deploy_auth_keygen(&self) -> WalletDbResult<()> {
-        eprintln!("Generating a new keypair");
+    pub async fn deploy_auth_keygen(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Generating a new keypair"));
 
         let keypair = Keypair::random(&mut OsRng);
         let freeze_height: Option<u32> = None;
@@ -78,8 +78,8 @@ impl Drk {
             rusqlite::params![serialize_async(&keypair).await, 0, freeze_height],
         )?;
 
-        eprintln!("Created new contract deploy authority");
-        println!("Contract ID: {}", ContractId::derive_public(keypair.public));
+        output.push(String::from("Created new contract deploy authority"));
+        output.push(format!("Contract ID: {}", ContractId::derive_public(keypair.public)));
 
         Ok(())
     }
