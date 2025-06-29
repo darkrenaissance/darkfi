@@ -189,7 +189,7 @@ impl StorageAdapter for CacheSmtStorage {
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
         if let Err(e) = self.overlay.0.insert(&self.tree, &key.to_bytes_le(), &value.to_repr()) {
-            error!(target: "cache::StorageAdapter::put", "Inserting key {key:?}, value {value:?} into DB failed: {e:?}");
+            error!(target: "cache::StorageAdapter::put", "Inserting key {key:?}, value {value:?} into DB failed: {e}");
             return Err(ContractError::SmtPutFailed)
         }
         Ok(())
@@ -199,7 +199,7 @@ impl StorageAdapter for CacheSmtStorage {
         let value = match self.overlay.0.get(&self.tree, &key.to_bytes_le()) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "cache::StorageAdapter::get", "Fetching key {key:?} from DB failed: {e:?}");
+                error!(target: "cache::StorageAdapter::get", "Fetching key {key:?} from DB failed: {e}");
                 return None
             }
         };
@@ -214,7 +214,7 @@ impl StorageAdapter for CacheSmtStorage {
 
     fn del(&mut self, key: &BigUint) -> ContractResult {
         if let Err(e) = self.overlay.0.remove(&self.tree, &key.to_bytes_le()) {
-            error!(target: "cache::StorageAdapter::del", "Removing key {key:?} from DB failed: {e:?}");
+            error!(target: "cache::StorageAdapter::del", "Removing key {key:?} from DB failed: {e}");
             return Err(ContractError::SmtDelFailed)
         }
         Ok(())

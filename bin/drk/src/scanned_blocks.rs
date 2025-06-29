@@ -81,14 +81,13 @@ impl Drk {
     pub fn reset_scanned_blocks(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting scanned blocks"));
         if let Err(e) = self.cache.scanned_blocks.clear() {
-            output.push(format!(
-                "[reset_scanned_blocks] Resetting scanned blocks tree failed: {e:?}"
-            ));
+            output
+                .push(format!("[reset_scanned_blocks] Resetting scanned blocks tree failed: {e}"));
             return Err(WalletDbError::GenericError)
         }
         if let Err(e) = self.cache.state_inverse_diff.clear() {
             output.push(format!(
-                "[reset_scanned_blocks] Resetting state inverse diffs tree failed: {e:?}"
+                "[reset_scanned_blocks] Resetting state inverse diffs tree failed: {e}"
             ));
             return Err(WalletDbError::GenericError)
         }
@@ -123,7 +122,7 @@ impl Drk {
         let mut overlay = match CacheOverlay::new(&self.cache) {
             Ok(o) => o,
             Err(e) => {
-                output.push(format!("[reset_to_height] Creating cache overlay failed: {e:?}"));
+                output.push(format!("[reset_to_height] Creating cache overlay failed: {e}"));
                 return Err(WalletDbError::GenericError)
             }
         };
@@ -135,7 +134,7 @@ impl Drk {
                 Ok(d) => d,
                 Err(e) => {
                     output.push(format!(
-                        "[reset_to_height] Retrieving state inverse diff from cache failed: {e:?}"
+                        "[reset_to_height] Retrieving state inverse diff from cache failed: {e}"
                     ));
                     return Err(WalletDbError::GenericError)
                 }
@@ -143,26 +142,27 @@ impl Drk {
 
             // Apply it
             if let Err(e) = overlay.0.add_diff(&inverse_diff) {
-                output.push(format!("[reset_to_height] Adding state inverse diff to the cache overlay failed: {e:?}"));
+                output.push(format!(
+                    "[reset_to_height] Adding state inverse diff to the cache overlay failed: {e}"
+                ));
                 return Err(WalletDbError::GenericError)
             }
             if let Err(e) = overlay.0.apply_diff(&inverse_diff) {
-                output.push(format!("[reset_to_height] Applying state inverse diff to the cache overlay failed: {e:?}"));
+                output.push(format!("[reset_to_height] Applying state inverse diff to the cache overlay failed: {e}"));
                 return Err(WalletDbError::GenericError)
             }
 
             // Remove it
             if let Err(e) = self.cache.state_inverse_diff.remove(height.to_be_bytes()) {
                 output.push(format!(
-                    "[reset_to_height] Removing state inverse diff from the cache failed: {e:?}"
+                    "[reset_to_height] Removing state inverse diff from the cache failed: {e}"
                 ));
                 return Err(WalletDbError::GenericError)
             }
 
             // Flush sled
             if let Err(e) = self.cache.sled_db.flush() {
-                output
-                    .push(format!("[reset_to_height] Flushing cache sled database failed: {e:?}"));
+                output.push(format!("[reset_to_height] Flushing cache sled database failed: {e}"));
                 return Err(WalletDbError::GenericError)
             }
         }

@@ -628,7 +628,7 @@ async fn new_wallet(
     match Drk::new(cache_path, wallet_path, wallet_pass, endpoint, ex, fun).await {
         Ok(wallet) => wallet,
         Err(e) => {
-            eprintln!("Error initializing wallet: {e:?}");
+            eprintln!("Error initializing wallet: {e}");
             exit(2);
         }
     }
@@ -712,22 +712,22 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             match command {
                 WalletSubcmd::Initialize => {
                     if let Err(e) = drk.initialize_wallet().await {
-                        eprintln!("Error initializing wallet: {e:?}");
+                        eprintln!("Error initializing wallet: {e}");
                         exit(2);
                     }
                     let mut output = vec![];
                     if let Err(e) = drk.initialize_money(&mut output).await {
                         print_output(&output);
-                        eprintln!("Failed to initialize Money: {e:?}");
+                        eprintln!("Failed to initialize Money: {e}");
                         exit(2);
                     }
                     print_output(&output);
                     if let Err(e) = drk.initialize_dao().await {
-                        eprintln!("Failed to initialize DAO: {e:?}");
+                        eprintln!("Failed to initialize DAO: {e}");
                         exit(2);
                     }
                     if let Err(e) = drk.initialize_deployooor() {
-                        eprintln!("Failed to initialize Deployooor: {e:?}");
+                        eprintln!("Failed to initialize Deployooor: {e}");
                         exit(2);
                     }
                 }
@@ -736,7 +736,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     let mut output = vec![];
                     if let Err(e) = drk.money_keygen(&mut output).await {
                         print_output(&output);
-                        eprintln!("Failed to generate keypair: {e:?}");
+                        eprintln!("Failed to generate keypair: {e}");
                         exit(2);
                     }
                     print_output(&output);
@@ -774,7 +774,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 WalletSubcmd::Address => match drk.default_address().await {
                     Ok(address) => println!("{address}"),
                     Err(e) => {
-                        eprintln!("Failed to fetch default address: {e:?}");
+                        eprintln!("Failed to fetch default address: {e}");
                         exit(2);
                     }
                 },
@@ -803,7 +803,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 WalletSubcmd::DefaultAddress { index } => {
                     if let Err(e) = drk.set_default_address(index) {
-                        eprintln!("Failed to set default address: {e:?}");
+                        eprintln!("Failed to set default address: {e}");
                         exit(2);
                     }
                 }
@@ -836,7 +836,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         }
                         Err(e) => {
                             print_output(&output);
-                            eprintln!("Failed to import secret keys into wallet: {e:?}");
+                            eprintln!("Failed to import secret keys into wallet: {e}");
                             exit(2);
                         }
                     };
@@ -941,7 +941,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let mut output = vec![];
             if let Err(e) = drk.mark_tx_spend(&tx, &mut output).await {
                 print_output(&output);
-                eprintln!("Failed to mark transaction coins as spent: {e:?}");
+                eprintln!("Failed to mark transaction coins as spent: {e}");
                 exit(2);
             };
             print_output(&output);
@@ -977,7 +977,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
             if let Err(e) = drk.unspend_coin(&coin).await {
-                eprintln!("Failed to mark coin as unspent: {e:?}");
+                eprintln!("Failed to mark coin as unspent: {e}");
                 exit(2);
             }
 
@@ -996,14 +996,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             .await;
 
             if let Err(e) = f64::from_str(&amount) {
-                eprintln!("Invalid amount: {e:?}");
+                eprintln!("Invalid amount: {e}");
                 exit(2);
             }
 
             let rcpt = match PublicKey::from_str(&recipient) {
                 Ok(r) => r,
                 Err(e) => {
-                    eprintln!("Invalid recipient: {e:?}");
+                    eprintln!("Invalid recipient: {e}");
                     exit(2);
                 }
             };
@@ -1011,7 +1011,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let token_id = match drk.get_token(token).await {
                 Ok(t) => t,
                 Err(e) => {
-                    eprintln!("Invalid token alias: {e:?}");
+                    eprintln!("Invalid token alias: {e}");
                     exit(2);
                 }
             };
@@ -1020,7 +1020,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 Some(s) => match FuncId::from_str(&s) {
                     Ok(s) => Some(s),
                     Err(e) => {
-                        eprintln!("Invalid spend hook: {e:?}");
+                        eprintln!("Invalid spend hook: {e}");
                         exit(2);
                     }
                 },
@@ -1054,7 +1054,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             {
                 Ok(t) => t,
                 Err(e) => {
-                    eprintln!("Failed to create payment transaction: {e:?}");
+                    eprintln!("Failed to create payment transaction: {e}");
                     exit(2);
                 }
             };
@@ -1081,7 +1081,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let half = match drk.init_swap(value_pair, token_pair, None, None, None).await {
                     Ok(h) => h,
                     Err(e) => {
-                        eprintln!("Failed to create swap transaction half: {e:?}");
+                        eprintln!("Failed to create swap transaction half: {e}");
                         exit(2);
                     }
                 };
@@ -1112,7 +1112,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = match drk.join_swap(partial, None, None, None).await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to create a join swap transaction: {e:?}");
+                        eprintln!("Failed to create a join swap transaction: {e}");
                         exit(2);
                     }
                 };
@@ -1141,7 +1141,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut output = vec![];
                 if let Err(e) = drk.inspect_swap(bytes, &mut output).await {
                     print_output(&output);
-                    eprintln!("Failed to inspect swap: {e:?}");
+                    eprintln!("Failed to inspect swap: {e}");
                     exit(2);
                 };
                 print_output(&output);
@@ -1162,7 +1162,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
                 if let Err(e) = drk.sign_swap(&mut tx).await {
-                    eprintln!("Failed to sign joined swap transaction: {e:?}");
+                    eprintln!("Failed to sign joined swap transaction: {e}");
                     exit(2);
                 };
 
@@ -1180,15 +1180,15 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 gov_token_id,
             } => {
                 if let Err(e) = f64::from_str(&proposer_limit) {
-                    eprintln!("Invalid proposer limit: {e:?}");
+                    eprintln!("Invalid proposer limit: {e}");
                     exit(2);
                 }
                 if let Err(e) = f64::from_str(&quorum) {
-                    eprintln!("Invalid quorum: {e:?}");
+                    eprintln!("Invalid quorum: {e}");
                     exit(2);
                 }
                 if let Err(e) = f64::from_str(&early_exec_quorum) {
-                    eprintln!("Invalid early exec quorum: {e:?}");
+                    eprintln!("Invalid early exec quorum: {e}");
                     exit(2);
                 }
 
@@ -1217,7 +1217,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let gov_token_id = match drk.get_token(gov_token_id).await {
                     Ok(g) => g,
                     Err(e) => {
-                        eprintln!("Invalid Token ID: {e:?}");
+                        eprintln!("Invalid Token ID: {e}");
                         exit(2);
                     }
                 };
@@ -1283,7 +1283,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut output = vec![];
                 if let Err(e) = drk.import_dao(&name, &params, &mut output).await {
                     print_output(&output);
-                    eprintln!("Failed to import DAO: {e:?}");
+                    eprintln!("Failed to import DAO: {e}");
                     exit(2);
                 }
                 print_output(&output);
@@ -1308,7 +1308,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut output = vec![];
                 if let Err(e) = drk.update_dao_keys(&params, &mut output).await {
                     print_output(&output);
-                    eprintln!("Failed to update DAO keys: {e:?}");
+                    eprintln!("Failed to update DAO keys: {e}");
                     exit(2);
                 }
                 print_output(&output);
@@ -1329,7 +1329,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut output = vec![];
                 if let Err(e) = drk.dao_list(&name, &mut output).await {
                     print_output(&output);
-                    eprintln!("Failed to list DAO: {e:?}");
+                    eprintln!("Failed to list DAO: {e}");
                     exit(2);
                 }
                 print_output(&output);
@@ -1350,7 +1350,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let balmap = match drk.dao_balance(&name).await {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Failed to fetch DAO balance: {e:?}");
+                        eprintln!("Failed to fetch DAO balance: {e}");
                         exit(2);
                     }
                 };
@@ -1358,7 +1358,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let aliases_map = match drk.get_aliases_mapped_by_token().await {
                     Ok(a) => a,
                     Err(e) => {
-                        eprintln!("Failed to fetch wallet aliases: {e:?}");
+                        eprintln!("Failed to fetch wallet aliases: {e}");
                         exit(2);
                     }
                 };
@@ -1402,7 +1402,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = match drk.dao_mint(&name).await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to mint DAO: {e:?}");
+                        eprintln!("Failed to mint DAO: {e}");
                         exit(2);
                     }
                 };
@@ -1431,14 +1431,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 if let Err(e) = f64::from_str(&amount) {
-                    eprintln!("Invalid amount: {e:?}");
+                    eprintln!("Invalid amount: {e}");
                     exit(2);
                 }
 
                 let rcpt = match PublicKey::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
-                        eprintln!("Invalid recipient: {e:?}");
+                        eprintln!("Invalid recipient: {e}");
                         exit(2);
                     }
                 };
@@ -1446,7 +1446,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
-                        eprintln!("Invalid token alias: {e:?}");
+                        eprintln!("Invalid token alias: {e}");
                         exit(2);
                     }
                 };
@@ -1455,7 +1455,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     Some(s) => match FuncId::from_str(&s) {
                         Ok(s) => Some(s),
                         Err(e) => {
-                            eprintln!("Invalid spend hook: {e:?}");
+                            eprintln!("Invalid spend hook: {e}");
                             exit(2);
                         }
                     },
@@ -1491,7 +1491,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!("Failed to create DAO transfer proposal: {e:?}");
+                        eprintln!("Failed to create DAO transfer proposal: {e}");
                         exit(2);
                     }
                 };
@@ -1536,7 +1536,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let proposal = match drk.dao_propose_generic(&name, duration, user_data).await {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!("Failed to create DAO generic proposal: {e:?}");
+                        eprintln!("Failed to create DAO generic proposal: {e}");
                         exit(2);
                     }
                 };
@@ -1569,7 +1569,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid proposal bulla: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e}");
                         exit(2);
                     }
                 };
@@ -1610,7 +1610,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                             let tx = match drk.dao_transfer_proposal_tx(&proposal).await {
                                 Ok(tx) => tx,
                                 Err(e) => {
-                                    eprintln!("Failed to create DAO transfer proposal: {e:?}");
+                                    eprintln!("Failed to create DAO transfer proposal: {e}");
                                     exit(2);
                                 }
                             };
@@ -1625,7 +1625,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         let tx = match drk.dao_generic_proposal_tx(&proposal).await {
                             Ok(tx) => tx,
                             Err(e) => {
-                                eprintln!("Failed to create DAO generic proposal: {e:?}");
+                                eprintln!("Failed to create DAO generic proposal: {e}");
                                 exit(2);
                             }
                         };
@@ -1827,7 +1827,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid proposal bulla: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e}");
                         exit(2);
                     }
                 };
@@ -1841,7 +1841,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let weight = match vote_weight {
                     Some(w) => {
                         if let Err(e) = f64::from_str(&w) {
-                            eprintln!("Invalid vote weight: {e:?}");
+                            eprintln!("Invalid vote weight: {e}");
                             exit(2);
                         }
                         Some(decode_base10(&w, BALANCE_BASE10_DECIMALS, true)?)
@@ -1861,7 +1861,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = match drk.dao_vote(&bulla, vote, weight).await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to create DAO Vote transaction: {e:?}");
+                        eprintln!("Failed to create DAO Vote transaction: {e}");
                         exit(2);
                     }
                 };
@@ -1874,7 +1874,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid proposal bulla: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e}");
                         exit(2);
                     }
                 };
@@ -1897,7 +1897,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         let tx = match drk.dao_exec_transfer(&proposal, early).await {
                             Ok(tx) => tx,
                             Err(e) => {
-                                eprintln!("Failed to execute DAO transfer proposal: {e:?}");
+                                eprintln!("Failed to execute DAO transfer proposal: {e}");
                                 exit(2);
                             }
                         };
@@ -1912,7 +1912,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     let tx = match drk.dao_exec_generic(&proposal, early).await {
                         Ok(tx) => tx,
                         Err(e) => {
-                            eprintln!("Failed to execute DAO generic proposal: {e:?}");
+                            eprintln!("Failed to execute DAO generic proposal: {e}");
                             exit(2);
                         }
                     };
@@ -1949,7 +1949,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await;
             if let Err(e) = drk.attach_fee(&mut tx).await {
-                eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                eprintln!("Failed to attach the fee call to the transaction: {e}");
                 exit(2);
             };
 
@@ -1980,14 +1980,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             .await;
 
             if let Err(e) = drk.simulate_tx(&tx).await {
-                eprintln!("Failed to simulate tx: {e:?}");
+                eprintln!("Failed to simulate tx: {e}");
                 exit(2);
             };
 
             let mut output = vec![];
             if let Err(e) = drk.mark_tx_spend(&tx, &mut output).await {
                 print_output(&output);
-                eprintln!("Failed to mark transaction coins as spent: {e:?}");
+                eprintln!("Failed to mark transaction coins as spent: {e}");
                 exit(2);
             };
 
@@ -1995,7 +1995,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 Ok(t) => t,
                 Err(e) => {
                     print_output(&output);
-                    eprintln!("Failed to broadcast transaction: {e:?}");
+                    eprintln!("Failed to broadcast transaction: {e}");
                     exit(2);
                 }
             };
@@ -2021,14 +2021,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut buf = vec![];
                 if let Err(e) = drk.reset_to_height(height, &mut buf) {
                     print_output(&buf);
-                    eprintln!("Failed during wallet reset: {e:?}");
+                    eprintln!("Failed during wallet reset: {e}");
                     exit(2);
                 }
                 print_output(&buf);
             }
 
             if let Err(e) = drk.scan_blocks(&mut vec![], None, &true).await {
-                eprintln!("Failed during scanning: {e:?}");
+                eprintln!("Failed during scanning: {e}");
                 exit(2);
             }
             println!("Finished scanning blockchain");
@@ -2247,7 +2247,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let token_id = match TokenId::from_str(token.as_str()) {
                     Ok(t) => t,
                     Err(e) => {
-                        eprintln!("Invalid Token ID: {e:?}");
+                        eprintln!("Invalid Token ID: {e}");
                         exit(2);
                     }
                 };
