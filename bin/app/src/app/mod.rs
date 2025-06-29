@@ -29,10 +29,7 @@ use crate::{
     error::Error,
     gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi},
     plugin::PluginSettings,
-    prop::{
-        Property, PropertyAtomicGuard, PropertySubType, PropertyType,
-        PropertyValue, Role,
-    },
+    prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
     text::TextShaperPtr,
     ui::{chatview, Window},

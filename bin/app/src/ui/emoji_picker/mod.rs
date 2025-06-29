@@ -22,19 +22,13 @@ use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    };
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use crate::{
-    gfx::{
-        GfxDrawCall, GfxDrawInstruction, Point,
-        Rectangle, RenderApi,
-    },
-    prop::{
-        PropertyAtomicGuard, PropertyFloat32, PropertyRect,
-        PropertyUint32, Role,
-    },
+    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
+    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,

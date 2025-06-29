@@ -21,10 +21,7 @@ use miniquad::{KeyCode, KeyMods};
 use std::sync::Arc;
 
 use crate::{
-    prop::{
-        PropertyPtr,
-        PropertyUint32, Role,
-    },
+    prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
 };
 

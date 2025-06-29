@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc,
-array::TryFromSliceError, string::FromUtf8Error};
 use sled_overlay::sled;
+use std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc};
 
 pub mod darkirc;
 pub use darkirc::{DarkIrc, DarkIrcPtr};
@@ -26,10 +25,7 @@ pub use darkirc::{DarkIrc, DarkIrcPtr};
 use darkfi::net::Settings as NetSettings;
 
 use crate::{
-    prop::{
-        Property, PropertyAtomicGuard, PropertySubType, PropertyType,
-        PropertyValue, Role,
-    },
+    prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{SceneNode, SceneNodePtr, SceneNodeType},
 };
 
@@ -107,12 +103,9 @@ impl PluginSettings {
                 PropertyType::Bool => {
                     let sled_result = self.sled_tree.get(setting_node.name.as_str());
                     if let Ok(Some(sled_value)) = sled_result {
-                        setting_node.set_property_bool(
-                            atom,
-                            Role::User,
-                            "value",
-                            sled_value[0] != 0,
-                        ).unwrap();
+                        setting_node
+                            .set_property_bool(atom, Role::User, "value", sled_value[0] != 0)
+                            .unwrap();
                     }
                 }
                 PropertyType::Uint32 => {
@@ -122,12 +115,14 @@ impl PluginSettings {
                             let bytes: Result<[u8; 4], TryFromSliceError> =
                                 sled_value.as_ref().try_into();
                             if let Ok(b) = bytes {
-                                setting_node.set_property_u32(
-                                    atom,
-                                    Role::User,
-                                    "value",
-                                    u32::from_le_bytes(b),
-                                ).unwrap();
+                                setting_node
+                                    .set_property_u32(
+                                        atom,
+                                        Role::User,
+                                        "value",
+                                        u32::from_le_bytes(b),
+                                    )
+                                    .unwrap();
                             }
                         }
                     }
@@ -139,12 +134,14 @@ impl PluginSettings {
                             let bytes: Result<[u8; 4], TryFromSliceError> =
                                 sled_value.as_ref().try_into();
                             if let Ok(b) = bytes {
-                                setting_node.set_property_f32(
-                                    atom,
-                                    Role::User,
-                                    "value",
-                                    f32::from_le_bytes(b),
-                                ).unwrap();
+                                setting_node
+                                    .set_property_f32(
+                                        atom,
+                                        Role::User,
+                                        "value",
+                                        f32::from_le_bytes(b),
+                                    )
+                                    .unwrap();
                             }
                         }
                     }
@@ -176,25 +173,32 @@ impl PluginSettings {
                 PropertyType::Bool => {
                     let value_bytes = if value.get_bool(0).unwrap() { 1u8 } else { 0u8 };
                     self.sled_tree
-                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes])).unwrap();
+                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes]))
+                        .unwrap();
                 }
                 PropertyType::Uint32 => {
-                    self.sled_tree.insert(
-                        setting_node.name.as_str(),
-                        sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()),
-                    ).unwrap();
+                    self.sled_tree
+                        .insert(
+                            setting_node.name.as_str(),
+                            sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()),
+                        )
+                        .unwrap();
                 }
                 PropertyType::Float32 => {
-                    self.sled_tree.insert(
-                        setting_node.name.as_str(),
-                        sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()),
-                    ).unwrap();
+                    self.sled_tree
+                        .insert(
+                            setting_node.name.as_str(),
+                            sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()),
+                        )
+                        .unwrap();
                 }
                 PropertyType::Str => {
-                    self.sled_tree.insert(
-                        setting_node.name.as_str(),
-                        sled::IVec::from(value.get_str(0).unwrap().as_bytes()),
-                    ).unwrap();
+                    self.sled_tree
+                        .insert(
+                            setting_node.name.as_str(),
+                            sled::IVec::from(value.get_str(0).unwrap().as_bytes()),
+                        )
+                        .unwrap();
                 }
                 _ => {}
             }

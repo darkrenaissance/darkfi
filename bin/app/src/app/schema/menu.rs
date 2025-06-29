@@ -18,22 +18,13 @@
 
 use crate::{
     app::{
-        node::{
-            create_button,
-            create_layer, create_shortcut, create_text, create_vector_art,
-        },
+        node::{create_button, create_layer, create_shortcut, create_text, create_vector_art},
         App,
     },
     expr,
-    prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyFloat32,
-        Role,
-    },
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
-    ui::{
-        Button, Layer, ShapeVertex, Shortcut, Text, VectorArt,
-        VectorShape,
-    },
+    ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
 };
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
@@ -88,8 +79,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.link(layer_node.clone());
 
     // Channels label bg
@@ -129,8 +119,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         [0.15, 0.2, 0.19, 1.],
     );
 
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.clone().link(node);
 
     // Create some text
@@ -159,15 +148,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     }
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.render_api.clone(),
-            )
-        })
-        .await;
+    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
     layer_node.clone().link(node);
 
     let mut channel_y = CHANNEL_LABEL_LINESPACE;
@@ -205,9 +186,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             sep_color,
         );
 
-        let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
-            .await;
+        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
         layer_node.clone().link(node);
 
         // Desktop platforms
@@ -246,15 +225,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         set_normal_color(atom);
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-        let node = node
-            .setup(|me| {
-                Text::new(
-                    me,
-                    window_scale.clone(),
-                    app.render_api.clone(),
-                )
-            })
-            .await;
+        let node =
+            node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
         layer_node.clone().link(node);
 
         // Create the button

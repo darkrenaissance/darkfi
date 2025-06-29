@@ -25,7 +25,7 @@ use simplelog::{
 use {
     file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate},
     simplelog::WriteLogger,
-    std::{path::PathBuf, thread::sleep, time::Duration}
+    std::{path::PathBuf, thread::sleep, time::Duration},
 };
 
 // Measured in bytes

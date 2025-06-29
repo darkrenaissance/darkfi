@@ -20,6 +20,8 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use std::sync::{Arc, Weak};
 
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 use crate::{
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
@@ -32,8 +34,6 @@ use crate::{
     util::unixtime,
     ExecutorPtr,
 };
-#[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 

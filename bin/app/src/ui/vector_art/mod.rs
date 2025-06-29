@@ -22,13 +22,8 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi,
-    },
-    prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyRect,
-        PropertyUint32, Role,
-    },
+    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
@@ -60,11 +55,7 @@ pub struct VectorArt {
 }
 
 impl VectorArt {
-    pub async fn new(
-        node: SceneNodeWeak,
-        shape: VectorShape,
-        render_api: RenderApi,
-    ) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, shape: VectorShape, render_api: RenderApi) -> Pimpl {
         t!("VectorArt::new()");
 
         let node_ref = &node.upgrade().unwrap();

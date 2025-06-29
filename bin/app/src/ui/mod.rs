@@ -21,14 +21,14 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 use crate::{
     gfx::{GfxDrawCall, Point, Rectangle},
     prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
-#[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
 
 mod button;
 pub use button::{Button, ButtonPtr};

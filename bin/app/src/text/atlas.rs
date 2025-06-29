@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi},
-};
+use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi};
 
 use super::{
     ft::{Sprite, SpritePtr},

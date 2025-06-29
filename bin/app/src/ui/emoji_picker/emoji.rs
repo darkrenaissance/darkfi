@@ -25,10 +25,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawMesh,
-        Rectangle, RenderApi,
-    },
+    gfx::{gfxtag, GfxDrawMesh, Rectangle, RenderApi},
     mesh::{MeshBuilder, COLOR_WHITE},
     text::{self, TextShaperPtr},
 };

@@ -33,8 +33,8 @@ mod guard;
 pub use guard::PropertyAtomicGuard;
 mod wrap;
 pub use wrap::{
-    PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyRect,
-    PropertyStr, PropertyUint32,
+    PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyRect, PropertyStr,
+    PropertyUint32,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]

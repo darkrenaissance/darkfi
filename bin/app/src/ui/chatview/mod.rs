@@ -38,13 +38,10 @@ mod page;
 use page::MessageBuffer;
 
 use crate::{
-    gfx::{
-        GfxDrawCall, GfxDrawInstruction, Point, Rectangle,
-        RenderApi,
-    },
+    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
-        PropertyRect, PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyRect,
+        PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text::TextShaperPtr,

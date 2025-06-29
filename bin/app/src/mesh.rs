@@ -17,9 +17,8 @@
  */
 
 use crate::gfx::{
-        DebugTag, GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
-        Vertex,
-    };
+    DebugTag, GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex,
+};
 
 pub type Color = [f32; 4];
 

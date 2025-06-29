@@ -22,13 +22,10 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction,
-        Rectangle, RenderApi,
-    },
+    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApi},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
-        PropertyRect, PropertyStr, PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyRect,
+        PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
     text2::{self, TEXT_CTX},

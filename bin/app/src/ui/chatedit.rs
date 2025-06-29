@@ -32,10 +32,11 @@ use std::{
     },
 };
 
+#[cfg(target_os = "android")]
+use crate::AndroidSuggestEvent;
 use crate::{
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh,
-        Point, Rectangle, RenderApi, Vertex,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi, Vertex,
     },
     mesh::MeshBuilder,
     prop::{
@@ -47,8 +48,6 @@ use crate::{
     util::unixtime,
     ExecutorPtr,
 };
-#[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
 
 use super::{
     baseedit::{
@@ -907,10 +906,7 @@ impl ChatEdit {
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
         self.is_phone_select.store(false, Ordering::Relaxed);
         self.hide_cursor.store(false, Ordering::Relaxed);
-        self.select_text
-            .clone()
-            .set_null(atom, Role::Internal, 0)
-            .unwrap();
+        self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
     }
 
     /// Whenever the cursor is modified this MUST be called

@@ -60,23 +60,21 @@ mod util;
 use crate::{
     app::{App, AppPtr},
     gfx::EpochIndex,
-    prop::{
-        Property, PropertySubType, PropertyType,
-    },
+    prop::{Property, PropertySubType, PropertyType},
     scene::{CallArgType, SceneNode, SceneNodeType},
     text::TextShaper,
     util::AsyncRuntime,
 };
-#[cfg(feature = "enable-plugins")]
-use {
-    scene::{SceneNodePtr, Slot},
-    prop::{PropertyStr, Role, PropertyAtomicGuard, PropertyBool},
-    ui::chatview,
-    std::io::Cursor,
-    darkfi_serial::{Encodable, Decodable, deserialize},
-};
 #[cfg(feature = "enable-netdebug")]
 use net::ZeroMQAdapter;
+#[cfg(feature = "enable-plugins")]
+use {
+    darkfi_serial::{deserialize, Decodable, Encodable},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyStr, Role},
+    scene::{SceneNodePtr, Slot},
+    std::io::Cursor,
+    ui::chatview,
+};
 
 // This is historical, but ideally we can fix the entire project and remove this import.
 pub use util::ExecutorPtr;

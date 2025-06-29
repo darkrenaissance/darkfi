@@ -20,15 +20,12 @@ use async_trait::async_trait;
 use image::ImageReader;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::{
-    io::Cursor,
-    sync::Arc,
-};
+use std::{io::Cursor, sync::Arc};
 
 use crate::{
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr,
-        Rectangle, RenderApi,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr, Rectangle,
+        RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},

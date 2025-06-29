@@ -18,10 +18,7 @@
 
 use async_lock::Mutex;
 use darkfi_serial::{async_trait, deserialize, Decodable, Encodable, SerialDecodable, VarInt};
-use std::{
-    io::Cursor,
-    sync::Arc
-};
+use std::{io::Cursor, sync::Arc};
 use zeromq::{Socket, SocketRecv, SocketSend};
 
 use crate::{

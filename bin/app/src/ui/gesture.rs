@@ -23,9 +23,7 @@ use std::sync::{Arc, Mutex as SyncMutex};
 
 use crate::{
     gfx::Point,
-    prop::{
-        PropertyUint32, Role,
-    },
+    prop::{PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
 };
 

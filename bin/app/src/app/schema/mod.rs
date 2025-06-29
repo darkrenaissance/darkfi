@@ -22,21 +22,14 @@ use std::fs::File;
 
 use crate::{
     app::{
-        node::{
-            create_image, create_layer, create_shortcut, create_vector_art,
-        },
+        node::{create_image, create_layer, create_shortcut, create_vector_art},
         App,
     },
     expr::{self, Compiler},
-    prop::{
-        PropertyAtomicGuard, Role,
-    },
+    prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{
-        emoji_picker, Image, Layer,
-        Shortcut, VectorArt, VectorShape,
-    },
+    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape},
 };
 
 mod chat;
@@ -231,8 +224,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
         layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let layer_node =
-            layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+        let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
         window.clone().link(layer_node.clone());
 
         // Create a bg image
@@ -297,9 +289,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             expr::load_var("h"),
             [c, c, c, 0.3],
         );
-        let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
-            .await;
+        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
         layer_node.clone().link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
@@ -320,9 +310,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             expr::load_var("h"),
             [c, c, c, 0.3],
         );
-        let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone()))
-            .await;
+        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
         window.clone().link(node);
     }
 
@@ -337,8 +325,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let netlayer_node =
-        netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.clone().link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
@@ -352,8 +339,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
-    let net0_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net0_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net0_node);
 
     let node = create_vector_art("net1");
@@ -367,8 +353,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
-    let net1_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net1_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net1_node);
 
     let node = create_vector_art("net2");
@@ -382,8 +367,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    let net2_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net2_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net2_node);
 
     let node = create_vector_art("net3");
@@ -397,8 +381,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    let net3_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net3_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.clone().link(net3_node);
 
     // Navbar Settings Button

@@ -27,10 +27,7 @@ use std::{
 
 use super::{max, MessageId, Timestamp};
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawMesh,
-        Rectangle, RenderApi,
-    },
+    gfx::{gfxtag, GfxDrawMesh, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_PINK, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
     text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
