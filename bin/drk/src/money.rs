@@ -120,13 +120,13 @@ pub const BALANCE_BASE10_DECIMALS: usize = 8;
 
 impl Drk {
     /// Initialize wallet with tables for the Money contract.
-    pub async fn initialize_money(&self) -> WalletDbResult<()> {
+    pub async fn initialize_money(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         // Initialize Money wallet schema
         let wallet_schema = include_str!("../money.sql");
         self.wallet.exec_batch_sql(wallet_schema)?;
 
         // Insert DRK alias
-        self.add_alias("DRK".to_string(), *DARK_TOKEN_ID).await?;
+        self.add_alias("DRK".to_string(), *DARK_TOKEN_ID, output).await?;
 
         Ok(())
     }
@@ -573,8 +573,13 @@ impl Drk {
     }
 
     /// Create an alias record for provided Token ID.
-    pub async fn add_alias(&self, alias: String, token_id: TokenId) -> WalletDbResult<()> {
-        println!("Generating alias {alias} for Token: {token_id}");
+    pub async fn add_alias(
+        &self,
+        alias: String,
+        token_id: TokenId,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Generating alias {alias} for Token: {token_id}"));
         let query = format!(
             "INSERT OR REPLACE INTO {} ({}, {}) VALUES (?1, ?2);",
             *MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
@@ -644,8 +649,12 @@ impl Drk {
     }
 
     /// Remove provided alias record from the wallet database.
-    pub async fn remove_alias(&self, alias: String) -> WalletDbResult<()> {
-        println!("Removing alias: {alias}");
+    pub async fn remove_alias(
+        &self,
+        alias: String,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Removing alias: {alias}"));
         let query = format!(
             "DELETE FROM {} WHERE {} = ?1;",
             *MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS,

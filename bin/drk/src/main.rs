@@ -715,10 +715,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         eprintln!("Error initializing wallet: {e:?}");
                         exit(2);
                     }
-                    if let Err(e) = drk.initialize_money().await {
+                    let mut output = vec![];
+                    if let Err(e) = drk.initialize_money(&mut output).await {
+                        print_output(&output);
                         eprintln!("Failed to initialize Money: {e:?}");
                         exit(2);
                     }
+                    print_output(&output);
                     if let Err(e) = drk.initialize_dao().await {
                         eprintln!("Failed to initialize DAO: {e:?}");
                         exit(2);
@@ -2258,10 +2261,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     args.fun,
                 )
                 .await;
-                if let Err(e) = drk.add_alias(alias, token_id).await {
-                    eprintln!("Failed to add alias: {e:?}");
+                let mut output = vec![];
+                if let Err(e) = drk.add_alias(alias, token_id, &mut output).await {
+                    print_output(&output);
+                    eprintln!("Failed to add alias: {e}");
                     exit(2);
                 }
+                print_output(&output);
 
                 Ok(())
             }
@@ -2316,10 +2322,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     args.fun,
                 )
                 .await;
-                if let Err(e) = drk.remove_alias(alias).await {
-                    eprintln!("Failed to remove alias: {e:?}");
+                let mut output = vec![];
+                if let Err(e) = drk.remove_alias(alias, &mut output).await {
+                    print_output(&output);
+                    eprintln!("Failed to remove alias: {e}");
                     exit(2);
                 }
+                print_output(&output);
 
                 Ok(())
             }

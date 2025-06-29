@@ -45,7 +45,7 @@ use darkfi::{
     Error,
 };
 use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
-use darkfi_money_contract::model::{Coin, CoinAttributes};
+use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, DAO_CONTRACT_ID,
@@ -101,6 +101,7 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\tunsnooze: Enables the background subscription messages printing"));
     output.push(String::from("\tscan: Scan the blockchain and parse relevant transactions"));
     output.push(String::from("\texplorer: Explorer related subcommands"));
+    output.push(String::from("\talias: Token alias"));
 }
 
 /// Auxiliary function to define the interactive shell completions.
@@ -195,7 +196,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
-    if last.starts_with("a") {
+    if last.starts_with("at") {
         lc.push(prefix + "attach-fee");
         return
     }
@@ -246,7 +247,24 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
+    if last.starts_with("al") {
+        lc.push(prefix.clone() + "alias");
+        lc.push(prefix.clone() + "alias add");
+        lc.push(prefix.clone() + "alias show");
+        lc.push(prefix + "alias remove");
+        return
+    }
+
     // Now the catch alls
+    if last.starts_with("a") {
+        lc.push(prefix.clone() + "attach-fee");
+        lc.push(prefix.clone() + "alias");
+        lc.push(prefix.clone() + "alias add");
+        lc.push(prefix.clone() + "alias show");
+        lc.push(prefix + "alias remove");
+        return
+    }
+
     if last.starts_with("s") {
         lc.push(prefix.clone() + "spend");
         lc.push(prefix.clone() + "subscribe");
@@ -268,32 +286,38 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
     // Split commands so we always process the last one
     let commands: Vec<&str> = buffer.split('|').collect();
     let last = commands.last().unwrap().trim_start();
+    let color = 35; // magenta
+    let bold = false;
     match last {
-        "completions " => Some(("<shell>".to_string(), 35, false)), // 35 = magenta
-        "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), 35, false)),
-        "wallet default-address " => Some(("<index>".to_string(), 35, false)),
-        "unspend " => Some(("<coin>".to_string(), 35, false)),
-        "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), 35, false)),
-        "otc " => Some(("(init|join|inspect|sign)".to_string(), 35, false)),
-        "otc init " => Some(("<value_pair> <token_pair>".to_string(), 35, false)),
-        "dao " => Some(("(create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), 35, false)),
-        "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), 35, false)),
-        "dao import " => Some(("<name>".to_string(), 35, false)),
-        "dao list " => Some(("[name]".to_string(), 35, false)),
-        "dao balance " => Some(("<name>".to_string(), 35, false)),
-        "dao mint " => Some(("<name>".to_string(), 35, false)),
-        "dao propose-transfer " => Some(("<name> <duration> <amount> <token> <recipient> [spend-hook] [user-data]".to_string(), 35, false)),
-        "dao propose-generic" => Some(("<name> <duration> [user-data]".to_string(), 35, false)),
-        "dao proposals " => Some(("<name>".to_string(), 35, false)),
-        "dao proposal " => Some(("[--(export|mint-proposal)] <bulla>".to_string(), 35, false)),
-        "dao vote " => Some(("<bulla> <vote> [vote-weight]".to_string(), 35, false)),
-        "dao exec " => Some(("[--early] <bulla>".to_string(), 35, false)),
-        "scan " => Some(("[--reset]".to_string(), 35, false)),
-        "scan --reset " => Some(("<height>".to_string(), 35, false)),
-        "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)".to_string(), 35, false)),
-        "explorer fetch-tx " => Some(("[--encode] <tx-hash>".to_string(), 35, false)),
-        "explorer txs-history " => Some(("[--encode] [tx-hash]".to_string(), 35, false)),
-        "explorer scanned-blocks " => Some(("[height]".to_string(), 35, false)),
+        "completions " => Some(("<shell>".to_string(), color, bold)),
+        "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), color, bold)),
+        "wallet default-address " => Some(("<index>".to_string(), color, bold)),
+        "unspend " => Some(("<coin>".to_string(), color, bold)),
+        "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), color, bold)),
+        "otc " => Some(("(init|join|inspect|sign)".to_string(), color, bold)),
+        "otc init " => Some(("<value_pair> <token_pair>".to_string(), color, bold)),
+        "dao " => Some(("(create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), color, bold)),
+        "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), color, bold)),
+        "dao import " => Some(("<name>".to_string(), color, bold)),
+        "dao list " => Some(("[name]".to_string(), color, bold)),
+        "dao balance " => Some(("<name>".to_string(), color, bold)),
+        "dao mint " => Some(("<name>".to_string(), color, bold)),
+        "dao propose-transfer " => Some(("<name> <duration> <amount> <token> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
+        "dao propose-generic" => Some(("<name> <duration> [user-data]".to_string(), color, bold)),
+        "dao proposals " => Some(("<name>".to_string(), color, bold)),
+        "dao proposal " => Some(("[--(export|mint-proposal)] <bulla>".to_string(), color, bold)),
+        "dao vote " => Some(("<bulla> <vote> [vote-weight]".to_string(), color, bold)),
+        "dao exec " => Some(("[--early] <bulla>".to_string(), color, bold)),
+        "scan " => Some(("[--reset]".to_string(), color, bold)),
+        "scan --reset " => Some(("<height>".to_string(), color, bold)),
+        "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)".to_string(), color, bold)),
+        "explorer fetch-tx " => Some(("[--encode] <tx-hash>".to_string(), color, bold)),
+        "explorer txs-history " => Some(("[--encode] [tx-hash]".to_string(), color, bold)),
+        "explorer scanned-blocks " => Some(("[height]".to_string(), color, bold)),
+        "alias " => Some(("(add|show|remove)".to_string(), color, bold)),
+        "alias add " => Some(("<alias> <token>".to_string(), color, bold)),
+        "alias show " => Some(("[-a, --alias <alias>] [-t, --token <token>]".to_string(), color, bold)),
+        "alias remove " => Some(("<alias>".to_string(), color, bold)),
         _ => None,
     }
 }
@@ -480,6 +504,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                     .await
                 }
                 "explorer" => handle_explorer(drk, &parts, &input, &mut output).await,
+                "alias" => handle_alias(drk, &parts, &mut output).await,
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
             }
 
@@ -695,7 +720,7 @@ async fn handle_wallet_initialize(drk: &DrkPtr, output: &mut Vec<String>) {
         output.push(format!("Error initializing wallet: {e:?}"));
         return
     }
-    if let Err(e) = lock.initialize_money().await {
+    if let Err(e) = lock.initialize_money(output).await {
         output.push(format!("Failed to initialize Money: {e:?}"));
         return
     }
@@ -1528,7 +1553,7 @@ async fn handle_dao_update_keys(
 /// Auxiliary function to define the dao list subcommand handling.
 async fn handle_dao_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 2 || parts.len() != 3 {
+    if parts.len() != 2 && parts.len() != 3 {
         output.push(String::from("Malformed `dao list` subcommand"));
         output.push(String::from("Usage: dao list [name]"));
         return
@@ -1699,7 +1724,7 @@ async fn handle_dao_propose_transfer(drk: &DrkPtr, parts: &[&str], output: &mut 
 /// Auxiliary function to define the dao propose generic subcommand handling.
 async fn handle_dao_propose_generic(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 4 || parts.len() != 5 {
+    if parts.len() != 4 && parts.len() != 5 {
         output.push(String::from("Malformed `dao proposal-generic` subcommand"));
         output.push(String::from("Usage: dao proposal-generic <name> <duration> [user-data]"));
         return
@@ -1771,7 +1796,7 @@ async fn handle_dao_proposals(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
 /// Auxiliary function to define the dao proposal subcommand handling.
 async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 3 || parts.len() != 4 {
+    if parts.len() != 3 && parts.len() != 4 {
         output.push(String::from("Malformed `dao proposal` subcommand"));
         output.push(String::from("Usage: dao proposal [--(export|mint-proposal)] <bulla>"));
         return
@@ -2102,7 +2127,7 @@ async fn handle_dao_proposal_import(
 /// Auxiliary function to define the dao vote subcommand handling.
 async fn handle_dao_vote(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 4 || parts.len() != 5 {
+    if parts.len() != 4 && parts.len() != 5 {
         output.push(String::from("Malformed `dao vote` subcommand"));
         output.push(String::from("Usage: dao vote <bulla> <vote> [vote-weight]"));
         return
@@ -2155,7 +2180,7 @@ async fn handle_dao_vote(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
 /// Auxiliary function to define the dao exec subcommand handling.
 async fn handle_dao_exec(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 3 || parts.len() != 4 {
+    if parts.len() != 3 && parts.len() != 4 {
         output.push(String::from("Malformed `dao exec` subcommand"));
         output.push(String::from("Usage: dao exec [--early] <bulla>"));
         return
@@ -2415,7 +2440,7 @@ async fn handle_explorer(drk: &DrkPtr, parts: &[&str], input: &[String], output:
 /// Auxiliary function to define the explorer fetch transaction subcommand handling.
 async fn handle_explorer_fetch_tx(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 3 || parts.len() != 4 {
+    if parts.len() != 3 && parts.len() != 4 {
         output.push(String::from("Malformed `explorer fetch-tx` subcommand"));
         output.push(String::from("Usage: explorer fetch-tx [--encode] <tx-hash>"));
         return
@@ -2582,7 +2607,7 @@ async fn handle_explorer_clear_reverted(drk: &DrkPtr, parts: &[&str], output: &m
 /// Auxiliary function to define the explorer scanned blocks subcommand handling.
 async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 2 || parts.len() != 3 {
+    if parts.len() != 2 && parts.len() != 3 {
         output.push(String::from("Malformed `explorer scanned-blocks` subcommand"));
         output.push(String::from("Usage: explorer scanned-blocks [height]"));
         return
@@ -2628,5 +2653,125 @@ async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &m
         output.push(String::from("No scanned blocks records found"));
     } else {
         output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the alias command handling.
+async fn handle_alias(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        output.push(String::from("Malformed `alias` command"));
+        output.push(String::from("Usage: alias (add|show|remove)"));
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "add" => handle_alias_add(drk, parts, output).await,
+        "show" => handle_alias_show(drk, parts, output).await,
+        "remove" => handle_alias_remove(drk, parts, output).await,
+        _ => {
+            output.push(format!("Unreconized alias subcommand: {}", parts[1]));
+            output.push(String::from("Usage: alias (add|show|remove)"));
+        }
+    }
+}
+
+/// Auxiliary function to define the alias add subcommand handling.
+async fn handle_alias_add(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 4 {
+        output.push(String::from("Malformed `alias add` subcommand"));
+        output.push(String::from("Usage: alias add <alias> <token>"));
+        return
+    }
+
+    if parts[2].len() > 5 {
+        output.push(String::from("Error: Alias exceeds 5 characters"));
+        return
+    }
+
+    let token_id = match TokenId::from_str(parts[3]) {
+        Ok(t) => t,
+        Err(e) => {
+            output.push(format!("Invalid Token ID: {e:?}"));
+            return
+        }
+    };
+
+    if let Err(e) = drk.read().await.add_alias(String::from(parts[2]), token_id, output).await {
+        output.push(format!("Failed to add alias: {e}"));
+    }
+}
+
+/// Auxiliary function to define the alias show subcommand handling.
+async fn handle_alias_show(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() != 2 && parts.len() != 4 && parts.len() != 6 {
+        output.push(String::from("Malformed `alias show` command"));
+        output.push(String::from("Usage: alias show [-a, --alias <alias>] [-t, --token <token>]"));
+        return
+    }
+
+    let mut alias = None;
+    let mut token_id = None;
+    if parts.len() > 2 {
+        let mut index = 2;
+        if parts[index] == "-a" || parts[index] == "--alias" {
+            alias = Some(String::from(parts[index + 1]));
+            index += 2;
+        }
+
+        if index < parts.len() && (parts[index] == "-t" || parts[index] == "--token") {
+            match TokenId::from_str(parts[index + 1]) {
+                Ok(t) => token_id = Some(t),
+                Err(e) => {
+                    output.push(format!("Invalid Token ID: {e:?}"));
+                    return
+                }
+            };
+            index += 2;
+        }
+
+        // Check alias again in case it was after token
+        if index < parts.len() && (parts[index] == "-a" || parts[index] == "--alias") {
+            alias = Some(String::from(parts[index + 1]));
+        }
+    }
+
+    let map = match drk.read().await.get_aliases(alias, token_id).await {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            return
+        }
+    };
+
+    // Create a prettytable with the new data:
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Alias", "Token ID"]);
+    for (alias, token_id) in map.iter() {
+        table.add_row(row![alias, token_id]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No aliases found"));
+    } else {
+        output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the alias remove subcommand handling.
+async fn handle_alias_remove(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `alias remove` subcommand"));
+        output.push(String::from("Usage: alias remove <alias>"));
+        return
+    }
+
+    if let Err(e) = drk.read().await.remove_alias(String::from(parts[2]), output).await {
+        output.push(format!("Failed to remove alias: {e}"));
     }
 }
