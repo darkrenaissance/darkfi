@@ -48,7 +48,8 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, DAO_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
+        DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -102,6 +103,7 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\tscan: Scan the blockchain and parse relevant transactions"));
     output.push(String::from("\texplorer: Explorer related subcommands"));
     output.push(String::from("\talias: Token alias"));
+    output.push(String::from("\ttoken: Token functionalities"));
 }
 
 /// Auxiliary function to define the interactive shell completions.
@@ -162,7 +164,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
-    if last.starts_with("t") {
+    if last.starts_with("tr") {
         lc.push(prefix + "transfer");
         return
     }
@@ -255,6 +257,16 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
+    if last.starts_with("to") {
+        lc.push(prefix.clone() + "token");
+        lc.push(prefix.clone() + "token import");
+        lc.push(prefix.clone() + "token generate-mint");
+        lc.push(prefix.clone() + "token list");
+        lc.push(prefix.clone() + "token mint");
+        lc.push(prefix + "token freeze");
+        return
+    }
+
     // Now the catch alls
     if last.starts_with("a") {
         lc.push(prefix.clone() + "attach-fee");
@@ -271,6 +283,17 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "snooze");
         lc.push(prefix.clone() + "scan");
         lc.push(prefix + "scan --reset");
+        return
+    }
+
+    if last.starts_with("t") {
+        lc.push(prefix.clone() + "transfer");
+        lc.push(prefix.clone() + "token");
+        lc.push(prefix.clone() + "token import");
+        lc.push(prefix.clone() + "token generate-mint");
+        lc.push(prefix.clone() + "token list");
+        lc.push(prefix.clone() + "token mint");
+        lc.push(prefix + "token freeze");
         return
     }
 
@@ -318,6 +341,10 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "alias add " => Some(("<alias> <token>".to_string(), color, bold)),
         "alias show " => Some(("[-a, --alias <alias>] [-t, --token <token>]".to_string(), color, bold)),
         "alias remove " => Some(("<alias>".to_string(), color, bold)),
+        "token " => Some(("(import|generate-mint|list|mint|freeze)".to_string(), color, bold)),
+        "token import " => Some(("<secret-key> <token-blind>".to_string(), color, bold)),
+        "token mint " => Some(("<token> <amount> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
+        "token freeze " => Some(("<token>".to_string(), color, bold)),
         _ => None,
     }
 }
@@ -505,6 +532,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 }
                 "explorer" => handle_explorer(drk, &parts, &input, &mut output).await,
                 "alias" => handle_alias(drk, &parts, &mut output).await,
+                "token" => handle_token(drk, &parts, &mut output).await,
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
             }
 
@@ -1063,7 +1091,7 @@ async fn handle_transfer(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
     let token_id = match lock.get_token(String::from(parts[index])).await {
         Ok(t) => t,
         Err(e) => {
-            output.push(format!("Invalid token alias: {e}"));
+            output.push(format!("Invalid token ID: {e}"));
             return
         }
     };
@@ -1653,7 +1681,7 @@ async fn handle_dao_propose_transfer(drk: &DrkPtr, parts: &[&str], output: &mut 
     let token_id = match lock.get_token(String::from(parts[5])).await {
         Ok(t) => t,
         Err(e) => {
-            output.push(format!("Invalid token alias: {e}"));
+            output.push(format!("Invalid token ID: {e}"));
             return
         }
     };
@@ -2773,5 +2801,247 @@ async fn handle_alias_remove(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
 
     if let Err(e) = drk.read().await.remove_alias(String::from(parts[2]), output).await {
         output.push(format!("Failed to remove alias: {e}"));
+    }
+}
+
+/// Auxiliary function to define the token command handling.
+async fn handle_token(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        output.push(String::from("Malformed `token` command"));
+        output.push(String::from("Usage: token (import|generate-mint|list|mint|freeze)"));
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "import" => handle_token_import(drk, parts, output).await,
+        "generate-mint" => handle_token_generate_mint(drk, parts, output).await,
+        "list" => handle_token_list(drk, parts, output).await,
+        "mint" => handle_token_mint(drk, parts, output).await,
+        "freeze" => handle_token_freeze(drk, parts, output).await,
+        _ => {
+            output.push(format!("Unreconized token subcommand: {}", parts[1]));
+            output.push(String::from("Usage: token (import|generate-mint|list|mint|freeze)"));
+        }
+    }
+}
+
+/// Auxiliary function to define the token import subcommand handling.
+async fn handle_token_import(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 4 {
+        output.push(String::from("Malformed `token import` subcommand"));
+        output.push(String::from("Usage: token import <secret-key> <token-blind>"));
+        return
+    }
+
+    let mint_authority = match SecretKey::from_str(parts[2]) {
+        Ok(ma) => ma,
+        Err(e) => {
+            output.push(format!("Invalid mint authority: {e}"));
+            return
+        }
+    };
+
+    let token_blind = match BaseBlind::from_str(parts[3]) {
+        Ok(tb) => tb,
+        Err(e) => {
+            output.push(format!("Invalid token blind: {e}"));
+            return
+        }
+    };
+
+    match drk.read().await.import_mint_authority(mint_authority, token_blind).await {
+        Ok(token_id) => {
+            output.push(format!("Successfully imported mint authority for token ID: {token_id}"))
+        }
+        Err(e) => output.push(format!("Failed to import mint authority: {e}")),
+    }
+}
+
+/// Auxiliary function to define the token generate mint subcommand handling.
+async fn handle_token_generate_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `token generate-mint` subcommand"));
+        output.push(String::from("Usage: token generate-mint"));
+        return
+    }
+
+    let mint_authority = SecretKey::random(&mut OsRng);
+    let token_blind = BaseBlind::random(&mut OsRng);
+    match drk.read().await.import_mint_authority(mint_authority, token_blind).await {
+        Ok(token_id) => {
+            output.push(format!("Successfully imported mint authority for token ID: {token_id}"))
+        }
+        Err(e) => output.push(format!("Failed to import mint authority: {e}")),
+    }
+}
+
+/// Auxiliary function to define the token list subcommand handling.
+async fn handle_token_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `token list` subcommand"));
+        output.push(String::from("Usage: token list"));
+        return
+    }
+
+    let lock = drk.read().await;
+    let tokens = match lock.get_mint_authorities().await {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to fetch mint autorities: {e:?}"));
+            return
+        }
+    };
+
+    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            return
+        }
+    };
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row![
+        "Token ID",
+        "Aliases",
+        "Mint Authority",
+        "Token Blind",
+        "Frozen",
+        "Freeze Height"
+    ]);
+
+    for (token_id, authority, blind, frozen, freeze_height) in tokens {
+        let aliases = match aliases_map.get(&token_id.to_string()) {
+            Some(a) => a,
+            None => "-",
+        };
+
+        let freeze_height = match freeze_height {
+            Some(freeze_height) => freeze_height.to_string(),
+            None => String::from("-"),
+        };
+
+        table.add_row(row![token_id, aliases, authority, blind, frozen, freeze_height]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No tokens found"));
+    } else {
+        output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the token mint subcommand handling.
+async fn handle_token_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 5 || parts.len() > 7 {
+        output.push(String::from("Malformed `token mint` subcommand"));
+        output.push(String::from(
+            "Usage: token mint <token> <amount> <recipient> [spend-hook] [user-data]",
+        ));
+        return
+    }
+
+    let amount = String::from(parts[3]);
+    if let Err(e) = f64::from_str(&amount) {
+        output.push(format!("Invalid amount: {e}"));
+        return
+    }
+
+    let rcpt = match PublicKey::from_str(parts[4]) {
+        Ok(r) => r,
+        Err(e) => {
+            output.push(format!("Invalid recipient: {e}"));
+            return
+        }
+    };
+
+    let lock = drk.read().await;
+    let token_id = match lock.get_token(String::from(parts[2])).await {
+        Ok(t) => t,
+        Err(e) => {
+            output.push(format!("Invalid token ID: {e}"));
+            return
+        }
+    };
+
+    // Parse command
+    let mut index = 4;
+    let spend_hook = if index < parts.len() {
+        match FuncId::from_str(parts[index]) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                output.push(format!("Invalid spend hook: {e}"));
+                return
+            }
+        }
+    } else {
+        None
+    };
+    index += 1;
+
+    let user_data = if index < parts.len() {
+        let bytes = match bs58::decode(&parts[index]).into_vec() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e}"));
+                return
+            }
+        };
+
+        let bytes: [u8; 32] = match bytes.try_into() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e:?}"));
+                return
+            }
+        };
+
+        let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+            Some(v) => v,
+            None => {
+                output.push(String::from("Invalid user data"));
+                return
+            }
+        };
+
+        Some(elem)
+    } else {
+        None
+    };
+
+    match lock.mint_token(&amount, rcpt, token_id, spend_hook, user_data).await {
+        Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
+        Err(e) => output.push(format!("Failed to create token mint transaction: {e}")),
+    }
+}
+
+/// Auxiliary function to define the token freeze subcommand handling.
+async fn handle_token_freeze(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `token freeze` subcommand"));
+        output.push(String::from("Usage: token freeze <token>"));
+        return
+    }
+
+    let lock = drk.read().await;
+    let token_id = match lock.get_token(String::from(parts[2])).await {
+        Ok(t) => t,
+        Err(e) => {
+            output.push(format!("Invalid token ID: {e}"));
+            return
+        }
+    };
+
+    match lock.freeze_token(token_id).await {
+        Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
+        Err(e) => output.push(format!("Failed to create token freeze transaction: {e}")),
     }
 }

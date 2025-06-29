@@ -2277,7 +2277,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     Some(t) => match TokenId::from_str(t.as_str()) {
                         Ok(t) => Some(t),
                         Err(e) => {
-                            eprintln!("Invalid Token ID: {e:?}");
+                            eprintln!("Invalid Token ID: {e}");
                             exit(2);
                         }
                     },
@@ -2339,7 +2339,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mint_authority = match SecretKey::from_str(&secret_key) {
                     Ok(ma) => ma,
                     Err(e) => {
-                        eprintln!("Invalid mint authority: {e:?}");
+                        eprintln!("Invalid mint authority: {e}");
                         exit(2);
                     }
                 };
@@ -2347,7 +2347,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let token_blind = match BaseBlind::from_str(&token_blind) {
                     Ok(tb) => tb,
                     Err(e) => {
-                        eprintln!("Invalid token blind: {e:?}");
+                        eprintln!("Invalid token blind: {e}");
                         exit(2);
                     }
                 };
@@ -2399,7 +2399,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let aliases_map = match drk.get_aliases_mapped_by_token().await {
                     Ok(map) => map,
                     Err(e) => {
-                        eprintln!("Failed to fetch wallet aliases: {e:?}");
+                        eprintln!("Failed to fetch wallet aliases: {e}");
                         exit(2);
                     }
                 };
@@ -2450,14 +2450,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 if let Err(e) = f64::from_str(&amount) {
-                    eprintln!("Invalid amount: {e:?}");
+                    eprintln!("Invalid amount: {e}");
                     exit(2);
                 }
 
                 let rcpt = match PublicKey::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
-                        eprintln!("Invalid recipient: {e:?}");
+                        eprintln!("Invalid recipient: {e}");
                         exit(2);
                     }
                 };
@@ -2465,7 +2465,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
-                        eprintln!("Invalid Token ID: {e:?}");
+                        eprintln!("Invalid Token ID: {e}");
                         exit(2);
                     }
                 };
@@ -2474,7 +2474,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     Some(s) => match FuncId::from_str(&s) {
                         Ok(s) => Some(s),
                         Err(e) => {
-                            eprintln!("Invalid spend hook: {e:?}");
+                            eprintln!("Invalid spend hook: {e}");
                             exit(2);
                         }
                     },
@@ -2506,7 +2506,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to create token mint transaction: {e:?}");
+                        eprintln!("Failed to create token mint transaction: {e}");
                         exit(2);
                     }
                 };
@@ -2529,7 +2529,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
-                        eprintln!("Invalid Token ID: {e:?}");
+                        eprintln!("Invalid Token ID: {e}");
                         exit(2);
                     }
                 };
@@ -2537,7 +2537,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = match drk.freeze_token(token_id).await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to create token freeze transaction: {e:?}");
+                        eprintln!("Failed to create token freeze transaction: {e}");
                         exit(2);
                     }
                 };
