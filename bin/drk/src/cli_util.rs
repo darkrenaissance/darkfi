@@ -381,13 +381,11 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     // Explorer
     let tx_hash = Arg::with_name("tx-hash").help("Transaction hash");
 
-    let full = Arg::with_name("full").long("full").help("Print the full transaction information");
-
     let encode = Arg::with_name("encode").long("encode").help("Encode transaction to base58");
 
     let fetch_tx = SubCommand::with_name("fetch-tx")
         .about("Fetch a blockchain transaction by hash")
-        .args(&vec![tx_hash, full, encode]);
+        .args(&vec![tx_hash, encode]);
 
     let simulate_tx =
         SubCommand::with_name("simulate-tx").about("Read a transaction from stdin and simulate it");

@@ -195,13 +195,13 @@ impl Drk {
 
     /// Remove the transaction history records in the wallet
     /// that have been reverted.
-    pub fn remove_reverted_txs(&self) -> WalletDbResult<()> {
-        println!("Removing reverted transactions history records");
+    pub fn remove_reverted_txs(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Removing reverted transactions history records"));
         let query = format!(
             "DELETE FROM {WALLET_TXS_HISTORY_TABLE} WHERE {WALLET_TXS_HISTORY_COL_STATUS} = 'Reverted';"
         );
         self.wallet.exec_sql(&query, &[])?;
-        println!("Successfully removed reverted transactions history records");
+        output.push(String::from("Successfully removed reverted transactions history records"));
 
         Ok(())
     }

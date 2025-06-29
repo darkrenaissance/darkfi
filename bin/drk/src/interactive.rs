@@ -51,6 +51,7 @@ use darkfi_sdk::{
         note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
+    tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 
@@ -99,6 +100,7 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\tsnooze: Disables the background subscription messages printing"));
     output.push(String::from("\tunsnooze: Enables the background subscription messages printing"));
     output.push(String::from("\tscan: Scan the blockchain and parse relevant transactions"));
+    output.push(String::from("\texplorer: Explorer related subcommands"));
 }
 
 /// Auxiliary function to define the interactive shell completions.
@@ -234,6 +236,16 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         return
     }
 
+    if last.starts_with("e") {
+        lc.push(prefix.clone() + "explorer");
+        lc.push(prefix.clone() + "explorer fetch-tx");
+        lc.push(prefix.clone() + "explorer simulate-tx");
+        lc.push(prefix.clone() + "explorer txs-history");
+        lc.push(prefix.clone() + "explorer clear-reverted");
+        lc.push(prefix + "explorer scanned-blocks");
+        return
+    }
+
     // Now the catch alls
     if last.starts_with("s") {
         lc.push(prefix.clone() + "spend");
@@ -278,6 +290,10 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "dao exec " => Some(("[--early] <bulla>".to_string(), 35, false)),
         "scan " => Some(("[--reset]".to_string(), 35, false)),
         "scan --reset " => Some(("<height>".to_string(), 35, false)),
+        "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)".to_string(), 35, false)),
+        "explorer fetch-tx " => Some(("[--encode] <tx-hash>".to_string(), 35, false)),
+        "explorer txs-history " => Some(("[--encode] [tx-hash]".to_string(), 35, false)),
+        "explorer scanned-blocks " => Some(("[height]".to_string(), 35, false)),
         _ => None,
     }
 }
@@ -463,6 +479,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                     )
                     .await
                 }
+                "explorer" => handle_explorer(drk, &parts, &input, &mut output).await,
                 _ => output.push(format!("Unreconized command: {}", parts[0])),
             }
 
@@ -2144,7 +2161,7 @@ async fn handle_dao_exec(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
         return
     }
 
-    let mut index = 1;
+    let mut index = 2;
     let mut early = false;
     if parts[index] == "--early" {
         early = true;
@@ -2366,4 +2383,250 @@ async fn handle_scan(
         return
     }
     append_or_print(output, None, print, vec![String::from("Finished scanning blockchain")]).await;
+}
+
+/// Auxiliary function to define the explorer command handling.
+async fn handle_explorer(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 {
+        output.push(String::from("Malformed `explorer` command"));
+        output.push(String::from(
+            "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)",
+        ));
+        return
+    }
+
+    // Handle subcommand
+    match parts[1] {
+        "fetch-tx" => handle_explorer_fetch_tx(drk, parts, output).await,
+        "simulate-tx" => handle_explorer_simulate_tx(drk, parts, input, output).await,
+        "txs-history" => handle_explorer_txs_history(drk, parts, output).await,
+        "clear-reverted" => handle_explorer_clear_reverted(drk, parts, output).await,
+        "scanned-blocks" => handle_explorer_scanned_blocks(drk, parts, output).await,
+        _ => {
+            output.push(format!("Unreconized explorer subcommand: {}", parts[1]));
+            output.push(String::from(
+                "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)",
+            ));
+        }
+    }
+}
+
+/// Auxiliary function to define the explorer fetch transaction subcommand handling.
+async fn handle_explorer_fetch_tx(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 || parts.len() != 4 {
+        output.push(String::from("Malformed `explorer fetch-tx` subcommand"));
+        output.push(String::from("Usage: explorer fetch-tx [--encode] <tx-hash>"));
+        return
+    }
+
+    let mut index = 2;
+    let mut encode = false;
+    if parts[index] == "--encode" {
+        encode = true;
+        index += 1;
+    }
+
+    let hash = match blake3::Hash::from_hex(parts[index]) {
+        Ok(h) => h,
+        Err(e) => {
+            output.push(format!("Invalid transaction hash: {e}"));
+            return
+        }
+    };
+    let tx_hash = TransactionHash(*hash.as_bytes());
+
+    let tx = match drk.read().await.get_tx(&tx_hash).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            output.push(format!("Failed to fetch transaction: {e}"));
+            return
+        }
+    };
+
+    let Some(tx) = tx else {
+        output.push(String::from("Transaction was not found"));
+        return
+    };
+
+    // Make sure the tx is correct
+    if tx.hash() != tx_hash {
+        output.push(format!("Transaction hash missmatch: {tx_hash} - {}", tx.hash()));
+        return
+    }
+
+    if encode {
+        output.push(base64::encode(&serialize_async(&tx).await));
+        return
+    }
+
+    output.push(format!("Transaction ID: {tx_hash}"));
+    output.push(format!("{tx:?}"));
+}
+
+/// Auxiliary function to define the explorer simulate transaction subcommand handling.
+async fn handle_explorer_simulate_tx(
+    drk: &DrkPtr,
+    parts: &[&str],
+    input: &[String],
+    output: &mut Vec<String>,
+) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `explorer simulate-tx` subcommand"));
+        output.push(String::from("Usage: explorer simulate-tx"));
+        return
+    }
+
+    let tx = match parse_tx_from_input(input).await {
+        Ok(t) => t,
+        Err(e) => {
+            output.push(format!("Error while parsing transaction: {e}"));
+            return
+        }
+    };
+
+    match drk.read().await.simulate_tx(&tx).await {
+        Ok(is_valid) => {
+            output.push(format!("Transaction ID: {}", tx.hash()));
+            output.push(format!("State: {}", if is_valid { "valid" } else { "invalid" }));
+        }
+        Err(e) => output.push(format!("Failed to simulate tx: {e}")),
+    }
+}
+
+/// Auxiliary function to define the explorer transactions history subcommand handling.
+async fn handle_explorer_txs_history(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 2 || parts.len() > 4 {
+        output.push(String::from("Malformed `explorer txs-history` command"));
+        output.push(String::from("Usage: explorer txs-history [--encode] [tx-hash]"));
+        return
+    }
+
+    let lock = drk.read().await;
+    if parts.len() > 2 {
+        let mut index = 2;
+        let mut encode = false;
+        if parts[index] == "--encode" {
+            encode = true;
+            index += 1;
+        }
+
+        let (tx_hash, status, block_height, tx) =
+            match lock.get_tx_history_record(parts[index]).await {
+                Ok(i) => i,
+                Err(e) => {
+                    output.push(format!("Failed to fetch transaction: {e}"));
+                    return
+                }
+            };
+
+        if encode {
+            output.push(base64::encode(&serialize_async(&tx).await));
+            return
+        }
+
+        output.push(format!("Transaction ID: {tx_hash}"));
+        output.push(format!("Status: {status}"));
+        match block_height {
+            Some(block_height) => output.push(format!("Block height: {block_height}")),
+            None => output.push(String::from("Block height: -")),
+        }
+        output.push(format!("{tx:?}"));
+        return
+    }
+
+    let map = match lock.get_txs_history() {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to retrieve transactions history records: {e}"));
+            return
+        }
+    };
+
+    // Create a prettytable with the new data:
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Transaction Hash", "Status", "Block Height"]);
+    for (txs_hash, status, block_height) in map.iter() {
+        let block_height = match block_height {
+            Some(block_height) => block_height.to_string(),
+            None => String::from("-"),
+        };
+        table.add_row(row![txs_hash, status, block_height]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No transactions found"));
+    } else {
+        output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the explorer clear reverted subcommand handling.
+async fn handle_explorer_clear_reverted(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `explorer clear-reverted` subcommand"));
+        output.push(String::from("Usage: explorer clear-reverted"));
+        return
+    }
+
+    if let Err(e) = drk.read().await.remove_reverted_txs(output) {
+        output.push(format!("Failed to remove reverted transactions: {e}"));
+    }
+}
+
+/// Auxiliary function to define the explorer scanned blocks subcommand handling.
+async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 || parts.len() != 3 {
+        output.push(String::from("Malformed `explorer scanned-blocks` subcommand"));
+        output.push(String::from("Usage: explorer scanned-blocks [height]"));
+        return
+    }
+
+    let lock = drk.read().await;
+    if parts.len() == 3 {
+        let height = match u32::from_str(parts[2]) {
+            Ok(d) => d,
+            Err(e) => {
+                output.push(format!("Invalid height: {e}"));
+                return
+            }
+        };
+
+        match lock.get_scanned_block_hash(&height) {
+            Ok(hash) => {
+                output.push(format!("Height: {height}"));
+                output.push(format!("Hash: {hash}"));
+            }
+            Err(e) => output.push(format!("Failed to retrieve scanned block record: {e}")),
+        };
+        return
+    }
+
+    let map = match lock.get_scanned_block_records() {
+        Ok(m) => m,
+        Err(e) => {
+            output.push(format!("Failed to retrieve scanned blocks records: {e}"));
+            return
+        }
+    };
+
+    // Create a prettytable with the new data:
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Height", "Hash"]);
+    for (height, hash) in map.iter() {
+        table.add_row(row![height, hash]);
+    }
+
+    if table.is_empty() {
+        output.push(String::from("No scanned blocks records found"));
+    } else {
+        output.push(format!("{table}"));
+    }
 }
