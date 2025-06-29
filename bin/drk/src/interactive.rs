@@ -768,26 +768,26 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str], input: &[String], output: &
 async fn handle_wallet_initialize(drk: &DrkPtr, output: &mut Vec<String>) {
     let lock = drk.read().await;
     if let Err(e) = lock.initialize_wallet().await {
-        output.push(format!("Error initializing wallet: {e:?}"));
+        output.push(format!("Error initializing wallet: {e}"));
         return
     }
     if let Err(e) = lock.initialize_money(output).await {
-        output.push(format!("Failed to initialize Money: {e:?}"));
+        output.push(format!("Failed to initialize Money: {e}"));
         return
     }
     if let Err(e) = lock.initialize_dao().await {
-        output.push(format!("Failed to initialize DAO: {e:?}"));
+        output.push(format!("Failed to initialize DAO: {e}"));
         return
     }
     if let Err(e) = lock.initialize_deployooor() {
-        output.push(format!("Failed to initialize Deployooor: {e:?}"));
+        output.push(format!("Failed to initialize Deployooor: {e}"));
     }
 }
 
 /// Auxiliary function to define the wallet keygen subcommand handling.
 async fn handle_wallet_keygen(drk: &DrkPtr, output: &mut Vec<String>) {
     if let Err(e) = drk.read().await.money_keygen(output).await {
-        output.push(format!("Failed to generate keypair: {e:?}"));
+        output.push(format!("Failed to generate keypair: {e}"));
     }
 }
 
@@ -797,7 +797,7 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
     let balmap = match lock.money_balance().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch balances map: {e:?}"));
+            output.push(format!("Failed to fetch balances map: {e}"));
             return
         }
     };
@@ -805,7 +805,7 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
     let aliases_map = match lock.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            output.push(format!("Failed to fetch aliases map: {e}"));
             return
         }
     };
@@ -834,7 +834,7 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
 async fn handle_wallet_address(drk: &DrkPtr, output: &mut Vec<String>) {
     match drk.read().await.default_address().await {
         Ok(address) => output.push(format!("{address}")),
-        Err(e) => output.push(format!("Failed to fetch default address: {e:?}")),
+        Err(e) => output.push(format!("Failed to fetch default address: {e}")),
     }
 }
 
@@ -843,7 +843,7 @@ async fn handle_wallet_addresses(drk: &DrkPtr, output: &mut Vec<String>) {
     let addresses = match drk.read().await.addresses().await {
         Ok(a) => a,
         Err(e) => {
-            output.push(format!("Failed to fetch addresses: {e:?}"));
+            output.push(format!("Failed to fetch addresses: {e}"));
             return
         }
     };
@@ -878,13 +878,13 @@ async fn handle_wallet_default_address(drk: &DrkPtr, parts: &[&str], output: &mu
     let index = match usize::from_str(parts[2]) {
         Ok(i) => i,
         Err(e) => {
-            output.push(format!("Invalid address id: {e:?}"));
+            output.push(format!("Invalid address id: {e}"));
             return
         }
     };
 
     if let Err(e) = drk.read().await.set_default_address(index) {
-        output.push(format!("Failed to set default address: {e:?}"));
+        output.push(format!("Failed to set default address: {e}"));
     }
 }
 
@@ -896,7 +896,7 @@ async fn handle_wallet_secrets(drk: &DrkPtr, output: &mut Vec<String>) {
                 output.push(format!("{secret}"));
             }
         }
-        Err(e) => output.push(format!("Failed to fetch secrets: {e:?}")),
+        Err(e) => output.push(format!("Failed to fetch secrets: {e}")),
     }
 }
 
@@ -938,7 +938,7 @@ async fn handle_wallet_import_secrets(drk: &DrkPtr, input: &[String], output: &m
                 output.push(format!("{key}"));
             }
         }
-        Err(e) => output.push(format!("Failed to import secrets: {e:?}")),
+        Err(e) => output.push(format!("Failed to import secrets: {e}")),
     }
 }
 
@@ -946,7 +946,7 @@ async fn handle_wallet_import_secrets(drk: &DrkPtr, input: &[String], output: &m
 async fn handle_wallet_tree(drk: &DrkPtr, output: &mut Vec<String>) {
     match drk.read().await.get_money_tree().await {
         Ok(tree) => output.push(format!("{tree:#?}")),
-        Err(e) => output.push(format!("Failed to fetch tree: {e:?}")),
+        Err(e) => output.push(format!("Failed to fetch tree: {e}")),
     }
 }
 
@@ -956,7 +956,7 @@ async fn handle_wallet_coins(drk: &DrkPtr, output: &mut Vec<String>) {
     let coins = match lock.get_coins(true).await {
         Ok(c) => c,
         Err(e) => {
-            output.push(format!("Failed to fetch coins: {e:?}"));
+            output.push(format!("Failed to fetch coins: {e}"));
             return
         }
     };
@@ -968,7 +968,7 @@ async fn handle_wallet_coins(drk: &DrkPtr, output: &mut Vec<String>) {
     let aliases_map = match lock.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            output.push(format!("Failed to fetch aliases map: {e}"));
             return
         }
     };
@@ -1630,7 +1630,7 @@ async fn handle_dao_balance(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Strin
     let balmap = match lock.dao_balance(parts[2]).await {
         Ok(b) => b,
         Err(e) => {
-            output.push(format!("Failed to fetch DAO balance: {e:?}"));
+            output.push(format!("Failed to fetch DAO balance: {e}"));
             return
         }
     };
@@ -1638,7 +1638,7 @@ async fn handle_dao_balance(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Strin
     let aliases_map = match lock.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            output.push(format!("Failed to fetch aliases map: {e}"));
             return
         }
     };
@@ -2439,7 +2439,7 @@ async fn handle_scan(
         let height = match u32::from_str(parts[2]) {
             Ok(h) => h,
             Err(e) => {
-                append_or_print(output, None, print, vec![format!("Invalid reset height: {e:?}")])
+                append_or_print(output, None, print, vec![format!("Invalid reset height: {e}")])
                     .await;
                 return
             }
@@ -2447,7 +2447,7 @@ async fn handle_scan(
 
         let mut buf = vec![];
         if let Err(e) = lock.reset_to_height(height, &mut buf) {
-            buf.push(format!("Failed during wallet reset: {e:?}"));
+            buf.push(format!("Failed during wallet reset: {e}"));
             append_or_print(output, None, print, buf).await;
             return
         }
@@ -2455,7 +2455,7 @@ async fn handle_scan(
     }
 
     if let Err(e) = lock.scan_blocks(output, None, print).await {
-        append_or_print(output, None, print, vec![format!("Failed during scanning: {e:?}")]).await;
+        append_or_print(output, None, print, vec![format!("Failed during scanning: {e}")]).await;
         return
     }
     append_or_print(output, None, print, vec![String::from("Finished scanning blockchain")]).await;
@@ -2745,7 +2745,7 @@ async fn handle_alias_add(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>
     let token_id = match TokenId::from_str(parts[3]) {
         Ok(t) => t,
         Err(e) => {
-            output.push(format!("Invalid Token ID: {e:?}"));
+            output.push(format!("Invalid Token ID: {e}"));
             return
         }
     };
@@ -2777,7 +2777,7 @@ async fn handle_alias_show(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
             match TokenId::from_str(parts[index + 1]) {
                 Ok(t) => token_id = Some(t),
                 Err(e) => {
-                    output.push(format!("Invalid Token ID: {e:?}"));
+                    output.push(format!("Invalid Token ID: {e}"));
                     return
                 }
             };
@@ -2793,7 +2793,7 @@ async fn handle_alias_show(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     let map = match drk.read().await.get_aliases(alias, token_id).await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            output.push(format!("Failed to fetch aliases map: {e}"));
             return
         }
     };
@@ -2915,7 +2915,7 @@ async fn handle_token_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     let tokens = match lock.get_mint_authorities().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch mint authorities: {e:?}"));
+            output.push(format!("Failed to fetch mint authorities: {e}"));
             return
         }
     };
@@ -2923,7 +2923,7 @@ async fn handle_token_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     let aliases_map = match lock.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
-            output.push(format!("Failed to fetch aliases map: {e:?}"));
+            output.push(format!("Failed to fetch aliases map: {e}"));
             return
         }
     };

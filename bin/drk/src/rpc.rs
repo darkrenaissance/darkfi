@@ -275,7 +275,7 @@ impl Drk {
             self.put_tx_history_records(&wallet_txs, "Confirmed", Some(block.header.height)).await
         {
             return Err(Error::DatabaseError(format!(
-                "[scan_block] Inserting transaction history records failed: {e:?}"
+                "[scan_block] Inserting transaction history records failed: {e}"
             )))
         }
 
@@ -304,7 +304,7 @@ impl Drk {
                     output,
                     sender,
                     print,
-                    vec![format!("[scan_blocks] RPC client request failed: {e:?}")],
+                    vec![format!("[scan_blocks] RPC client request failed: {e}")],
                 )
                 .await;
                 return Err(WalletDbError::GenericError)
@@ -327,7 +327,7 @@ impl Drk {
                     // Check if block was found
                     Err(Error::JsonRpcError((-32121, _))) => None,
                     Err(e) => {
-                        buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        buf.push(format!("[scan_blocks] RPC client request failed: {e}"));
                         append_or_print(output, sender, print, buf).await;
                         return Err(WalletDbError::GenericError)
                     }
@@ -365,7 +365,7 @@ impl Drk {
                     output,
                     sender,
                     print,
-                    vec![format!("[scan_blocks] Generating scan cache failed: {e:?}")],
+                    vec![format!("[scan_blocks] Generating scan cache failed: {e}")],
                 )
                 .await;
                 return Err(WalletDbError::GenericError)
@@ -378,7 +378,7 @@ impl Drk {
             let (last_height, last_hash) = match self.get_last_confirmed_block().await {
                 Ok(last) => last,
                 Err(e) => {
-                    buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                    buf.push(format!("[scan_blocks] RPC client request failed: {e}"));
                     append_or_print(output, sender, print, buf).await;
                     return Err(WalletDbError::GenericError)
                 }
@@ -399,14 +399,14 @@ impl Drk {
                 let block = match self.get_block_by_height(height).await {
                     Ok(b) => b,
                     Err(e) => {
-                        buf.push(format!("[scan_blocks] RPC client request failed: {e:?}"));
+                        buf.push(format!("[scan_blocks] RPC client request failed: {e}"));
                         append_or_print(output, sender, print, buf).await;
                         return Err(WalletDbError::GenericError)
                     }
                 };
                 buf.push(format!("Block {height} received! Scanning block..."));
                 if let Err(e) = self.scan_block(&mut scan_cache, &block).await {
-                    buf.push(format!("[scan_blocks] Scan block failed: {e:?}"));
+                    buf.push(format!("[scan_blocks] Scan block failed: {e}"));
                     append_or_print(output, sender, print, buf).await;
                     return Err(WalletDbError::GenericError)
                 };
@@ -459,7 +459,7 @@ impl Drk {
         // Store transactions history record
         if let Err(e) = self.put_tx_history_record(tx, "Broadcasted", None).await {
             return Err(Error::DatabaseError(format!(
-                "[broadcast_tx] Inserting transaction history record failed: {e:?}"
+                "[broadcast_tx] Inserting transaction history record failed: {e}"
             )))
         }
 
@@ -603,7 +603,7 @@ pub async fn subscribe_blocks(
     // First we do a clean scan
     let lock = drk.read().await;
     if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
-        let err_msg = format!("Failed during scanning: {e:?}");
+        let err_msg = format!("Failed during scanning: {e}");
         shell_sender.send(vec![err_msg.clone()]).await?;
         return Err(Error::Custom(err_msg))
     }
@@ -615,7 +615,7 @@ pub async fn subscribe_blocks(
     // Handle genesis(0) block
     if last_confirmed_height == 0 {
         if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
-            let err_msg = format!("[subscribe_blocks] Scanning from genesis block failed: {e:?}");
+            let err_msg = format!("[subscribe_blocks] Scanning from genesis block failed: {e}");
             shell_sender.send(vec![err_msg.clone()]).await?;
             return Err(Error::Custom(err_msg))
         }
@@ -628,7 +628,7 @@ pub async fn subscribe_blocks(
     let (mut last_scanned_height, last_scanned_hash) = match lock.get_last_scanned_block() {
         Ok(last) => last,
         Err(e) => {
-            let err_msg = format!("[subscribe_blocks] Retrieving last scanned block failed: {e:?}");
+            let err_msg = format!("[subscribe_blocks] Retrieving last scanned block failed: {e}");
             shell_sender.send(vec![err_msg.clone()]).await?;
             return Err(Error::Custom(err_msg))
         }
@@ -664,7 +664,7 @@ pub async fn subscribe_blocks(
             match res {
                 Ok(()) => { /* Do nothing */ }
                 Err(e) => {
-                    eprintln!("[subscribe_blocks] JSON-RPC server error: {e:?}");
+                    eprintln!("[subscribe_blocks] JSON-RPC server error: {e}");
                     publisher
                         .notify(JsonResult::Error(JsonError::new(
                             ErrorCode::InternalError,
@@ -724,7 +724,7 @@ pub async fn subscribe_blocks(
                         if let Err(e) = lock.reset_to_height(reset_height, &mut shell_message) {
                             shell_sender.send(shell_message).await?;
                             break 'outer Error::Custom(format!(
-                                "[subscribe_blocks] Wallet state reset failed: {e:?}"
+                                "[subscribe_blocks] Wallet state reset failed: {e}"
                             ))
                         }
 
@@ -735,7 +735,7 @@ pub async fn subscribe_blocks(
                                 Err(e) => {
                                     shell_sender.send(shell_message).await?;
                                     break 'outer Error::Custom(format!(
-                                        "[subscribe_blocks] RPC client request failed: {e:?}"
+                                        "[subscribe_blocks] RPC client request failed: {e}"
                                     ))
                                 }
                             };
@@ -743,7 +743,7 @@ pub async fn subscribe_blocks(
                             if let Err(e) = lock.scan_block(&mut scan_cache, &genesis).await {
                                 shell_sender.send(shell_message).await?;
                                 break 'outer Error::Custom(format!(
-                                    "[subscribe_blocks] Scanning block failed: {e:?}"
+                                    "[subscribe_blocks] Scanning block failed: {e}"
                                 ))
                             };
                             for msg in scan_cache.flush_messages() {
@@ -756,7 +756,7 @@ pub async fn subscribe_blocks(
                     if let Err(e) = lock.scan_block(&mut scan_cache, &block).await {
                         shell_sender.send(shell_message).await?;
                         break 'outer Error::Custom(format!(
-                            "[subscribe_blocks] Scanning block failed: {e:?}"
+                            "[subscribe_blocks] Scanning block failed: {e}"
                         ))
                     }
                     for msg in scan_cache.flush_messages() {

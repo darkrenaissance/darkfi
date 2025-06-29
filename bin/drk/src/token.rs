@@ -113,7 +113,7 @@ impl Drk {
             ],
         ) {
             return Err(Error::DatabaseError(format!(
-                "[import_mint_authority] Inserting mint authority failed: {e:?}"
+                "[import_mint_authority] Inserting mint authority failed: {e}"
             )))
         };
 
@@ -216,7 +216,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_mint_authorities] Tokens mint autorities retrieval failed: {e:?}"
+                    "[get_mint_authorities] Tokens mint autorities retrieval failed: {e}"
                 )))
             }
         };
@@ -242,7 +242,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_token_mint_authority] Token mint autority retrieval failed: {e:?}"
+                    "[get_token_mint_authority] Token mint autority retrieval failed: {e}"
                 )))
             }
         };

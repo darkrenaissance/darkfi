@@ -1002,7 +1002,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::DatabaseError(format!("[get_daos] DAOs retrieval failed: {e:?}")))
+                return Err(Error::DatabaseError(format!("[get_daos] DAOs retrieval failed: {e}")))
             }
         };
 
@@ -1158,7 +1158,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_dao_proposals] Proposals retrieval failed: {e:?}"
+                    "[get_dao_proposals] Proposals retrieval failed: {e}"
                 )))
             }
         };
@@ -1208,7 +1208,7 @@ impl Drk {
             .await
         {
             return Err(Error::DatabaseError(format!(
-                "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
+                "[apply_dao_mint_data] Confirm DAO failed: {e}"
             )))
         }
 
@@ -1279,7 +1279,7 @@ impl Drk {
             // Update/store our record
             if let Err(e) = self.put_dao_proposal(&our_proposal).await {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_dao_propose_data] Put DAO proposals failed: {e:?}"
+                    "[apply_dao_propose_data] Put DAO proposals failed: {e}"
                 )))
             }
 
@@ -1356,7 +1356,7 @@ impl Drk {
 
         if let Err(e) = self.put_dao_vote(&v).await {
             return Err(Error::DatabaseError(format!(
-                "[apply_dao_vote_data] Put DAO votes failed: {e:?}"
+                "[apply_dao_vote_data] Put DAO votes failed: {e}"
             )))
         }
 
@@ -1397,7 +1397,7 @@ impl Drk {
             .exec_sql(&query, rusqlite::params![Some(*exec_height), Some(serialize(tx_hash)), key])
         {
             return Err(Error::DatabaseError(format!(
-                "[apply_dao_exec_data] Update DAO proposal failed: {e:?}"
+                "[apply_dao_exec_data] Update DAO proposal failed: {e}"
             )))
         }
 
@@ -1585,7 +1585,7 @@ impl Drk {
         // Execute the query
         if let Err(e) = self.wallet.exec_sql(&query, params) {
             return Err(Error::DatabaseError(format!(
-                "[put_dao_proposal] Proposal insert failed: {e:?}"
+                "[put_dao_proposal] Proposal insert failed: {e}"
             )))
         }
 
@@ -1636,13 +1636,12 @@ impl Drk {
     pub fn reset_dao_trees(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting DAO Merkle trees"));
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_DAOS) {
-            output.push(format!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e:?}"));
+            output.push(format!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e}"));
             return Err(WalletDbError::GenericError)
         }
         if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_PROPOSALS) {
-            output.push(format!(
-                "[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e:?}"
-            ));
+            output
+                .push(format!("[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e}"));
             return Err(WalletDbError::GenericError)
         }
         output.push(String::from("Successfully reset DAO Merkle trees"));
@@ -1813,7 +1812,7 @@ impl Drk {
                 serialize_async(params).await,
             ],
         ) {
-            return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e:?}")))
+            return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e}")))
         };
 
         Ok(())
@@ -1841,7 +1840,7 @@ impl Drk {
             &query,
             rusqlite::params![serialize_async(params).await, serialize_async(&bulla).await,],
         ) {
-            return Err(Error::DatabaseError(format!("[update_dao_keys] DAO update failed: {e:?}")))
+            return Err(Error::DatabaseError(format!("[update_dao_keys] DAO update failed: {e}")))
         };
 
         Ok(())
@@ -1857,7 +1856,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_dao_by_bulla] DAO retrieval failed: {e:?}"
+                    "[get_dao_by_bulla] DAO retrieval failed: {e}"
                 )))
             }
         };
@@ -1875,7 +1874,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_dao_by_name] DAO retrieval failed: {e:?}"
+                    "[get_dao_by_name] DAO retrieval failed: {e}"
                 )))
             }
         };
@@ -1934,7 +1933,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_proposals] DAO proposalss retrieval failed: {e:?}"
+                    "[get_proposals] DAO proposalss retrieval failed: {e}"
                 )))
             }
         };
@@ -1961,7 +1960,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_dao_proposal_by_bulla] DAO proposal retrieval failed: {e:?}"
+                    "[get_dao_proposal_by_bulla] DAO proposal retrieval failed: {e}"
                 )))
             }
         };
@@ -1983,7 +1982,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_dao_proposal_votes] Votes retrieval failed: {e:?}"
+                    "[get_dao_proposal_votes] Votes retrieval failed: {e}"
                 )))
             }
         };
@@ -2296,7 +2295,7 @@ impl Drk {
 
         if let Err(e) = self.put_dao_proposal(&proposal_record).await {
             return Err(Error::DatabaseError(format!(
-                "[dao_propose_transfer] Put DAO proposal failed: {e:?}"
+                "[dao_propose_transfer] Put DAO proposal failed: {e}"
             )))
         }
 
@@ -2356,7 +2355,7 @@ impl Drk {
 
         if let Err(e) = self.put_dao_proposal(&proposal_record).await {
             return Err(Error::DatabaseError(format!(
-                "[dao_propose_generic] Put DAO proposal failed: {e:?}"
+                "[dao_propose_generic] Put DAO proposal failed: {e}"
             )))
         }
 
