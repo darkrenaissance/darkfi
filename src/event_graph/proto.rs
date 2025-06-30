@@ -331,6 +331,9 @@ impl ProtocolEventGraph {
                 "Event {event_id} is new"
             );
 
+            // TODO: when in fast mode (headers only mode) if someone
+            // sends us an event this block will try to request all
+            // the events parents
             let mut missing_parents = HashSet::new();
             for parent_id in event.header.parents.iter() {
                 // `event.validate_new()` should have already made sure that
@@ -453,9 +456,17 @@ impl ProtocolEventGraph {
                         events.push(tip);
                     }
                 }
-                if self.event_graph.dag_insert(&events).await.is_err() {
+                let headers = events.iter().map(|x| x.header.clone()).collect();
+                if self.event_graph.header_dag_insert(headers).await.is_err() {
                     self.clone().increase_malicious_count().await?;
                     continue
+                }
+                // FIXME
+                if !self.event_graph.fast_mode {
+                    if self.event_graph.dag_insert(&events).await.is_err() {
+                        self.clone().increase_malicious_count().await?;
+                        continue
+                    }
                 }
             } // <-- !missing_parents.is_empty()
 
@@ -466,6 +477,11 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put",
                 "Got all parents necessary for insertion",
             );
+            if self.event_graph.header_dag_insert(vec![event.header.clone()]).await.is_err() {
+                self.clone().increase_malicious_count().await?;
+                continue
+            }
+
             if self.event_graph.dag_insert(slice::from_ref(&event)).await.is_err() {
                 self.clone().increase_malicious_count().await?;
                 continue

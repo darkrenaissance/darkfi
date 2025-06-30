@@ -475,6 +475,9 @@ pub enum Error {
     #[error("Event is invalid")]
     EventIsInvalid,
 
+    #[error("Header is invalid")]
+    HeaderIsInvalid,
+
     // ====================
     // Miscellaneous errors
     // ====================

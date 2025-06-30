@@ -32,7 +32,7 @@ use crate::{
         Event, EventGraph,
     },
     net::{session::SESSION_DEFAULT, settings::NetworkProfile, P2p, Settings},
-    system::sleep,
+    system::{msleep, sleep},
     util::logger::{setup_test_logger, Level},
 };
 
@@ -99,7 +99,7 @@ async fn spawn_node(
     let p2p = P2p::new(settings, ex.clone()).await.unwrap();
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
     let event_graph =
-        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, "dag", 1, ex.clone())
+        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, false, "dag", 1, ex.clone())
             .await
             .unwrap();
     *event_graph.synced.write().await = true;
@@ -219,7 +219,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =========================================
     // 1. Assert that everyone's DAG is the same
     // =========================================
-    info!("dag len is 1");
     assert_dags(&eg_instances, 1, &mut rng).await;
 
     // ==========================================
@@ -229,6 +228,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     let event = Event::new(vec![1, 2, 3, 4], random_node).await;
     assert!(event.header.parents.contains(&genesis_event_id));
     // The node adds it to their DAG, on layer 1.
+    random_node.header_dag_insert(vec![event.header.clone()]).await.unwrap();
     let event_id = random_node.dag_insert(slice::from_ref(&event)).await.unwrap()[0];
     let tips_layers = random_node.unreferenced_tips.read().await;
     // Since genesis was referenced, its layer (0) have been removed
@@ -243,7 +243,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ====================================================
     // 3. Assert that everyone has the new event in the DAG
     // ====================================================
-    info!("dag len is 2");
     assert_dags(&eg_instances, 2, &mut rng).await;
 
     // ==============================================================
@@ -253,10 +252,13 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ==============================================================
     let random_node = eg_instances.choose(&mut rng).unwrap();
     let event0 = Event::new(vec![1, 2, 3, 4, 0], random_node).await;
+    random_node.header_dag_insert(vec![event0.header.clone()]).await.unwrap();
     let event0_id = random_node.dag_insert(slice::from_ref(&event0)).await.unwrap()[0];
     let event1 = Event::new(vec![1, 2, 3, 4, 1], random_node).await;
+    random_node.header_dag_insert(vec![event1.header.clone()]).await.unwrap();
     let event1_id = random_node.dag_insert(slice::from_ref(&event1)).await.unwrap()[0];
     let event2 = Event::new(vec![1, 2, 3, 4, 2], random_node).await;
+    random_node.header_dag_insert(vec![event2.header.clone()]).await.unwrap();
     let event2_id = random_node.dag_insert(slice::from_ref(&event2)).await.unwrap()[0];
     // Genesis event + event from 2. + upper 3 events (layer 4)
     assert_eq!(random_node.main_dag.len(), 5);
@@ -280,7 +282,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ==========================================
     // 5. Assert that everyone has all the events
     // ==========================================
-    info!("dag len is 5");
     assert_dags(&eg_instances, 5, &mut rng).await;
 
     // ===========================================
@@ -290,57 +291,66 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =======
     let node1 = eg_instances.choose(&mut rng).unwrap();
     let event0_1 = Event::new(vec![1, 2, 3, 4, 3], node1).await;
+    node1.header_dag_insert(vec![event0_1.header.clone()]).await.unwrap();
     node1.dag_insert(slice::from_ref(&event0_1)).await.unwrap();
     node1.p2p.broadcast(&EventPut(event0_1)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event1_1 = Event::new(vec![1, 2, 3, 4, 4], node1).await;
+    node1.header_dag_insert(vec![event1_1.header.clone()]).await.unwrap();
     node1.dag_insert(slice::from_ref(&event1_1)).await.unwrap();
     node1.p2p.broadcast(&EventPut(event1_1)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event2_1 = Event::new(vec![1, 2, 3, 4, 5], node1).await;
+    node1.header_dag_insert(vec![event2_1.header.clone()]).await.unwrap();
     node1.dag_insert(slice::from_ref(&event2_1)).await.unwrap();
     node1.p2p.broadcast(&EventPut(event2_1)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     // =======
     // node 2
     // =======
     let node2 = eg_instances.choose(&mut rng).unwrap();
     let event0_2 = Event::new(vec![1, 2, 3, 4, 6], node2).await;
+    node2.header_dag_insert(vec![event0_2.header.clone()]).await.unwrap();
     node2.dag_insert(slice::from_ref(&event0_2)).await.unwrap();
     node2.p2p.broadcast(&EventPut(event0_2)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event1_2 = Event::new(vec![1, 2, 3, 4, 7], node2).await;
+    node2.header_dag_insert(vec![event1_2.header.clone()]).await.unwrap();
     node2.dag_insert(slice::from_ref(&event1_2)).await.unwrap();
     node2.p2p.broadcast(&EventPut(event1_2)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event2_2 = Event::new(vec![1, 2, 3, 4, 8], node2).await;
+    node2.header_dag_insert(vec![event2_2.header.clone()]).await.unwrap();
     node2.dag_insert(slice::from_ref(&event2_2)).await.unwrap();
     node2.p2p.broadcast(&EventPut(event2_2)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     // =======
     // node 3
     // =======
     let node3 = eg_instances.choose(&mut rng).unwrap();
     let event0_3 = Event::new(vec![1, 2, 3, 4, 9], node3).await;
+    node3.header_dag_insert(vec![event0_3.header.clone()]).await.unwrap();
     node3.dag_insert(slice::from_ref(&event0_3)).await.unwrap();
     node3.p2p.broadcast(&EventPut(event0_3)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event1_3 = Event::new(vec![1, 2, 3, 4, 10], node3).await;
+    node3.header_dag_insert(vec![event1_3.header.clone()]).await.unwrap();
     node3.dag_insert(slice::from_ref(&event1_3)).await.unwrap();
     node3.p2p.broadcast(&EventPut(event1_3)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     let event2_3 = Event::new(vec![1, 2, 3, 4, 11], node3).await;
+    node3.header_dag_insert(vec![event2_3.header.clone()]).await.unwrap();
     node3.dag_insert(slice::from_ref(&event2_3)).await.unwrap();
     node3.p2p.broadcast(&EventPut(event2_3)).await;
-    sleep(1).await;
+    msleep(300).await;
 
     // /////
     // //
@@ -360,14 +370,10 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // node4.p2p.broadcast(&EventPut(event2_4)).await;
     // // sleep(1).await;
 
-    info!("Waiting 5s for events propagation");
-    sleep(5).await;
-
     // ==========================================
     // 7. Assert that everyone has all the events
     // ==========================================
     // 5 events from 2. and 4. + 9 events from 6. = 14
-    info!("dag len is 14 in 7.");
     assert_dags(&eg_instances, 14, &mut rng).await;
 
     // ============================================================
@@ -405,7 +411,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // 9. Assert the new synced DAG has the same contents as others
     // ============================================================
     // 5 events from 2. and 4. + 9 events from 6. = 14
-    info!("dag len is 14 but in 9.");
     assert_dags(&eg_instances, 14, &mut rng).await;
 
     // Stop the P2P network
@@ -438,6 +443,7 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
     for i in 0..n_events {
         let random_node = eg_instances.choose(&mut rng).unwrap();
         let event = Event::new(i.to_be_bytes().to_vec(), random_node).await;
+        random_node.header_dag_insert(vec![event.header.clone()]).await.unwrap();
         random_node.dag_insert(slice::from_ref(&event)).await.unwrap();
         random_node.p2p.broadcast(&EventPut(event)).await;
     }

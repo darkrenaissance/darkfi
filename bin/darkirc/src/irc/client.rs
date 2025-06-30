@@ -197,6 +197,9 @@ impl Client {
                                 *self.last_sent.write().await = event_id;
 
                                 // If it fails for some reason, for now, we just note it and pass.
+                                if let Err(e) = self.server.darkirc.event_graph.header_dag_insert(vec![event.header.clone()]).await {
+                                    error!("[IRC CLIENT] Failed inserting new header to Header DAG: {}", e);
+                                }
                                 if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event)).await {
                                     error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
                                 } else {

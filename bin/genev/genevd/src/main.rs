@@ -121,6 +121,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     let replay_datastore = expand_path(&settings.replay_datastore)?;
     let replay_mode = settings.replay_mode;
+    let fast_mode = settings.fast_mode;
 
     let sled_db = sled::open(datastore_path.clone())?;
     let p2p_settings: darkfi::net::Settings =
@@ -131,6 +132,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         sled_db.clone(),
         replay_datastore,
         replay_mode,
+        fast_mode,
         "genevd_dag",
         1,
         executor.clone(),
