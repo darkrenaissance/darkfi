@@ -20,6 +20,7 @@ use std::{collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
+use tracing::info;
 
 use crate::Result;
 
@@ -74,6 +75,7 @@ impl Header {
     ) -> Result<bool> {
         // Check if the event timestamp is after genesis timestamp
         if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT {
+            info!("timestampe");
             return Ok(false)
         }
 
@@ -82,6 +84,7 @@ impl Header {
         if days_rotation > 0 {
             let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
             if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
+                info!("rotation");
                 return Ok(false)
             }
         }
@@ -95,14 +98,17 @@ impl Header {
 
         for parent_id in self.parents.iter() {
             if parent_id == &NULL_ID {
+                info!("null");
                 continue
             }
 
             if parent_id == &self_id {
+                info!("self");
                 return Ok(false)
             }
 
             if seen.contains(parent_id) {
+                info!("seen");
                 return Ok(false)
             }
 
@@ -112,11 +118,13 @@ impl Header {
                 dag.get(parent_id.as_bytes())?
             };
             if parent_bytes.is_none() {
+                info!("none");
                 return Ok(false)
             }
 
             let parent: Header = deserialize_async(&parent_bytes.unwrap()).await?;
             if self.layer <= parent.layer {
+                info!("layer");
                 return Ok(false)
             }
 
@@ -163,70 +171,14 @@ impl Event {
     /// to use that instead of actual referenced DAG.
     /// TODO: is this necessary? we validate headers and events should
     /// be downloaded into the correct structure.
-    pub async fn validate(
-        &self,
-        dag: &sled::Tree,
-        genesis_timestamp: u64,
-        days_rotation: u64,
-        overlay: Option<&SledTreeOverlay>,
-    ) -> Result<bool> {
+    pub async fn validate(&self, _dag: &sled::Tree) -> Result<bool> {
         // Let's not bother with empty events
         if self.content.is_empty() {
+            info!("empty");
             return Ok(false)
         }
 
-        // Check if the event timestamp is after genesis timestamp
-        if self.header.timestamp < genesis_timestamp - EVENT_TIME_DRIFT {
-            return Ok(false)
-        }
-
-        // If a rotation has been set, check if the event timestamp
-        // is after the next genesis timestamp
-        if days_rotation > 0 {
-            let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
-            if self.header.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
-                return Ok(false)
-            }
-        }
-
-        // Validate the parents. We have to check that at least one parent
-        // is not NULL, that the parents exist, that no two parents are the
-        // same, and that the parent exists in previous layers, to prevent
-        // recursive references(circles).
-        let mut seen = HashSet::new();
-        let self_id = self.header.id();
-
-        for parent_id in self.header.parents.iter() {
-            if parent_id == &NULL_ID {
-                continue
-            }
-
-            if parent_id == &self_id {
-                return Ok(false)
-            }
-
-            if seen.contains(parent_id) {
-                return Ok(false)
-            }
-
-            let parent_bytes = if let Some(overlay) = overlay {
-                overlay.get(parent_id.as_bytes())?
-            } else {
-                dag.get(parent_id.as_bytes())?
-            };
-            if parent_bytes.is_none() {
-                return Ok(false)
-            }
-
-            let parent: Event = deserialize_async(&parent_bytes.unwrap()).await?;
-            if self.header.layer <= parent.header.layer {
-                return Ok(false)
-            }
-
-            seen.insert(parent_id);
-        }
-
-        Ok(!seen.is_empty())
+        Ok(true)
     }
 
     /// Fully validate an event for the correct layout against provided
@@ -234,11 +186,10 @@ impl Event {
     /// possibility for a time drift.
     pub async fn dag_validate(&self, event_graph: &EventGraph) -> Result<bool> {
         // Grab genesis timestamp
-        let genesis_timestamp = event_graph.current_genesis.read().await.header.timestamp;
+        // let genesis_timestamp = event_graph.current_genesis.read().await.header.timestamp;
 
         // Perform validation
-        self.validate(&event_graph.header_dag, genesis_timestamp, event_graph.days_rotation, None)
-            .await
+        self.validate(&event_graph.header_dag).await
     }
 
     /// Validate a new event for the correct layout and enforce relevant age,
@@ -301,7 +252,7 @@ mod tests {
         let ex = Arc::new(Executor::new());
         let p2p = P2p::new(Settings::default(), ex.clone()).await?;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        EventGraph::new(p2p, sled_db, "/tmp".into(), false, "dag", 1, ex).await
+        EventGraph::new(p2p, sled_db, "/tmp".into(), false, false, "dag", 1, ex).await
     }
 
     #[test]

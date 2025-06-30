@@ -128,7 +128,7 @@ struct Args {
 
     #[structopt(long)]
     // Whether to sync headers only or full sync
-    pub fast_mode: bool,
+    fast_mode: bool,
 
     #[structopt(long)]
     /// IRC Password (Encrypted with bcrypt-2b)
@@ -191,6 +191,9 @@ impl DarkIrc {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
+    if args.fast_mode {
+        info!("fast mode enabled");
+    }
     // Abort the application on panic right away
     std::panic::set_hook(Box::new(panic_hook));
 
@@ -334,6 +337,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
     };
     let replay_mode = args.replay_mode;
+    let fast_mode = args.fast_mode;
 
     info!("Instantiating event DAG");
     let sled_db = match sled::open(datastore.clone()) {
@@ -357,6 +361,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         sled_db.clone(),
         replay_datastore.clone(),
         replay_mode,
+        fast_mode,
         "darkirc_dag",
         1,
         ex.clone(),
