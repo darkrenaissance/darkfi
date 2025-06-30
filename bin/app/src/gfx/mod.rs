@@ -1071,6 +1071,7 @@ pub fn run_gui() {
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
             //blocking_event_loop: true,
+            android_panic_hook: false,
             ..Default::default()
         },
         icon: Some(miniquad::conf::Icon {
