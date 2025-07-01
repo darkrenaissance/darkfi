@@ -395,7 +395,6 @@ impl Drk {
 
             while height <= last_height {
                 let mut buf = vec![format!("Requesting block {height}...")];
-                buf.push(format!("Requesting block {height}..."));
                 let block = match self.get_block_by_height(height).await {
                     Ok(b) => b,
                     Err(e) => {
