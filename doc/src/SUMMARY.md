@@ -81,6 +81,7 @@
 - [DEP 0002: Smart Contract Composability (deprecated)](dep/0002.md)
 - [DEP 0003: Token Mint Authorization (accepted)](dep/0003.md)
 - [DEP 0004: Client wallet WASM modules (draft)](dep/0004.md)
+- [DEP 0006: App Identifier for Version and Verack Messages (draft)](dep/0006.md)
 
 # Specs
 
