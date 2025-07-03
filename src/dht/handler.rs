@@ -29,12 +29,13 @@ use std::{
 
 use super::{ChannelCacheItem, Dht, DhtNode, DhtRouterItem, DhtRouterPtr};
 use crate::{
+    geode::hash_to_string,
     net::{
         connector::Connector,
         session::{Session, SESSION_REFINE, SESSION_SEED},
         ChannelPtr, Message,
     },
-    system::{sleep, timeout::timeout},
+    system::timeout::timeout,
     Error, Result,
 };
 
@@ -65,6 +66,7 @@ pub trait DhtHandler {
 
         self.add_to_router(router.clone(), key, vec![self_node.clone().into()]).await;
         let nodes = self.lookup_nodes(key).await?;
+        info!(target: "dht::DhtHandler::announce()", "Announcing {} to {} nodes", hash_to_string(key), nodes.len());
 
         for node in nodes {
             let channel_res = self.get_channel(&node, None).await;
