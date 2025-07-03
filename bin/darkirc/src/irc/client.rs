@@ -635,7 +635,7 @@ impl Client {
             }
 
             // Format the message
-            let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+            let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
 
             // Send it to the client
             let reply = ReplyType::Client((privmsg.nick.clone(), msg));
@@ -703,7 +703,7 @@ impl Client {
             }
 
             // Format the message
-            let msg = format!("{} {} :{}", command, modmsg.channel, line);
+            let msg = format!("{command} {} :{line}", modmsg.channel);
 
             // Send it to the client
             let reply = ReplyType::Client((String::from("moderator"), msg));
