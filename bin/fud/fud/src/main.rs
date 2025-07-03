@@ -242,19 +242,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::DetachedTaskStopped,
         ex.clone(),
     );
-    let dht_disconnect_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    dht_disconnect_task.clone().start(
-        async move { fud_.disconnect_task().await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht disconnect task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
     let announce_task = StoppableTask::new();
     let fud_ = fud.clone();
     announce_task.clone().start(
@@ -288,7 +275,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "fud", "Stopping DHT tasks");
     dht_channel_task.stop().await;
-    dht_disconnect_task.stop().await;
     announce_task.stop().await;
 
     info!(target: "fud", "Flushing sled database...");
