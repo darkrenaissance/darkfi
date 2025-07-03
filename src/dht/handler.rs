@@ -100,7 +100,6 @@ pub trait DhtHandler {
                 continue;
             }
 
-            sleep(1).await;
             let ping_res = self.ping(channel.clone()).await;
 
             if let Err(e) = ping_res {
@@ -121,22 +120,6 @@ pub trait DhtHandler {
             if !node.addresses.is_empty() {
                 self.add_node(node.clone()).await;
                 let _ = self.on_new_node(&node.clone()).await;
-            }
-        }
-    }
-
-    /// Remove disconnected nodes from the channel cache
-    async fn disconnect_task(&self) -> Result<()> {
-        loop {
-            sleep(15).await;
-
-            let channel_cache_lock = self.dht().channel_cache.clone();
-            let mut channel_cache = channel_cache_lock.write().await;
-            for (channel_id, _) in channel_cache.clone() {
-                let channel = self.dht().p2p.get_channel(channel_id);
-                if channel.is_none() {
-                    channel_cache.remove(&channel_id);
-                }
             }
         }
     }
