@@ -307,6 +307,7 @@ dht = [
     "smol",
 
     "darkfi-serial",
+    "geode",
     "net",
 ]
 
