@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["status_to_colorspec","type_to_colorspec"]};
