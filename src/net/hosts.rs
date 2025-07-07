@@ -1998,7 +1998,7 @@ mod tests {
         let addr = "eweiibe6tdjsdprb4px6rqrzzcsi22m4koia44kc5pcjr7nec2rlxyad.onion:23330";
         host_container.store_or_update(
             HostColor::Grey,
-            Url::parse(&format!("tor://{}", addr)).unwrap(),
+            Url::parse(&format!("tor://{addr}")).unwrap(),
             0,
         );
         let tor_socks5_proxy_url = Url::parse("socks5://127.0.0.1:9050").ok();
