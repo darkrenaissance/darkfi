@@ -63,18 +63,19 @@ macro_rules! impl_p2p_message {
     };
 }
 
-/// Maximum command (message name) length in bytes
+/// Maximum command (message name) length in bytes.
 pub const MAX_COMMAND_LENGTH: u8 = 255;
 
-/// For each message configs a threshold was calculated by taking the maximum number of messages
-/// in a 10 seconds window and multiply it by 2 not to be strict.
+/// For each message configs a threshold was calculated by taking the
+/// maximum number of messages in a 10 seconds window and multiply it
+/// by 2 not to be strict.
 pub const PING_PONG_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
     threshold: 4,
     sleep_step: 1000,
     expiry_time: NanoTimestamp::from_secs(10),
 };
 
-/// Ping-Pong messages fields size
+/// Ping-Pong messages fields size:
 /// * nonce = 2
 pub const PING_PONG_MAX_BYTES: u64 = 2;
 
@@ -100,7 +101,7 @@ pub struct GetAddrsMessage {
     /// also contain addresses without the preferred
     /// transports, so its size will be 2 * max.
     pub max: u32,
-    /// Preferred addresses transports
+    /// Preferred addresses transports.
     pub transports: Vec<String>,
 }
 pub const GET_ADDRS_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
@@ -109,11 +110,11 @@ pub const GET_ADDRS_METERING_CONFIGURATION: MeteringConfiguration = MeteringConf
     expiry_time: NanoTimestamp::from_secs(10),
 };
 
-/// GetAddrs message fields size
+/// GetAddrs message fields size:
 /// * max = 4
 /// * transports = 1 (vec_len) + 4 + 4 + 4 + 4 + 4 + 8 + 8 + 8 + 8 = 53
 ///
-/// Transports is list of all transports to be shared specified in protocol_address
+/// Transports is list of all transports to be shared specified in protocol_address.
 pub const GET_ADDRS_MAX_BYTES: u64 = 57;
 
 impl_p2p_message!(
@@ -135,10 +136,10 @@ pub const ADDRS_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfigur
     expiry_time: NanoTimestamp::from_secs(10),
 };
 
-/// Addrs message fields size
+/// Addrs message fields size:
 /// * addrs = 1 (vec_len) + (u8::MAX * 2) * 128
 ///
-/// Url type is estimated to be max 128 bytes here and for other message below
+/// Url type is estimated to be max 128 bytes here and for other message below.
 pub const ADDRS_MAX_BYTES: u64 = 65281;
 
 impl_p2p_message!(AddrsMessage, "addr", ADDRS_MAX_BYTES, 1, ADDRS_METERING_CONFIGURATION);
@@ -148,7 +149,7 @@ impl_p2p_message!(AddrsMessage, "addr", ADDRS_MAX_BYTES, 1, ADDRS_METERING_CONFI
 pub struct VersionMessage {
     /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
-    /// Identifies protocol version being used by the node
+    /// Identifies protocol version being used by the node.
     pub version: semver::Version,
     /// UNIX timestamp of when the VersionMessage was created.
     pub timestamp: u64,
@@ -162,7 +163,7 @@ pub struct VersionMessage {
     /// otherwise).
     pub ext_send_addr: Vec<Url>,
     /// List of features consisting of a tuple of (services, version)
-    /// to be enabled for this connection
+    /// to be enabled for this connection.
     pub features: Vec<(String, u32)>,
 }
 pub const VERSION_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
@@ -171,7 +172,7 @@ pub const VERSION_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfig
     expiry_time: NanoTimestamp::from_secs(10),
 };
 
-/// Version message fields size
+/// Version message fields size:
 /// * node_id = 8  (this will be empty most of the time)
 /// * version = 128 (look at VerackMessage for the reasoning)
 /// * timestamp = 8
@@ -207,10 +208,10 @@ pub const VERACK_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfigu
     expiry_time: NanoTimestamp::from_secs(10),
 };
 
-/// Verack message fields size
+/// Verack message fields size:
 /// * app_version = 24 (major = 8, minor = 8, patch = 8) + 52 (prerelease =  1(str_len) + 51(str)) + 52 (build = 1(str_len) + 51(str))
 ///
-/// Prerelease and build strings are variable length but shouldn't be larger than 102 bytes
+/// Prerelease and build strings are variable length but shouldn't be larger than 102 bytes.
 pub const VERACK_MAX_BYTES: u64 = 128;
 
 impl_p2p_message!(VerackMessage, "verack", VERACK_MAX_BYTES, 1, VERACK_METERING_CONFIGURATION);

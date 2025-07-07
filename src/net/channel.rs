@@ -29,7 +29,6 @@ use std::{
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
 };
-
 use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
