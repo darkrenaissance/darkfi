@@ -679,7 +679,7 @@ impl Drk {
         match self.cache.merkle_trees.get(SLED_MERKLE_TREES_MONEY)? {
             Some(tree_bytes) => Ok(deserialize_async(&tree_bytes).await?),
             None => {
-                let mut tree = MerkleTree::new(1);
+                let mut tree = MerkleTree::new(u32::MAX as usize);
                 tree.append(MerkleNode::from(pallas::Base::ZERO));
                 let _ = tree.mark().unwrap();
                 Ok(tree)
@@ -772,21 +772,20 @@ impl Drk {
 
     /// Auxiliary function to handle coins with their notes from a
     /// transaction money call.
-    /// Returns a flag indicating if the money tree should be updated,
-    /// along with found own coins.
+    /// Returns our found own coins.
     fn handle_money_call_coins(
         &self,
         tree: &mut MerkleTree,
         secrets: &[SecretKey],
         messages_buffer: &mut Vec<String>,
         coins: &[(Coin, AeadEncryptedNote)],
-    ) -> (bool, Vec<OwnCoin>) {
+    ) -> Vec<OwnCoin> {
         // Keep track of our own coins found in the vec
         let mut owncoins = vec![];
 
         // Check if provided coins vec is empty
         if coins.is_empty() {
-            return (false, owncoins)
+            return owncoins
         }
 
         // Handle provided coins vector and grab our own
@@ -809,7 +808,7 @@ impl Drk {
             }
         }
 
-        (true, owncoins)
+        owncoins
     }
 
     /// Auxiliary function to handle own coins from a transaction money
@@ -943,8 +942,8 @@ impl Drk {
 
     /// Append data related to Money contract transactions into the
     /// wallet database and update the provided scan cache.
-    /// Returns a flag indicating if the money tree should be updated
-    /// and one indicating if provided data refer to our own wallet.
+    /// Returns a flag indicating if provided data refer to our own
+    /// wallet.
     pub async fn apply_tx_money_data(
         &self,
         scan_cache: &mut ScanCache,
@@ -952,13 +951,13 @@ impl Drk {
         calls: &[DarkLeaf<ContractCall>],
         tx_hash: &String,
         block_height: &u32,
-    ) -> Result<(bool, bool)> {
+    ) -> Result<bool> {
         // Parse the call
         let (nullifiers, coins, freezes) =
             self.parse_money_call(scan_cache, call_idx, calls).await?;
 
         // Parse call coins and grab our own
-        let (update_tree, owncoins) = self.handle_money_call_coins(
+        let owncoins = self.handle_money_call_coins(
             &mut scan_cache.money_tree,
             &scan_cache.notes_secrets,
             &mut scan_cache.messages_buffer,
@@ -988,10 +987,7 @@ impl Drk {
             kaching().await;
         }
 
-        Ok((
-            update_tree || wallet_spent_coins,
-            wallet_spent_coins || !owncoins.is_empty() || wallet_freezes,
-        ))
+        Ok(wallet_spent_coins || !owncoins.is_empty() || wallet_freezes)
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.

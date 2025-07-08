@@ -20,7 +20,9 @@ use darkfi_serial::deserialize;
 
 use crate::{
     cache::CacheOverlay,
+    dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
+    money::SLED_MERKLE_TREES_MONEY,
     Drk,
 };
 
@@ -98,7 +100,11 @@ impl Drk {
 
     /// Reset state to provided block height.
     /// If genesis block height(0) was provided, perform a full reset.
-    pub fn reset_to_height(&self, height: u32, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_to_height(
+        &self,
+        height: u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
         output.push(format!("Resetting wallet state to block: {height}"));
 
         // If genesis block height(0) was provided,
@@ -117,6 +123,22 @@ impl Drk {
             ));
             return Ok(())
         }
+
+        // Grab our current merkle trees
+        let mut money_tree = match self.get_money_tree().await {
+            Ok(t) => t,
+            Err(e) => {
+                output.push(format!("[reset_to_height] Money merkle tree retrieval failed: {e}"));
+                return Err(WalletDbError::GenericError)
+            }
+        };
+        let (mut dao_daos_tree, mut dao_proposals_tree) = match self.get_dao_trees().await {
+            Ok(p) => p,
+            Err(e) => {
+                output.push(format!("[reset_to_height] DAO merkle trees retrieval failed: {e}"));
+                return Err(WalletDbError::GenericError)
+            }
+        };
 
         // Create an overlay to apply the reverse diffs
         let mut overlay = match CacheOverlay::new(&self.cache) {
@@ -159,6 +181,19 @@ impl Drk {
                 ));
                 return Err(WalletDbError::GenericError)
             }
+
+            // Rewind and update the merkle trees
+            money_tree.checkpoint(height as usize);
+            dao_daos_tree.checkpoint(height as usize);
+            dao_proposals_tree.checkpoint(height as usize);
+            if let Err(e) = self.cache.insert_merkle_trees(&[
+                (SLED_MERKLE_TREES_MONEY, &money_tree),
+                (SLED_MERKLE_TREES_DAO_DAOS, &dao_daos_tree),
+                (SLED_MERKLE_TREES_DAO_PROPOSALS, &dao_proposals_tree),
+            ]) {
+                output.push(format!("[reset_to_height] Updating merkle trees failed: {e}"));
+                return Err(WalletDbError::GenericError)
+            };
 
             // Flush sled
             if let Err(e) = self.cache.sled_db.flush() {

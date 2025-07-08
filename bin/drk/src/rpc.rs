@@ -147,11 +147,7 @@ impl Drk {
     /// `scan_block` will go over over transactions in a block and handle their calls
     /// based on the called contract.
     async fn scan_block(&self, scan_cache: &mut ScanCache, block: &BlockInfo) -> Result<()> {
-        // Keep track of the trees we need to update and our wallet
-        // transactions.
-        let mut update_money_tree = false;
-        let mut update_dao_daos_tree = false;
-        let mut update_dao_proposals_tree = false;
+        // Keep track of our wallet transactions.
         let mut wallet_txs = vec![];
 
         // Scan the block
@@ -167,7 +163,7 @@ impl Drk {
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     scan_cache.log(format!("[scan_block] Found Money contract in call {i}"));
-                    let (update_tree, own_tx) = self
+                    if self
                         .apply_tx_money_data(
                             scan_cache,
                             &i,
@@ -175,11 +171,8 @@ impl Drk {
                             &tx_hash_string,
                             &block.header.height,
                         )
-                        .await?;
-                    if update_tree {
-                        update_money_tree = true;
-                    }
-                    if own_tx {
+                        .await?
+                    {
                         wallet_tx = true;
                     }
                     continue
@@ -187,7 +180,7 @@ impl Drk {
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
                     scan_cache.log(format!("[scan_block] Found DAO contract in call {i}"));
-                    let (update_daos_tree, update_proposals_tree, own_tx) = self
+                    if self
                         .apply_tx_dao_data(
                             scan_cache,
                             &call.data.data,
@@ -195,14 +188,8 @@ impl Drk {
                             &(i as u8),
                             &block.header.height,
                         )
-                        .await?;
-                    if update_daos_tree {
-                        update_dao_daos_tree = true;
-                    }
-                    if update_proposals_tree {
-                        update_dao_proposals_tree = true;
-                    }
-                    if own_tx {
+                        .await?
+                    {
                         wallet_tx = true;
                     }
                     continue
@@ -225,32 +212,6 @@ impl Drk {
             }
         }
 
-        // Update money merkle tree, if needed
-        if update_money_tree {
-            scan_cache
-                .money_smt
-                .store
-                .overlay
-                .insert_merkle_tree(SLED_MERKLE_TREES_MONEY, &scan_cache.money_tree)?;
-        }
-
-        // Update dao daos merkle tree, if needed
-        if update_dao_daos_tree {
-            scan_cache
-                .money_smt
-                .store
-                .overlay
-                .insert_merkle_tree(SLED_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree)?;
-        }
-
-        // Update dao proposals merkle tree, if needed
-        if update_dao_proposals_tree {
-            scan_cache.money_smt.store.overlay.insert_merkle_tree(
-                SLED_MERKLE_TREES_DAO_PROPOSALS,
-                &scan_cache.dao_proposals_tree,
-            )?;
-        }
-
         // Insert the block record
         scan_cache
             .money_smt
@@ -266,6 +227,16 @@ impl Drk {
 
         // Insert the state inverse diff record
         self.cache.insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
+
+        // Checkpoint and update the merkle trees
+        scan_cache.money_tree.checkpoint(block.header.height as usize);
+        scan_cache.dao_daos_tree.checkpoint(block.header.height as usize);
+        scan_cache.dao_proposals_tree.checkpoint(block.header.height as usize);
+        self.cache.insert_merkle_trees(&[
+            (SLED_MERKLE_TREES_MONEY, &scan_cache.money_tree),
+            (SLED_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree),
+            (SLED_MERKLE_TREES_DAO_PROPOSALS, &scan_cache.dao_proposals_tree),
+        ])?;
 
         // Flush sled
         self.cache.sled_db.flush()?;
@@ -341,7 +312,7 @@ impl Drk {
 
                 // Reset to its height
                 buf.push(format!("Last common block found: {height} - {scanned_block_hash}"));
-                self.reset_to_height(height, &mut buf)?;
+                self.reset_to_height(height, &mut buf).await?;
                 append_or_print(output, sender, print, buf).await;
                 break
             }
@@ -720,7 +691,8 @@ pub async fn subscribe_blocks(
                     let lock = drk.read().await;
                     if block.header.height <= last_scanned_height {
                         let reset_height = block.header.height.saturating_sub(1);
-                        if let Err(e) = lock.reset_to_height(reset_height, &mut shell_message) {
+                        if let Err(e) = lock.reset_to_height(reset_height, &mut shell_message).await
+                        {
                             shell_sender.send(shell_message).await?;
                             break 'outer Error::Custom(format!(
                                 "[subscribe_blocks] Wallet state reset failed: {e}"

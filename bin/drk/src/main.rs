@@ -2019,7 +2019,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             if let Some(height) = reset {
                 let mut buf = vec![];
-                if let Err(e) = drk.reset_to_height(height, &mut buf) {
+                if let Err(e) = drk.reset_to_height(height, &mut buf).await {
                     print_output(&buf);
                     eprintln!("Failed during wallet reset: {e}");
                     exit(2);
