@@ -927,11 +927,11 @@ impl Drk {
     pub async fn get_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
         let daos_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_DAOS)? {
             Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
-            None => MerkleTree::new(1),
+            None => MerkleTree::new(u32::MAX as usize),
         };
         let proposals_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_PROPOSALS)? {
             Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
-            None => MerkleTree::new(1),
+            None => MerkleTree::new(u32::MAX as usize),
         };
         Ok((daos_tree, proposals_tree))
     }
@@ -1406,9 +1406,7 @@ impl Drk {
 
     /// Append data related to DAO contract transactions into the
     /// wallet database and update the provided scan cache.
-    /// Returns a flag indicating if the daos tree should be updated,
-    /// one indicating if the proposals tree should be updated and
-    /// another one indicating if provided data refer to our own
+    /// Returns a flag indicating if provided data refer to our own
     /// wallet.
     pub async fn apply_tx_dao_data(
         &self,
@@ -1417,51 +1415,42 @@ impl Drk {
         tx_hash: &TransactionHash,
         call_idx: &u8,
         block_height: &u32,
-    ) -> Result<(bool, bool, bool)> {
+    ) -> Result<bool> {
         // Run through the transaction call data and see what we got:
         match DaoFunction::try_from(data[0])? {
             DaoFunction::Mint => {
                 scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Mint call"));
                 let params: DaoMintParams = deserialize_async(&data[1..]).await?;
-                let own_tx = self
-                    .apply_dao_mint_data(
-                        scan_cache,
-                        &params.dao_bulla,
-                        tx_hash,
-                        call_idx,
-                        block_height,
-                    )
-                    .await?;
-                Ok((true, false, own_tx))
+                self.apply_dao_mint_data(
+                    scan_cache,
+                    &params.dao_bulla,
+                    tx_hash,
+                    call_idx,
+                    block_height,
+                )
+                .await
             }
             DaoFunction::Propose => {
                 scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Propose call"));
                 let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
-                let own_tx = self
-                    .apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx, block_height)
-                    .await?;
-                Ok((false, true, own_tx))
+                self.apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx, block_height)
+                    .await
             }
             DaoFunction::Vote => {
                 scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Vote call"));
                 let params: DaoVoteParams = deserialize_async(&data[1..]).await?;
-                let own_tx = self
-                    .apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx, block_height)
-                    .await?;
-                Ok((false, false, own_tx))
+                self.apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx, block_height).await
             }
             DaoFunction::Exec => {
                 scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Exec call"));
                 let params: DaoExecParams = deserialize_async(&data[1..]).await?;
-                let own_tx =
-                    self.apply_dao_exec_data(scan_cache, &params, tx_hash, block_height).await?;
-                Ok((false, false, own_tx))
+                self.apply_dao_exec_data(scan_cache, &params, tx_hash, block_height).await
             }
             DaoFunction::AuthMoneyTransfer => {
                 scan_cache
                     .log(String::from("[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call"));
                 // Does nothing, just verifies the other calls are correct
-                Ok((false, false, false))
+                Ok(false)
             }
         }
     }

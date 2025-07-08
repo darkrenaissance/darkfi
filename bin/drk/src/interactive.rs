@@ -2446,7 +2446,7 @@ async fn handle_scan(
         };
 
         let mut buf = vec![];
-        if let Err(e) = lock.reset_to_height(height, &mut buf) {
+        if let Err(e) = lock.reset_to_height(height, &mut buf).await {
             buf.push(format!("Failed during wallet reset: {e}"));
             append_or_print(output, None, print, buf).await;
             return
@@ -2995,7 +2995,7 @@ async fn handle_token_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     };
 
     // Parse command
-    let mut index = 4;
+    let mut index = 5;
     let spend_hook = if index < parts.len() {
         match FuncId::from_str(parts[index]) {
             Ok(s) => Some(s),

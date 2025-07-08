@@ -80,6 +80,18 @@ impl Cache {
         })
     }
 
+    /// Execute an atomic sled batch corresponding to inserts to the
+    /// merkle trees tree. For each record, the bytes slice is used as
+    /// the key, and the serialized merkle tree is used as value.
+    pub fn insert_merkle_trees(&self, trees: &[(&[u8], &MerkleTree)]) -> Result<()> {
+        let mut batch = sled::Batch::default();
+        for (key, tree) in trees {
+            batch.insert(*key, serialize(*tree));
+        }
+        self.merkle_trees.apply_batch(batch)?;
+        Ok(())
+    }
+
     /// Insert a `u32` and a block inverse diff into store's inverse
     /// diffs tree. The block height is used as the key, and the
     /// serialized database inverse diff is used as value.
@@ -136,14 +148,6 @@ impl CacheOverlay {
             &height.to_be_bytes(),
             &serialize(&hash.to_string()),
         )?;
-        Ok(())
-    }
-
-    /// Insert a bytes slice and a merkle tree into overlay's merkle
-    /// trees tree. The provided bytes slice is used as the key, and
-    /// the serialized merkle tree is used as value.
-    pub fn insert_merkle_tree(&mut self, key: &[u8], tree: &MerkleTree) -> Result<()> {
-        self.0.insert(SLED_MERKLE_TREES_TREE, key, &serialize(tree))?;
         Ok(())
     }
 }
