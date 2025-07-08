@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AEAD_TAG_SIZE"],"struct":["AeadEncryptedNote","ElGamalEncryptedNote"]};
