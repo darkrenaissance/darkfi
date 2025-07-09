@@ -54,7 +54,7 @@ use darkfi::{
 };
 use darkfi_serial::deserialize_async;
 
-use crate::{error::handle_database_error, service::ExplorerService, Explorerd};
+use crate::{service::ExplorerService, Explorerd};
 
 impl ExplorerService {
     /// Synchronizes blocks between the explorer and a Darkfi blockchain node, ensuring
@@ -70,11 +70,9 @@ impl ExplorerService {
     pub async fn sync_blocks(&self, reset: bool) -> darkfi::Result<()> {
         // Grab last synced block height from the explorer's database.
         let last_synced_block = self.last_block().map_err(|e| {
-            handle_database_error(
-                "rpc_blocks::sync_blocks",
-                "[sync_blocks] Retrieving last synced block failed",
-                e,
-            )
+            let error_message = format!("[sync_blocks] Retrieving last synced block failed: {e:?}");
+            error!(target: "explorerd::rpc_blocks::sync_blocks", "{}", error_message);
+            Error::DatabaseError(error_message)
         })?;
 
         // Grab the last confirmed block height and hash from the darkfi node
@@ -136,21 +134,17 @@ impl ExplorerService {
             let block = match self.darkfid_client.get_block_by_height(current_height).await {
                 Ok(r) => r,
                 Err(e) => {
-                    return Err(handle_database_error(
-                        "rpc_blocks::sync_blocks",
-                        "[sync_blocks] RPC client request failed",
-                        e,
-                    ))
+                    let error_message = format!("[sync_blocks] RPC client request failed: {e:?}");
+                    error!(target: "explorerd::rpc_blocks::sync_blocks", "{}", error_message);
+                    return Err(Error::DatabaseError(error_message))
                 }
             };
 
             // Store the retrieved block in the explorer's database
             if let Err(e) = self.put_block(&block).await {
-                return Err(handle_database_error(
-                    "rpc_blocks::sync_blocks",
-                    "[sync_blocks] Put block failed",
-                    e,
-                ));
+                let error_message = format!("[sync_blocks] Put block failed: {e:?}");
+                error!(target: "explorerd::rpc_blocks::sync_blocks", "{}", error_message);
+                return Err(Error::DatabaseError(error_message))
             };
 
             debug!(
@@ -233,11 +227,10 @@ impl ExplorerService {
                     // Continue searching for blocks that do not exist on darkfi nodes
                     Err(Error::JsonRpcError((-32121, _))) => (),
                     Err(e) => {
-                        return Err(handle_database_error(
-                            "rpc_blocks::process_sync_blocks_reorg",
-                            "[process_sync_blocks_reorg] RPC client request failed",
-                            e,
-                        ))
+                        let error_message =
+                            format!("[process_sync_blocks_reorg] RPC client request failed: {e:?}");
+                        error!(target: "explorerd::rpc_blocks::process_sync_blocks_reorg", "{}", error_message);
+                        return Err(Error::DatabaseError(error_message))
                     }
                 }
             }

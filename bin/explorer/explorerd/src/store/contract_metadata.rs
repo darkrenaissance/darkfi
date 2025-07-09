@@ -309,10 +309,12 @@ impl ContractMetadataStoreOverlay {
 #[cfg(test)]
 ///  This test module verifies the correct insertion and retrieval of contract metadata and source code.
 mod tests {
-    use super::*;
-    use crate::test_utils::init_logger;
+    use darkfi::util::logger::{setup_test_logger, Level};
     use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
     use sled_overlay::sled::Config;
+    use tracing::warn;
+
+    use super::*;
 
     // Test source paths data
     const TEST_SOURCE_PATHS: &[&str] = &["test/source1.rs", "test/source2.rs"];
@@ -411,7 +413,18 @@ mod tests {
     /// and returning an initialized [`ContractMetaStore`].
     fn setup() -> Result<ContractMetaStore> {
         // Initialize logger to show execution output
-        init_logger(simplelog::LevelFilter::Off, vec!["sled", "runtime", "net"]);
+        if setup_test_logger(
+            &["sled", "runtime", "net"],
+            false,
+            Level::Info,
+            //Level::Verbose,
+            //Level::Debug,
+            //Level::Trace
+        )
+        .is_err()
+        {
+            warn!("Logger already initialized");
+        }
 
         // Initialize an in-memory sled db instance
         let db = Config::new().temporary(true).open()?;

@@ -22,11 +22,15 @@ use lazy_static::lazy_static;
 use smol::Executor;
 use tempdir::TempDir;
 use tinyjson::JsonValue;
+use tracing::warn;
 use url::Url;
 
-use darkfi::rpc::{
-    jsonrpc::{ErrorCode, JsonRequest, JsonResult},
-    server::RequestHandler,
+use darkfi::{
+    rpc::{
+        jsonrpc::{ErrorCode, JsonRequest, JsonResult},
+        server::RequestHandler,
+    },
+    util::logger::{setup_test_logger, Level},
 };
 
 use crate::Explorerd;
@@ -34,34 +38,6 @@ use crate::Explorerd;
 // Defines a global `Explorerd` instance shared across all tests
 lazy_static! {
     static ref EXPLORERD_INSTANCE: Mutex<Option<Arc<Explorerd>>> = Mutex::new(None);
-}
-
-/// Initializes logging for test cases, which is useful for debugging issues encountered during testing.
-/// The logger is configured based on the provided list of targets to ignore and the desired log level.
-#[cfg(test)]
-pub fn init_logger(log_level: simplelog::LevelFilter, ignore_targets: Vec<&str>) {
-    let mut cfg = simplelog::ConfigBuilder::new();
-
-    // Add targets to ignore
-    for target in ignore_targets {
-        cfg.add_filter_ignore(target.to_string());
-    }
-
-    // Set log level
-    cfg.set_target_level(log_level);
-
-    // initialize the logger
-    if simplelog::TermLogger::init(
-        log_level,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
-    )
-    .is_err()
-    {
-        // Print an error message if logger failed to initialize
-        eprintln!("Logger failed to initialize");
-    }
 }
 
 #[cfg(test)]
@@ -72,7 +48,18 @@ pub fn setup() -> Arc<Explorerd> {
 
     if instance.is_none() {
         // Initialize logger for the first time
-        init_logger(simplelog::LevelFilter::Off, vec!["sled", "runtime", "net"]);
+        if setup_test_logger(
+            &["sled", "runtime", "net"],
+            false,
+            Level::Info,
+            //Level::Verbose,
+            //Level::Debug,
+            //Level::Trace
+        )
+        .is_err()
+        {
+            warn!("Logger already initialized");
+        }
 
         // Prepare parameters for Explorerd::new
         let temp_dir = TempDir::new("explorerd").expect("Failed to create temp dir");

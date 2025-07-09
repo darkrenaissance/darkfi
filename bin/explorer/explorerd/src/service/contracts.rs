@@ -318,14 +318,17 @@ pub fn untar_source(tar_bytes: &[u8]) -> Result<Vec<ContractSourceFile>> {
 mod tests {
     use std::{fs::File, io::Read, path::Path, sync::Arc};
 
+    use darkfi::{
+        util::logger::{setup_test_logger, Level},
+        Error::Custom,
+    };
+    use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
     use tar::Archive;
     use tempdir::TempDir;
-
-    use darkfi::Error::Custom;
-    use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
+    use tracing::warn;
 
     use super::*;
-    use crate::{rpc::DarkfidRpcClient, test_utils::init_logger};
+    use crate::rpc::DarkfidRpcClient;
 
     /// Tests the adding of [`ContractMetaData`] to the store by adding
     /// metadata, and verifying the inserted data matches the expected results.
@@ -460,7 +463,18 @@ mod tests {
     /// and returning an initialized [`ExplorerService`].
     fn setup() -> Result<ExplorerService> {
         // Initialize logger to show execution output
-        init_logger(simplelog::LevelFilter::Off, vec!["sled", "runtime", "net"]);
+        if setup_test_logger(
+            &["sled", "runtime", "net"],
+            false,
+            Level::Info,
+            //Level::Verbose,
+            //Level::Debug,
+            //Level::Trace,
+        )
+        .is_err()
+        {
+            warn!("Logger already initialized");
+        }
 
         // Create a temporary directory for sled DB
         let temp_dir = TempDir::new("test")?;

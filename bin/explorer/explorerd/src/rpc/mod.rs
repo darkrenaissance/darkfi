@@ -314,13 +314,10 @@ impl Explorerd {
 }
 
 /// Auxiliary function that logs RPC request failures by generating a structured log message
-/// containing the provided `req_method`, `params`, and `error` details. Constructs a log target
-/// specific to the request method, formats the error message by stringifying the JSON parameters
-/// and error, and performs the log operation without returning a value.
+/// containing the provided `req_method`, `params`, and `error` details.
+/// Formats the error message by stringifying the JSON parameters and error,
+/// and performs the log operation without returning a value.
 fn log_request_failure(req_method: &str, params: &JsonValue, error: &JsonError) {
-    // Generate the log target based on request
-    let log_target = format!("explorerd::rpc::handle_request::{req_method}");
-
     // Stringify the params
     let params_stringified = match params.stringify() {
         Ok(params) => params,
@@ -337,7 +334,7 @@ fn log_request_failure(req_method: &str, params: &JsonValue, error: &JsonError) 
     let error_message = format!("RPC Request Failure: method: {req_method}, params: {params_stringified}, error: {error_stringified}");
 
     // Log the error
-    error!(target: &log_target, "{error_message}");
+    error!(target: "explorerd::rpc::handle_request", "{error_message}");
 }
 
 /// Test module for validating API functions within this `mod.rs` file. It ensures that the core API

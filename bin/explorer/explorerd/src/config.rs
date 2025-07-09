@@ -221,9 +221,10 @@ impl FromStr for ExplorerNetworkConfig {
 mod tests {
     use std::path::Path;
 
-    use super::*;
+    use darkfi::util::logger::{setup_test_logger, Level};
+    use tracing::warn;
 
-    use crate::test_utils::init_logger;
+    use super::*;
 
     /// Validates the functionality of initializing and interacting with `ExplorerConfig`
     /// loaded from a TOML file, ensuring correctness of the network-specific configurations.
@@ -254,7 +255,18 @@ mod tests {
             ),
         ];
 
-        init_logger(simplelog::LevelFilter::Info, vec!["sled", "runtime", "net"]);
+        if setup_test_logger(
+            &["sled", "runtime", "net"],
+            false,
+            Level::Info,
+            //Level::Verbose,
+            //Level::Debug,
+            //Level::Trace,
+        )
+        .is_err()
+        {
+            warn!("Logger already initialized");
+        }
 
         // Ensure the configuration file exists
         assert!(Path::new(CONFIG_PATH).exists());

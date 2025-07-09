@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt, sync::Arc};
+use std::sync::Arc;
 
 use tracing::error;
 
@@ -81,13 +81,4 @@ pub fn server_error(e: &ExplorerdError, id: u16, msg: Option<&str>) -> JsonError
     let message = msg.unwrap_or(&default_msg).to_string();
 
     JsonError::new(ErrorCode::ServerError(code), Some(message), id)
-}
-
-/// Logs and converts a database error into a [`DatabaseError`].
-/// This function ensures the error is logged contextually before being returned.
-pub fn handle_database_error(target: &str, message: &str, error: impl fmt::Debug) -> Error {
-    let error_message = format!("{message}: {error:?}");
-    let formatted_target = format!("explorerd::{target}");
-    error!(target: &formatted_target, "{error_message}");
-    Error::DatabaseError(error_message)
 }

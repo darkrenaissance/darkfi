@@ -863,16 +863,19 @@ impl GasMetricsKeySource for &str {
 /// This test module verifies the correct insertion, retrieval, and reset of metrics in the store.
 /// It covers adding metrics, searching metrics by time and transaction hash, and resetting metrics with specified heights.
 mod tests {
-
-    use darkfi::util::time::DateTime;
     use std::{
         str::FromStr,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
+
+    use darkfi::util::{
+        logger::{setup_test_logger, Level},
+        time::DateTime,
+    };
     use structopt::lazy_static::lazy_static;
+    use tracing::warn;
 
     use super::*;
-    use crate::test_utils::init_logger;
 
     /// Number of heights to simulate.
     const HEIGHT: u32 = 10;
@@ -1202,7 +1205,18 @@ mod tests {
     /// creating a temporary database, and returning an initialized metrics store.
     fn setup() -> Result<MetricsStore> {
         // Initialize logger to show execution output
-        init_logger(simplelog::LevelFilter::Off, vec!["sled", "runtime", "net"]);
+        if setup_test_logger(
+            &["sled", "runtime", "net"],
+            false,
+            Level::Info,
+            //Level::Verbose,
+            //Level::Debug,
+            //Level::Trace,
+        )
+        .is_err()
+        {
+            warn!("Logger already initialized");
+        }
 
         // Create a temporary directory for the sled database
         let db =
