@@ -21,6 +21,7 @@ use std::sync::Arc;
 use darkfi::{
     net::Settings,
     rpc::settings::RpcSettings,
+    util::logger::{setup_test_logger, Level},
     validator::{consensus::Fork, utils::best_fork_index, verification::verify_block},
     Result,
 };
@@ -28,6 +29,7 @@ use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
 use smol::Executor;
+use tracing::warn;
 use url::Url;
 
 mod harness;
@@ -223,22 +225,19 @@ fn sync_blocks() -> Result<()> {
 /// First we initialize a daemon, start it and then perform
 /// couple of restarts to verify everything works as expected.
 fn darkfid_programmatic_control() -> Result<()> {
-    // Initialize logger
-    let mut cfg = simplelog::ConfigBuilder::new();
-
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
-    if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
+    if setup_test_logger(
+        &[],
+        false,
+        Level::Info,
+        //Level::Verbose,
+        //Level::Debug,
+        //Level::Trace
     )
     .is_err()
     {
-        log::debug!(target: "darkfid_programmatic_control", "Logger initialized");
+        warn!(target: "darkfid_programmatic_control", "Logger already initialized");
     }
 
     // Create an executor and communication signals
