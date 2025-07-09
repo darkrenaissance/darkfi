@@ -155,7 +155,11 @@ impl Minerd {
 }
 
 #[cfg(test)]
-use url::Url;
+use {
+    darkfi::util::logger::{setup_test_logger, Level},
+    tracing::warn,
+    url::Url,
+};
 
 #[test]
 /// Test the programmatic control of `Minerd`.
@@ -163,22 +167,19 @@ use url::Url;
 /// First we initialize a daemon, start it and then perform
 /// couple of restarts to verify everything works as expected.
 fn minerd_programmatic_control() -> Result<()> {
-    // Initialize logger
-    let mut cfg = simplelog::ConfigBuilder::new();
-
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
-    if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
+    if setup_test_logger(
+        &[],
+        false,
+        Level::Info,
+        //Level::Verbose,
+        //Level::Debug,
+        //Level::Trace,
     )
     .is_err()
     {
-        log::debug!(target: "minerd_programmatic_control", "Logger initialized");
+        warn!(target: "minerd_programmatic_control", "Logger already initialized");
     }
 
     // Daemon configuration
