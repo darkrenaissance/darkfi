@@ -17,7 +17,7 @@ wasmparser = "0.236.0"
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
 darkfi = { path = "../../../", features = ["zk"], optional = true }
-log = { version = "0.4.27", optional = true }
+tracing = { version = "0.1.41", optional = true }
 rand = { version = "0.8.5", optional = true }
 
 # These are used for integration tests
@@ -39,7 +39,7 @@ client = [
     "darkfi-sdk/async",
     "darkfi-serial/async",
 
-    "log",
+    "tracing",
     "rand",
 ]
 

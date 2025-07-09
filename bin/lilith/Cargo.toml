@@ -14,7 +14,7 @@ darkfi = {path = "../../", features = ["toml", "async-daemonize", "rpc"]}
 # Misc
 async-trait = "0.1.88"
 futures = "0.3.31"
-log = "0.4.27"
+tracing = "0.1.41"
 semver = "1.0.26"
 tinyjson = "2.5.1"
 toml = "0.9.5"
@@ -24,7 +24,8 @@ url = "2.5.4"
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-simplelog = "0.12.2"
+tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.3"
 smol = "2.0.2"
 
 # Argument parsing

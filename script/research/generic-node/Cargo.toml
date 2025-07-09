@@ -16,10 +16,11 @@ rand = "0.8.5"
 
 # Daemon
 easy-parallel = "3.3.1"
-log = "0.4.27"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.3"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing

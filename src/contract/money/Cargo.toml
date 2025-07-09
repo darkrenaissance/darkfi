@@ -20,7 +20,7 @@ thiserror = "2.0.12"
 darkfi = { path = "../../../", features = ["zk"], optional = true }
 chacha20poly1305 = { version = "0.10.1", optional = true }
 halo2_proofs = { version = "0.3.1", optional = true }
-log = { version = "0.4.27", optional = true }
+tracing = { version = "0.1.41", optional = true }
 rand = { version = "0.8.5", optional = true }
 
 # Misc
@@ -46,7 +46,7 @@ client = [
 
     "rand",
     "chacha20poly1305",
-    "log",
+    "tracing",
     "halo2_proofs",
 ]
 

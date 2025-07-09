@@ -1576,6 +1576,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1782,8 +1791,8 @@ dependencies = [
  "httparse",
  "lazy_static",
  "libc",
- "log",
  "monero",
+ "nu-ansi-term",
  "num-bigint",
  "pin-project-lite",
  "plotters",
@@ -1795,7 +1804,6 @@ dependencies = [
  "rustls-pemfile",
  "semver",
  "serde",
- "simplelog",
  "sled-overlay",
  "smol",
  "socket2",
@@ -1811,6 +1819,9 @@ dependencies = [
  "tor-hsservice",
  "tor-proto",
  "tor-rtcompat",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
  "wasmer",
  "wasmer-compiler-singlepass",
@@ -1829,11 +1840,11 @@ dependencies = [
  "darkfi_dao_contract",
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
- "log",
  "num-bigint",
  "rand 0.8.5",
- "simplelog",
  "sled-overlay",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1929,10 +1940,10 @@ dependencies = [
  "darkfi_money_contract",
  "getrandom 0.2.16",
  "halo2_proofs",
- "log",
  "rand 0.8.5",
  "smol",
  "thiserror 2.0.12",
+ "tracing",
 ]
 
 [[package]]
@@ -1944,10 +1955,10 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom 0.2.16",
- "log",
  "rand 0.8.5",
  "smol",
  "thiserror 2.0.12",
+ "tracing",
  "wasmparser 0.236.0",
 ]
 
@@ -1965,10 +1976,10 @@ dependencies = [
  "getrandom 0.2.16",
  "halo2_proofs",
  "lazy_static",
- "log",
  "rand 0.8.5",
  "smol",
  "thiserror 2.0.12",
+ "tracing",
 ]
 
 [[package]]
@@ -1984,19 +1995,20 @@ dependencies = [
  "darkfi-serial",
  "darkfi_money_contract",
  "easy-parallel",
- "log",
  "num-bigint",
  "rand 0.8.5",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
  "tinyjson",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -2016,7 +2028,6 @@ dependencies = [
  "futures",
  "futures-rustls",
  "libc",
- "log",
  "openssl",
  "rand 0.8.5",
  "rusqlite",
@@ -2025,12 +2036,14 @@ dependencies = [
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -2173,14 +2186,15 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
- "log",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -2471,7 +2485,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "linenoise-rs",
- "log",
  "num-bigint",
  "prettytable-rs",
  "rand 0.8.5",
@@ -2480,12 +2493,14 @@ dependencies = [
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -2763,11 +2778,9 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "lazy_static",
- "log",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
@@ -2777,6 +2790,9 @@ dependencies = [
  "thiserror 2.0.12",
  "tinyjson",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -3050,10 +3066,10 @@ dependencies = [
  "clap 4.5.42",
  "darkfi",
  "fud",
- "log",
- "simplelog",
  "smol",
  "termcolor",
+ "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -3077,19 +3093,20 @@ dependencies = [
  "easy-parallel",
  "equix",
  "futures",
- "log",
  "num-bigint",
  "rand 0.8.5",
  "serde",
  "sha2",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
  "tinyjson",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -3240,10 +3257,10 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "genevd",
- "log",
- "simplelog",
  "smol",
  "tinyjson",
+ "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -3256,16 +3273,17 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
- "log",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
  "tinyjson",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -4087,17 +4105,18 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
- "log",
  "semver",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
  "tinyjson",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -4234,16 +4253,17 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
- "log",
  "num-bigint",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
  "tinyjson",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -4549,15 +4569,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
-]
-
-[[package]]
-name = "num_threads"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -6321,17 +6332,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
-name = "simplelog"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16257adbfaef1ee58b1363bdc0664c9b8e1e30aed86049635fb5f147d065a9c0"
-dependencies = [
- "log",
- "termcolor",
- "time",
-]
-
-[[package]]
 name = "sinsemilla"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6728,12 +6728,10 @@ dependencies = [
  "easy-parallel",
  "futures",
  "libc",
- "log",
  "rand 0.8.5",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "simplelog",
  "sled-overlay",
  "smol",
  "structopt",
@@ -6741,6 +6739,9 @@ dependencies = [
  "thiserror 2.0.12",
  "tinyjson",
  "toml 0.9.5",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -6853,9 +6854,7 @@ checksum = "8a7619e19bc266e0f9c5e6686659d394bc57973859340060a69221e57dbc0c40"
 dependencies = [
  "deranged",
  "itoa",
- "libc",
  "num-conv",
- "num_threads",
  "powerfmt",
  "serde",
  "time-core",
@@ -8016,6 +8015,18 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-appender"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3566e8ce28cc0a3fe42519fc80e6b4c943cc4c8cef275620eb8dac2d3d4e06cf"
+dependencies = [
+ "crossbeam-channel",
+ "thiserror 1.0.69",
+ "time",
+ "tracing-subscriber",
 ]
 
 [[package]]
