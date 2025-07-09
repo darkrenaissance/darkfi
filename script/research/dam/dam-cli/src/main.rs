@@ -19,8 +19,7 @@
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use darkfi::{cli_desc, rpc::util::JsonValue, Result};
-use simplelog::{Config, LevelFilter, SimpleLogger};
+use darkfi::{cli_desc, rpc::util::JsonValue, util::logger::setup_logging, Result};
 use smol::Executor;
 
 use dam_cli::DamCli;
@@ -59,8 +58,8 @@ enum Subcmd {
 }
 
 fn main() -> Result<()> {
-    // Setup terminal logger
-    let _ = SimpleLogger::init(LevelFilter::Info, Config::default());
+    // Setup terminal logger. verbosity level 0 == Level::Info
+    setup_logging(0, None)?;
 
     // Initialize an executor
     let executor = Arc::new(Executor::new());
