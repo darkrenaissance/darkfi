@@ -19,12 +19,7 @@
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use darkfi::{
-    rpc::client::RpcClient,
-    util::cli::{get_log_config, get_log_level},
-    Result,
-};
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use darkfi::{rpc::client::RpcClient, util::logger::setup_logging, Result};
 use smol::Executor;
 use url::Url;
 
@@ -58,9 +53,7 @@ enum SubCmd {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let log_level = get_log_level(args.verbose);
-    let log_config = get_log_config(args.verbose);
-    TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
+    setup_logging(args.verbose, None)?;
 
     let executor = Arc::new(Executor::new());
 
