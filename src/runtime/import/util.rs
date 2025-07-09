@@ -20,7 +20,7 @@ use std::io::Cursor;
 
 use darkfi_sdk::wasm;
 use darkfi_serial::Decodable;
-use log::{debug, error};
+use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;

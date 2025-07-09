@@ -50,8 +50,8 @@ use std::sync::{
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, info, warn};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use super::{

@@ -23,8 +23,8 @@ use std::sync::{
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
-use log::{debug, error, info, warn};
 use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::{

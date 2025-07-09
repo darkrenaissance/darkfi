@@ -21,8 +21,8 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, error, info, warn};
 use smol::lock::Mutex;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use darkfi::{

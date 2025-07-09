@@ -18,7 +18,7 @@
 
 use darkfi::Result;
 use darkfi_sdk::crypto::Keypair;
-use log::debug;
+use tracing::debug;
 
 use crate::model::LockParamsV1;
 

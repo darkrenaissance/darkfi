@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use log::{debug, error};
 use tinyjson::JsonValue;
+use tracing::{debug, error};
 
 use darkfi::{
     net::{

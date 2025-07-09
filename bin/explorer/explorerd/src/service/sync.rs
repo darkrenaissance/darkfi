@@ -38,8 +38,8 @@
 
 use std::{sync::Arc, time::Instant};
 
-use log::{debug, error, info, warn};
 use tinyjson::JsonValue;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use darkfi::{

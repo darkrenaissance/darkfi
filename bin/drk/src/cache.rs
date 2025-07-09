@@ -29,9 +29,9 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
-use log::error;
 use num_bigint::BigUint;
 use sled_overlay::{sled, SledDbOverlay, SledDbOverlayStateDiff};
+use tracing::error;
 
 pub const SLED_SCANNED_BLOCKS_TREE: &[u8] = b"_scanned_blocks";
 pub const SLED_STATE_INVERSE_DIFF_TREE: &[u8] = b"_state_inverse_diff";

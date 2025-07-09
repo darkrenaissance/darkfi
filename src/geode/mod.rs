@@ -82,7 +82,6 @@ use std::{
 };
 
 use futures::{AsyncRead, AsyncSeek};
-use log::{debug, info, warn};
 use smol::{
     fs::{self, File},
     io::{
@@ -91,6 +90,7 @@ use smol::{
     },
     stream::StreamExt,
 };
+use tracing::{debug, info, warn};
 
 use crate::{Error, Result};
 

@@ -22,11 +22,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::debug;
 use smol::{
     fs,
     net::unix::{UnixListener as SmolUnixListener, UnixStream},
 };
+use tracing::debug;
 use url::Url;
 
 use super::{PtListener, PtStream};

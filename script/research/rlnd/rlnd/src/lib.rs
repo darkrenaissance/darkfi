@@ -18,8 +18,8 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{error, info};
 use smol::lock::Mutex;
+use tracing::{error, info};
 use url::Url;
 
 use darkfi::{

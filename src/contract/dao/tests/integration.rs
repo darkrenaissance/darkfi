@@ -37,8 +37,8 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use log::info;
 use rand::rngs::OsRng;
+use tracing::info;
 
 // Integration test configuration
 // Holders this test will use:

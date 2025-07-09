@@ -33,12 +33,12 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 
-use log::{debug, error, info};
 use rand::rngs::OsRng;
 use settings::list_configured_contacts;
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{debug, error, info};
 use url::Url;
 
 const CONFIG_FILE: &str = "darkirc_config.toml";

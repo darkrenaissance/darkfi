@@ -17,9 +17,9 @@
  */
 
 use async_trait::async_trait;
-use log::{debug, error, info};
 use smol::Executor;
 use std::{path::StripPrefixError, sync::Arc};
+use tracing::{debug, error, info};
 
 use darkfi::{
     dht::DhtHandler,

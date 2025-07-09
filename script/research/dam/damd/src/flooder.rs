@@ -27,9 +27,9 @@ use darkfi::{
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
-use log::{debug, error, info};
 use smol::lock::Mutex;
 use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use crate::proto::{
     protocol_bar::Bar,

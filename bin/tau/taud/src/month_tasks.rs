@@ -23,8 +23,8 @@ use std::{
 };
 
 use chrono::{TimeZone, Utc};
-use log::debug;
 use tinyjson::JsonValue;
+use tracing::debug;
 
 use darkfi::util::{
     file::{load_json_file, save_json_file},

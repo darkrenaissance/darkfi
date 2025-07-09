@@ -28,8 +28,8 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use halo2_proofs::pasta::pallas;
-use log::{debug, error};
 use num_bigint::BigUint;
+use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;

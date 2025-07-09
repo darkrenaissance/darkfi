@@ -23,8 +23,8 @@ use std::{
 };
 
 use futures::{AsyncReadExt, AsyncWriteExt};
-use log::debug;
 use smol::net::TcpStream;
+use tracing::debug;
 use url::Url;
 
 /// SOCKS5 dialer

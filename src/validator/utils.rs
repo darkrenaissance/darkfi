@@ -20,9 +20,9 @@ use darkfi_sdk::{
     crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
     tx::TransactionHash,
 };
-use log::info;
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXFlags, RandomXVM};
+use tracing::info;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr, Header},

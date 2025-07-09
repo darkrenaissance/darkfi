@@ -36,12 +36,12 @@ use darkfi_serial::{
 };
 use futures::{select, FutureExt};
 use libc::mkfifo;
-use log::{debug, error, info};
 use rand::rngs::OsRng;
 use sled_overlay::sled;
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use darkfi::{
     async_daemonize,

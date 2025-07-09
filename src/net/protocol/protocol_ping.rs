@@ -22,9 +22,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{lock::RwLock as AsyncRwLock, Executor};
+use tracing::{debug, error, warn};
 
 use super::{
     super::{

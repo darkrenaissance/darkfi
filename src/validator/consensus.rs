@@ -20,10 +20,10 @@ use std::collections::{HashMap, HashSet};
 
 use darkfi_sdk::{crypto::MerkleTree, monotree::Monotree, tx::TransactionHash};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use log::{debug, info, warn};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayStateDiff;
 use smol::lock::RwLock;
+use tracing::{debug, info, warn};
 
 use crate::{
     blockchain::{

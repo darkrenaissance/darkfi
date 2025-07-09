@@ -21,8 +21,8 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 
-use log::debug;
 use rand::rngs::OsRng;
+use tracing::debug;
 
 use darkfi::{
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},

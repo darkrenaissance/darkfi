@@ -36,7 +36,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, warn};
+use tracing::{debug, warn};
 use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};

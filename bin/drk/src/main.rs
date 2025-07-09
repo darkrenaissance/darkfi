@@ -22,11 +22,11 @@ use std::{
     str::FromStr,
 };
 
-use log::info;
 use prettytable::{format, row, Table};
 use rand::rngs::OsRng;
 use smol::{fs::read_to_string, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::info;
 use url::Url;
 
 use darkfi::{

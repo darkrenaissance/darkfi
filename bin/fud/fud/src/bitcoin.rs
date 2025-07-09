@@ -23,11 +23,11 @@ use std::{
     time::Duration,
 };
 
-use log::{error, info, warn};
 use rand::{prelude::SliceRandom, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use smol::lock::RwLock;
 use tinyjson::JsonValue;
+use tracing::{error, info, warn};
 use url::Url;
 
 use darkfi::{

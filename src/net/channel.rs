@@ -29,13 +29,13 @@ use std::{
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
 };
-use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     lock::{Mutex as AsyncMutex, OnceCell},
     Executor,
 };
+use tracing::{debug, error, info, trace, warn};
 use url::Url;
 
 use super::{

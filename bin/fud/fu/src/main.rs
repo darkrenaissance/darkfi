@@ -17,8 +17,6 @@
  */
 
 use clap::{Parser, Subcommand};
-use log::error;
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::lock::RwLock;
 use std::{
     collections::HashMap,
@@ -26,6 +24,7 @@ use std::{
     sync::Arc,
 };
 use termcolor::{StandardStream, WriteColor};
+use tracing::error;
 use url::Url;
 
 use darkfi::{

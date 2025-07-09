@@ -24,7 +24,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
 use semver::Version;
 use smol::{
     lock::{Mutex, MutexGuard},
@@ -35,6 +34,7 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
 use toml::Value;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use darkfi::{

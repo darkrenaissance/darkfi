@@ -52,7 +52,7 @@
 use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
-use log::{error, info};
+use tracing::{error, info};
 
 use super::{
     client::{Client, ReplyType},

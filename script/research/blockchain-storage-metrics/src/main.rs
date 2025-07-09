@@ -18,9 +18,9 @@
 
 use std::{fmt, sync::Arc};
 
-use log::info;
 use smol::stream::StreamExt;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::info;
 use url::Url;
 
 use darkfi::{

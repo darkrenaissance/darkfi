@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, warn};
 use sled_overlay::sled::{transaction::ConflictableTransactionError, Transactional};
 use tinyjson::JsonValue;
+use tracing::{debug, warn};
 
 use darkfi::{
     blockchain::{

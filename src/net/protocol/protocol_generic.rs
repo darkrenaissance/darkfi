@@ -19,12 +19,12 @@
 use std::{clone::Clone, collections::HashMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use log::debug;
 use smol::{
     channel::{Receiver, Sender},
     lock::RwLock,
     Executor,
 };
+use tracing::debug;
 
 use super::{
     super::{

@@ -25,8 +25,8 @@ use std::{
 };
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use log::{debug, error, trace, warn};
 use smol::Executor;
+use tracing::{debug, error, trace, warn};
 
 use super::{Event, EventGraphPtr, NULL_ID};
 use crate::{

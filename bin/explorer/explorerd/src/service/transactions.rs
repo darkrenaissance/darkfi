@@ -18,9 +18,9 @@
 
 use std::collections::HashMap;
 
-use log::{debug, error};
 use smol::io::Cursor;
 use tinyjson::JsonValue;
+use tracing::{debug, error};
 
 use darkfi::{
     blockchain::{

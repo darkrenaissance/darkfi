@@ -39,7 +39,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 use futures::FutureExt;
-use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -47,6 +46,7 @@ use smol::{
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
 };
+use tracing::{debug, error, info, warn};
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},

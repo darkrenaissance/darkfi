@@ -24,13 +24,13 @@ use futures::{
     pin_mut,
 };
 use futures_rustls::{TlsAcceptor, TlsStream};
-use log::debug;
 use smol::{
     lock::OnceCell,
     net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream},
     Async, Timer,
 };
 use socket2::{Domain, Socket, TcpKeepalive, Type};
+use tracing::debug;
 use url::Url;
 
 use super::{PtListener, PtStream};

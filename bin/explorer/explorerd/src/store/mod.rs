@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 
 use lazy_static::lazy_static;
-use log::info;
 use sled_overlay::sled;
+use tracing::info;
 
 use darkfi::{blockchain::Blockchain, error::Result, util::path::expand_path};
 

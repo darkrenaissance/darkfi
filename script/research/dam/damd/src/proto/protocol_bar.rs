@@ -19,8 +19,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, error, info};
 use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use darkfi::{
     impl_p2p_message,

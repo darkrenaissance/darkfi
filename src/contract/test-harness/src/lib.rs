@@ -42,9 +42,9 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::Encodable;
-use log::debug;
 use num_bigint::BigUint;
 use sled_overlay::sled;
+use tracing::debug;
 
 /// Utility module for caching ZK proof PKs and VKs
 pub mod vks;

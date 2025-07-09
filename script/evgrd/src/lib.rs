@@ -27,7 +27,7 @@ use darkfi::{
 use darkfi_serial::{
     async_trait, deserialize_async, serialize_async, SerialDecodable, SerialEncodable,
 };
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
     lock::{OnceCell, RwLock},

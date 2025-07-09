@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use log::{debug, error};
 use smol::{channel, io::BufReader, Executor};
 use tinyjson::JsonValue;
+use tracing::{debug, error};
 use url::Url;
 
 use super::{

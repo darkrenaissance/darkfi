@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 
 use darkfi::{
     dht::{DhtHandler, DhtNode},

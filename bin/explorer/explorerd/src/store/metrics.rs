@@ -21,8 +21,8 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use log::{debug, info};
 use sled_overlay::{sled, SledDbOverlay};
+use tracing::{debug, info};
 
 use darkfi::{
     blockchain::SledDbOverlayPtr,

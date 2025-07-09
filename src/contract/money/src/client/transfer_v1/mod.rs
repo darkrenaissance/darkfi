@@ -21,8 +21,8 @@ use darkfi_sdk::{
     crypto::{pasta_prelude::*, Blind, FuncId, Keypair, MerkleTree, PublicKey},
     pasta::pallas,
 };
-use log::{debug, error};
 use rand::{prelude::SliceRandom, rngs::OsRng};
+use tracing::{debug, error};
 
 use crate::{
     client::OwnCoin,

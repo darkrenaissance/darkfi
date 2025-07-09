@@ -19,8 +19,8 @@
 use std::{io, time::Duration};
 
 use async_trait::async_trait;
-use log::error;
 use smol::io::{AsyncRead, AsyncWrite};
+use tracing::error;
 use url::Url;
 
 #[cfg(feature = "p2p-unix")]

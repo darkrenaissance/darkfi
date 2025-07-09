@@ -28,8 +28,8 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use log::debug;
 use rand::rngs::OsRng;
+use tracing::debug;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{

@@ -25,8 +25,8 @@ use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey},
     pasta::pallas,
 };
-use log::debug;
 use rand::{prelude::SliceRandom, rngs::OsRng};
+use tracing::debug;
 
 use crate::{
     client::{

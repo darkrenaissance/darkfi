@@ -21,9 +21,9 @@
 use std::{collections::HashSet, net::TcpListener, panic, sync::Arc};
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use log::{error, info, warn};
 use rand::{prelude::SliceRandom, rngs::ThreadRng, Rng};
 use smol::{channel, future, Executor};
+use tracing::{error, info, warn};
 use url::Url;
 
 use crate::{

@@ -22,8 +22,8 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::crypto::Keypair;
-use log::debug;
 use rand::rngs::OsRng;
+use tracing::debug;
 
 use crate::model::{MoneyAuthTokenFreezeParamsV1, TokenAttributes};
 

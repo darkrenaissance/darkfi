@@ -22,8 +22,8 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::pasta::pallas;
-use log::debug;
 use rand::rngs::OsRng;
+use tracing::debug;
 
 use crate::model::{CoinAttributes, MoneyTokenMintParamsV1, TokenAttributes};
 

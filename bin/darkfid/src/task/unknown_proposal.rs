@@ -18,9 +18,9 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{debug, error, info};
 use smol::{channel::Receiver, lock::RwLock};
 use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use darkfi::{
     blockchain::BlockDifficulty,

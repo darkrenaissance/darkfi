@@ -19,9 +19,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::debug;
 use num_bigint::BigUint;
 use rand::{rngs::OsRng, Rng};
+use tracing::debug;
 use url::Url;
 
 use darkfi::{

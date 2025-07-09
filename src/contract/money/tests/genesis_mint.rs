@@ -27,7 +27,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use log::info;
+use tracing::info;
 
 #[test]
 fn genesis_mint() -> Result<()> {

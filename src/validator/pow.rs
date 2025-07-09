@@ -26,10 +26,10 @@ use std::{
 };
 
 use darkfi_sdk::num_traits::{One, Zero};
-use log::debug;
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use smol::channel::Receiver;
+use tracing::debug;
 
 use crate::{
     blockchain::{

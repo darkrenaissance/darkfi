@@ -27,7 +27,7 @@ use darkfi::{
     system::{ExecutorPtr, Publisher, StoppableTask},
     Error, Result,
 };
-use log::{error, info};
+use tracing::{error, info};
 use url::Url;
 
 use crate::DamCli;

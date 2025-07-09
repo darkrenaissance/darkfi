@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{error, info};
+use tracing::{error, info};
 use rand::{rngs::OsRng, Rng};
 use smol::{stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};

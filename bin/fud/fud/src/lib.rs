@@ -23,13 +23,13 @@ use std::{
     sync::Arc,
 };
 
-use log::{error, info, warn};
 use sled_overlay::sled;
 use smol::{
     channel,
     fs::{self, OpenOptions},
     lock::RwLock,
 };
+use tracing::{error, info, warn};
 
 use darkfi::{
     dht::{tasks as dht_tasks, Dht, DhtHandler, DhtSettings},

@@ -23,11 +23,11 @@ use std::{
 };
 
 use futures::{future::FutureExt, pin_mut, select};
-use log::{error, info, warn};
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
     rngs::OsRng,
 };
+use tracing::{error, info, warn};
 
 use darkfi::{
     dht::DhtNode,

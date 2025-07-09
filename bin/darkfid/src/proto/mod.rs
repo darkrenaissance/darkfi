@@ -25,7 +25,7 @@ use darkfi::{
     validator::ValidatorPtr,
     Result,
 };
-use log::info;
+use tracing::info;
 
 /// Block proposal broadcast protocol
 mod protocol_proposal;

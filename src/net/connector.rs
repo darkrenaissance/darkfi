@@ -25,8 +25,8 @@ use futures::{
     future::{select, Either},
     pin_mut,
 };
-use log::warn;
 use smol::lock::RwLock as AsyncRwLock;
+use tracing::warn;
 use url::Url;
 
 use super::{

@@ -21,11 +21,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use log::{debug, error};
 use rusqlite::{
     types::{ToSql, Value},
     Connection,
 };
+use tracing::{debug, error};
 
 use crate::error::{WalletDbError, WalletDbResult};
 

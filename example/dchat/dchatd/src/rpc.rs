@@ -18,9 +18,9 @@
 
 use async_trait::async_trait;
 use darkfi::{net::P2pPtr, system::StoppableTaskPtr};
-use log::debug;
 use smol::lock::MutexGuard;
 use std::collections::HashSet;
+use tracing::debug;
 
 use darkfi::rpc::{
     jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},

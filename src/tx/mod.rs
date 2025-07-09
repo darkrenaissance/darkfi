@@ -33,7 +33,7 @@ use darkfi_sdk::{
 use darkfi_serial::async_trait;
 
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
-use log::{debug, error};
+use tracing::{debug, error};
 
 use crate::{
     error::TxVerifyFailed,

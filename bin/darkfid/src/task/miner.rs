@@ -40,10 +40,10 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize_async, Encodable};
-use log::{error, info};
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
+use tracing::{error, info};
 
 use crate::{proto::ProposalMessage, task::garbage_collect_task, DarkfiNodePtr};
 

@@ -36,7 +36,6 @@ use futures::{
     stream::StreamExt,
     Stream,
 };
-use log::{debug, error, info, warn};
 use smol::{
     lock::{Mutex as AsyncMutex, OnceCell},
     Timer,
@@ -46,6 +45,7 @@ use tor_error::ErrorReport;
 use tor_hsservice::{HsNickname, RendRequest, RunningOnionService};
 use tor_proto::stream::IncomingStreamRequest;
 use tor_rtcompat::PreferredRuntime;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::{PtListener, PtStream};

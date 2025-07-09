@@ -18,9 +18,9 @@
 
 use std::{collections::HashSet, path::Path, sync::Arc};
 
-use log::{error, info};
 use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{error, info};
 use url::Url;
 
 use darkfi::{

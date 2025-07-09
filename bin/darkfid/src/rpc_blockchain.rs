@@ -23,8 +23,8 @@ use darkfi_sdk::{
     tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
-use log::{debug, error};
 use tinyjson::JsonValue;
+use tracing::{debug, error};
 
 use darkfi::{
     rpc::jsonrpc::{

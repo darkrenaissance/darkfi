@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
 use std::{
@@ -30,6 +29,7 @@ use std::{
     },
     time::{Instant, UNIX_EPOCH},
 };
+use tracing::{debug, error, info, trace, warn};
 use url::{Host, Url};
 
 use super::{

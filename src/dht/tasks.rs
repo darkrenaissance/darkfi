@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::warn;
 use std::sync::Arc;
+use tracing::warn;
 
 use crate::{
     dht::{ChannelCacheItem, DhtHandler, DhtNode},

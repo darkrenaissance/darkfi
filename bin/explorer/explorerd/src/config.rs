@@ -22,9 +22,9 @@ use std::{
     str::FromStr,
 };
 
-use log::{debug, error};
 use serde::Deserialize;
 use structopt::StructOpt;
+use tracing::{debug, error};
 use url::Url;
 
 use darkfi::{rpc::settings::RpcSettingsOpt, util::file::load_file, Error, Result};

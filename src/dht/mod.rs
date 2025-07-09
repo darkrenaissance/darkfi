@@ -27,12 +27,12 @@ use std::{
 };
 
 use futures::stream::FuturesUnordered;
-use log::{debug, info, warn};
 use num_bigint::BigUint;
 use smol::{
     lock::{RwLock, Semaphore},
     stream::StreamExt,
 };
+use tracing::{debug, info, warn};
 use url::Url;
 
 use crate::{

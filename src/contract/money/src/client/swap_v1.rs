@@ -31,8 +31,8 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::serialize;
-use log::{debug, error};
 use rand::rngs::OsRng;
+use tracing::{debug, error};
 
 use crate::{
     client::{

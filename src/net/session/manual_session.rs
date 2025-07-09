@@ -35,8 +35,8 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, error, info, warn};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::{

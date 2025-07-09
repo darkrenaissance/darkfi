@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{stream::StreamExt, Executor};
 use std::sync::Arc;
 use structopt_toml::StructOptToml;
+use tracing::{debug, error, info, warn};
 
 use darkfi::{
     async_daemonize,

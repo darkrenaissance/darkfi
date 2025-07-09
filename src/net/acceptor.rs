@@ -24,8 +24,8 @@ use std::{
     },
 };
 
-use log::{error, info, warn};
 use smol::Executor;
+use tracing::{error, info, warn};
 use url::Url;
 
 use super::{

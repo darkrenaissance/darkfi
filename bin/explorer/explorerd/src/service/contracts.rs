@@ -21,9 +21,9 @@ use std::{
     str::FromStr,
 };
 
-use log::info;
 use tar::Archive;
 use tinyjson::JsonValue;
+use tracing::info;
 
 use darkfi::{
     blockchain::BlockchainOverlay, validator::utils::deploy_native_contracts, Error, Result,

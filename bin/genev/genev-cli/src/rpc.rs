@@ -23,8 +23,8 @@ use darkfi::{
 };
 use darkfi_serial::{deserialize, serialize};
 use genevd::GenEvent;
-use log::debug;
 use tinyjson::JsonValue;
+use tracing::debug;
 
 pub struct Gen {
     pub rpc_client: RpcClient,

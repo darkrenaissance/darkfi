@@ -23,7 +23,7 @@ use darkfi_sdk::{
     wasm,
 };
 use darkfi_serial::{deserialize, serialize, Decodable};
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;

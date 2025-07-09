@@ -17,8 +17,8 @@
  */
 
 use darkfi_serial::deserialize_async;
-use log::{error, warn};
 use tinyjson::JsonValue;
+use tracing::{error, warn};
 
 use darkfi::{
     rpc::jsonrpc::{

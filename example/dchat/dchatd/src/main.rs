@@ -17,9 +17,9 @@
  */
 
 // ANCHOR: imports
-use log::{debug, error, info};
 use smol::{lock::Mutex, stream::StreamExt};
 use std::{collections::HashSet, sync::Arc};
+use tracing::{debug, error, info};
 
 use darkfi::{
     async_daemonize, cli_desc, net,

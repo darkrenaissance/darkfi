@@ -25,9 +25,9 @@ use std::{
 };
 
 use darkfi_serial::{deserialize, deserialize_async, serialize};
-use log::error;
 use sled_overlay::sled;
 use tinyjson::JsonValue;
+use tracing::error;
 
 use crate::{
     event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS},

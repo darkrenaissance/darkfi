@@ -18,9 +18,9 @@
 
 use std::collections::HashSet;
 
-use log::{debug, error, info};
 use num_bigint::BigUint;
 use smol::lock::MutexGuard;
+use tracing::{debug, error, info};
 
 use darkfi::{
     blockchain::BlockInfo,

@@ -53,7 +53,7 @@ use halo2_proofs::{
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use log::{error, trace};
+use tracing::{error, trace};
 
 pub use super::vm_heap::{HeapVar, Witness};
 use super::{

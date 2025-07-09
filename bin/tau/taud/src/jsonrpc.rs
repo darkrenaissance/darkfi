@@ -24,9 +24,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, info, warn};
 use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
+use tracing::{debug, info, warn};
 
 use darkfi::{
     event_graph::EventGraphPtr,

@@ -21,10 +21,10 @@ use std::{
     sync::Arc,
 };
 
-use log::info;
 use rand::rngs::OsRng;
 use smol::lock::RwLock;
 use structopt::StructOpt;
+use tracing::info;
 use url::Url;
 
 use darkfi::{system::ExecutorPtr, Error, Result};

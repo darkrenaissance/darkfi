@@ -19,7 +19,7 @@
 //! Clock sync module
 use std::{net::UdpSocket, time::Duration};
 
-use log::debug;
+use tracing::debug;
 use url::Url;
 
 use crate::{util::time::Timestamp, Error, Result};

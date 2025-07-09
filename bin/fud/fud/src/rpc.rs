@@ -17,7 +17,6 @@
  */
 
 use async_trait::async_trait;
-use log::error;
 use smol::lock::{Mutex, MutexGuard};
 use std::{
     collections::{HashMap, HashSet},
@@ -25,6 +24,7 @@ use std::{
     sync::Arc,
 };
 use tinyjson::JsonValue;
+use tracing::error;
 
 use darkfi::{
     dht::DhtNode,

@@ -38,7 +38,6 @@ use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
 };
-use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{
     fs,
@@ -47,6 +46,7 @@ use smol::{
     prelude::{AsyncRead, AsyncWrite},
     Executor,
 };
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};

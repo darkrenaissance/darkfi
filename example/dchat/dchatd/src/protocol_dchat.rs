@@ -19,9 +19,9 @@
 // ANCHOR: protocol_dchat
 use async_trait::async_trait;
 use darkfi::{net, Result};
-use log::debug;
 use smol::Executor;
 use std::sync::Arc;
+use tracing::debug;
 
 use crate::dchatmsg::{DchatMsg, DchatMsgsBuffer};
 

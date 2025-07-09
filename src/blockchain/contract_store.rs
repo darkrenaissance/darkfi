@@ -26,8 +26,8 @@ use darkfi_sdk::{
     monotree::Monotree,
 };
 use darkfi_serial::{deserialize, serialize};
-use log::{debug, error};
 use sled_overlay::{serial::parse_record, sled, SledDbOverlay};
+use tracing::{debug, error};
 
 use crate::{
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},

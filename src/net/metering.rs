@@ -18,7 +18,7 @@
 
 use std::collections::VecDeque;
 
-use log::debug;
+use tracing::debug;
 
 use crate::util::time::NanoTimestamp;
 

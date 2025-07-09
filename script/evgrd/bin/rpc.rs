@@ -29,7 +29,7 @@ use darkfi::{
     },
     system::StoppableTaskPtr,
 };
-use log::debug;
+use tracing::debug;
 use smol::lock::MutexGuard;
 
 use super::Daemon;

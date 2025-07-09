@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::trace;
 use rand::{rngs::OsRng, Rng};
 use smol::{
     future::{self, Future},
     Executor,
 };
 use std::sync::Arc;
+use tracing::trace;
 
 use super::CondVar;
 
@@ -155,8 +155,7 @@ impl Drop for StoppableTask {
 mod tests {
     use super::*;
     use crate::{error::Error, system::sleep_forever};
-    use log::warn;
-
+    use tracing::warn;
     #[test]
     fn stoppit_mom() {
         let mut cfg = simplelog::ConfigBuilder::new();

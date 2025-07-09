@@ -19,9 +19,9 @@
 use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
-use log::{debug, error};
 use smol::{channel::Sender, lock::RwLock};
 use tinyjson::JsonValue;
+use tracing::{debug, error};
 
 use darkfi::{
     impl_p2p_message,

@@ -21,8 +21,8 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, error, info};
 use smol::lock::Mutex;
+use tracing::{debug, error, info};
 
 use darkfi::{
     net::settings::Settings,

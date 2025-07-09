@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, error};
+use tracing::{debug, error};
 
 use darkfi::{
     blockchain::{BlockInfo, Header, HeaderHash},

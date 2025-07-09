@@ -30,8 +30,8 @@
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_sdk::crypto::BaseBlind;
-use log::info;
 use rand::rngs::OsRng;
+use tracing::info;
 
 #[test]
 fn mint_pay_swap() -> Result<()> {

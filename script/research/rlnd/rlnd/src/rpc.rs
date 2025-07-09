@@ -30,9 +30,9 @@ use darkfi::{
 };
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::serialize;
-use log::{debug, error, info};
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 use url::Url;
 
 use crate::{

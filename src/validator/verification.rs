@@ -30,9 +30,9 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
-use log::{debug, error, warn};
 use num_bigint::BigUint;
 use smol::io::Cursor;
+use tracing::{debug, error, warn};
 
 use crate::{
     blockchain::{

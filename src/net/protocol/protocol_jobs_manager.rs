@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use log::{debug, trace};
 use smol::{future::Future, lock::Mutex, Executor, Task};
+use tracing::{debug, trace};
 
 use super::super::channel::ChannelPtr;
 use crate::Result;

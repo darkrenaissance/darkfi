@@ -24,8 +24,8 @@ use std::{
 };
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use log::debug;
 use tinyjson::JsonValue;
+use tracing::debug;
 
 use darkfi::{
     util::{

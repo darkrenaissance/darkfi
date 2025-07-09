@@ -18,11 +18,11 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{error, info};
 use smol::{
     channel::{Receiver, Sender},
     lock::Mutex,
 };
+use tracing::{error, info};
 
 use darkfi::{
     rpc::{

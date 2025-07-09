@@ -23,7 +23,6 @@ use std::{
 };
 
 use darkfi_serial::{deserialize_async, serialize_async};
-use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
@@ -31,6 +30,7 @@ use smol::{
     Executor,
 };
 use tinyjson::JsonValue::{self};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     event_graph::util::replayer_log,

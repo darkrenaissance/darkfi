@@ -18,8 +18,8 @@
 
 use std::{io, time::Duration};
 
-use log::error;
 use smol::io::{AsyncReadExt, AsyncWriteExt, BufReader, ReadHalf, WriteHalf};
+use tracing::error;
 
 use super::jsonrpc::*;
 use crate::net::transport::PtStream;

@@ -24,7 +24,7 @@ use darkfi::{
     system::ExecutorPtr,
     Result,
 };
-use log::info;
+use tracing::info;
 
 /// `Foo` messages broadcast protocol
 pub mod protocol_foo;

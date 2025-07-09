@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::debug;
 use smol::{
     future::{Boxed, Future},
     lock::Mutex,
 };
+use tracing::debug;
 
 use super::{
     super::{channel::ChannelPtr, p2p::P2pPtr, session::SessionBitFlag},

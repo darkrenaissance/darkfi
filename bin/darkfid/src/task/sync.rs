@@ -23,9 +23,9 @@ use darkfi::{
     util::encoding::base64, validator::consensus::Proposal, Error, Result,
 };
 use darkfi_serial::serialize_async;
-use log::{debug, info, warn};
 use rand::{prelude::SliceRandom, rngs::OsRng};
 use tinyjson::JsonValue;
+use tracing::{debug, info, warn};
 
 use crate::{
     proto::{

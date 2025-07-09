@@ -18,7 +18,7 @@
 
 use std::{fmt, sync::Arc};
 
-use log::error;
+use tracing::error;
 
 use darkfi::{
     error::RpcError,

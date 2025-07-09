@@ -18,7 +18,7 @@
 
 use darkfi::{ClientFailed, Result};
 use darkfi_sdk::{crypto::Keypair, deploy::DeployParamsV1};
-use log::{debug, error};
+use tracing::{debug, error};
 
 use crate::error::DeployError;
 

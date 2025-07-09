@@ -19,8 +19,8 @@
 use std::sync::Arc;
 
 use async_std::prelude::StreamExt;
-use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::info;
 use url::Url;
 
 use darkfi::{async_daemonize, cli_desc, rpc::settings::RpcSettingsOpt, Error, Result};

@@ -32,7 +32,7 @@ use {
 };
 
 use darkfi_sdk::pasta::pallas;
-use log::error;
+use tracing::error;
 
 use super::{Witness, ZkCircuit};
 use crate::{zkas, Error, Result};

@@ -31,7 +31,7 @@ use halo2_proofs::{
     pasta::pallas,
     plonk,
 };
-use log::error;
+use tracing::error;
 
 use crate::{
     zkas::{decoder::ZkBinary, types::VarType},

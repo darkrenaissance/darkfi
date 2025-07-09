@@ -39,7 +39,7 @@ use darkfi::{
 };
 use darkfi_serial::{AsyncDecodable, AsyncEncodable};
 use futures::{FutureExt, AsyncWriteExt};
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};

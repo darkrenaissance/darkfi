@@ -32,8 +32,8 @@ use darkfi_sdk::{
     crypto::{pasta_prelude::FromUniformBytes, poseidon_hash, MerkleTree},
     pasta::pallas,
 };
-use log::info;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
+use tracing::info;
 
 pub const RLN_APP_IDENTIFIER: pallas::Base = pallas::Base::from_raw([4242, 0, 0, 0]);
 pub const RLN_TRAPDOOR_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4211, 0, 0, 0]);

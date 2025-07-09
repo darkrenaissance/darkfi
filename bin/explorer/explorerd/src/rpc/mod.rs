@@ -19,9 +19,9 @@
 use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
-use log::{debug, error, trace, warn};
 use smol::lock::{MutexGuard, RwLock};
 use tinyjson::JsonValue;
+use tracing::{debug, error, trace, warn};
 use url::Url;
 
 use darkfi::{

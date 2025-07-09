@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use log::{debug, error, info};
 use smol::{fs::read_to_string, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{debug, error, info};
 use url::Url;
 
 use darkfi::{

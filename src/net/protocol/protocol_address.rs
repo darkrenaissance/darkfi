@@ -17,9 +17,9 @@
  */
 
 use async_trait::async_trait;
-use log::debug;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
 use std::{sync::Arc, time::UNIX_EPOCH};
+use tracing::debug;
 
 use super::{
     super::{

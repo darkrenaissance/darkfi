@@ -18,8 +18,8 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use log::debug;
 use sled_overlay::{sled, SledDbOverlay};
+use tracing::debug;
 
 use darkfi::{blockchain::SledDbOverlayPtr, Error, Result};
 use darkfi_sdk::crypto::ContractId;

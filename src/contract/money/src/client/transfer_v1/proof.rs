@@ -29,8 +29,8 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use log::debug;
 use rand::rngs::OsRng;
+use tracing::debug;
 
 use super::{TransferCallInput, TransferCallOutput};
 use crate::model::{Coin, CoinAttributes, Nullifier};

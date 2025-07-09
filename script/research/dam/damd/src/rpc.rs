@@ -19,8 +19,8 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use log::debug;
 use smol::lock::MutexGuard;
+use tracing::debug;
 
 use darkfi::{
     net::P2pPtr,

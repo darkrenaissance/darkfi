@@ -32,7 +32,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
-use log::info;
+use tracing::info;
 
 use super::{Holder, TestHarness};
 

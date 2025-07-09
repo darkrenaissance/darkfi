@@ -42,8 +42,8 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
-use log::{debug, info};
 use rand::rngs::OsRng;
+use tracing::{debug, info};
 
 use super::{Holder, TestHarness};
 

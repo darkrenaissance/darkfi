@@ -29,8 +29,8 @@ use futures_rustls::{
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
-use log::error;
 use rustls_pemfile::pkcs8_private_keys;
+use tracing::error;
 use x509_parser::{
     parse_x509_certificate,
     prelude::{GeneralName, ParsedExtension, X509Certificate},

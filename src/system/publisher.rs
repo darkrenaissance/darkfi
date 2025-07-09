@@ -18,9 +18,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use log::warn;
 use rand::{rngs::OsRng, Rng};
 use smol::lock::Mutex;
+use tracing::warn;
 
 pub type PublisherPtr<T> = Arc<Publisher<T>>;
 pub type SubscriptionId = usize;

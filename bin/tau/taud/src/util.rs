@@ -22,7 +22,7 @@ use std::{
     path::Path,
 };
 
-use log::debug;
+use tracing::debug;
 
 use darkfi::{Error, Result};
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};

@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 
 use darkfi::rpc::jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult};
-use log::error;
 use tinyjson::JsonValue;
+use tracing::error;
 
 use crate::DarkfiNode;
 

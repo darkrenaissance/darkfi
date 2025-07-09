@@ -18,7 +18,7 @@
 
 use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
 use darkfi_sdk::crypto::MerkleTree;
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 
 use crate::DarkfiNodePtr;
 

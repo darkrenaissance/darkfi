@@ -20,12 +20,12 @@ use futures::{
     future::{join_all, select, Either},
     pin_mut,
 };
-use log::{debug, error};
 use smol::{lock::RwLock as AsyncRwLock, Executor, Timer};
 use std::{
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
 };
+use tracing::{debug, error};
 
 use super::super::{
     channel::ChannelPtr,

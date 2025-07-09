@@ -31,10 +31,10 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use log::{debug, error, info};
 use sled_overlay::sled;
 use smol::{fs, lock::RwLock, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{debug, error, info};
 
 mod rpc;
 use rpc::JsonRpcInterface;

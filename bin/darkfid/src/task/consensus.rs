@@ -30,7 +30,7 @@ use darkfi_sdk::{
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::serialize_async;
-use log::{error, info};
+use tracing::{error, info};
 
 use crate::{
     task::{garbage_collect_task, miner::MinerRewardsRecipientConfig, miner_task, sync_task},

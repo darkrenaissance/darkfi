@@ -27,7 +27,7 @@ use darkfi_sdk::{
     wasm, AsHex,
 };
 use darkfi_serial::serialize;
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use wasmer::{
     imports, sys::CompilerConfig, wasmparser::Operator, AsStoreMut, AsStoreRef, Function,
     FunctionEnv, Instance, Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
