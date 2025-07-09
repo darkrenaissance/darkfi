@@ -23,7 +23,7 @@ use std::{
     io::{stdout, Write},
     sync::Arc,
 };
-use termcolor::{StandardStream, WriteColor};
+use termcolor::{ColorChoice, StandardStream, WriteColor};
 use tracing::error;
 use url::Url;
 
@@ -35,7 +35,7 @@ use darkfi::{
         util::JsonValue,
     },
     system::{ExecutorPtr, Publisher, StoppableTask},
-    util::cli::{get_log_config, get_log_level},
+    util::logger::setup_logging,
     Error, Result,
 };
 
@@ -787,9 +787,7 @@ impl Fu {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let log_level = get_log_level(args.verbose);
-    let log_config = get_log_config(args.verbose);
-    TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
+    setup_logging(args.verbose, None)?;
 
     let ex = Arc::new(smol::Executor::new());
     smol::block_on(async {
