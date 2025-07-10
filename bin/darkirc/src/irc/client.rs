@@ -409,7 +409,7 @@ impl Client {
         &self,
         line: &str,
         writer: &mut W,
-        args_queue: &mut VecDeque<String>,
+        args_queue: &mut VecDeque<OldPrivmsg>,
     ) -> Result<Option<Vec<Event>>>
     where
         W: AsyncWrite + Unpin,
@@ -500,7 +500,8 @@ impl Client {
             // Once synced, send queued lines and continue as normal
             if !*self.server.darkirc.event_graph.synced.read().await {
                 debug!("DAG is still syncing, queuing and skipping...");
-                args_queue.push_back(args);
+                let privmsg = self.args_to_privmsg(args).await;
+                args_queue.push_back(privmsg);
                 return Ok(None)
             }
 
@@ -508,14 +509,15 @@ impl Client {
             let mut pending_events = vec![];
             if !args_queue.is_empty() {
                 for _ in 0..args_queue.len() {
-                    let args = args_queue.pop_front().unwrap();
-                    pending_events.push(self.privmsg_to_event(args).await);
+                    let privmsg = args_queue.pop_front().unwrap();
+                    pending_events.push(self.privmsg_to_event(privmsg).await);
                 }
                 return Ok(Some(pending_events))
             }
 
             // If queue is empty, create an event and return it
-            let event = self.privmsg_to_event(args).await;
+            let privmsg = self.args_to_privmsg(args).await;
+            let event = self.privmsg_to_event(privmsg).await;
 
             return Ok(Some(vec![event]))
         }
@@ -523,24 +525,20 @@ impl Client {
         Ok(None)
     }
 
-    // Internal helper function that creates an Event from PRIVMSG arguments
-    async fn privmsg_to_event(&self, args: String) -> Event {
+    // Internal helper function that creates a PRIVMSG from IRC client arguments
+    async fn args_to_privmsg(&self, args: String) -> OldPrivmsg {
+        let nick = self.nickname.read().await.to_string();
         let channel = args.split_ascii_whitespace().next().unwrap().to_string();
         let msg_offset = args.find(':').unwrap() + 1;
         let (_, msg) = args.split_at(msg_offset);
 
         // Truncate messages longer than MAX_MSG_LEN
         let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
+        OldPrivmsg { channel, nick, msg: msg.to_string() }
+    }
 
-        // TODO: This is kept as old version of privmsg, since now we
-        // can deserialize both old and new versions, after some time
-        // this will be replaced with Privmsg (new version)
-        let mut privmsg = OldPrivmsg {
-            channel,
-            nick: self.nickname.read().await.to_string(),
-            msg: msg.to_string(),
-        };
-
+    // Internal helper function that creates an Event from PRIVMSG arguments
+    async fn privmsg_to_event(&self, mut privmsg: OldPrivmsg) -> Event {
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;
 
