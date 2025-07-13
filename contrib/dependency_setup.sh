@@ -2,7 +2,11 @@
 set -e
 
 if [ "$(id -u)" != 0 ]; then
-	SUDO="${SUDO:-$(command -v sudo)}"
+	if command -v sudo; then
+		SUDO="${SUDO:-$(command -v sudo)}"
+	elif command -v doas; then
+		SUDO="${SUDO:-$(command -v doas)}"
+	fi
 else
 	SUDO="${SUDO:-}"
 fi
