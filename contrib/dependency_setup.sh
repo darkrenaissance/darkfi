@@ -6,7 +6,10 @@ if [ "$(id -u)" != 0 ]; then
 		SUDO="${SUDO:-$(command -v sudo)}"
 	elif command -v doas; then
 		SUDO="${SUDO:-$(command -v doas)}"
-	fi
+    else
+		echo "Please run this script as root!" >&2
+		exit
+    fi
 else
 	SUDO="${SUDO:-}"
 fi
