@@ -183,9 +183,9 @@ impl Drk {
             }
 
             // Rewind and update the merkle trees
-            money_tree.checkpoint(height as usize);
-            dao_daos_tree.checkpoint(height as usize);
-            dao_proposals_tree.checkpoint(height as usize);
+            money_tree.rewind();
+            dao_daos_tree.rewind();
+            dao_proposals_tree.rewind();
             if let Err(e) = self.cache.insert_merkle_trees(&[
                 (SLED_MERKLE_TREES_MONEY, &money_tree),
                 (SLED_MERKLE_TREES_DAO_DAOS, &dao_daos_tree),
