@@ -150,6 +150,11 @@ impl Drk {
         // Keep track of our wallet transactions.
         let mut wallet_txs = vec![];
 
+        // Checkpoint the merkle trees
+        scan_cache.money_tree.checkpoint(block.header.height as usize);
+        scan_cache.dao_daos_tree.checkpoint(block.header.height as usize);
+        scan_cache.dao_proposals_tree.checkpoint(block.header.height as usize);
+
         // Scan the block
         scan_cache.log(String::from("======================================="));
         scan_cache.log(format!("{}", block.header));
@@ -228,10 +233,7 @@ impl Drk {
         // Insert the state inverse diff record
         self.cache.insert_state_inverse_diff(&block.header.height, &diff.inverse())?;
 
-        // Checkpoint and update the merkle trees
-        scan_cache.money_tree.checkpoint(block.header.height as usize);
-        scan_cache.dao_daos_tree.checkpoint(block.header.height as usize);
-        scan_cache.dao_proposals_tree.checkpoint(block.header.height as usize);
+        // Update the merkle trees
         self.cache.insert_merkle_trees(&[
             (SLED_MERKLE_TREES_MONEY, &scan_cache.money_tree),
             (SLED_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree),
