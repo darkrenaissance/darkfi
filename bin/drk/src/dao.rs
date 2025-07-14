@@ -1471,7 +1471,7 @@ impl Drk {
 
         // Create an SQL `UPDATE` query
         let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 {} = ?4 WHERE {} = ?5;",
+            "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3, {} = ?4 WHERE {} = ?5;",
             *DAO_DAOS_TABLE,
             DAO_DAOS_COL_LEAF_POSITION,
             DAO_DAOS_COL_MINT_HEIGHT,
