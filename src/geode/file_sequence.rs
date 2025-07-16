@@ -35,6 +35,10 @@ use std::{path::PathBuf, pin::Pin};
 /// This allows seamless handling of multiple files as if they were a single
 /// continuous file. It automatically opens the next file in the list when the
 /// current file is exhausted.
+///
+/// It's also made so that files in `files` that do not exist on the filesystem
+/// will get skipped, without returning an Error. All files you want to read,
+/// write, and seek to should be created before using the FileSequence.
 #[derive(Debug)]
 pub struct FileSequence {
     /// List of (file path, file size). File sizes are not the sizes of the
@@ -44,6 +48,8 @@ pub struct FileSequence {
     current_file: Option<File>,
     /// Index of the currently opened file in the `files` vector
     current_file_index: Option<usize>,
+
+    position: u64,
     /// Set to `true` to automatically set the length of the file on the
     /// filesystem to it's size as defined in the `files` vector, after a write
     auto_set_len: bool,
@@ -51,7 +57,13 @@ pub struct FileSequence {
 
 impl FileSequence {
     pub fn new(files: &[(PathBuf, u64)], auto_set_len: bool) -> Self {
-        Self { files: files.to_vec(), current_file: None, current_file_index: None, auto_set_len }
+        Self {
+            files: files.to_vec(),
+            current_file: None,
+            current_file_index: None,
+            position: 0,
+            auto_set_len,
+        }
     }
 
     /// Update a single file size.
@@ -69,10 +81,21 @@ impl FileSequence {
         &self.files
     }
 
+    /// Compute the starting position of the file (in bytes) by suming up
+    /// the size of the previous files.
+    pub fn get_file_position(&self, file_index: usize) -> u64 {
+        let mut pos = 0;
+        for i in 0..file_index {
+            pos += self.files[i].1;
+        }
+        pos
+    }
+
     /// Open the file at (`current_file_index` + 1).
     /// If no file is currently open (`current_file_index` is None), it opens
     /// the first file.
     async fn open_next_file(&mut self) -> io::Result<()> {
+        self.current_file = None;
         self.current_file_index = match self.current_file_index {
             Some(i) => Some(i + 1),
             None => Some(0),
@@ -83,7 +106,7 @@ impl FileSequence {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true)
+            .create(false)
             .open(self.files[self.current_file_index.unwrap()].0.clone())
             .await?;
         self.current_file = Some(file);
@@ -92,14 +115,15 @@ impl FileSequence {
 
     /// Open the file at `file_index`.
     async fn open_file(&mut self, file_index: usize) -> io::Result<()> {
+        self.current_file = None;
+        self.current_file_index = Some(file_index);
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true)
+            .create(false)
             .open(self.files[file_index].0.clone())
             .await?;
         self.current_file = Some(file);
-        self.current_file_index = Some(file_index);
         Ok(())
     }
 }
@@ -177,13 +201,20 @@ impl AsyncSeek for FileSequence {
             )))
         }
 
+        this.position = abs_pos; // Update FileSequence position
+
         // Open the file
         if this.current_file.is_none() ||
             this.current_file_index.is_some() && this.current_file_index.unwrap() != file_index
         {
-            if let Err(e) = smol::block_on(this.open_file(file_index)) {
-                return Poll::Ready(Err(e));
-            }
+            match smol::block_on(this.open_file(file_index)) {
+                Ok(_) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    // If the file does not exist, return without actually seeking it
+                    return Poll::Ready(Ok(this.position));
+                }
+                Err(e) => return Poll::Ready(Err(e)),
+            };
         }
 
         let file = this.current_file.as_mut().unwrap();
@@ -191,7 +222,7 @@ impl AsyncSeek for FileSequence {
 
         // Seek in the current file
         match smol::block_on(file.seek(SeekFrom::Start(file_pos))) {
-            Ok(new_position) => Poll::Ready(Ok(new_position)),
+            Ok(_) => Poll::Ready(Ok(this.position)),
             Err(e) => Poll::Ready(Err(e)),
         }
     }
@@ -223,9 +254,26 @@ impl AsyncWrite for FileSequence {
                     if file_index >= this.files.len() - 1 {
                         break; // No more files
                     }
+                    if remaining_buf.is_empty() {
+                        break; // No more data to write
+                    }
+                    let start_pos = this.get_file_position(file_index);
+                    let file_size = this.files[file_index].1 as usize;
+                    let file_pos = this.position - start_pos;
+                    let space_left = file_size - file_pos as usize;
+                    let skip_bytes = remaining_buf.len().min(space_left);
+                    this.position += skip_bytes as u64;
+                    remaining_buf = &remaining_buf[skip_bytes..]; // Update the remaining buffer
                 }
-                if let Err(e) = smol::block_on(this.open_next_file()) {
-                    return Poll::Ready(Err(e));
+
+                // Switch to the next file
+                match smol::block_on(this.open_next_file()) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                        this.current_file = None;
+                        continue; // Skip to next file
+                    }
+                    Err(e) => return Poll::Ready(Err(e)),
                 }
             }
 
@@ -250,6 +298,7 @@ impl AsyncWrite for FileSequence {
             match smol::block_on(file.write(&remaining_buf[..bytes_to_write])) {
                 Ok(bytes_written) => {
                     total_bytes_written += bytes_written;
+                    this.position += bytes_written as u64;
                     remaining_buf = &remaining_buf[bytes_written..]; // Update the remaining buffer
                     if remaining_buf.is_empty() {
                         if let Err(e) = finalize_current_file(file, max_size) {

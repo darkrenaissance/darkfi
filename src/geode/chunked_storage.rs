@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::geode::file_sequence::FileSequence;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use crate::geode::{file_sequence::FileSequence, MAX_CHUNK_SIZE};
 
 /// `ChunkedStorage` is a representation of a file or directory we're trying to
 /// retrieve from `Geode`.
@@ -96,5 +97,26 @@ impl ChunkedStorage {
     /// Return `is_dir`.
     pub fn is_dir(&self) -> bool {
         self.is_dir
+    }
+
+    /// Return all chunks that contain parts of `file`.
+    pub fn get_chunks_of_file(&self, file: &Path) -> Vec<(blake3::Hash, bool)> {
+        let files = self.fileseq.get_files();
+        let file_index = files.iter().position(|(f, _)| f == file);
+        if file_index.is_none() {
+            return vec![];
+        }
+        let file_index = file_index.unwrap();
+
+        let start_pos = self.fileseq.get_file_position(file_index);
+
+        let end_pos = start_pos + files[file_index].1;
+
+        let start_index = (start_pos as f64 / MAX_CHUNK_SIZE as f64).floor();
+        let end_index = (end_pos as f64 / MAX_CHUNK_SIZE as f64).floor();
+
+        let chunk_indexes: Vec<usize> = (start_index as usize..=end_index as usize).collect();
+
+        chunk_indexes.iter().filter_map(|&index| self.chunks.get(index)).cloned().collect()
     }
 }

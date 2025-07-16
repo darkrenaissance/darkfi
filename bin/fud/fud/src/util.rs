@@ -18,7 +18,10 @@
 
 use darkfi::Result;
 use smol::{fs, stream::StreamExt};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     let mut files = Vec::new();
@@ -38,4 +41,19 @@ pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     }
 
     Ok(files)
+}
+
+/// An enum to represent a set of files, where you can use `All` if you want
+/// all files without having to specify all of them.
+/// We could use an Option<HashSet<PathBuf>>, but this is more explicit.
+pub enum FileSelection {
+    All,
+    Set(HashSet<PathBuf>),
+}
+
+impl FromIterator<PathBuf> for FileSelection {
+    fn from_iter<I: IntoIterator<Item = PathBuf>>(iter: I) -> Self {
+        let paths: HashSet<PathBuf> = iter.into_iter().collect();
+        FileSelection::Set(paths)
+    }
 }

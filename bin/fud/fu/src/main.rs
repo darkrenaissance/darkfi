@@ -61,12 +61,15 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Subcmd {
-    /// Retrieve provided file name from the fud network
+    /// Retrieve provided resource from the fud network
     Get {
-        /// File hash
-        file: String,
-        /// File name
-        name: Option<String>,
+        /// Resource hash
+        hash: String,
+        /// Download path (relative or absolute)
+        path: Option<String>,
+        /// Optional list of files you want to download (only used for directories)
+        #[arg(short, long, num_args = 1..)]
+        files: Option<Vec<String>>,
     },
 
     /// Put a file onto the fud network
@@ -109,7 +112,8 @@ impl Fu {
     async fn get(
         &self,
         file_hash: String,
-        file_name: Option<String>,
+        file_path: Option<String>,
+        files: Option<Vec<String>>,
         ex: ExecutorPtr,
     ) -> Result<()> {
         let publisher = Publisher::new();
@@ -153,8 +157,8 @@ impl Fu {
             let chunks_downloaded =
                 *resource.get("chunks_downloaded").unwrap().get::<f64>().unwrap() as usize;
             let chunks_total =
-                *resource.get("chunks_total").unwrap().get::<f64>().unwrap() as usize;
-            let status = resource.get("status").unwrap().get::<String>().unwrap();
+                *resource.get("chunks_target").unwrap().get::<f64>().unwrap() as usize;
+            let mut status = resource.get("status").unwrap().get::<String>().unwrap().clone();
             let percent = match chunks_total {
                 0 => 0f64,
                 _ => chunks_downloaded as f64 / chunks_total as f64,
@@ -166,7 +170,10 @@ impl Fu {
                 "\x1B[2K\r[{bar}] {:.1}% | {chunks_downloaded}/{chunks_total} chunks | ",
                 percent * 100.0
             );
-            tstdout.set_color(&status_to_colorspec(status)).unwrap();
+            if remaining == 0 {
+                status = "seeding".to_string();
+            }
+            tstdout.set_color(&status_to_colorspec(&status)).unwrap();
             print!(
                 "{}",
                 match status.as_str() {
@@ -182,7 +189,13 @@ impl Fu {
             "get",
             JsonValue::Array(vec![
                 JsonValue::String(file_hash_.clone()),
-                JsonValue::String(file_name.unwrap_or_default()),
+                JsonValue::String(file_path.unwrap_or_default()),
+                match files {
+                    Some(files) => {
+                        JsonValue::Array(files.into_iter().map(JsonValue::String).collect())
+                    }
+                    None => JsonValue::Null,
+                },
             ]),
         );
         // Create a RPC client to send the `get` request
@@ -564,7 +577,7 @@ fn main() -> Result<()> {
             let fu = Fu { rpc_client, endpoint: args.endpoint.clone() };
 
             match args.command {
-                Subcmd::Get { file, name } => fu.get(file, name, ex.clone()).await,
+                Subcmd::Get { hash, path, files } => fu.get(hash, path, files, ex.clone()).await,
                 Subcmd::Put { file } => fu.put(file).await,
                 Subcmd::Ls {} => fu.list_resources().await,
                 Subcmd::Watch {} => fu.watch(ex.clone()).await,

@@ -150,7 +150,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             downloads_path,
             args.chunk_timeout,
             dht.clone(),
-            sled_db.open_tree("path")?,
+            &sled_db,
             event_pub.clone(),
         )
         .await?,

@@ -82,7 +82,10 @@ use futures::{AsyncRead, AsyncSeek};
 use log::{debug, info, warn};
 use smol::{
     fs::{self, File},
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, Cursor, SeekFrom},
+    io::{
+        AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, Cursor, ErrorKind,
+        SeekFrom,
+    },
     stream::StreamExt,
 };
 use std::path::Path;
@@ -330,12 +333,13 @@ impl Geode {
 
     /// Write a single chunk given a stream.
     /// The file must be inserted into Geode before calling this method.
-    /// Always overwrites any existing chunk. Returns the chunk hash once inserted.
+    /// Always overwrites any existing chunk. Returns the chunk hash and
+    /// the number of bytes written to the file system.
     pub async fn write_chunk(
         &self,
         chunked: &mut ChunkedStorage,
         stream: impl AsRef<[u8]>,
-    ) -> Result<blake3::Hash> {
+    ) -> Result<(blake3::Hash, usize)> {
         info!(target: "geode::write_chunk()", "[Geode] Writing single chunk");
 
         let mut cursor = Cursor::new(&stream);
@@ -363,7 +367,7 @@ impl Geode {
         fileseq.seek(SeekFrom::Start(position)).await?;
 
         // This will write the chunk, and truncate files if `chunked` is a directory.
-        fileseq.write_all(chunk_slice).await?;
+        let bytes_written = fileseq.write(chunk_slice).await?;
 
         // If it's the last chunk of a file (and it's *not* a directory),
         // truncate the file to the correct length.
@@ -379,7 +383,7 @@ impl Geode {
             }
         }
 
-        Ok(chunk_hash)
+        Ok((chunk_hash, bytes_written))
     }
 
     /// Iterate over chunks and find which chunks are available locally.
@@ -392,8 +396,9 @@ impl Geode {
             // Read the chunk using the FileSequence
             let chunk = match self.read_chunk(&mut chunked_file.get_fileseq(), &chunk_index).await {
                 Ok(c) => c,
+                Err(Error::Io(ErrorKind::NotFound)) => continue,
                 Err(e) => {
-                    warn!("Error while verifying chunks: {e}");
+                    warn!(target: "geode::verify_chunks()", "Error while verifying chunks: {e}");
                     break
                 }
             };
@@ -427,7 +432,7 @@ impl Geode {
                     return self.create_chunked_storage(hash, path, &chunk_hashes, &files).await
                 }
                 Err(e) => {
-                    if !matches!(e, Error::Io(std::io::ErrorKind::NotFound)) {
+                    if !matches!(e, Error::Io(ErrorKind::NotFound)) {
                         return Err(Error::GeodeNeedsGc)
                     }
                 }

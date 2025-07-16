@@ -44,6 +44,7 @@ pub struct Resource {
     pub status: ResourceStatus,
     pub chunks_total: u64,
     pub chunks_downloaded: u64,
+    pub chunks_target: u64,
 }
 
 impl From<Resource> for JsonValue {
@@ -83,6 +84,7 @@ impl From<Resource> for JsonValue {
             ),
             ("chunks_total", JsonValue::Number(rs.chunks_total as f64)),
             ("chunks_downloaded", JsonValue::Number(rs.chunks_downloaded as f64)),
+            ("chunks_target", JsonValue::Number(rs.chunks_target as f64)),
         ])
     }
 }

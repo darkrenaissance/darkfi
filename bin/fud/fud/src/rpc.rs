@@ -39,7 +39,7 @@ use darkfi::{
     Result,
 };
 
-use crate::Fud;
+use crate::{util::FileSelection, Fud};
 
 pub struct JsonRpcInterface {
     fud: Arc<Fud>,
@@ -116,14 +116,15 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Fetch a resource from the network. Takes a hash and path (absolute or relative) as parameters.
+    // Fetch a resource from the network. Takes a hash, path (absolute or relative), and an
+    // optional list of file paths (only used for directories) as parameters.
     // Returns the path where the resource will be located once downloaded.
     //
-    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg"], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg", null], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "/home/user/myfile.jpg", "id": 42}
     async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
+        if params.len() != 3 || !params[0].is_string() || !params[1].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
@@ -157,8 +158,23 @@ impl JsonRpcInterface {
             None => self.fud.downloads_path.join(&hash_str),
         };
 
+        let files: FileSelection = match &params[2] {
+            JsonValue::Array(files) => files
+                .iter()
+                .filter_map(|v| {
+                    if let JsonValue::String(file) = v {
+                        Some(PathBuf::from(file.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            JsonValue::Null => FileSelection::All,
+            _ => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
+        };
+
         // Start downloading the resource
-        if let Err(e) = self.fud.get(&hash, &path).await {
+        if let Err(e) = self.fud.get(&hash, &path, files).await {
             return JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
         }
 

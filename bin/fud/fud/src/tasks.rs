@@ -42,7 +42,7 @@ pub enum FetchReply {
 /// removed from the hashmap.
 pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
     loop {
-        let (hash, path) = fud.get_rx.recv().await.unwrap();
+        let (hash, path, files) = fud.get_rx.recv().await.unwrap();
 
         // Create the new task
         let mut fetch_tasks = fud.fetch_tasks.write().await;
@@ -54,7 +54,7 @@ pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
         let fud_1 = fud.clone();
         let fud_2 = fud.clone();
         task.start(
-            async move { fud_1.fetch_resource(&hash, &path).await },
+            async move { fud_1.fetch_resource(&hash, &path, &files).await },
             move |res| async move {
                 // Remove the task from the `fud.fetch_tasks` hashmap once it is
                 // stopped (error, manually, or just done).
