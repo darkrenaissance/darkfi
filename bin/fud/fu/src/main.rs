@@ -72,10 +72,10 @@ enum Subcmd {
         files: Option<Vec<String>>,
     },
 
-    /// Put a file onto the fud network
+    /// Put a file or directory onto the fud network
     Put {
-        /// File name
-        file: String,
+        /// File path or directory path
+        path: String,
     },
 
     /// List resources
@@ -269,8 +269,8 @@ impl Fu {
         }
     }
 
-    async fn put(&self, file: String) -> Result<()> {
-        let req = JsonRequest::new("put", JsonValue::Array(vec![JsonValue::String(file)]));
+    async fn put(&self, path: String) -> Result<()> {
+        let req = JsonRequest::new("put", JsonValue::Array(vec![JsonValue::String(path)]));
         let rep = self.rpc_client.request(req).await?;
         match rep {
             JsonValue::String(id) => {
@@ -578,7 +578,7 @@ fn main() -> Result<()> {
 
             match args.command {
                 Subcmd::Get { hash, path, files } => fu.get(hash, path, files, ex.clone()).await,
-                Subcmd::Put { file } => fu.put(file).await,
+                Subcmd::Put { path } => fu.put(path).await,
                 Subcmd::Ls {} => fu.list_resources().await,
                 Subcmd::Watch {} => fu.watch(ex.clone()).await,
                 Subcmd::Rm { hash } => fu.remove(hash).await,
