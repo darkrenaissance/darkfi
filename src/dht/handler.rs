@@ -355,6 +355,8 @@ pub trait DhtHandler {
             }
         }
 
+        drop(channel_cache);
+
         // Create a channel
         for addr in node.addresses.clone() {
             let session_out = self.dht().p2p.session_outbound();
@@ -387,6 +389,7 @@ pub trait DhtHandler {
                 continue;
             }
 
+            let mut channel_cache = channel_cache_lock.write().await;
             channel_cache.insert(
                 channel.info.id,
                 ChannelCacheItem { node: node.clone(), topic, usage_count: 1 },
