@@ -215,12 +215,12 @@ impl DhtHandler for Fud {
         let request = FudFindNodesRequest { key: *key };
         channel.send(&request).await?;
 
-        let reply = msg_subscriber_nodes.receive_with_timeout(self.dht().settings.timeout).await?;
+        let reply = msg_subscriber_nodes.receive_with_timeout(self.dht().settings.timeout).await;
 
         msg_subscriber_nodes.unsubscribe().await;
         self.cleanup_channel(channel).await;
 
-        Ok(reply.nodes.clone())
+        Ok(reply?.nodes.clone())
     }
 }
 
