@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EVENT_TIME_DRIFT","GENESIS_CONTENTS","INITIAL_GENESIS","NULL_ID","N_EVENT_PARENTS"],"mod":["deg","event","proto","util"],"struct":["EventGraph"],"type":["EventGraphPtr"]};
