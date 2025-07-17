@@ -1152,10 +1152,13 @@ impl Hosts {
             return
         }
 
-        // This will panic if we are already connected to this peer, this peer
+        // This will error if we are already connected to this peer, this peer
         // is suspended, or this peer is currently being inserted into the hostlist.
         // None of these scenarios should ever happen.
-        self.try_register(address.clone(), HostState::Connected(channel.clone())).unwrap();
+        if let Err(e) = self.try_register(address.clone(), HostState::Connected(channel.clone())) {
+            warn!(target: "net::hosts::register_channel", "Error while registering channel {channel:?}: {e:?}");
+            return
+        }
 
         // Notify that channel processing was successful
         self.channel_publisher.notify(Ok(channel.clone())).await;
