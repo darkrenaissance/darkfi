@@ -83,15 +83,11 @@ impl Connector {
                 } else if tor_socks5_proxy.is_some() {
                     endpoint = tor_socks5_proxy.unwrap();
                 } else {
-                    warn!(target: "net::connector::connect", "Transport mixing is enabled but tor_socks5_proxy is not set");
+                    warn!(target: "net::connector::connect", "Transport mixing is enabled but socks5 proxy is not set");
                     return Err(Error::ConnectFailed)
                 }
 
-                endpoint.set_path(&format!(
-                    "{}:{}",
-                    endpoint.host().unwrap(),
-                    endpoint.port().unwrap()
-                ));
+                endpoint.set_path(&format!("{}:{}", url.host().unwrap(), url.port().unwrap()));
                 endpoint.set_scheme("socks5")?;
             } else if transports.contains(&"socks5+tls".to_string()) &&
                 (scheme == "tcp+tls" || scheme == "tor+tls")
@@ -102,15 +98,11 @@ impl Connector {
                 } else if tor_socks5_proxy.is_some() {
                     endpoint = tor_socks5_proxy.unwrap();
                 } else {
-                    warn!(target: "net::connector::connect", "Transport mixing is enabled but tor_socks5_proxy is not set");
+                    warn!(target: "net::connector::connect", "Transport mixing is enabled but socks5 proxy is not set");
                     return Err(Error::ConnectFailed)
                 }
 
-                endpoint.set_path(&format!(
-                    "{}:{}",
-                    endpoint.host().unwrap(),
-                    endpoint.port().unwrap()
-                ));
+                endpoint.set_path(&format!("{}:{}", url.host().unwrap(), url.port().unwrap()));
                 endpoint.set_scheme("socks5+tls")?;
             } else if transports.contains(&"tor".to_string()) && scheme == "tcp" {
                 endpoint.set_scheme("tor")?;
