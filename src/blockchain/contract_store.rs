@@ -550,8 +550,8 @@ impl ContractStoreOverlay {
         Ok(tree)
     }
 
-    /// Compute all updated contracts states and wasm bincodes
-    /// checksums and update their records in the provided
+    /// Retrieve all updated contracts states and wasm bincodes
+    /// monotrees roots and update their records in the provided
     /// Monotree(SMT).
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
