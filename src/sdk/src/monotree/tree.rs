@@ -20,7 +20,7 @@
 use std::sync::{Arc, Mutex};
 
 use hashbrown::{HashMap, HashSet};
-use sled_overlay::SledDbOverlay;
+use sled_overlay::{sled::Tree, SledDbOverlay};
 
 use super::{
     bits::Bits,
@@ -150,7 +150,82 @@ impl MonotreeStorageAdapter for MemoryDb {
     }
 }
 
-/// sled-overlay-based storage for Monotree
+/// sled-tree based storage for Monotree
+#[derive(Clone)]
+pub struct SledTreeDb {
+    tree: Tree,
+    batch: MemCache,
+    batch_on: bool,
+}
+
+impl SledTreeDb {
+    pub fn new(tree: &Tree) -> Self {
+        Self { tree: tree.clone(), batch: MemCache::new(), batch_on: false }
+    }
+}
+
+impl MonotreeStorageAdapter for SledTreeDb {
+    fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
+        if self.batch_on {
+            self.batch.put(key, value);
+        } else if let Err(e) = self.tree.insert(slice_to_hash(key), value) {
+            return Err(ContractError::IoError(e.to_string()))
+        }
+
+        Ok(())
+    }
+
+    fn get(&self, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
+        if self.batch_on && self.batch.contains(key) {
+            return Ok(self.batch.get(key));
+        }
+
+        match self.tree.get(key) {
+            Ok(Some(v)) => Ok(Some(v.to_vec())),
+            Ok(None) => Ok(None),
+            Err(e) => Err(ContractError::IoError(e.to_string())),
+        }
+    }
+
+    fn del(&mut self, key: &Hash) -> GenericResult<()> {
+        if self.batch_on {
+            self.batch.del(key);
+        } else if let Err(e) = self.tree.remove(key) {
+            return Err(ContractError::IoError(e.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn init_batch(&mut self) -> GenericResult<()> {
+        if !self.batch_on {
+            self.batch.clear();
+            self.batch_on = true;
+        }
+
+        Ok(())
+    }
+
+    fn finish_batch(&mut self) -> GenericResult<()> {
+        if self.batch_on {
+            for (key, value) in self.batch.map.drain() {
+                if let Err(e) = self.tree.insert(key, value) {
+                    return Err(ContractError::IoError(e.to_string()))
+                }
+            }
+            for key in self.batch.set.drain() {
+                if let Err(e) = self.tree.remove(key) {
+                    return Err(ContractError::IoError(e.to_string()))
+                }
+            }
+            self.batch_on = false;
+        }
+
+        Ok(())
+    }
+}
+
+/// sled-overlay based storage for Monotree
 #[derive(Clone)]
 pub struct SledOverlayDb {
     overlay: Arc<Mutex<SledDbOverlay>>,

@@ -21,9 +21,9 @@ use std::{collections::BTreeMap, io::Cursor};
 use darkfi_sdk::{
     crypto::contract_id::{
         ContractId, NATIVE_CONTRACT_IDS_BYTES, NATIVE_CONTRACT_ZKAS_DB_NAMES,
-        SMART_CONTRACT_ZKAS_DB_NAME,
+        SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
     },
-    monotree::{self, Monotree},
+    monotree::{MemoryDb, Monotree, SledTreeDb, EMPTY_HASH},
 };
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
@@ -257,40 +257,49 @@ impl ContractStore {
     }
 
     /// Generate a Monotree(SMT) containing all contracts states
-    /// checksums, along with the wasm bincodes checksum.
+    /// roots, along with the wasm bincodes monotree root.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<monotree::MemoryDb>> {
+    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<MemoryDb>> {
         // Initialize the monotree
         let mut root = None;
-        let monotree_db = monotree::MemoryDb::new();
+        let monotree_db = MemoryDb::new();
         let mut tree = Monotree::new(monotree_db);
 
-        // Iterate over current contracts states records
-        // TODO: parallelize this with a threadpool
-        for state_record in self.state.iter().values() {
-            // Iterate over contract states pointers
-            let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?)?;
-            for state_ptr in state_pointers {
-                // Skip native zkas tree
-                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_ptr) {
-                    continue
-                }
+        // Iterate over current contracts states keys
+        for contract in self.state.iter() {
+            // Grab its monotree pointer
+            let (contract_id, state_pointers): (ContractId, Vec<[u8; 32]>) =
+                parse_record(contract?)?;
+            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
 
-                // Grab the state tree
-                let state_tree = db.open_tree(state_ptr)?;
-
-                // Compute its checksum
-                let checksum = sled_tree_checksum(&state_tree)?;
-
-                // Insert record to monotree
-                root = tree.insert(root.as_ref(), &state_ptr, &checksum)?;
-                tree.set_headroot(root.as_ref());
+            // Skip native zkas tree
+            if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_monotree_ptr) {
+                continue
             }
+
+            // Check it exists
+            if !state_pointers.contains(&state_monotree_ptr) {
+                return Err(Error::ContractStateNotFound)
+            }
+
+            // Grab its monotree
+            let state_tree = db.open_tree(state_monotree_ptr)?;
+            let state_monotree_db = SledTreeDb::new(&state_tree);
+            let state_monotree = Monotree::new(state_monotree_db);
+
+            // Insert its root to the global monotree
+            let state_monotree_root = match state_monotree.get_headroot()? {
+                Some(hash) => hash,
+                None => *EMPTY_HASH,
+            };
+            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
         }
 
-        // Iterate over current contracts wasm bincodes to compute its checksum
-        let mut hasher = blake3::Hasher::new();
+        // Iterate over current contracts wasm bincodes to compute its monotree root
+        let mut wasm_monotree_root = None;
+        let wasm_monotree_db = MemoryDb::new();
+        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
         for record in self.wasm.iter() {
             let (key, value) = record?;
 
@@ -299,16 +308,23 @@ impl ContractStore {
                 continue
             }
 
-            // Hash record
-            hasher.update(&key);
-            hasher.update(&value);
+            // Insert record
+            wasm_monotree_root = wasm_monotree.insert(
+                wasm_monotree_root.as_ref(),
+                blake3::hash(&key).as_bytes(),
+                blake3::hash(&value).as_bytes(),
+            )?;
         }
 
-        // Insert wasm bincodes record to monotree
+        // Insert wasm bincodes root to the global monotree
+        let wasm_monotree_root = match wasm_monotree_root {
+            Some(hash) => hash,
+            None => *EMPTY_HASH,
+        };
         root = tree.insert(
             root.as_ref(),
             blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            hasher.finalize().as_bytes(),
+            &wasm_monotree_root,
         )?;
         tree.set_headroot(root.as_ref());
 
@@ -456,7 +472,7 @@ impl ContractStoreOverlay {
     /// Be carefull as this will open all states trees in the overlay.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
+    pub fn get_state_monotree(&self) -> Result<Monotree<MemoryDb>> {
         let mut lock = self.0.lock().unwrap();
 
         // Grab all states pointers
@@ -474,7 +490,7 @@ impl ContractStoreOverlay {
 
         // Initialize the monotree
         let mut root = None;
-        let monotree_db = monotree::MemoryDb::new();
+        let monotree_db = MemoryDb::new();
         let mut tree = Monotree::new(monotree_db);
 
         // Iterate over contract states pointers
@@ -522,7 +538,7 @@ impl ContractStoreOverlay {
     /// Monotree(SMT).
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn update_state_monotree(&self, tree: &mut Monotree<monotree::MemoryDb>) -> Result<()> {
+    pub fn update_state_monotree(&self, tree: &mut Monotree<MemoryDb>) -> Result<()> {
         let lock = self.0.lock().unwrap();
 
         // Iterate over overlay's caches
@@ -586,23 +602,6 @@ impl ContractStoreOverlay {
 
         Ok(())
     }
-}
-
-/// Auxiliary function to compute a blake3 checksum for provided sled
-/// tree.
-fn sled_tree_checksum(tree: &sled::Tree) -> Result<[u8; 32]> {
-    // Generate a new blake3 hashed
-    let mut hasher = blake3::Hasher::new();
-
-    // Iterate over tree records to compute its checksum
-    for record in tree.iter() {
-        let (key, value) = record?;
-        hasher.update(&key);
-        hasher.update(&value);
-    }
-
-    // Return the finalized hasher bytes
-    Ok(*hasher.finalize().as_bytes())
 }
 
 /// Auxiliary function to compute a blake3 checksum for provided sled
