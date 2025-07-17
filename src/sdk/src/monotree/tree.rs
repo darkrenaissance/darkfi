@@ -17,8 +17,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Mutex};
-
 use hashbrown::{HashMap, HashSet};
 use sled_overlay::{sled::Tree, SledDbOverlay};
 
@@ -228,14 +226,14 @@ impl MonotreeStorageAdapter for SledTreeDb {
 /// sled-overlay based storage for Monotree
 #[derive(Clone)]
 pub struct SledOverlayDb {
-    overlay: Arc<Mutex<SledDbOverlay>>,
+    overlay: SledDbOverlay,
     tree: [u8; 32],
     batch: MemCache,
     batch_on: bool,
 }
 
 impl SledOverlayDb {
-    pub fn new(overlay: &Arc<Mutex<SledDbOverlay>>, tree: &[u8; 32]) -> Self {
+    pub fn new(overlay: &SledDbOverlay, tree: &[u8; 32]) -> Self {
         Self { overlay: overlay.clone(), tree: *tree, batch: MemCache::new(), batch_on: false }
     }
 }
@@ -244,9 +242,7 @@ impl MonotreeStorageAdapter for SledOverlayDb {
     fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
         if self.batch_on {
             self.batch.put(key, value);
-        } else if let Err(e) =
-            self.overlay.lock().unwrap().insert(&self.tree, &slice_to_hash(key), &value)
-        {
+        } else if let Err(e) = self.overlay.insert(&self.tree, &slice_to_hash(key), &value) {
             return Err(ContractError::IoError(e.to_string()))
         }
 
@@ -258,7 +254,7 @@ impl MonotreeStorageAdapter for SledOverlayDb {
             return Ok(self.batch.get(key));
         }
 
-        match self.overlay.lock().unwrap().get(&self.tree, key) {
+        match self.overlay.get(&self.tree, key) {
             Ok(Some(v)) => Ok(Some(v.to_vec())),
             Ok(None) => Ok(None),
             Err(e) => Err(ContractError::IoError(e.to_string())),
@@ -268,7 +264,7 @@ impl MonotreeStorageAdapter for SledOverlayDb {
     fn del(&mut self, key: &Hash) -> GenericResult<()> {
         if self.batch_on {
             self.batch.del(key);
-        } else if let Err(e) = self.overlay.lock().unwrap().remove(&self.tree, key) {
+        } else if let Err(e) = self.overlay.remove(&self.tree, key) {
             return Err(ContractError::IoError(e.to_string()));
         }
 
@@ -287,12 +283,12 @@ impl MonotreeStorageAdapter for SledOverlayDb {
     fn finish_batch(&mut self) -> GenericResult<()> {
         if self.batch_on {
             for (key, value) in self.batch.map.drain() {
-                if let Err(e) = self.overlay.lock().unwrap().insert(&self.tree, &key, &value) {
+                if let Err(e) = self.overlay.insert(&self.tree, &key, &value) {
                     return Err(ContractError::IoError(e.to_string()))
                 }
             }
             for key in self.batch.set.drain() {
-                if let Err(e) = self.overlay.lock().unwrap().remove(&self.tree, &key) {
+                if let Err(e) = self.overlay.remove(&self.tree, &key) {
                     return Err(ContractError::IoError(e.to_string()))
                 }
             }
