@@ -41,7 +41,7 @@ pub mod bits;
 pub mod node;
 
 pub mod tree;
-pub use tree::{MemoryDb, Monotree, SledDb};
+pub use tree::{MemoryDb, Monotree, SledOverlayDb};
 
 pub mod utils;
 
