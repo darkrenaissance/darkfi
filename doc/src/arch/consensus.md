@@ -301,13 +301,13 @@ comparison the tx in Bitcoin with the most outputs has 2501.
 
 ## Contracts states Monotree(SMT)
 
-DarkFi is using an optimized Sparse Merkle Tree implementation,
-called Monotree.
-This tree is constructed using all contracts states trees checksums,
-along with the wasm bincodes tree checksum, excluding native contracts
-zkas tree and wasm bincodes.
-The checksum of each tree is computed by hashing all its key and values,
-using a `blake3` hasher.
+DarkFi is using an optimized Sparse Merkle Tree implementation, called
+Monotree. Each contract has its own Monotree, containing all its
+database trees hashed records. Additionally, a global tree exists
+reflecting the total database state. The global tree is constructed
+using all contracts states monotrees roots, along with the wasm
+bincodes monotree root, excluding native contracts zkas tree and wasm
+bincodes.
 For each block, we compute the current tree root and keep it in its header,
 enabling us to both verify the contacts state after the block insertion,
 and create proofs commiting to that specific state.
@@ -317,7 +317,7 @@ and create proofs commiting to that specific state.
 In this pseudocode we can see how we can use the Monotree to produce
 a proof for a specific state. First, we will create a random set of
 key-value `blake3` hash pairs, representing our contract states
-checksums:
+roots:
 
 ```
 keys = random_hashes(100);

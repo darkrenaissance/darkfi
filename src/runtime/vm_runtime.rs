@@ -22,7 +22,9 @@ use std::{
 };
 
 use darkfi_sdk::{
-    crypto::contract_id::{ContractId, SMART_CONTRACT_ZKAS_DB_NAME},
+    crypto::contract_id::{
+        ContractId, SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
+    },
     tx::TransactionHash,
     wasm, AsHex,
 };
@@ -465,6 +467,12 @@ impl Runtime {
                     Ok(v) => v,
                     Err(_) => contracts.init(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?,
                 };
+
+            // Create the monotree db tree for this contract,
+            // if it doesn't exists.
+            if contracts.lookup(&env_mut.contract_id, SMART_CONTRACT_MONOTREE_DB_NAME).is_err() {
+                contracts.init(&env_mut.contract_id, SMART_CONTRACT_MONOTREE_DB_NAME)?;
+            }
 
             let mut db_handles = env_mut.db_handles.borrow_mut();
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
