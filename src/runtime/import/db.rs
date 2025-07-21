@@ -19,7 +19,9 @@
 use std::io::Cursor;
 
 use darkfi_sdk::{
-    crypto::contract_id::{ContractId, SMART_CONTRACT_ZKAS_DB_NAME},
+    crypto::contract_id::{
+        ContractId, SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
+    },
     wasm,
 };
 use darkfi_serial::{deserialize, serialize, Decodable};
@@ -134,6 +136,15 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         error!(
             target: "runtime::db::db_init",
             "[WASM] [{cid}] db_init(): Attempted to init zkas db"
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Nor can we allow initializing the special monotree db:
+    if read_db_name == SMART_CONTRACT_MONOTREE_DB_NAME {
+        error!(
+            target: "runtime::db::db_init",
+            "[WASM] [{cid}] db_init(): Attempted to init monotree db"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -289,6 +300,14 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         error!(
             target: "runtime::db::db_lookup",
             "[WASM] [{cid}] db_lookup(): Attempted to lookup zkas db"
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    if db_name == SMART_CONTRACT_MONOTREE_DB_NAME {
+        error!(
+            target: "runtime::db::db_lookup",
+            "[WASM] [{cid}] db_lookup(): Attempted to lookup monotree db"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }

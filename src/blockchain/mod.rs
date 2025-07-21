@@ -51,6 +51,7 @@ pub use tx_store::{
 pub mod contract_store;
 pub use contract_store::{
     ContractStore, ContractStoreOverlay, SLED_BINCODE_TREE, SLED_CONTRACTS_TREE,
+    SLED_CONTRACTS_TREES_TREE,
 };
 
 /// Monero definitions needed for merge mining
@@ -447,6 +448,7 @@ impl BlockchainOverlay {
             SLED_PENDING_TX_TREE,
             SLED_PENDING_TX_ORDER_TREE,
             SLED_CONTRACTS_TREE,
+            SLED_CONTRACTS_TREES_TREE,
             SLED_BINCODE_TREE,
         ];
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(

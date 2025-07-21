@@ -28,6 +28,9 @@ use crate::error::ContractError;
 /// The hardcoded db name for the zkas circuits database tree
 pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
+/// The hardcoded db name for the monotree database tree
+pub const SMART_CONTRACT_MONOTREE_DB_NAME: &str = "_monotree";
+
 lazy_static! {
     // The idea here is that 0 is not a valid x coordinate for any pallas point,
     // therefore a signature cannot be produced for such IDs. This allows us to

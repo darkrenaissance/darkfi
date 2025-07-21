@@ -21,13 +21,13 @@ use std::{collections::BTreeMap, io::Cursor};
 use darkfi_sdk::{
     crypto::contract_id::{
         ContractId, NATIVE_CONTRACT_IDS_BYTES, NATIVE_CONTRACT_ZKAS_DB_NAMES,
-        SMART_CONTRACT_ZKAS_DB_NAME,
+        SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
     },
-    monotree::{self, Monotree},
+    monotree::{MemoryDb, Monotree, SledOverlayDb, SledTreeDb, EMPTY_HASH},
 };
 use darkfi_serial::{deserialize, serialize};
-use sled_overlay::{serial::parse_record, sled, SledDbOverlay};
 use tracing::{debug, error};
+use sled_overlay::{serial::parse_record, sled};
 
 use crate::{
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
@@ -38,6 +38,7 @@ use crate::{
 use super::SledDbOverlayPtr;
 
 pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
+pub const SLED_CONTRACTS_TREES_TREE: &[u8] = b"_contracts_trees";
 pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
 
 /// The `ContractStore` is a structure representing all `sled` trees related
@@ -61,6 +62,17 @@ pub struct ContractStore {
     /// ```
     /// These values get mutated with `init()` and `remove()`.
     pub state: sled::Tree,
+    /// The `sled` tree storing the inverse pointers to contracts'
+    /// databases. See the rustdoc for the impl functions for more
+    /// info.
+    /// The layout looks like this:
+    /// ```plaintext
+    ///  tree: "_contracts_trees"
+    ///   key: blake3(ContractId || tree_name)
+    /// value: ContractId
+    /// ```
+    /// These values get mutated with `init()` and `remove()`.
+    pub state_trees: sled::Tree,
 }
 
 impl ContractStore {
@@ -68,7 +80,8 @@ impl ContractStore {
     pub fn new(db: &sled::Db) -> Result<Self> {
         let wasm = db.open_tree(SLED_BINCODE_TREE)?;
         let state = db.open_tree(SLED_CONTRACTS_TREE)?;
-        Ok(Self { wasm, state })
+        let state_trees = db.open_tree(SLED_CONTRACTS_TREES_TREE)?;
+        Ok(Self { wasm, state, state_trees })
     }
 
     /// Fetches the bincode for a given ContractId from the store's wasm tree.
@@ -139,10 +152,14 @@ impl ContractStore {
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
+        if !self.state_trees.contains_key(ptr)? {
+            return Err(Error::ContractStateNotFound)
+        }
 
         // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
         self.state.insert(contract_id_bytes, serialize(&state_pointers))?;
+        self.state_trees.remove(ptr)?;
 
         // Drop the deleted tree from the database
         db.drop_tree(ptr)?;
@@ -257,40 +274,47 @@ impl ContractStore {
     }
 
     /// Generate a Monotree(SMT) containing all contracts states
-    /// checksums, along with the wasm bincodes checksum.
+    /// roots, along with the wasm bincodes monotree root.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<monotree::MemoryDb>> {
+    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<MemoryDb>> {
         // Initialize the monotree
         let mut root = None;
-        let monotree_db = monotree::MemoryDb::new();
+        let monotree_db = MemoryDb::new();
         let mut tree = Monotree::new(monotree_db);
 
         // Iterate over current contracts states records
-        // TODO: parallelize this with a threadpool
-        for state_record in self.state.iter().values() {
-            // Iterate over contract states pointers
-            let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?)?;
-            for state_ptr in state_pointers {
-                // Skip native zkas tree
-                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_ptr) {
-                    continue
-                }
+        for state_record in self.state.iter() {
+            // Grab its monotree pointer
+            let (contract_id, state_pointers): (ContractId, Vec<[u8; 32]>) =
+                parse_record(state_record?)?;
+            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
 
-                // Grab the state tree
-                let state_tree = db.open_tree(state_ptr)?;
-
-                // Compute its checksum
-                let checksum = sled_tree_checksum(&state_tree)?;
-
-                // Insert record to monotree
-                root = tree.insert(root.as_ref(), &state_ptr, &checksum)?;
-                tree.set_headroot(root.as_ref());
+            // Check it exists
+            if !state_pointers.contains(&state_monotree_ptr) {
+                return Err(Error::ContractStateNotFound)
             }
+            if !self.state_trees.contains_key(&state_monotree_ptr)? {
+                return Err(Error::ContractStateNotFound)
+            }
+
+            // Grab its monotree
+            let state_tree = db.open_tree(state_monotree_ptr)?;
+            let state_monotree_db = SledTreeDb::new(&state_tree);
+            let state_monotree = Monotree::new(state_monotree_db);
+
+            // Insert its root to the global monotree
+            let state_monotree_root = match state_monotree.get_headroot()? {
+                Some(hash) => hash,
+                None => *EMPTY_HASH,
+            };
+            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
         }
 
-        // Iterate over current contracts wasm bincodes to compute its checksum
-        let mut hasher = blake3::Hasher::new();
+        // Iterate over current contracts wasm bincodes to compute its monotree root
+        let mut wasm_monotree_root = None;
+        let wasm_monotree_db = MemoryDb::new();
+        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
         for record in self.wasm.iter() {
             let (key, value) = record?;
 
@@ -299,16 +323,23 @@ impl ContractStore {
                 continue
             }
 
-            // Hash record
-            hasher.update(&key);
-            hasher.update(&value);
+            // Insert record
+            wasm_monotree_root = wasm_monotree.insert(
+                wasm_monotree_root.as_ref(),
+                blake3::hash(&key).as_bytes(),
+                blake3::hash(&value).as_bytes(),
+            )?;
         }
 
-        // Insert wasm bincodes record to monotree
+        // Insert wasm bincodes root to the global monotree
+        let wasm_monotree_root = match wasm_monotree_root {
+            Some(hash) => hash,
+            None => *EMPTY_HASH,
+        };
         root = tree.insert(
             root.as_ref(),
             blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            hasher.finalize().as_bytes(),
+            &wasm_monotree_root,
         )?;
         tree.set_headroot(root.as_ref());
 
@@ -323,6 +354,7 @@ impl ContractStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREES_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -385,6 +417,7 @@ impl ContractStoreOverlay {
         // Now we add it so it's marked as initialized and create its tree.
         state_pointers.push(ptr);
         lock.insert(SLED_CONTRACTS_TREE, &contract_id_bytes, &serialize(&state_pointers))?;
+        lock.insert(SLED_CONTRACTS_TREES_TREE, &ptr, &contract_id_bytes)?;
         lock.open_tree(&ptr, false)?;
 
         Ok(ptr)
@@ -411,6 +444,9 @@ impl ContractStoreOverlay {
         // in this array. If not, that's an error.
         let ptr = contract_id.hash_state_id(tree_name);
         if !state_pointers.contains(&ptr) {
+            return Err(Error::ContractStateNotFound)
+        }
+        if !lock.contains_key(SLED_CONTRACTS_TREES_TREE, &ptr)? {
             return Err(Error::ContractStateNotFound)
         }
 
@@ -452,47 +488,55 @@ impl ContractStoreOverlay {
     }
 
     /// Generate a Monotree(SMT) containing all contracts states
-    /// checksums, along with the wasm bincodes checksum.
-    /// Be carefull as this will open all states trees in the overlay.
+    /// roots, along with the wasm bincodes monotree roots.
+    /// Be carefull as this will open all states monotrees in the overlay.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
-        let mut lock = self.0.lock().unwrap();
+    pub fn get_state_monotree(&self) -> Result<Monotree<MemoryDb>> {
+        let lock = self.0.lock().unwrap();
 
-        // Grab all states pointers
-        let mut states_pointers = vec![];
+        // Grab all states monotrees pointers
+        let mut states_monotrees_pointers = vec![];
         for state_record in lock.iter(SLED_CONTRACTS_TREE)? {
-            let state_pointers: Vec<[u8; 32]> = deserialize(&state_record?.1)?;
-            for state_ptr in state_pointers {
-                // Skip native zkas tree
-                if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_ptr) {
-                    continue
-                }
-                states_pointers.push(state_ptr);
+            // Grab its monotree pointer
+            let (contract_id, state_pointers): (ContractId, Vec<[u8; 32]>) =
+                parse_record(state_record?)?;
+            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
+
+            // Check it exists
+            if !state_pointers.contains(&state_monotree_ptr) {
+                return Err(Error::ContractStateNotFound)
             }
+            if !lock.contains_key(SLED_CONTRACTS_TREES_TREE, &state_monotree_ptr)? {
+                return Err(Error::ContractStateNotFound)
+            }
+
+            states_monotrees_pointers.push((contract_id, state_monotree_ptr));
         }
 
         // Initialize the monotree
         let mut root = None;
-        let monotree_db = monotree::MemoryDb::new();
+        let monotree_db = MemoryDb::new();
         let mut tree = Monotree::new(monotree_db);
 
-        // Iterate over contract states pointers
-        // TODO: parallelize this with a threadpool
-        for state_ptr in states_pointers {
-            // Open the state tree in the overlay
-            lock.open_tree(&state_ptr, false)?;
+        // Iterate over contract states monotrees pointers
+        for (contract_id, state_monotree_ptr) in states_monotrees_pointers {
+            // Grab its monotree
+            let state_monotree_db = SledOverlayDb::new(&lock, &state_monotree_ptr)?;
+            let state_monotree = Monotree::new(state_monotree_db);
 
-            // Compute its checksum
-            let checksum = sled_overlay_tree_checksum(&lock, &state_ptr)?;
-
-            // Insert record to monotree
-            root = tree.insert(root.as_ref(), &state_ptr, &checksum)?;
-            tree.set_headroot(root.as_ref());
+            // Insert its root to the global monotree
+            let state_monotree_root = match state_monotree.get_headroot()? {
+                Some(hash) => hash,
+                None => *EMPTY_HASH,
+            };
+            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
         }
 
-        // Iterate over current contracts wasm bincodes to compute its checksum
-        let mut hasher = blake3::Hasher::new();
+        // Iterate over current contracts wasm bincodes to compute its monotree root
+        let mut wasm_monotree_root = None;
+        let wasm_monotree_db = MemoryDb::new();
+        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
         for record in lock.iter(SLED_BINCODE_TREE)? {
             let (key, value) = record?;
 
@@ -501,32 +545,38 @@ impl ContractStoreOverlay {
                 continue
             }
 
-            // Hash record
-            hasher.update(&key);
-            hasher.update(&value);
+            // Insert record
+            wasm_monotree_root = wasm_monotree.insert(
+                wasm_monotree_root.as_ref(),
+                blake3::hash(&key).as_bytes(),
+                blake3::hash(&value).as_bytes(),
+            )?;
         }
 
-        // Insert wasm bincodes record to monotree
+        // Insert wasm bincodes root to the global monotree
+        let wasm_monotree_root = match wasm_monotree_root {
+            Some(hash) => hash,
+            None => *EMPTY_HASH,
+        };
         root = tree.insert(
             root.as_ref(),
             blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            hasher.finalize().as_bytes(),
+            &wasm_monotree_root,
         )?;
         tree.set_headroot(root.as_ref());
 
         Ok(tree)
     }
 
-    /// Compute all updated contracts states and wasm bincodes
-    /// checksums and update their records in the provided
+    /// Retrieve all updated contracts states and wasm bincodes
+    /// monotrees roots and update their records in the provided
     /// Monotree(SMT).
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn update_state_monotree(&self, tree: &mut Monotree<monotree::MemoryDb>) -> Result<()> {
+    pub fn update_state_monotree(&self, tree: &mut Monotree<MemoryDb>) -> Result<()> {
         let lock = self.0.lock().unwrap();
 
         // Iterate over overlay's caches
-        // TODO: parallelize this with a threadpool
         let mut root = tree.get_headroot()?;
         for (state_key, state_cache) in &lock.state.caches {
             // Check if that cache is a contract state one.
@@ -539,13 +589,48 @@ impl ContractStoreOverlay {
                     continue
                 }
 
-                // Compute its checksum
-                let checksum = sled_overlay_tree_checksum(&lock, &state_key)?;
+                // Grab its contract id
+                let Some(record) = lock.get(SLED_CONTRACTS_TREES_TREE, &state_key)? else {
+                    return Err(Error::ContractStateNotFound)
+                };
+                let contract_id: ContractId = deserialize(&record)?;
+                debug!(target: "blockchain::contractstore::update_state_monotree", "Updating monotree for contract: {contract_id}");
 
-                // Insert record to monotree
-                root = tree.insert(root.as_ref(), &state_key, &checksum)?;
+                // Grab its monotree
+                let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
+                let state_monotree_db = SledOverlayDb::new(&lock, &state_monotree_ptr)?;
+                let mut state_monotree = Monotree::new(state_monotree_db);
+                let mut state_monotree_root = state_monotree.get_headroot()?;
+
+                // Remove dropped records
+                for key in &state_cache.state.removed {
+                    let key = blake3::hash(&key);
+                    debug!(target: "blockchain::contractstore::update_state_monotree", "Removed key: {key}");
+                    state_monotree_root =
+                        state_monotree.remove(state_monotree_root.as_ref(), key.as_bytes())?;
+                }
+
+                // Update or insert new records
+                for (key, value) in &state_cache.state.cache {
+                    let key = blake3::hash(&key);
+                    let value = blake3::hash(&value);
+                    debug!(target: "blockchain::contractstore::update_state_monotree", "Updating key {key} with value: {value}");
+                    state_monotree_root = state_monotree.insert(
+                        state_monotree_root.as_ref(),
+                        key.as_bytes(),
+                        value.as_bytes(),
+                    )?;
+                }
+
+                // Insert its root to the global monotree
+                let state_monotree_root = match state_monotree_root {
+                    Some(hash) => hash,
+                    None => *EMPTY_HASH,
+                };
+                debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::hash(&state_monotree_root));
+                root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
                 tree.set_headroot(root.as_ref());
-
+                debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::hash(&root.unwrap()));
                 continue
             }
 
@@ -559,10 +644,12 @@ impl ContractStoreOverlay {
                 continue
             }
 
-            // Iterate over current contracts wasm bincodes to compute
-            // its checksum.
-            let mut hasher = blake3::Hasher::new();
-            for record in lock.iter(SLED_BINCODE_TREE)? {
+            // Iterate over current contracts wasm bincodes to compute its monotree root
+            debug!(target: "blockchain::contractstore::update_state_monotree", "Updating wasm bincodes monotree...");
+            let mut wasm_monotree_root = None;
+            let wasm_monotree_db = MemoryDb::new();
+            let mut wasm_monotree = Monotree::new(wasm_monotree_db);
+            for record in state_cache.iter() {
                 let (key, value) = record?;
 
                 // Skip native ones
@@ -570,54 +657,32 @@ impl ContractStoreOverlay {
                     continue
                 }
 
-                // Hash record
-                hasher.update(&key);
-                hasher.update(&value);
+                // Insert record
+                let key = blake3::hash(&key);
+                let value = blake3::hash(&value);
+                debug!(target: "blockchain::contractstore::update_state_monotree", "Inserting key {key} with value: {value}");
+                wasm_monotree_root = wasm_monotree.insert(
+                    wasm_monotree_root.as_ref(),
+                    key.as_bytes(),
+                    value.as_bytes(),
+                )?;
             }
 
-            // Insert wasm bincodes record to monotree
+            // Insert wasm bincodes root to the global monotree
+            let wasm_monotree_root = match wasm_monotree_root {
+                Some(hash) => hash,
+                None => *EMPTY_HASH,
+            };
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::hash(&wasm_monotree_root));
             root = tree.insert(
                 root.as_ref(),
                 blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-                hasher.finalize().as_bytes(),
+                &wasm_monotree_root,
             )?;
             tree.set_headroot(root.as_ref());
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::hash(&root.unwrap()));
         }
 
         Ok(())
     }
-}
-
-/// Auxiliary function to compute a blake3 checksum for provided sled
-/// tree.
-fn sled_tree_checksum(tree: &sled::Tree) -> Result<[u8; 32]> {
-    // Generate a new blake3 hashed
-    let mut hasher = blake3::Hasher::new();
-
-    // Iterate over tree records to compute its checksum
-    for record in tree.iter() {
-        let (key, value) = record?;
-        hasher.update(&key);
-        hasher.update(&value);
-    }
-
-    // Return the finalized hasher bytes
-    Ok(*hasher.finalize().as_bytes())
-}
-
-/// Auxiliary function to compute a blake3 checksum for provided sled
-/// overlay tree.
-fn sled_overlay_tree_checksum(overlay: &SledDbOverlay, tree_key: &[u8]) -> Result<[u8; 32]> {
-    // Generate a new blake3 hashed
-    let mut hasher = blake3::Hasher::new();
-
-    // Iterate over tree records to compute its checksum
-    for record in overlay.iter(tree_key)? {
-        let (key, value) = record?;
-        hasher.update(&key);
-        hasher.update(&value);
-    }
-
-    // Return the finalized hasher bytes
-    Ok(*hasher.finalize().as_bytes())
 }
