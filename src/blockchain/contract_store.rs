@@ -294,7 +294,7 @@ impl ContractStore {
             if !state_pointers.contains(&state_monotree_ptr) {
                 return Err(Error::ContractStateNotFound)
             }
-            if !self.state_trees.contains_key(&state_monotree_ptr)? {
+            if !self.state_trees.contains_key(state_monotree_ptr)? {
                 return Err(Error::ContractStateNotFound)
             }
 
@@ -490,6 +490,8 @@ impl ContractStoreOverlay {
     /// Generate a Monotree(SMT) containing all contracts states
     /// roots, along with the wasm bincodes monotree roots.
     /// Be carefull as this will open all states monotrees in the overlay.
+    /// If overlay holds changes the generate monotree must be updated
+    /// using update_state_monotree().
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree<MemoryDb>> {
@@ -604,7 +606,7 @@ impl ContractStoreOverlay {
 
                 // Remove dropped records
                 for key in &state_cache.state.removed {
-                    let key = blake3::hash(&key);
+                    let key = blake3::hash(key);
                     debug!(target: "blockchain::contractstore::update_state_monotree", "Removed key: {key}");
                     state_monotree_root =
                         state_monotree.remove(state_monotree_root.as_ref(), key.as_bytes())?;
@@ -612,8 +614,8 @@ impl ContractStoreOverlay {
 
                 // Update or insert new records
                 for (key, value) in &state_cache.state.cache {
-                    let key = blake3::hash(&key);
-                    let value = blake3::hash(&value);
+                    let key = blake3::hash(key);
+                    let value = blake3::hash(value);
                     debug!(target: "blockchain::contractstore::update_state_monotree", "Updating key {key} with value: {value}");
                     state_monotree_root = state_monotree.insert(
                         state_monotree_root.as_ref(),

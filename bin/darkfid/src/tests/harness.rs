@@ -245,8 +245,9 @@ impl Harness {
             &mut MerkleTree::new(1),
         )
         .await?;
-        block.header.state_root =
-            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
+        let mut monotree = overlay.lock().unwrap().contracts.get_state_monotree()?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&mut monotree)?;
+        block.header.state_root = monotree.get_headroot()?.unwrap();
 
         // Attach signature
         block.sign(&keypair.secret);
