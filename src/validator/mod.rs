@@ -393,7 +393,7 @@ impl Validator {
             info!(target: "validator::confirmation", "\t{proposal} - {}", confirmed_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
-            module.append(confirmed_blocks[index].header.timestamp, &next_difficulty);
+            module.append(&confirmed_blocks[index].header, &next_difficulty)?;
             confirmed_txs.extend_from_slice(&confirmed_blocks[index].txs);
             state_inverse_diffs_heights.push(confirmed_blocks[index].header.height);
             state_inverse_diffs.push(diffs[index].inverse());
@@ -503,7 +503,7 @@ impl Validator {
                 cumulative_difficulty,
                 ranks,
             );
-            module.append_difficulty(&overlay, block_difficulty)?;
+            module.append_difficulty(&overlay, &block.header, block_difficulty)?;
 
             // Store block transactions
             for tx in &block.txs {
@@ -617,7 +617,7 @@ impl Validator {
                 cumulative_difficulty,
                 ranks,
             );
-            module.append_difficulty(&overlay, block_difficulty)?;
+            module.append_difficulty(&overlay, &block.header, block_difficulty)?;
 
             // Store block transactions
             for tx in &block.txs {
@@ -785,14 +785,7 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Create a PoW module to validate each block
-        let mut module = PoWModule::new(
-            blockchain,
-            pow_target,
-            pow_fixed_difficulty,
-            Some(0),
-            self.consensus.darkfi_rx_factory.clone(),
-            self.consensus.monero_rx_factory.clone(),
-        )?;
+        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, Some(0))?;
 
         // Grab current contracts states monotree to validate each block
         let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
@@ -823,7 +816,7 @@ impl Validator {
             };
 
             // Update PoW module
-            module.append(block.header.timestamp, &module.next_difficulty()?);
+            module.append(&block.header, &module.next_difficulty()?)?;
 
             // Use last inserted block as next iteration previous
             previous = block;
@@ -895,14 +888,8 @@ impl Validator {
 
         // Create a PoW module and an in memory overlay to compute each
         // block difficulty.
-        let mut module = PoWModule::new(
-            self.blockchain.clone(),
-            pow_target,
-            pow_fixed_difficulty,
-            Some(0),
-            self.consensus.darkfi_rx_factory.clone(),
-            self.consensus.monero_rx_factory.clone(),
-        )?;
+        let mut module =
+            PoWModule::new(self.blockchain.clone(), pow_target, pow_fixed_difficulty, Some(0))?;
 
         // Grab genesis block difficulty to access current ranks
         let genesis_block = self.blockchain.genesis_block()?;
@@ -943,7 +930,7 @@ impl Validator {
                 cumulative_difficulty,
                 ranks,
             );
-            module.append(block_difficulty.timestamp, &block_difficulty.difficulty);
+            module.append(&block.header, &block_difficulty.difficulty)?;
 
             // Add difficulty to database
             self.blockchain.blocks.insert_difficulty(&[block_difficulty])?;

@@ -24,6 +24,7 @@ use darkfi::{
     util::{encoding::base64, time::Timestamp},
     validator::{
         consensus::{Fork, Proposal},
+        pow::{RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
         utils::best_fork_index,
         verification::apply_producer_transaction,
     },
@@ -308,16 +309,30 @@ async fn mine_next_block(
 
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
-    let block = JsonValue::String(base64::encode(&serialize_async(&next_block).await));
-    let response =
-        node.miner_daemon_request_with_retry("mine", &JsonValue::Array(vec![target, block])).await;
+    // Grab the RandomX key to use.
+    // We only use the next key when the next block is the
+    // height changing one.
+    let randomx_key = if next_block.header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
+        next_block.header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
+    {
+        JsonValue::String(base64::encode(&extended_fork.module.darkfi_rx_keys.1))
+    } else {
+        JsonValue::String(base64::encode(&extended_fork.module.darkfi_rx_keys.0))
+    };
+    let header = JsonValue::String(base64::encode(&serialize_async(&next_block.header).await));
+    let response = node
+        .miner_daemon_request_with_retry(
+            "mine",
+            &JsonValue::Array(vec![target, randomx_key, header]),
+        )
+        .await;
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
     // Sign the mined block
     next_block.sign(&block_signing_secret);
 
     // Verify it
-    extended_fork.module.verify_current_block(&next_block)?;
+    extended_fork.module.verify_current_block(&next_block.header)?;
 
     // Check if we are connected to the network
     if !skip_sync && !node.p2p_handler.p2p.is_connected() {

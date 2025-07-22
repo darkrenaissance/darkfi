@@ -18,7 +18,7 @@
 
 use darkfi::{
     blockchain::{BlockInfo, Blockchain, HeaderHash},
-    validator::{consensus::Fork, pow::PoWModule, RandomXFactory},
+    validator::{consensus::Fork, pow::PoWModule},
     Result,
 };
 use sled_overlay::sled;
@@ -39,16 +39,7 @@ fn forks() -> Result<()> {
         let genesis_block_hash = genesis_block.hash();
 
         // Generate the PoW module
-        let darkfi_rx_factory = RandomXFactory::default();
-        let monero_rx_factory = RandomXFactory::default();
-        let module = PoWModule::new(
-            blockchain.clone(),
-            90,
-            None,
-            None,
-            darkfi_rx_factory,
-            monero_rx_factory,
-        )?;
+        let module = PoWModule::new(blockchain.clone(), 90, None, None)?;
 
         // Create a fork
         let fork = Fork::new(blockchain.clone(), module).await?;

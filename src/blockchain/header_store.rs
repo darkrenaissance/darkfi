@@ -39,8 +39,8 @@ use super::{monero::MoneroPowData, SledDbOverlayPtr};
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 #[allow(clippy::large_enum_variant)]
 pub enum PowData {
-    /// Native Darkfi PoW
-    Darkfi,
+    /// Native DarkFi PoW
+    DarkFi,
     /// Monero merge mining PoW
     Monero(MoneroPowData),
 }
@@ -105,12 +105,12 @@ pub struct Header {
 
 impl Header {
     /// Generates a new header with default transactions and state root,
-    /// using Darkfi native Proof of Work data.
+    /// using DarkFi native Proof of Work data.
     pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
         let transactions_root = MerkleTree::new(1).root(0).unwrap();
         let state_root = *EMPTY_HASH;
-        let pow_data = PowData::Darkfi;
+        let pow_data = PowData::DarkFi;
         Self {
             version,
             previous,
