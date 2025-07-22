@@ -333,8 +333,6 @@ async fn handle_reorg(
         validator.consensus.module.read().await.target,
         validator.consensus.module.read().await.fixed_difficulty.clone(),
         Some(last_common_height + 1),
-        validator.consensus.darkfi_rx_factory.clone(),
-        validator.consensus.monero_rx_factory.clone(),
     ) {
         Ok(m) => m,
         Err(e) => {
@@ -430,7 +428,10 @@ async fn handle_reorg(
             hashes_rank += hash_distance_sq.clone();
 
             // Update PoW headers module
-            headers_module.append(peer_header.timestamp, &next_difficulty);
+            if let Err(e) = headers_module.append(peer_header, &next_difficulty) {
+                debug!(target: "darkfid::task::handle_reorg", "Error while appending header to module: {e}");
+                return true
+            };
 
             // Set previous header
             previous_height = peer_header.height;
