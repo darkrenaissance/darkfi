@@ -40,7 +40,6 @@ use crate::{
         pow::PoWModule,
         utils::{best_fork_index, block_rank, find_extended_fork_index},
         verification::{verify_proposal, verify_transaction},
-        RandomXFactory,
     },
     zk::VerifyingKey,
     Error, Result,
@@ -55,10 +54,6 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Fork size(length) after which it can be confirmed
     pub confirmation_threshold: usize,
-    /// RandomXFactory for native PoW
-    pub darkfi_rx_factory: RandomXFactory,
-    /// RandomXFactory for Monero PoW
-    pub monero_rx_factory: RandomXFactory,
     /// Fork chains containing block proposals
     pub forks: RwLock<Vec<Fork>>,
     /// Canonical blockchain PoW module state
@@ -77,29 +72,16 @@ impl Consensus {
     ) -> Result<Self> {
         let forks = RwLock::new(vec![]);
 
-        let darkfi_rx_factory = RandomXFactory::default();
-        let monero_rx_factory = RandomXFactory::default();
-
         let module = RwLock::new(PoWModule::new(
             blockchain.clone(),
             pow_target,
             pow_fixed_difficulty,
             None,
-            darkfi_rx_factory.clone(),
-            monero_rx_factory.clone(),
         )?);
 
         let append_lock = RwLock::new(());
 
-        Ok(Self {
-            blockchain,
-            confirmation_threshold,
-            darkfi_rx_factory,
-            monero_rx_factory,
-            forks,
-            module,
-            append_lock,
-        })
+        Ok(Self { blockchain, confirmation_threshold, forks, module, append_lock })
     }
 
     /// Generate a new empty fork.
@@ -242,7 +224,7 @@ impl Consensus {
             let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
 
             // Update PoW module
-            fork.module.append(block.header.timestamp, &next_difficulty);
+            fork.module.append(&block.header, &next_difficulty)?;
 
             // Update fork ranks
             fork.targets_rank += target_distance_sq;
@@ -656,8 +638,6 @@ impl Consensus {
             module.target,
             module.fixed_difficulty.clone(),
             None,
-            self.darkfi_rx_factory.clone(),
-            self.monero_rx_factory.clone(),
         )?;
         drop(module);
         debug!(target: "validator::consensus::reset_pow_module", "PoW module reset successfully!");
@@ -794,7 +774,7 @@ impl Fork {
             cumulative_difficulty,
             ranks,
         );
-        self.module.append_difficulty(&self.overlay, block_difficulty)?;
+        self.module.append_difficulty(&self.overlay, &proposal.block.header, block_difficulty)?;
 
         // Push proposal's hash
         self.proposals.push(proposal.hash);
@@ -961,7 +941,8 @@ impl Fork {
     //        proposal.
     pub fn healthcheck(&self) -> Result<()> {
         // Rebuild current contract states checksums monotree
-        let state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
+        let mut state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
+        self.overlay.lock().unwrap().contracts.update_state_monotree(&mut state_monotree)?;
 
         // Check that it matches forks' tree
         let Some(state_root) = state_monotree.get_headroot()? else {

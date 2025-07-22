@@ -33,7 +33,11 @@ use tracing::debug;
 
 use crate::{
     blockchain::{
-        block_store::{BlockDifficulty, BlockInfo},
+        block_store::BlockDifficulty,
+        header_store::{
+            Header,
+            PowData::{DarkFi, Monero},
+        },
         Blockchain, BlockchainOverlayPtr,
     },
     system::thread_priority::ThreadPriority,
@@ -71,6 +75,10 @@ const CUT_END: usize = 660;
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
 const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
+/// RandomX VM key changing height
+pub const RANDOMX_KEY_CHANGING_HEIGHT: u32 = 2048;
+/// RandomX VM key change delay
+pub const RANDOMX_KEY_CHANGE_DELAY: u32 = 64;
 
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
@@ -90,6 +98,8 @@ pub struct PoWModule {
     /// access(optimization), since its always same as
     /// difficulties buffer last.
     pub cumulative_difficulty: BigUint,
+    /// Native PoW RandomX VMs current and next keys pair
+    pub darkfi_rx_keys: ([u8; 32], [u8; 32]),
     /// RandomXFactory for native PoW (Arc from parent)
     pub darkfi_rx_factory: RandomXFactory,
     /// RandomXFactory for Monero PoW (Arc from parent)
@@ -104,8 +114,6 @@ impl PoWModule {
         target: u32,
         fixed_difficulty: Option<BigUint>,
         height: Option<u32>,
-        darkfi_rx_factory: RandomXFactory,
-        monero_rx_factory: RandomXFactory,
     ) -> Result<Self> {
         // Retrieve genesis block timestamp
         let genesis = blockchain.genesis_block()?.header.timestamp;
@@ -129,6 +137,13 @@ impl PoWModule {
             assert!(diff > &BigUint::zero());
         }
 
+        // Retrieve current and next native PoW RandomX VM current and
+        // next keys pair, and generate the RandomX factories.
+        let darkfi_rx_keys = blockchain
+            .get_randomx_vm_keys(&RANDOMX_KEY_CHANGING_HEIGHT, &RANDOMX_KEY_CHANGE_DELAY)?;
+        let darkfi_rx_factory = RandomXFactory::default();
+        let monero_rx_factory = RandomXFactory::default();
+
         Ok(Self {
             genesis,
             target,
@@ -136,6 +151,7 @@ impl PoWModule {
             timestamps,
             difficulties,
             cumulative_difficulty,
+            darkfi_rx_keys,
             darkfi_rx_factory,
             monero_rx_factory,
         })
@@ -264,34 +280,51 @@ impl PoWModule {
     }
 
     /// Verify provided block timestamp and hash.
-    pub fn verify_current_block(&self, block: &BlockInfo) -> Result<()> {
+    pub fn verify_current_block(&self, header: &Header) -> Result<()> {
         // First we verify the block's timestamp
-        if !self.verify_current_timestamp(block.header.timestamp)? {
+        if !self.verify_current_timestamp(header.timestamp)? {
             return Err(Error::PoWInvalidTimestamp)
         }
 
         // Then we verify the block's hash
-        self.verify_block_hash(block)
+        self.verify_block_hash(header)
     }
 
     /// Verify provided block corresponds to next mine target.
-    // TODO: Verify depending on block Proof of Work data
-    pub fn verify_block_hash(&self, block: &BlockInfo) -> Result<()> {
+    pub fn verify_block_hash(&self, header: &Header) -> Result<()> {
         let verifier_setup = Instant::now();
 
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
-        // Setup verifier
-        let randomx_key = block.header.previous.inner();
+        // Setup verifier based on block PoW data
         let flags = RandomXFlags::get_recommended_flags();
-        let cache = RandomXCache::new(flags, &randomx_key[..])?;
-        let vm = self.darkfi_rx_factory.create(&randomx_key[..], Some(cache), None)?;
+        let vm = match &header.pow_data {
+            DarkFi => {
+                // Check which VM key should be used.
+                // We only use the next key when the next block is the
+                // height changing one.
+                let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
+                    header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
+                {
+                    &self.darkfi_rx_keys.1[..]
+                } else {
+                    &self.darkfi_rx_keys.0[..]
+                };
+                let cache = RandomXCache::new(flags, randomx_key)?;
+                self.darkfi_rx_factory.create(randomx_key, Some(cache), None)?
+            }
+            Monero(monero_pow_data) => {
+                let randomx_key = &monero_pow_data.randomx_key[..];
+                let cache = RandomXCache::new(flags, randomx_key)?;
+                self.monero_rx_factory.create(randomx_key, Some(cache), None)?
+            }
+        };
         debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
 
         // Compute the output hash
         let verification_time = Instant::now();
-        let out_hash = vm.calculate_hash(block.header.hash().inner())?;
+        let out_hash = vm.calculate_hash(header.hash().inner())?;
         let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
@@ -303,11 +336,34 @@ impl PoWModule {
         Ok(())
     }
 
-    /// Append provided timestamp and difficulty to the ring buffers.
-    pub fn append(&mut self, timestamp: Timestamp, difficulty: &BigUint) {
-        self.timestamps.push(timestamp);
+    /// Append provided header timestamp and difficulty to the ring
+    /// buffers, and check if we need to rotate and/or create the next
+    /// key RandomX VM in the native PoW factory.
+    pub fn append(&mut self, header: &Header, difficulty: &BigUint) -> Result<()> {
+        self.timestamps.push(header.timestamp);
         self.cumulative_difficulty += difficulty;
         self.difficulties.push(self.cumulative_difficulty.clone());
+
+        if header.height < RANDOMX_KEY_CHANGING_HEIGHT {
+            return Ok(())
+        }
+
+        // Check if need to set the new key
+        if header.height % RANDOMX_KEY_CHANGING_HEIGHT == 0 {
+            let next_key = *header.hash().inner();
+            let flags = RandomXFlags::get_recommended_flags();
+            let cache = RandomXCache::new(flags, &next_key[..])?;
+            let _ = self.darkfi_rx_factory.create(&next_key[..], Some(cache), None)?;
+            self.darkfi_rx_keys.1 = next_key;
+            return Ok(())
+        }
+
+        // Check if need to rotate keys
+        if header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY {
+            self.darkfi_rx_keys.0 = self.darkfi_rx_keys.1;
+        }
+
+        Ok(())
     }
 
     /// Append provided block difficulty to the ring buffers and insert
@@ -315,23 +371,35 @@ impl PoWModule {
     pub fn append_difficulty(
         &mut self,
         overlay: &BlockchainOverlayPtr,
+        header: &Header,
         difficulty: BlockDifficulty,
     ) -> Result<()> {
-        self.append(difficulty.timestamp, &difficulty.difficulty);
+        self.append(header, &difficulty.difficulty)?;
         overlay.lock().unwrap().blocks.insert_difficulty(&[difficulty])
     }
 
     /// Mine provided block, based on next mine target.
     pub fn mine_block(
         &self,
-        miner_block: &mut BlockInfo,
+        header: &mut Header,
         threads: usize,
         stop_signal: &Receiver<()>,
     ) -> Result<()> {
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
-        mine_block(&target, miner_block, threads, stop_signal)
+        // Grab the RandomX key to use.
+        // We only use the next key when the next block is the
+        // height changing one.
+        let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
+            header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
+        {
+            &self.darkfi_rx_keys.1
+        } else {
+            &self.darkfi_rx_keys.0
+        };
+
+        mine_block(&target, randomx_key, header, threads, stop_signal)
     }
 }
 
@@ -348,16 +416,15 @@ impl std::fmt::Display for PoWModule {
 /// Mine provided block, based on provided PoW module next mine target.
 pub fn mine_block(
     target: &BigUint,
-    miner_block: &mut BlockInfo,
+    input: &[u8; 32],
+    miner_header: &mut Header,
     threads: usize,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
     let miner_setup = Instant::now();
 
-    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
-    // Get the PoW input. The key changes with every mined block.
-    let input = miner_block.header.previous;
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input);
+    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", blake3::hash(input));
 
     let mut flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -368,25 +435,24 @@ pub fn mine_block(
     }
 
     debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX cache...");
-    let cache = RandomXCache::new(flags, input.inner())?;
+    let cache = RandomXCache::new(flags, &input[..])?;
 
     debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 
     // Multithreaded mining setup
     let mining_time = Instant::now();
     let mut handles = vec![];
-    let found_block = Arc::new(AtomicBool::new(false));
+    let found_header = Arc::new(AtomicBool::new(false));
     let found_nonce = Arc::new(AtomicU64::new(0));
     let threads = threads as u64;
     let dataset_item_count = RandomXDataset::count()?;
 
     for t in 0..threads {
         let target = target.clone();
-        let mut block = miner_block.clone();
-        let found_block = Arc::clone(&found_block);
+        let mut header = miner_header.clone();
+        let found_header = Arc::clone(&found_header);
         let found_nonce = Arc::clone(&found_nonce);
 
-        // TODO: Clean up using RandomXFactory and add wrapper for AVX2
         let dataset = if threads > 1 {
             let a = (dataset_item_count * (t as u32)) / (threads as u32);
             let b = (dataset_item_count * (t as u32 + 1)) / (threads as u32);
@@ -414,19 +480,19 @@ pub fn mine_block(
                     break
                 }
 
-                block.header.nonce = miner_nonce;
-                if found_block.load(Ordering::SeqCst) {
-                    debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{t} exiting");
+                header.nonce = miner_nonce;
+                if found_header.load(Ordering::SeqCst) {
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block header found, thread #{t} exiting");
                     break
                 }
 
-                let out_hash = vm.calculate_hash(block.hash().inner()).unwrap();
+                let out_hash = vm.calculate_hash(header.hash().inner()).unwrap();
                 let out_hash = BigUint::from_bytes_be(&out_hash);
                 if out_hash <= target {
-                    found_block.store(true, Ordering::SeqCst);
+                    found_header.store(true, Ordering::SeqCst);
                     found_nonce.store(miner_nonce, Ordering::SeqCst);
-                    debug!(target: "validator::pow::mine_block", "[MINER] Thread #{t} found block using nonce {miner_nonce}");
-                    debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash());
+                    debug!(target: "validator::pow::mine_block", "[MINER] Thread #{t} found block header using nonce {miner_nonce}");
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block header hash {}", header.hash());
                     debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{out_hash:064x}");
                     break
                 }
@@ -448,8 +514,8 @@ pub fn mine_block(
 
     debug!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
 
-    // Set the valid mined nonce in the block
-    miner_block.header.nonce = found_nonce.load(Ordering::SeqCst);
+    // Set the valid mined nonce in the block header
+    miner_header.nonce = found_nonce.load(Ordering::SeqCst);
 
     Ok(())
 }
@@ -466,11 +532,11 @@ mod tests {
     use sled_overlay::sled;
 
     use crate::{
-        blockchain::{BlockInfo, Blockchain},
+        blockchain::{header_store::Header, BlockInfo, Blockchain},
         Result,
     };
 
-    use super::{super::RandomXFactory, PoWModule};
+    use super::PoWModule;
 
     const DEFAULT_TEST_THREADS: usize = 2;
     const DEFAULT_TEST_DIFFICULTY_TARGET: u32 = 120;
@@ -482,26 +548,23 @@ mod tests {
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
 
-        let darkfi_rx_factory = RandomXFactory::default();
-        let monero_rx_factory = RandomXFactory::default();
-        let mut module = PoWModule::new(
-            blockchain,
-            DEFAULT_TEST_DIFFICULTY_TARGET,
-            None,
-            None,
-            darkfi_rx_factory,
-            monero_rx_factory,
-        )?;
+        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
 
+        let mut previous = genesis_block.header;
         for (n, line) in reader.lines().enumerate() {
             let line = line.unwrap();
             let parts: Vec<String> = line.split(' ').map(|x| x.to_string()).collect();
             assert!(parts.len() == 2);
 
-            let timestamp = parts[0].parse::<u64>().unwrap().into();
+            let header = Header::new(
+                previous.hash(),
+                previous.height + 1,
+                parts[0].parse::<u64>().unwrap().into(),
+                0,
+            );
             let difficulty = BigUint::from_str_radix(&parts[1], 10).unwrap();
 
             let res = module.next_difficulty()?;
@@ -513,7 +576,8 @@ mod tests {
                 assert!(res == difficulty);
             }
 
-            module.append(timestamp, &difficulty);
+            module.append(&header, &difficulty)?;
+            previous = header;
         }
 
         Ok(())
@@ -528,26 +592,17 @@ mod tests {
         genesis_block.header.timestamp = 0.into();
         blockchain.add_block(&genesis_block)?;
 
-        let darkfi_rx_factory = RandomXFactory::default();
-        let monero_rx_factory = RandomXFactory::default();
-        let module = PoWModule::new(
-            blockchain,
-            DEFAULT_TEST_DIFFICULTY_TARGET,
-            None,
-            None,
-            darkfi_rx_factory,
-            monero_rx_factory,
-        )?;
+        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
 
         let (_, recvr) = smol::channel::bounded(1);
 
         // Mine next block
         let mut next_block = BlockInfo::default();
         next_block.header.previous = genesis_block.hash();
-        module.mine_block(&mut next_block, DEFAULT_TEST_THREADS, &recvr)?;
+        module.mine_block(&mut next_block.header, DEFAULT_TEST_THREADS, &recvr)?;
 
         // Verify it
-        module.verify_current_block(&next_block)?;
+        module.verify_current_block(&next_block.header)?;
 
         Ok(())
     }

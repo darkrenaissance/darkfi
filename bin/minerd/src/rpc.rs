@@ -23,7 +23,7 @@ use smol::lock::MutexGuard;
 use tracing::{debug, error, info};
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::header_store::{Header, HeaderHash},
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
@@ -74,9 +74,11 @@ impl MinerNode {
     }
 
     // RPCAPI:
-    // Mine provided block for requested mine target, and return the corresponding nonce value.
+    // Mine provided block header for requested mine target, using
+    // provided RandomX VM key, and return the corresponding nonce
+    // value.
     //
-    // --> {"jsonrpc": "2.0", "method": "mine", "params": ["target", "block"], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "mine", "params": ["target", "randomx_key", "header"], "id": 42}
     // --> {"jsonrpc": "2.0", "result": "nonce", "id": 42}
     async fn mine(&self, id: u16, params: JsonValue) -> JsonResult {
         // Verify parameters
@@ -84,7 +86,11 @@ impl MinerNode {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
+        if params.len() != 3 ||
+            !params[0].is_string() ||
+            !params[1].is_string() ||
+            !params[2].is_string()
+        {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
@@ -93,19 +99,28 @@ impl MinerNode {
             error!(target: "minerd::rpc", "Failed to parse target");
             return server_error(RpcError::TargetParseError, id, None)
         };
-        let Some(block_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
-            error!(target: "minerd::rpc", "Failed to parse block bytes");
+        let Some(randomx_key_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
+            error!(target: "minerd::rpc", "Failed to parse RandomX key bytes");
             return server_error(RpcError::BlockParseError, id, None)
         };
-        let Ok(mut block) = deserialize_async::<BlockInfo>(&block_bytes).await else {
-            error!(target: "minerd::rpc", "Failed to parse block");
+        let Ok(randomx_key) = deserialize_async::<[u8; 32]>(&randomx_key_bytes).await else {
+            error!(target: "minerd::rpc", "Failed to parse RandomX key");
             return server_error(RpcError::BlockParseError, id, None)
         };
-        let block_hash = block.hash();
-        info!(target: "minerd::rpc", "Received request to mine block {block_hash} for target: {target}");
+        let Some(header_bytes) = base64::decode(params[2].get::<String>().unwrap()) else {
+            error!(target: "minerd::rpc", "Failed to parse header bytes");
+            return server_error(RpcError::BlockParseError, id, None)
+        };
+        let Ok(mut header) = deserialize_async::<Header>(&header_bytes).await else {
+            error!(target: "minerd::rpc", "Failed to parse header");
+            return server_error(RpcError::BlockParseError, id, None)
+        };
+        let header_hash = header.hash();
+        let randomx_key_hash = HeaderHash::new(randomx_key);
+        info!(target: "minerd::rpc", "Received request to mine block header {header_hash} with key {randomx_key_hash} for target: {target}");
 
         // If we have a requested mining height, we'll keep dropping here.
-        if self.stop_at_height > 0 && block.header.height >= self.stop_at_height {
+        if self.stop_at_height > 0 && header.height >= self.stop_at_height {
             info!(target: "minerd::rpc", "Reached requested mining height {}", self.stop_at_height);
             return server_error(RpcError::MiningFailed, id, None)
         }
@@ -115,16 +130,18 @@ impl MinerNode {
             return e
         };
 
-        // Mine provided block
-        info!(target: "minerd::rpc", "Mining block {block_hash} for target: {target}");
-        if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal.clone()) {
-            error!(target: "minerd::rpc", "Failed mining block {block_hash} with error: {e}");
+        // Mine provided block header
+        info!(target: "minerd::rpc", "Mining block header {header_hash} with key {randomx_key_hash} for target: {target}");
+        if let Err(e) =
+            mine_block(&target, &randomx_key, &mut header, self.threads, &self.stop_signal.clone())
+        {
+            error!(target: "minerd::rpc", "Failed mining block header {header_hash} with error: {e}");
             return server_error(RpcError::MiningFailed, id, None)
         }
-        info!(target: "minerd::rpc", "Mined block {block_hash} with nonce: {}", block.header.nonce);
+        info!(target: "minerd::rpc", "Mined block header {header_hash} with nonce: {}", header.nonce);
 
-        // Return block nonce
-        JsonResponse::new(JsonValue::Number(block.header.nonce as f64), id).into()
+        // Return block header nonce
+        JsonResponse::new(JsonValue::Number(header.nonce as f64), id).into()
     }
 
     /// Auxiliary function to abort pending request.

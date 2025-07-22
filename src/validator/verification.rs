@@ -36,8 +36,8 @@ use tracing::{debug, error, warn};
 
 use crate::{
     blockchain::{
-        block_store::append_tx_to_merkle_tree, header_store::PowData, BlockInfo, Blockchain,
-        BlockchainOverlayPtr, HeaderHash,
+        block_store::append_tx_to_merkle_tree, header_store::PowData::DarkFi, BlockInfo,
+        Blockchain, BlockchainOverlayPtr, HeaderHash,
     },
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
@@ -46,7 +46,6 @@ use crate::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
         fees::{circuit_gas_use, compute_fee, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
-        RandomXFactory,
     },
     zk::VerifyingKey,
     Error, Result,
@@ -78,7 +77,7 @@ pub async fn verify_genesis_block(
 
     // Block must use Darkfi native Proof of Work data
     match block.header.pow_data {
-        PowData::Darkfi => { /* do nothing */ }
+        DarkFi => { /* do nothing */ }
         _ => return Err(Error::BlockIsInvalid(block_hash)),
     }
 
@@ -172,7 +171,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModul
     }
 
     // Check block hash corresponds to next one (5)
-    module.verify_block_hash(block)?;
+    module.verify_block_hash(&block.header)?;
 
     Ok(())
 }
@@ -186,16 +185,7 @@ pub fn validate_blockchain(
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let darkfi_rx_factory = RandomXFactory::default();
-    let monero_rx_factory = RandomXFactory::default();
-    let mut module = PoWModule::new(
-        blockchain.clone(),
-        pow_target,
-        pow_fixed_difficulty,
-        Some(0),
-        darkfi_rx_factory,
-        monero_rx_factory,
-    )?;
+    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, Some(0))?;
 
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.blocks.get_all_order()?;
@@ -204,7 +194,7 @@ pub fn validate_blockchain(
         let full_block = &full_blocks[1];
         validate_block(full_block, &full_blocks[0], &module)?;
         // Update PoW module
-        module.append(full_block.header.timestamp, &module.next_difficulty()?);
+        module.append(&full_block.header, &module.next_difficulty()?)?;
     }
 
     Ok(())

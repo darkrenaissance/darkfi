@@ -410,6 +410,65 @@ impl Blockchain {
     pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         self.contracts.get_state_monotree(&self.sled_db)
     }
+
+    /// Grab the RandomX VM current and next key, based on provided key
+    /// changing height and delay.
+    ///
+    /// NOTE: the height calculation logic is verified using test:
+    //        test_randomx_keys_retrieval_logic
+    pub fn get_randomx_vm_keys(
+        &self,
+        key_change_height: &u32,
+        key_change_delay: &u32,
+    ) -> Result<([u8; 32], [u8; 32])> {
+        // Grab last known block header
+        let last = self.last_header()?;
+
+        // Check if we passed the first key change height
+        if &last.height <= key_change_height {
+            // Genesis is our current
+            let current = *self.genesis()?.1.inner();
+
+            // Check if last known block header is the next key
+            let next =
+                if &last.height == key_change_height { *last.hash().inner() } else { current };
+
+            return Ok((current, next))
+        }
+
+        // Find the current and next key based on distance of last
+        // known block header height from the key change height.
+        let distance = last.height % key_change_height;
+
+        // When distance is 0, current key is the block header
+        // located at last_height - key_change_height height, while
+        // last known block header is the next key.
+        if distance == 0 {
+            return Ok((
+                *self.get_blocks_by_heights(&[last.height - key_change_height])?[0].hash().inner(),
+                *last.hash().inner(),
+            ))
+        }
+
+        // When distance is less than key change delay, current key
+        // is the block header located at last_height - (distance + key_change_height)
+        // height, while the block header located at last_height - distance
+        // height is the next key.
+        if &distance < key_change_delay {
+            return Ok((
+                *self.get_blocks_by_heights(&[last.height - (distance + key_change_height)])?[0]
+                    .hash()
+                    .inner(),
+                *self.get_blocks_by_heights(&[last.height - distance])?[0].hash().inner(),
+            ))
+        }
+
+        // When distance is greater or equal to key change delay,
+        // current key is the block header located at last_height - distance
+        // height and we don't know the next key.
+        let current = *self.get_blocks_by_heights(&[last.height - distance])?[0].hash().inner();
+        Ok((current, current))
+    }
 }
 
 /// Atomic pointer to sled db overlay.
@@ -615,5 +674,82 @@ impl BlockchainOverlay {
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::validator::pow::{RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT};
+
+    /// Compute the RandomX VM current and next key heights, based on
+    /// provided key changing height and delay.
+    fn get_randomx_vm_keys_heights(last: u32) -> (u32, u32) {
+        // Check if we passed the first key change height
+        if last <= RANDOMX_KEY_CHANGING_HEIGHT {
+            // Genesis is our current
+            let current = 0;
+
+            // Check if last height is the next key height
+            let next = if last == RANDOMX_KEY_CHANGING_HEIGHT { last } else { current };
+
+            return (current, next)
+        }
+
+        // Find the current and next key based on distance of last
+        // height from the key change height.
+        let distance = last % RANDOMX_KEY_CHANGING_HEIGHT;
+
+        // When distance is 0, current key is the last_height - RANDOMX_KEY_CHANGING_HEIGHT
+        // height, while last is the next key.
+        if distance == 0 {
+            return (last - RANDOMX_KEY_CHANGING_HEIGHT, last)
+        }
+
+        // When distance is less than key change delay, current key
+        // is the last_height - (distance + RANDOMX_KEY_CHANGING_HEIGHT) height,
+        // while the last_height - distance height is the next key.
+        if distance < RANDOMX_KEY_CHANGE_DELAY {
+            return (last - (distance + RANDOMX_KEY_CHANGING_HEIGHT), last - distance)
+        }
+
+        // When distance is greater or equal to key change delay,
+        // current key is the last_height - distance height and we
+        // don't know the next key height.
+        let current = last - distance;
+        (current, current)
+    }
+
+    #[test]
+    fn test_randomx_keys_retrieval_logic() {
+        // last < RANDOMX_KEY_CHANGING_HEIGHT(2048)
+        let (current, next) = get_randomx_vm_keys_heights(2047);
+        assert_eq!(current, 0);
+        assert_eq!(next, 0);
+
+        // last == RANDOMX_KEY_CHANGING_HEIGHT(2048)
+        let (current, next) = get_randomx_vm_keys_heights(2048);
+        assert_eq!(current, 0);
+        assert_eq!(next, 2048);
+
+        // last > RANDOMX_KEY_CHANGING_HEIGHT(2048)
+        // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) == 0
+        let (current, next) = get_randomx_vm_keys_heights(4096);
+        assert_eq!(current, 2048);
+        assert_eq!(next, 4096);
+
+        // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) < RANDOMX_KEY_CHANGE_DELAY(64)
+        let (current, next) = get_randomx_vm_keys_heights(4097);
+        assert_eq!(current, 2048);
+        assert_eq!(next, 4096);
+
+        // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) == RANDOMX_KEY_CHANGE_DELAY(64)
+        let (current, next) = get_randomx_vm_keys_heights(4160);
+        assert_eq!(current, 4096);
+        assert_eq!(next, 4096);
+
+        // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) > RANDOMX_KEY_CHANGE_DELAY(64)
+        let (current, next) = get_randomx_vm_keys_heights(4161);
+        assert_eq!(current, 4096);
+        assert_eq!(next, 4096);
     }
 }
