@@ -434,7 +434,7 @@ impl Blockchain {
 
     /// Grab the RandomX VM current and next key, based on provided key
     /// changing height and delay. Optionally, a height can be provided
-    /// to get the keys at it.
+    /// to get the keys before it.
     ///
     /// NOTE: the height calculation logic is verified using test:
     //        test_randomx_keys_retrieval_logic
@@ -446,7 +446,7 @@ impl Blockchain {
     ) -> Result<([u8; 32], [u8; 32])> {
         // Grab last known block header
         let last = match height {
-            Some(h) => &self.get_headers_by_heights(&[h])?[0],
+            Some(h) => &self.get_headers_by_heights(&[if h != 0 { h - 1 } else { 0 }])?[0],
             None => &self.last_header()?,
         };
 
