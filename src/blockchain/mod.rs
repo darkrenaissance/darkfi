@@ -186,6 +186,27 @@ impl Blockchain {
         self.get_blocks_by_hash(&hashes)
     }
 
+    /// Retrieve [`Header`]s by given hashes. Fails if any of them is not found.
+    pub fn get_headers_by_hash(&self, hashes: &[HeaderHash]) -> Result<Vec<Header>> {
+        let headers = self.headers.get(hashes, true)?;
+        let ret: Vec<Header> = headers.iter().map(|x| x.clone().unwrap()).collect();
+
+        Ok(ret)
+    }
+
+    /// Retrieve [`Header`]s by given heights. Fails if any of them is not found.
+    pub fn get_headers_by_heights(&self, heights: &[u32]) -> Result<Vec<Header>> {
+        debug!(target: "blockchain", "get_headers_by_heights(): {heights:?}");
+        let blockhashes = self.blocks.get_order(heights, true)?;
+
+        let mut hashes = vec![];
+        for i in blockhashes.into_iter().flatten() {
+            hashes.push(i);
+        }
+
+        self.get_headers_by_hash(&hashes)
+    }
+
     /// Retrieve n headers before given block height.
     pub fn get_headers_before(&self, height: u32, n: usize) -> Result<Vec<Header>> {
         debug!(target: "blockchain", "get_headers_before(): {height} -> {n}");
@@ -412,7 +433,8 @@ impl Blockchain {
     }
 
     /// Grab the RandomX VM current and next key, based on provided key
-    /// changing height and delay.
+    /// changing height and delay. Optionally, a height can be provided
+    /// to get the keys at it.
     ///
     /// NOTE: the height calculation logic is verified using test:
     //        test_randomx_keys_retrieval_logic
@@ -420,9 +442,13 @@ impl Blockchain {
         &self,
         key_change_height: &u32,
         key_change_delay: &u32,
+        height: Option<u32>,
     ) -> Result<([u8; 32], [u8; 32])> {
         // Grab last known block header
-        let last = self.last_header()?;
+        let last = match height {
+            Some(h) => &self.get_headers_by_heights(&[h])?[0],
+            None => &self.last_header()?,
+        };
 
         // Check if we passed the first key change height
         if &last.height <= key_change_height {
@@ -445,7 +471,7 @@ impl Blockchain {
         // last known block header is the next key.
         if distance == 0 {
             return Ok((
-                *self.get_blocks_by_heights(&[last.height - key_change_height])?[0].hash().inner(),
+                *self.get_headers_by_heights(&[last.height - key_change_height])?[0].hash().inner(),
                 *last.hash().inner(),
             ))
         }
@@ -456,17 +482,17 @@ impl Blockchain {
         // height is the next key.
         if &distance < key_change_delay {
             return Ok((
-                *self.get_blocks_by_heights(&[last.height - (distance + key_change_height)])?[0]
+                *self.get_headers_by_heights(&[last.height - (distance + key_change_height)])?[0]
                     .hash()
                     .inner(),
-                *self.get_blocks_by_heights(&[last.height - distance])?[0].hash().inner(),
+                *self.get_headers_by_heights(&[last.height - distance])?[0].hash().inner(),
             ))
         }
 
         // When distance is greater or equal to key change delay,
         // current key is the block header located at last_height - distance
         // height and we don't know the next key.
-        let current = *self.get_blocks_by_heights(&[last.height - distance])?[0].hash().inner();
+        let current = *self.get_headers_by_heights(&[last.height - distance])?[0].hash().inner();
         Ok((current, current))
     }
 }

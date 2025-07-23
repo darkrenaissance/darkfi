@@ -137,10 +137,13 @@ impl PoWModule {
             assert!(diff > &BigUint::zero());
         }
 
-        // Retrieve current and next native PoW RandomX VM current and
-        // next keys pair, and generate the RandomX factories.
-        let darkfi_rx_keys = blockchain
-            .get_randomx_vm_keys(&RANDOMX_KEY_CHANGING_HEIGHT, &RANDOMX_KEY_CHANGE_DELAY)?;
+        // Retrieve current and next native PoW RandomX VM keys pair,
+        // and generate the RandomX factories.
+        let darkfi_rx_keys = blockchain.get_randomx_vm_keys(
+            &RANDOMX_KEY_CHANGING_HEIGHT,
+            &RANDOMX_KEY_CHANGE_DELAY,
+            height,
+        )?;
         let darkfi_rx_factory = RandomXFactory::default();
         let monero_rx_factory = RandomXFactory::default();
 
