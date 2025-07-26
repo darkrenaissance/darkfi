@@ -216,10 +216,7 @@ impl Slot {
         let gold_count = settings.gold_connect_count;
 
         let transports = settings.allowed_transports.clone();
-        let mixed_transports = settings.mixed_transports.clone();
         let preference_strict = settings.slot_preference_strict;
-        let tor_socks5_proxy = settings.tor_socks5_proxy.clone();
-        let nym_socks5_proxy = settings.nym_socks5_proxy.clone();
 
         // Drop Settings read lock
         drop(settings);
@@ -231,37 +228,13 @@ impl Slot {
         // If we only have grey entries, select from the greylist. Otherwise,
         // use the preference defined in settings.
         let addrs = if grey_only && !preference_strict {
-            container.fetch(
-                HostColor::Grey,
-                &transports,
-                &mixed_transports,
-                tor_socks5_proxy,
-                nym_socks5_proxy,
-            )
+            container.fetch_with_schemes(HostColor::Grey as usize, &transports, None)
         } else if slot < gold_count {
-            container.fetch(
-                HostColor::Gold,
-                &transports,
-                &mixed_transports,
-                tor_socks5_proxy,
-                nym_socks5_proxy,
-            )
+            container.fetch_with_schemes(HostColor::Gold as usize, &transports, None)
         } else if slot < white_count {
-            container.fetch(
-                HostColor::White,
-                &transports,
-                &mixed_transports,
-                tor_socks5_proxy,
-                nym_socks5_proxy,
-            )
+            container.fetch_with_schemes(HostColor::White as usize, &transports, None)
         } else {
-            container.fetch(
-                HostColor::Grey,
-                &transports,
-                &mixed_transports,
-                tor_socks5_proxy,
-                nym_socks5_proxy,
-            )
+            container.fetch_with_schemes(HostColor::Grey as usize, &transports, None)
         };
 
         hosts.check_addrs(addrs).await

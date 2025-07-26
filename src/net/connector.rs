@@ -36,7 +36,7 @@ use super::{
     settings::Settings,
     transport::Dialer,
 };
-use crate::{system::CondVar, Error, Result};
+use crate::{net::hosts::HostContainer, system::CondVar, Error, Result};
 
 /// Create outbound socket connections
 pub struct Connector {
@@ -72,48 +72,19 @@ impl Connector {
         let nym_socks5_proxy = settings.nym_socks5_proxy.clone();
         drop(settings);
 
-        let mut endpoint = url.clone();
-        let scheme = endpoint.scheme();
-
-        if mixed_transports.contains(&scheme.to_string()) {
-            if transports.contains(&"socks5".to_string()) && (scheme == "tcp" || scheme == "tor") {
-                // Prioritize connection through nym socks5 proxy for tcp endpoint mixing
-                if scheme == "tcp" && nym_socks5_proxy.is_some() {
-                    endpoint = nym_socks5_proxy.unwrap();
-                } else if tor_socks5_proxy.is_some() {
-                    endpoint = tor_socks5_proxy.unwrap();
-                } else {
-                    warn!(target: "net::connector::connect", "Transport mixing is enabled but socks5 proxy is not set");
-                    return Err(Error::ConnectFailed)
-                }
-
-                endpoint.set_path(&format!("{}:{}", url.host().unwrap(), url.port().unwrap()));
-                endpoint.set_scheme("socks5")?;
-            } else if transports.contains(&"socks5+tls".to_string()) &&
-                (scheme == "tcp+tls" || scheme == "tor+tls")
-            {
-                // Prioritize connection through nym socks5 proxy for tcp+tls endpoint mixing
-                if scheme == "tcp+tls" && nym_socks5_proxy.is_some() {
-                    endpoint = nym_socks5_proxy.unwrap();
-                } else if tor_socks5_proxy.is_some() {
-                    endpoint = tor_socks5_proxy.unwrap();
-                } else {
-                    warn!(target: "net::connector::connect", "Transport mixing is enabled but socks5 proxy is not set");
-                    return Err(Error::ConnectFailed)
-                }
-
-                endpoint.set_path(&format!("{}:{}", url.host().unwrap(), url.port().unwrap()));
-                endpoint.set_scheme("socks5+tls")?;
-            } else if transports.contains(&"tor".to_string()) && scheme == "tcp" {
-                endpoint.set_scheme("tor")?;
-            } else if transports.contains(&"tor+tls".to_string()) && scheme == "tcp+tls" {
-                endpoint.set_scheme("tor+tls")?;
-            } else if transports.contains(&"nym".to_string()) && scheme == "tcp" {
-                endpoint.set_scheme("nym")?;
-            } else if transports.contains(&"nym+tls".to_string()) && scheme == "tcp+tls" {
-                endpoint.set_scheme("nym+tls")?;
-            }
-        }
+        let endpoint = if let Some(mixed_host) = HostContainer::mix_host(
+            url.clone(),
+            &transports,
+            &mixed_transports,
+            tor_socks5_proxy,
+            nym_socks5_proxy,
+        )
+        .first()
+        {
+            mixed_host.clone()
+        } else {
+            url.clone()
+        };
 
         let dialer = Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await?;
         let timeout = Duration::from_secs(outbound_connect_timeout);
