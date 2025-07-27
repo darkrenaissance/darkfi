@@ -161,7 +161,7 @@ impl ProtocolVersion {
             version: app_version.clone(),
             timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
             connect_recv_addr: self.channel.connect_addr().clone(),
-            resolve_recv_addr: self.channel.resolve_addr().clone(),
+            resolve_recv_addr: self.channel.resolve_addr(),
             ext_send_addr: external_addrs,
             /* NOTE: `features` is a list of enabled features in the
             format Vec<(service, version)>. In the future, Protocols will

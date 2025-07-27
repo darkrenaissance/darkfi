@@ -361,10 +361,13 @@ impl Slot {
                 );
 
                 // Peer disconnected during the registry process. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
+                self.p2p().hosts().move_host(channel.address(), last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
-                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
+                self.p2p()
+                    .hosts()
+                    .try_register(channel.address().clone(), HostState::Suspend)
+                    .unwrap();
 
                 continue
             }

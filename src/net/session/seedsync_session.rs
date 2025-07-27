@@ -240,7 +240,7 @@ impl Slot {
                         }
 
                         Err(e) => {
-                            self.handle_failure(e, &url);
+                            self.handle_failure(e, ch.address());
 
                             continue
                         }

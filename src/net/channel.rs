@@ -68,11 +68,17 @@ pub struct ChannelInfo {
     pub connect_addr: Url,
     pub start_time: u64,
     pub id: u32,
+    pub transport_mixed: bool,
 }
 
 impl ChannelInfo {
-    fn new(resolve_addr: Option<Url>, connect_addr: Url, start_time: u64) -> Self {
-        Self { resolve_addr, connect_addr, start_time, id: OsRng.gen() }
+    fn new(
+        resolve_addr: Option<Url>,
+        connect_addr: Url,
+        start_time: u64,
+        transport_mixed: bool,
+    ) -> Self {
+        Self { resolve_addr, connect_addr, start_time, id: OsRng.gen(), transport_mixed }
     }
 }
 
@@ -112,6 +118,7 @@ impl Channel {
         resolve_addr: Option<Url>,
         connect_addr: Url,
         session: SessionWeakPtr,
+        transport_mixed: bool,
     ) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
         let reader = AsyncMutex::new(reader);
@@ -121,7 +128,8 @@ impl Channel {
         Self::setup_dispatchers(&message_subsystem).await;
 
         let start_time = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        let info = ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time);
+        let info =
+            ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time, transport_mixed);
         let metering_map = AsyncMutex::new(HashMap::new());
 
         Arc::new(Self {
@@ -525,16 +533,19 @@ impl Channel {
         debug!(target: "net::channel::ban()", "STOP {self:?}");
     }
 
-    /// Returns the relevant socket address for this connection.  If this is
+    /// Returns the relevant socket address for this connection. If this is
     /// an outbound connection, the transport-processed resolve_addr will
-    /// be returned.  Otherwise for inbound connections it will default
+    /// be returned except for transport mixed connections, to make sure
+    /// mixed hosts don't enter hostlist.
+    /// Otherwise for inbound connections it will default
     /// to connect_addr.
     pub fn address(&self) -> &Url {
-        if self.info.resolve_addr.is_some() {
-            self.info.resolve_addr.as_ref().unwrap()
-        } else {
-            &self.info.connect_addr
+        if !self.info.transport_mixed {
+            if let Some(resolve_addr) = &self.info.resolve_addr {
+                return resolve_addr
+            }
         }
+        &self.info.connect_addr
     }
 
     /// Returns the socket address that has undergone transport

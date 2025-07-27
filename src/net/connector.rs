@@ -72,7 +72,7 @@ impl Connector {
         let nym_socks5_proxy = settings.nym_socks5_proxy.clone();
         drop(settings);
 
-        let endpoint = if let Some(mixed_host) = HostContainer::mix_host(
+        let (endpoint, mixed_transport) = if let Some(mixed_host) = HostContainer::mix_host(
             url.clone(),
             &transports,
             &mixed_transports,
@@ -81,9 +81,9 @@ impl Connector {
         )
         .first()
         {
-            mixed_host.clone()
+            (mixed_host.clone(), true)
         } else {
-            url.clone()
+            (url.clone(), false)
         };
 
         let dialer = Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await?;
@@ -104,6 +104,7 @@ impl Connector {
                     Some(endpoint.clone()),
                     url.clone(),
                     self.session.clone(),
+                    mixed_transport,
                 )
                 .await;
                 Ok((endpoint, channel))
