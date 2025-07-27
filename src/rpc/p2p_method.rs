@@ -37,8 +37,16 @@ pub trait HandlerP2p: Sync + Send {
                 net::session::SESSION_SEED => "seed",
                 _ => panic!("invalid result from channel.session_type_id()"),
             };
+            // For transport mixed connections send the mixed url to aid in debugging
+            // TODO: make this a function in channel that returns the url String
+            let url = if channel.info.transport_mixed {
+                // TODO: don't blindly unwrap() here, do it like channel.address()
+                channel.resolve_addr().unwrap().to_string()
+            } else {
+                channel.address().to_string()
+            };
             channels.push(json_map([
-                ("url", JsonStr(channel.address().clone().into())),
+                ("url", JsonStr(url)),
                 ("session", json_str(session)),
                 ("id", JsonNum(channel.info.id.into())),
             ]));
