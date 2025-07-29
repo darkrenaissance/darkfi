@@ -108,17 +108,13 @@ impl VectorArt {
 
         let rect = self.rect.get();
         let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
+        let indices = self.shape.indices.clone();
+        let num_elements = self.shape.indices.len() as i32;
 
-        //debug!(target: "ui::vector_art", "=> {verts:#?}");
+        //debug!(target: "ui::vector_art", "vec_draw_instrs {verts:?} | {indices:?} | {num_elements}");
         let vertex_buffer = self.render_api.new_vertex_buffer(verts, gfxtag!("vectorart"));
-        let index_buffer =
-            self.render_api.new_index_buffer(self.shape.indices.clone(), gfxtag!("vectorart"));
-        let mesh = GfxDrawMesh {
-            vertex_buffer,
-            index_buffer,
-            texture: None,
-            num_elements: self.shape.indices.len() as i32,
-        };
+        let index_buffer = self.render_api.new_index_buffer(indices, gfxtag!("vectorart"));
+        let mesh = GfxDrawMesh { vertex_buffer, index_buffer, texture: None, num_elements };
 
         vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)]
     }

@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{async_trait, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, AsyncEncodable, AsyncWrite, Decodable, Encodable, FutAsyncWriteExt,
+    SerialDecodable, SerialEncodable,
+};
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
@@ -27,6 +30,7 @@ use miniquad::{
 use std::{
     collections::HashMap,
     fs::File,
+    io::Write,
     path::PathBuf,
     sync::{
         atomic::{AtomicU32, Ordering},
@@ -38,6 +42,8 @@ mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
+mod trax;
+use trax::get_trax;
 
 use crate::{
     error::{Error, Result},
@@ -47,6 +53,7 @@ use crate::{
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
+const DEBUG_TRAX: bool = false;
 
 #[macro_export]
 macro_rules! gfxtag {
@@ -173,10 +180,11 @@ impl RenderApi {
         width: u16,
         height: u16,
         data: Vec<u8>,
+        tag: DebugTag,
     ) -> (GfxTextureId, EpochIndex) {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::SeqCst);
 
-        let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
+        let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id, tag));
         let epoch = self.send(method);
 
         (gfx_texture_id, epoch)
@@ -189,7 +197,7 @@ impl RenderApi {
         data: Vec<u8>,
         tag: DebugTag,
     ) -> ManagedTexturePtr {
-        let (id, epoch) = self.new_unmanaged_texture(width, height, data);
+        let (id, epoch) = self.new_unmanaged_texture(width, height, data, tag);
         Arc::new(ManagedTexture { id, epoch, render_api: self.clone(), tag })
     }
 
@@ -198,30 +206,38 @@ impl RenderApi {
         self.send_with_epoch(method, epoch);
     }
 
-    fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> (GfxBufferId, EpochIndex) {
+    fn new_unmanaged_vertex_buffer(
+        &self,
+        verts: Vec<Vertex>,
+        tag: DebugTag,
+    ) -> (GfxBufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
-        let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
+        let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id, tag));
         let epoch = self.send(method);
 
         (gfx_buffer_id, epoch)
     }
 
-    fn new_unmanaged_index_buffer(&self, indices: Vec<u16>) -> (GfxBufferId, EpochIndex) {
+    fn new_unmanaged_index_buffer(
+        &self,
+        indices: Vec<u16>,
+        tag: DebugTag,
+    ) -> (GfxBufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
-        let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
+        let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id, tag));
         let epoch = self.send(method);
 
         (gfx_buffer_id, epoch)
     }
 
     pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
-        let (id, epoch) = self.new_unmanaged_vertex_buffer(verts);
+        let (id, epoch) = self.new_unmanaged_vertex_buffer(verts, tag);
         Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 0 })
     }
     pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
-        let (id, epoch) = self.new_unmanaged_index_buffer(indices);
+        let (id, epoch) = self.new_unmanaged_index_buffer(indices, tag);
         Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 1 })
     }
 
@@ -311,7 +327,44 @@ impl GfxDrawMesh {
     }
 }
 
-#[derive(Debug, Clone)]
+impl Encodable for GfxDrawMesh {
+    fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += self.vertex_buffer.id.encode(s)?;
+        len += self.vertex_buffer.epoch.encode(s)?;
+        len += self.vertex_buffer.tag.encode(s)?;
+        len += self.vertex_buffer.buftype.encode(s)?;
+        len += self.index_buffer.id.encode(s)?;
+        len += self.index_buffer.epoch.encode(s)?;
+        len += self.index_buffer.tag.encode(s)?;
+        len += self.index_buffer.buftype.encode(s)?;
+        match &self.texture {
+            Some(t) => {
+                len += 1u8.encode(s)?;
+                len += t.id.encode(s)?;
+                len += t.epoch.encode(s)?;
+                len += t.tag.encode(s)?;
+            }
+            None => {
+                len += 0u8.encode(s)?;
+            }
+        }
+        len += self.num_elements.encode(s)?;
+        Ok(len)
+    }
+}
+
+#[async_trait]
+impl AsyncEncodable for GfxDrawMesh {
+    async fn encode_async<W: AsyncWrite + Unpin + Send>(
+        &self,
+        _: &mut W,
+    ) -> std::io::Result<usize> {
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable)]
 pub enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
@@ -340,7 +393,7 @@ impl GfxDrawInstruction {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, SerialEncodable)]
 pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
     pub dcs: Vec<u64>,
@@ -423,6 +476,9 @@ impl<'a> RenderContext<'a> {
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw()");
         }
+        if DEBUG_TRAX {
+            get_trax().lock().set_curr(0);
+        }
         self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw() [DONE]");
@@ -474,7 +530,10 @@ impl<'a> RenderContext<'a> {
         let old_view = self.view;
         let old_cursor = self.cursor;
 
-        for instr in &draw_call.instrs {
+        for (idx, instr) in draw_call.instrs.iter().enumerate() {
+            if DEBUG_TRAX {
+                get_trax().lock().set_instr(idx);
+            }
             match instr {
                 DrawInstruction::SetScale(scale) => {
                     self.scale = *scale;
@@ -557,6 +616,9 @@ impl<'a> RenderContext<'a> {
         draw_calls.sort_unstable_by_key(|(_, dc)| dc.z_index);
 
         for (dc_key, dc) in draw_calls {
+            if DEBUG_TRAX {
+                get_trax().lock().set_curr(*dc_key);
+            }
             if is_debug {
                 debug!(target: "gfx", "{ws}drawcall {dc_key}");
             }
@@ -579,10 +641,10 @@ impl<'a> RenderContext<'a> {
 
 #[derive(Clone)]
 pub enum GraphicsMethod {
-    NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
+    NewTexture((u16, u16, Vec<u8>, GfxTextureId, DebugTag)),
     DeleteTexture((GfxTextureId, DebugTag)),
-    NewVertexBuffer((Vec<Vertex>, GfxBufferId)),
-    NewIndexBuffer((Vec<u16>, GfxBufferId)),
+    NewVertexBuffer((Vec<Vertex>, GfxBufferId, DebugTag)),
+    NewIndexBuffer((Vec<u16>, GfxBufferId, DebugTag)),
     DeleteBuffer((GfxBufferId, DebugTag, u8)),
     ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
 }
@@ -739,6 +801,9 @@ struct Stage {
 
 impl Stage {
     pub fn new() -> Self {
+        if DEBUG_TRAX {
+            get_trax().lock().clear();
+        }
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         let god = GOD.get().unwrap();
@@ -810,14 +875,14 @@ impl Stage {
     fn process_method(&mut self, mut method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
         let res = match &mut method {
-            GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
+            GraphicsMethod::NewTexture((width, height, data, gfx_texture_id, _)) => {
                 self.method_new_texture(*width, *height, data, *gfx_texture_id)
             }
             GraphicsMethod::DeleteTexture((texture, _)) => self.method_delete_texture(*texture),
-            GraphicsMethod::NewVertexBuffer((verts, gbuffid)) => {
+            GraphicsMethod::NewVertexBuffer((verts, gbuffid, _)) => {
                 self.method_new_vertex_buffer(verts, *gbuffid)
             }
-            GraphicsMethod::NewIndexBuffer((indices, gbuffid)) => {
+            GraphicsMethod::NewIndexBuffer((indices, gbuffid, _)) => {
                 self.method_new_index_buffer(indices, *gbuffid)
             }
             GraphicsMethod::DeleteBuffer((buffer, _, _)) => self.method_delete_buffer(*buffer),
@@ -848,13 +913,22 @@ impl Stage {
             //       ansi_texture(width as usize, height as usize, &data));
         }
         if let Some(_) = self.textures.insert(gfx_texture_id, texture) {
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(2);
+            }
             //panic!("Duplicate texture ID={gfx_texture_id} detected!");
             return Err(Error::GfxDuplicateTextureID)
+        }
+        if DEBUG_TRAX {
+            get_trax().lock().put_stat(0);
         }
         Ok(())
     }
     fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) -> Result<()> {
         let Some(texture) = self.textures.remove(&gfx_texture_id) else {
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(2);
+            }
             //.expect("couldn't find gfx_texture_id");
             return Err(Error::GfxUnknownTextureID)
         };
@@ -863,6 +937,9 @@ impl Stage {
                    gfx_texture_id, texture);
         }
         self.ctx.delete_texture(texture);
+        if DEBUG_TRAX {
+            get_trax().lock().put_stat(0);
+        }
         Ok(())
     }
     fn method_new_vertex_buffer(
@@ -882,8 +959,14 @@ impl Stage {
             //       verts, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(2);
+            }
             //panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!");
             return Err(Error::GfxDuplicateBufferID)
+        }
+        if DEBUG_TRAX {
+            get_trax().lock().put_stat(0);
         }
         Ok(())
     }
@@ -904,13 +987,22 @@ impl Stage {
             //       indices, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(2);
+            }
             //panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
             return Err(Error::GfxDuplicateBufferID)
+        }
+        if DEBUG_TRAX {
+            get_trax().lock().put_stat(0);
         }
         Ok(())
     }
     fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) -> Result<()> {
         let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(2);
+            }
             //.expect("couldn't find gfx_buffer_id");
             return Err(Error::GfxUnknownBufferID)
         };
@@ -919,6 +1011,9 @@ impl Stage {
                    gfx_buffer_id, buffer);
         }
         self.ctx.delete_buffer(buffer);
+        if DEBUG_TRAX {
+            get_trax().lock().put_stat(0);
+        }
         Ok(())
     }
     fn method_replace_draw_calls(
@@ -931,6 +1026,9 @@ impl Stage {
         }
         for (key, val) in dcs {
             let Some(val) = val.compile(&self.textures, &self.buffers, timest) else {
+                if DEBUG_TRAX {
+                    get_trax().lock().put_stat(3);
+                }
                 error!(target: "gfx", "fatal: replace_draw_calls({timest}, ...) failed with item ID={key}");
                 continue
             };
@@ -939,17 +1037,50 @@ impl Stage {
                 Some(old_val) => {
                     // Only replace the draw call if it is more recent
                     if old_val.timest < timest {
+                        if DEBUG_TRAX {
+                            get_trax().lock().put_stat(0);
+                        }
                         *old_val = val;
                     } else {
                         trace!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
+                        if DEBUG_TRAX {
+                            get_trax().lock().put_stat(2);
+                        }
                     }
                 }
                 None => {
                     self.draw_calls.insert(key, val);
+                    if DEBUG_TRAX {
+                        get_trax().lock().put_stat(1);
+                    }
                 }
             }
         }
         Ok(())
+    }
+
+    fn trax_method(&self, epoch: EpochIndex, method: &GraphicsMethod) {
+        let mut trax = get_trax().lock();
+        match method {
+            GraphicsMethod::NewTexture((_, _, _, gfx_texture_id, tag)) => {
+                trax.put_tex(epoch, *gfx_texture_id, *tag);
+            }
+            GraphicsMethod::DeleteTexture((texture, tag)) => {
+                trax.del_tex(epoch, *texture, *tag);
+            }
+            GraphicsMethod::NewVertexBuffer((verts, gbuffid, tag)) => {
+                trax.put_verts(epoch, verts.clone(), *gbuffid, *tag, 0);
+            }
+            GraphicsMethod::NewIndexBuffer((idxs, gbuffid, tag)) => {
+                trax.put_idxs(epoch, idxs.clone(), *gbuffid, *tag, 1);
+            }
+            GraphicsMethod::DeleteBuffer((buffer, tag, buftype)) => {
+                trax.del_buf(epoch, *buffer, *tag, *buftype);
+            }
+            GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
+                trax.put_dcs(epoch, *timest, dcs);
+            }
+        };
     }
 }
 
@@ -957,13 +1088,24 @@ impl EventHandler for Stage {
     fn update(&mut self) {
         // Process as many methods as we can
         while let Ok((epoch, method)) = self.method_rep.try_recv() {
+            if DEBUG_TRAX {
+                self.trax_method(epoch, &method);
+            }
             if epoch < self.epoch {
+                if DEBUG_TRAX {
+                    let mut trax = get_trax().lock();
+                    trax.put_stat(1);
+                    trax.flush();
+                }
                 // Discard old rubbish
                 trace!(target: "gfx", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
                 continue
             }
             assert_eq!(epoch, self.epoch);
             self.process_method(method);
+            if DEBUG_TRAX {
+                get_trax().lock().flush();
+            }
         }
     }
 
