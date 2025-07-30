@@ -65,7 +65,13 @@ pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "fud::get_task()", "Error while fetching resource: {e}")
+                        error!(target: "fud::get_task()", "Error while fetching resource: {e}");
+
+                        // Send a DownloadError for any error that stopped the fetch task
+                        notify_event!(fud_2, DownloadError, {
+                            hash,
+                            error: e.to_string(),
+                        });
                     }
                 }
             },
