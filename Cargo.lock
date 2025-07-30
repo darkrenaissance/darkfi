@@ -3048,6 +3048,7 @@ version = "0.5.0"
 dependencies = [
  "clap 4.5.38",
  "darkfi",
+ "fud",
  "log",
  "simplelog",
  "smol",
