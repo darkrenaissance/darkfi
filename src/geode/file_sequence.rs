@@ -24,7 +24,7 @@ use smol::{
     fs::{File, OpenOptions},
     io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
 };
-use std::{path::PathBuf, pin::Pin};
+use std::{collections::HashSet, path::PathBuf, pin::Pin};
 
 /// `FileSequence` is an object that implements `AsyncRead`, `AsyncSeek`, and
 /// `AsyncWrite` for an ordered list of (file path, file size).
@@ -79,6 +79,21 @@ impl FileSequence {
     /// Return `files`.
     pub fn get_files(&self) -> &Vec<(PathBuf, u64)> {
         &self.files
+    }
+
+    /// Return the combined file size of all files.
+    pub fn len(&self) -> u64 {
+        self.files.iter().map(|(_, size)| size).sum()
+    }
+
+    /// Return `true` if the `FileSequence` contains no file.
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+
+    /// Return the combined file size of all files.
+    pub fn subset_len(&self, files: HashSet<PathBuf>) -> u64 {
+        self.files.iter().filter(|(path, _)| files.contains(path)).map(|(_, size)| size).sum()
     }
 
     /// Compute the starting position of the file (in bytes) by suming up
@@ -139,15 +154,31 @@ impl AsyncRead for FileSequence {
 
         while total_read < buf.len() {
             if this.current_file.is_none() {
-                // Stop if there are no more files to read
                 if let Some(file_index) = this.current_file_index {
+                    // Stop if there are no more files to read
                     if file_index >= this.files.len() - 1 {
                         return Poll::Ready(Ok(total_read));
                     }
+                    let start_pos = this.get_file_position(file_index);
+                    let file_size = this.files[file_index].1 as usize;
+                    let file_pos = this.position - start_pos;
+                    let space_left = file_size - file_pos as usize;
+                    let skip_bytes = (buf.len() - total_read).min(space_left);
+                    this.position += skip_bytes as u64;
+                    total_read += skip_bytes;
                 }
+
                 // Open the next file
-                if let Err(e) = smol::block_on(this.open_next_file()) {
-                    return Poll::Ready(Err(e));
+                match smol::block_on(this.open_next_file()) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
+                        return Poll::Ready(Ok(total_read));
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                        this.current_file = None;
+                        continue; // Skip to next file
+                    }
+                    Err(e) => return Poll::Ready(Err(e)),
                 }
             }
 
@@ -159,6 +190,7 @@ impl AsyncRead for FileSequence {
                         this.current_file = None; // Move to the next file
                     } else {
                         total_read += bytes_read;
+                        this.position += bytes_read as u64;
                     }
                 }
                 Err(e) => return Poll::Ready(Err(e)),

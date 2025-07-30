@@ -90,7 +90,12 @@ impl ChunkedStorage {
     }
 
     /// Return `fileseq`.
-    pub fn get_fileseq(&mut self) -> &mut FileSequence {
+    pub fn get_fileseq(&self) -> &FileSequence {
+        &self.fileseq
+    }
+
+    /// Return a mutable `fileseq`.
+    pub fn get_fileseq_mut(&mut self) -> &mut FileSequence {
         &mut self.fileseq
     }
 
@@ -100,7 +105,7 @@ impl ChunkedStorage {
     }
 
     /// Return all chunks that contain parts of `file`.
-    pub fn get_chunks_of_file(&self, file: &Path) -> Vec<(blake3::Hash, bool)> {
+    pub fn get_chunks_of_file(&self, file: &Path) -> Vec<blake3::Hash> {
         let files = self.fileseq.get_files();
         let file_index = files.iter().position(|(f, _)| f == file);
         if file_index.is_none() {
@@ -117,6 +122,11 @@ impl ChunkedStorage {
 
         let chunk_indexes: Vec<usize> = (start_index as usize..=end_index as usize).collect();
 
-        chunk_indexes.iter().filter_map(|&index| self.chunks.get(index)).cloned().collect()
+        chunk_indexes
+            .iter()
+            .filter_map(|&index| self.chunks.get(index))
+            .map(|(hash, _)| hash)
+            .cloned()
+            .collect()
     }
 }

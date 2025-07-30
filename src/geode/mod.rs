@@ -76,7 +76,10 @@
 //! The full file is not copied, and individual chunks are not stored by
 //! geode. Additionally it does not keep track of the full files path.
 
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use futures::{AsyncRead, AsyncSeek};
 use log::{debug, info, warn};
@@ -88,7 +91,6 @@ use smol::{
     },
     stream::StreamExt,
 };
-use std::path::Path;
 
 use crate::{Error, Result};
 
@@ -363,7 +365,7 @@ impl Geode {
         let position = (chunk_index as u64) * (MAX_CHUNK_SIZE as u64);
 
         // Seek to the correct position
-        let fileseq = &mut chunked.get_fileseq();
+        let fileseq = &mut chunked.get_fileseq_mut();
         fileseq.seek(SeekFrom::Start(position)).await?;
 
         // This will write the chunk, and truncate files if `chunked` is a directory.
@@ -371,53 +373,24 @@ impl Geode {
 
         // If it's the last chunk of a file (and it's *not* a directory),
         // truncate the file to the correct length.
-        // This is because contrary to directories, for a file shared on fud we
-        // do not know the exact file size from its metadata, we only know the
-        // number of chunks. Therefore we only know the exact size once we know
-        // the size of the last chunk.
+        // This is because contrary to directories, we do not know the exact
+        // file size from its metadata, we only know the number of chunks.
+        // Therefore we only know the exact size once we know the size of the
+        // last chunk.
+        // We also update the `FileSequence` to the exact size.
         if !chunked.is_dir() && chunk_index == chunked.len() - 1 {
             let exact_file_size =
                 chunked.len() * MAX_CHUNK_SIZE - (MAX_CHUNK_SIZE - chunk_slice.len());
-            if let Some(file) = &chunked.get_fileseq().get_current_file() {
+            if let Some(file) = &chunked.get_fileseq_mut().get_current_file() {
                 let _ = file.set_len(exact_file_size as u64).await;
             }
+            chunked.get_fileseq_mut().set_file_size(0, exact_file_size as u64);
         }
 
         Ok((chunk_hash, bytes_written))
     }
 
-    /// Iterate over chunks and find which chunks are available locally.
-    pub async fn verify_chunks(&self, chunked_file: &mut ChunkedStorage) -> Result<()> {
-        let chunks = chunked_file.get_chunks().clone();
-        let mut available_chunks = vec![];
-
-        // Gather all available chunks
-        for (chunk_index, (chunk_hash, _)) in chunks.iter().enumerate() {
-            // Read the chunk using the FileSequence
-            let chunk = match self.read_chunk(&mut chunked_file.get_fileseq(), &chunk_index).await {
-                Ok(c) => c,
-                Err(Error::Io(ErrorKind::NotFound)) => continue,
-                Err(e) => {
-                    warn!(target: "geode::verify_chunks()", "Error while verifying chunks: {e}");
-                    break
-                }
-            };
-
-            // Perform chunk consistency check
-            if self.verify_chunk(chunk_hash, &chunk) {
-                available_chunks.push(chunk_index);
-            }
-        }
-
-        // Update available chunks
-        for chunk_index in available_chunks {
-            chunked_file.get_chunk_mut(chunk_index).1 = true;
-        }
-
-        Ok(())
-    }
-
-    /// Fetch file/directory metadata from Geode. Returns [`Chunked`]. Returns an error if
+    /// Fetch file/directory metadata from Geode. Returns [`ChunkedStorage`]. Returns an error if
     /// the read failed in any way (could also be the file does not exist).
     pub async fn get(&self, hash: &blake3::Hash, path: &Path) -> Result<ChunkedStorage> {
         let hash_str = hash_to_string(hash);
@@ -474,17 +447,13 @@ impl Geode {
 
     /// Fetch a single chunk from Geode. Returns a Vec containing the chunk content
     /// if it is found.
+    /// The returned chunk is NOT verified.
     pub async fn get_chunk(
         &self,
         chunked: &mut ChunkedStorage,
         chunk_hash: &blake3::Hash,
-        path: &Path,
     ) -> Result<Vec<u8>> {
         info!(target: "geode::get_chunk()", "[Geode] Getting chunk {}", hash_to_string(chunk_hash));
-
-        if !path.exists() {
-            return Err(Error::GeodeChunkNotFound)
-        }
 
         // Get the chunk index in the file from the chunk hash
         let chunk_index = match chunked.iter().position(|(h, _)| *h == *chunk_hash) {
@@ -493,19 +462,14 @@ impl Geode {
         };
 
         // Read the file to get the chunk content
-        let chunk = self.read_chunk(&mut chunked.get_fileseq(), &chunk_index).await?;
-
-        // Perform chunk consistency check
-        if !self.verify_chunk(chunk_hash, &chunk) {
-            return Err(Error::GeodeNeedsGc)
-        }
+        let chunk = self.read_chunk(&mut chunked.get_fileseq_mut(), &chunk_index).await?;
 
         Ok(chunk)
     }
 
     /// Read the file at `file_path` to get its chunk with index `chunk_index`.
     /// Returns the chunk content in a Vec.
-    async fn read_chunk(
+    pub async fn read_chunk(
         &self,
         mut stream: impl AsyncRead + Unpin + AsyncSeek,
         chunk_index: &usize,

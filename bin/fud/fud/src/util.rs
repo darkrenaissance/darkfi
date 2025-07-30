@@ -16,12 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::Result;
 use smol::{fs, stream::StreamExt};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
 };
+
+pub use darkfi::geode::hash_to_string;
+use darkfi::Result;
 
 pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     let mut files = Vec::new();
@@ -45,7 +47,8 @@ pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
 
 /// An enum to represent a set of files, where you can use `All` if you want
 /// all files without having to specify all of them.
-/// We could use an Option<HashSet<PathBuf>>, but this is more explicit.
+/// We could use an `Option<HashSet<PathBuf>>`, but this is more explicit.
+#[derive(Clone, Debug)]
 pub enum FileSelection {
     All,
     Set(HashSet<PathBuf>),

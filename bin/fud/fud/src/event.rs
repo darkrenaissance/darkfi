@@ -205,3 +205,27 @@ impl From<FudEvent> for JsonValue {
         }
     }
 }
+
+/// Macro calling `fud.event_publisher.notify()`
+macro_rules! notify_event {
+    // This is for any `FudEvent`
+    ($fud:ident, $event:ident, { $($fields:tt)* }) => {
+        $fud
+            .event_publisher
+            .notify(FudEvent::$event(event::$event {
+                $($fields)*
+            }))
+            .await;
+    };
+    // This is for `FudEvent`s that only have a hash and resource
+    ($fud:ident, $event:ident, $resource:expr) => {
+        $fud
+            .event_publisher
+            .notify(FudEvent::$event(event::$event {
+                hash: $resource.hash,
+                resource: $resource.clone(),
+            }))
+            .await;
+    };
+}
+pub(crate) use notify_event;

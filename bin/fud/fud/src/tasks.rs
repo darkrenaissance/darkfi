@@ -26,8 +26,10 @@ use darkfi::{
 };
 
 use crate::{
+    event,
+    event::notify_event,
     proto::{FudAnnounce, FudChunkReply, FudDirectoryReply, FudFileReply},
-    Fud,
+    Fud, FudEvent,
 };
 
 pub enum FetchReply {

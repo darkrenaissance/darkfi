@@ -246,9 +246,12 @@ impl ProtocolFud {
             return false;
         }
 
-        let chunk = self.fud.geode.get_chunk(&mut chunked.unwrap(), &request.key, &path).await;
+        let chunk = self.fud.geode.get_chunk(&mut chunked.unwrap(), &request.key).await;
         if let Ok(chunk) = chunk {
-            // TODO: Run geode GC
+            if !self.fud.geode.verify_chunk(&request.key, &chunk) {
+                // TODO: Run geode GC
+                return false;
+            }
             let reply = FudChunkReply { chunk };
             info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk {}", hash_to_string(&request.key));
             let _ = self.channel.send(&reply).await;
@@ -276,9 +279,12 @@ impl ProtocolFud {
         // If it's a file with a single chunk, just reply with the chunk
         if chunked_file.len() == 1 && !chunked_file.is_dir() {
             let chunk_hash = chunked_file.get_chunks()[0].0;
-            let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash, &path).await;
+            let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash).await;
             if let Ok(chunk) = chunk {
-                // TODO: Run geode GC
+                if !self.fud.geode.verify_chunk(&request.key, &chunk) {
+                    // TODO: Run geode GC
+                    return false;
+                }
                 let reply = FudChunkReply { chunk };
                 info!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Sending chunk (file has a single chunk) {}", hash_to_string(&chunk_hash));
                 let _ = self.channel.send(&reply).await;
