@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VRF_DOMAIN"],"struct":["VrfProof"]};
