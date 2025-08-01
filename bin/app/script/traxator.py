@@ -3,6 +3,7 @@ from pydrk import serial
 from collections import namedtuple
 from dataclasses import dataclass
 from typing import Union
+import sys
 
 @dataclass
 class SetScale:
@@ -280,8 +281,8 @@ def read_section(f):
 
     return sect
 
-def read_trax():
-    f = open("trax.dat", "rb")
+def read_trax(fname):
+    f = open(fname, "rb")
     sections = []
     while True:
         if (sect := read_section(f)) is None:
@@ -290,7 +291,11 @@ def read_trax():
     return sections
 
 if __name__ == "__main__":
-    sections = read_trax()
+    if len(sys.argv) != 2:
+        print("wrong args", file=sys.stderr)
+        sys.exit(-1)
+    fname = sys.argv[1]
+    sections = read_trax(fname)
     for sect in sections:
         print(sect)
 

@@ -6,7 +6,7 @@ dc_id = 2767617242841734550
 vert_id = 39568
 idx_id = 39569
 
-sections = read_trax()
+sections = read_trax("trax.dat")
 for sect in sections:
     match sect:
         case PutDrawCall(_, _, dcs, stats):
