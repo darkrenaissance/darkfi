@@ -69,16 +69,13 @@ enable-netdebug = []
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
 freetype-sys = { git = "https://github.com/narodnik/freetype-sys2" }
 
-halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v4" }
-halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v4" }
+halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v031" }
+halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v031" }
 # This patch didn't work for me
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 
 # Once merged, we can remove this
 swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
-
-tor-rtcompat = "0.32.0"
-tor-rtmock = "0.32.0"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
