@@ -33,7 +33,11 @@ pub struct Trax {
 
 impl Trax {
     fn new() -> Self {
+        #[cfg(target_os = "android")]
         let path = crate::android::get_external_storage_path().join("trax.dat");
+        #[cfg(not(target_os = "android"))] // FIXME:
+        let path = std::path::PathBuf::from(std::env::var("TMPDIR").unwrap()).join("trax.dat");
+
         let file = File::create(path).unwrap();
         Self { file, buf: vec![] }
     }
