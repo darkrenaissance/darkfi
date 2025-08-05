@@ -29,10 +29,10 @@ darkfi-serial = {version = "0.5.0", features = ["async"]}
 thiserror = "2.0.12"
 smol = "2.0.2"
 atomic_float = "1.1.0"
-async-channel = "2.3.1"
+async-channel = "2.5.0"
 easy-parallel = "3.3.1"
 rand = "0.8.5"
-async-lock = "3.4.0"
+async-lock = "3.4.1"
 futures = "0.3.31"
 async-recursion = "1.1.1"
 colored = "3.0.0"
@@ -47,7 +47,7 @@ blake3 = "1.8.2"
 simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
-parking_lot = { version = "0.12.3", features = ["nightly"] }
+parking_lot = { version = "0.12.4", features = ["nightly"] }
 regex = "1.11"
 parley = { git = "https://github.com/linebender/parley.git" }
 swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
@@ -77,8 +77,8 @@ halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v4" }
 # Once merged, we can remove this
 swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" }
 
-tor-rtcompat = { git = "https://github.com/narodnik/arti" }
-tor-rtmock = { git = "https://github.com/narodnik/arti" }
+tor-rtcompat = "0.32.0"
+tor-rtmock = "0.32.0"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
@@ -86,12 +86,12 @@ dirs = "5.0.1"
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
-tor-dirmgr = { version="0.29.0", features=["static"] }
+tor-dirmgr = { version="0.32.0", features=["static"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
-#rusqlite = {version = "0.32.1", features = ["bundled"]}
-tor-dirmgr = { version="0.29.0", features=["static"] }
+#rusqlite = {version = "0.37.0", features = ["bundled"]}
+tor-dirmgr = { version="0.32.0", features=["static"] }
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

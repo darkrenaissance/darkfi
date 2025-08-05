@@ -52,7 +52,7 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.172"
+libc = "0.2.174"
 log = "0.4.27"
 thiserror = "2.0.12"
 
@@ -67,14 +67,14 @@ pin-project-lite = {version = "0.2.16", optional = true}
 futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"], optional = true}
 
 # Pluggable Transports
-socket2 = {version = "0.5.9", features = ["all"], optional = true}
-arti-client = {version = "0.30.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
-tor-error = {version = "0.30.0", optional = true}
-tor-rtcompat = {version = "0.30.0", features = ["async-std", "rustls"], optional = true}
-tor-hscrypto = {version = "0.30.0", optional = true}
-tor-hsservice = {version = "0.30.0", optional = true}
-tor-proto = {version = "0.30.0", optional = true}
-tor-cell = {version = "0.30.0", optional = true}
+socket2 = {version = "0.6.0", features = ["all"], optional = true}
+arti-client = {version = "0.32.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
+tor-error = {version = "0.32.0", optional = true}
+tor-rtcompat = {version = "0.32.0", features = ["async-std", "rustls"], optional = true}
+tor-hscrypto = {version = "0.32.0", optional = true}
+tor-hsservice = {version = "0.32.0", optional = true}
+tor-proto = {version = "0.32.0", optional = true}
+tor-cell = {version = "0.32.0", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.1.1", optional = true}
@@ -90,13 +90,13 @@ httparse = {version = "1.10.1", optional = true}
 semver = {version = "1.0.26", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.8.22", optional = true}
+toml = {version = "0.9.5", optional = true}
 
 # Utilities
 #darkfi-serial = {path = "src/serial", optional = true}
 #darkfi-derive = {path = "src/serial/derive", optional = true}
-darkfi-serial = {version = "0.5.0", optional = true}
-darkfi-derive = {version = "0.5.0", optional = true}
+darkfi-serial = {version = "0.5.1", optional = true}
+darkfi-derive = {version = "0.5.1", optional = true}
 
 # TODO: check chrono usage and impl our own
 chrono = {version = "0.4.41", optional = true}
@@ -112,14 +112,14 @@ regex = {version = "1.11.1", optional = true}
 rand = {version = "0.8.5", optional = true}
 blake3 = {version = "1.8.2", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
-halo2_proofs = {version = "0.3.0", features = ["circuit-params"], optional = true}
+halo2_proofs = {version = "0.3.1", features = ["circuit-params"], optional = true}
 halo2_gadgets = {version = "0.3.1", features = ["circuit-params"], optional = true}
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
-wasmer = {version = "6.0.1", features = ["singlepass"], optional = true}
-wasmer-compiler-singlepass = {version = "6.0.1", optional = true}
-wasmer-middlewares = {version = "6.0.1", optional = true}
+wasmer = {version = "6.1.0-rc.2", features = ["singlepass"], optional = true}
+wasmer-compiler-singlepass = {version = "6.1.0-rc.2", optional = true}
+wasmer-middlewares = {version = "6.1.0-rc.2", optional = true}
 
 # Blockchain store
 sled-overlay = {version = "0.1.9", optional = true}
@@ -131,13 +131,13 @@ tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
 
 [dev-dependencies]
 clap = {version = "4.4.11", features = ["derive"]}
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
+halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}
 halo2_gadgets = "0.3.1"
 plotters = "0.3.7"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
 # Used for benchmarks
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.7.0", features = ["html_reports"] }
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -321,10 +321,8 @@ dht = [
 # -----END LIBRARY FEATURES-----
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
-# Temp smol-2.0 fix
-async-lock = {git="https://github.com/smol-rs/async-lock", rev="542831132f2c707aae1c380edd43452053433814"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}
 # Forked "url" crate with added P2P schemas
 url = {git="https://github.com/darkrenaissance/rust-url", branch="main"}
 

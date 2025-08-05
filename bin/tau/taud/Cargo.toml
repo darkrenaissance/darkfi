@@ -37,13 +37,13 @@ rand = "0.8.5"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.22"
+toml = "0.9.5"
 
 # Misc
 async-trait = "0.1.88"
 chrono = "0.4.41"
 futures = "0.3.31"
-libc = "0.2.172"
+libc = "0.2.174"
 log = "0.4.27"
 thiserror = "2.0.12"
 tinyjson = "2.5.1"

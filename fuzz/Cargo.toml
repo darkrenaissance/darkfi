@@ -8,7 +8,7 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4.9"
+libfuzzer-sys = "0.4.10"
 
 [dependencies.darkfi]
 path = ".."

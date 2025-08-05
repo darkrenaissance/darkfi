@@ -21,7 +21,7 @@ path = "src/main.rs"
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {version = "0.5.0", features = ["async"]}
-libc = "0.2.172"
+libc = "0.2.174"
 
 # Event Graph DB
 sled-overlay = "0.1.9"
@@ -44,7 +44,7 @@ url = "2.5.4"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.22"
+toml = "0.9.5"
 semver = "1.0.26"
 
 # Daemon
@@ -62,7 +62,7 @@ structopt-toml = "0.5.1"
 # See https://github.com/rust-mobile/android-rs-glue/issues/193
 [target.aarch64-linux-android.dependencies]
 openssl = { version = "*", features = ["vendored"] }
-rusqlite = {version = "0.32.1", features = ["bundled"]}
+rusqlite = {version = "0.36.0", features = ["bundled"]}
 
 [lints]
 workspace = true

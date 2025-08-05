@@ -17,7 +17,7 @@ futures = "0.3.31"
 log = "0.4.27"
 semver = "1.0.26"
 tinyjson = "2.5.1"
-toml = "0.8.22"
+toml = "0.9.5"
 url = "2.5.4"
 
 # Daemon

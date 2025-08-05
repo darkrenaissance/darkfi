@@ -44,7 +44,7 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::lookup_range_check::LookupRangeCheckConfig,
+    utilities::lookup_range_check::{LookupRangeCheck, LookupRangeCheckConfig},
 };
 use halo2_proofs::{
     arithmetic::Field,
