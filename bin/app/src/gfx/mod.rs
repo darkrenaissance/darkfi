@@ -22,10 +22,10 @@ use darkfi_serial::{
 };
 use log::debug;
 use miniquad::{
-    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
-    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
-    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TouchPhase,
-    UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    conf, native::egl, window, Backend, Bindings, BlendFactor, BlendState, BlendValue,
+    BufferLayout, BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods,
+    MouseButton, PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource,
+    TouchPhase, UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
 use std::{
     collections::HashMap,
@@ -252,7 +252,7 @@ impl RenderApi {
         self.send_with_epoch(method, epoch);
     }
 
-    pub fn replace_draw_calls(&self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
+    pub fn replace_draw_calls(&self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
         let method = GraphicsMethod::ReplaceDrawCalls { timest, dcs };
         self.send(method);
     }
@@ -396,7 +396,7 @@ impl GfxDrawInstruction {
 #[derive(Clone, Debug, Default, SerialEncodable)]
 pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
-    pub dcs: Vec<u64>,
+    pub dcs: Vec<DcId>,
     pub z_index: u32,
     pub debug_str: &'static str,
 }
@@ -404,7 +404,7 @@ pub struct GfxDrawCall {
 impl GfxDrawCall {
     pub fn new(
         instrs: Vec<GfxDrawInstruction>,
-        dcs: Vec<u64>,
+        dcs: Vec<DcId>,
         z_index: u32,
         debug_str: &'static str,
     ) -> Self {
@@ -417,7 +417,7 @@ impl GfxDrawCall {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-        timest: u64,
+        timest: Timestamp,
     ) -> Option<DrawCall> {
         Some(DrawCall {
             instrs: self
@@ -455,14 +455,14 @@ enum DrawInstruction {
 #[derive(Debug)]
 struct DrawCall {
     instrs: Vec<DrawInstruction>,
-    dcs: Vec<u64>,
+    dcs: Vec<DcId>,
     z_index: u32,
-    timest: u64,
+    timest: Timestamp,
 }
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
-    draw_calls: &'a HashMap<u64, DrawCall>,
+    draw_calls: &'a HashMap<DcId, DrawCall>,
     uniforms_data: [u8; 128],
     white_texture: miniquad::TextureId,
 
@@ -639,6 +639,9 @@ impl<'a> RenderContext<'a> {
     }
 }
 
+type Timestamp = u64;
+type DcId = u64;
+
 #[derive(Clone)]
 pub enum GraphicsMethod {
     NewTexture((u16, u16, Vec<u8>, GfxTextureId, DebugTag)),
@@ -646,7 +649,7 @@ pub enum GraphicsMethod {
     NewVertexBuffer((Vec<Vertex>, GfxBufferId, DebugTag)),
     NewIndexBuffer((Vec<u16>, GfxBufferId, DebugTag)),
     DeleteBuffer((GfxBufferId, DebugTag, u8)),
-    ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
+    ReplaceDrawCalls { timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)> },
 }
 
 impl std::fmt::Debug for GraphicsMethod {
@@ -787,9 +790,10 @@ impl GraphicsEventPublisher {
 
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
+    libegl: egl::LibEgl,
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
-    draw_calls: HashMap<u64, DrawCall>,
+    draw_calls: HashMap<DcId, DrawCall>,
 
     textures: HashMap<GfxTextureId, miniquad::TextureId>,
     buffers: HashMap<GfxBufferId, miniquad::BufferId>,
@@ -797,6 +801,8 @@ struct Stage {
     epoch: EpochIndex,
     method_rep: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
+
+    pruner: PruneMethodHeap,
 }
 
 impl Stage {
@@ -854,8 +860,11 @@ impl Stage {
             params,
         );
 
+        let libegl = egl::LibEgl::try_load().expect("Cant load LibEGL");
+
         Stage {
             ctx,
+            libegl,
             pipeline,
             white_texture,
             draw_calls: HashMap::from([(
@@ -869,23 +878,25 @@ impl Stage {
             epoch,
             method_rep,
             event_pub,
+
+            pruner: PruneMethodHeap::new(epoch),
         }
     }
 
     fn process_method(&mut self, mut method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
         let res = match &mut method {
-            GraphicsMethod::NewTexture((width, height, data, gfx_texture_id, _)) => {
-                self.method_new_texture(*width, *height, data, *gfx_texture_id)
+            GraphicsMethod::NewTexture((width, height, data, gtex_id, _)) => {
+                self.method_new_texture(*width, *height, data, *gtex_id)
             }
-            GraphicsMethod::DeleteTexture((texture, _)) => self.method_delete_texture(*texture),
-            GraphicsMethod::NewVertexBuffer((verts, gbuffid, _)) => {
-                self.method_new_vertex_buffer(verts, *gbuffid)
+            GraphicsMethod::DeleteTexture((gtex_id, _)) => self.method_delete_texture(*gtex_id),
+            GraphicsMethod::NewVertexBuffer((verts, gbuff_id, _)) => {
+                self.method_new_vertex_buffer(verts, *gbuff_id)
             }
-            GraphicsMethod::NewIndexBuffer((indices, gbuffid, _)) => {
-                self.method_new_index_buffer(indices, *gbuffid)
+            GraphicsMethod::NewIndexBuffer((indices, gbuff_id, _)) => {
+                self.method_new_index_buffer(indices, *gbuff_id)
             }
-            GraphicsMethod::DeleteBuffer((buffer, _, _)) => self.method_delete_buffer(*buffer),
+            GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
                 let dcs = std::mem::take(dcs);
                 self.method_replace_draw_calls(*timest, dcs)
@@ -1018,8 +1029,8 @@ impl Stage {
     }
     fn method_replace_draw_calls(
         &mut self,
-        timest: u64,
-        dcs: Vec<(u64, GfxDrawCall)>,
+        timest: Timestamp,
+        dcs: Vec<(DcId, GfxDrawCall)>,
     ) -> Result<()> {
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
@@ -1062,30 +1073,156 @@ impl Stage {
     fn trax_method(&self, epoch: EpochIndex, method: &GraphicsMethod) {
         let mut trax = get_trax().lock();
         match method {
-            GraphicsMethod::NewTexture((_, _, _, gfx_texture_id, tag)) => {
-                trax.put_tex(epoch, *gfx_texture_id, *tag);
+            GraphicsMethod::NewTexture((_, _, _, gtex_id, tag)) => {
+                trax.put_tex(epoch, *gtex_id, *tag);
             }
-            GraphicsMethod::DeleteTexture((texture, tag)) => {
-                trax.del_tex(epoch, *texture, *tag);
+            GraphicsMethod::DeleteTexture((gtex_id, tag)) => {
+                trax.del_tex(epoch, *gtex_id, *tag);
             }
-            GraphicsMethod::NewVertexBuffer((verts, gbuffid, tag)) => {
-                trax.put_verts(epoch, verts.clone(), *gbuffid, *tag, 0);
+            GraphicsMethod::NewVertexBuffer((verts, gbuff_id, tag)) => {
+                trax.put_verts(epoch, verts.clone(), *gbuff_id, *tag, 0);
             }
-            GraphicsMethod::NewIndexBuffer((idxs, gbuffid, tag)) => {
-                trax.put_idxs(epoch, idxs.clone(), *gbuffid, *tag, 1);
+            GraphicsMethod::NewIndexBuffer((idxs, gbuff_id, tag)) => {
+                trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
             }
-            GraphicsMethod::DeleteBuffer((buffer, tag, buftype)) => {
-                trax.del_buf(epoch, *buffer, *tag, *buftype);
+            GraphicsMethod::DeleteBuffer((gbuff_id, tag, buftype)) => {
+                trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
                 trax.put_dcs(epoch, *timest, dcs);
             }
         };
     }
+
+    fn egl_ctx_is_disabled(&self) -> bool {
+        let egl_ctx = unsafe { (self.libegl.eglGetCurrentContext)() };
+        egl_ctx.is_null()
+    }
+}
+
+/// This is used to process the method queue while the screen is off to avoid the queue
+/// becoming congested and using up all the memory.
+/// Will drop alloc/delete pairs, and merge draw calls together.
+struct PruneMethodHeap {
+    /// Newly allocated buffers while screen was off
+    new_buf: HashMap<GfxBufferId, GraphicsMethod>,
+    /// Newly allocated textures while screen was off
+    new_tex: HashMap<GfxTextureId, GraphicsMethod>,
+    /// Deleted objects
+    del: Vec<GraphicsMethod>,
+    /// Draw calls
+    dcs: HashMap<DcId, (Timestamp, GfxDrawCall)>,
+
+    epoch: EpochIndex,
+}
+
+impl PruneMethodHeap {
+    fn new(epoch: EpochIndex) -> Self {
+        Self {
+            new_buf: HashMap::new(),
+            new_tex: HashMap::new(),
+            del: vec![],
+            dcs: HashMap::new(),
+            epoch,
+        }
+    }
+
+    fn drain(&mut self, method_rep: &async_channel::Receiver<(EpochIndex, GraphicsMethod)>) {
+        // Process as many methods as we can
+        while let Ok((epoch, method)) = method_rep.try_recv() {
+            if epoch < self.epoch {
+                // Discard old rubbish
+                trace!(target: "gfx::pruner", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
+                continue
+            }
+            assert_eq!(epoch, self.epoch);
+            self.process_method(method);
+        }
+    }
+
+    fn process_method(&mut self, method: GraphicsMethod) {
+        match method.clone() {
+            GraphicsMethod::NewTexture((_, _, _, gtex_id, _)) => {
+                self.new_tex.insert(gtex_id, method);
+            }
+            GraphicsMethod::DeleteTexture((gtex_id, _)) => {
+                if self.new_tex.remove(&gtex_id).is_none() {
+                    self.del.push(method);
+                }
+            }
+            GraphicsMethod::NewVertexBuffer((_, gbuff_id, _)) => {
+                self.new_buf.insert(gbuff_id, method);
+            }
+            GraphicsMethod::NewIndexBuffer((_, gbuff_id, _)) => {
+                self.new_buf.insert(gbuff_id, method);
+            }
+            GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => {
+                if self.new_buf.remove(&gbuff_id).is_none() {
+                    self.del.push(method);
+                }
+            }
+            GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
+                self.method_replace_draw_calls(timest, dcs)
+            }
+        }
+    }
+
+    fn method_replace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
+        for (key, val) in dcs {
+            match self.dcs.get_mut(&key) {
+                Some(old_val) => {
+                    // Only replace the draw call if it is more recent
+                    if old_val.0 < timest {
+                        *old_val = (timest, val);
+                    } else {
+                        trace!(target: "gfx::pruner", "Rejected stale draw_call {key}: {val:?}");
+                    }
+                }
+                None => {
+                    self.dcs.insert(key, (timest, val));
+                }
+            }
+        }
+    }
+
+    /// Collect everything now the screen is on
+    fn recv_all(&mut self) -> Vec<GraphicsMethod> {
+        let mut meth = Vec::with_capacity(
+            self.new_buf.len() + self.new_tex.len() + self.del.len() + self.dcs.len(),
+        );
+        let new_buf = std::mem::take(&mut self.new_buf);
+        let new_tex = std::mem::take(&mut self.new_tex);
+        meth.extend(new_buf.into_values());
+        meth.extend(new_tex.into_values());
+        meth.append(&mut self.del);
+        for (dc_id, (timest, dc)) in std::mem::take(&mut self.dcs) {
+            meth.push(GraphicsMethod::ReplaceDrawCalls { timest, dcs: vec![(dc_id, dc)] });
+        }
+        meth
+    }
 }
 
 impl EventHandler for Stage {
     fn update(&mut self) {
+        if self.egl_ctx_is_disabled() {
+            // Screen is off so collect all methods into the pruner
+            self.pruner.drain(&self.method_rep);
+            return
+        }
+
+        // Process all cached methods by the pruner from while the screen was off.
+        for method in self.pruner.recv_all() {
+            // Stale methods will be dropped by pruner, so they will not be caught by trax
+            // while the screen is off.
+            if DEBUG_TRAX {
+                self.trax_method(self.epoch, &method);
+            }
+            self.process_method(method);
+            if DEBUG_TRAX {
+                get_trax().lock().flush();
+            }
+        }
+
         // Process as many methods as we can
         while let Ok((epoch, method)) = self.method_rep.try_recv() {
             if DEBUG_TRAX {

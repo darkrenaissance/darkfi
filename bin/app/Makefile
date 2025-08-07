@@ -84,7 +84,7 @@ install-apk:
 	reset
 	adb logcat -c
 	adb shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
-	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app
+	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
 
 # Useful for dev
 cli:

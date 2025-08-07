@@ -19,7 +19,7 @@
 use darkfi_serial::Encodable;
 use log::debug;
 use parking_lot::Mutex as SyncMutex;
-use std::{fs::File, io::Write, sync::OnceLock};
+use std::{fs::File, sync::OnceLock};
 
 use super::{DebugTag, GfxBufferId, GfxDrawCall, GfxTextureId, Vertex};
 use crate::EpochIndex;
