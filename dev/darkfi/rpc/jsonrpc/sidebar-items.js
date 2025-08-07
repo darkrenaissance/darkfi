@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ErrorCode","JsonResult"],"fn":["parse_json_array_number","parse_json_array_string","parse_json_number","parse_json_response_string","parse_json_string","to_json_array","validate_empty_params"],"struct":["JsonError","JsonErrorVal","JsonNotification","JsonRequest","JsonResponse","JsonSubscriber"]};
