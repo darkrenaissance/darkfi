@@ -803,6 +803,7 @@ struct Stage {
     event_pub: GraphicsEventPublisherPtr,
 
     pruner: PruneMethodHeap,
+    screen_was_off: bool,
 }
 
 impl Stage {
@@ -880,6 +881,7 @@ impl Stage {
             event_pub,
 
             pruner: PruneMethodHeap::new(epoch),
+            screen_was_off: false,
         }
     }
 
@@ -1207,19 +1209,27 @@ impl EventHandler for Stage {
         if self.egl_ctx_is_disabled() {
             // Screen is off so collect all methods into the pruner
             self.pruner.drain(&self.method_rep);
+            self.screen_was_off = true;
             return
         }
 
-        // Process all cached methods by the pruner from while the screen was off.
-        for method in self.pruner.recv_all() {
-            // Stale methods will be dropped by pruner, so they will not be caught by trax
-            // while the screen is off.
-            if DEBUG_TRAX {
-                self.trax_method(self.epoch, &method);
-            }
-            self.process_method(method);
-            if DEBUG_TRAX {
-                get_trax().lock().flush();
+        // We actually want to skip draining the prune queue the first time so
+        // draw actually gets a chance to be called first.
+        // Otherwise we will just see a black screen for a sec or so.
+        if self.screen_was_off {
+            self.screen_was_off = false;
+        } else {
+            // Process all cached methods by the pruner from while the screen was off.
+            for method in self.pruner.recv_all() {
+                // Stale methods will be dropped by pruner, so they will not be caught by trax
+                // while the screen is off.
+                if DEBUG_TRAX {
+                    self.trax_method(self.epoch, &method);
+                }
+                self.process_method(method);
+                if DEBUG_TRAX {
+                    get_trax().lock().flush();
+                }
             }
         }
 
