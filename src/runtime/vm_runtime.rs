@@ -32,7 +32,8 @@ use darkfi_serial::serialize;
 use tracing::{debug, error, info};
 use wasmer::{
     imports, sys::CompilerConfig, wasmparser::Operator, AsStoreMut, AsStoreRef, Function,
-    FunctionEnv, Instance, Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
+    FunctionEnv, Instance, Memory, MemoryType, MemoryView, Module, Pages, Store, Value,
+    WASM_PAGE_SIZE,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
@@ -183,6 +184,14 @@ impl Runtime {
         compiler_config.push_middleware(metering);
         let mut store = Store::new(compiler_config);
 
+        // Create a larger Memory for the instance
+        let memory_type = MemoryType::new(
+            Pages(256),        // init: 16 MB (256 * 64KB)
+            Some(Pages(4096)), // max: 256 MB
+            false,
+        );
+        let memory = Memory::new(&mut store, memory_type)?;
+
         debug!(target: "runtime::vm_runtime", "Compiling module");
         let module = Module::new(&store, wasm_bytes)?;
 
@@ -202,7 +211,7 @@ impl Runtime {
                 contract_section: ContractSection::Null,
                 contract_return_data: Cell::new(None),
                 logs,
-                memory: None,
+                memory: Some(memory.clone()),
                 objects: RefCell::new(vec![]),
                 verifying_block_height,
                 block_target,
@@ -214,6 +223,8 @@ impl Runtime {
 
         let imports = imports! {
             "env" => {
+                "memory" => memory,
+
                 "drk_log_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
