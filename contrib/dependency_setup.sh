@@ -29,22 +29,22 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libfontconfig1-dev liblzma-dev libssl-dev libsqlcipher-dev libsqlite3-dev wabt"
+	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libfontconfig1-dev liblzma-dev libssl-dev libsqlcipher-dev libsqlite3-dev"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git cmake make gcc pkgconf alsa-lib openssl sqlcipher wabt"
+	pacman_deps="git cmake make gcc pkgconf alsa-lib openssl sqlcipher"
 	$1 -Sy $pacman_deps || return 1
 }
 
 setup_xbps() {
-	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel wabt"
+	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
 	$1 -S $xbps_deps || return 1
 }
 
 setup_dnf() {
-	dnf_deps="git make gcc pkg-config findutils lato-fonts fontconfig-devel perl-FindBin perl-File-Compare alsa-lib-devel python3-devel alsa-lib-devel openssl-devel sqlcipher-devel libsq3-devel wabt"
+	dnf_deps="git make gcc pkg-config findutils lato-fonts fontconfig-devel perl-FindBin perl-File-Compare alsa-lib-devel python3-devel alsa-lib-devel openssl-devel sqlcipher-devel libsq3-devel"
 	$1 install -y $dnf_deps || return 1
 }
 
@@ -64,7 +64,7 @@ setup_emerge() {
 }
 
 setup_pkg() {
-	pkg_deps="git bash gcc findutils cantarell-fonts gmake devel/automake rust wabt llvm cmake sqlcipher pkgconf python python3"
+	pkg_deps="git bash gcc findutils cantarell-fonts gmake devel/automake rust llvm cmake sqlcipher pkgconf python python3"
 	$1 install -y $pkg_deps || return 1
 }
 

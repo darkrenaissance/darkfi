@@ -12,7 +12,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   build-essential cmake jq wget curl \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev python3-dev libsqlite3-dev libsqlcipher-dev wabt
+  libasound2-dev python3-dev libsqlite3-dev libsqlcipher-dev
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 

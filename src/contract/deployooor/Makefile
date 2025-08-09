@@ -32,7 +32,6 @@ $(WASM_BIN): $(WASM_SRC)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
 		--release --package $(PKGNAME)
 	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
-	wasm-strip $@
 
 test-integration: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
