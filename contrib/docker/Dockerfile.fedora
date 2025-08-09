@@ -13,7 +13,7 @@ RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
   perl-FindBin perl-File-Compare perl-lib sqlite-devel \
-  perl-interpreter sqlcipher-devel wabt
+  perl-interpreter sqlcipher-devel
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 

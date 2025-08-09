@@ -24,7 +24,7 @@ ARG BINS
 RUN apt-get update
 RUN apt-get install -y git cmake make gcc g++ pkg-config \
     libasound2-dev libclang-dev libssl-dev libsqlcipher-dev \
-    libsqlite3-dev wabt wget
+    libsqlite3-dev wget
 
 ## Rust installation
 RUN wget -O install-rustup.sh https://sh.rustup.rs && \
