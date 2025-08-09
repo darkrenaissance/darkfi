@@ -11,7 +11,7 @@ ARG RUST_VER
 RUN apt-get update && apt-get install -y build-essential cmake jq wget \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev libasound2-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev libsqlite3-dev \
-  libsqlcipher-dev wabt
+  libsqlcipher-dev
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
