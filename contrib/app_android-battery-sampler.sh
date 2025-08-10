@@ -3,19 +3,29 @@
 # Use wireless debugging with this script
 # Phone should be fully charged and unplugged
 
-adb root
+# adb root
+# Long hold wireless debugging in developer options
+# Select "Pair device with pairing code"
+# adb pair ipaddr:port
+# Now use the ipaddr:port on the wireless debugging screen
+# adb connect ipaddr:port
 
 log_elapsed() {
     now=$(date +%s)
     elapsed=$(( now - start ))
-    volt=$(adb shell cat /sys/class/power_supply/battery/voltage_now)
-    echo $elapsed, $volt
+    #val=$(adb shell cat /sys/class/power_supply/battery/voltage_now)
+    val=$(adb shell dumpsys battery | grep level)
+    echo $elapsed, $val
 }
 
 start=$(date +%s)
 
-for i in $(seq 1 20); do
+#for i in $(seq 1 20); do
+while true; do
     log_elapsed
+    if [ $? -ne 0 ]; then
+        break
+    fi
     sleep 60
 done
 
