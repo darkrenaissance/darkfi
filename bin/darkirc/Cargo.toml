@@ -63,7 +63,7 @@ structopt-toml = "0.5.1"
 # See https://github.com/rust-mobile/android-rs-glue/issues/193
 [target.aarch64-linux-android.dependencies]
 openssl = { version = "*", features = ["vendored"] }
-rusqlite = {version = "0.36.0", features = ["bundled"]}
+rusqlite = {version = "0.37.0", features = ["bundled"]}
 
 [lints]
 workspace = true

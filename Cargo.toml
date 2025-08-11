@@ -68,13 +68,13 @@ futures-rustls = {version = "0.26.0", default-features = false, features = ["log
 
 # Pluggable Transports
 socket2 = {version = "0.6.0", features = ["all"], optional = true}
-arti-client = {version = "0.32.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
-tor-error = {version = "0.32.0", optional = true}
-tor-rtcompat = {version = "0.32.0", features = ["async-std", "rustls"], optional = true}
-tor-hscrypto = {version = "0.32.0", optional = true}
-tor-hsservice = {version = "0.32.0", optional = true}
-tor-proto = {version = "0.32.0", optional = true}
-tor-cell = {version = "0.32.0", optional = true}
+arti-client = {version = "0.33.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
+tor-error = {version = "0.33.0", optional = true}
+tor-rtcompat = {version = "0.33.0", features = ["async-std", "rustls"], optional = true}
+tor-hscrypto = {version = "0.33.0", optional = true}
+tor-hsservice = {version = "0.33.0", optional = true}
+tor-proto = {version = "0.33.0", optional = true}
+tor-cell = {version = "0.33.0", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.1.1", optional = true}
