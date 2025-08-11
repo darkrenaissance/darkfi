@@ -14,14 +14,13 @@ log_elapsed() {
     now=$(date +%s)
     elapsed=$(( now - start ))
     #val=$(adb shell cat /sys/class/power_supply/battery/voltage_now)
-    val=$(adb shell dumpsys battery | grep level)
+    val=$(adb shell dumpsys battery | grep level | awk '{print $2}')
     echo $elapsed, $val
 }
 
 start=$(date +%s)
 
-#for i in $(seq 1 20); do
-while true; do
+for i in $(seq 1 200); do
     log_elapsed
     if [ $? -ne 0 ]; then
         break
