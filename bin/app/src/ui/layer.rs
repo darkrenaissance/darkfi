@@ -26,7 +26,7 @@ use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::unixtime,
+    util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
 };
 
@@ -313,5 +313,12 @@ impl UIObject for Layer {
             }
         }
         false
+    }
+
+    fn set_i18n(&self, i18n_fish: &I18nBabelFish) {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.set_i18n(i18n_fish);
+        }
     }
 }

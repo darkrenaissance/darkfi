@@ -55,6 +55,10 @@ swash = { git = "https://github.com/valadaptive/swash", branch = "tight-bounds" 
 zeno = { git = "https://github.com/valadaptive/zeno", branch = "tight-bounds" }
 peniko = "*"
 
+fluent = "0.17"
+unic-langid = { version = "0.9", features = ["unic-langid-macros"] }
+indoc = "2"
+
 [features]
 emulate-android = []
 enable-plugins = []

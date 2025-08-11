@@ -30,6 +30,7 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
 };
 
 mod chat;
@@ -124,7 +125,7 @@ enum ColorScheme {
     PaperLight,
 }
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
@@ -504,9 +505,18 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
     for channel in CHANNELS {
-        chat::make(app, window.clone(), channel, &db, emoji_meshes.clone(), is_first_time).await;
+        chat::make(
+            app,
+            window.clone(),
+            channel,
+            &db,
+            i18n_fish,
+            emoji_meshes.clone(),
+            is_first_time,
+        )
+        .await;
     }
-    menu::make(app, window.clone()).await;
+    menu::make(app, window.clone(), i18n_fish).await;
 
     // @@@ Debug stuff @@@
     //let chatview_node = app.sg_root.clone().lookup_node("/window/dev_chat_layer").unwrap();

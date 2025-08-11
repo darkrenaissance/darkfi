@@ -25,6 +25,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
 };
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
@@ -60,7 +61,7 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.clone().lookup_node("/setting/scale").unwrap(),
         Role::Internal,
@@ -131,7 +132,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "CHANNELS").unwrap();
+    node.set_property_bool(atom, Role::App, "use_i18n", true).unwrap();
+    node.set_property_str(atom, Role::App, "text", "channels-label").unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -148,7 +150,9 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     }
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     layer_node.clone().link(node);
 
     let mut channel_y = CHANNEL_LABEL_LINESPACE;
@@ -225,8 +229,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         set_normal_color(atom);
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-        let node =
-            node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+        let node = node
+            .setup(|me| {
+                Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone())
+            })
+            .await;
         layer_node.clone().link(node);
 
         // Create the button

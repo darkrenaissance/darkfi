@@ -20,6 +20,7 @@
 use colored::Colorize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub mod i18n;
 mod rt;
 pub use rt::{AsyncRuntime, ExecutorPtr};
 

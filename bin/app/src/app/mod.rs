@@ -18,6 +18,7 @@
 
 use chrono::{NaiveDate, NaiveDateTime};
 use darkfi_serial::Encodable;
+use indoc::indoc;
 use sled_overlay::sled;
 use smol::Task;
 use std::sync::{Arc, Mutex as SyncMutex};
@@ -33,6 +34,7 @@ use crate::{
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
     text::TextShaperPtr,
     ui::{chatview, Window},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -86,6 +88,8 @@ impl App {
 
         let mut window = SceneNode::new("window", SceneNodeType::Window);
 
+        let i18n_fish = self.setup_locale(&mut window);
+
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
@@ -120,19 +124,55 @@ impl App {
             self.tasks.lock().unwrap().push(setting_task);
         }
 
-        let window =
-            window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
+        let window = window
+            .setup(|me| {
+                Window::new(me, self.render_api.clone(), i18n_fish.clone(), setting_root.clone())
+            })
+            .await;
 
         self.sg_root.clone().link(window.clone());
         self.sg_root.clone().link(setting_root.clone());
 
-        schema::make(&self, window.clone()).await;
+        schema::make(&self, window.clone(), &i18n_fish).await;
 
         //settings::make(&self, window, self.ex.clone()).await;
 
         d!("Schema loaded");
 
         Ok(None)
+    }
+
+    fn setup_locale(&self, window: &mut SceneNode) -> I18nBabelFish {
+        let i18n_src = indoc! {"
+            hello-world = Hello, world!
+            channels-label = CHANNELS
+        "}
+        .to_owned();
+        // Will be managed by settings eventually
+        let i18n_fish = I18nBabelFish::new(i18n_src, "en-US");
+
+        // sys-locale = "0.3"
+        // fluent-langneg = "0.14"
+        /*
+        use fluent_langneg::{
+            negotiate_languages,
+            NegotiationStrategy,
+            convert_vec_str_to_langids_lossy,
+            LanguageIdentifier
+        };
+        let mut locales: Vec<_> = sys_locale::get_locales().collect();
+        let en_US = "en-US".to_string();
+        if !locales.contains(&en_US) {
+            locales.push(en_US);
+        }
+        info!(target: "app", "Locale: {:?}", locales);
+        */
+
+        let mut prop = Property::new("locale", PropertyType::Str, PropertySubType::Locale);
+        prop.set_defaults_str(vec!["en-US".to_string()]).unwrap();
+        window.add_property(prop).unwrap();
+
+        i18n_fish
     }
 
     /// Begins the draw of the tree, and then starts the UI procs.

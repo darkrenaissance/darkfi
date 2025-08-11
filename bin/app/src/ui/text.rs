@@ -29,7 +29,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodeWeak},
     text2::{self, TEXT_CTX},
-    util::unixtime,
+    util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
 };
 
@@ -42,6 +42,7 @@ pub type TextPtr = Arc<Text>;
 pub struct Text {
     node: SceneNodeWeak,
     render_api: RenderApi,
+    i18n_fish: I18nBabelFish,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
@@ -53,6 +54,7 @@ pub struct Text {
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     lineheight: PropertyFloat32,
+    use_i18n: PropertyBool,
     debug: PropertyBool,
 
     window_scale: PropertyFloat32,
@@ -64,6 +66,7 @@ impl Text {
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
+        i18n_fish: I18nBabelFish,
     ) -> Pimpl {
         t!("Text::new()");
 
@@ -75,11 +78,13 @@ impl Text {
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
+        let use_i18n = PropertyBool::wrap(node_ref, Role::Internal, "use_i18n", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
             render_api,
+            i18n_fish,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
@@ -90,6 +95,7 @@ impl Text {
             font_size,
             text_color,
             lineheight,
+            use_i18n,
             debug,
 
             window_scale,
@@ -105,6 +111,16 @@ impl Text {
         let lineheight = self.lineheight.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
+
+        let text = if self.use_i18n.get() {
+            if let Some(trans) = self.i18n_fish.tr(&text) {
+                trans
+            } else {
+                format!("tr err: {}", text)
+            }
+        } else {
+            text
+        };
 
         let layout = {
             let mut txt_ctx = TEXT_CTX.get().await;
@@ -184,6 +200,10 @@ impl UIObject for Text {
         t!("Text::draw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
+    }
+
+    fn set_i18n(&self, i18n_fish: &I18nBabelFish) {
+        self.i18n_fish.set(i18n_fish);
     }
 }
 

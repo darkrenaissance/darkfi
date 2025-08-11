@@ -120,13 +120,13 @@ struct God {
 
 impl God {
     fn new() -> Self {
-        info!(target: "main", "Creating the app");
-
         // Abort the application on panic right away
         std::panic::set_hook(Box::new(panic_hook));
 
         text2::init_txt_ctx();
         logger::setup_logging();
+
+        info!(target: "main", "Creating the app");
 
         #[cfg(target_os = "android")]
         {

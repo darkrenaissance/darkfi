@@ -40,7 +40,7 @@ use crate::{
         chatview, emoji_picker, Button, ChatEdit, ChatView, EmojiPicker, Layer, Shortcut, Text,
         VectorArt, VectorShape,
     },
-    util::unixtime,
+    util::{i18n::I18nBabelFish, unixtime},
 };
 
 use super::{ColorScheme, COLOR_SCHEME};
@@ -181,6 +181,7 @@ pub async fn make(
     window: SceneNodePtr,
     channel: &str,
     db: &sled::Db,
+    i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     is_first_time: bool,
 ) {
@@ -361,7 +362,9 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     layer_node.clone().link(node);
 
     // Create the emoji picker
@@ -744,7 +747,7 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let editz_select_text = node.get_property("select_text").unwrap();
@@ -1113,7 +1116,9 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     cmd_layer_node.clone().link(node);
 
     // Create some text
@@ -1134,7 +1139,9 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     cmd_layer_node.clone().link(node);
 
     // Create debug box
@@ -1281,7 +1288,9 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     layer_node.clone().link(node);
 
     // Copy button
@@ -1451,7 +1460,9 @@ pub async fn make(
     prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
     layer_node.clone().link(node);
 
     // Paste button

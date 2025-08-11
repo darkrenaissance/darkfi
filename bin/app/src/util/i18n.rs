@@ -40,7 +40,7 @@ impl I18nBabelFish {
         Self { bundle: RwLock::new(Arc::new(bundle)) }
     }
 
-    pub fn set(&self, other: Self) {
+    pub fn set(&self, other: &Self) {
         let bundle = other.bundle.read();
         *self.bundle.write() = Arc::clone(&*bundle);
     }

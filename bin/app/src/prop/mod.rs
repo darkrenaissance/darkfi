@@ -73,6 +73,7 @@ pub enum PropertySubType {
     // Size of something in pixels
     Pixel = 2,
     ResourceId = 3,
+    Locale = 4,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

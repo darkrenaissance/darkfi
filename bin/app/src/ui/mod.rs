@@ -25,6 +25,7 @@ use crate::{
     gfx::{GfxDrawCall, Point, Rectangle},
     prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -106,6 +107,8 @@ pub trait UIObject: Sync {
     async fn handle_touch(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
         false
     }
+
+    fn set_i18n(&self, _i18n_fish: &I18nBabelFish) {}
 }
 
 pub struct DrawUpdate {
