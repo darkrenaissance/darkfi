@@ -438,17 +438,19 @@ def wrap_comment(comment, width):
     return '\n'.join(lines)
 
 async def modify_task(refid, args, server_name, port):
+    task = await api.fetch_task(refid, server_name, port)
+    current_assigns = task["assign"]
+    current_tags = task["tags"]
     changes = {}
     changes["assign"] = []
     changes["tags"] = []
     for arg in args:
         # This must go before the next elif block
-        if arg.startswith("@") or arg.startswith("-@"):
+        if arg.startswith("@") or (arg.startswith("-@") and arg[2:] in current_assigns):
             changes["assign"].append(arg)
-        elif arg.startswith("+") or arg.startswith("-"):
+        elif arg.startswith("+") or (arg.startswith("-") and arg[1:] in current_tags):
             changes["tags"].append(arg)
         elif arg.lower() in ["desc", "description"]:
-            task = await api.fetch_task(refid, server_name, port)
             desc = task["desc"]
             new_desc = prompt_description_edit(desc).lstrip()
             if desc == new_desc:
