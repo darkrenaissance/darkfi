@@ -6,6 +6,9 @@ CARGO = cargo
 RELEASE_APK = target/android-artifacts/release/apk/darkfi-app.apk
 DEBUG_APK = target/android-artifacts/debug/apk/darkfi-app.apk
 
+#ADB_DEVICE = -s DEVICE_ID
+ADB_DEVICE =
+
 SRC = \
 	build.rs \
 	Cargo.lock \
@@ -79,12 +82,12 @@ apk: $(SRC) fonts
 
 install-apk:
 	-mv $(DEBUG_APK) .
-	-adb uninstall darkfi.darkfi_app
-	adb install -r darkfi-app.apk
+	-adb $(ADB_DEVICE) uninstall darkfi.darkfi_app
+	adb $(ADB_DEVICE) install -r darkfi-app.apk
 	reset
-	adb logcat -c
-	adb shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
-	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
+	adb $(ADB_DEVICE) logcat -c
+	adb $(ADB_DEVICE) shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
+	adb $(ADB_DEVICE) logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
 
 # Useful for dev
 cli:
