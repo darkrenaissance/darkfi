@@ -152,14 +152,14 @@ pub type EpochIndex = u32;
 #[derive(Clone)]
 pub struct RenderApi {
     /// We are abusing async_channel since it's cloneable whereas std::sync::mpsc is shit.
-    method_req: async_channel::Sender<(EpochIndex, GraphicsMethod)>,
+    method_send: async_channel::Sender<(EpochIndex, GraphicsMethod)>,
     /// Keep track of the current UI epoch
     epoch: Arc<AtomicU32>,
 }
 
 impl RenderApi {
-    pub fn new(method_req: async_channel::Sender<(EpochIndex, GraphicsMethod)>) -> Self {
-        Self { method_req, epoch: Arc::new(AtomicU32::new(0)) }
+    pub fn new(method_send: async_channel::Sender<(EpochIndex, GraphicsMethod)>) -> Self {
+        Self { method_send, epoch: Arc::new(AtomicU32::new(0)) }
     }
 
     fn next_epoch(&self) -> EpochIndex {
@@ -172,7 +172,7 @@ impl RenderApi {
         epoch
     }
     fn send_with_epoch(&self, method: GraphicsMethod, epoch: EpochIndex) {
-        let _ = self.method_req.try_send((epoch, method)).unwrap();
+        let _ = self.method_send.try_send((epoch, method)).unwrap();
     }
 
     fn new_unmanaged_texture(
@@ -799,7 +799,7 @@ struct Stage {
     buffers: HashMap<GfxBufferId, miniquad::BufferId>,
 
     epoch: EpochIndex,
-    method_rep: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
+    method_recv: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
 
     pruner: PruneMethodHeap,
@@ -819,7 +819,7 @@ impl Stage {
         // This will start the app to start. Needed since we cannot get window size for init
         // until window is created.
         god.start_app(epoch);
-        let method_rep = god.method_rep.clone();
+        let method_recv = god.method_recv.clone();
         let event_pub = god.event_pub.clone();
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
@@ -877,7 +877,7 @@ impl Stage {
             buffers: HashMap::new(),
 
             epoch,
-            method_rep,
+            method_recv,
             event_pub,
 
             pruner: PruneMethodHeap::new(epoch),
@@ -901,7 +901,7 @@ impl Stage {
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
                 let dcs = std::mem::take(dcs);
-                self.method_replace_draw_calls(*timest, dcs)
+                self.method_recvlace_draw_calls(*timest, dcs)
             }
         };
         if let Err(err) = res {
@@ -1029,7 +1029,7 @@ impl Stage {
         }
         Ok(())
     }
-    fn method_replace_draw_calls(
+    fn method_recvlace_draw_calls(
         &mut self,
         timest: Timestamp,
         dcs: Vec<(DcId, GfxDrawCall)>,
@@ -1129,9 +1129,9 @@ impl PruneMethodHeap {
         }
     }
 
-    fn drain(&mut self, method_rep: &async_channel::Receiver<(EpochIndex, GraphicsMethod)>) {
+    fn drain(&mut self, method_recv: &async_channel::Receiver<(EpochIndex, GraphicsMethod)>) {
         // Process as many methods as we can
-        while let Ok((epoch, method)) = method_rep.try_recv() {
+        while let Ok((epoch, method)) = method_recv.try_recv() {
             if epoch < self.epoch {
                 // Discard old rubbish
                 trace!(target: "gfx::pruner", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
@@ -1164,12 +1164,12 @@ impl PruneMethodHeap {
                 }
             }
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
-                self.method_replace_draw_calls(timest, dcs)
+                self.method_recvlace_draw_calls(timest, dcs)
             }
         }
     }
 
-    fn method_replace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
+    fn method_recvlace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
         for (key, val) in dcs {
             match self.dcs.get_mut(&key) {
                 Some(old_val) => {
@@ -1208,7 +1208,7 @@ impl EventHandler for Stage {
     fn update(&mut self) {
         if self.egl_ctx_is_disabled() {
             // Screen is off so collect all methods into the pruner
-            self.pruner.drain(&self.method_rep);
+            self.pruner.drain(&self.method_recv);
             self.screen_was_off = true;
             return
         }
@@ -1234,7 +1234,7 @@ impl EventHandler for Stage {
         }
 
         // Process as many methods as we can
-        while let Ok((epoch, method)) = self.method_rep.try_recv() {
+        while let Ok((epoch, method)) = self.method_recv.try_recv() {
             if DEBUG_TRAX {
                 self.trax_method(epoch, &method);
             }

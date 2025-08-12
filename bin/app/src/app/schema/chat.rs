@@ -747,7 +747,7 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
-    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let editz_select_text = node.get_property("select_text").unwrap();

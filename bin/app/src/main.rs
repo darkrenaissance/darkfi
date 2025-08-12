@@ -113,7 +113,7 @@ struct God {
     /// We have a ref here so the gfx subsystem can increment the epoch counter.
     render_api: gfx::RenderApi,
     /// This is how the gfx subsystem receives messages from the render API.
-    method_rep: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
+    method_recv: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
     /// Publisher to send input and window events to subscribers.
     event_pub: gfx::GraphicsEventPublisherPtr,
 }
@@ -163,10 +163,10 @@ impl God {
 
         let fg_runtime = AsyncRuntime::new(fg_ex.clone(), "fg");
 
-        let (method_req, method_rep) = async_channel::unbounded();
+        let (method_send, method_recv) = async_channel::unbounded();
         // The UI actually needs to be running for this to reply back.
         // Otherwise calls will just hang.
-        let render_api = gfx::RenderApi::new(method_req);
+        let render_api = gfx::RenderApi::new(method_send);
         let event_pub = gfx::GraphicsEventPublisher::new();
 
         let text_shaper = TextShaper::new();
@@ -205,7 +205,7 @@ impl God {
             app,
 
             render_api,
-            method_rep,
+            method_recv,
             event_pub,
         }
     }
