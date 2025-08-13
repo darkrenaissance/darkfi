@@ -229,17 +229,30 @@ impl PluginSettings {
             "net.inbound_connections",
             PropertyValue::Uint32(p2p_settings.inbound_connections as u32),
         );
+        //TODO: Update this when multiple active_profiles at a time is supported
         self.add_setting(
             "net.outbound_connect_timeout",
-            PropertyValue::Uint32(p2p_settings.outbound_connect_timeout as u32),
+            PropertyValue::Uint32(
+                p2p_settings
+                    .outbound_connect_timeout(&p2p_settings.active_profiles.first().unwrap())
+                    as u32,
+            ),
         );
         self.add_setting(
             "net.channel_handshake_timeout",
-            PropertyValue::Uint32(p2p_settings.channel_handshake_timeout as u32),
+            PropertyValue::Uint32(
+                p2p_settings
+                    .channel_handshake_timeout(&p2p_settings.active_profiles.first().unwrap())
+                    as u32,
+            ),
         );
         self.add_setting(
             "net.channel_heartbeat_interval",
-            PropertyValue::Uint32(p2p_settings.channel_heartbeat_interval as u32),
+            PropertyValue::Uint32(
+                p2p_settings
+                    .channel_heartbeat_interval(&p2p_settings.active_profiles.first().unwrap())
+                    as u32,
+            ),
         );
         self.add_setting(
             "net.outbound_peer_discovery_cooloff_time",
@@ -278,21 +291,24 @@ impl PluginSettings {
         p2p_settings.inbound_connections =
             self.get_setting("net.inbound_connections").unwrap().get_property_u32("value").unwrap()
                 as usize;
-        p2p_settings.outbound_connect_timeout = self
-            .get_setting("net.outbound_connect_timeout")
-            .unwrap()
-            .get_property_u32("value")
-            .unwrap() as u64;
-        p2p_settings.channel_handshake_timeout = self
-            .get_setting("net.channel_handshake_timeout")
-            .unwrap()
-            .get_property_u32("value")
-            .unwrap() as u64;
-        p2p_settings.channel_heartbeat_interval = self
-            .get_setting("net.channel_heartbeat_interval")
-            .unwrap()
-            .get_property_u32("value")
-            .unwrap() as u64;
+        //TODO: Update this when multiple active_profiles at a time is supported
+        if let Some(profile) = p2p_settings.profiles.get_mut(p2p_settings.active_profiles.first().unwrap()) {
+            profile.outbound_connect_timeout = self
+                .get_setting("net.outbound_connect_timeout")
+                .unwrap()
+                .get_property_u32("value")
+                .unwrap() as u64;
+            profile.channel_handshake_timeout = self
+                .get_setting("net.channel_handshake_timeout")
+                .unwrap()
+                .get_property_u32("value")
+                .unwrap() as u64;
+            profile.channel_heartbeat_interval = self
+                .get_setting("net.channel_heartbeat_interval")
+                .unwrap()
+                .get_property_u32("value")
+                .unwrap() as u64;
+        }
         p2p_settings.outbound_peer_discovery_cooloff_time = self
             .get_setting("net.outbound_peer_discovery_cooloff_time")
             .unwrap()

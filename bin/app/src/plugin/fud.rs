@@ -19,12 +19,15 @@
 use darkfi::{
     net::{
         session::{SESSION_DIRECT, SESSION_INBOUND},
-        settings::Settings as NetSettings,
+        settings::{MagicBytes, NetworkProfile, Settings as NetSettings},
         P2p, P2pPtr,
     },
     system::{sleep, Publisher, PublisherPtr},
 };
 use darkfi_serial::{Decodable, Encodable};
+use fud::{
+    event::FudEvent, proto::ProtocolFud, settings::Args as FudSettings, util::hash_to_string, Fud,
+};
 use sled_overlay::sled;
 use smol::lock::Mutex;
 use std::{
@@ -34,10 +37,6 @@ use std::{
     sync::{Arc, OnceLock, Weak},
 };
 use url::Url;
-
-use fud::{
-    event::FudEvent, proto::ProtocolFud, settings::Args as FudSettings, util::hash_to_string, Fud,
-};
 
 use crate::{
     error::{Error, Result},
@@ -158,9 +157,9 @@ impl FudPlugin {
         p2p_settings.app_name = "fud".to_string();
         if get_use_tor_filename().exists() {
             i!("Setup P2P network [tor]");
-            p2p_settings.outbound_connect_timeout = 60;
-            p2p_settings.channel_handshake_timeout = 55;
-            p2p_settings.channel_heartbeat_interval = 90;
+            let mut tor_profile = NetworkProfile::tor_default();
+            tor_profile.outbound_connect_timeout = 60;
+            p2p_settings.profiles.insert("tor".to_string(), tor_profile);
             p2p_settings.outbound_peer_discovery_cooloff_time = 60;
 
             p2p_settings.seeds.push(
@@ -175,7 +174,7 @@ impl FudPlugin {
                 )
                 .unwrap(),
             );
-            p2p_settings.allowed_transports = vec!["tor".to_string()];
+            p2p_settings.active_profiles = vec!["tor".to_string()];
 
             fud_settings.pow.btc_electrum_nodes.push(
                 url::Url::parse(
@@ -203,8 +202,11 @@ impl FudPlugin {
             );
         } else {
             i!("Setup P2P network [clearnet]");
-            p2p_settings.outbound_connect_timeout = 40;
-            p2p_settings.channel_handshake_timeout = 30;
+            let mut profile = NetworkProfile::default();
+            profile.outbound_connect_timeout = 40;
+            profile.channel_handshake_timeout = 30;
+            p2p_settings.profiles.insert("tcp+tls".to_string(), profile);
+            p2p_settings.active_profiles = vec!["tcp+tls".to_string()];
 
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:24441").unwrap());
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:24441").unwrap());

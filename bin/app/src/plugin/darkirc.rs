@@ -16,6 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
+    time::UNIX_EPOCH,
+};
+
 use async_trait::async_trait;
 use darkfi::{
     event_graph::{
@@ -23,7 +29,11 @@ use darkfi::{
         proto::{EventPut, ProtocolEventGraph},
         EventGraph, EventGraphPtr,
     },
-    net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, ChannelPtr, P2p, P2pPtr},
+    net::{
+        session::SESSION_DEFAULT,
+        settings::{MagicBytes, NetworkProfile, Settings as NetSettings},
+        ChannelPtr, P2p, P2pPtr,
+    },
     system::{sleep, Subscription},
     Result as DarkFiResult,
 };
@@ -32,12 +42,7 @@ use darkfi_serial::{
     SerialDecodable, SerialEncodable,
 };
 use sled_overlay::sled;
-use std::{
-    io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
-    time::UNIX_EPOCH,
-};
-use darkfi::net::settings::MagicBytes;
+
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
@@ -205,9 +210,9 @@ impl DarkIrc {
         p2p_settings.app_name = "darkirc".to_string();
         if get_use_tor_filename().exists() {
             i!("Setup P2P network [tor]");
-            p2p_settings.outbound_connect_timeout = 60;
-            p2p_settings.channel_handshake_timeout = 55;
-            p2p_settings.channel_heartbeat_interval = 90;
+            let mut tor_profile = NetworkProfile::tor_default();
+            tor_profile.outbound_connect_timeout = 60;
+            p2p_settings.profiles.insert("tor".to_string(), tor_profile);
             p2p_settings.outbound_peer_discovery_cooloff_time = 60;
 
             p2p_settings.seeds.push(
@@ -222,17 +227,20 @@ impl DarkIrc {
                 )
                 .unwrap(),
             );
-            p2p_settings.allowed_transports = vec!["tor".to_string()];
+            p2p_settings.active_profiles = vec!["tor".to_string()];
         } else {
             i!("Setup P2P network [clearnet]");
-            p2p_settings.outbound_connect_timeout = 40;
-            p2p_settings.channel_handshake_timeout = 30;
+            let mut profile = NetworkProfile::default();
+            profile.outbound_connect_timeout = 40;
+            profile.channel_handshake_timeout = 30;
+            p2p_settings.profiles.insert("tcp+tls".to_string(), profile);
 
             p2p_settings.outbound_connections = 3;
             p2p_settings.inbound_connections = 0;
 
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
+            p2p_settings.active_profiles = vec!["tcp+tls".to_string()];
         }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
