@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
+use std::collections::HashMap;
 use structopt::StructOpt;
 use url::Url;
 
@@ -65,23 +65,23 @@ pub struct Settings {
     /// Application Identifier
     pub app_name: String,
     /// Whitelisted network transports for outbound connections
-    pub allowed_transports: Vec<String>,
+    pub active_profiles: Vec<String>,
     /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls)
     /// When transport is added to this list the corresponding transport
-    /// in allowed_transports is used to connect to the node.
+    /// in active_profiles is used to connect to the node.
     /// Supported mixing scenarios include
-    /// allowed_transport | mixed_transport
+    /// active_profile | mixed_profile
     ///        tor        |     tcp
     ///       tor+tls     |    tcp+tls
     ///       socks5      |      tor
     ///       socks5      |      tcp
     ///      socks5+tls   |    tor+tls
     ///      socks5+tls   |    tcp+tls
-    pub mixed_transports: Vec<String>,
-    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    pub mixed_profiles: Vec<String>,
+    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to active profiles
     /// and transport mixing is enabled
     pub tor_socks5_proxy: Option<Url>,
-    /// Nym socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    /// Nym socks5 proxy to connect to when socks5 or socks5+tls are added to active profiles
     /// and transport mixing is enabled
     pub nym_socks5_proxy: Option<Url>,
     /// I2p Socks5 proxy to connect to i2p eepsite (hidden services)
@@ -92,12 +92,6 @@ pub struct Settings {
     /// Inbound connection slots number, this many active listening connections
     /// will be allowed. (This does not include manual connections)
     pub inbound_connections: usize,
-    /// Outbound connection timeout (in seconds)
-    pub outbound_connect_timeout: u64,
-    /// Exchange versions (handshake) timeout (in seconds)
-    pub channel_handshake_timeout: u64,
-    /// Ping-pong exchange execution interval (in seconds)
-    pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
     /// Cooling off time for peer discovery when unsuccessful
@@ -133,6 +127,8 @@ pub struct Settings {
     /// Do not ban nodes that send messages without dispatchers if set
     /// to `Relaxed`. For most uses, should be set to `Strict`.
     pub ban_policy: BanPolicy,
+    /// Mapping of transport/scheme to Network Profile
+    pub profiles: HashMap<String, NetworkProfile>,
 }
 
 impl Default for Settings {
@@ -150,16 +146,13 @@ impl Default for Settings {
             seeds: vec![],
             app_version,
             app_name,
-            allowed_transports: vec!["tcp+tls".to_string()],
-            mixed_transports: vec![],
+            active_profiles: vec![],
+            mixed_profiles: vec![],
             tor_socks5_proxy: None,
             nym_socks5_proxy: None,
             i2p_socks5_proxy: Url::parse("socks5://127.0.0.1:4447").unwrap(),
             outbound_connections: 8,
             inbound_connections: 8,
-            outbound_connect_timeout: 15,
-            channel_handshake_timeout: 10,
-            channel_heartbeat_interval: 30,
             localnet: false,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
@@ -173,6 +166,7 @@ impl Default for Settings {
             time_with_no_connections: 30,
             blacklist: vec![],
             ban_policy: BanPolicy::Strict,
+            profiles: HashMap::new(),
         }
     }
 }
@@ -250,30 +244,27 @@ pub struct SettingsOpt {
 
     /// Preferred transports for outbound connections
     #[serde(default)]
-    #[structopt(long = "transports")]
-    pub allowed_transports: Option<Vec<String>>,
+    #[structopt(long = "network-profiles")]
+    pub active_profiles: Option<Vec<String>>,
 
-    /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls)
+    /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls).
     /// When transport is added to this list the corresponding transport
-    /// in allowed_transports is used to connect to the node.
+    /// in active_profiles is used to connect to the node.
     /// Supported mixing scenarios include
-    /// allowed_transport | mixed_transport
-    ///        tor        |     tcp
-    ///       tor+tls     |    tcp+tls
-    ///       socks5      |      tor
-    ///       socks5      |      tcp
-    ///      socks5+tls   |    tor+tls
-    ///      socks5+tls   |    tcp+tls
+    /// tor => tcp, tor+tls => tcp+tls,
+    /// socks5 => tor, socks5 => tcp,
+    /// socks5+tls => tor+tls, socks5+tls => tcp+tls
+    /// where the first one overrides the second.
     #[serde(default)]
-    #[structopt(long = "mixed-transports")]
-    pub mixed_transports: Option<Vec<String>>,
+    #[structopt(long = "mixed-profiles")]
+    pub mixed_profiles: Option<Vec<String>>,
 
-    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    /// Tor socks5 proxy to connect to when socks5 or socks5+tls are added to active profiles
     /// and transport mixing is enabled
     #[structopt(long)]
     pub tor_socks5_proxy: Option<Url>,
 
-    /// Nym socks5 proxy to connect to when socks5 or socks5+tls are added to allowed transports
+    /// Nym socks5 proxy to connect to when socks5 or socks5+tls are added to active profiles
     /// and transport mixing is enabled
     #[structopt(long)]
     pub nym_socks5_proxy: Option<Url>,
@@ -348,6 +339,11 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(skip)]
     pub ban_policy: BanPolicy,
+
+    /// Network Profile for each transport
+    #[serde(default)]
+    #[structopt(skip)]
+    pub profiles: HashMap<String, NetworkProfileOpt>,
 }
 
 impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
@@ -358,32 +354,51 @@ impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
         let opt = st.2;
 
         let def = Settings::default();
+        let mut inbound_addrs = opt.inbound;
+        let mut external_addrs = opt.external_addrs;
+        let mut peers = opt.peers;
+        let mut seeds = opt.seeds;
+        let active_profiles = opt.active_profiles.unwrap_or(def.active_profiles);
+        let mixed_profiles = opt.mixed_profiles.unwrap_or(def.mixed_profiles);
+
+        // check all the active profiles that are not mixed are found in net.profiles
+        for name in &active_profiles {
+            if !mixed_profiles.contains(name) && !opt.profiles.contains_key(name) {
+                return Err(Error::ConfigError(format!(
+                    "Active profile '{name}' not defined in net.profiles"
+                )));
+            }
+        }
+
+        let profiles: HashMap<String, NetworkProfile> = opt
+            .profiles
+            .into_iter()
+            .filter(|(k, _)| active_profiles.contains(k) && !mixed_profiles.contains(k))
+            .map(|(k, v)| {
+                inbound_addrs.extend_from_slice(&v.inbound);
+                external_addrs.extend_from_slice(&v.external_addrs);
+                peers.extend_from_slice(&v.peers);
+                seeds.extend_from_slice(&v.seeds);
+                (k.clone(), NetworkProfile::from_with_profile(v, &k))
+            })
+            .collect();
 
         Ok(Self {
             node_id: opt.node_id,
-            inbound_addrs: opt.inbound,
-            external_addrs: opt.external_addrs,
+            inbound_addrs,
+            external_addrs,
             magic_bytes: opt.magic_bytes,
-            peers: opt.peers,
-            seeds: opt.seeds,
+            peers,
+            seeds,
             app_version,
             app_name,
-            allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
-            mixed_transports: opt.mixed_transports.unwrap_or(def.mixed_transports),
+            active_profiles,
+            mixed_profiles,
             tor_socks5_proxy: opt.tor_socks5_proxy,
             nym_socks5_proxy: opt.nym_socks5_proxy,
             i2p_socks5_proxy: opt.i2p_socks5_proxy.unwrap_or(def.i2p_socks5_proxy),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
-            outbound_connect_timeout: opt
-                .outbound_connect_timeout
-                .unwrap_or(def.outbound_connect_timeout),
-            channel_handshake_timeout: opt
-                .channel_handshake_timeout
-                .unwrap_or(def.channel_handshake_timeout),
-            channel_heartbeat_interval: opt
-                .channel_heartbeat_interval
-                .unwrap_or(def.channel_heartbeat_interval),
             localnet: opt.localnet,
             outbound_peer_discovery_cooloff_time: opt
                 .outbound_peer_discovery_cooloff_time
@@ -405,6 +420,99 @@ impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
                 .unwrap_or(def.time_with_no_connections),
             blacklist: opt.blacklist,
             ban_policy: opt.ban_policy,
+            profiles,
         })
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
+#[structopt()]
+pub struct NetworkProfileOpt {
+    /// P2P accept address node listens to for inbound connections
+    #[serde(default)]
+    #[structopt(long = "accept")]
+    pub inbound: Vec<Url>,
+
+    /// P2P external addresses node advertises so other peers can
+    /// reach us and connect to us, as long as inbound addresses
+    /// are also configured
+    #[serde(default)]
+    #[structopt(long)]
+    pub external_addrs: Vec<Url>,
+
+    /// Peer nodes to manually connect to
+    #[serde(default)]
+    #[structopt(long)]
+    pub peers: Vec<Url>,
+
+    /// Seed nodes to connect to for peers retrieval and/or
+    /// advertising our own external addresses
+    #[serde(default)]
+    #[structopt(long)]
+    pub seeds: Vec<Url>,
+
+    /// Connection establishment timeout in seconds
+    #[structopt(skip)]
+    pub outbound_connect_timeout: Option<u64>,
+
+    /// Exchange versions (handshake) timeout in seconds
+    #[structopt(skip)]
+    pub channel_handshake_timeout: Option<u64>,
+
+    /// Ping-pong exchange execution interval in seconds
+    #[structopt(skip)]
+    pub channel_heartbeat_interval: Option<u64>,
+}
+
+/// Network Profile info unique for each profile/transport
+#[derive(Debug, Clone)]
+pub struct NetworkProfile {
+    /// Outbound connection timeout (in seconds)
+    pub outbound_connect_timeout: u64,
+    /// Exchange versions (handshake) timeout (in seconds)
+    pub channel_handshake_timeout: u64,
+    /// Ping-pong exchange execution interval (in seconds)
+    pub channel_heartbeat_interval: u64,
+}
+
+impl Default for NetworkProfile {
+    fn default() -> Self {
+        Self {
+            outbound_connect_timeout: 15,
+            channel_handshake_timeout: 10,
+            channel_heartbeat_interval: 30,
+        }
+    }
+}
+
+impl NetworkProfile {
+    /// Creates default [`NetworkProfile`] for non-clearnet profiles
+    pub fn tor_default() -> Self {
+        Self {
+            outbound_connect_timeout: 65,
+            channel_handshake_timeout: 55,
+            channel_heartbeat_interval: 90,
+        }
+    }
+
+    /// Creates [`NetworkProfile`] from [`NetworkProfileOpt`] based on the profile
+    fn from_with_profile(opt: NetworkProfileOpt, profile: &str) -> Self {
+        let def = if profile == "tcp" || profile == "tcp+tls" {
+            NetworkProfile::default()
+        } else {
+            NetworkProfile::tor_default()
+        };
+
+        Self {
+            outbound_connect_timeout: opt
+                .outbound_connect_timeout
+                .unwrap_or(def.outbound_connect_timeout),
+            channel_handshake_timeout: opt
+                .channel_handshake_timeout
+                .unwrap_or(def.channel_handshake_timeout),
+            channel_heartbeat_interval: opt
+                .channel_heartbeat_interval
+                .unwrap_or(def.channel_heartbeat_interval),
+        }
     }
 }
