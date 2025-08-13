@@ -252,10 +252,14 @@ impl EventGraph {
                 continue
             };
 
-            // Node waits for response
-            let Ok(peer_tips) = tip_rep_sub
-                .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
+            let outbound_connect_timeout = self
+                .p2p
+                .settings()
+                .read_arc()
                 .await
+                .outbound_connect_timeout(channel.address().scheme());
+            // Node waits for response
+            let Ok(peer_tips) = tip_rep_sub.receive_with_timeout(outbound_connect_timeout).await
             else {
                 error!(
                     target: "event_graph::dag_sync()",
@@ -351,10 +355,14 @@ impl EventGraph {
                     continue
                 }
 
-                // Node waits for response
-                let Ok(parent) = ev_rep_sub
-                    .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
+                let outbound_connect_timeout = self
+                    .p2p
+                    .settings()
+                    .read_arc()
                     .await
+                    .outbound_connect_timeout(channel.address().scheme());
+                // Node waits for response
+                let Ok(parent) = ev_rep_sub.receive_with_timeout(outbound_connect_timeout).await
                 else {
                     error!(
                         target: "event_graph::dag_sync()",

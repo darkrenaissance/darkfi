@@ -339,13 +339,16 @@ impl ProtocolEventGraph {
                         .send(&EventReq(missing_parents.clone().into_iter().collect()))
                         .await?;
 
-                    // Node waits for response
-                    let Ok(parents) = self
-                        .ev_rep_sub
-                        .receive_with_timeout(
-                            self.event_graph.p2p.settings().read().await.outbound_connect_timeout,
-                        )
+                    let outbound_connect_timeout = self
+                        .event_graph
+                        .p2p
+                        .settings()
+                        .read_arc()
                         .await
+                        .outbound_connect_timeout(self.channel.address().scheme());
+                    // Node waits for response
+                    let Ok(parents) =
+                        self.ev_rep_sub.receive_with_timeout(outbound_connect_timeout).await
                     else {
                         error!(
                             target: "event_graph::protocol::handle_event_put()",

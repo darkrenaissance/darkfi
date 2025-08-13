@@ -18,7 +18,7 @@
 
 // cargo test --release --features=event-graph --lib eventgraph_propagation -- --include-ignored
 
-use std::{slice, sync::Arc};
+use std::{collections::HashMap, slice, sync::Arc};
 
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 use sled_overlay::sled;
@@ -31,7 +31,7 @@ use crate::{
         proto::{EventPut, ProtocolEventGraph},
         Event, EventGraph,
     },
-    net::{session::SESSION_DEFAULT, P2p, Settings},
+    net::{session::SESSION_DEFAULT, settings::NetworkProfile, P2p, Settings},
     system::sleep,
     util::logger::{setup_test_logger, Level},
 };
@@ -80,14 +80,19 @@ async fn spawn_node(
     peers: Vec<Url>,
     ex: Arc<Executor<'static>>,
 ) -> Arc<EventGraph> {
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "tcp".to_string(),
+        NetworkProfile { outbound_connect_timeout: 2, ..Default::default() },
+    );
     let settings = Settings {
         localnet: true,
         inbound_addrs,
         outbound_connections: 0,
-        outbound_connect_timeout: 2,
         inbound_connections: usize::MAX,
         peers,
-        allowed_transports: vec!["tcp".to_string()],
+        active_profiles: vec!["tcp".to_string()],
+        profiles,
         ..Default::default()
     };
 
