@@ -69,8 +69,10 @@ impl ProtocolVersion {
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.display_address());
-        let timeout =
-            Timer::after(Duration::from_secs(self.settings.read().await.channel_handshake_timeout));
+        let channel_handshake_timeout =
+            self.settings.read().await.channel_handshake_timeout(self.channel.address().scheme());
+
+        let timeout = Timer::after(Duration::from_secs(channel_handshake_timeout));
         let version = self.clone().exchange_versions(executor);
 
         pin_mut!(timeout);
@@ -188,7 +190,7 @@ impl ProtocolVersion {
         // MAJOR and MINOR should be the same, as well as the app identifier
         if app_version.major != verack_msg.app_version.major ||
             app_version.minor != verack_msg.app_version.minor ||
-             app_name != verack_msg.app_name
+            app_name != verack_msg.app_name
         {
             error!(
                 target: "net::protocol_version::send_version()",

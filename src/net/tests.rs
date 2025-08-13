@@ -18,7 +18,12 @@
 
 // cargo test --release --features=net --lib p2p -- --include-ignored
 
-use std::{collections::HashSet, net::TcpListener, panic, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    net::TcpListener,
+    panic,
+    sync::Arc,
+};
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use rand::{prelude::SliceRandom, rngs::ThreadRng, Rng};
@@ -31,6 +36,7 @@ use crate::{
         hosts::HostColor,
         message::{GetAddrsMessage, Message},
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        settings::NetworkProfile,
         P2p, Settings,
     },
     system::sleep,
@@ -103,6 +109,12 @@ async fn spawn_seed_session(
     let mut outbound_instances = vec![];
     let ports = get_unique_ports(n_nodes);
 
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "tcp".to_string(),
+        NetworkProfile { outbound_connect_timeout: 2, ..Default::default() },
+    );
+
     for port in ports {
         let settings = Settings {
             localnet: true,
@@ -110,13 +122,13 @@ async fn spawn_seed_session(
             external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap()],
             outbound_connections: 2,
             outbound_peer_discovery_cooloff_time: 2,
-            outbound_connect_timeout: 2,
             inbound_connections: usize::MAX,
             greylist_refinery_interval: 15,
             peers: vec![],
             seeds: vec![seed_addr.clone()],
             node_id: (port).to_string(),
-            allowed_transports: vec!["tcp".to_string()],
+            active_profiles: vec!["tcp".to_string()],
+            profiles: profiles.clone(),
             ..Default::default()
         };
 
@@ -139,6 +151,12 @@ async fn spawn_manual_session(
     let mut rng = rand::thread_rng();
     let ports = get_unique_ports(n_nodes);
 
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "tcp".to_string(),
+        NetworkProfile { outbound_connect_timeout: 2, ..Default::default() },
+    );
+
     for i in 0..n_nodes {
         let mut peer_indexes_copy: Vec<usize> = (0..n_nodes).collect();
         peer_indexes_copy.remove(i);
@@ -158,13 +176,13 @@ async fn spawn_manual_session(
             external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{inbound_port}")).unwrap()],
             outbound_connections: 2,
             outbound_peer_discovery_cooloff_time: 2,
-            outbound_connect_timeout: 2,
             inbound_connections: usize::MAX,
             greylist_refinery_interval: 15,
             peers,
             seeds: vec![],
             node_id: inbound_port.to_string(),
-            allowed_transports: vec!["tcp".to_string()],
+            active_profiles: vec!["tcp".to_string()],
+            profiles: profiles.clone(),
             ..Default::default()
         };
 
@@ -307,7 +325,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
         inbound_connections: usize::MAX,
         seeds: vec![],
         peers: vec![],
-        allowed_transports: vec!["tcp".to_string()],
+        active_profiles: vec!["tcp".to_string()],
         greylist_refinery_interval: 12,
         node_id: "seed".to_string(),
         ..Default::default()

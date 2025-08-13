@@ -85,8 +85,10 @@ impl ProtocolPing {
 
         loop {
             let settings = self.settings.read().await;
-            let outbound_connect_timeout = settings.outbound_connect_timeout;
-            let channel_heartbeat_interval = settings.channel_heartbeat_interval;
+            let outbound_connect_timeout =
+                settings.outbound_connect_timeout(self.channel.address().scheme());
+            let channel_heartbeat_interval =
+                settings.channel_heartbeat_interval(self.channel.address().scheme());
             drop(settings);
 
             // Create a random nonce.

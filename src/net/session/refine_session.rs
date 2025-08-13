@@ -229,7 +229,7 @@ impl GreylistRefinery {
             let settings = self.p2p().settings().read_arc().await;
             let greylist_refinery_interval = settings.greylist_refinery_interval;
             let time_with_no_connections = settings.time_with_no_connections;
-            let allowed_transports = settings.allowed_transports.clone();
+            let active_profiles = settings.active_profiles.clone();
             drop(settings);
 
             sleep(greylist_refinery_interval).await;
@@ -267,7 +267,7 @@ impl GreylistRefinery {
             }
 
             // Only attempt to refine peers that match our transports.
-            match hosts.container.fetch_random_with_schemes(HostColor::Grey, &allowed_transports) {
+            match hosts.container.fetch_random_with_schemes(HostColor::Grey, &active_profiles) {
                 Some((entry, _)) => {
                     let url = &entry.0;
 

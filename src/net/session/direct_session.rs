@@ -227,8 +227,13 @@ impl DirectSession {
                             break
                         }
                         Err(_) => {
-                            let settings = self_.p2p().settings().read_arc().await;
-                            sleep(settings.outbound_connect_timeout).await;
+                            let outbound_connect_timeout = self_
+                                .p2p()
+                                .settings()
+                                .read_arc()
+                                .await
+                                .outbound_connect_timeout(addr.scheme());
+                            sleep(outbound_connect_timeout).await;
                         }
                     }
                 }
@@ -263,7 +268,7 @@ impl DirectSession {
 
         let settings = self.p2p().settings().read_arc().await;
         let seeds = settings.seeds.clone();
-        let allowed_transports = settings.allowed_transports.clone();
+        let active_profiles = settings.active_profiles.clone();
         drop(settings);
 
         // Do not establish a connection to a host that is also configured as a seed.
@@ -290,7 +295,7 @@ impl DirectSession {
         }
 
         // Abort if we do not support this transport.
-        if !allowed_transports.contains(&addr.scheme().to_string()) {
+        if !active_profiles.contains(&addr.scheme().to_string()) {
             return Err(Error::UnsupportedTransport(addr.scheme().to_string()))
         }
 
@@ -524,7 +529,7 @@ impl PeerDiscovery {
             let outbound_peer_discovery_attempt_time =
                 settings.outbound_peer_discovery_attempt_time;
             let getaddrs_max = settings.getaddrs_max;
-            let allowed_transports = settings.allowed_transports.clone();
+            let active_profiles = settings.active_profiles.clone();
             let seeds = settings.seeds.clone();
             drop(settings);
 
@@ -560,7 +565,7 @@ impl PeerDiscovery {
                         .p2p()
                         .hosts()
                         .container
-                        .fetch_random_with_schemes(color.clone(), &allowed_transports)
+                        .fetch_random_with_schemes(color.clone(), &active_profiles)
                     {
                         channel = self.p2p().session_direct().get_channel(&entry.0).await.ok();
                         break;
@@ -582,10 +587,8 @@ impl PeerDiscovery {
                     state: "getaddr",
                 });
 
-                let get_addrs = GetAddrsMessage {
-                    max: getaddrs_max.unwrap_or(1),
-                    transports: allowed_transports,
-                };
+                let get_addrs =
+                    GetAddrsMessage { max: getaddrs_max.unwrap_or(1), transports: active_profiles };
 
                 self.p2p().broadcast(&get_addrs).await;
 

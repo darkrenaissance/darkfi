@@ -216,7 +216,7 @@ impl Slot {
         let white_count = (settings.white_connect_percent * settings.outbound_connections) / 100;
         let gold_count = settings.gold_connect_count;
 
-        let transports = settings.allowed_transports.clone();
+        let transports = settings.active_profiles.clone();
         let preference_strict = settings.slot_preference_strict;
 
         // Drop Settings read lock
@@ -537,7 +537,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 settings.outbound_peer_discovery_attempt_time;
             let outbound_connections = settings.outbound_connections;
             let getaddrs_max = settings.getaddrs_max;
-            let allowed_transports = settings.allowed_transports.clone();
+            let active_profiles = settings.active_profiles.clone();
             let seeds = settings.seeds.clone();
             drop(settings);
 
@@ -581,7 +581,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
                 let get_addrs = GetAddrsMessage {
                     max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
-                    transports: allowed_transports,
+                    transports: active_profiles,
                 };
 
                 self.p2p().broadcast(&get_addrs).await;

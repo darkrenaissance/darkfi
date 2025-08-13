@@ -806,11 +806,11 @@ impl HostContainer {
     /// to connect to tcp+tls:// or socks5:// to connect to tor://.
     /// However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
     pub(in crate::net) fn mix_host(
-        addr: Url,
+        addr: &Url,
         transports: &[String],
         mixed_transports: &[String],
-        tor_socks5_proxy: Option<Url>,
-        nym_socks5_proxy: Option<Url>,
+        tor_socks5_proxy: &Option<Url>,
+        nym_socks5_proxy: &Option<Url>,
     ) -> Vec<Url> {
         let mut hosts = vec![];
 
@@ -821,9 +821,9 @@ impl HostContainer {
         macro_rules! mix_transport {
             ($a:expr, $b:expr) => {
                 if transports.contains(&$a.to_string()) && addr.scheme() == $b {
-                    let mut addr = addr.clone();
-                    addr.set_scheme($a).unwrap();
-                    hosts.push(addr.clone());
+                    let mut url = addr.clone();
+                    url.set_scheme($a).unwrap();
+                    hosts.push(url);
                 }
             };
         }
@@ -1383,7 +1383,7 @@ impl Hosts {
             // or if this peer is IPV6 and we do not support IPV6.
             // We will personally ignore this peer but still send it to others in
             // Protocol Addr to ensure all transports get propagated.
-            if !settings.allowed_transports.contains(&addr_.scheme().to_string()) ||
+            if !settings.active_profiles.contains(&addr_.scheme().to_string()) ||
                 (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr_))
             {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen);
@@ -1394,8 +1394,8 @@ impl Hosts {
                 let day = 86400;
                 self.container.refresh(HostColor::Dark, day);
 
-                // If the scheme is not found in mixed_transports we can not connect to this host
-                if !settings.mixed_transports.contains(&addr_.scheme().to_string()) {
+                // If the scheme is not found in mixed_profiles we can not connect to this host
+                if !settings.mixed_profiles.contains(&addr_.scheme().to_string()) {
                     continue;
                 }
             }
@@ -1923,11 +1923,11 @@ mod tests {
     #[test]
     fn test_transport_tor_mixed_with_tcp() {
         let mixed_hosts = HostContainer::mix_host(
-            Url::parse("tcp://dark.fi:28880").unwrap(),
+            &Url::parse("tcp://dark.fi:28880").unwrap(),
             &["tor+tls".to_string(), "tcp".to_string(), "tor".to_string()],
             &["tcp".to_string()],
-            Url::parse("socks5://127.0.0.1:9050").ok(),
-            None,
+            &Url::parse("socks5://127.0.0.1:9050").ok(),
+            &None,
         );
 
         assert_eq!(mixed_hosts.len(), 1);
@@ -1943,11 +1943,11 @@ mod tests {
         let nym_socks5_proxy_url = Url::parse("socks5://127.0.0.1:1080").ok();
 
         let fetched_hosts = HostContainer::mix_host(
-            Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
             &["socks5".to_string(), "socks5+tls".to_string()],
             &["tcp+tls".to_string()],
-            tor_socks5_proxy_url.clone(),
-            nym_socks5_proxy_url.clone(),
+            &tor_socks5_proxy_url,
+            &nym_socks5_proxy_url,
         );
 
         assert_eq!(fetched_hosts.len(), 2);
@@ -1979,11 +1979,11 @@ mod tests {
         let nym_socks5_proxy_url = Url::parse("socks5://127.0.0.1:1080").ok();
 
         let fetched_hosts = HostContainer::mix_host(
-            Url::parse(&format!("tor://{addr}")).unwrap(),
+            &Url::parse(&format!("tor://{addr}")).unwrap(),
             &["socks5".to_string(), "socks5+tls".to_string(), "tor".to_string()],
             &["tor".to_string()],
-            tor_socks5_proxy_url.clone(),
-            nym_socks5_proxy_url,
+            &tor_socks5_proxy_url,
+            &nym_socks5_proxy_url,
         );
 
         assert_eq!(fetched_hosts.len(), 1);
@@ -1998,7 +1998,7 @@ mod tests {
     #[test]
     fn test_transport_tor_and_socks5_mixed_with_tcp() {
         let fetched_hosts = HostContainer::mix_host(
-            Url::parse("tcp://dark.fi:28880").unwrap(),
+            &Url::parse("tcp://dark.fi:28880").unwrap(),
             &[
                 "tor".to_string(),
                 "tor+tls".to_string(),
@@ -2006,8 +2006,8 @@ mod tests {
                 "socks5+tls".to_string(),
             ],
             &["tcp".to_string()],
-            Url::parse("socks5://127.0.0.1:9050").ok(),
-            None,
+            &Url::parse("socks5://127.0.0.1:9050").ok(),
+            &None,
         );
 
         assert_eq!(fetched_hosts.len(), 2);

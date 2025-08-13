@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use std::collections::HashMap;
+
 use structopt::StructOpt;
 use url::Url;
 
@@ -171,8 +172,30 @@ impl Default for Settings {
     }
 }
 
-// The following is used so we can have P2P settings configurable
-// from TOML files.
+impl Settings {
+    /// Returns `outbound_connect_timeout` for a specific profile.
+    pub fn outbound_connect_timeout(&self, profile: &str) -> u64 {
+        self.profiles.get(profile).unwrap_or(&NetworkProfile::default()).outbound_connect_timeout
+    }
+
+    /// Returns the maximum `outbound_connect_timeout` across all profiles,
+    /// selecting a conservative value suitable for the slowest network profile.
+    pub fn outbound_connect_timeout_max(&self) -> u64 {
+        self.profiles
+            .values()
+            .map(|p| p.outbound_connect_timeout)
+            .max()
+            .unwrap_or(NetworkProfile::default().outbound_connect_timeout)
+    }
+
+    pub fn channel_heartbeat_interval(&self, profile: &str) -> u64 {
+        self.profiles.get(profile).unwrap_or(&NetworkProfile::default()).channel_heartbeat_interval
+    }
+
+    pub fn channel_handshake_timeout(&self, profile: &str) -> u64 {
+        self.profiles.get(profile).unwrap_or(&NetworkProfile::default()).channel_handshake_timeout
+    }
+}
 
 /// Distinguishes distinct P2P networks
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -183,6 +206,9 @@ impl Default for MagicBytes {
         Self([0xd9, 0xef, 0xb6, 0x7d])
     }
 }
+
+// The following is used so we can have P2P settings configurable
+// from TOML files.
 
 /// Defines the network settings.
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]

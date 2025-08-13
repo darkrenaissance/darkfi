@@ -163,7 +163,7 @@ impl Slot {
 
             let settings = self.p2p().settings().read_arc().await;
             let seeds = settings.seeds.clone();
-            let outbound_connect_timeout = settings.outbound_connect_timeout;
+            let outbound_connect_timeout = settings.outbound_connect_timeout(self.addr.scheme());
             drop(settings);
 
             // Do not establish a connection to a host that is also configured as a seed.

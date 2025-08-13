@@ -63,21 +63,15 @@ impl Connector {
         }
 
         let settings = self.settings.read().await;
-        let transports = settings.allowed_transports.clone();
-        let mixed_transports = settings.mixed_transports.clone();
         let datastore = settings.p2p_datastore.clone();
-        let outbound_connect_timeout = settings.outbound_connect_timeout;
         let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
-        let tor_socks5_proxy = settings.tor_socks5_proxy.clone();
-        let nym_socks5_proxy = settings.nym_socks5_proxy.clone();
-        drop(settings);
 
         let (endpoint, mixed_transport) = if let Some(mixed_host) = HostContainer::mix_host(
-            url.clone(),
-            &transports,
-            &mixed_transports,
-            tor_socks5_proxy,
-            nym_socks5_proxy,
+            url,
+            &settings.active_profiles,
+            &settings.mixed_profiles,
+            &settings.tor_socks5_proxy,
+            &settings.nym_socks5_proxy,
         )
         .first()
         {
@@ -86,11 +80,13 @@ impl Connector {
             (url.clone(), false)
         };
 
+        let outbound_connect_timeout = settings.outbound_connect_timeout(endpoint.scheme());
+        drop(settings);
+
         let dialer = match Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await {
             Ok(dialer) => dialer,
             Err(err) => return Err(Error::ConnectFailed(format!("[{endpoint}]: {err}"))),
         };
-
         let timeout = Duration::from_secs(outbound_connect_timeout);
 
         let stop_fut = async {
