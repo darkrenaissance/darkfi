@@ -76,9 +76,6 @@ p2p_datastore = "~/.local/share/darkfi/fud"
 # Path to a configured hostlist for saving known peers
 hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 
-## P2P accept addresses
-#inbound = ["tcp+tls://0.0.0.0:24441", "tcp+tls://[::]:24441"]
-
 ## Outbound connection slots
 # outbound_connections = 16
 
@@ -91,29 +88,20 @@ hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 ## White connection percent
 # white_connect_percent = 70
 
-## Addresses we want to advertise to peers (optional)
-## These should be reachable externally
-#external_addrs = ["tcp+tls://my.resolveable.address:24441"]
-
-## Seed nodes to connect to
-seeds = [
-    "tcp+tls://lilith0.dark.fi:24441",
-    "tcp+tls://lilith1.dark.fi:24441",
-    #"tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
-    #"tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
-]
-
-## Manual peers to connect to
-#peers = []
+# Nodes to avoid interacting with for the duration of the program, in the
+# format ["host", ["scheme", "scheme"], [port, port]].
+# If scheme is left empty it will default to "tcp+tls".
+# If ports are left empty all ports from this peer will be blocked.
+#blacklist = [["example.com", ["tcp"], [8551, 23331]]]
 
 # Whitelisted transports for outbound connections
-allowed_transports = ["tcp+tls"]
-#allowed_transports = ["tor"]
-#allowed_transports = ["tor", "tor+tls"]
+active_profiles = ["tor"]
+#active_profiles = ["tcp+tls"]
+#active_profiles = ["tor", "tor+tls"]
 
 # Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
-# if tcp is added to mixed_transports and tor is added to allowed_transports)
-#mixed_transports = []
+# if tcp is added to mixed_profiles and tor is added to active_profiles)
+#mixed_profiles = []
 
 # Tor Socks5 proxy
 #tor_socks5_proxy = "socks5://127.0.0.1:9050"
@@ -124,8 +112,93 @@ allowed_transports = ["tcp+tls"]
 # I2p Socks5 proxy
 #i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 
-# Nodes to avoid interacting with for the duration of the program, in the
-# format ["host", ["scheme", "scheme"], [port, port]].
-# If scheme is left empty it will default to "tcp+tls".
-# If ports are left empty all ports from this peer will be blocked.
-#blacklist = [["example.com", ["tcp"], [8551, 23331]]]
+[net.profiles."tcp+tls"]
+## Seed nodes to connect to
+seeds = [
+    "tcp+tls://lilith0.dark.fi:24441",
+    "tcp+tls://lilith1.dark.fi:24441",
+]
+
+## Manual peers to connect to
+#peers = []
+
+## P2P accept addresses
+#inbound = ["tcp+tls://0.0.0.0:24441", "tcp+tls://[::]:24441"]
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["tcp+tls://my.resolveable.address:24441"]
+
+[net.profiles."tor"]
+## Seed nodes to connect to
+seeds = [
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
+]
+
+## Manual peers to connect to
+#peers = []
+
+## P2P accept addresses
+#inbound = ["tcp://127.0.0.1:24441"]
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["tor://youraddress.onion:24441"]
+
+[net.profiles."i2p"]
+## Seed nodes to connect to
+#seeds = []
+
+## Manual peers to connect to
+#peers = []
+
+## P2P accept addresses
+#inbound = ["tcp://127.0.0.1:24441"]
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["i2p://youraddress.b32.i2p:24441"]
+
+[net.profiles."socks5"]
+## Seed nodes to connect to
+seeds = [
+    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
+    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
+]
+
+## Manual peers to connect to
+#peers = []
+
+[net.profiles."socks5+tls"]
+## Seed nodes to connect to
+seeds = [
+    #"socks5+tls://127.0.0.1:9050/lilith0.dark.fi:24441",
+    #"socks5+tls://127.0.0.1:1080/lilith1.dark.fi:24441"
+]
+
+## Manual peers to connect to
+#peers = []
+
+[net.profiles."tor+tls"]
+## Seed nodes to connect to
+seeds = [
+    "tor+tls://lilith0.dark.fi:24441",
+    "tor+tls://lilith1.dark.fi:24441"
+]
+
+## Manual peers to connect to
+#peers = []
+
+[net.profiles."tcp"]
+## Seed nodes to connect to
+#seeds = ["tcp://127.0.0.1:24442"]
+
+## Manual peers to connect to
+#peers = []
+
+## P2P accept addresses
+#inbound = ["tcp://127.0.0.1:24441"]
+
+## Addresses we want to advertise to peers
+#external_addrs = ["tcp://127.0.0.1:24441"]
