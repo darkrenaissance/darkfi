@@ -114,6 +114,7 @@ impl Text {
 
         let text = if self.use_i18n.get() {
             if let Some(trans) = self.i18n_fish.tr(&text) {
+                //t!("Translate '{text}' to '{trans}'");
                 trans
             } else {
                 format!("tr err: {}", text)

@@ -21,6 +21,7 @@ use parking_lot::Mutex as SyncMutex;
 use std::sync::{Arc, Weak};
 
 use crate::{
+    app::locale::read_locale_ftl,
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
@@ -473,15 +474,18 @@ impl Window {
     }
 
     async fn reload_locale(&self) {
-        // todo: Load this from disk
+        /*
         let i18n_src = indoc::indoc! {"
             hello-world = Hello, world!
             channels-label = KANALLAR
         "}
         .to_owned();
+        */
 
         let locale = self.locale.get();
+        let i18n_src = read_locale_ftl(&locale);
         i!("Changed locale to: {locale}");
+        i!("loaded {i18n_src}");
         assert_eq!(locale, "tr");
         let i18n_fish = I18nBabelFish::new(i18n_src, &locale);
         self.i18n_fish.set(&i18n_fish);

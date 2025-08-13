@@ -38,6 +38,8 @@ use crate::{
     ExecutorPtr,
 };
 
+pub mod locale;
+use locale::read_locale_ftl;
 mod node;
 mod schema;
 use schema::get_settingsdb_path;
@@ -143,13 +145,17 @@ impl App {
     }
 
     fn setup_locale(&self, window: &mut SceneNode) -> I18nBabelFish {
+        /*
         let i18n_src = indoc! {"
             hello-world = Hello, world!
             channels-label = CHANNELS
         "}
         .to_owned();
+        */
+        let locale = "en-US";
+        let i18n_src = read_locale_ftl(locale);
         // Will be managed by settings eventually
-        let i18n_fish = I18nBabelFish::new(i18n_src, "en-US");
+        let i18n_fish = I18nBabelFish::new(i18n_src, locale);
 
         // sys-locale = "0.3"
         // fluent-langneg = "0.14"
@@ -169,7 +175,7 @@ impl App {
         */
 
         let mut prop = Property::new("locale", PropertyType::Str, PropertySubType::Locale);
-        prop.set_defaults_str(vec!["en-US".to_string()]).unwrap();
+        prop.set_defaults_str(vec![locale.to_string()]).unwrap();
         window.add_property(prop).unwrap();
 
         i18n_fish
