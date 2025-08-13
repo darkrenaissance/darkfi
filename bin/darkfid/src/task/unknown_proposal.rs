@@ -141,11 +141,11 @@ async fn handle_unknown_proposal(
         return true
     };
 
+    let comms_timeout =
+        p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
+
     // Node waits for response
-    let response = match response_sub
-        .receive_with_timeout(p2p.settings().read().await.outbound_connect_timeout)
-        .await
-    {
+    let response = match response_sub.receive_with_timeout(comms_timeout).await {
         Ok(r) => r,
         Err(e) => {
             debug!(target: "darkfid::task::handle_unknown_proposal", "Asking peer for fork sequence failed: {e}");
@@ -252,11 +252,10 @@ async fn handle_reorg(
             return true
         };
 
+        let comms_timeout =
+            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
         // Node waits for response
-        let response = match response_sub
-            .receive_with_timeout(p2p.settings().read().await.outbound_connect_timeout)
-            .await
-        {
+        let response = match response_sub.receive_with_timeout(comms_timeout).await {
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for header hash failed: {e}");
@@ -364,11 +363,10 @@ async fn handle_reorg(
             return true
         };
 
+        let comms_timeout =
+            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
         // Node waits for response
-        let response = match response_sub
-            .receive_with_timeout(p2p.settings().read().await.outbound_connect_timeout)
-            .await
-        {
+        let response = match response_sub.receive_with_timeout(comms_timeout).await {
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for headers sequence failed: {e}");
@@ -526,11 +524,11 @@ async fn handle_reorg(
             return true
         };
 
+        let comms_timeout =
+            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
+
         // Node waits for response
-        let response = match response_sub
-            .receive_with_timeout(p2p.settings().read().await.outbound_connect_timeout)
-            .await
-        {
+        let response = match response_sub.receive_with_timeout(comms_timeout).await {
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for proposals sequence failed: {e}");

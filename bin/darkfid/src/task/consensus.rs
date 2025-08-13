@@ -69,7 +69,9 @@ pub async fn consensus_init_task(
     node.validator.consensus.generate_empty_fork().await?;
 
     // Sync blockchain
-    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout =
+        node.p2p_handler.p2p.settings().read_arc().await.outbound_connect_timeout_max();
+
     let checkpoint = if !config.skip_sync {
         // Parse configured checkpoint
         if config.checkpoint_height.is_some() && config.checkpoint.is_none() {

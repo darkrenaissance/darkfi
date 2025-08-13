@@ -146,7 +146,6 @@ async fn synced_peers(
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> HashMap<(u32, [u8; 32]), Vec<ChannelPtr>> {
     info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
-    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
     let mut tips = HashMap::new();
     loop {
         // Grab channels
@@ -154,6 +153,14 @@ async fn synced_peers(
 
         // Ask each peer(if we got any) if they are synced
         for peer in peers {
+            let comms_timeout = node
+                .p2p_handler
+                .p2p
+                .settings()
+                .read_arc()
+                .await
+                .outbound_connect_timeout(peer.address().scheme());
+
             // If a checkpoint was provider, we check that the peer follows that sequence
             if let Some(c) = checkpoint {
                 // Communication setup
@@ -230,6 +237,9 @@ async fn synced_peers(
         let _ = subscription.receive().await;
         subscription.unsubscribe().await;
 
+        let comms_timeout =
+            node.p2p_handler.p2p.settings().read_arc().await.outbound_connect_timeout_max();
+
         info!(target: "darkfid::task::sync::synced_peers", "Sleeping for {comms_timeout} to allow for more nodes to connect...");
         sleep(comms_timeout).await;
     }
@@ -286,7 +296,6 @@ async fn retrieve_headers(
             }
         }
     }
-    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
 
     // We subtract 1 since tip_height is increased by one
     let total = tip_height - last_known - 1;
@@ -321,6 +330,14 @@ async fn retrieve_headers(
                 *failed = true;
                 continue
             };
+
+            let comms_timeout = node
+                .p2p_handler
+                .p2p
+                .settings()
+                .read_arc()
+                .await
+                .outbound_connect_timeout(peer.address().scheme());
 
             // Node waits for response
             let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
@@ -424,7 +441,6 @@ async fn retrieve_blocks(
             }
         }
     }
-    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
 
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
@@ -470,6 +486,14 @@ async fn retrieve_blocks(
                 *failed = true;
                 continue
             };
+
+            let comms_timeout = node
+                .p2p_handler
+                .p2p
+                .settings()
+                .read_arc()
+                .await
+                .outbound_connect_timeout(peer.address().scheme());
 
             // Node waits for response
             let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
@@ -555,11 +579,16 @@ async fn sync_best_fork(node: &DarkfiNodePtr, peers: &[ChannelPtr], last_tip: &H
         return
     };
 
-    // Node waits for response
-    let Ok(response) = response_sub
-        .receive_with_timeout(node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout)
+    let comms_timeout = node
+        .p2p_handler
+        .p2p
+        .settings()
+        .read_arc()
         .await
-    else {
+        .outbound_connect_timeout(peer.address().scheme());
+
+    // Node waits for response
+    let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
         debug!(target: "darkfid::task::sync::sync_best_fork", "Timeout while waiting for `ForkSyncResponse` from peer: {peer:?}");
         return
     };
