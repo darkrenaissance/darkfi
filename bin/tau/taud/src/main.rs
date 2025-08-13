@@ -522,6 +522,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     let p2p_settings: darkfi::net::Settings =
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), settings.net.clone()).try_into()?;
+    let comms_timeout = p2p_settings.outbound_connect_timeout_max();
 
     let p2p = P2p::new(p2p_settings, executor.clone()).await?;
     let event_graph = EventGraph::new(
@@ -549,8 +550,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Starting P2P network");
     p2p.clone().start().await?;
-
-    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
 
     loop {
         if p2p.is_connected() {
