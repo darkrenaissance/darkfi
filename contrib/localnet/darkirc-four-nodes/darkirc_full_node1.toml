@@ -28,20 +28,21 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 8
 
+localnet = true
+hostlist = "darkirc1/hostlist.tsv"
+
+# Prefered transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## Seed nodes to connect to
+seeds = ["tcp://127.0.0.1:25551"]
+
 inbound = ["tcp://127.0.0.1:25552"]
 
 external_addrs = ["tcp://127.0.0.1:25552"]
 
 # peers = []
-
-## Seed nodes to connect to 
-seeds = ["tcp://127.0.0.1:25551"]
-
-# Prefered transports for outbound connections
-allowed_transports = ["tcp"]
-
-localnet = true
-hostlist = "darkirc1/hostlist.tsv"
 
 #
 # [channel."#dev"]

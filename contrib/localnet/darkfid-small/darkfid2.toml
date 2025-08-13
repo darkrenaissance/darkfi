@@ -45,14 +45,15 @@ rpc_listen = "tcp://127.0.0.1:48440"
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
+# Allow localnet hosts
+localnet = true
+
+# Whitelisted network transports for outbound connections
+active_profiles = ["tcp+tls"]
+
+[network_config."localnet".net.profiles."tcp+tls"]
 # P2P accept addresses the instance listens on for inbound connections
 inbound = ["tcp+tls://0.0.0.0:48442"]
 
-# Whitelisted network transports for outbound connections
-allowed_transports = ["tcp+tls"]
-
 # Peer nodes to manually connect to
 peers = ["tcp+tls://0.0.0.0:48242", "tcp+tls://0.0.0.0:48342"]
-
-# Allow localnet hosts
-localnet = true

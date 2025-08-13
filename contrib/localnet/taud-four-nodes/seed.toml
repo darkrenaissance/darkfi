@@ -56,9 +56,6 @@ rpc_listen = "tcp://127.0.0.1:23340"
 # Path to a configured hostlist for saving known peers
 hostlist = "seed/hostlist.tsv"
 
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:23331"]
-
 ## Outbound connection slots
 #outbound_connections = 8
 
@@ -71,29 +68,6 @@ inbound_connections = 8
 ## White connection percent
 #white_connect_percent = 70
 
-## Addresses we want to advertise to peers (optional)
-## These should be reachable externally
-# external_addrs = ["tcp://127.0.0.1:23331"]
-
-## Seed nodes to connect to
-# seeds = [
-    #"tcp+tls://lilith0.dark.fi:5363",
-    # "tcp+tls://lilith1.dark.fi:5363",
-    # "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5362"
-    # "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5362"
-# ]
-
-## Manual peers to connect to
-#peers = []
-
-# Whitelisted transports for outbound connections
-allowed_transports = ["tcp"]
-#allowed_transports = ["tor"]
-
-# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
-# if tcp is added to mixed_transports and tor is added to allowed_transports)
-mixed_transports = []
-
 localnet = true
 
 # Nodes to avoid interacting with for the duration of the program, in the
@@ -101,3 +75,25 @@ localnet = true
 # If scheme is left empty it will default to "tcp+tls". 
 # If ports are left empty all ports from this peer will be blocked.
 #blacklist = [["example.com", ["tcp"], [8551, 23331]]]
+
+# Whitelisted transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:23331"]
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+# external_addrs = ["tcp://127.0.0.1:23331"]
+
+## Seed nodes to connect to
+# seeds = [
+#"tcp+tls://lilith0.dark.fi:5363",
+# "tcp+tls://lilith1.dark.fi:5363",
+# "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5362"
+# "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5362"
+# ]
+
+## Manual peers to connect to
+#peers = []

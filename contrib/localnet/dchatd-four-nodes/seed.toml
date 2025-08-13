@@ -9,11 +9,12 @@ rpc_listen = "tcp://127.0.0.1:54448"
 #rpc_disabled_methods = ["p2p.get_info"]
 
 [net]
-## P2P accept addresses Required for inbound nodes.
-inbound=["tcp://127.0.0.1:44448"]
-
-# Prefered transports for outbound connections
-allowed_transports = ["tcp"]
-
 # Set to true if testing on localhost
 localnet = true
+
+# Prefered transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## P2P accept addresses Required for inbound nodes.
+inbound=["tcp://127.0.0.1:44448"]

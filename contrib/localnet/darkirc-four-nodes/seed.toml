@@ -34,17 +34,19 @@ rpc_listen = "tcp://127.0.0.1:8888"
 ## Inbound connection slots
 inbound_connections = 8
 
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:25551"]
-
-# Prefered transports for outbound connections
-allowed_transports = ["tcp"]
-
 localnet = true
 hostlist = "seed/hostlist.tsv"
 
+# Prefered transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:25551"]
+
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]
+
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"

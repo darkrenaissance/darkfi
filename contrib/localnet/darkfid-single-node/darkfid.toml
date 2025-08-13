@@ -61,8 +61,12 @@ rpc_listen = "tcp://127.0.0.1:48241"
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
-# P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:48242"]
-
 # Allow localnet hosts
 localnet = true
+
+# Whitelisted network transports for outbound connections
+active_profiles = ["tcp+tls"]
+
+[network_config."localnet".net.profiles."tcp+tls"]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:48242"]
