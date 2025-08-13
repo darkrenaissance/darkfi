@@ -14,14 +14,18 @@ rpc_disabled_methods = ["p2p.get_info"]
 
 ## net settings
 [net]
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:28885"]
-
 ## Connection slots
 outbound_connections = 4
 
 ## Inbound connection slots
 # inbound_connections = 4
+
+# Prefered transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:28885"]
 
 ## P2P external addresses
 external_addrs = ["tcp://127.0.0.1:28885"]
@@ -31,13 +35,3 @@ external_addrs = ["tcp://127.0.0.1:28885"]
 
 ## Seed nodes to connect to
 seeds = ["tcp://127.0.0.1:28881"]
-
-# Prefered transports for outbound connections
-allowed_transports = ["tcp"]
-
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
