@@ -1,5 +1,5 @@
 ## IRC listen URL
-irc_listen = "127.0.0.1:11066"
+irc_listen = "tcp://127.0.0.1:11066"
 
 ## Sets Datastore Path
 datastore = "~/.config/darkfi/darkirc-outbound"
@@ -17,24 +17,21 @@ rpc_disabled_methods = ["p2p.get_info"]
 # Magic Bytes to distinguish the p2p network
 magic_bytes = [251, 229, 199, 181]
 
-## P2P accept addresses
-# inbound=["127.0.0.1:11002"]
-
 ## Connection slots
 outbound_connections = 5
 
+# Whitelisted transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
+## Seed nodes to connect to
+seeds = ["tcp://127.0.0.1:11001"]
+
+## P2P accept addresses
+# inbound=["tcp://127.0.0.1:11002"]
+
 ## P2P external addresses
-#external_addr=["127.0.0.1:11002"]
+#external_addr=["tcp://127.0.0.1:11002"]
 
 ## Peers to connect to
-#peers=["127.0.0.1:11003"]
-
-## Seed nodes to connect to 
-seeds = ["127.0.0.1:11001"]
-
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
+#peers=["tcp://127.0.0.1:11003"]

@@ -548,7 +548,7 @@ async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
 
 /// Async task to endlessly try to sync DAG, returns Ok if done.
 async fn sync_task(p2p: &P2pPtr, event_graph: &EventGraphPtr, skip_dag_sync: bool) -> Result<()> {
-    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout = p2p.settings().read_arc().await.outbound_connect_timeout_max();
 
     loop {
         if p2p.is_connected() {

@@ -21,26 +21,7 @@ datastore = "~/.local/share/darkfi/darkirc"
 hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
 
 ## connection settings
-outbound_connect_timeout = 60
-channel_handshake_timeout = 55
-channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
-
-## Whitelisted transports for outbound connections
-allowed_transports = ["tcp+tls", "tor", "tor+tls"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661", "tor://youraddress.onion:25551"]
-
-## Seed nodes to connect to 
-seeds = [
-    "tcp+tls://lilith1.dark.fi:5262",
-    "tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
-    "tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
-]
-
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:25551", "tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
 ## Outbound connection slots
 outbound_connections = 8
@@ -48,5 +29,47 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
+## Whitelisted transports for outbound connections
+active_profiles = ["tcp+tls", "tor", "i2p"]
+
 ## Transports to be mixed
-mixed_transports = ["tcp", "tcp+tls"]
+mixed_profiles = []
+
+[net.profiles."tcp+tls"]
+## Seed nodes to connect to
+seeds = ["tcp+tls://lilith0.dark.fi:25551", "tcp+tls://lilith1.dark.fi:25551"]
+
+## P2P accept addresses
+inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
+
+## Addresses we want to advertise to peers
+external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661"]
+
+[net.profiles."tor"]
+## Seed nodes to connect to
+seeds = [
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+]
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:26662"]
+
+## Addresses we want to advertise to peers
+external_addrs = ["tor://youraddress.onion:26662"]
+
+[net.profiles."i2p"]
+## Seed nodes to connect to
+seeds = [
+    ##TODO: replace with an official seed address
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+]
+
+## Manual peers to connect to
+#peers = []
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:26663"]
+
+## Addresses we want to advertise to peers
+external_addrs = ["i2p://youraddress.b32.i2p:26663"]
