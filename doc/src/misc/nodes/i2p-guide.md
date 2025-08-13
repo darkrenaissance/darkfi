@@ -53,24 +53,22 @@ before running `darkirc`.
 
 ```toml
 ## connection settings
-outbound_connect_timeout = 60
-channel_handshake_timeout = 55
-channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
-
-## Whitelisted transports for outbound connections
-allowed_transports = ["i2p", "i2p+tls"]
-
-## Seed nodes to connect to 
-seeds = [
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
-]
 
 ## Outbound connection slots
 outbound_connections = 8
 
+## Whitelisted transports for outbound connections
+active_profiles = ["i2p"]
+
 ## I2p Socks5 proxy
 i2p_socks5_proxy = "socks5://127.0.0.1:4447"
+
+[net.profiles."i2p"]
+## Seed nodes to connect to
+seeds = [
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+]
 ```
 
 ### Inbound node settings
@@ -112,14 +110,15 @@ Note your `.b32.i2p` address and the ports you used while setting up the
 hidden service, and add the following settings to your configuration file:
 
 ```toml
+## Inbound connection slots
+inbound_connections = 64
+
+[net.profiles."i2p"]
 ## Addresses we want to advertise to peers
 external_addrs = ["i2p://youraddress.b32.i2p:25551"]
 
 ## P2P accept addresses
 inbound = ["tcp://127.0.0.1:25551"]
-
-## Inbound connection slots
-inbound_connections = 64
 ```
 
 ## Connect and test your node

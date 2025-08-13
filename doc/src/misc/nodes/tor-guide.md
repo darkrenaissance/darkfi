@@ -42,45 +42,52 @@ connecting to the network. You will not advertise an external address.
 
 ```toml
 ## connection settings
-outbound_connect_timeout = 60
-channel_handshake_timeout = 55
-channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
-
-## Whitelisted transports for outbound connections
-allowed_transports = ["tor", "tor+tls"]
-
-## Seed nodes to connect to 
-seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
-]
 
 ## Outbound connection slots
 outbound_connections = 8
 
+## Whitelisted transports for outbound connections
+active_profiles = ["tor"]
+
 ## Transports to be mixed
-mixed_transports = []
+mixed_profiles = []
+
+[net.profiles."tor"]
+## Seed nodes to connect to
+seeds = [
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+]
 ```
 
 #### Socks5 proxy node settings
-If we want to route all our connections through the `socks5` proxy provided by Tor, we can enable the Socks5 proxy 
-transport in our settings.
+If we want to route all our connections through the `socks5` proxy provided by Tor,
+we can add the `socks5` and `socks5+tls` profiles to `active_profiles` and enable
+transport mixing by adding `tor` and `tcp+tls` to `mixed_profiles`. Enabling
+transport mixing helps us to connect to `tor` and `tcp+tls` endpoints through
+our socks5 proxy.
 
 When using `Whonix`, this configuration helps prevent the `Tor over Tor` issue.
-Ensure that the `tor_socks5_proxy` field is correctly set, if your tor socks5 proxy is running on a different 
-host or port.
+Ensure that the `tor_socks5_proxy` field is correctly set.
 
-<u><b>Note</b></u>: With this setup, our node will connect to both Tor and clearnet nodes through the Socks5 proxy.
+<u><b>Note</b></u>: With this setup, our node will connect to both Tor and clearnet
+nodes through the Socks5 proxy.
 ```toml
 ## Whitelisted transports for outbound connections
-allowed_transports = ["socks5", "socks5+tls", "tcp+tls", "tor"]
+active_profiles = ["socks5", "socks5+tls", "tcp+tls", "tor"]
 ## Transports to be mixed
-mixed_transports = ["tor", "tcp+tls"]
+mixed_profiles = ["tor", "tcp+tls"]
 ## Tor Socks5 proxy
 tor_socks5_proxy = "socks5://127.0.0.1:9050"
 ```
-If you prefer to connect only to `tor` nodes, remove `tcp+tls` from both allowed and mixed transports.
+If you prefer to connect only to `tor` nodes, modify the above config like below.
+```toml
+## Whitelisted transports for outbound connections
+active_profiles = ["socks5", "tor"]
+## Transports to be mixed
+mixed_profiles = ["tor"]
+```
 
 ### Inbound node settings
 
@@ -150,14 +157,15 @@ Note your `.onion` address and the ports you used while setting up the
 hidden service, and add the following settings to your configuration file:
 
 ```toml
+## Inbound connection slots
+inbound_connections = 64
+
+[net.profiles."tor"]
 ## Addresses we want to advertise to peers
 external_addrs = ["tor://youraddress.onion:25551"]
 
 ## P2P accept addresses
 inbound = ["tcp://127.0.0.1:25551"]
-
-## Inbound connection slots
-inbound_connections = 64
 ```
 
 ## Connect and test your node

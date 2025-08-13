@@ -11,8 +11,14 @@ place specified in `CONFIG_FILE_CONTENTS`.
 
 ```toml
 # dchatd toml
-
 [net]
+## Outbound connect slots. Required for outbound nodes.
+outbound_connections = 5
+
+# Whitelisted network transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
 ## P2P accept addresses Required for inbound nodes.
 inbound=["tcp://127.0.0.1:51554"]
 
@@ -21,10 +27,6 @@ external_addr=["tcp://127.0.0.1:51554"]
 
 ## Seed nodes to connect to. Required for inbound and outbound nodes.
 seeds=["tcp://127.0.0.1:50515"]
-
-## Outbound connect slots. Required for outbound nodes.
-outbound_connections = 5
-
 ```
 
 Inbound nodes specify an external address and an inbound address: this is

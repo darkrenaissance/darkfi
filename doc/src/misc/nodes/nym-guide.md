@@ -71,27 +71,19 @@ settings:
 
 ```toml
 ## connection settings
-outbound_connect_timeout = 60
-channel_handshake_timeout = 55
-channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
-
-## Whitelisted transports for outbound connections
-allowed_transports = ["socks5+tls", "tcp+tls"]
-
-## Transports to be mixed
-mixed_transports = ["tcp+tls"]
-
-## Seed nodes to connect to 
-seeds = [
-    "tcp+tls://lilith1.dark.fi:5262"
-]
 
 ## Outbound connection slots
 outbound_connections = 8
 
 ## Nym Socks5 proxy
 nym_socks5_proxy = "socks5://127.0.0.1:1080"
+
+[net.profiles."socks5+tls"]
+## Seed nodes to connect to
+seeds = [
+    "socks5+tls://127.0.0.1:1080/lilith1.dark.fi:25551"
+]
 ```
 
 ## Connect and test your node
