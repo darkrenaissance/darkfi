@@ -155,12 +155,14 @@ impl ProtocolVersion {
         let settings = self.settings.read().await;
         let node_id = settings.node_id.clone();
         let app_version = settings.app_version.clone();
+        let app_name = settings.app_name.clone();
         drop(settings);
 
         let external_addrs = self.channel.hosts().external_addrs().await;
 
         let version = VersionMessage {
             node_id,
+            app_name: app_name.clone(),
             version: app_version.clone(),
             timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
             connect_recv_addr: self.channel.connect_addr().clone(),
@@ -183,9 +185,10 @@ impl ProtocolVersion {
             verack_msg.app_version,
         );
 
-        // MAJOR and MINOR should be the same.
+        // MAJOR and MINOR should be the same, as well as the app identifier
         if app_version.major != verack_msg.app_version.major ||
-            app_version.minor != verack_msg.app_version.minor
+            app_version.minor != verack_msg.app_version.minor ||
+             app_name != verack_msg.app_name
         {
             error!(
                 target: "net::protocol_version::send_version()",
@@ -229,7 +232,12 @@ impl ProtocolVersion {
         self.channel.set_version(version).await;
 
         // Send verack
-        let verack = VerackMessage { app_version: self.settings.read().await.app_version.clone() };
+        let settings = self.settings.read().await;
+        let app_version = settings.app_version.clone();
+        let app_name = settings.app_name.clone();
+        drop(settings);
+
+        let verack = VerackMessage { app_version, app_name };
         self.channel.send(&verack).await?;
 
         debug!(

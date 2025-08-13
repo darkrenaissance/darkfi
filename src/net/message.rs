@@ -149,6 +149,8 @@ impl_p2p_message!(AddrsMessage, "addr", ADDRS_MAX_BYTES, 1, ADDRS_METERING_CONFI
 pub struct VersionMessage {
     /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
+    /// App identifier
+    pub app_name: String,
     /// Identifies protocol version being used by the node.
     pub version: semver::Version,
     /// UNIX timestamp of when the VersionMessage was created.
@@ -201,6 +203,8 @@ impl VersionMessage {
 pub struct VerackMessage {
     /// App version
     pub app_version: semver::Version,
+    /// App identifier
+    pub app_name: String,
 }
 pub const VERACK_METERING_CONFIGURATION: MeteringConfiguration = MeteringConfiguration {
     threshold: 4,

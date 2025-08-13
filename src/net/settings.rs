@@ -19,6 +19,8 @@
 use structopt::StructOpt;
 use url::Url;
 
+use crate::error::{Error, Result};
+
 type BlacklistEntry = (String, Vec<String>, Vec<u16>);
 
 /// Ban policies definitions.
@@ -60,6 +62,8 @@ pub struct Settings {
     pub magic_bytes: MagicBytes,
     /// Application version, used for convenient protocol matching
     pub app_version: semver::Version,
+    /// Application Identifier
+    pub app_name: String,
     /// Whitelisted network transports for outbound connections
     pub allowed_transports: Vec<String>,
     /// Transports allowed to be mixed (tcp, tcp+tls, tor, tor+tls)
@@ -135,6 +139,7 @@ impl Default for Settings {
     fn default() -> Self {
         let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
         let app_version = semver::Version::parse(version).unwrap();
+        let app_name = option_env!("CARGO_PKG_NAME").unwrap_or("").to_string();
 
         Self {
             node_id: String::new(),
@@ -144,6 +149,7 @@ impl Default for Settings {
             peers: vec![],
             seeds: vec![],
             app_version,
+            app_name,
             allowed_transports: vec!["tcp+tls".to_string()],
             mixed_transports: vec![],
             tor_socks5_proxy: None,
@@ -344,18 +350,24 @@ pub struct SettingsOpt {
     pub ban_policy: BanPolicy,
 }
 
-impl From<SettingsOpt> for Settings {
-    fn from(opt: SettingsOpt) -> Self {
+impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
+    type Error = Error;
+    fn try_from(st: (&str, &str, SettingsOpt)) -> Result<Self> {
+        let app_name = st.0.to_string();
+        let app_version = semver::Version::parse(&st.1)?;
+        let opt = st.2;
+
         let def = Settings::default();
 
-        Self {
+        Ok(Self {
             node_id: opt.node_id,
             inbound_addrs: opt.inbound,
             external_addrs: opt.external_addrs,
             magic_bytes: opt.magic_bytes,
             peers: opt.peers,
             seeds: opt.seeds,
-            app_version: def.app_version,
+            app_version,
+            app_name,
             allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
             mixed_transports: opt.mixed_transports.unwrap_or(def.mixed_transports),
             tor_socks5_proxy: opt.tor_socks5_proxy,
@@ -393,6 +405,6 @@ impl From<SettingsOpt> for Settings {
                 .unwrap_or(def.time_with_no_connections),
             blacklist: opt.blacklist,
             ban_policy: opt.ban_policy,
-        }
+        })
     }
 }
