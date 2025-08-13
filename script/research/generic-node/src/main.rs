@@ -18,10 +18,10 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use tracing::{error, info};
 use rand::{rngs::OsRng, Rng};
 use smol::{stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{error, info};
 
 use darkfi::{
     async_daemonize, cli_desc, impl_p2p_message,
@@ -344,7 +344,9 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "generic-node", "Initializing generic node...");
 
-    let genericd = Genericd::new(args.node_id, &args.net.into(), &ex).await?;
+    let net_settings: Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
+    let genericd = Genericd::new(args.node_id, &net_settings, &ex).await?;
     genericd.start().await?;
 
     // Signal handling for graceful termination.

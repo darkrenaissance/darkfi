@@ -61,7 +61,9 @@ struct Args {
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "damd", "Starting Denial-of-service Analysis Multitool daemon...");
-    let daemon = Damd::init(&args.net.into(), &ex).await?;
+    let net_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
+    let daemon = Damd::init(&net_settings, &ex).await?;
     daemon.start(&ex, &args.rpc.into()).await?;
 
     // Signal handling for graceful termination.

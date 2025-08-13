@@ -99,7 +99,9 @@ impl Dchat {
 // ANCHOR: main
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
-    let p2p = net::P2p::new(args.net.into(), ex.clone()).await?;
+    let p2p_settings: net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
+    let p2p = net::P2p::new(p2p_settings, ex.clone()).await?;
 
     // ANCHOR: dnet
     info!("Starting dnet subs task");

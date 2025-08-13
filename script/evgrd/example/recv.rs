@@ -26,9 +26,9 @@ use darkfi_serial::{
     async_trait, deserialize_async_partial, AsyncDecodable, AsyncEncodable, SerialDecodable,
     SerialEncodable,
 };
-use tracing::{error, info};
 use sled_overlay::sled;
 use smol::fs;
+use tracing::{error, info};
 use url::Url;
 
 use evgrd::{FetchEventsMessage, LocalEventGraph, VersionMessage, MSG_EVENT, MSG_FETCHEVENTS};

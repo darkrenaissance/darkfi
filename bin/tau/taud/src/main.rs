@@ -519,7 +519,11 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    let p2p = P2p::new(settings.net.clone().into(), executor.clone()).await?;
+
+    let p2p_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), settings.net.clone()).try_into()?;
+
+    let p2p = P2p::new(p2p_settings, executor.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
         sled_db.clone(),

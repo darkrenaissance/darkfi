@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{collections::HashSet, convert::TryInto, path::PathBuf, sync::Arc};
+
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{
@@ -38,12 +40,11 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{AsyncDecodable, AsyncEncodable};
-use futures::{FutureExt, AsyncWriteExt};
-use tracing::{debug, error, info};
+use futures::{AsyncWriteExt, FutureExt};
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tracing::{debug, error, info};
 use url::Url;
 
 use evgrd::{FetchEventsMessage, VersionMessage, MSG_EVENT, MSG_FETCHEVENTS, MSG_SENDEVENT};
@@ -274,8 +275,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "evgrd", "Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    let mut p2p_settings: darkfi::net::Settings = args.net.into();
-    p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    let mut p2p_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
     p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
     let p2p = P2p::new(p2p_settings, ex.clone()).await?;
     let event_graph = EventGraph::new(

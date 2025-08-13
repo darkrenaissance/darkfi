@@ -27,7 +27,6 @@ use darkfi::{
 use darkfi_serial::{
     async_trait, deserialize_async, serialize_async, SerialDecodable, SerialEncodable,
 };
-use tracing::{debug, error, info};
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
     lock::{OnceCell, RwLock},
@@ -37,6 +36,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
+use tracing::{debug, error, info};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 

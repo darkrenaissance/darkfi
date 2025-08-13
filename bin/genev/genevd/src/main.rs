@@ -119,7 +119,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let replay_mode = settings.replay_mode;
 
     let sled_db = sled::open(datastore_path.clone())?;
-    let p2p = P2p::new(settings.net.into(), executor.clone()).await?;
+    let p2p_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), settings.net).try_into()?;
+    let p2p = P2p::new(p2p_settings, executor.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
         sled_db.clone(),

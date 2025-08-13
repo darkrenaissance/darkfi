@@ -60,8 +60,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // We will use the peers defined in the settings as direct connections (instead of manual)
     // let direct_peers = net_settings.peers.clone();
     // net_settings.peers = vec![];
-    let net_settings: NetSettings = args.net.into();
-    let p2p = P2p::new(net_settings.clone(), ex.clone()).await?;
+    let net_settings: NetSettings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
+    let p2p = P2p::new(net_settings, ex.clone()).await?;
 
     info!(target: "fud", "Starting dnet subs task");
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");

@@ -29,8 +29,8 @@ use darkfi::{
     },
     system::StoppableTaskPtr,
 };
-use tracing::debug;
 use smol::lock::MutexGuard;
+use tracing::debug;
 
 use super::Daemon;
 

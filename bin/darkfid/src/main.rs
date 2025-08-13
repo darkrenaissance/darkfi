@@ -227,12 +227,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         return Ok(())
     }
 
+    let p2p_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), blockchain_config.net).try_into()?;
+
     // Generate the daemon
     let daemon = Darkfid::init(
         network,
         &sled_db,
         &config,
-        &blockchain_config.net.into(),
+        &p2p_settings,
         &blockchain_config.txs_batch_size,
         &ex,
     )

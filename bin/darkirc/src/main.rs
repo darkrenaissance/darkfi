@@ -339,8 +339,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             return Err(e.into());
         }
     };
-    let mut p2p_settings: darkfi::net::Settings = args.net.into();
-    p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    let p2p_settings: darkfi::net::Settings =
+        (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
     let p2p = match P2p::new(p2p_settings, ex.clone()).await {
         Ok(p2p) => p2p,
         Err(e) => {
