@@ -9,6 +9,13 @@ rpc_listen = "tcp://127.0.0.1:51054"
 #rpc_disabled_methods = ["p2p.get_info"]
 
 [net]
+## Outbound connect slots. Required for outbound nodes.
+outbound_connections = 5
+
+# Whitelisted network transports for outbound connections
+active_profiles = ["tcp"]
+
+[net.profiles."tcp"]
 ## P2P accept addresses Required for inbound nodes.
 #inbound=["tcp://127.0.0.1:51554"]
 
@@ -17,6 +24,3 @@ rpc_listen = "tcp://127.0.0.1:51054"
 
 ## Seed nodes to connect to. Required for inbound and outbound nodes.
 seeds=["tcp://127.0.0.1:50515"]
-
-## Outbound connect slots. Required for outbound nodes.
-outbound_connections = 5

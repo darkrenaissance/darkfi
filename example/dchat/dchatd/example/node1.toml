@@ -3,11 +3,12 @@ verbose = 2
 
 [net]
 hostlist = "example/node1.tsv"
-inbound = ["tcp://[::]:10202"]
-allowed_transports = ["tcp"]
-external_addrs = ["tcp://[::]:10202"]
-seeds = ["tcp://[::1]:10200"]
 outbound_connections = 5
 magic_bytes = [127, 64, 12, 201]
 localnet = true
+active_profiles = ["tcp"]
 
+[net.profiles."tcp"]
+inbound = ["tcp://[::]:10202"]
+external_addrs = ["tcp://[::]:10202"]
+seeds = ["tcp://[::1]:10200"]

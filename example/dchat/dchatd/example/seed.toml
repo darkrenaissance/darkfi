@@ -3,10 +3,11 @@ verbose = 2
 
 [net]
 hostlist = "example/seed.tsv"
-inbound=["tcp://[::]:10200"]
-allowed_transports = ["tcp"]
-seeds=[]
-# no outbounds for seed node
 magic_bytes=[127, 64, 12, 201]
 localnet = true
+active_profiles = ["tcp"]
 
+[net.profiles."tcp"]
+inbound=["tcp://[::]:10200"]
+seeds=[]
+# no outbounds for seed node
