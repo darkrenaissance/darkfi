@@ -8,27 +8,6 @@
 
 ## P2P network settings
 [net]
-# P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:38967"]
-
-# P2P external addresses the instance advertises so other peers can
-# reach us and connect to us, as long as inbound addrs are configured.
-#external_addrs = []
-
-# Peer nodes to manually connect to
-#peers = []
-
-# Seed nodes to connect to for peer discovery and/or adversising our
-# own external addresses
-#seeds = []
-
-# Whitelisted network transports for outbound connections
-#allowed_transports = ["tcp+tls"]
-
-# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
-# if tcp is added to mixed_transports and tor is added to allowed_transports)
-#mixed_transports = []
-
 # Outbound connection slots number, this many connections will be
 # attempted. (This does not include manual connections)
 #outbound_connections = 8
@@ -46,15 +25,6 @@ inbound = ["tcp+tls://0.0.0.0:38967"]
 # Manual connections retry limit, 0 for forever looping
 #manual_attempt_limit = 0
 
-# Outbound connection timeout (in seconds)
-#outbound_connect_timeout = 10
-
-# Exchange versions (handshake) timeout (in seconds)
-#channel_handshake_timeout = 4
-
-# Ping-pong exchange execution interval (in seconds)
-#channel_heartbeat_interval = 10
-
 # Allow localnet hosts
 localnet = true
 
@@ -63,3 +33,34 @@ localnet = true
 
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
+
+# Whitelisted network transports for outbound connections
+#active_profiles = ["tcp+tls"]
+
+# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
+# if tcp is added to mixed_profiles and tor is added to active_profiles)
+#mixed_profiles = []
+
+[net.profiles."tcp+tls"]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:38967"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+#external_addrs = []
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = []
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10

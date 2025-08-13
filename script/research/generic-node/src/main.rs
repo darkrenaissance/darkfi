@@ -299,7 +299,7 @@ async fn handle_generic_request_msg(
 
 /// Background function to send messages at random intervals.
 async fn broadcast_messages(node_id: u64, p2p: P2pPtr) -> Result<()> {
-    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout_max();
     let request = GenericRequestMessage { msg: format!("Ping from node {node_id}!") };
     let mut counter = 0;
     loop {

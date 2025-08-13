@@ -80,7 +80,7 @@ impl DamFlooder {
         for peer in self.p2p.hosts().channels() {
             let task = StoppableTask::new();
             task.clone().start(
-                flood_foo(self.p2p.settings().read().await.outbound_connect_timeout, peer, subscribers.get("attack_foo").unwrap().clone(), limit),
+                flood_foo(self.p2p.settings().read().await.outbound_connect_timeout(peer.address().scheme()), peer, subscribers.get("attack_foo").unwrap().clone(), limit),
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
