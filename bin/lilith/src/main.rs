@@ -42,7 +42,7 @@ use darkfi::{
     net::{
         self,
         hosts::HostColor,
-        settings::{BanPolicy, MagicBytes},
+        settings::{BanPolicy, MagicBytes, NetworkProfile},
         P2p, P2pPtr,
     },
     rpc::{
@@ -376,6 +376,14 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         listen_urls.push(url.clone());
     }
 
+    let mut profiles = HashMap::new();
+    profiles.insert("tcp+tls".to_string(), NetworkProfile::default());
+    profiles.insert("tcp".to_string(), NetworkProfile::default());
+    profiles.insert("tor".to_string(), NetworkProfile::tor_default());
+    profiles.insert("i2p".to_string(), NetworkProfile::tor_default());
+    profiles.insert("tor+tls".to_string(), NetworkProfile::tor_default());
+    profiles.insert("i2p+tls".to_string(), NetworkProfile::tor_default());
+
     // P2P network settings
     let settings = net::Settings {
         magic_bytes: info.magic_bytes.clone(),
@@ -383,14 +391,13 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         seeds: info.seeds.clone(),
         peers: info.peers.clone(),
         outbound_connections: 0,
-        outbound_connect_timeout: 30,
         inbound_connections: 512,
         app_version: info.version.clone(),
         app_name: info.app_name.clone(),
         localnet: info.localnet,
         p2p_datastore: Some(info.datastore.clone()),
         hostlist: Some(info.hostlist.clone()),
-        allowed_transports: vec![
+        active_profiles: vec![
             "tcp".to_string(),
             "tcp+tls".to_string(),
             "tor".to_string(),
@@ -401,6 +408,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
             "i2p+tls".to_string(),
         ],
         ban_policy: BanPolicy::Relaxed,
+        profiles,
         ..Default::default()
     };
 
