@@ -202,6 +202,7 @@ impl DarkIrc {
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.magic_bytes = MagicBytes([251, 229, 199, 181]);
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
+        p2p_settings.app_name = "darkirc".to_string();
         if get_use_tor_filename().exists() {
             i!("Setup P2P network [tor]");
             p2p_settings.outbound_connect_timeout = 60;
