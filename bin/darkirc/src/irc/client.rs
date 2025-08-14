@@ -433,15 +433,15 @@ impl Client {
 
         // Prefix the message part of PRIVMSG with ':' if is not already.
         // Or realname part of USER command.
-        let mut words: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
-        if words[0].to_uppercase() == "PRIVMSG" {
-            if words.len() > 1 && !words[2].starts_with(':') {
-                words[2] = format!(":{}", words[2]);
-            }
-            line = words.join(" ");
-        } else if words[0].to_uppercase() == "USER" {
-            if words.len() > 1 && !words[4].starts_with(':') {
-                words[4] = format!(":{}", words[4]);
+        if let Some(index) = match line.split_whitespace().next() {
+            Some("PRIVMSG") => Some(2),
+            Some("USER") => Some(4),
+            _ => None,
+        } {
+            let mut words: Vec<String> =
+                line.splitn(index + 1, char::is_whitespace).map(|s| s.to_string()).collect();
+            if words.len() > index && !words[index].starts_with(':') {
+                words[index] = format!(":{}", words[index]);
             }
             line = words.join(" ");
         }
