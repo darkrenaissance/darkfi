@@ -2,17 +2,16 @@ FROM docker.io/ubuntu
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update
-RUN apt install -yq openjdk-21-jre-headless openjdk-21-jdk-headless
-RUN apt install -yq wget unzip cmake file
+RUN apt install -yq openjdk-21-jre-headless openjdk-21-jdk-headless unzip cmake file git wget
 # For vendored openssl
-RUN apt-get update && apt-get install -y build-essential checkinstall zlib1g-dev
+RUN apt-get install -y build-essential checkinstall zlib1g-dev
 
 RUN cd /tmp/ && \
     wget -O install-rustup.sh https://sh.rustup.rs && \
     sh install-rustup.sh -yq --default-toolchain none && \
     rm install-rustup.sh
 ENV PATH "${PATH}:/root/.cargo/bin/"
-RUN rustup default stable
+RUN rustup default 1.88
 RUN rustup target add aarch64-linux-android
 #RUN rustup target add armv7-linux-androideabi
 #RUN rustup target add i686-linux-android
