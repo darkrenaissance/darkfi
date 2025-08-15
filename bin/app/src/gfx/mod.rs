@@ -20,7 +20,6 @@ use darkfi_serial::{
     async_trait, AsyncEncodable, AsyncWrite, Decodable, Encodable, FutAsyncWriteExt,
     SerialDecodable, SerialEncodable,
 };
-use log::debug;
 #[cfg(target_os = "android")]
 use miniquad::native::egl;
 use miniquad::{
@@ -40,6 +39,7 @@ use std::{
         Arc,
     },
 };
+use tracing::debug;
 
 pub mod anim;
 use anim::{Frame as AnimFrame, GfxSeqAnim};

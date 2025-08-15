@@ -17,9 +17,9 @@
  */
 
 use darkfi_serial::Encodable;
-use log::debug;
 use parking_lot::Mutex as SyncMutex;
 use std::{fs::File, sync::OnceLock};
+use tracing::debug;
 
 use super::{BufferId, DebugTag, DrawCall, TextureId, Vertex};
 use crate::{prop::BatchGuardId, EpochIndex};

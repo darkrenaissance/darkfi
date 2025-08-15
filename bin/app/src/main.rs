@@ -25,9 +25,7 @@ use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
 
 #[macro_use]
-extern crate log;
-#[allow(unused_imports)]
-use log::LevelFilter;
+extern crate tracing;
 
 #[derive(Debug)]
 pub enum AndroidSuggestEvent {
@@ -118,6 +116,10 @@ struct God {
     method_recv: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
     /// Publisher to send input and window events to subscribers.
     event_pub: gfx::GraphicsEventPublisherPtr,
+
+    /// A WorkerGuard for file logging used to ensure buffered logs are flushed
+    /// to their output in the case of abrupt terminations of a process.
+    _file_logging_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
 }
 
 impl God {
@@ -126,7 +128,7 @@ impl God {
         std::panic::set_hook(Box::new(panic_hook));
 
         text2::init_txt_ctx();
-        logger::setup_logging();
+        let file_logging_guard = logger::setup_logging();
 
         info!(target: "main", "Creating the app");
 
@@ -211,6 +213,7 @@ impl God {
             render_api,
             method_recv,
             event_pub,
+            _file_logging_guard: file_logging_guard,
         }
     }
 

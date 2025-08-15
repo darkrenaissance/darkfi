@@ -19,7 +19,7 @@ freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
 image = "0.25.5"
 qoi = "0.4.1"
-log = { version = "0.4.27", features = ["release_max_level_info"] }
+tracing = "0.1.41"
 glam = "0.29.2"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
@@ -46,8 +46,9 @@ chrono = "0.4.41"
 async-gen = "0.2.3"
 async-trait = "0.1.88"
 blake3 = "1.8.2"
-simplelog = "0.12.2"
 clap = { version = "4.5", features = ["derive"] }
+tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.3"
 # For log files
 file-rotate = "0.7.6"
 parking_lot = { version = "0.12.4", features = ["nightly"] }
@@ -84,7 +85,7 @@ halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v031" }
 dirs = "5.0.1"
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.13.3"
+tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
 tor-dirmgr = { version="0.32.0", features=["static"] }
 

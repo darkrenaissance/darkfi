@@ -15,16 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-use log::{LevelFilter, Log, Metadata, Record};
-use simplelog::{CombinedLogger, Config, ConfigBuilder, SharedLogger};
-
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 #[cfg(feature = "enable-filelog")]
 use {
     file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate},
-    simplelog::WriteLogger,
-    std::{path::PathBuf, thread::sleep, time::Duration},
+    std::path::PathBuf,
 };
+
+#[cfg(target_os = "android")]
+use tracing_subscriber::filter::{LevelFilter, Targets};
+
+#[cfg(any(not(target_os = "android"), feature = "enable-filelog"))]
+use darkfi::util::logger::{EventFormatter, Level, TargetFilter};
 
 // Measured in bytes
 #[cfg(feature = "enable-filelog")]
@@ -33,6 +36,8 @@ const LOGFILE_MAXSIZE: usize = 5_000_000;
 static MUTED_TARGETS: &[&'static str] = &[
     "sled",
     "rustls",
+    "async_io",
+    "polling",
     "net::channel",
     "net::message_publisher",
     "net::hosts",
@@ -47,7 +52,7 @@ static MUTED_TARGETS: &[&'static str] = &[
     "event_graph::dag_insert()",
     "event_graph::protocol",
 ];
-
+#[cfg(not(target_os = "android"))]
 static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx"];
 
 #[cfg(all(target_os = "android", feature = "enable-filelog"))]
@@ -61,175 +66,73 @@ fn logfile_path() -> PathBuf {
     dirs::cache_dir().unwrap().join("darkfi/darkfi-app.log")
 }
 
-#[cfg(target_os = "android")]
-mod android {
-    use super::*;
-    use android_logger::{AndroidLogger, Config as AndroidConfig};
-
-    /// Implements a wrapper around the android logger so it's compatible with simplelog.
-    pub struct AndroidLoggerWrapper {
-        logger: AndroidLogger,
-        level: LevelFilter,
-        config: Config,
-    }
-
-    impl AndroidLoggerWrapper {
-        pub fn new(level: LevelFilter, config: Config) -> Box<Self> {
-            let cfg = AndroidConfig::default().with_max_level(level).with_tag("darkfi");
-            Box::new(Self { logger: AndroidLogger::new(cfg), level, config })
-        }
-    }
-
-    impl Log for AndroidLoggerWrapper {
-        fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-            let target = metadata.target();
-            for allow in ALLOW_TRACE {
-                if target.starts_with(allow) {
-                    return true
-                }
-            }
-            for muted in MUTED_TARGETS {
-                if target.starts_with(muted) {
-                    return false
-                }
-            }
-            if metadata.level() > self.level {
-                return false
-            }
-            self.logger.enabled(metadata)
-        }
-
-        fn log(&self, record: &Record<'_>) {
-            if self.enabled(record.metadata()) {
-                self.logger.log(record)
-            }
-        }
-
-        fn flush(&self) {}
-    }
-
-    impl SharedLogger for AndroidLoggerWrapper {
-        fn level(&self) -> LevelFilter {
-            self.level
-        }
-
-        fn config(&self) -> Option<&Config> {
-            Some(&self.config)
-        }
-
-        fn as_log(self: Box<Self>) -> Box<dyn Log> {
-            Box::new(*self)
-        }
-    }
-}
-
-#[cfg(not(target_os = "android"))]
-mod desktop {
-    use super::*;
-    use simplelog::{ColorChoice, TermLogger, TerminalMode};
-
-    /// Implements a wrapper around the android logger so it's compatible with simplelog.
-    pub struct CustomTermLogger {
-        logger: TermLogger,
-    }
-
-    impl CustomTermLogger {
-        pub fn new(_level: LevelFilter, cfg: Config) -> Box<Self> {
-            let logger =
-                TermLogger::new(LevelFilter::Trace, cfg, TerminalMode::Mixed, ColorChoice::Auto);
-            Box::new(Self { logger: *logger })
-        }
-    }
-
-    impl Log for CustomTermLogger {
-        fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-            let target = metadata.target();
-            for allow in ALLOW_TRACE {
-                if target.starts_with(allow) {
-                    return true
-                }
-            }
-            for muted in MUTED_TARGETS {
-                if target.starts_with(muted) && metadata.level() > LevelFilter::Info {
-                    return false
-                }
-            }
-            if metadata.level() > self.level() {
-                return false
-            }
-            self.logger.enabled(metadata)
-        }
-
-        fn log(&self, record: &Record<'_>) {
-            if self.enabled(record.metadata()) {
-                self.logger.log(record)
-            }
-        }
-
-        fn flush(&self) {
-            self.logger.flush()
-        }
-    }
-
-    impl SharedLogger for CustomTermLogger {
-        fn level(&self) -> LevelFilter {
-            self.logger.level()
-        }
-
-        fn config(&self) -> Option<&Config> {
-            self.logger.config()
-        }
-
-        fn as_log(self: Box<Self>) -> Box<dyn Log> {
-            Box::new(self.logger).as_log()
-        }
-    }
-}
-
-pub fn setup_logging() {
-    // https://gist.github.com/jb-alvarado/6e223936446bb88cd9a93e7028fc2c4f
-    let mut loggers: Vec<Box<dyn SharedLogger>> = vec![];
-
-    let mut cfg = ConfigBuilder::new();
+pub fn setup_logging() -> Option<WorkerGuard> {
+    let mut layers: Vec<(Box<dyn Layer<Registry> + Send + Sync>, Option<WorkerGuard>)> = vec![];
 
     #[cfg(feature = "enable-filelog")]
     {
-        let mut cfg = cfg.clone();
-        cfg.add_filter_ignore_str("sled");
-        cfg.add_filter_ignore_str("rustls");
-        let cfg = cfg.build();
-
-        let log_file = FileRotate::new(
+        let (non_blocking_file_rotate, guard) = tracing_appender::non_blocking(FileRotate::new(
             logfile_path(),
             AppendCount::new(0),
             ContentLimit::BytesSurpassed(LOGFILE_MAXSIZE),
             Compression::None,
             #[cfg(unix)]
             None,
-        );
-        let file_logger = WriteLogger::new(LevelFilter::Trace, cfg, log_file);
-        loggers.push(file_logger);
-    }
+        ));
 
-    let cfg = cfg.build();
+        let file_layer = tracing_subscriber::fmt::Layer::new()
+            .event_format(EventFormatter::new(true, true))
+            .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
+                darkfi::util::logger::file_field_formatter,
+            ))
+            .with_writer(non_blocking_file_rotate)
+            .with_filter(
+                TargetFilter::default()
+                    .ignore_targets(["sled", "rustls", "async_io", "polling"])
+                    .default_level(Level::Trace),
+            );
+
+        layers.push((file_layer.boxed(), Some(guard)));
+    }
 
     #[cfg(target_os = "android")]
     {
-        use android::AndroidLoggerWrapper;
-        let android_logger = AndroidLoggerWrapper::new(LevelFilter::Trace, cfg);
-        loggers.push(android_logger);
+        let logcat_layer =
+            tracing_android::layer("darkfi").expect("tracing_android layer").with_filter(
+                Targets::new()
+                    .with_targets(
+                        crate::logger::MUTED_TARGETS.iter().map(|&t| (t, LevelFilter::OFF)),
+                    )
+                    .with_default(LevelFilter::TRACE),
+            );
+
+        layers.push((logcat_layer.boxed(), None));
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        use desktop::CustomTermLogger;
+        let terminal_layer = tracing_subscriber::fmt::Layer::new()
+            .event_format(EventFormatter::new(true, true))
+            .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
+                darkfi::util::logger::terminal_field_formatter,
+            ))
+            .with_writer(std::io::stdout)
+            .with_filter(
+                TargetFilter::default()
+                    .targets_level(ALLOW_TRACE, Level::Trace)
+                    .targets_level(MUTED_TARGETS, Level::Info)
+                    .default_level(Level::Debug),
+            );
 
-        // For ANSI colors in the terminal
-        colored::control::set_override(true);
-
-        let term_logger = CustomTermLogger::new(LevelFilter::Debug, cfg);
-        loggers.push(term_logger);
+        layers.push((terminal_layer.boxed(), None));
     }
 
-    CombinedLogger::init(loggers).expect("logger");
+    let file_logging_guard = layers.iter_mut().find_map(|l| l.1.take());
+
+    Registry::default()
+        .with(layers.into_iter().map(|l| l.0).collect::<Vec<_>>())
+        .try_init()
+        .expect("logger");
+
+    file_logging_guard
 }
