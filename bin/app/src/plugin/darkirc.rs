@@ -226,6 +226,9 @@ impl DarkIrc {
             p2p_settings.outbound_connect_timeout = 40;
             p2p_settings.channel_handshake_timeout = 30;
 
+            p2p_settings.outbound_connections = 1;
+            p2p_settings.inbound_connections = 0;
+
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
         }
