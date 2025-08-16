@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Arg","StatementType","Var"],"struct":["Constant","Literal","Statement","Variable","Witness"]};
