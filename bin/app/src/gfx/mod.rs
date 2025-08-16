@@ -27,6 +27,7 @@ use miniquad::{
     MouseButton, PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource,
     TouchPhase, UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
+use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::HashMap,
     fs::File,
@@ -790,6 +791,7 @@ impl GraphicsEventPublisher {
 
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
+    #[cfg(target_os = "android")]
     libegl: egl::LibEgl,
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
@@ -799,7 +801,7 @@ struct Stage {
     buffers: HashMap<GfxBufferId, miniquad::BufferId>,
 
     epoch: EpochIndex,
-    method_recv: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
+    method_queue: Arc<SyncMutex<Vec<(EpochIndex, GraphicsMethod)>>>,
     event_pub: GraphicsEventPublisherPtr,
 
     pruner: PruneMethodHeap,
@@ -821,6 +823,22 @@ impl Stage {
         god.start_app(epoch);
         let method_recv = god.method_recv.clone();
         let event_pub = god.event_pub.clone();
+
+        let method_queue = Arc::new(SyncMutex::new(vec![]));
+        let method_queue2 = method_queue.clone();
+        let sink_task = god.fg_ex.spawn(async move {
+            // Pull from render_api
+            while let Ok((epoch, method)) = method_recv.recv().await {
+                let is_replace_dc = matches!(method, GraphicsMethod::ReplaceDrawCalls { .. });
+                // Append to stage data
+                method_queue2.lock().push((epoch, method));
+                // If ReplaceDrawCall then wake up miniquad
+                if is_replace_dc {
+                    miniquad::window::schedule_update();
+                }
+            }
+        });
+        god.fg_runtime.push_task(sink_task);
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -861,10 +879,12 @@ impl Stage {
             params,
         );
 
+        #[cfg(target_os = "android")]
         let libegl = egl::LibEgl::try_load().expect("Cant load LibEGL");
 
         Stage {
             ctx,
+            #[cfg(target_os = "android")]
             libegl,
             pipeline,
             white_texture,
@@ -877,7 +897,7 @@ impl Stage {
             buffers: HashMap::new(),
 
             epoch,
-            method_recv,
+            method_queue,
             event_pub,
 
             pruner: PruneMethodHeap::new(epoch),
@@ -901,7 +921,7 @@ impl Stage {
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
                 let dcs = std::mem::take(dcs);
-                self.method_recvlace_draw_calls(*timest, dcs)
+                self.method_replace_draw_calls(*timest, dcs)
             }
         };
         if let Err(err) = res {
@@ -1029,7 +1049,7 @@ impl Stage {
         }
         Ok(())
     }
-    fn method_recvlace_draw_calls(
+    fn method_replace_draw_calls(
         &mut self,
         timest: Timestamp,
         dcs: Vec<(DcId, GfxDrawCall)>,
@@ -1097,8 +1117,13 @@ impl Stage {
     }
 
     fn egl_ctx_is_disabled(&self) -> bool {
-        let egl_ctx = unsafe { (self.libegl.eglGetCurrentContext)() };
-        egl_ctx.is_null()
+        #[cfg(target_os = "android")]
+        {
+            let egl_ctx = unsafe { (self.libegl.eglGetCurrentContext)() };
+            egl_ctx.is_null()
+        }
+        #[cfg(not(target_os = "android"))]
+        false
     }
 }
 
@@ -1129,9 +1154,9 @@ impl PruneMethodHeap {
         }
     }
 
-    fn drain(&mut self, method_recv: &async_channel::Receiver<(EpochIndex, GraphicsMethod)>) {
+    fn drain(&mut self, methods: Vec<(EpochIndex, GraphicsMethod)>) {
         // Process as many methods as we can
-        while let Ok((epoch, method)) = method_recv.try_recv() {
+        for (epoch, method) in methods {
             if epoch < self.epoch {
                 // Discard old rubbish
                 trace!(target: "gfx::pruner", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
@@ -1164,12 +1189,12 @@ impl PruneMethodHeap {
                 }
             }
             GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
-                self.method_recvlace_draw_calls(timest, dcs)
+                self.method_replace_draw_calls(timest, dcs)
             }
         }
     }
 
-    fn method_recvlace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
+    fn method_replace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)>) {
         for (key, val) in dcs {
             match self.dcs.get_mut(&key) {
                 Some(old_val) => {
@@ -1206,9 +1231,11 @@ impl PruneMethodHeap {
 
 impl EventHandler for Stage {
     fn update(&mut self) {
+        let methods = std::mem::take(&mut *self.method_queue.lock());
+
         if self.egl_ctx_is_disabled() {
             // Screen is off so collect all methods into the pruner
-            self.pruner.drain(&self.method_recv);
+            self.pruner.drain(methods);
             self.screen_was_off = true;
             return
         }
@@ -1234,7 +1261,7 @@ impl EventHandler for Stage {
         }
 
         // Process as many methods as we can
-        while let Ok((epoch, method)) = self.method_recv.try_recv() {
+        for (epoch, method) in methods {
             if DEBUG_TRAX {
                 self.trax_method(epoch, &method);
             }
@@ -1359,7 +1386,8 @@ pub fn run_gui() {
         window_resizable: true,
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
-            //blocking_event_loop: true,
+            #[cfg(target_os = "android")]
+            blocking_event_loop: true,
             android_panic_hook: false,
             ..Default::default()
         },

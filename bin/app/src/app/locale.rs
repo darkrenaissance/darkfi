@@ -32,9 +32,7 @@ mod ui_consts {
 
 pub use ui_consts::*;
 
-static ENTRIES: &[&'static str] = &[
-    "app.ftl"
-];
+static ENTRIES: &[&'static str] = &["app.ftl"];
 
 pub fn read_locale_ftl(locale: &str) -> String {
     let dir = LOCALE_PATH.replace("{locale}", locale);
@@ -45,7 +43,7 @@ pub fn read_locale_ftl(locale: &str) -> String {
         let (sender, recvr) = sync_channel(1);
         miniquad::fs::load_file(&path, move |res| match res {
             Ok(res) => sender.send(res).unwrap(),
-            Err(e) => panic!("FTL not found! {e}")
+            Err(e) => panic!("FTL not found! {e}"),
         });
         let res = recvr.recv().unwrap();
         let contents = std::str::from_utf8(&res).unwrap();
