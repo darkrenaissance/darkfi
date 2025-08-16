@@ -21,11 +21,13 @@ use darkfi_serial::{
     SerialDecodable, SerialEncodable,
 };
 use log::debug;
+#[cfg(target_os = "android")]
+use miniquad::native::egl;
 use miniquad::{
-    conf, native::egl, window, Backend, Bindings, BlendFactor, BlendState, BlendValue,
-    BufferLayout, BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods,
-    MouseButton, PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource,
-    TouchPhase, UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
+    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
+    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TouchPhase,
+    UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
 use parking_lot::Mutex as SyncMutex;
 use std::{
