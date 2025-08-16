@@ -18,7 +18,6 @@
 
 use chrono::{NaiveDate, NaiveDateTime};
 use darkfi_serial::Encodable;
-use indoc::indoc;
 use sled_overlay::sled;
 use smol::Task;
 use std::sync::{Arc, Mutex as SyncMutex};
@@ -146,7 +145,7 @@ impl App {
 
     fn setup_locale(&self, window: &mut SceneNode) -> I18nBabelFish {
         /*
-        let i18n_src = indoc! {"
+        let i18n_src = indoc::indoc! {"
             hello-world = Hello, world!
             channels-label = CHANNELS
         "}

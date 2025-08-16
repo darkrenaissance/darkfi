@@ -16,38 +16,40 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, path::Path};
+use std::sync::mpsc::sync_channel;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const LOCALE_PATH: &str = "lang/{locale}/";
+    pub const LOCALE_PATH: &str = "lang/{locale}/{entry}";
 }
 #[cfg(all(
     any(target_os = "linux", target_os = "macos", target_os = "windows"),
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
-    pub const LOCALE_PATH: &str = "assets/lang/{locale}/";
+    pub const LOCALE_PATH: &str = "assets/lang/{locale}/{entry}";
 }
 
 pub use ui_consts::*;
 
-fn read_files_to_string<P: AsRef<Path>>(dir: P) -> std::io::Result<String> {
-    let mut output = String::new();
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            let contents = fs::read_to_string(&path)?;
-            output.push_str(&contents);
-        }
-    }
-
-    Ok(output)
-}
+static ENTRIES: &[&'static str] = &[
+    "app.ftl"
+];
 
 pub fn read_locale_ftl(locale: &str) -> String {
     let dir = LOCALE_PATH.replace("{locale}", locale);
-    read_files_to_string(dir).unwrap()
+
+    let mut output = String::new();
+    for entry in ENTRIES {
+        let path = dir.replace("{entry}", entry);
+        let (sender, recvr) = sync_channel(1);
+        miniquad::fs::load_file(&path, move |res| match res {
+            Ok(res) => sender.send(res).unwrap(),
+            Err(e) => panic!("FTL not found! {e}")
+        });
+        let res = recvr.recv().unwrap();
+        let contents = std::str::from_utf8(&res).unwrap();
+        output.push_str(contents);
+    }
+    output
 }
