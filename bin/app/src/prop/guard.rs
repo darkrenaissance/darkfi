@@ -59,6 +59,10 @@ impl PropertyAtomicGuard {
         Self { batch_id, updates: vec![], end_batch: Some(end_batch), parent: None }
     }
 
+    /// Should only be used when there's an explicit end_batch() called manually at the end
+    /// of the context.
+    /// You probably mostly want to either `batch.spawn()` from an existing batch
+    /// or use `render_api.make_guard()`.
     pub fn none() -> Self {
         Self::new(Box::new(|_| {}), Box::new(|_| {}))
     }

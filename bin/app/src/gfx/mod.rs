@@ -284,10 +284,6 @@ impl RenderApi {
     }
 }
 
-pub fn make_render_guard(render_api: &RenderApi) -> PropertyAtomicGuard {
-    render_api.make_guard()
-}
-
 #[derive(Clone, Debug)]
 pub struct GfxDrawMesh {
     pub vertex_buffer: ManagedBufferPtr,

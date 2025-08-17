@@ -26,7 +26,6 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
-    gfx::make_render_guard,
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -154,8 +153,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let mut atom = make_render_guard(&render_api);
-            window_scale2.set_property_f32(&mut atom, Role::User, "value", scale).unwrap();
+            let atom = &mut render_api.make_guard();
+            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -182,8 +181,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let mut atom = make_render_guard(&render_api);
-            window_scale2.set_property_f32(&mut atom, Role::User, "value", scale).unwrap();
+            let atom = &mut render_api.make_guard();
+            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);

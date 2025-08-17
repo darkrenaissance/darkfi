@@ -22,7 +22,6 @@ use crate::{
         App,
     },
     expr,
-    gfx::make_render_guard,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
@@ -256,11 +255,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let render_api = app.render_api.clone();
         let select_channel = move || {
-            let mut atom = make_render_guard(&render_api);
+            let atom = &mut render_api.make_guard();
             info!(target: "app::menu", "clicked: {channel}!");
-            chatview_is_visible.set(&mut atom, true);
-            menu_is_visible.set(&mut atom, false);
-            set_normal_color(&mut atom);
+            chatview_is_visible.set(atom, true);
+            menu_is_visible.set(atom, false);
+            set_normal_color(atom);
         };
 
         let select_channel2 = select_channel.clone();

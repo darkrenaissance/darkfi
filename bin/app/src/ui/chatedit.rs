@@ -1292,6 +1292,7 @@ impl ChatEdit {
             return
         }
 
+        let atom = &mut self.render_api.make_guard();
         match ev {
             AndroidSuggestEvent::Init => {
                 let mut editor = self.lock_editor().await;
@@ -1318,7 +1319,6 @@ impl ChatEdit {
                 self.is_phone_select.store(false, Ordering::Relaxed);
                 self.hide_cursor.store(false, Ordering::Relaxed);
 
-                let atom = &mut PropertyAtomicGuard::new();
                 self.finish_select(atom);
 
                 let mut editor = self.lock_editor().await;
@@ -1332,7 +1332,7 @@ impl ChatEdit {
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready
         if self.parent_rect.lock().is_some() {
-            self.redraw().await;
+            self.redraw(atom).await;
         }
     }
 }
