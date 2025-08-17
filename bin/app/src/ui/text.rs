@@ -24,8 +24,8 @@ use std::sync::Arc;
 use crate::{
     gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApi},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyRect,
-        PropertyStr, PropertyUint32, Role,
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
     text2::{self, TEXT_CTX},
@@ -136,22 +136,27 @@ impl Text {
         text2::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
     }
 
-    async fn redraw(self: Arc<Self>) {
+    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
         let trace: DrawTrace = rand::random();
         let timest = unixtime();
         t!("Text::redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+        let atom = &mut batch.spawn();
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
             error!(target: "ui::text", "Text failed to draw [trace={trace}]");
             return
         };
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
         t!("Text::redraw() DONE [trace={trace}]");
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        self.rect.eval(&parent_rect).ok()?;
+    async fn get_draw_calls(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        parent_rect: Rectangle,
+    ) -> Option<DrawUpdate> {
+        self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
 
         let mut instrs = vec![GfxDrawInstruction::Move(rect.pos())];
@@ -196,11 +201,11 @@ impl UIObject for Text {
         &self,
         parent_rect: Rectangle,
         trace: DrawTrace,
-        _atom: &mut PropertyAtomicGuard,
+        atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("Text::draw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect).await
+        self.get_draw_calls(atom, parent_rect).await
     }
 
     fn set_i18n(&self, i18n_fish: &I18nBabelFish) {
@@ -210,6 +215,11 @@ impl UIObject for Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
+        let atom = self.render_api.make_guard();
+        self.render_api.replace_draw_calls(
+            atom.batch_id,
+            unixtime(),
+            vec![(self.dc_key, Default::default())],
+        );
     }
 }

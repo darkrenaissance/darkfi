@@ -23,7 +23,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, Point, Rectangle},
-    prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
+    prop::{BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -129,8 +129,11 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         Self { ex, node, me, tasks: vec![] }
     }
 
-    pub fn when_change<F>(&mut self, prop: PropertyPtr, f: impl Fn(Arc<T>) -> F + Send + 'static)
-    where
+    pub fn when_change<F>(
+        &mut self,
+        prop: PropertyPtr,
+        f: impl Fn(Arc<T>, BatchGuardPtr) -> F + Send + 'static,
+    ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
         let mut on_modify_subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
@@ -146,24 +149,24 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 for (i, (prop_weak, prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
                     let recv = on_modify_sub.receive();
                     poll_queues.push(async move {
-                        let (role, action) = recv.await.ok()?;
-                        Some((i, prop_weak, prop_i, role, action))
+                        let (role, action, batch_guard) = recv.await.ok()?;
+                        Some((i, prop_weak, prop_i, role, action, batch_guard))
                     });
                 }
 
-                let Some(Some((idx, prop_weak, prop_i, role, action))) = poll_queues.next().await else {
+                let Some(Some((idx, prop_weak, prop_i, role, action, batch_guard))) = poll_queues.next().await else {
                     e!("Property {:?} on_modify pipe is broken", prop);
                     return
                 };
 
                 // Skip internal messages from ourselves or explicitly marked ignored
-                if (idx == 0 && role == Role::Internal) || role == Role::Ignored{
+                if (idx == 0 && role == Role::Internal) || role == Role::Ignored {
                     continue
                 }
                 if let Some(prop_i) = prop_i {
                     match action {
                         ModifyAction::Set(i) => if *prop_i != i { continue },
-                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue },
+                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue }
                         _ => continue
                     }
                 }
@@ -184,7 +187,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 };
 
                 //debug!(target: "app", "property modified");
-                f(self_).await;
+                f(self_, batch_guard).await;
             }
         });
         self.tasks.push(task);

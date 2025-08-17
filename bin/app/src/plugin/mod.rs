@@ -37,7 +37,7 @@ pub struct PluginSettings {
 }
 impl PluginSettings {
     pub fn add_setting(&self, name: &str, default: PropertyValue) -> Option<SceneNodePtr> {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         let node = match default {
             PropertyValue::Bool(b) => {
                 let mut node = SceneNode::new(name, SceneNodeType::Setting);
@@ -94,7 +94,7 @@ impl PluginSettings {
 
     // For all settings, copy the value from sled into the setting node's value property
     pub fn load_settings(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
                 continue

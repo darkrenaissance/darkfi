@@ -136,9 +136,22 @@ class Vertex:
 @dataclass
 class PutDrawCall:
     epoch: int
+    batch_id: int
     timest: int
     dcs: [DrawCall]
     stats: [int]
+
+@dataclass
+class PutStartBatch:
+    epoch: int
+    batch_id: int
+    stat: int
+
+@dataclass
+class PutEndBatch:
+    epoch: int
+    batch_id: int
+    stat: int
 
 @dataclass
 class PutTex:
@@ -214,6 +227,7 @@ def read_section(f):
     match c:
         case 0:
             epoch = serial.read_u32(cur)
+            batch_id = serial.read_u32(cur)
             timest = serial.read_u64(cur)
             dcs = serial.decode_arr(cur, read_dc)
             stats = []
@@ -221,16 +235,28 @@ def read_section(f):
                 stat = serial.read_u8(cur)
                 stats.append(stat)
                 #print(f"  stat={stat}")
-            #print(f"put_dcs epoch={epoch}, timest={timest}, dcs={dcs}, stats={stats}")
-            sect = PutDrawCall(epoch, timest, dcs, stats)
+            #print(f"put_dcs epoch={epoch}, batch_id={batch_id}, timest={timest}, dcs={dcs}, stats={stats}")
+            sect = PutDrawCall(epoch, batch_id, timest, dcs, stats)
         case 1:
+            epoch = serial.read_u32(cur)
+            batch_id = serial.read_u32(cur)
+            stat = serial.read_u8(cur)
+            #print(f"put_start_batch epoch={epoch}, batch_id={batch_id}, stat={stat}")
+            sect = PutStartBatch(epoch, batch_id, timest, dcs, stats)
+        case 2:
+            epoch = serial.read_u32(cur)
+            batch_id = serial.read_u32(cur)
+            stat = serial.read_u8(cur)
+            #print(f"put_end_batch epoch={epoch}, batch_id={batch_id}, stat={stat}")
+            sect = PutEndBatch(epoch, batch_id, timest, dcs, stats)
+        case 3:
             epoch = serial.read_u32(cur)
             tex = serial.read_u32(cur)
             tag = serial.decode_opt(cur, read_tag)
             stat = serial.read_u8(cur)
             #print(f"put_tex epoch={epoch}, tex={tex}, tag='{tag}', stat={stat}")
             sect = PutTex(epoch, tex, tag, stat)
-        case 2:
+        case 4:
             epoch = serial.read_u32(cur)
             verts = serial.decode_arr(cur, read_vert)
             buf = serial.read_u32(cur)
@@ -239,7 +265,7 @@ def read_section(f):
             stat = serial.read_u8(cur)
             #print(f"put_verts epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")
             sect = PutVerts(epoch, verts, buf, tag, buftype, stat)
-        case 3:
+        case 5:
             epoch = serial.read_u32(cur)
             idxs = serial.decode_arr(cur, serial.read_u16)
             buf = serial.read_u32(cur)
@@ -248,14 +274,14 @@ def read_section(f):
             stat = serial.read_u8(cur)
             #print(f"put_idxs epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")
             sect = PutIdxs(epoch, idxs, buf, tag, buftype, stat)
-        case 4:
+        case 6:
             epoch = serial.read_u32(cur)
             buf = serial.read_u32(cur)
             tag = serial.decode_opt(cur, read_tag)
             stat = serial.read_u8(cur)
             #print(f"del_tex epoch={epoch}, buf={buf}, tag='{tag}', stat={stat}")
             sect = DelTex(epoch, buf, tag, stat)
-        case 5:
+        case 7:
             epoch = serial.read_u32(cur)
             buf = serial.read_u32(cur)
             tag = serial.decode_opt(cur, read_tag)
@@ -263,11 +289,11 @@ def read_section(f):
             stat = serial.read_u8(cur)
             #print(f"del_buf epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")
             sect = DelBuf(epoch, buf, tag, buftype, stat)
-        case 6:
+        case 8:
             dc = serial.read_u64(cur)
             #print(f"set_curr dc={dc}")
             sect = SetCurr(dc)
-        case 7:
+        case 9:
             idx = serial.read_u64(cur)
             #print(f"set_instr idx={idx}")
             sect = SetInstr(idx)

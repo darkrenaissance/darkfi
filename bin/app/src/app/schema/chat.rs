@@ -29,6 +29,7 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
+    gfx::make_render_guard,
     plugin::darkirc,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
@@ -192,7 +193,7 @@ pub async fn make(
         0,
     )
     .unwrap();
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     let mut cc = Compiler::new();
 
@@ -288,17 +289,18 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let layer_node2 = layer_node.clone();
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+    let render_api = app.render_api.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
-        let atom = &mut PropertyAtomicGuard::new();
+        let mut atom = make_render_guard(&render_api);
 
         let editz_node = layer_node2.clone().lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
 
         let menu_node = sg_root.clone().lookup_node("/window/menu_layer").unwrap();
-        menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+        menu_node.set_property_bool(&mut atom, Role::App, "is_visible", true).unwrap();
 
-        chatview_is_visible.set(atom, false);
+        chatview_is_visible.set(&mut atom, false);
     };
 
     let (slot, recvr) = Slot::new("back_clicked");
@@ -502,7 +504,7 @@ pub async fn make(
         1.00, 0.30, 0.00, 1.
     ];
     for c in nick_colors {
-        prop.push_f32(Role::App, c).unwrap();
+        prop.clone().push_f32(atom, Role::App, c).unwrap();
     }
 
     let prop = node.get_property("hi_bg_color").unwrap();
@@ -838,17 +840,19 @@ pub async fn make(
     let editz_text2 = editz_text.clone();
     let channel2 = format!("#{channel}");
     let sg_root = app.sg_root.clone();
+    let render_api = app.render_api.clone();
     let sendmsg = move || {
         let editz_text = editz_text2.clone();
         let channel = channel2.clone();
         let sg_root = sg_root.clone();
         let chatview_node = chatview_node.clone();
+        let render_api = render_api.clone();
         async move {
-            let atom = &mut PropertyAtomicGuard::new();
+            let mut atom = make_render_guard(&render_api);
 
             let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: {channel}");
-            editz_text.set(atom, "");
+            editz_text.set(&mut atom, "");
 
             let Some(darkirc) = sg_root.clone().lookup_node("/plugin/darkirc") else {
                 error!(target: "app::chat", "DarkIrc plugin has not been loaded");
@@ -858,7 +862,7 @@ pub async fn make(
             if text.starts_with("/nick") {
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
                 info!(target: "app::chat", "Setting nick to: {nick}");
-                darkirc.set_property_str(atom, Role::App, "nick", nick).unwrap();
+                darkirc.set_property_str(&mut atom, Role::App, "nick", nick).unwrap();
 
                 let msg = format!("You are now known as <{nick}>");
                 let id: [u8; 32] = rand::random();
@@ -954,6 +958,7 @@ pub async fn make(
     let (slot, recvr) = Slot::new("emoji_clicked");
     let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         let mut panel_height = if cfg!(target_os = "android") {
             let keyb_height = android_keyboard_height();
@@ -968,7 +973,7 @@ pub async fn make(
 
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
-            let atom = &mut PropertyAtomicGuard::new();
+            let mut atom = make_render_guard(&render_api);
 
             if cfg!(target_os = "android") {
                 let keyb_height = android_keyboard_height();
@@ -982,11 +987,11 @@ pub async fn make(
 
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
-                emoji_btn_is_visible.set(atom, false);
-                emoji_close_is_visible.set(atom, true);
-                emoji_h_prop.set(atom, panel_height as f32);
+                emoji_btn_is_visible.set(&mut atom, false);
+                emoji_close_is_visible.set(&mut atom, true);
+                emoji_h_prop.set(&mut atom, panel_height as f32);
                 //for i in 1..=20 {
-                //    emoji_h_prop.set(atom, (20 * i) as f32);
+                //    emoji_h_prop.set(&mut atom, (20 * i) as f32);
                 //    msleep(10).await;
                 //}
             } else {
@@ -994,11 +999,11 @@ pub async fn make(
 
                 assert!(emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() > 0.);
-                emoji_btn_is_visible.set(atom, true);
-                emoji_close_is_visible.set(atom, false);
-                emoji_h_prop.set(atom, 0. as f32);
+                emoji_btn_is_visible.set(&mut atom, true);
+                emoji_close_is_visible.set(&mut atom, false);
+                emoji_h_prop.set(&mut atom, 0. as f32);
                 //for i in 1..=20 {
-                //    emoji_h_prop.set(atom, (400 - 20 * i) as f32);
+                //    emoji_h_prop.set(&mut atom, (400 - 20 * i) as f32);
                 //    msleep(10).await;
                 //}
             }
@@ -1041,13 +1046,14 @@ pub async fn make(
     let (slot, recvr) = Slot::new("nickcmd_clicked");
     node.register("click", slot).unwrap();
     let editz_text2 = editz_text.clone();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked /nick");
-            let atom = &mut PropertyAtomicGuard::new();
+            let mut atom = make_render_guard(&render_api);
             // This will autohide this popup due to ending in a space.
             // Setting the property will retrigger the logic whether to show popup.
-            editz_text2.set(atom, "/nick ");
+            editz_text2.set(&mut atom, "/nick ");
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1306,11 +1312,12 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let actions_is_visible2 = actions_is_visible.clone();
     let editz_select_text2 = editz_select_text.clone();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked copy");
-            let atom = &mut PropertyAtomicGuard::new();
-            actions_is_visible2.set(atom, false);
+            let mut atom = make_render_guard(&render_api);
+            actions_is_visible2.set(&mut atom, false);
             let select_text = editz_select_text2.get_str(0).unwrap();
             miniquad::window::clipboard_set(&select_text);
         }
@@ -1333,9 +1340,10 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let actions_is_visible2 = actions_is_visible.clone();
     let chatedit_node2 = chatedit_node.clone();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut PropertyAtomicGuard::new();
+            let mut atom = make_render_guard(&render_api);
             if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
@@ -1344,7 +1352,7 @@ pub async fn make(
             } else {
                 info!(target: "app::chat", "clicked paste but clip is empty");
             }
-            actions_is_visible2.set(atom, false);
+            actions_is_visible2.set(&mut atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1396,10 +1404,11 @@ pub async fn make(
     let (slot, recvr) = Slot::new("reqpasta");
     chatedit_node.register("paste_request", slot).unwrap();
     let pasta_is_visible2 = pasta_is_visible.clone();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut PropertyAtomicGuard::new();
-            pasta_is_visible2.set(atom, true);
+            let mut atom = make_render_guard(&render_api);
+            pasta_is_visible2.set(&mut atom, true);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1481,9 +1490,10 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let chatedit_node2 = chatedit_node.clone();
     let pasta_is_visible2 = pasta_is_visible.clone();
+    let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut PropertyAtomicGuard::new();
+            let mut atom = make_render_guard(&render_api);
             if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
@@ -1492,7 +1502,7 @@ pub async fn make(
             } else {
                 info!(target: "app::chat", "clicked paste but clip is empty");
             }
-            pasta_is_visible2.set(atom, false);
+            pasta_is_visible2.set(&mut atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1501,18 +1511,19 @@ pub async fn make(
     {
         let editz_select_sub = editz_select_text.subscribe_modify();
         let pasta_is_visible2 = pasta_is_visible.clone();
+        let render_api = app.render_api.clone();
         let editz_select_task = app.ex.spawn(async move {
             while let Ok(_) = editz_select_sub.receive().await {
-                let atom = &mut PropertyAtomicGuard::new();
+                let mut atom = make_render_guard(&render_api);
                 if editz_select_text.is_null(0).unwrap() {
                     info!(target: "app::chat", "selection changed: null");
-                    actions_is_visible.set(atom, false);
-                    pasta_is_visible2.set(atom, false);
+                    actions_is_visible.set(&mut atom, false);
+                    pasta_is_visible2.set(&mut atom, false);
                 } else {
                     let select_text = editz_select_text.get_str(0).unwrap();
                     info!(target: "app::chat", "selection changed: {select_text}");
-                    actions_is_visible.set(atom, true);
-                    pasta_is_visible2.set(atom, false);
+                    actions_is_visible.set(&mut atom, true);
+                    pasta_is_visible2.set(&mut atom, false);
                 }
             }
         });
@@ -1520,10 +1531,11 @@ pub async fn make(
     }
 
     let editz_text_sub = editz_text.prop().subscribe_modify();
+    let render_api = app.render_api.clone();
     let editz_text_task = app.ex.spawn(async move {
         while let Ok(_) = editz_text_sub.receive().await {
-            let atom = &mut PropertyAtomicGuard::new();
-            pasta_is_visible.set(atom, false);
+            let mut atom = make_render_guard(&render_api);
+            pasta_is_visible.set(&mut atom, false);
 
             let text = editz_text.get();
             debug!(target: "app::chat", "text changed: {text}");
@@ -1533,11 +1545,11 @@ pub async fn make(
             // Only show popup for "/ni", "/nick", but not for: "", "/nick ", "/nick foo"
             if !text.is_empty() && "/nick".starts_with(&text) && text.len() <= "/nick".len() {
                 if !cmd_hint_is_visible.get() {
-                    cmd_hint_is_visible.set(atom, true);
+                    cmd_hint_is_visible.set(&mut atom, true);
                 }
             } else {
                 if cmd_hint_is_visible.get() {
-                    cmd_hint_is_visible.set(atom, false);
+                    cmd_hint_is_visible.set(&mut atom, false);
                 }
             }
         }

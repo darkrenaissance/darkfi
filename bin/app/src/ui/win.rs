@@ -28,7 +28,9 @@ use crate::{
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
-    prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
@@ -116,17 +118,17 @@ impl Window {
                 };
 
                 d!("Window resized {size:?}");
-                let atom = &mut PropertyAtomicGuard::new();
-
-                // Now update the properties
-                screen_size2.set(atom, size);
 
                 let Some(self_) = me2.upgrade() else {
                     // Should not happen
                     panic!("self destroyed before modify_task was stopped!");
                 };
 
-                self_.draw().await;
+                let atom = &mut self_.render_api.make_guard();
+                // Now update the properties
+                screen_size2.set(atom, size);
+
+                self_.draw(atom).await;
             }
         });
 
@@ -168,11 +170,13 @@ impl Window {
         let me2 = me.clone();
         let touch_task = ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
-        async fn reload_locale(self_: Arc<Window>) {
-            self_.reload_locale().await;
+        async fn reload_locale(self_: Arc<Window>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.reload_locale(atom).await;
         }
-        async fn redraw(self_: Arc<Window>) {
-            self_.draw().await;
+        async fn redraw(self_: Arc<Window>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.draw(atom).await;
         }
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
@@ -436,8 +440,7 @@ impl Window {
         }
     }
 
-    pub async fn draw(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+    pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
 
@@ -468,12 +471,12 @@ impl Window {
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(timest, draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_calls);
 
         t!("Window::draw() - replaced draw call [timest={timest}, trace_id={trace_id}]");
     }
 
-    async fn reload_locale(&self) {
+    async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {
         /*
         let i18n_src = indoc::indoc! {"
             hello-world = Hello, world!
@@ -494,6 +497,6 @@ impl Window {
             obj.set_i18n(&i18n_fish);
         }
         // Just redraw everything lol
-        self.draw().await;
+        self.draw(atom).await;
     }
 }

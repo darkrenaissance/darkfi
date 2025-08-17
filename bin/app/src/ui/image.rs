@@ -28,7 +28,7 @@ use crate::{
         RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
-    prop::{PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
@@ -88,11 +88,11 @@ impl Image {
         Pimpl::Image(self_)
     }
 
-    async fn reload(self: Arc<Self>) {
+    async fn reload(self: Arc<Self>, batch: BatchGuardPtr) {
         let texture = self.load_texture();
         *self.texture.lock() = Some(texture);
 
-        self.clone().redraw().await;
+        self.clone().redraw(batch).await;
     }
 
     fn load_texture(&self) -> ManagedTexturePtr {
@@ -122,17 +122,18 @@ impl Image {
         self.render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }
 
-    async fn redraw(self: Arc<Self>) {
+    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
         let trace: DrawTrace = rand::random();
         let timest = unixtime();
         t!("redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+        let atom = &mut batch.spawn();
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
             error!(target: "ui::image", "Image failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
         t!("redraw() DONE [trace={trace}]");
     }
 
@@ -146,10 +147,14 @@ impl Image {
         mesh.alloc(&self.render_api)
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        self.rect.eval(&parent_rect).ok()?;
+    async fn get_draw_calls(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        parent_rect: Rectangle,
+    ) -> Option<DrawUpdate> {
+        self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
-        self.uv.eval(&rect).ok()?;
+        self.uv.eval(atom, &rect).ok()?;
 
         let mesh = self.regen_mesh();
         let texture = self.texture.lock().clone().expect("Node missing texture_id!");
@@ -208,16 +213,21 @@ impl UIObject for Image {
         &self,
         parent_rect: Rectangle,
         trace: DrawTrace,
-        _atom: &mut PropertyAtomicGuard,
+        atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("Image::draw() [trace={trace}]");
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect).await
+        self.get_draw_calls(atom, parent_rect).await
     }
 }
 
 impl Drop for Image {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
+        let atom = self.render_api.make_guard();
+        self.render_api.replace_draw_calls(
+            atom.batch_id,
+            unixtime(),
+            vec![(self.dc_key, Default::default())],
+        );
     }
 }

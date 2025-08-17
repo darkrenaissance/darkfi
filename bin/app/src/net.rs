@@ -24,6 +24,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
+    gfx::{make_render_guard, RenderApi},
     prop::{PropertyAtomicGuard, PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
@@ -75,6 +76,7 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     sg_root: SceneNodePtr,
+    render_api: RenderApi,
     _ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
@@ -82,7 +84,7 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Arc<Self> {
+    pub async fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
 
@@ -91,6 +93,7 @@ impl ZeroMQAdapter {
 
         Arc::new(Self {
             sg_root,
+            render_api,
             _ex: ex,
             zmq_rep: Mutex::new(zmq_rep),
             _zmq_pub: Mutex::new(zmq_pub),
@@ -243,40 +246,40 @@ impl ZeroMQAdapter {
                     self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
-                let atom = &mut PropertyAtomicGuard::new();
+                let mut atom = make_render_guard(&self.render_api);
 
                 match prop_type {
                     PropertyType::Null => {
-                        prop.set_null(atom, Role::User, prop_i)?;
+                        prop.set_null(&mut atom, Role::User, prop_i)?;
                     }
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
-                        prop.set_bool(atom, Role::User, prop_i, val)?;
+                        prop.set_bool(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Uint32 => {
                         let val = u32::decode(&mut cur).unwrap();
-                        prop.set_u32(atom, Role::User, prop_i, val)?;
+                        prop.set_u32(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Float32 => {
                         let val = f32::decode(&mut cur).unwrap();
-                        prop.set_f32(atom, Role::User, prop_i, val)?;
+                        prop.set_f32(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Str => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_str(atom, Role::User, prop_i, val)?;
+                        prop.set_str(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Enum => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_enum(atom, Role::User, prop_i, val)?;
+                        prop.set_enum(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
-                        prop.set_node_id(atom, Role::User, prop_i, val)?;
+                        prop.set_node_id(&mut atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::SExpr => {
                         let val = SExprCode::decode(&mut cur).unwrap();
                         debug!(target: "req", "  received code {:?}", val);
-                        prop.set_expr(atom, Role::User, prop_i, val)?;
+                        prop.set_expr(&mut atom, Role::User, prop_i, val)?;
                     }
                 }
             }

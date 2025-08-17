@@ -150,17 +150,6 @@ impl God {
         let bg_runtime = AsyncRuntime::new(bg_ex.clone(), "bg");
         bg_runtime.start();
 
-        #[cfg(feature = "enable-netdebug")]
-        {
-            let sg_root = sg_root.clone();
-            let ex = bg_ex.clone();
-            let zmq_task = bg_ex.spawn(async {
-                let zmq_rpc = ZeroMQAdapter::new(sg_root, ex).await;
-                zmq_rpc.run().await;
-            });
-            bg_runtime.push_task(zmq_task);
-        }
-
         let fg_runtime = AsyncRuntime::new(fg_ex.clone(), "fg");
 
         let (method_send, method_recv) = async_channel::unbounded();
@@ -181,6 +170,18 @@ impl God {
             cv.notify();
         });
         fg_runtime.push_task(app_task);
+
+        #[cfg(feature = "enable-netdebug")]
+        {
+            let sg_root = sg_root.clone();
+            let ex = bg_ex.clone();
+            let render_api = render_api.clone();
+            let zmq_task = bg_ex.spawn(async {
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, render_api, ex).await;
+                zmq_rpc.run().await;
+            });
+            bg_runtime.push_task(zmq_task);
+        }
 
         #[cfg(feature = "enable-plugins")]
         {

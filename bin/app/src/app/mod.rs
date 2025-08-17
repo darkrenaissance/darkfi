@@ -183,7 +183,7 @@ impl App {
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
-        let mut atom = PropertyAtomicGuard::new();
+        let mut atom = PropertyAtomicGuard::none();
 
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
         let prop = window_node.get_property("screen_size").unwrap();
@@ -221,9 +221,10 @@ impl App {
     }
 
     async fn trigger_draw(&self) {
+        let atom = &mut self.render_api.make_guard();
         let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
         match window_node.pimpl() {
-            Pimpl::Window(win) => win.draw().await,
+            Pimpl::Window(win) => win.draw(atom).await,
             _ => panic!("wrong pimpl"),
         }
     }

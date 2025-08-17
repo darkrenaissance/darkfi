@@ -293,14 +293,20 @@ impl PropertyRect {
         Ok(Self { prop, role })
     }
 
-    pub fn eval(&self, parent_rect: &Rectangle) -> Result<()> {
+    pub fn eval(&self, atom: &mut PropertyAtomicGuard, parent_rect: &Rectangle) -> Result<()> {
         self.eval_with(
+            atom,
             (0..4).collect(),
             vec![("w".to_string(), parent_rect.w), ("h".to_string(), parent_rect.h)],
         )
     }
 
-    pub fn eval_with(&self, range: Vec<usize>, extras: Vec<(String, f32)>) -> Result<()> {
+    pub fn eval_with(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        range: Vec<usize>,
+        extras: Vec<(String, f32)>,
+    ) -> Result<()> {
         let mut globals = vec![];
 
         for dep in self.prop.get_depends() {
@@ -330,7 +336,7 @@ impl PropertyRect {
             let v = machine.call()?.as_f32()?;
             changes.push((i, v));
         }
-        self.prop.set_cache_f32_multi(self.role, changes).unwrap();
+        self.prop().set_cache_f32_multi(atom, self.role, changes).unwrap();
         Ok(())
     }
 

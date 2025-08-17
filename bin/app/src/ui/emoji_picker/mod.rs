@@ -28,7 +28,9 @@ use std::sync::{
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
-    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
@@ -182,8 +184,7 @@ impl EmojiPicker {
         }
     }
 
-    fn redraw(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("redraw({:?}) [timest={timest}, trace_id={trace_id}]", self.node.upgrade().unwrap());
@@ -193,7 +194,7 @@ impl EmojiPicker {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
         t!("redraw DONE [trace_id={trace_id}]");
     }
 
@@ -203,7 +204,7 @@ impl EmojiPicker {
         _trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        if let Err(e) = self.rect.eval(&parent_rect) {
+        if let Err(e) = self.rect.eval(atom, &parent_rect) {
             warn!(target: "ui::emoji_picker", "Rect eval failed: {e}");
             return None
         }
@@ -264,8 +265,9 @@ impl UIObject for EmojiPicker {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
-        async fn redraw(self_: Arc<EmojiPicker>) {
-            self_.redraw();
+        async fn redraw(self_: Arc<EmojiPicker>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.redraw(atom);
         }
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
@@ -302,14 +304,14 @@ impl UIObject for EmojiPicker {
             return false
         }
         t!("handle_mouse_wheel()");
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard();
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
         scroll = scroll.clamp(0., self.max_scroll());
         self.scroll.set(atom, scroll);
 
-        self.redraw();
+        self.redraw(atom);
 
         true
     }
@@ -332,7 +334,7 @@ impl UIObject for EmojiPicker {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard();
 
         let rect = self.rect.get();
         let pos = touch_pos - Point::new(rect.x, rect.y);
@@ -365,7 +367,7 @@ impl UIObject for EmojiPicker {
                             let mut scroll = touch_info.start_scroll + y_diff;
                             scroll = scroll.clamp(0., self.max_scroll());
                             self.scroll.set(atom, scroll);
-                            self.redraw();
+                            self.redraw(atom);
                         }
                     } else {
                         return false
@@ -393,6 +395,11 @@ impl UIObject for EmojiPicker {
 
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
+        let atom = self.render_api.make_guard();
+        self.render_api.replace_draw_calls(
+            atom.batch_id,
+            unixtime(),
+            vec![(self.dc_key, Default::default())],
+        );
     }
 }

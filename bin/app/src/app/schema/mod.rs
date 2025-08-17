@@ -26,6 +26,7 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
+    gfx::make_render_guard,
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -130,7 +131,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
 
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     let node = create_shortcut("zoom_out_shortcut");
     node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
@@ -140,6 +141,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.register("shortcut", slot).unwrap();
     let window_scale = app.sg_root.clone().lookup_node("/setting/scale").unwrap();
     let window_scale2 = window_scale.clone();
+    let render_api = app.render_api.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
@@ -152,8 +154,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
+            let mut atom = make_render_guard(&render_api);
+            window_scale2.set_property_f32(&mut atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
@@ -167,6 +169,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (slot, recvr) = Slot::new("zoom_in_pressed");
     node.register("shortcut", slot).unwrap();
     let window_scale2 = window_scale.clone();
+    let render_api = app.render_api.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
@@ -179,8 +182,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut PropertyAtomicGuard::new();
-            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
+            let mut atom = make_render_guard(&render_api);
+            window_scale2.set_property_f32(&mut atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);

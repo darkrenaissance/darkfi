@@ -16,7 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
+
 use super::{ModifyAction, PropertyPtr, Role};
+
+static BATCH_ID: AtomicU32 = AtomicU32::new(0);
 
 /// This schedules all property updates to happen at the end of the scope.
 /// We can therefore have fine-grained control about when property updates are
@@ -39,12 +46,21 @@ use super::{ModifyAction, PropertyPtr, Role};
 /// This also has the unintended side-effect of making draws much faster since they aren't
 /// interrupted halfway through by extra compute.
 pub struct PropertyAtomicGuard {
+    pub batch_id: BatchGuardId,
     updates: Vec<(PropertyPtr, Role, ModifyAction)>,
+    end_batch: Option<BatchGuardCb>,
+    parent: Option<BatchGuardPtr>,
 }
 
 impl PropertyAtomicGuard {
-    pub fn new() -> Self {
-        Self { updates: vec![] }
+    pub fn new(start_batch: BatchGuardCb, end_batch: BatchGuardCb) -> Self {
+        let batch_id = BATCH_ID.fetch_add(1, Ordering::Relaxed);
+        start_batch(batch_id);
+        Self { batch_id, updates: vec![], end_batch: Some(end_batch), parent: None }
+    }
+
+    pub fn none() -> Self {
+        Self::new(Box::new(|_| {}), Box::new(|_| {}))
     }
 
     pub(super) fn add(&mut self, prop: PropertyPtr, role: Role, action: ModifyAction) {
@@ -54,8 +70,41 @@ impl PropertyAtomicGuard {
 
 impl Drop for PropertyAtomicGuard {
     fn drop(&mut self) {
+        let guard = Arc::new(BatchGuard {
+            id: self.batch_id,
+            end_batch: self.end_batch.take(),
+            _parent: self.parent.take(),
+        });
         for (prop, role, action) in std::mem::take(&mut self.updates) {
-            prop.on_modify.notify((role, action));
+            prop.on_modify.notify((role, action, guard.clone()));
         }
+    }
+}
+
+pub type BatchGuardId = u32;
+type BatchGuardCb = Box<dyn FnOnce(BatchGuardId) + Send + Sync>;
+pub type BatchGuardPtr = Arc<BatchGuard>;
+
+pub struct BatchGuard {
+    pub id: BatchGuardId,
+    end_batch: Option<BatchGuardCb>,
+    _parent: Option<BatchGuardPtr>,
+}
+
+impl BatchGuard {
+    pub fn spawn(self: &Arc<Self>) -> PropertyAtomicGuard {
+        PropertyAtomicGuard {
+            batch_id: self.id,
+            updates: vec![],
+            end_batch: Some(Box::new(|_| {})),
+            parent: Some(self.clone()),
+        }
+    }
+}
+
+impl Drop for BatchGuard {
+    fn drop(&mut self) {
+        let end_batch = self.end_batch.take().unwrap();
+        end_batch(self.id);
     }
 }

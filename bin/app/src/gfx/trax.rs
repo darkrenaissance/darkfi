@@ -22,7 +22,7 @@ use parking_lot::Mutex as SyncMutex;
 use std::{fs::File, sync::OnceLock};
 
 use super::{DebugTag, GfxBufferId, GfxDrawCall, GfxTextureId, Vertex};
-use crate::EpochIndex;
+use crate::{prop::BatchGuardId, EpochIndex};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx::trax", $($arg)*); } }
 
@@ -47,17 +47,36 @@ impl Trax {
         self.file.set_len(0).unwrap();
     }
 
-    pub fn put_dcs(&mut self, epoch: EpochIndex, timest: u64, dcs: &Vec<(u64, GfxDrawCall)>) {
-        d!("put_dcs({epoch}, {timest}, {dcs:?})");
+    pub fn put_dcs(
+        &mut self,
+        epoch: EpochIndex,
+        batch_id: BatchGuardId,
+        timest: u64,
+        dcs: &Vec<(u64, GfxDrawCall)>,
+    ) {
+        d!("put_dcs({epoch}, {batch_id}, {timest}, {dcs:?})");
         0u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
+        batch_id.encode(&mut self.buf).unwrap();
         timest.encode(&mut self.buf).unwrap();
         dcs.encode(&mut self.buf).unwrap();
     }
 
+    pub fn put_start_batch(&mut self, epoch: EpochIndex, batch_id: BatchGuardId) {
+        d!("put_start_batch({epoch}, {batch_id})");
+        1u8.encode(&mut self.buf).unwrap();
+        batch_id.encode(&mut self.buf).unwrap();
+    }
+
+    pub fn put_end_batch(&mut self, epoch: EpochIndex, batch_id: BatchGuardId) {
+        d!("put_end_batch({epoch}, {batch_id})");
+        2u8.encode(&mut self.buf).unwrap();
+        batch_id.encode(&mut self.buf).unwrap();
+    }
+
     pub fn put_tex(&mut self, epoch: EpochIndex, tex: GfxTextureId, tag: DebugTag) {
         d!("put_tex({epoch}, {tex}, {tag:?})");
-        1u8.encode(&mut self.buf).unwrap();
+        3u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         tex.encode(&mut self.buf).unwrap();
         tag.encode(&mut self.buf).unwrap();
@@ -71,7 +90,7 @@ impl Trax {
         buftype: u8,
     ) {
         d!("put_verts({epoch}, ..., {buf}, {tag:?}, {buftype})");
-        2u8.encode(&mut self.buf).unwrap();
+        4u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         verts.encode(&mut self.buf).unwrap();
         buf.encode(&mut self.buf).unwrap();
@@ -87,29 +106,23 @@ impl Trax {
         buftype: u8,
     ) {
         d!("put_idxs({epoch}, ..., {buf}, {tag:?}, {buftype})");
-        3u8.encode(&mut self.buf).unwrap();
+        5u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         idxs.encode(&mut self.buf).unwrap();
         buf.encode(&mut self.buf).unwrap();
         tag.encode(&mut self.buf).unwrap();
         buftype.encode(&mut self.buf).unwrap();
     }
-
-    pub fn put_stat(&mut self, code: u8) {
-        d!("put_stat({code})");
-        code.encode(&mut self.buf).unwrap();
-    }
-
     pub fn del_tex(&mut self, epoch: EpochIndex, tex: GfxTextureId, tag: DebugTag) {
         d!("del_tex({epoch}, {tex}, {tag:?})");
-        4u8.encode(&mut self.buf).unwrap();
+        6u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         tex.encode(&mut self.buf).unwrap();
         tag.encode(&mut self.buf).unwrap();
     }
     pub fn del_buf(&mut self, epoch: EpochIndex, buf: GfxBufferId, tag: DebugTag, buftype: u8) {
         d!("del_buf({epoch}, {buf}, {tag:?}, {buftype})");
-        5u8.encode(&mut self.buf).unwrap();
+        7u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         buf.encode(&mut self.buf).unwrap();
         tag.encode(&mut self.buf).unwrap();
@@ -118,15 +131,20 @@ impl Trax {
 
     pub fn set_curr(&mut self, dc: u64) {
         d!("set_curr({dc})");
-        6u8.encode(&mut self.buf).unwrap();
+        8u8.encode(&mut self.buf).unwrap();
         dc.encode(&mut self.buf).unwrap();
         self.flush();
     }
     pub fn set_instr(&mut self, idx: usize) {
         d!("set_instr({idx})");
-        7u8.encode(&mut self.buf).unwrap();
+        9u8.encode(&mut self.buf).unwrap();
         idx.encode(&mut self.buf).unwrap();
         self.flush();
+    }
+
+    pub fn put_stat(&mut self, code: u8) {
+        d!("put_stat({code})");
+        code.encode(&mut self.buf).unwrap();
     }
 
     pub fn flush(&mut self) {

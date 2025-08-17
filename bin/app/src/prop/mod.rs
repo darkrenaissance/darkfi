@@ -30,7 +30,7 @@ use crate::{
 };
 
 mod guard;
-pub use guard::PropertyAtomicGuard;
+pub use guard::{BatchGuardId, BatchGuardPtr, PropertyAtomicGuard};
 mod wrap;
 pub use wrap::{
     PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyRect, PropertyStr,
@@ -203,7 +203,7 @@ pub enum ModifyAction {
     Push(usize),
 }
 
-type ModifyPublisher = PublisherPtr<(Role, ModifyAction)>;
+type ModifyPublisher = PublisherPtr<(Role, ModifyAction, BatchGuardPtr)>;
 
 pub type PropertyPtr = Arc<Property>;
 pub type PropertyWeak = Weak<Property>;
@@ -364,11 +364,13 @@ impl Property {
     // Set
 
     /// This will clear all values, resetting them to the default
-    pub fn clear_values(self: Arc<Self>, role: Role) {
-        let vals = &mut self.vals.lock().unwrap();
-        vals.clear();
-        vals.resize(self.array_len, PropertyValue::Unset);
-        self.on_modify.notify((role, ModifyAction::Clear));
+    pub fn clear_values(self: Arc<Self>, atom: &mut PropertyAtomicGuard, role: Role) {
+        {
+            let vals = &mut self.vals.lock().unwrap();
+            vals.clear();
+            vals.resize(self.array_len, PropertyValue::Unset);
+        }
+        atom.add(self, role, ModifyAction::Clear);
     }
 
     fn set_raw_value(&self, i: usize, val: PropertyValue) -> Result<()> {
@@ -564,39 +566,66 @@ impl Property {
         cache[i] = val;
         Ok(())
     }
-    pub fn set_cache_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
+    pub fn set_cache_f32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: f32,
+    ) -> Result<()> {
         self.set_cache(i, PropertyValue::Float32(val))?;
-        self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
+        atom.add(self, role, ModifyAction::SetCache(vec![i]));
         Ok(())
     }
-    pub fn set_cache_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
+    pub fn set_cache_u32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: u32,
+    ) -> Result<()> {
         self.set_cache(i, PropertyValue::Uint32(val))?;
-        self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
+        atom.add(self, role, ModifyAction::SetCache(vec![i]));
         Ok(())
     }
 
-    pub fn set_cache_f32_multi(&self, role: Role, changes: Vec<(usize, f32)>) -> Result<()> {
+    pub fn set_cache_f32_multi(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        changes: Vec<(usize, f32)>,
+    ) -> Result<()> {
         let mut idxs = vec![];
         for (idx, val) in changes {
             self.set_cache(idx, PropertyValue::Float32(val))?;
             idxs.push(idx);
         }
-        self.on_modify.notify((role, ModifyAction::SetCache(idxs)));
+        atom.add(self, role, ModifyAction::SetCache(idxs));
         Ok(())
     }
-    pub fn set_cache_u32_range(&self, role: Role, changes: Vec<(usize, u32)>) -> Result<()> {
+    pub fn set_cache_u32_range(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        changes: Vec<(usize, u32)>,
+    ) -> Result<()> {
         let mut idxs = vec![];
         for (idx, val) in changes {
             self.set_cache(idx, PropertyValue::Uint32(val))?;
             idxs.push(idx);
         }
-        self.on_modify.notify((role, ModifyAction::SetCache(idxs)));
+        atom.add(self, role, ModifyAction::SetCache(idxs));
         Ok(())
     }
 
     // Push
 
-    fn push_value(&self, role: Role, value: PropertyValue) -> Result<usize> {
+    fn push_value(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        value: PropertyValue,
+    ) -> Result<usize> {
         if self.is_bounded() {
             return Err(Error::PropertyIsBounded)
         }
@@ -606,33 +635,62 @@ impl Property {
         vals.push(value);
         drop(vals);
 
-        self.on_modify.notify((role, ModifyAction::Push(i)));
+        atom.add(self, role, ModifyAction::Push(i));
         Ok(i)
     }
 
-    pub fn push_null(&self, role: Role) -> Result<usize> {
-        self.push_value(role, PropertyValue::Null)
+    pub fn push_null(self: Arc<Self>, atom: &mut PropertyAtomicGuard, role: Role) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::Null)
     }
-
-    pub fn push_bool(&self, role: Role, val: bool) -> Result<usize> {
-        self.push_value(role, PropertyValue::Bool(val))
+    pub fn push_bool(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: bool,
+    ) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::Bool(val))
     }
-    pub fn push_u32(&self, role: Role, val: u32) -> Result<usize> {
+    pub fn push_u32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: u32,
+    ) -> Result<usize> {
         // TODO: none of these push calls are enforcing constraints that are required
         // see the set_XX calls.
-        self.push_value(role, PropertyValue::Uint32(val))
+        self.push_value(atom, role, PropertyValue::Uint32(val))
     }
-    pub fn push_f32(&self, role: Role, val: f32) -> Result<usize> {
-        self.push_value(role, PropertyValue::Float32(val))
+    pub fn push_f32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: f32,
+    ) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::Float32(val))
     }
-    pub fn push_str<S: Into<String>>(&self, role: Role, val: S) -> Result<usize> {
-        self.push_value(role, PropertyValue::Str(val.into()))
+    pub fn push_str<S: Into<String>>(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: S,
+    ) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::Str(val.into()))
     }
-    pub fn push_enum<S: Into<String>>(&self, role: Role, val: S) -> Result<usize> {
-        self.push_value(role, PropertyValue::Enum(val.into()))
+    pub fn push_enum<S: Into<String>>(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: S,
+    ) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::Enum(val.into()))
     }
-    pub fn push_node_id(&self, role: Role, val: SceneNodeId) -> Result<usize> {
-        self.push_value(role, PropertyValue::SceneNodeId(val))
+    pub fn push_node_id(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: SceneNodeId,
+    ) -> Result<usize> {
+        self.push_value(atom, role, PropertyValue::SceneNodeId(val))
     }
 
     // Get
@@ -775,7 +833,7 @@ impl Property {
 
     // Subs
 
-    pub fn subscribe_modify(&self) -> Subscription<(Role, ModifyAction)> {
+    pub fn subscribe_modify(&self) -> Subscription<(Role, ModifyAction, BatchGuardPtr)> {
         self.on_modify.clone().subscribe()
     }
 
