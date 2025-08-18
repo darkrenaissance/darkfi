@@ -70,7 +70,8 @@ use net::ZeroMQAdapter;
 #[cfg(feature = "enable-plugins")]
 use {
     darkfi_serial::{deserialize, Decodable, Encodable},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyStr, Role},
+    gfx::RenderApi,
+    prop::{PropertyBool, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     std::io::Cursor,
     ui::chatview,
@@ -187,8 +188,9 @@ impl God {
         {
             let ex = bg_ex.clone();
             let cv = cv_app_is_setup.clone();
+            let render_api = render_api.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, cv).await;
+                load_plugins(ex, sg_root, render_api, cv).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -260,7 +262,12 @@ impl std::fmt::Debug for God {
 static GOD: OnceLock<God> = OnceLock::new();
 
 #[cfg(feature = "enable-plugins")]
-async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) {
+async fn load_plugins(
+    ex: ExecutorPtr,
+    sg_root: SceneNodePtr,
+    render_api: RenderApi,
+    cv: Arc<CondVar>,
+) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
     sg_root.link(plugin.clone());
@@ -276,9 +283,10 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
+    let render_api2 = render_api.clone();
     let listen_recv = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api2.make_guard(gfxtag!("darkirc msg recv"));
 
             let mut cur = Cursor::new(&data);
             let channel = String::decode(&mut cur).unwrap();
@@ -351,7 +359,7 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
         while let Ok(data) = recvr.recv().await {
             let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api.make_guard(gfxtag!("netstatus change"));
 
             if peers_count == 0 {
                 net0_is_visible.set(atom, true);
