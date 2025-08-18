@@ -156,8 +156,7 @@ impl ZeroMQAdapter {
             Command::GetChildren => {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 debug!(target: "req", "{cmd:?}({node_path})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 let children: Vec<_> = node
                     .get_children()
@@ -183,8 +182,7 @@ impl ZeroMQAdapter {
             Command::GetProperties => {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 debug!(target: "req", "{cmd:?}({node_path})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 VarInt(node.props.len() as u64).encode(&mut reply).unwrap();
                 for prop in &node.props {
@@ -213,8 +211,7 @@ impl ZeroMQAdapter {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let prop_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {prop_name})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
                 prop.typ.encode(&mut reply).unwrap();
@@ -242,8 +239,7 @@ impl ZeroMQAdapter {
                 let prop_type = PropertyType::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {prop_name}, {prop_i}, {prop_type:?})");
 
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
                 let atom = &mut self.render_api.make_guard();
@@ -566,8 +562,7 @@ impl ZeroMQAdapter {
                 let arg_data = Vec::<u8>::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {method_name}, ...)");
 
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let result = node.call_method(&method_name, arg_data).await?;
                 result.encode(&mut reply).unwrap();
             }

@@ -85,7 +85,7 @@ impl PluginSettings {
         match node {
             Some(n) => {
                 let node_ptr = Arc::new(n);
-                self.setting_root.clone().link(node_ptr.clone().into());
+                self.setting_root.link(node_ptr.clone().into());
                 Some(node_ptr)
             }
             None => None,

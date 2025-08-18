@@ -74,7 +74,7 @@ impl Window {
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
         let scale = PropertyFloat32::wrap(
-            &setting_root.clone().lookup_node("/scale").unwrap(),
+            &setting_root.lookup_node("/scale").unwrap(),
             Role::Internal,
             "value",
             0,

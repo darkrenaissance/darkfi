@@ -263,7 +263,7 @@ static GOD: OnceLock<God> = OnceLock::new();
 async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
-    sg_root.clone().link(plugin.clone());
+    sg_root.link(plugin.clone());
 
     let darkirc = create_darkirc("darkirc");
     let darkirc = darkirc
@@ -289,7 +289,7 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
 
             let node_path = format!("/window/{channel}_chat_layer/content/chatty");
             t!("Attempting to relay message to {node_path}");
-            let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
+            let Some(chatview) = sg_root2.lookup_node(&node_path) else {
                 d!("Ignoring message since {node_path} doesn't exist");
                 continue
             };
@@ -309,26 +309,26 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
 
             // Apply coloring when you get a message
             let chat_path = format!("/window/{channel}_chat_layer");
-            let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
+            let chat_layer = sg_root2.lookup_node(chat_path).unwrap();
             if chat_layer.get_property_bool("is_visible").unwrap() {
                 continue
             }
 
             let node_path = format!("/window/menu_layer/{channel}_channel_label");
-            let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
+            let menu_label = sg_root2.lookup_node(&node_path).unwrap();
             let prop = menu_label.get_property("text_color").unwrap();
             if msg.contains(&darkirc_nick.get()) {
                 // Nick highlight
-                prop.clone().set_f32(atom, Role::App, 0, 0.56).unwrap();
-                prop.clone().set_f32(atom, Role::App, 1, 0.61).unwrap();
-                prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
+                prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
+                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             } else {
                 // Normal channel activity
-                prop.clone().set_f32(atom, Role::App, 0, 0.36).unwrap();
-                prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-                prop.clone().set_f32(atom, Role::App, 2, 0.51).unwrap();
-                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
+                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
         }
     });
@@ -338,10 +338,10 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
     let sg_root2 = sg_root.clone();
     let listen_connect = ex.spawn(async move {
         cv.wait().await;
-        let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
-        let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
-        let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
-        let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
+        let net0 = sg_root2.lookup_node("/window/netstatus_layer/net0").unwrap();
+        let net1 = sg_root2.lookup_node("/window/netstatus_layer/net1").unwrap();
+        let net2 = sg_root2.lookup_node("/window/netstatus_layer/net2").unwrap();
+        let net3 = sg_root2.lookup_node("/window/netstatus_layer/net3").unwrap();
 
         let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
         let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();

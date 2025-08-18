@@ -131,8 +131,8 @@ impl App {
             })
             .await;
 
-        self.sg_root.clone().link(window.clone());
-        self.sg_root.clone().link(setting_root.clone());
+        self.sg_root.link(window.clone());
+        self.sg_root.link(setting_root.clone());
 
         schema::make(&self, window.clone(), &i18n_fish).await;
 
@@ -185,12 +185,12 @@ impl App {
         d!("Starting app epoch={epoch}");
         let mut atom = PropertyAtomicGuard::none();
 
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         let prop = window_node.get_property("screen_size").unwrap();
         // We can only do this once the window has been created in miniquad.
         let (screen_width, screen_height) = miniquad::window::screen_size();
-        prop.clone().set_f32(&mut atom, Role::App, 0, screen_width).unwrap();
-        prop.clone().set_f32(&mut atom, Role::App, 1, screen_height).unwrap();
+        prop.set_f32(&mut atom, Role::App, 0, screen_width).unwrap();
+        prop.set_f32(&mut atom, Role::App, 1, screen_height).unwrap();
 
         drop(atom);
 
@@ -205,7 +205,7 @@ impl App {
     }
 
     pub fn init(&self) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.init(),
             _ => panic!("wrong pimpl"),
@@ -213,7 +213,7 @@ impl App {
     }
 
     pub fn stop(&self) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.stop(),
             _ => panic!("wrong pimpl"),
@@ -222,14 +222,14 @@ impl App {
 
     async fn trigger_draw(&self) {
         let atom = &mut self.render_api.make_guard();
-        let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
+        let window_node = self.sg_root.lookup_node("/window").expect("no window attached!");
         match window_node.pimpl() {
             Pimpl::Window(win) => win.draw(atom).await,
             _ => panic!("wrong pimpl"),
         }
     }
     async fn start_procs(&self, event_pub: GraphicsEventPublisherPtr) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.clone().start(event_pub, self.ex.clone()).await,
             _ => panic!("wrong pimpl"),

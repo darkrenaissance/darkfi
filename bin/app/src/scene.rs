@@ -192,7 +192,7 @@ impl SceneNode {
         self.pimpl.get().unwrap()
     }
 
-    pub fn link(self: Arc<Self>, child: SceneNodePtr) {
+    pub fn link(self: &Arc<Self>, child: SceneNodePtr) {
         let mut childs_parent = child.parent.write().unwrap();
         assert!(childs_parent.is_none());
         *childs_parent = Some(Arc::downgrade(&self));
@@ -206,11 +206,11 @@ impl SceneNode {
         self.children.read().unwrap().clone()
     }
 
-    pub fn lookup_node<P: Into<ScenePath>>(self: Arc<Self>, path: P) -> Option<SceneNodePtr> {
+    pub fn lookup_node<P: Into<ScenePath>>(self: &Arc<Self>, path: P) -> Option<SceneNodePtr> {
         let path: ScenePath = path.into();
         let mut path = path.0;
         if path.is_empty() {
-            return Some(self)
+            return Some(self.clone())
         }
         let child_name = path.pop_front().unwrap();
         for child in self.get_children() {

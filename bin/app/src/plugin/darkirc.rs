@@ -184,7 +184,7 @@ impl DarkIrc {
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.clone().link(setting_root.clone());
+        node_ref.link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
