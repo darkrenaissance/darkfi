@@ -22,6 +22,7 @@ use crate::{
         App,
     },
     expr,
+    gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
@@ -255,7 +256,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let render_api = app.render_api.clone();
         let select_channel = move || {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("channel_clicked"));
             info!(target: "app::menu", "clicked: {channel}!");
             chatview_is_visible.set(atom, true);
             menu_is_visible.set(atom, false);

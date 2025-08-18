@@ -24,7 +24,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    gfx::RenderApi,
+    gfx::{gfxtag, RenderApi},
     prop::{PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
@@ -242,7 +242,8 @@ impl ZeroMQAdapter {
                 let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
-                let atom = &mut self.render_api.make_guard();
+                let atom =
+                    &mut self.render_api.make_guard(gfxtag!("ZeroMQAdapter::SetPropertyValue"));
 
                 match prop_type {
                     PropertyType::Null => {

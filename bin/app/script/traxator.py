@@ -44,9 +44,6 @@ Instr = Union[SetScale, Move, SetPos, ApplyView, Draw]
 def hex(dat):
     return " ".join(f"{b:02x}" for b in dat)
 
-def read_tag(cur):
-    return serial.decode_str(cur)
-
 DrawCall = namedtuple("DrawCall", [
     "dc_id",
     "instrs",
@@ -94,16 +91,16 @@ def read_instr(cur):
         case 4:
             vert_id = serial.read_u32(cur)
             vert_epoch = serial.read_u32(cur)
-            vert_tag = serial.decode_opt(cur, read_tag)
+            vert_tag = serial.decode_opt(cur, serial.decode_str)
             vert_buftype = serial.read_u8(cur)
             index_id = serial.read_u32(cur)
             index_epoch = serial.read_u32(cur)
-            index_tag = serial.decode_opt(cur, read_tag)
+            index_tag = serial.decode_opt(cur, serial.decode_str)
             index_buftype = serial.read_u8(cur)
             def read_tex(cur):
                 id = serial.read_u32(cur)
                 epoch = serial.read_u32(cur)
-                tag = serial.decode_opt(cur, read_tag)
+                tag = serial.decode_opt(cur, serial.decode_str)
                 return (id, epoch, tag)
             tex = serial.decode_opt(cur, read_tex)
             num_elements = serial.read_i32(cur)
@@ -145,6 +142,7 @@ class PutDrawCall:
 class PutStartBatch:
     epoch: int
     batch_id: int
+    debug_str: str
     stat: int
 
 @dataclass
@@ -240,19 +238,20 @@ def read_section(f):
         case 1:
             epoch = serial.read_u32(cur)
             batch_id = serial.read_u32(cur)
+            debug_str = serial.decode_opt(cur, serial.decode_str)
             stat = serial.read_u8(cur)
             #print(f"put_start_batch epoch={epoch}, batch_id={batch_id}, stat={stat}")
-            sect = PutStartBatch(epoch, batch_id, timest, dcs, stats)
+            sect = PutStartBatch(epoch, batch_id, debug_str, stats)
         case 2:
             epoch = serial.read_u32(cur)
             batch_id = serial.read_u32(cur)
             stat = serial.read_u8(cur)
             #print(f"put_end_batch epoch={epoch}, batch_id={batch_id}, stat={stat}")
-            sect = PutEndBatch(epoch, batch_id, timest, dcs, stats)
+            sect = PutEndBatch(epoch, batch_id, stats)
         case 3:
             epoch = serial.read_u32(cur)
             tex = serial.read_u32(cur)
-            tag = serial.decode_opt(cur, read_tag)
+            tag = serial.decode_opt(cur, serial.decode_str)
             stat = serial.read_u8(cur)
             #print(f"put_tex epoch={epoch}, tex={tex}, tag='{tag}', stat={stat}")
             sect = PutTex(epoch, tex, tag, stat)
@@ -260,7 +259,7 @@ def read_section(f):
             epoch = serial.read_u32(cur)
             verts = serial.decode_arr(cur, read_vert)
             buf = serial.read_u32(cur)
-            tag = serial.decode_opt(cur, read_tag)
+            tag = serial.decode_opt(cur, serial.decode_str)
             buftype = serial.read_u8(cur)
             stat = serial.read_u8(cur)
             #print(f"put_verts epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")
@@ -269,7 +268,7 @@ def read_section(f):
             epoch = serial.read_u32(cur)
             idxs = serial.decode_arr(cur, serial.read_u16)
             buf = serial.read_u32(cur)
-            tag = serial.decode_opt(cur, read_tag)
+            tag = serial.decode_opt(cur, serial.decode_str)
             buftype = serial.read_u8(cur)
             stat = serial.read_u8(cur)
             #print(f"put_idxs epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")
@@ -277,14 +276,14 @@ def read_section(f):
         case 6:
             epoch = serial.read_u32(cur)
             buf = serial.read_u32(cur)
-            tag = serial.decode_opt(cur, read_tag)
+            tag = serial.decode_opt(cur, serial.decode_str)
             stat = serial.read_u8(cur)
             #print(f"del_tex epoch={epoch}, buf={buf}, tag='{tag}', stat={stat}")
             sect = DelTex(epoch, buf, tag, stat)
         case 7:
             epoch = serial.read_u32(cur)
             buf = serial.read_u32(cur)
-            tag = serial.decode_opt(cur, read_tag)
+            tag = serial.decode_opt(cur, serial.decode_str)
             buftype = serial.read_u8(cur)
             stat = serial.read_u8(cur)
             #print(f"del_buf epoch={epoch}, buf={buf}, tag='{tag}', buftype={buftype}, stat={stat}")

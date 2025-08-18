@@ -23,7 +23,7 @@ use std::sync::{Arc, Weak};
 use crate::{
     app::locale::read_locale_ftl,
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
+        gfxtag, GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
@@ -124,7 +124,7 @@ impl Window {
                     panic!("self destroyed before modify_task was stopped!");
                 };
 
-                let atom = &mut self_.render_api.make_guard();
+                let atom = &mut self_.render_api.make_guard(gfxtag!("Window::resize_task"));
                 // Now update the properties
                 screen_size2.set(atom, size);
 

@@ -62,10 +62,16 @@ impl Trax {
         dcs.encode(&mut self.buf).unwrap();
     }
 
-    pub fn put_start_batch(&mut self, epoch: EpochIndex, batch_id: BatchGuardId) {
+    pub fn put_start_batch(
+        &mut self,
+        epoch: EpochIndex,
+        batch_id: BatchGuardId,
+        debug_str: Option<&'static str>,
+    ) {
         d!("put_start_batch({epoch}, {batch_id})");
         1u8.encode(&mut self.buf).unwrap();
         batch_id.encode(&mut self.buf).unwrap();
+        debug_str.encode(&mut self.buf).unwrap();
     }
 
     pub fn put_end_batch(&mut self, epoch: EpochIndex, batch_id: BatchGuardId) {

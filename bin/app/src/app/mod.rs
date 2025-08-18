@@ -27,7 +27,7 @@ use crate::android;
 
 use crate::{
     error::Error,
-    gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi},
+    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, RenderApi},
     plugin::PluginSettings,
     prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
@@ -221,7 +221,7 @@ impl App {
     }
 
     async fn trigger_draw(&self) {
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("App::trigger_draw"));
         let window_node = self.sg_root.lookup_node("/window").expect("no window attached!");
         match window_node.pimpl() {
             Pimpl::Window(win) => win.draw(atom).await,

@@ -26,6 +26,7 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
+    gfx::gfxtag,
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -153,7 +154,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("zoom_out shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
@@ -181,7 +182,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("zoom_in shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });

@@ -266,8 +266,8 @@ impl RenderApi {
         self.send(method);
     }
 
-    fn start_batch(&self, batch_id: BatchGuardId) {
-        let method = GraphicsMethod::StartBatch(batch_id);
+    fn start_batch(&self, batch_id: BatchGuardId, debug_str: Option<&'static str>) {
+        let method = GraphicsMethod::StartBatch((batch_id, debug_str));
         self.send(method);
     }
     fn end_batch(&self, batch_id: BatchGuardId) {
@@ -275,9 +275,9 @@ impl RenderApi {
         self.send(method);
     }
 
-    pub fn make_guard(&self) -> PropertyAtomicGuard {
+    pub fn make_guard(&self, debug_str: Option<&'static str>) -> PropertyAtomicGuard {
         let r = self.clone();
-        let start_batch = Box::new(move |bid| r.start_batch(bid));
+        let start_batch = Box::new(move |bid| r.start_batch(bid, debug_str));
         let r = self.clone();
         let end_batch = Box::new(move |bid| r.end_batch(bid));
         PropertyAtomicGuard::new(start_batch, end_batch)
@@ -676,7 +676,7 @@ pub enum GraphicsMethod {
     NewIndexBuffer((Vec<u16>, GfxBufferId, DebugTag)),
     DeleteBuffer((GfxBufferId, DebugTag, u8)),
     ReplaceDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)> },
-    StartBatch(BatchGuardId),
+    StartBatch((BatchGuardId, Option<&'static str>)),
     EndBatch(BatchGuardId),
 }
 
@@ -691,7 +691,7 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::ReplaceDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
                 write!(f, "ReplaceDrawCalls({bid})")
             }
-            Self::StartBatch(bid) => write!(f, "StartBatch({bid})"),
+            Self::StartBatch((bid, debug_str)) => write!(f, "StartBatch({bid}, {debug_str:?})"),
             Self::EndBatch(bid) => write!(f, "EndBatch({bid})"),
         }
     }
@@ -953,7 +953,8 @@ impl Stage {
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
             GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
-                t!("Commit dc to {batch_id}");
+                let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
+                t!("Commit dc to {batch_id}: {debug_strs:?}");
                 let batch = self.batches.get_mut(batch_id).unwrap();
                 let dcs = std::mem::take(dcs);
                 batch.push(GraphicsMethod::ReplaceDrawCalls {
@@ -966,8 +967,8 @@ impl Stage {
                 }
                 Ok(())
             }
-            GraphicsMethod::StartBatch(batch_id) => {
-                t!("Start batch {batch_id}");
+            GraphicsMethod::StartBatch((batch_id, debug_str)) => {
+                t!("Start batch {batch_id}: {debug_str:?}");
                 if !self.batches.insert(*batch_id, vec![]).is_none() {
                     panic!("Batch {batch_id} already open!")
                 }
@@ -1184,8 +1185,8 @@ impl Stage {
             GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
                 trax.put_dcs(epoch, *batch_id, *timest, dcs);
             }
-            GraphicsMethod::StartBatch(batch_id) => {
-                trax.put_start_batch(epoch, *batch_id);
+            GraphicsMethod::StartBatch((batch_id, debug_str)) => {
+                trax.put_start_batch(epoch, *batch_id, *debug_str);
             }
             GraphicsMethod::EndBatch(batch_id) => {
                 trax.put_end_batch(epoch, *batch_id);

@@ -27,7 +27,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
@@ -304,7 +304,7 @@ impl UIObject for EmojiPicker {
             return false
         }
         t!("handle_mouse_wheel()");
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("EmojiPicker::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
@@ -334,7 +334,7 @@ impl UIObject for EmojiPicker {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("EmojiPicker::handle_touch"));
 
         let rect = self.rect.get();
         let pos = touch_pos - Point::new(rect.x, rect.y);
@@ -395,7 +395,7 @@ impl UIObject for EmojiPicker {
 
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard();
+        let atom = self.render_api.make_guard(gfxtag!("EmojiPicker::drop"));
         self.render_api.replace_draw_calls(
             atom.batch_id,
             unixtime(),

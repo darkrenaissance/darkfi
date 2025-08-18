@@ -29,6 +29,7 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
+    gfx::gfxtag,
     plugin::darkirc,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
@@ -291,7 +292,7 @@ pub async fn make(
     let render_api = app.render_api.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
-        let atom = &mut render_api.make_guard();
+        let atom = &mut render_api.make_guard(gfxtag!("goback action"));
 
         let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
@@ -847,7 +848,7 @@ pub async fn make(
         let chatview_node = chatview_node.clone();
         let render_api = render_api.clone();
         async move {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("sendmsg action"));
 
             let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: {channel}");
@@ -972,7 +973,7 @@ pub async fn make(
 
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("emoji click action"));
 
             if cfg!(target_os = "android") {
                 let keyb_height = android_keyboard_height();
@@ -1049,7 +1050,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked /nick");
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("nickcmd_clicked action"));
             // This will autohide this popup due to ending in a space.
             // Setting the property will retrigger the logic whether to show popup.
             editz_text2.set(atom, "/nick ");
@@ -1315,7 +1316,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked copy");
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("copy_clicked action"));
             actions_is_visible2.set(atom, false);
             let select_text = editz_select_text2.get_str(0).unwrap();
             miniquad::window::clipboard_set(&select_text);
@@ -1342,7 +1343,7 @@ pub async fn make(
     let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("paste_clicked action"));
             if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
@@ -1406,7 +1407,7 @@ pub async fn make(
     let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("paste_req action"));
             pasta_is_visible2.set(atom, true);
         }
     });
@@ -1492,7 +1493,7 @@ pub async fn make(
     let render_api = app.render_api.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("paste_clicked action"));
             if let Some(text) = miniquad::window::clipboard_get() {
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
@@ -1513,7 +1514,7 @@ pub async fn make(
         let render_api = app.render_api.clone();
         let editz_select_task = app.ex.spawn(async move {
             while let Ok(_) = editz_select_sub.receive().await {
-                let atom = &mut render_api.make_guard();
+                let atom = &mut render_api.make_guard(gfxtag!("edit select task"));
                 if editz_select_text.is_null(0).unwrap() {
                     info!(target: "app::chat", "selection changed: null");
                     actions_is_visible.set(atom, false);
@@ -1533,7 +1534,7 @@ pub async fn make(
     let render_api = app.render_api.clone();
     let editz_text_task = app.ex.spawn(async move {
         while let Ok(_) = editz_text_sub.receive().await {
-            let atom = &mut render_api.make_guard();
+            let atom = &mut render_api.make_guard(gfxtag!("chatedit txt changed"));
             pasta_is_visible.set(atom, false);
 
             let text = editz_text.get();

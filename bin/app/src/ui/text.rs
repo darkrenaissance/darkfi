@@ -215,7 +215,7 @@ impl UIObject for Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard();
+        let atom = self.render_api.make_guard(gfxtag!("Text::drop"));
         self.render_api.replace_draw_calls(
             atom.batch_id,
             unixtime(),

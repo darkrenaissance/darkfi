@@ -177,7 +177,7 @@ impl UIObject for VectorArt {
 
 impl Drop for VectorArt {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard();
+        let atom = self.render_api.make_guard(gfxtag!("VectorArt::drop"));
         self.render_api.replace_draw_calls(
             atom.batch_id,
             unixtime(),

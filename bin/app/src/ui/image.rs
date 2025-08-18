@@ -223,7 +223,7 @@ impl UIObject for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard();
+        let atom = self.render_api.make_guard(gfxtag!("Image::drop"));
         self.render_api.replace_draw_calls(
             atom.batch_id,
             unixtime(),

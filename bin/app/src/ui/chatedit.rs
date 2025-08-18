@@ -789,7 +789,7 @@ impl ChatEdit {
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_move({touch_pos:?})");
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_touch_move"));
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -1240,7 +1240,8 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let atom = &mut self_.render_api.make_guard();
+        let atom =
+            &mut self_.render_api.make_guard(gfxtag!("ChatEdit::process_insert_text_method"));
         self_.insert(&text, atom).await;
         self_.redraw(atom).await;
         true
@@ -1292,7 +1293,7 @@ impl ChatEdit {
             return
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_android_event"));
         match ev {
             AndroidSuggestEvent::Init => {
                 let mut editor = self.lock_editor().await;
@@ -1339,7 +1340,7 @@ impl ChatEdit {
 
 impl Drop for ChatEdit {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard();
+        let atom = self.render_api.make_guard(gfxtag!("ChatEdit::drop"));
         self.render_api.replace_draw_calls(
             atom.batch_id,
             unixtime(),
@@ -1460,7 +1461,7 @@ impl UIObject for ChatEdit {
 
                 // Invert the bool
                 self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
-                let atom = &mut self_.render_api.make_guard();
+                let atom = &mut self_.render_api.make_guard(gfxtag!("ChatEdit::start"));
                 self_.redraw_cursor(atom.batch_id).await;
             }
         });
@@ -1532,7 +1533,7 @@ impl UIObject for ChatEdit {
             repeater.key_down(PressedKey::Char(key), repeat)
         };
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_char"));
 
         if mods.ctrl || mods.alt || mods.logo {
             if repeat {
@@ -1575,7 +1576,7 @@ impl UIObject for ChatEdit {
             t!("Key {:?} has {} actions", key, actions);
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_key_down"));
 
         let mut is_handled = false;
         for _ in 0..actions {
@@ -1607,7 +1608,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_btn_down"));
 
         // clicking inside box will:
         // 1. make it active
@@ -1662,7 +1663,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_move"));
 
         // if active and selection_active, then use x to modify the selection.
         // also implement scrolling when cursor is to the left or right
@@ -1699,7 +1700,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.max_scroll());
@@ -1720,7 +1721,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_touch"));
 
         match phase {
             TouchPhase::Started => self.handle_touch_start(touch_pos).await,
