@@ -953,8 +953,8 @@ impl Stage {
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
             GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
-                let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
-                t!("Commit dc to {batch_id}: {debug_strs:?}");
+                //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
+                //t!("Commit dc to {batch_id}: {debug_strs:?}");
                 let batch = self.batches.get_mut(batch_id).unwrap();
                 let dcs = std::mem::take(dcs);
                 batch.push(GraphicsMethod::ReplaceDrawCalls {
@@ -967,8 +967,8 @@ impl Stage {
                 }
                 Ok(())
             }
-            GraphicsMethod::StartBatch((batch_id, debug_str)) => {
-                t!("Start batch {batch_id}: {debug_str:?}");
+            GraphicsMethod::StartBatch((batch_id, _debug_str)) => {
+                //t!("Start batch {batch_id}: {debug_str:?}");
                 if !self.batches.insert(*batch_id, vec![]).is_none() {
                     panic!("Batch {batch_id} already open!")
                 }
@@ -978,7 +978,7 @@ impl Stage {
                 Ok(())
             }
             GraphicsMethod::EndBatch(batch_id) => {
-                t!("End batch {batch_id}");
+                //t!("End batch {batch_id}");
                 let batch = self.batches.remove(batch_id).unwrap();
                 for mut method in batch {
                     let res = match &mut method {
