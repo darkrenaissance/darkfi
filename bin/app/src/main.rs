@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use clap::Parser;
 use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
 
@@ -442,14 +443,41 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     node
 }
 
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// On Linux use the X11 backend
+    #[arg(long)]
+    linux_x11_backend: bool,
+
+    /// On Linux use the wayland backend
+    #[arg(long)]
+    linux_wayland_backend: bool,
+}
+
 fn main() {
+    let args = Args::parse();
+
     GOD.get_or_init(God::new);
 
     // Reuse render_api, event_pub and text_shaper
     // No need for setup(), just wait for gfx start then call .start()
     // ZMQ, darkirc stay running
 
-    gfx::run_gui();
+    let linux_backend = if args.linux_wayland_backend {
+        if args.linux_x11_backend {
+            miniquad::conf::LinuxBackend::WaylandWithX11Fallback
+        } else {
+            miniquad::conf::LinuxBackend::WaylandOnly
+        }
+    } else if args.linux_x11_backend {
+        miniquad::conf::LinuxBackend::X11Only
+    } else {
+        miniquad::conf::LinuxBackend::WaylandWithX11Fallback
+    };
+
+    gfx::run_gui(linux_backend);
     debug!(target: "main", "Started GFX backend");
 }
 

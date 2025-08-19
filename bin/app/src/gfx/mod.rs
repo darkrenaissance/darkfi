@@ -1482,7 +1482,7 @@ impl EventHandler for Stage {
     }
 }
 
-pub fn run_gui() {
+pub fn run_gui(linux_backend: miniquad::conf::LinuxBackend) {
     let mut window_width = 1024;
     let mut window_height = 768;
     if let Ok(mut file) = File::open(get_window_size_filename()) {
@@ -1498,8 +1498,7 @@ pub fn run_gui() {
         high_dpi: true,
         window_resizable: true,
         platform: miniquad::conf::Platform {
-            linux_x11_gl: miniquad::conf::LinuxX11Gl::EGLWithGLXFallback,
-            linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
+            linux_backend,
             #[cfg(target_os = "android")]
             blocking_event_loop: true,
             android_panic_hook: false,
