@@ -524,5 +524,12 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node =
         node.setup(|me| ChatEdit::new(me, window_scale.clone(), app.render_api.clone())).await;
-    layer_node.link(node);
+    layer_node.link(node.clone());
+
+    // android: show on screen keyboard
+    let focus_task = app.ex.spawn(async move {
+        darkfi::system::sleep(1).await;
+        node.call_method("focus", vec![]).await.unwrap();
+    });
+    app.tasks.lock().unwrap().push(focus_task);
 }

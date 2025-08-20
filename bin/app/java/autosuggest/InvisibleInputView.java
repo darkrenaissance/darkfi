@@ -23,6 +23,7 @@ import android.graphics.Rect;
 import android.text.Editable;
 import android.text.Selection;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.BaseInputConnection;
@@ -104,6 +105,56 @@ public class InvisibleInputView extends View {
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
         Log.d("darkfi", "onFocusChanged: " + gainFocus);
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        Log.d("darkfi", "onKeyDown(" + keyCode + ", " + event + ")");
+        // Copied from CustomInputConnection
+        // Seems only the down event is sent.
+        int selectionStart = Selection.getSelectionStart(editable);
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DEL) {
+                if (selectionStart > 0) {
+                    editable.delete(selectionStart - 1, selectionStart);
+                    CustomInputConnection.onDeleteSurroundingText(id, 1, 0);
+                }
+            } else if (event.getKeyCode() == KeyEvent.KEYCODE_FORWARD_DEL) {
+                if (selectionStart < editable.length()) {
+                    editable.delete(selectionStart, selectionStart + 1);
+                    CustomInputConnection.onDeleteSurroundingText(id, 0, 1);
+                }
+            } else if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (selectionStart > 0) {
+                    Selection.setSelection(editable, selectionStart - 1);
+                    CustomInputConnection.onSetComposeRegion(
+                        id, selectionStart - 1, selectionStart);
+                }
+            } else if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (selectionStart < editable.length()) {
+                    Selection.setSelection(editable, selectionStart + 1);
+                    CustomInputConnection.onSetComposeRegion(
+                        id, selectionStart + 1, selectionStart + 2);
+                }
+            } else {
+                int unicodeChar = event.getUnicodeChar();
+                if (unicodeChar != 0) {
+                    int selectionEnd = Selection.getSelectionEnd(editable);
+                    if (selectionStart > selectionEnd) {
+                        int temp = selectionStart;
+                        selectionStart = selectionEnd;
+                        selectionEnd = temp;
+                    }
+
+                    String inputChar = Character.toString((char)unicodeChar);
+                    Log.d("darkfi", "-> " + inputChar + " [" + selectionStart + ", " + selectionEnd + "]");
+                    editable.replace(selectionStart, selectionEnd, inputChar);
+                    CustomInputConnection.onCompose(
+                        id, inputChar, selectionStart, true);
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     public String debugEditableStr() {
