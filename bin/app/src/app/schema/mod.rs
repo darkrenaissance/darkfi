@@ -37,7 +37,7 @@ use crate::{
 mod chat;
 mod menu;
 //mod settings;
-//mod test;
+//pub mod test;
 
 const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;

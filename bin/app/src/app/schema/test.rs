@@ -18,21 +18,15 @@
 
 use crate::{
     app::{
-        node::{
-            create_layer, create_text, create_vector_art,
-        },
+        node::{create_chatedit, create_layer, create_text, create_vector_art},
         App,
     },
     expr,
     mesh::COLOR_PURPLE,
-    prop::{
-        PropertyAtomicGuard, PropertyFloat32, Role,
-    },
+    prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{
-        Layer, Text, VectorArt,
-        VectorShape,
-    },
+    ui::{ChatEdit, Layer, Text, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
 };
 
 const LIGHTMODE: bool = false;
@@ -51,8 +45,8 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr) {
-    let atom = &mut PropertyAtomicGuard::new();
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+    let atom = &mut PropertyAtomicGuard::none();
 
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/setting/scale").unwrap(),
@@ -70,8 +64,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.link(layer_node.clone());
 
     // Create a bg mesh
@@ -100,8 +93,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         1.,
         COLOR_PURPLE,
     );
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.link(node);
 
     /*
@@ -263,7 +255,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(atom, Role::App, 1, 100.).unwrap();
     prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
     prop.set_f32(atom, Role::App, 3, 200.).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 60.).unwrap();
     node.set_property_str(
         atom,
@@ -283,15 +274,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
-            )
-        })
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
         .await;
     layer_node.link(node);
 
@@ -479,7 +462,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     layer_node.link(node);
     */
 
-    /*
     // Text edit
     let node = create_chatedit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -540,17 +522,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let node = node
-        .setup(|me| {
-            ChatEdit::new(
-                me,
-                window_scale.clone(),
-                app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
-            )
-        })
-        .await;
+    let node =
+        node.setup(|me| ChatEdit::new(me, window_scale.clone(), app.render_api.clone())).await;
     layer_node.link(node);
-    */
 }
