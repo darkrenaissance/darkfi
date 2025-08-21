@@ -16,18 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
-use futures::{future::FutureExt, pin_mut, select};
-use log::{debug, error, info, warn};
-use num_bigint::BigUint;
-use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom, RngCore};
-use sled_overlay::sled;
-use smol::{
-    channel,
-    fs::{self, File, OpenOptions},
-    io::{AsyncReadExt, AsyncWriteExt},
-    lock::RwLock,
-};
 use std::{
     collections::{HashMap, HashSet},
     io::ErrorKind,
@@ -36,15 +24,31 @@ use std::{
     time::Instant,
 };
 
+use async_trait::async_trait;
+use futures::{future::FutureExt, pin_mut, select};
+use log::{debug, error, info, warn};
+use num_bigint::BigUint;
+use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom, Rng};
+use sled_overlay::sled;
+use smol::{
+    channel,
+    fs::{self, File, OpenOptions},
+    lock::RwLock,
+};
+use url::Url;
+
 use darkfi::{
-    dht::{Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr},
+    dht::{
+        impl_dht_node_defaults, Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr, DhtSettings,
+    },
     geode::{hash_to_string, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
     net::{ChannelPtr, P2pPtr},
-    system::{PublisherPtr, StoppableTask},
+    system::{ExecutorPtr, PublisherPtr, StoppableTask},
     util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_sdk::crypto::{schnorr::SchnorrPublic, SecretKey};
+use darkfi_serial::{deserialize_async, serialize_async, SerialDecodable, SerialEncodable};
 
 /// P2P protocols
 pub mod proto;
@@ -73,6 +77,20 @@ pub mod rpc;
 pub mod tasks;
 use tasks::FetchReply;
 
+/// Bitcoin
+pub mod bitcoin;
+
+/// PoW
+pub mod pow;
+use pow::{FudPow, VerifiableNodeData};
+
+/// Equi-X
+pub mod equix;
+
+/// Settings and args
+pub mod settings;
+use settings::Args;
+
 /// Utils
 pub mod util;
 use util::{get_all_files, FileSelection};
@@ -81,41 +99,31 @@ const SLED_PATH_TREE: &[u8] = b"_fud_paths";
 const SLED_FILE_SELECTION_TREE: &[u8] = b"_fud_file_selections";
 const SLED_SCRAP_TREE: &[u8] = b"_fud_scraps";
 
-// TODO: This is not Sybil-resistant
-fn generate_node_id() -> Result<blake3::Hash> {
-    let mut rng = OsRng;
-    let mut random_data = [0u8; 32];
-    rng.fill_bytes(&mut random_data);
-    let node_id = blake3::Hash::from_bytes(random_data);
-    Ok(node_id)
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct FudNode {
+    data: VerifiableNodeData,
+    addresses: Vec<Url>,
 }
+impl_dht_node_defaults!(FudNode);
 
-/// Get or generate the node id.
-/// Fetches and saves the node id from/to a file.
-pub async fn get_node_id(node_id_path: &Path) -> Result<blake3::Hash> {
-    match File::open(node_id_path).await {
-        Ok(mut file) => {
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer).await?;
-            let mut out_buf = [0u8; 32];
-            bs58::decode(buffer).onto(&mut out_buf)?;
-            let node_id = blake3::Hash::from_bytes(out_buf);
-            Ok(node_id)
-        }
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            let node_id = generate_node_id()?;
-            let mut file = OpenOptions::new().write(true).create(true).open(node_id_path).await?;
-            file.write_all(&bs58::encode(node_id.as_bytes()).into_vec()).await?;
-            file.flush().await?;
-            Ok(node_id)
-        }
-        Err(e) => Err(e.into()),
+impl DhtNode for FudNode {
+    fn id(&self) -> blake3::Hash {
+        self.data.id()
+    }
+    fn addresses(&self) -> Vec<Url> {
+        self.addresses.clone()
     }
 }
 
 pub struct Fud {
+    /// Our own [`VerifiableNodeData`]
+    pub node_data: Arc<RwLock<VerifiableNodeData>>,
+
+    /// Our secret key (the public key is in `node_data`)
+    pub secret_key: Arc<RwLock<SecretKey>>,
+
     /// Key -> Seeders
-    seeders_router: DhtRouterPtr,
+    pub seeders_router: DhtRouterPtr<FudNode>,
 
     /// Pointer to the P2P network instance
     p2p: P2pPtr,
@@ -129,8 +137,11 @@ pub struct Fud {
     /// Chunk transfer timeout in seconds
     chunk_timeout: u64,
 
+    /// The [`FudPow`] instance
+    pub pow: Arc<RwLock<FudPow>>,
+
     /// The DHT instance
-    dht: Arc<Dht>,
+    dht: Arc<Dht<FudNode>>,
 
     /// Resources (current status of all downloads/seeds)
     resources: Arc<RwLock<HashMap<blake3::Hash, Resource>>>,
@@ -152,7 +163,7 @@ pub struct Fud {
     get_tx: channel::Sender<(blake3::Hash, PathBuf, FileSelection)>,
     get_rx: channel::Receiver<(blake3::Hash, PathBuf, FileSelection)>,
 
-    /// Currently active downloading tasks (running the `fud.fetch_resource()` method)
+    /// Currently active includingdownloading tasks (running the `fud.fetch_resource()` method)
     fetch_tasks: Arc<RwLock<HashMap<blake3::Hash, Arc<StoppableTask>>>>,
 
     /// Used to send events to fud clients
@@ -160,45 +171,71 @@ pub struct Fud {
 }
 
 #[async_trait]
-impl DhtHandler for Fud {
-    fn dht(&self) -> Arc<Dht> {
+impl DhtHandler<FudNode> for Fud {
+    fn dht(&self) -> Arc<Dht<FudNode>> {
         self.dht.clone()
     }
 
-    async fn ping(&self, channel: ChannelPtr) -> Result<DhtNode> {
+    async fn node(&self) -> FudNode {
+        FudNode {
+            data: self.node_data.read().await.clone(),
+            addresses: self
+                .p2p
+                .clone()
+                .hosts()
+                .external_addrs()
+                .await
+                .iter()
+                .filter(|addr| !addr.to_string().contains("[::]"))
+                .cloned()
+                .collect(),
+        }
+    }
+
+    async fn ping(&self, channel: ChannelPtr) -> Result<FudNode> {
         debug!(target: "fud::DhtHandler::ping()", "Sending ping to channel {}", channel.info.id);
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<FudPingReply>().await;
         let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
-        let request = FudPingRequest {};
 
+        // Send `FudPingRequest`
+        let mut rng = OsRng;
+        let request = FudPingRequest { random: rng.gen() };
         channel.send(&request).await?;
 
+        // Wait for `FudPingReply`
         let reply = msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await?;
-
         msg_subscriber.unsubscribe().await;
+
+        // Verify the signature
+        if !reply.node.data.public_key.verify(&request.random.to_be_bytes(), &reply.sig) {
+            channel.ban().await;
+            return Err(Error::InvalidSignature)
+        }
+
+        // Verify PoW
+        if let Err(e) = self.pow.write().await.verify_node(&reply.node.data).await {
+            channel.ban().await;
+            return Err(e)
+        }
 
         Ok(reply.node.clone())
     }
 
     // TODO: Optimize this
-    async fn on_new_node(&self, node: &DhtNode) -> Result<()> {
-        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", hash_to_string(&node.id));
+    async fn on_new_node(&self, node: &FudNode) -> Result<()> {
+        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", hash_to_string(&node.id()));
 
-        // If this is the first node we know about, then bootstrap
+        // If this is the first node we know about, then bootstrap and announce our files
         if !self.dht().is_bootstrapped().await {
-            self.dht().set_bootstrapped().await;
-
-            // Lookup our own node id
-            debug!(target: "fud::DhtHandler::on_new_node()", "DHT bootstrapping {}", hash_to_string(&self.dht().node_id));
-            let _ = self.lookup_nodes(&self.dht().node_id).await;
+            let _ = self.init().await;
         }
 
         // Send keys that are closer to this node than we are
-        let self_id = self.dht().node_id;
+        let self_id = self.node_data.read().await.id();
         let channel = self.get_channel(node, None).await?;
         for (key, seeders) in self.seeders_router.read().await.iter() {
-            let node_distance = BigUint::from_bytes_be(&self.dht().distance(key, &node.id));
+            let node_distance = BigUint::from_bytes_be(&self.dht().distance(key, &node.id()));
             let self_distance = BigUint::from_bytes_be(&self.dht().distance(key, &self_id));
             if node_distance <= self_distance {
                 let _ = channel
@@ -214,8 +251,8 @@ impl DhtHandler for Fud {
         Ok(())
     }
 
-    async fn fetch_nodes(&self, node: &DhtNode, key: &blake3::Hash) -> Result<Vec<DhtNode>> {
-        debug!(target: "fud::DhtHandler::fetch_nodes()", "Fetching nodes close to {} from node {}", hash_to_string(key), hash_to_string(&node.id));
+    async fn fetch_nodes(&self, node: &FudNode, key: &blake3::Hash) -> Result<Vec<FudNode>> {
+        debug!(target: "fud::DhtHandler::fetch_nodes()", "Fetching nodes close to {} from node {}", hash_to_string(key), hash_to_string(&node.id()));
 
         let channel = self.get_channel(node, None).await?;
         let msg_subsystem = channel.message_subsystem();
@@ -236,30 +273,43 @@ impl DhtHandler for Fud {
 
 impl Fud {
     pub async fn new(
+        settings: Args,
         p2p: P2pPtr,
-        basedir: PathBuf,
-        downloads_path: PathBuf,
-        chunk_timeout: u64,
-        dht: Arc<Dht>,
         sled_db: &sled::Db,
         event_publisher: PublisherPtr<FudEvent>,
+        executor: ExecutorPtr,
     ) -> Result<Self> {
-        let (get_tx, get_rx) = smol::channel::unbounded();
+        let basedir = expand_path(&settings.base_dir)?;
+        let downloads_path = match settings.downloads_path {
+            Some(downloads_path) => expand_path(&downloads_path)?,
+            None => basedir.join("downloads"),
+        };
 
-        // Hashmap used for routing
-        let seeders_router = Arc::new(RwLock::new(HashMap::new()));
+        // Run the PoW and generate a `VerifiableNodeData`
+        let mut pow = FudPow::new(settings.pow.into(), executor.clone());
+        pow.bitcoin_hash_cache.update().await?; // Fetch BTC block hashes
+        let (node_data, secret_key) = pow.generate_node().await?;
+        info!(target: "fud", "Your node ID: {}", hash_to_string(&node_data.id()));
 
+        // Geode
         info!("Instantiating Geode instance");
         let geode = Geode::new(&basedir).await?;
 
-        info!("Instantiating DHT instance");
+        // DHT
+        let dht_settings: DhtSettings = settings.dht.into();
+        let dht: Arc<Dht<FudNode>> =
+            Arc::new(Dht::<FudNode>::new(&dht_settings, p2p.clone(), executor.clone()).await);
 
+        let (get_tx, get_rx) = smol::channel::unbounded();
         let fud = Self {
-            seeders_router,
+            node_data: Arc::new(RwLock::new(node_data)),
+            secret_key: Arc::new(RwLock::new(secret_key)),
+            seeders_router: Arc::new(RwLock::new(HashMap::new())),
             p2p,
             geode,
             downloads_path,
-            chunk_timeout,
+            chunk_timeout: settings.chunk_timeout,
+            pow: Arc::new(RwLock::new(pow)),
             dht,
             path_tree: sled_db.open_tree(SLED_PATH_TREE)?,
             file_selection_tree: sled_db.open_tree(SLED_FILE_SELECTION_TREE)?,
@@ -271,14 +321,15 @@ impl Fud {
             event_publisher,
         };
 
-        fud.init().await?;
-
         Ok(fud)
     }
 
-    /// Add ourselves to `seeders_router` for the files we already have.
-    /// Skipped if we have no external address.
+    /// Bootstrap the DHT, verify our resources, add ourselves to
+    /// `seeders_router` for the resources we already have, announce our files.
     async fn init(&self) -> Result<()> {
+        info!(target: "fud::init()", "Bootstrapping the DHT...");
+        self.bootstrap().await;
+
         info!(target: "fud::init()", "Finding resources...");
         let mut resources_write = self.resources.write().await;
         for result in self.path_tree.iter() {
@@ -339,22 +390,34 @@ impl Fud {
         info!(target: "fud::init()", "Verifying resources...");
         let resources = self.verify_resources(None).await?;
 
-        let self_node = self.dht().node().await;
+        let self_node = self.node().await;
 
+        // Stop here if we have no external address
         if self_node.addresses.is_empty() {
             return Ok(());
         }
 
-        info!(target: "fud::init()", "Start seeding...");
-        let self_router_items: Vec<DhtRouterItem> = vec![self_node.into()];
-
-        for resource in resources {
+        // Add our own node as a seeder for the resources we are seeding
+        let self_router_items: Vec<DhtRouterItem<FudNode>> = vec![self_node.into()];
+        for resource in &resources {
             self.add_to_router(
                 self.seeders_router.clone(),
                 &resource.hash,
                 self_router_items.clone(),
             )
             .await;
+        }
+
+        info!(target: "fud::init()", "Announcing resources...");
+        let seeders = vec![self.node().await.into()];
+        for resource in resources {
+            let _ = self
+                .announce(
+                    &resource.hash,
+                    &FudAnnounce { key: resource.hash, seeders: seeders.clone() },
+                    self.seeders_router.clone(),
+                )
+                .await;
         }
 
         Ok(())
@@ -530,17 +593,17 @@ impl Fud {
     /// Query `nodes` to find the seeders for `key`
     async fn fetch_seeders(
         &self,
-        nodes: &Vec<DhtNode>,
+        nodes: &Vec<FudNode>,
         key: &blake3::Hash,
-    ) -> HashSet<DhtRouterItem> {
-        let self_node = self.dht().node().await;
-        let mut seeders: HashSet<DhtRouterItem> = HashSet::new();
+    ) -> HashSet<DhtRouterItem<FudNode>> {
+        let self_node = self.node().await;
+        let mut seeders: HashSet<DhtRouterItem<FudNode>> = HashSet::new();
 
         for node in nodes {
             let channel = match self.get_channel(node, None).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id));
+                    warn!(target: "fud::fetch_seeders()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id()));
                     continue;
                 }
             };
@@ -581,7 +644,8 @@ impl Fud {
             seeders.extend(reply.seeders.clone());
         }
 
-        seeders = seeders.iter().filter(|seeder| seeder.node.id != self_node.id).cloned().collect();
+        seeders =
+            seeders.iter().filter(|seeder| seeder.node.id() != self_node.id()).cloned().collect();
 
         info!(target: "fud::fetch_seeders()", "Found {} seeders for {}", seeders.len(), hash_to_string(key));
         seeders
@@ -592,7 +656,7 @@ impl Fud {
         &self,
         hash: &blake3::Hash,
         chunked: &mut ChunkedStorage,
-        seeders: &HashSet<DhtRouterItem>,
+        seeders: &HashSet<DhtRouterItem<FudNode>>,
         chunks: &HashSet<blake3::Hash>,
     ) -> Result<()> {
         let mut remaining_chunks = chunks.clone();
@@ -606,12 +670,12 @@ impl Fud {
             let channel = match self.get_channel(&seeder.node, Some(*hash)).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_chunks()", "Could not get a channel for node {}: {e}", hash_to_string(&seeder.node.id));
+                    warn!(target: "fud::fetch_chunks()", "Could not get a channel for node {}: {e}", hash_to_string(&seeder.node.id()));
                     continue;
                 }
             };
             let mut chunks_to_query = remaining_chunks.clone();
-            info!("Requesting chunks from seeder {}", hash_to_string(&seeder.node.id));
+            info!("Requesting chunks from seeder {}", hash_to_string(&seeder.node.id()));
             loop {
                 let start_time = Instant::now();
                 let msg_subsystem = channel.message_subsystem();
@@ -665,7 +729,7 @@ impl Fud {
                                     continue; // Skip to next chunk, will retry this chunk later
                                 }
 
-                                info!(target: "fud::fetch_chunks()", "Received chunk {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
+                                info!(target: "fud::fetch_chunks()", "Received chunk {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id()));
 
                                 // If we did not write the whole chunk to the filesystem,
                                 // save the chunk in the scraps.
@@ -726,7 +790,7 @@ impl Fud {
                             msg_subscriber_notfound.unsubscribe().await;
                             break; // Switch to another seeder
                         }
-                        info!(target: "fud::fetch_chunks()", "Received NOTFOUND {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id));
+                        info!(target: "fud::fetch_chunks()", "Received NOTFOUND {} from seeder {}", hash_to_string(&chunk_hash), hash_to_string(&seeder.node.id()));
                         notify_event!(self, ChunkNotFound, { hash: *hash, chunk_hash });
                     }
                 };
@@ -755,7 +819,7 @@ impl Fud {
     pub async fn fetch_metadata(
         &self,
         hash: &blake3::Hash,
-        nodes: &Vec<DhtNode>,
+        nodes: &Vec<FudNode>,
         path: &Path,
     ) -> Result<()> {
         let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
@@ -766,7 +830,7 @@ impl Fud {
             let channel = match self.get_channel(node, Some(*hash)).await {
                 Ok(channel) => channel,
                 Err(e) => {
-                    warn!(target: "fud::fetch_metadata()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id));
+                    warn!(target: "fud::fetch_metadata()", "Could not get a channel for node {}: {e}", hash_to_string(&node.id()));
                     continue;
                 }
             };
@@ -801,7 +865,7 @@ impl Fud {
             };
 
             let mut seeders = reply.seeders.clone();
-            info!(target: "fud::fetch_metadata()", "Found {} seeders for {} (from {})", seeders.len(), hash_to_string(hash), hash_to_string(&node.id));
+            info!(target: "fud::fetch_metadata()", "Found {} seeders for {} (from {})", seeders.len(), hash_to_string(hash), hash_to_string(&node.id()));
 
             msg_subscriber.unsubscribe().await;
             self.cleanup_channel(channel).await;
@@ -809,10 +873,10 @@ impl Fud {
             // 2. Request the file/chunk from the seeders
             while let Some(seeder) = seeders.pop() {
                 // Only query a seeder once
-                if queried_seeders.iter().any(|s| *s == seeder.node.id) {
+                if queried_seeders.iter().any(|s| *s == seeder.node.id()) {
                     continue;
                 }
-                queried_seeders.insert(seeder.node.id);
+                queried_seeders.insert(seeder.node.id());
 
                 if let Ok(channel) = self.get_channel(&seeder.node, Some(*hash)).await {
                     let msg_subsystem = channel.message_subsystem();
@@ -876,7 +940,7 @@ impl Fud {
                                 warn!(target: "fud::fetch_metadata()", "Received a chunk while fetching a file, the chunk did not match the file hash");
                                 continue;
                             }
-                            info!(target: "fud::fetch_metadata()", "Received chunk {} (for file {}) from seeder {}", hash_to_string(&chunk_hash), hash_to_string(hash), hash_to_string(&seeder.node.id));
+                            info!(target: "fud::fetch_metadata()", "Received chunk {} (for file {}) from seeder {}", hash_to_string(&chunk_hash), hash_to_string(hash), hash_to_string(&seeder.node.id()));
                             result = Some(FetchReply::Chunk((*reply).clone()));
                             break;
                         }
@@ -891,7 +955,7 @@ impl Fud {
                                 warn!(target: "fud::fetch_metadata()", "Received invalid file metadata");
                                 continue;
                             }
-                            info!(target: "fud::fetch_metadata()", "Received file {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id));
+                            info!(target: "fud::fetch_metadata()", "Received file {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id()));
                             result = Some(FetchReply::File((*reply).clone()));
                             break;
                         }
@@ -912,7 +976,7 @@ impl Fud {
                                 warn!(target: "fud::fetch_metadata()", "Received invalid directory metadata");
                                 continue;
                             }
-                            info!(target: "fud::fetch_metadata()", "Received directory {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id));
+                            info!(target: "fud::fetch_metadata()", "Received directory {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id()));
                             result = Some(FetchReply::Directory((*reply).clone()));
                             break;
                         }
@@ -922,7 +986,7 @@ impl Fud {
                                 warn!(target: "fud::fetch_metadata()", "Error waiting for NOTFOUND reply: {e}");
                                 continue;
                             }
-                            info!(target: "fud::fetch_metadata()", "Received NOTFOUND {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id));
+                            info!(target: "fud::fetch_metadata()", "Received NOTFOUND {} from seeder {}", hash_to_string(hash), hash_to_string(&seeder.node.id()));
                         }
                     };
                 }
@@ -1005,7 +1069,7 @@ impl Fud {
         &self,
         hash: &blake3::Hash,
         path: &Path,
-    ) -> Result<(ChunkedStorage, Vec<DhtNode>)> {
+    ) -> Result<(ChunkedStorage, Vec<FudNode>)> {
         match self.geode.get(hash, path).await {
             // We already know the metadata
             Ok(v) => Ok((v, vec![])),
@@ -1041,7 +1105,7 @@ impl Fud {
         path: &Path,
         files: &FileSelection,
     ) -> Result<()> {
-        let self_node = self.dht().node().await;
+        let self_node = self.node().await;
 
         let hash_bytes = hash.as_bytes();
         let path_string = path.to_string_lossy().to_string();
@@ -1456,7 +1520,7 @@ impl Fud {
 
     /// Add a resource from the file system.
     pub async fn put(&self, path: &PathBuf) -> Result<blake3::Hash> {
-        let self_node = self.dht.node().await;
+        let self_node = self.node().await;
 
         if self_node.addresses.is_empty() {
             return Err(Error::Custom(

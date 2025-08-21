@@ -784,6 +784,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2681,6 +2690,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "equix"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89178c5241f5cc0c8f2b5ac5008f3c7a32caad341b1ec747a6e1e51d2e877110"
+dependencies = [
+ "arrayvec",
+ "hashx",
+ "num-traits",
+ "thiserror 2.0.12",
+ "visibility",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2822,6 +2844,12 @@ dependencies = [
  "libredox",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "fixed-capacity-vec"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b31a14f5ee08ed1a40e1252b35af18bed062e3f39b69aab34decde36bc43e40"
 
 [[package]]
 name = "fixed-hash"
@@ -3036,16 +3064,20 @@ name = "fud"
 version = "0.5.0"
 dependencies = [
  "async-trait",
+ "blake2",
  "blake3",
  "bs58",
  "darkfi",
+ "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
+ "equix",
  "futures",
  "log",
  "num-bigint",
  "rand 0.8.5",
  "serde",
+ "sha2",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -3435,6 +3467,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
 dependencies = [
  "hashbrown 0.15.4",
+]
+
+[[package]]
+name = "hashx"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cb639748a589a17df2126f8015897ab416e81113afb82f56df5d47fa1486ab1"
+dependencies = [
+ "arrayvec",
+ "blake2",
+ "dynasmrt",
+ "fixed-capacity-vec",
+ "hex",
+ "rand_core 0.9.3",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

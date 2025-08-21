@@ -40,27 +40,33 @@ use crate::{
 };
 
 #[async_trait]
-pub trait DhtHandler {
-    fn dht(&self) -> Arc<Dht>;
+pub trait DhtHandler<N: DhtNode> {
+    fn dht(&self) -> Arc<Dht<N>>;
+
+    /// Get our own node
+    async fn node(&self) -> N;
 
     /// Send a DHT ping request
-    async fn ping(&self, channel: ChannelPtr) -> Result<DhtNode>;
+    async fn ping(&self, channel: ChannelPtr) -> Result<N>;
 
     /// Triggered when we find a new node
-    async fn on_new_node(&self, node: &DhtNode) -> Result<()>;
+    async fn on_new_node(&self, node: &N) -> Result<()>;
 
     /// Send FIND NODES request to a peer to get nodes close to `key`
-    async fn fetch_nodes(&self, node: &DhtNode, key: &blake3::Hash) -> Result<Vec<DhtNode>>;
+    async fn fetch_nodes(&self, node: &N, key: &blake3::Hash) -> Result<Vec<N>>;
 
     /// Announce message for a key, and add ourselves to router
     async fn announce<M: Message>(
         &self,
         key: &blake3::Hash,
         message: &M,
-        router: DhtRouterPtr,
-    ) -> Result<()> {
-        let self_node = self.dht().node().await;
-        if self_node.addresses.is_empty() {
+        router: DhtRouterPtr<N>,
+    ) -> Result<()>
+    where
+        N: 'async_trait,
+    {
+        let self_node = self.node().await;
+        if self_node.addresses().is_empty() {
             return Err(().into()); // TODO
         }
 
@@ -77,6 +83,19 @@ pub trait DhtHandler {
         }
 
         Ok(())
+    }
+
+    /// Lookup our own node id to bootstrap our DHT
+    async fn bootstrap(&self) {
+        self.dht().set_bootstrapped(true).await;
+
+        let self_node_id = self.node().await.id();
+        debug!(target: "dht::DhtHandler::bootstrap()", "DHT bootstrapping {}", hash_to_string(&self_node_id));
+        let nodes = self.lookup_nodes(&self_node_id).await;
+
+        if nodes.is_err() || nodes.map_or(true, |v| v.is_empty()) {
+            self.dht().set_bootstrapped(false).await;
+        }
     }
 
     /// Send a DHT ping request when there is a new channel, to know the node id of the new peer,
@@ -106,7 +125,7 @@ pub trait DhtHandler {
 
             if let Err(e) = ping_res {
                 warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
-                channel.stop().await;
+                // channel.stop().await;
                 continue;
             }
 
@@ -119,7 +138,7 @@ pub trait DhtHandler {
             });
             drop(channel_cache);
 
-            if !node.addresses.is_empty() {
+            if !node.addresses().is_empty() {
                 self.add_node(node.clone()).await;
                 let _ = self.on_new_node(&node.clone()).await;
             }
@@ -127,24 +146,35 @@ pub trait DhtHandler {
     }
 
     /// Add a node in the correct bucket
-    async fn add_node(&self, node: DhtNode) {
+    async fn add_node(&self, node: N)
+    where
+        N: 'async_trait,
+    {
+        let self_node = self.node().await;
+
         // Do not add ourselves to the buckets
-        if node.id == self.dht().node_id {
+        if node.id() == self_node.id() {
+            return;
+        }
+
+        // Don't add this node if it has any external address that is the same as one of ours
+        let node_addresses = node.addresses();
+        if self_node.addresses().iter().any(|addr| node_addresses.contains(addr)) {
             return;
         }
 
         // Do not add a node to the buckets if it does not have an address
-        if node.addresses.is_empty() {
+        if node.addresses().is_empty() {
             return;
         }
 
-        let bucket_index = self.dht().get_bucket_index(&node.id).await;
+        let bucket_index = self.dht().get_bucket_index(&self.node().await.id(), &node.id()).await;
         let buckets_lock = self.dht().buckets.clone();
         let mut buckets = buckets_lock.write().await;
         let bucket = &mut buckets[bucket_index];
 
         // Node is already in the bucket
-        if bucket.nodes.iter().any(|n| n.id == node.id) {
+        if bucket.nodes.iter().any(|n| n.id() == node.id()) {
             return;
         }
 
@@ -175,14 +205,15 @@ pub trait DhtHandler {
     /// Move a node to the tail in its bucket,
     /// to show that it is the most recently seen in the bucket.
     /// If the node is not in a bucket it will be added using `add_node`
-    async fn update_node(&self, node: &DhtNode) {
-        let bucket_index = self.dht().get_bucket_index(&node.id).await;
+    async fn update_node(&self, node: &N) {
+        let bucket_index = self.dht().get_bucket_index(&self.node().await.id(), &node.id()).await;
         let buckets_lock = self.dht().buckets.clone();
         let mut buckets = buckets_lock.write().await;
         let bucket = &mut buckets[bucket_index];
 
-        let node_index = bucket.nodes.iter().position(|n| n.id == node.id);
+        let node_index = bucket.nodes.iter().position(|n| n.id() == node.id());
         if node_index.is_none() {
+            drop(buckets);
             self.add_node(node.clone()).await;
             return;
         }
@@ -196,17 +227,21 @@ pub trait DhtHandler {
     async fn fetch_nodes_sp(
         &self,
         semaphore: Arc<Semaphore>,
-        node: DhtNode,
+        node: N,
         key: &blake3::Hash,
-    ) -> (DhtNode, Result<Vec<DhtNode>>) {
+    ) -> (N, Result<Vec<N>>)
+    where
+        N: 'async_trait,
+    {
         let _permit = semaphore.acquire().await;
         (node.clone(), self.fetch_nodes(&node, key).await)
     }
 
     /// Find `k` nodes closest to a key
-    async fn lookup_nodes(&self, key: &blake3::Hash) -> Result<Vec<DhtNode>> {
+    async fn lookup_nodes(&self, key: &blake3::Hash) -> Result<Vec<N>> {
         info!(target: "dht::DhtHandler::lookup_nodes()", "Starting node lookup for key {}", bs58::encode(key.as_bytes()).into_string());
 
+        let self_node_id = self.node().await.id();
         let k = self.dht().settings.k;
         let a = self.dht().settings.alpha;
         let semaphore = Arc::new(Semaphore::new(self.dht().settings.concurrency));
@@ -217,13 +252,13 @@ pub trait DhtHandler {
         // Nodes with a pending request or a request completed
         let mut visited_nodes = HashSet::<blake3::Hash>::new();
         // Nodes that responded to our request, sorted by distance from `key`
-        let mut result = Vec::<DhtNode>::new();
+        let mut result = Vec::<N>::new();
 
         // Create the first `alpha` tasks
         for _ in 0..a {
             match nodes_to_visit.pop() {
                 Some(node) => {
-                    visited_nodes.insert(node.id);
+                    visited_nodes.insert(node.id());
                     futures.push(self.fetch_nodes_sp(semaphore.clone(), node, key));
                 }
                 None => {
@@ -235,13 +270,13 @@ pub trait DhtHandler {
         while let Some((queried_node, value_result)) = futures.next().await {
             match value_result {
                 Ok(mut nodes) => {
-                    info!(target: "dht::DhtHandler::lookup_nodes", "Queried {}, got {} nodes", bs58::encode(queried_node.id.as_bytes()).into_string(), nodes.len());
+                    info!(target: "dht::DhtHandler::lookup_nodes", "Queried {}, got {} nodes", bs58::encode(queried_node.id().as_bytes()).into_string(), nodes.len());
 
                     // Remove ourselves and already known nodes from the new nodes
                     nodes.retain(|node| {
-                        node.id != self.dht().node_id &&
-                            !visited_nodes.contains(&node.id) &&
-                            !nodes_to_visit.iter().any(|n| n.id == node.id)
+                        node.id() != self_node_id &&
+                            !visited_nodes.contains(&node.id()) &&
+                            !nodes_to_visit.iter().any(|n| n.id() == node.id())
                     });
 
                     // Add new nodes to our buckets
@@ -263,10 +298,11 @@ pub trait DhtHandler {
                     if result.len() >= k {
                         if let Some(furthest) = result.last() {
                             if let Some(next_node) = nodes_to_visit.first() {
-                                let furthest_dist =
-                                    BigUint::from_bytes_be(&self.dht().distance(key, &furthest.id));
+                                let furthest_dist = BigUint::from_bytes_be(
+                                    &self.dht().distance(key, &furthest.id()),
+                                );
                                 let next_dist = BigUint::from_bytes_be(
-                                    &self.dht().distance(key, &next_node.id),
+                                    &self.dht().distance(key, &next_node.id()),
                                 );
                                 if furthest_dist < next_dist {
                                     info!(target: "dht::DhtHandler::lookup_nodes", "Early termination for lookup nodes");
@@ -280,7 +316,7 @@ pub trait DhtHandler {
                     for _ in 0..a {
                         match nodes_to_visit.pop() {
                             Some(node) => {
-                                visited_nodes.insert(node.id);
+                                visited_nodes.insert(node.id());
                                 futures.push(self.fetch_nodes_sp(semaphore.clone(), node, key));
                             }
                             None => {
@@ -301,12 +337,12 @@ pub trait DhtHandler {
 
     /// Get a channel (existing or create a new one) to `node` about `topic`.
     /// Don't forget to call `cleanup_channel()` once you are done with it.
-    async fn get_channel(&self, node: &DhtNode, topic: Option<blake3::Hash>) -> Result<ChannelPtr> {
+    async fn get_channel(&self, node: &N, topic: Option<blake3::Hash>) -> Result<ChannelPtr> {
         let channel_cache_lock = self.dht().channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
 
         // Get existing channels for this node, regardless of topic
-        let channels: HashMap<u32, ChannelCacheItem> = channel_cache
+        let channels: HashMap<u32, ChannelCacheItem<N>> = channel_cache
             .iter()
             .filter(|&(_, item)| item.node == *node)
             .map(|(&key, item)| (key, item.clone()))
@@ -358,7 +394,7 @@ pub trait DhtHandler {
         drop(channel_cache);
 
         // Create a channel
-        for addr in node.addresses.clone() {
+        for addr in node.addresses().clone() {
             let session_out = self.dht().p2p.session_outbound();
             let session_weak = Arc::downgrade(&self.dht().p2p.session_outbound());
 
@@ -422,12 +458,14 @@ pub trait DhtHandler {
     /// Add nodes as a provider for a key
     async fn add_to_router(
         &self,
-        router: DhtRouterPtr,
+        router: DhtRouterPtr<N>,
         key: &blake3::Hash,
-        router_items: Vec<DhtRouterItem>,
-    ) {
+        router_items: Vec<DhtRouterItem<N>>,
+    ) where
+        N: 'async_trait,
+    {
         let mut router_items = router_items.clone();
-        router_items.retain(|item| !item.node.addresses.is_empty());
+        router_items.retain(|item| !item.node.addresses().is_empty());
 
         debug!(target: "dht::DhtHandler::add_to_router()", "Inserting {} nodes to key {}", router_items.len(), bs58::encode(key.as_bytes()).into_string());
 
@@ -449,13 +487,13 @@ pub trait DhtHandler {
 
         // Add to router_cache
         for router_item in router_items {
-            let keys = router_cache.get_mut(&router_item.node.id);
+            let keys = router_cache.get_mut(&router_item.node.id());
             if let Some(k) = keys {
                 k.insert(*key);
             } else {
                 let mut keys = HashSet::new();
                 keys.insert(*key);
-                router_cache.insert(router_item.node.id, keys);
+                router_cache.insert(router_item.node.id(), keys);
             }
         }
     }

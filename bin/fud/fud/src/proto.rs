@@ -22,7 +22,7 @@ use smol::Executor;
 use std::{path::StripPrefixError, sync::Arc};
 
 use darkfi::{
-    dht::{DhtHandler, DhtNode, DhtRouterItem},
+    dht::{DhtHandler, DhtRouterItem},
     geode::hash_to_string,
     impl_p2p_message,
     net::{
@@ -32,9 +32,10 @@ use darkfi::{
     },
     Error, Result,
 };
+use darkfi_sdk::crypto::schnorr::{SchnorrSecret, Signature};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::Fud;
+use super::{Fud, FudNode};
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -55,7 +56,7 @@ impl_p2p_message!(FudDirectoryReply, "FudDirectoryReply", 0, 0, DEFAULT_METERING
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudAnnounce {
     pub key: blake3::Hash,
-    pub seeders: Vec<DhtRouterItem>,
+    pub seeders: Vec<DhtRouterItem<FudNode>>,
 }
 impl_p2p_message!(FudAnnounce, "FudAnnounce", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -74,13 +75,17 @@ impl_p2p_message!(FudNotFound, "FudNotFound", 0, 0, DEFAULT_METERING_CONFIGURATI
 
 /// Message representing a ping request on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudPingRequest;
+pub struct FudPingRequest {
+    pub random: u64,
+}
 impl_p2p_message!(FudPingRequest, "FudPingRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a ping reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudPingReply {
-    pub node: DhtNode,
+    pub node: FudNode,
+    /// Signature of the random u64 from the ping request
+    pub sig: Signature,
 }
 impl_p2p_message!(FudPingReply, "FudPingReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -102,7 +107,7 @@ impl_p2p_message!(FudFindNodesRequest, "FudFindNodesRequest", 0, 0, DEFAULT_METE
 /// Message representing a find nodes reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindNodesReply {
-    pub nodes: Vec<DhtNode>,
+    pub nodes: Vec<FudNode>,
 }
 impl_p2p_message!(FudFindNodesReply, "FudFindNodesReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -122,7 +127,7 @@ impl_p2p_message!(
 /// Message representing a find seeders reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindSeedersReply {
-    pub seeders: Vec<DhtRouterItem>,
+    pub seeders: Vec<DhtRouterItem<FudNode>>,
 }
 impl_p2p_message!(FudFindSeedersReply, "FudFindSeedersReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -174,7 +179,7 @@ impl ProtocolFud {
         debug!(target: "fud::ProtocolFud::handle_fud_ping_request()", "START");
 
         loop {
-            let _ = match self.ping_request_sub.receive().await {
+            let ping_req = match self.ping_request_sub.receive().await {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
@@ -182,9 +187,12 @@ impl ProtocolFud {
                     continue
                 }
             };
-            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING");
+            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING REQUEST");
 
-            let reply = FudPingReply { node: self.fud.dht.node().await };
+            let reply = FudPingReply {
+                node: self.fud.node().await,
+                sig: self.fud.secret_key.read().await.sign(&ping_req.random.to_be_bytes()),
+            };
             match self.channel.send(&reply).await {
                 Ok(()) => continue,
                 Err(_e) => continue,
@@ -253,7 +261,7 @@ impl ProtocolFud {
                 return false;
             }
             let reply = FudChunkReply { chunk };
-            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk {}", hash_to_string(&request.key));
+            info!(target: "fud::ProtocolFud::handle_fud_chunk_request()", "Sending chunk {}", hash_to_string(&request.key));
             let _ = self.channel.send(&reply).await;
             return true;
         }

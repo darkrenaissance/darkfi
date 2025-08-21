@@ -27,6 +27,7 @@ use std::{
 use tinyjson::JsonValue;
 
 use darkfi::{
+    dht::DhtNode,
     geode::hash_to_string,
     net::P2pPtr,
     rpc::{
@@ -265,11 +266,11 @@ impl JsonRpcInterface {
             let mut nodes = vec![];
             for node in bucket.nodes.clone() {
                 let mut addresses = vec![];
-                for addr in node.addresses {
+                for addr in &node.addresses {
                     addresses.push(JsonValue::String(addr.to_string()));
                 }
                 nodes.push(JsonValue::Array(vec![
-                    JsonValue::String(hash_to_string(&node.id)),
+                    JsonValue::String(hash_to_string(&node.id())),
                     JsonValue::Array(addresses),
                 ]));
             }
@@ -293,7 +294,7 @@ impl JsonRpcInterface {
         for (hash, items) in self.fud.seeders_router.read().await.iter() {
             let mut node_ids = vec![];
             for item in items {
-                node_ids.push(JsonValue::String(hash_to_string(&item.node.id)));
+                node_ids.push(JsonValue::String(hash_to_string(&item.node.id())));
             }
             seeders_router.insert(hash_to_string(hash), JsonValue::Array(node_ids));
         }

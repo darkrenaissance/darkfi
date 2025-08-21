@@ -16,14 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    cmp::Eq,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    marker::{Send, Sync},
+    sync::Arc,
+};
+
 use async_trait::async_trait;
 use num_bigint::BigUint;
 use smol::lock::RwLock;
-use std::{
-    collections::{HashMap, HashSet},
-    hash::{Hash, Hasher},
-    sync::Arc,
-};
 use url::Url;
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -36,59 +40,65 @@ pub use settings::{DhtSettings, DhtSettingsOpt};
 pub mod handler;
 pub use handler::DhtHandler;
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
-pub struct DhtNode {
-    pub id: blake3::Hash,
-    pub addresses: Vec<Url>,
+pub trait DhtNode: Debug + Clone + Send + Sync + PartialEq + Eq + Hash {
+    fn id(&self) -> blake3::Hash;
+    fn addresses(&self) -> Vec<Url>;
 }
 
-impl Hash for DhtNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
+/// Implements default Hash, PartialEq, and Eq for a struct implementing [`DhtNode`]
+#[macro_export]
+macro_rules! impl_dht_node_defaults {
+    ($t:ty) => {
+        impl std::hash::Hash for $t {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.id().hash(state);
+            }
+        }
+        impl std::cmp::PartialEq for $t {
+            fn eq(&self, other: &Self) -> bool {
+                self.id() == other.id()
+            }
+        }
+        impl std::cmp::Eq for $t {}
+    };
 }
+pub use impl_dht_node_defaults;
 
-impl PartialEq for DhtNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-pub struct DhtBucket {
-    pub nodes: Vec<DhtNode>,
+pub struct DhtBucket<N: DhtNode> {
+    pub nodes: Vec<N>,
 }
 
 /// "Router" means: Key -> Set of nodes (+ additional data for each node)
-pub type DhtRouterPtr = Arc<RwLock<HashMap<blake3::Hash, HashSet<DhtRouterItem>>>>;
+pub type DhtRouterPtr<N> = Arc<RwLock<HashMap<blake3::Hash, HashSet<DhtRouterItem<N>>>>>;
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
-pub struct DhtRouterItem {
-    pub node: DhtNode,
+pub struct DhtRouterItem<N: DhtNode> {
+    pub node: N,
     pub timestamp: u64,
 }
 
-impl Hash for DhtRouterItem {
+impl<N: DhtNode> Hash for DhtRouterItem<N> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.node.id.hash(state);
+        self.node.id().hash(state);
     }
 }
 
-impl PartialEq for DhtRouterItem {
+impl<N: DhtNode> PartialEq for DhtRouterItem<N> {
     fn eq(&self, other: &Self) -> bool {
-        self.node.id == other.node.id
+        self.node.id() == other.node.id()
     }
 }
 
-impl From<DhtNode> for DhtRouterItem {
-    fn from(node: DhtNode) -> Self {
+impl<N: DhtNode> From<N> for DhtRouterItem<N> {
+    fn from(node: N) -> Self {
         DhtRouterItem { node, timestamp: Timestamp::current_time().inner() }
     }
 }
 
 #[derive(Clone)]
-pub struct ChannelCacheItem {
+pub struct ChannelCacheItem<N: DhtNode> {
     /// The DHT node the channel is connected to.
-    node: DhtNode,
+    pub node: N,
 
     /// Topic is a hash that you set to remember what the channel is about,
     /// it's not shared with the peer. If you ask for a channel (with
@@ -103,17 +113,15 @@ pub struct ChannelCacheItem {
     usage_count: u32,
 }
 
-pub struct Dht {
-    /// Our own node id
-    pub node_id: blake3::Hash,
+pub struct Dht<N: DhtNode> {
     /// Are we bootstrapped?
     pub bootstrapped: Arc<RwLock<bool>>,
     /// Vec of buckets
-    pub buckets: Arc<RwLock<Vec<DhtBucket>>>,
+    pub buckets: Arc<RwLock<Vec<DhtBucket<N>>>>,
     /// Number of buckets
     pub n_buckets: usize,
     /// Channel ID -> ChannelCacheItem
-    pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem>>>,
+    pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem<N>>>>,
     /// Node ID -> Set of keys
     pub router_cache: Arc<RwLock<HashMap<blake3::Hash, HashSet<blake3::Hash>>>>,
 
@@ -123,13 +131,8 @@ pub struct Dht {
     pub executor: ExecutorPtr,
 }
 
-impl Dht {
-    pub async fn new(
-        node_id: &blake3::Hash,
-        settings: &DhtSettings,
-        p2p: P2pPtr,
-        ex: ExecutorPtr,
-    ) -> Self {
+impl<N: DhtNode> Dht<N> {
+    pub async fn new(settings: &DhtSettings, p2p: P2pPtr, ex: ExecutorPtr) -> Self {
         // Create empty buckets
         let mut buckets = vec![];
         for _ in 0..256 {
@@ -137,7 +140,6 @@ impl Dht {
         }
 
         Self {
-            node_id: *node_id,
             buckets: Arc::new(RwLock::new(buckets)),
             n_buckets: 256,
             bootstrapped: Arc::new(RwLock::new(false)),
@@ -156,26 +158,9 @@ impl Dht {
         *bootstrapped
     }
 
-    pub async fn set_bootstrapped(&self) {
+    pub async fn set_bootstrapped(&self, value: bool) {
         let mut bootstrapped = self.bootstrapped.write().await;
-        *bootstrapped = true;
-    }
-
-    /// Get own node
-    pub async fn node(&self) -> DhtNode {
-        DhtNode {
-            id: self.node_id,
-            addresses: self
-                .p2p
-                .clone()
-                .hosts()
-                .external_addrs()
-                .await
-                .iter()
-                .filter(|addr| !addr.to_string().contains("[::]"))
-                .cloned()
-                .collect(),
-        }
+        *bootstrapped = value;
     }
 
     /// Get the distance between `key_1` and `key_2`
@@ -193,20 +178,20 @@ impl Dht {
     }
 
     /// Sort `nodes` by distance from `key`
-    pub fn sort_by_distance(&self, nodes: &mut [DhtNode], key: &blake3::Hash) {
+    pub fn sort_by_distance(&self, nodes: &mut [N], key: &blake3::Hash) {
         nodes.sort_by(|a, b| {
-            let distance_a = BigUint::from_bytes_be(&self.distance(key, &a.id));
-            let distance_b = BigUint::from_bytes_be(&self.distance(key, &b.id));
+            let distance_a = BigUint::from_bytes_be(&self.distance(key, &a.id()));
+            let distance_b = BigUint::from_bytes_be(&self.distance(key, &b.id()));
             distance_a.cmp(&distance_b)
         });
     }
 
     /// `key` -> bucket index
-    pub async fn get_bucket_index(&self, key: &blake3::Hash) -> usize {
-        if key == &self.node_id {
+    pub async fn get_bucket_index(&self, self_node_id: &blake3::Hash, key: &blake3::Hash) -> usize {
+        if key == self_node_id {
             return 0
         }
-        let distance = self.distance(&self.node_id, key);
+        let distance = self.distance(self_node_id, key);
         let mut leading_zeros = 0;
 
         for &byte in &distance {
@@ -224,7 +209,7 @@ impl Dht {
 
     /// Get `n` closest known nodes to a key
     /// TODO: Can be optimized
-    pub async fn find_neighbors(&self, key: &blake3::Hash, n: usize) -> Vec<DhtNode> {
+    pub async fn find_neighbors(&self, key: &blake3::Hash, n: usize) -> Vec<N> {
         let buckets_lock = self.buckets.clone();
         let buckets = buckets_lock.read().await;
 
@@ -244,7 +229,7 @@ impl Dht {
     }
 
     /// Channel ID -> DhtNode
-    pub async fn get_node_from_channel(&self, channel_id: u32) -> Option<DhtNode> {
+    pub async fn get_node_from_channel(&self, channel_id: u32) -> Option<N> {
         let channel_cache_lock = self.channel_cache.clone();
         let channel_cache = channel_cache_lock.read().await;
         if let Some(cached) = channel_cache.get(&channel_id).cloned() {
@@ -255,7 +240,7 @@ impl Dht {
     }
 
     /// Remove nodes in router that are older than expiry_secs
-    pub async fn prune_router(&self, router: DhtRouterPtr, expiry_secs: u32) {
+    pub async fn prune_router(&self, router: DhtRouterPtr<N>, expiry_secs: u32) {
         let expiry_timestamp = Timestamp::current_time().inner() - (expiry_secs as u64);
         let mut router_write = router.write().await;
 
@@ -268,5 +253,18 @@ impl Dht {
                 router_write.remove(&key);
             }
         }
+    }
+
+    /// Reset the DHT state
+    pub async fn reset(&self) {
+        let mut bootstrapped = self.bootstrapped.write().await;
+        *bootstrapped = false;
+
+        let mut buckets = vec![];
+        for _ in 0..256 {
+            buckets.push(DhtBucket { nodes: vec![] })
+        }
+
+        *self.buckets.write().await = buckets;
     }
 }

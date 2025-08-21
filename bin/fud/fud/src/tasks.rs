@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{error, info};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
+
+use log::{error, info, warn};
 
 use darkfi::{
-    dht::DhtHandler,
+    dht::{DhtHandler, DhtNode},
+    geode::hash_to_string,
     system::{sleep, ExecutorPtr, StoppableTask},
     Error, Result,
 };
@@ -89,7 +91,7 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
     loop {
         sleep(interval).await;
 
-        let seeders = vec![fud.dht().node().await.into()];
+        let seeders = vec![fud.node().await.into()];
 
         info!(target: "fud::announce_seed_task()", "Verifying seeds...");
         let seeding_resources = match fud.verify_resources(None).await {
@@ -113,5 +115,92 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
 
         info!(target: "fud::announce_seed_task()", "Pruning seeders...");
         fud.dht().prune_router(fud.seeders_router.clone(), interval.try_into().unwrap()).await;
+    }
+}
+
+/// Background task that:
+/// 1. Updates the [`crate::bitcoin::BitcoinHashCache`]
+/// 2. Removes old nodes from the DHT
+/// 3. Removes old nodes from the seeders router
+/// 4. If the Bitcoin block hash we currently use in our `fud.node_data` is too old, we update it and reset our DHT
+pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
+    let interval = 600; // TODO: Make a setting
+
+    loop {
+        sleep(interval).await;
+
+        let mut pow = fud.pow.write().await;
+        let btc = &mut pow.bitcoin_hash_cache;
+
+        if btc.update().await.is_err() {
+            continue
+        }
+
+        let block = fud.node_data.read().await.btc_block_hash;
+        let needs_dht_reset = match btc.block_hashes.iter().position(|b| *b == block) {
+            Some(i) => i < 6,
+            None => true,
+        };
+
+        if !needs_dht_reset {
+            // Removes nodes in the DHT with unknown BTC block hashes.
+            let dht = fud.dht();
+            let mut buckets = dht.buckets.write().await;
+            for bucket in buckets.iter_mut() {
+                for (i, node) in bucket.nodes.clone().iter().enumerate().rev() {
+                    // If this node's BTC block hash is unknown, remove it from the bucket
+                    if !btc.block_hashes.contains(&node.data.btc_block_hash) {
+                        bucket.nodes.remove(i);
+                        info!(target: "fud::node_id_task()", "Removed node {} from the DHT (BTC block hash too old or unknown)", hash_to_string(&node.id()));
+                    }
+                }
+            }
+            drop(buckets);
+
+            // Removes nodes in the seeders router with unknown BTC block hashes
+            let mut seeders_router = fud.seeders_router.write().await;
+            for (key, seeders) in seeders_router.iter_mut() {
+                for seeder in seeders.clone().iter() {
+                    if !btc.block_hashes.contains(&seeder.node.data.btc_block_hash) {
+                        seeders.remove(seeder);
+                        info!(target: "fud::node_id_task()", "Removed node {} from the seeders of key {} (BTC block hash too old or unknown)", hash_to_string(&seeder.node.id()), hash_to_string(key));
+                    }
+                }
+            }
+
+            continue
+        }
+
+        info!(target: "fud::node_id_task()", "Creating a new node id...");
+        let (node_data, secret_key) = match pow.generate_node().await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!(target: "fud::node_id_task()", "Error creating a new node id: {e}");
+                continue
+            }
+        };
+        drop(pow);
+        info!(target: "fud::node_id_task()", "New node id: {}", hash_to_string(&node_data.id()));
+
+        // Close all channels
+        let dht = fud.dht();
+        let mut channel_cache = dht.channel_cache.write().await;
+        for channel in dht.p2p.hosts().channels().clone() {
+            channel.stop().await;
+            channel_cache.remove(&channel.info.id);
+        }
+        drop(channel_cache);
+
+        // Reset the DHT
+        dht.reset().await;
+
+        // Reset the seeders router
+        *fud.seeders_router.write().await = HashMap::new();
+
+        // Update our node data and our secret key
+        *fud.node_data.write().await = node_data;
+        *fud.secret_key.write().await = secret_key;
+
+        // DHT will be bootstrapped on the next channel connection
     }
 }

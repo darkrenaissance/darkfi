@@ -12,6 +12,31 @@ base_dir = "~/.local/share/darkfi/fud"
 ## Chunk transfer timeout in seconds
 #chunk_timeout = 60
 
+# PoW settings (to generate a valid node id)
+[pow]
+## Equi-X effort value
+#equix_value = 10000
+
+## Number of latest BTC block hashes that are valid for fud's PoW
+#btc_hash_count = 144
+
+## Electrum nodes timeout in seconds
+#btc_timeout = 15
+
+# Electrum nodes used to fetch the latest BTC block hashes (used in fud's PoW)
+btc_electrum_nodes = [
+    "tcp://ax102.blockeng.ch:50001",
+    "tcp://fulcrum-core.1209k.com:50001",
+    "tcp://electrum.blockstream.info:50001",
+    "tcp://bitcoin.aranguren.org:50001",
+    "tcp://bitcoin.grey.pw:50001",
+    #"tor://4vrz2q62yxlfmcntnotzdjahpqh2joirp2vrcdsayyioxthffimbp2ad.onion:50001",
+    #"tor://k23xxwk6xipyfdqey4ylsfeetmcajjro63odwihzbmx5m6xabbwzp4yd.onion:50001",
+    #"tor://sysaw6aecffum4ghlbukauf6g7l3hzh3rffafmfak5bxnfowrynd56ad.onion:50001",
+    #"tor://udfpzbte2hommnvag5f3qlouqkhvp3xybhlus2yvfeqdwlhjroe4bbyd.onion:60001",
+    #"tor://lukebtcygzrosjtcklev2fhlvpbyu25saienzorhbf3vwc2fpa475qyd.onion:50001",
+]
+
 # DHT settings
 [dht]
 ## Number of nodes in a bucket
