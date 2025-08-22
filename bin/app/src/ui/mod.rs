@@ -44,6 +44,8 @@ mod gesture;
 pub use gesture::GesturePtr;
 mod image;
 pub use image::{Image, ImagePtr};
+mod video;
+pub use video::{Video, VideoPtr};
 mod vector_art;
 pub use vector_art::{
     shape::{ShapeVertex, VectorShape},
@@ -203,6 +205,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::ChatEdit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
+        Pimpl::Video(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
         Pimpl::EmojiPicker(obj) => obj.clone(),
         Pimpl::Shortcut(obj) => obj.clone(),
@@ -219,6 +222,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::ChatEdit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
+        Pimpl::Video(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
         Pimpl::Shortcut(obj) => obj.as_ref(),

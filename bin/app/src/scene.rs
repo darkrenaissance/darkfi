@@ -544,6 +544,7 @@ pub enum Pimpl {
     ChatEdit(ui::ChatEditPtr),
     ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
+    Video(ui::VideoPtr),
     Button(ui::ButtonPtr),
     Shortcut(ui::ShortcutPtr),
     Gesture(ui::GesturePtr),

@@ -41,6 +41,8 @@ use std::{
     },
 };
 
+mod anim;
+use anim::AbstractAnimation;
 mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
@@ -475,10 +477,11 @@ enum DrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
+    Animation { anim: Arc<dyn AbstractAnimation> },
     EnableDebug,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct DrawCall {
     instrs: Vec<DrawInstruction>,
     dcs: Vec<DcId>,
@@ -626,6 +629,10 @@ impl<'a> RenderContext<'a> {
                     };
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
+                }
+                DrawInstruction::Animation { anim } => {
+                    let dc = anim.tick();
+                    self.draw_call(&dc, indent + 1, is_debug);
                 }
                 DrawInstruction::EnableDebug => {
                     if !is_debug {
