@@ -151,6 +151,39 @@ pub fn create_image(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_video(name: &str) -> SceneNode {
+    t!("create_video({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Image);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("uv", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0., 0., 1., 1.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Path", "Path format string using {frame} in the name");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("length", PropertyType::Uint32, PropertySubType::Null);
+    prop.set_ui_text("Frame Length", "Total frames to load (last frame + 1)");
+    node.add_property(prop).unwrap();
+
+    node
+}
+
 pub fn create_text(name: &str) -> SceneNode {
     t!("create_text({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Text);

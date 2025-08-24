@@ -41,8 +41,8 @@ use std::{
     },
 };
 
-mod anim;
-use anim::AbstractAnimation;
+pub mod anim;
+use anim::{GfxSequenceAnimation, SequenceAnimation};
 mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
@@ -399,6 +399,7 @@ pub enum GfxDrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(GfxDrawMesh),
+    Animation(GfxSequenceAnimation),
     EnableDebug,
 }
 
@@ -415,6 +416,7 @@ impl GfxDrawInstruction {
             Self::SetPos(pos) => DrawInstruction::SetPos(pos),
             Self::ApplyView(view) => DrawInstruction::ApplyView(view),
             Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?),
+            Self::Animation(anim) => DrawInstruction::Animation(anim.compile(textures, buffers)),
             Self::EnableDebug => DrawInstruction::EnableDebug,
         };
         Some(instr)
@@ -438,9 +440,7 @@ impl GfxDrawCall {
     ) -> Self {
         Self { instrs, dcs, z_index, debug_str }
     }
-}
 
-impl GfxDrawCall {
     fn compile(
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
@@ -477,7 +477,7 @@ enum DrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
-    Animation { anim: Arc<dyn AbstractAnimation> },
+    Animation(SequenceAnimation),
     EnableDebug,
 }
 
@@ -630,7 +630,7 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
-                DrawInstruction::Animation { anim } => {
+                DrawInstruction::Animation(anim) => {
                     let dc = anim.tick();
                     self.draw_call(&dc, indent + 1, is_debug);
                 }

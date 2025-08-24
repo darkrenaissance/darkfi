@@ -18,14 +18,14 @@
 
 use crate::{
     app::{
-        node::{create_chatedit, create_layer, create_text, create_vector_art},
+        node::{create_chatedit, create_layer, create_text, create_vector_art, create_video},
         App,
     },
     expr,
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{ChatEdit, Layer, Text, VectorArt, VectorShape},
+    ui::{ChatEdit, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -248,6 +248,19 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
     */
 
+    // Create KING GNU!
+    let node = create_video("king");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 80.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 400.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 600.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 600.).unwrap();
+    node.set_property_str(atom, Role::App, "path", "assets/forest/forest_{frame}.jpg").unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(atom, Role::App, "length", 357).unwrap();
+    let node = node.setup(|me| Video::new(me, app.render_api.clone())).await;
+    layer_node.link(node);
+
     // Create some text
     let node = create_text("label");
     let prop = node.get_property("rect").unwrap();
@@ -462,6 +475,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
     */
 
+    /*
     // Text edit
     let node = create_chatedit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -532,4 +546,5 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.call_method("focus", vec![]).await.unwrap();
     });
     app.tasks.lock().unwrap().push(focus_task);
+    */
 }

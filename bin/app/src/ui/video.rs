@@ -24,6 +24,7 @@ use std::{io::Cursor, sync::Arc};
 
 use crate::{
     gfx::{
+        anim::{GfxSequenceAnimation, GfxSequenceAnimationFrame},
         gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr, Rectangle,
         RenderApi,
     },
@@ -45,7 +46,7 @@ pub struct Video {
     render_api: RenderApi,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
-    texture: SyncMutex<Option<ManagedTexturePtr>>,
+    textures: SyncMutex<Vec<ManagedTexturePtr>>,
     dc_key: u64,
 
     rect: PropertyRect,
@@ -53,6 +54,7 @@ pub struct Video {
     z_index: PropertyUint32,
     priority: PropertyUint32,
     path: PropertyStr,
+    len: PropertyUint32,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
@@ -67,13 +69,14 @@ impl Video {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
+        let len = PropertyUint32::wrap(node_ref, Role::Internal, "length", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
             render_api,
             tasks: SyncMutex::new(vec![]),
 
-            texture: SyncMutex::new(None),
+            textures: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
             rect,
@@ -81,6 +84,7 @@ impl Video {
             z_index,
             priority,
             path,
+            len,
 
             parent_rect: SyncMutex::new(None),
         });
@@ -89,15 +93,25 @@ impl Video {
     }
 
     async fn reload(self: Arc<Self>, batch: BatchGuardPtr) {
-        let texture = self.load_texture();
-        *self.texture.lock() = Some(texture);
-
+        self.load_textures();
         self.clone().redraw(batch).await;
     }
 
-    fn load_texture(&self) -> ManagedTexturePtr {
-        let path = self.path.get();
+    fn load_textures(&self) {
+        let len = self.len.get();
+        let mut textures = Vec::with_capacity(len as usize);
+        let path_fmt = self.path.get();
+        for i in 0..len {
+            t!("i = {i}");
+            let path = path_fmt.replace("{frame}", &format!("{i:#03}"));
+            let texture = self.load_texture(path);
+            textures.push(texture);
+        }
 
+        *self.textures.lock() = textures;
+    }
+
+    fn load_texture(&self, path: String) -> ManagedTexturePtr {
         // TODO we should NOT use panic here
         let data = Arc::new(SyncMutex::new(vec![]));
         let data2 = data.clone();
@@ -157,24 +171,36 @@ impl Video {
         self.uv.eval(atom, &rect).ok()?;
 
         let mesh = self.regen_mesh();
-        let texture = self.texture.lock().clone().expect("Node missing texture_id!");
+        let textures = self.textures.lock().clone();
+        assert!(!textures.is_empty());
 
-        let mesh = GfxDrawMesh {
-            vertex_buffer: mesh.vertex_buffer,
-            index_buffer: mesh.index_buffer,
-            texture: Some(texture),
-            num_elements: mesh.num_elements,
-        };
+        let mut frames = Vec::with_capacity(textures.len());
+        for texture in textures {
+            let mesh = GfxDrawMesh {
+                vertex_buffer: mesh.vertex_buffer.clone(),
+                index_buffer: mesh.index_buffer.clone(),
+                texture: Some(texture),
+                num_elements: mesh.num_elements,
+            };
+            let dc = GfxDrawCall {
+                instrs: vec![GfxDrawInstruction::Draw(mesh)],
+                dcs: vec![],
+                z_index: 0,
+                debug_str: "video",
+            };
+            frames.push(GfxSequenceAnimationFrame::new(40, dc));
+        }
+        let anim = GfxSequenceAnimation::new(false, frames);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
                 GfxDrawCall::new(
-                    vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)],
+                    vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Animation(anim)],
                     vec![],
                     self.z_index.get(),
-                    "img",
+                    "vid",
                 ),
             )],
         })
@@ -188,7 +214,7 @@ impl UIObject for Video {
     }
 
     fn init(&self) {
-        *self.texture.lock() = Some(self.load_texture());
+        self.load_textures();
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
@@ -206,7 +232,7 @@ impl UIObject for Video {
     fn stop(&self) {
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
-        *self.texture.lock() = None;
+        self.textures.lock().clear();
     }
 
     async fn draw(
@@ -231,4 +257,3 @@ impl Drop for Video {
         );
     }
 }
-
