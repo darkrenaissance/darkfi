@@ -24,7 +24,7 @@ use std::{
 };
 
 use log::{error, info, warn};
-use rand::{prelude::IteratorRandom, rngs::OsRng};
+use rand::{prelude::SliceRandom, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use smol::lock::RwLock;
 use tinyjson::JsonValue;
@@ -70,12 +70,12 @@ impl BitcoinHashCache {
         let btc_electrum_nodes = self.settings.read().await.btc_electrum_nodes.clone();
 
         let mut rng = OsRng;
-        let random_nodes: Vec<_> =
-            btc_electrum_nodes.iter().choose_multiple(&mut rng, btc_electrum_nodes.len());
+        let mut shuffled_nodes: Vec<_> = btc_electrum_nodes.clone();
+        shuffled_nodes.shuffle(&mut rng);
 
-        for addr in random_nodes {
+        for addr in shuffled_nodes {
             // Connect to the Electrum node
-            let client = match self.create_rpc_client(addr).await {
+            let client = match self.create_rpc_client(&addr).await {
                 Ok(client) => client,
                 Err(e) => {
                     warn!(target: "fud::BitcoinHashCache::update()", "[BTC] Error while creating RPC client for Electrum node {addr}: {e}");
