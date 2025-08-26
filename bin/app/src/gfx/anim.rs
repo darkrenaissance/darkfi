@@ -24,7 +24,7 @@ use std::{
     io::Write,
     sync::{
         atomic::{AtomicU32, Ordering},
-        Arc,
+        Arc, RwLock,
     },
 };
 
@@ -32,6 +32,19 @@ use super::{DrawCall, GfxBufferId, GfxDrawCall, GfxTextureId};
 
 // This can be in instruction but also implement encodable
 // maybe just remove trax?
+
+/*
+type GfxFrameOpt = Arc<RwLock<Option<GfxSequenceAnimationFrame>>>;
+
+pub struct SequenceAnimBuffer {
+    frames: Vec<GfxFrameOpt>
+}
+
+impl SequenceAnimBuffer {
+    pub fn new(len: usize) -> Self {
+    }
+}
+*/
 
 #[derive(Debug, Clone, SerialEncodable)]
 pub struct GfxSequenceAnimation {
@@ -41,6 +54,7 @@ pub struct GfxSequenceAnimation {
 
 impl GfxSequenceAnimation {
     pub fn new(oneshot: bool, frames: Vec<GfxSequenceAnimationFrame>) -> Self {
+        //let frames = frames.into_iter().map(|f| Arc::new(RwLock::new(
         Self { oneshot, frames }
     }
 
@@ -99,6 +113,7 @@ impl AsyncEncodable for GfxSequenceAnimationFrame {
 pub(super) struct SequenceAnimation {
     oneshot: bool,
     frames: Vec<SequenceAnimationFrame>,
+    //incoming_frames: Vec<Arc<RwLock<Option<GfxSequenceAnimationFrame>>>>,
     state: RefCell<SequenceAnimationState>,
 }
 

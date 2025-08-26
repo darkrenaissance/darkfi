@@ -20,7 +20,13 @@ use async_trait::async_trait;
 use image::ImageReader;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::{io::Cursor, sync::Arc};
+use std::{
+    io::Cursor,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use crate::{
     gfx::{
@@ -45,6 +51,7 @@ pub struct Video {
     node: SceneNodeWeak,
     render_api: RenderApi,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
+    stop_load: Arc<AtomicBool>,
 
     textures: SyncMutex<Vec<ManagedTexturePtr>>,
     dc_key: u64,
@@ -75,6 +82,7 @@ impl Video {
             node,
             render_api,
             tasks: SyncMutex::new(vec![]),
+            stop_load: Arc::new(AtomicBool::new(false)),
 
             textures: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
@@ -98,20 +106,40 @@ impl Video {
     }
 
     fn load_textures(&self) {
+        let (sendr, recvr) = async_channel::bounded(1);
         let len = self.len.get();
-        let mut textures = Vec::with_capacity(len as usize);
         let path_fmt = self.path.get();
-        for i in 0..len {
-            t!("i = {i}");
-            let path = path_fmt.replace("{frame}", &format!("{i:#03}"));
-            let texture = self.load_texture(path);
-            textures.push(texture);
-        }
+        let render_api = self.render_api.clone();
+        let stop_load = self.stop_load.clone();
+        let handle = std::thread::spawn(move || {
+            let mut textures = Vec::with_capacity(len as usize);
+            let instant = std::time::Instant::now();
+            for i in 0..len {
+                // Stop loading instantly
+                if stop_load.load(Ordering::Relaxed) {
+                    return
+                }
+                t!("i = {i}");
+                let path = path_fmt.replace("{frame}", &format!("{i:#03}"));
+                let texture = Self::load_texture(path, &render_api);
+                textures.push(texture);
+            }
+            t!("elapsed = {:?}", instant.elapsed());
+            sendr.send_blocking(textures).unwrap();
+        });
+
+        // Temp here
+        let Ok(textures) = recvr.recv_blocking() else {
+            let node_ref = &self.node.upgrade().unwrap();
+            t!("loading textures was stopped {node_ref:?}");
+            return
+        };
+        assert!(handle.is_finished());
 
         *self.textures.lock() = textures;
     }
 
-    fn load_texture(&self, path: String) -> ManagedTexturePtr {
+    fn load_texture(path: String, render_api: &RenderApi) -> ManagedTexturePtr {
         // TODO we should NOT use panic here
         let data = Arc::new(SyncMutex::new(vec![]));
         let data2 = data.clone();
@@ -133,7 +161,7 @@ impl Video {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        self.render_api.new_texture(width, height, bmp, gfxtag!("img"))
+        render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }
 
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
