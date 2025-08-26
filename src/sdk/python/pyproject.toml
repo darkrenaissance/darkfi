@@ -4,6 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "darkfi-sdk"
+version = "0.5.0"
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",

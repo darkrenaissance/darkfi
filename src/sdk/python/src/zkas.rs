@@ -257,7 +257,7 @@ impl ProvingKey {
 
 #[pyclass]
 /// A zkVM proof
-pub struct Proof(zk::proof::Proof);
+pub struct Proof(pub(crate) zk::proof::Proof);
 
 #[pymethods]
 impl Proof {

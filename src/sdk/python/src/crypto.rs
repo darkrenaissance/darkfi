@@ -16,13 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ops::Deref;
+use std::{fmt::Write, ops::Deref};
 
-use darkfi_sdk::{crypto, pasta::pallas};
+use darkfi_sdk::{crypto, crypto::util::FieldElemAsStr, hex::AsHex, pasta::pallas};
 use pyo3::{
-    prelude::{PyModule, PyModuleMethods},
-    pyfunction, wrap_pyfunction, Bound, PyResult, Python,
+    prelude::{PyDictMethods, PyModule, PyModuleMethods},
+    pyclass, pyfunction, pymethods,
+    types::PyDict,
+    wrap_pyfunction, Bound, Py, PyResult, Python,
 };
+
+use crate::contract::{impl_py_methods, FunctionParams};
 
 use super::pasta::{Ep, Fp, Fq};
 
@@ -64,6 +68,74 @@ pub fn pedersen_commitment_base(value: &Bound<Fp>, blind: &Bound<Fq>) -> Ep {
         value.borrow().deref().0,
         crypto::Blind(blind.borrow().deref().0),
     ))
+}
+
+/// [`crypto::schnorr::Signature`] python binding
+#[pyclass]
+pub struct Signature(pub crypto::schnorr::Signature);
+
+#[pymethods]
+impl Signature {
+    pub fn __str__(&self) -> String {
+        format!("{:?}", self.0)
+    }
+}
+
+/// [`crypto::note::AeadEncryptedNote`] python binding
+#[pyclass]
+pub struct AeadEncryptedNote(crypto::note::AeadEncryptedNote);
+impl_py_methods!(AeadEncryptedNote);
+
+impl FunctionParams for crypto::note::AeadEncryptedNote {
+    fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("ephem_public", self.ephem_public.to_string())?;
+        dict.set_item("ciphertext", self.ciphertext.hex())?;
+        Ok(dict.unbind())
+    }
+
+    fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
+        let prefix = format!("{}├─ ", "   ".repeat(depth));
+        writeln!(out, "{prefix}ephem_public: {}", self.ephem_public).unwrap();
+        writeln!(out, "{prefix}ciphertext: [{} bytes]", self.ciphertext.len()).unwrap();
+        Ok(())
+    }
+}
+
+macro_rules! el_gamal_encrypted_note_binding {
+    ($name: ident, $typ:literal) => {
+        #[pyo3::pyclass]
+        pub struct $name(crypto::note::ElGamalEncryptedNote<$typ>);
+
+        crate::impl_py_methods!($name);
+    };
+}
+
+el_gamal_encrypted_note_binding!(ElGamalEncryptedNote3, 3);
+el_gamal_encrypted_note_binding!(ElGamalEncryptedNote4, 4);
+el_gamal_encrypted_note_binding!(ElGamalEncryptedNote5, 5);
+
+impl<const N: usize> FunctionParams for crypto::note::ElGamalEncryptedNote<N> {
+    fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("ephem_public", self.ephem_public.to_string())?;
+        dict.set_item(
+            "encrypted_values",
+            self.encrypted_values.iter().map(|b| b.to_string()).collect::<Vec<_>>(),
+        )?;
+        Ok(dict.unbind())
+    }
+
+    fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
+        let prefix = format!("{}├─ ", "   ".repeat(depth));
+        writeln!(out, "{prefix}ephem_public: {}", self.ephem_public).unwrap();
+        writeln!(out, "{prefix}encrypted_values:").unwrap();
+
+        for value in &self.encrypted_values {
+            writeln!(out, "   {prefix}{}", value.to_string()).unwrap();
+        }
+        Ok(())
+    }
 }
 
 /// Wrapper function for creating this Python module.

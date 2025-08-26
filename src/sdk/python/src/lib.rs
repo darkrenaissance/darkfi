@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use pyo3::prelude::PyAnyMethods;
+
 /// Pallas and Vesta curves
 mod pasta;
 
@@ -28,25 +30,39 @@ mod crypto;
 /// zkas definitions
 mod zkas;
 
+/// Contract definitions
+mod contract;
+
+/// Transaction definitions
+mod tx;
+
 #[pyo3::prelude::pymodule]
 fn darkfi_sdk(
     py: pyo3::Python<'_>,
     m: &pyo3::Bound<'_, pyo3::prelude::PyModule>,
 ) -> pyo3::PyResult<()> {
     let submodule = pasta::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.pasta'] = submodule");
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.pasta", &submodule)?;
     pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
 
     let submodule = merkle::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.merkle'] = submodule");
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.merkle", &submodule)?;
     pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
 
     let submodule = crypto::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.crypto'] = submodule");
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.crypto", &submodule)?;
     pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
 
     let submodule = zkas::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.zkas'] = submodule");
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.zkas", &submodule)?;
+    pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
+
+    let submodule = tx::create_module(py)?;
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.tx", &submodule)?;
+    pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
+
+    let submodule = contract::create_module(py)?;
+    py.import("sys")?.getattr("modules")?.set_item("darkfi_sdk.contract", &submodule)?;
     pyo3::types::PyModuleMethods::add_submodule(m, &submodule)?;
 
     Ok(())
