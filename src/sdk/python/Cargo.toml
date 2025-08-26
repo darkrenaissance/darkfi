@@ -14,8 +14,12 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-darkfi = {path = "../../../", features = ["zk", "zkas"]}
+darkfi = {path = "../../../", features = ["zk", "zkas", "tx"]}
+darkfi_money_contract = {path = "../../contract/money", features=["no-entrypoint", "client"]}
+darkfi_dao_contract = {path = "../../contract/dao", features=["no-entrypoint", "client"]}
+darkfi_deployooor_contract = {path = "../../contract/deployooor", features=["no-entrypoint", "client"]}
 darkfi-sdk = {path = "../"}
+darkfi-serial = {version = "0.5.1", features = ["crypto"]}
 halo2_proofs = {version = "0.3.1", features = ["circuit-params", "dev-graph", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.1", features = ["circuit-params"]}
 plotters = "0.3.7"

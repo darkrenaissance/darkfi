@@ -1902,6 +1902,10 @@ version = "0.5.0"
 dependencies = [
  "darkfi",
  "darkfi-sdk",
+ "darkfi-serial",
+ "darkfi_dao_contract",
+ "darkfi_deployooor_contract",
+ "darkfi_money_contract",
  "halo2_gadgets",
  "halo2_proofs",
  "plotters",
