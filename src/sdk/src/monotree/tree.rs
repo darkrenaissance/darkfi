@@ -224,17 +224,18 @@ impl MonotreeStorageAdapter for SledTreeDb {
 }
 
 /// sled-overlay based storage for Monotree
-#[derive(Clone)]
-pub struct SledOverlayDb {
-    overlay: SledDbOverlay,
+pub struct SledOverlayDb<'a> {
+    overlay: &'a mut SledDbOverlay,
     tree: [u8; 32],
     batch: MemCache,
     batch_on: bool,
 }
 
-impl SledOverlayDb {
-    pub fn new(overlay: &SledDbOverlay, tree: &[u8; 32]) -> GenericResult<Self> {
-        let mut overlay = overlay.clone();
+impl<'a> SledOverlayDb<'a> {
+    pub fn new(
+        overlay: &'a mut SledDbOverlay,
+        tree: &[u8; 32],
+    ) -> GenericResult<SledOverlayDb<'a>> {
         if let Err(e) = overlay.open_tree(tree, false) {
             return Err(ContractError::IoError(e.to_string()))
         };
@@ -242,7 +243,7 @@ impl SledOverlayDb {
     }
 }
 
-impl MonotreeStorageAdapter for SledOverlayDb {
+impl MonotreeStorageAdapter for SledOverlayDb<'_> {
     fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
         if self.batch_on {
             self.batch.put(key, value);
