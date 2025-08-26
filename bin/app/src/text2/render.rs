@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    gfx::{DebugTag, GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi},
+    gfx::{DebugTag, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
@@ -53,7 +53,7 @@ pub fn render_layout(
     layout: &parley::Layout<Color>,
     render_api: &RenderApi,
     tag: DebugTag,
-) -> Vec<GfxDrawInstruction> {
+) -> Vec<DrawInstruction> {
     render_layout_with_opts(layout, DebugRenderOptions::OFF, render_api, tag)
 }
 
@@ -62,7 +62,7 @@ pub fn render_layout_with_opts(
     opts: DebugRenderOptions,
     render_api: &RenderApi,
     tag: DebugTag,
-) -> Vec<GfxDrawInstruction> {
+) -> Vec<DrawInstruction> {
     let mut scale_cx = swash::scale::ScaleContext::new();
     let mut run_idx = 0;
     let mut instrs = vec![];
@@ -72,7 +72,7 @@ pub fn render_layout_with_opts(
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
                     let mesh =
                         render_glyph_run(&mut scale_cx, &glyph_run, run_idx, opts, render_api, tag);
-                    instrs.push(GfxDrawInstruction::Draw(mesh));
+                    instrs.push(DrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
                 parley::PositionedLayoutItem::InlineBox(_) => {}
@@ -89,7 +89,7 @@ fn render_glyph_run(
     opts: DebugRenderOptions,
     render_api: &RenderApi,
     tag: DebugTag,
-) -> GfxDrawMesh {
+) -> DrawMesh {
     let mut run_x = glyph_run.offset();
     let run_y = glyph_run.baseline();
     let style = glyph_run.style();

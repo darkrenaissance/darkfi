@@ -22,7 +22,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     util::unixtime,
@@ -101,7 +101,7 @@ impl VectorArt {
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
     }
 
-    fn get_draw_instrs(&self) -> Vec<GfxDrawInstruction> {
+    fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
         if !self.is_visible.get() {
             t!("Skipping draw for invisible {}", self.node_path());
             return vec![]
@@ -115,9 +115,9 @@ impl VectorArt {
         //debug!(target: "ui::vector_art", "vec_draw_instrs {verts:?} | {indices:?} | {num_elements}");
         let vertex_buffer = self.render_api.new_vertex_buffer(verts, gfxtag!("vectorart"));
         let index_buffer = self.render_api.new_index_buffer(indices, gfxtag!("vectorart"));
-        let mesh = GfxDrawMesh { vertex_buffer, index_buffer, texture: None, num_elements };
+        let mesh = DrawMesh { vertex_buffer, index_buffer, texture: None, num_elements };
 
-        vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)]
+        vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
     }
 
     async fn get_draw_calls(
@@ -135,7 +135,7 @@ impl VectorArt {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "vecart"),
+                DrawCall::new(instrs, vec![], self.z_index.get(), "vecart"),
             )],
         })
     }

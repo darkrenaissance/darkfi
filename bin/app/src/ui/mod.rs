@@ -22,7 +22,7 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, Point, Rectangle},
+    gfx::{DrawCall, Point, Rectangle},
     prop::{BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
@@ -115,7 +115,7 @@ pub trait UIObject: Sync {
 
 pub struct DrawUpdate {
     pub key: u64,
-    pub draw_calls: Vec<(u64, GfxDrawCall)>,
+    pub draw_calls: Vec<(u64, DrawCall)>,
 }
 
 pub struct OnModify<T> {

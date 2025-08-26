@@ -23,7 +23,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::{i18n::I18nBabelFish, unixtime},
@@ -131,8 +131,8 @@ impl Layer {
             }
         }
 
-        let dc = GfxDrawCall::new(
-            vec![GfxDrawInstruction::ApplyView(rect)],
+        let dc = DrawCall::new(
+            vec![DrawInstruction::ApplyView(rect)],
             child_calls,
             self.z_index.get(),
             "layer",

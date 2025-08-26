@@ -100,8 +100,8 @@ impl Vertex {
     }
 }
 
-pub type GfxTextureId = u32;
-pub type GfxBufferId = u32;
+pub type TextureId = u32;
+pub type BufferId = u32;
 
 static NEXT_BUFFER_ID: AtomicU32 = AtomicU32::new(0);
 static NEXT_TEXTURE_ID: AtomicU32 = AtomicU32::new(0);
@@ -111,7 +111,7 @@ pub type ManagedTexturePtr = Arc<ManagedTexture>;
 /// Auto-deletes texture on drop
 #[derive(Clone)]
 pub struct ManagedTexture {
-    id: GfxTextureId,
+    id: TextureId,
     epoch: u32,
     render_api: RenderApi,
     tag: DebugTag,
@@ -134,7 +134,7 @@ pub type ManagedBufferPtr = Arc<ManagedBuffer>;
 /// Auto-deletes buffer on drop
 #[derive(Clone)]
 pub struct ManagedBuffer {
-    id: GfxBufferId,
+    id: BufferId,
     epoch: u32,
     render_api: RenderApi,
     tag: DebugTag,
@@ -187,7 +187,7 @@ impl RenderApi {
         height: u16,
         data: Vec<u8>,
         tag: DebugTag,
-    ) -> (GfxTextureId, EpochIndex) {
+    ) -> (TextureId, EpochIndex) {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id, tag));
@@ -207,7 +207,7 @@ impl RenderApi {
         Arc::new(ManagedTexture { id, epoch, render_api: self.clone(), tag })
     }
 
-    fn delete_unmanaged_texture(&self, texture: GfxTextureId, epoch: EpochIndex, tag: DebugTag) {
+    fn delete_unmanaged_texture(&self, texture: TextureId, epoch: EpochIndex, tag: DebugTag) {
         let method = GraphicsMethod::DeleteTexture((texture, tag));
         self.send_with_epoch(method, epoch);
     }
@@ -216,7 +216,7 @@ impl RenderApi {
         &self,
         verts: Vec<Vertex>,
         tag: DebugTag,
-    ) -> (GfxBufferId, EpochIndex) {
+    ) -> (BufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
 
         let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id, tag));
@@ -229,7 +229,7 @@ impl RenderApi {
         &self,
         indices: Vec<u16>,
         tag: DebugTag,
-    ) -> (GfxBufferId, EpochIndex) {
+    ) -> (BufferId, EpochIndex) {
         let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
 
         let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id, tag));
@@ -249,7 +249,7 @@ impl RenderApi {
 
     fn delete_unmanaged_buffer(
         &self,
-        buffer: GfxBufferId,
+        buffer: BufferId,
         epoch: EpochIndex,
         tag: DebugTag,
         buftype: u8,
@@ -262,9 +262,9 @@ impl RenderApi {
         &self,
         batch_id: BatchGuardId,
         timest: Timestamp,
-        dcs: Vec<(DcId, GfxDrawCall)>,
+        dcs: Vec<(DcId, DrawCall)>,
     ) {
-        let method = GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs };
+        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs };
         self.send(method);
     }
 
@@ -287,20 +287,20 @@ impl RenderApi {
 }
 
 #[derive(Clone, Debug)]
-pub struct GfxDrawMesh {
+pub struct DrawMesh {
     pub vertex_buffer: ManagedBufferPtr,
     pub index_buffer: ManagedBufferPtr,
     pub texture: Option<ManagedTexturePtr>,
     pub num_elements: i32,
 }
 
-impl GfxDrawMesh {
+impl DrawMesh {
     fn compile(
         self,
-        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
-        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        textures: &HashMap<TextureId, miniquad::TextureId>,
+        buffers: &HashMap<BufferId, miniquad::BufferId>,
         debug_str: &'static str,
-    ) -> Option<DrawMesh> {
+    ) -> Option<GfxDrawMesh> {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
         let _buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
@@ -308,7 +308,7 @@ impl GfxDrawMesh {
             Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture, debug_str),
             None => None,
         };
-        Some(DrawMesh {
+        Some(GfxDrawMesh {
             vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id, debug_str)?,
             index_buffer: Self::try_get_buffer(buffers, index_buffer_id, debug_str)?,
             _buffers_keep_alive,
@@ -318,7 +318,7 @@ impl GfxDrawMesh {
     }
 
     fn try_get_texture(
-        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
+        textures: &HashMap<TextureId, miniquad::TextureId>,
         gfx_texture: ManagedTexturePtr,
         debug_str: &'static str,
     ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
@@ -338,8 +338,8 @@ impl GfxDrawMesh {
     }
 
     fn try_get_buffer(
-        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-        gfx_buffer_id: GfxBufferId,
+        buffers: &HashMap<BufferId, miniquad::BufferId>,
+        gfx_buffer_id: BufferId,
         debug_str: &'static str,
     ) -> Option<miniquad::BufferId> {
         let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
@@ -355,7 +355,7 @@ impl GfxDrawMesh {
     }
 }
 
-impl Encodable for GfxDrawMesh {
+impl Encodable for DrawMesh {
     fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
         let mut len = 0;
         len += self.vertex_buffer.id.encode(s)?;
@@ -383,7 +383,7 @@ impl Encodable for GfxDrawMesh {
 }
 
 #[async_trait]
-impl AsyncEncodable for GfxDrawMesh {
+impl AsyncEncodable for DrawMesh {
     async fn encode_async<W: AsyncWrite + Unpin + Send>(
         &self,
         _: &mut W,
@@ -393,47 +393,49 @@ impl AsyncEncodable for GfxDrawMesh {
 }
 
 #[derive(Debug, Clone, SerialEncodable)]
-pub enum GfxDrawInstruction {
+pub enum DrawInstruction {
     SetScale(f32),
     Move(Point),
     SetPos(Point),
     ApplyView(Rectangle),
-    Draw(GfxDrawMesh),
-    Animation(GfxSequenceAnimation),
+    Draw(DrawMesh),
+    Animation(SequenceAnimation),
     EnableDebug,
 }
 
-impl GfxDrawInstruction {
+impl DrawInstruction {
     fn compile(
         self,
-        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
-        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        textures: &HashMap<TextureId, miniquad::TextureId>,
+        buffers: &HashMap<BufferId, miniquad::BufferId>,
         debug_str: &'static str,
-    ) -> Option<DrawInstruction> {
+    ) -> Option<GfxDrawInstruction> {
         let instr = match self {
-            Self::SetScale(scale) => DrawInstruction::SetScale(scale),
-            Self::Move(off) => DrawInstruction::Move(off),
-            Self::SetPos(pos) => DrawInstruction::SetPos(pos),
-            Self::ApplyView(view) => DrawInstruction::ApplyView(view),
-            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?),
-            Self::Animation(anim) => DrawInstruction::Animation(anim.compile(textures, buffers)),
-            Self::EnableDebug => DrawInstruction::EnableDebug,
+            Self::SetScale(scale) => GfxDrawInstruction::SetScale(scale),
+            Self::Move(off) => GfxDrawInstruction::Move(off),
+            Self::SetPos(pos) => GfxDrawInstruction::SetPos(pos),
+            Self::ApplyView(view) => GfxDrawInstruction::ApplyView(view),
+            Self::Draw(mesh) => {
+                GfxDrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?)
+            }
+            Self::Animation(anim) => GfxDrawInstruction::Animation(anim.compile(textures, buffers)),
+            Self::EnableDebug => GfxDrawInstruction::EnableDebug,
         };
         Some(instr)
     }
 }
 
 #[derive(Clone, Debug, Default, SerialEncodable)]
-pub struct GfxDrawCall {
-    pub instrs: Vec<GfxDrawInstruction>,
+pub struct DrawCall {
+    pub instrs: Vec<DrawInstruction>,
     pub dcs: Vec<DcId>,
     pub z_index: u32,
     pub debug_str: &'static str,
 }
 
-impl GfxDrawCall {
+impl DrawCall {
     pub fn new(
-        instrs: Vec<GfxDrawInstruction>,
+        instrs: Vec<DrawInstruction>,
         dcs: Vec<DcId>,
         z_index: u32,
         debug_str: &'static str,
@@ -443,11 +445,11 @@ impl GfxDrawCall {
 
     fn compile(
         self,
-        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
-        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        textures: &HashMap<TextureId, miniquad::TextureId>,
+        buffers: &HashMap<BufferId, miniquad::BufferId>,
         timest: Timestamp,
-    ) -> Option<DrawCall> {
-        Some(DrawCall {
+    ) -> Option<GfxDrawCall> {
+        Some(GfxDrawCall {
             instrs: self
                 .instrs
                 .into_iter()
@@ -461,7 +463,7 @@ impl GfxDrawCall {
 }
 
 #[derive(Clone, Debug)]
-struct DrawMesh {
+struct GfxDrawMesh {
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
     /// Keeps the buffers alive for the duration of this draw call
@@ -471,19 +473,19 @@ struct DrawMesh {
 }
 
 #[derive(Debug, Clone)]
-enum DrawInstruction {
+enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
     SetPos(Point),
     ApplyView(Rectangle),
-    Draw(DrawMesh),
-    Animation(SequenceAnimation),
+    Draw(GfxDrawMesh),
+    Animation(GfxSequenceAnimation),
     EnableDebug,
 }
 
 #[derive(Clone, Debug)]
-struct DrawCall {
-    instrs: Vec<DrawInstruction>,
+struct GfxDrawCall {
+    instrs: Vec<GfxDrawInstruction>,
     dcs: Vec<DcId>,
     z_index: u32,
     timest: Timestamp,
@@ -491,7 +493,7 @@ struct DrawCall {
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
-    draw_calls: &'a HashMap<DcId, DrawCall>,
+    draw_calls: &'a HashMap<DcId, GfxDrawCall>,
     uniforms_data: [u8; 128],
     white_texture: miniquad::TextureId,
 
@@ -552,7 +554,7 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_uniforms_from_bytes(self.uniforms_data.as_ptr(), self.uniforms_data.len());
     }
 
-    fn draw_call(&mut self, draw_call: &DrawCall, mut indent: u32, mut is_debug: bool) {
+    fn draw_call(&mut self, draw_call: &GfxDrawCall, mut indent: u32, mut is_debug: bool) {
         let ws = if is_debug { " ".repeat(indent as usize * 4) } else { String::new() };
 
         let old_scale = self.scale;
@@ -564,7 +566,7 @@ impl<'a> RenderContext<'a> {
                 get_trax().lock().set_instr(idx);
             }
             match instr {
-                DrawInstruction::SetScale(scale) => {
+                GfxDrawInstruction::SetScale(scale) => {
                     self.scale = *scale;
                     self.view.w /= self.scale;
                     self.view.h /= self.scale;
@@ -572,7 +574,7 @@ impl<'a> RenderContext<'a> {
                         debug!(target: "gfx", "{ws}set_scale({scale})");
                     }
                 }
-                DrawInstruction::Move(off) => {
+                GfxDrawInstruction::Move(off) => {
                     self.cursor += *off;
                     if is_debug {
                         debug!(target: "gfx",
@@ -582,7 +584,7 @@ impl<'a> RenderContext<'a> {
                     }
                     self.apply_model();
                 }
-                DrawInstruction::SetPos(pos) => {
+                GfxDrawInstruction::SetPos(pos) => {
                     self.cursor = old_cursor + *pos;
                     if is_debug {
                         debug!(target: "gfx",
@@ -592,7 +594,7 @@ impl<'a> RenderContext<'a> {
                     }
                     self.apply_model();
                 }
-                DrawInstruction::ApplyView(view) => {
+                GfxDrawInstruction::ApplyView(view) => {
                     // Adjust view relative to cursor
                     self.view = *view + self.cursor;
 
@@ -614,7 +616,7 @@ impl<'a> RenderContext<'a> {
                     self.apply_view();
                     self.apply_model();
                 }
-                DrawInstruction::Draw(mesh) => {
+                GfxDrawInstruction::Draw(mesh) => {
                     if is_debug {
                         debug!(target: "gfx", "{ws}draw({mesh:?})");
                     }
@@ -630,11 +632,11 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
-                DrawInstruction::Animation(anim) => {
+                GfxDrawInstruction::Animation(anim) => {
                     let dc = anim.tick();
                     self.draw_call(&dc, indent + 1, is_debug);
                 }
-                DrawInstruction::EnableDebug => {
+                GfxDrawInstruction::EnableDebug => {
                     if !is_debug {
                         indent = 0;
                     }
@@ -677,12 +679,12 @@ type DcId = u64;
 
 #[derive(Clone)]
 pub enum GraphicsMethod {
-    NewTexture((u16, u16, Vec<u8>, GfxTextureId, DebugTag)),
-    DeleteTexture((GfxTextureId, DebugTag)),
-    NewVertexBuffer((Vec<Vertex>, GfxBufferId, DebugTag)),
-    NewIndexBuffer((Vec<u16>, GfxBufferId, DebugTag)),
-    DeleteBuffer((GfxBufferId, DebugTag, u8)),
-    ReplaceDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, GfxDrawCall)> },
+    NewTexture((u16, u16, Vec<u8>, TextureId, DebugTag)),
+    DeleteTexture((TextureId, DebugTag)),
+    NewVertexBuffer((Vec<Vertex>, BufferId, DebugTag)),
+    NewIndexBuffer((Vec<u16>, BufferId, DebugTag)),
+    DeleteBuffer((BufferId, DebugTag, u8)),
+    ReplaceGfxDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, DrawCall)> },
     StartBatch((BatchGuardId, Option<&'static str>)),
     EndBatch(BatchGuardId),
 }
@@ -695,8 +697,8 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::NewVertexBuffer(_) => write!(f, "NewVertexBuffer"),
             Self::NewIndexBuffer(_) => write!(f, "NewIndexBuffer"),
             Self::DeleteBuffer(_) => write!(f, "DeleteBuffer"),
-            Self::ReplaceDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
-                write!(f, "ReplaceDrawCalls({bid})")
+            Self::ReplaceGfxDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
+                write!(f, "ReplaceGfxDrawCalls({bid})")
             }
             Self::StartBatch((bid, debug_str)) => write!(f, "StartBatch({bid}, {debug_str:?})"),
             Self::EndBatch(bid) => write!(f, "EndBatch({bid})"),
@@ -833,11 +835,11 @@ struct Stage {
     libegl: egl::LibEgl,
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
-    draw_calls: HashMap<DcId, DrawCall>,
+    draw_calls: HashMap<DcId, GfxDrawCall>,
     batches: HashMap<BatchGuardId, Vec<GraphicsMethod>>,
 
-    textures: HashMap<GfxTextureId, miniquad::TextureId>,
-    buffers: HashMap<GfxBufferId, miniquad::BufferId>,
+    textures: HashMap<TextureId, miniquad::TextureId>,
+    buffers: HashMap<BufferId, miniquad::BufferId>,
 
     epoch: EpochIndex,
     method_queue: Arc<SyncMutex<Vec<(EpochIndex, GraphicsMethod)>>>,
@@ -868,10 +870,10 @@ impl Stage {
         let sink_task = god.fg_ex.spawn(async move {
             // Pull from render_api
             while let Ok((epoch, method)) = method_recv.recv().await {
-                let is_replace_dc = matches!(method, GraphicsMethod::ReplaceDrawCalls { .. });
+                let is_replace_dc = matches!(method, GraphicsMethod::ReplaceGfxDrawCalls { .. });
                 // Append to stage data
                 method_queue2.lock().push((epoch, method));
-                // If ReplaceDrawCall then wake up miniquad
+                // If ReplaceGfxDrawCall then wake up miniquad
                 if is_replace_dc {
                     miniquad::window::schedule_update();
                 }
@@ -929,7 +931,7 @@ impl Stage {
             white_texture,
             draw_calls: HashMap::from([(
                 0,
-                DrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
+                GfxDrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
             )]),
             batches: HashMap::new(),
 
@@ -959,12 +961,12 @@ impl Stage {
                 self.method_new_index_buffer(indices, *gbuff_id)
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
-            GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
                 //t!("Commit dc to {batch_id}: {debug_strs:?}");
                 let batch = self.batches.get_mut(batch_id).unwrap();
                 let dcs = std::mem::take(dcs);
-                batch.push(GraphicsMethod::ReplaceDrawCalls {
+                batch.push(GraphicsMethod::ReplaceGfxDrawCalls {
                     batch_id: *batch_id,
                     timest: *timest,
                     dcs,
@@ -989,7 +991,7 @@ impl Stage {
                 let batch = self.batches.remove(batch_id).unwrap();
                 for mut method in batch {
                     let res = match &mut method {
-                        GraphicsMethod::ReplaceDrawCalls { batch_id: _, timest, dcs } => {
+                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest, dcs } => {
                             let dcs = std::mem::take(dcs);
                             self.method_replace_draw_calls(*timest, dcs)
                         }
@@ -1014,7 +1016,7 @@ impl Stage {
         width: u16,
         height: u16,
         data: &Vec<u8>,
-        gfx_texture_id: GfxTextureId,
+        gfx_texture_id: TextureId,
     ) -> Result<()> {
         let texture = self.ctx.new_texture_from_rgba8(width, height, data);
         if DEBUG_GFXAPI {
@@ -1036,7 +1038,7 @@ impl Stage {
         }
         Ok(())
     }
-    fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) -> Result<()> {
+    fn method_delete_texture(&mut self, gfx_texture_id: TextureId) -> Result<()> {
         let Some(texture) = self.textures.remove(&gfx_texture_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
@@ -1057,7 +1059,7 @@ impl Stage {
     fn method_new_vertex_buffer(
         &mut self,
         verts: &[Vertex],
-        gfx_buffer_id: GfxBufferId,
+        gfx_buffer_id: BufferId,
     ) -> Result<()> {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
@@ -1082,11 +1084,7 @@ impl Stage {
         }
         Ok(())
     }
-    fn method_new_index_buffer(
-        &mut self,
-        indices: &[u16],
-        gfx_buffer_id: GfxBufferId,
-    ) -> Result<()> {
+    fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) -> Result<()> {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
@@ -1110,7 +1108,7 @@ impl Stage {
         }
         Ok(())
     }
-    fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) -> Result<()> {
+    fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) -> Result<()> {
         let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
@@ -1131,7 +1129,7 @@ impl Stage {
     fn method_replace_draw_calls(
         &mut self,
         timest: Timestamp,
-        dcs: Vec<(DcId, GfxDrawCall)>,
+        dcs: Vec<(DcId, DrawCall)>,
     ) -> Result<()> {
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
@@ -1189,7 +1187,7 @@ impl Stage {
             GraphicsMethod::DeleteBuffer((gbuff_id, tag, buftype)) => {
                 trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
-            GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 trax.put_dcs(epoch, *batch_id, *timest, dcs);
             }
             GraphicsMethod::StartBatch((batch_id, debug_str)) => {
@@ -1217,13 +1215,13 @@ impl Stage {
 /// Will drop alloc/delete pairs, and merge draw calls together.
 struct PruneMethodHeap {
     /// Newly allocated buffers while screen was off
-    new_buf: HashMap<GfxBufferId, GraphicsMethod>,
+    new_buf: HashMap<BufferId, GraphicsMethod>,
     /// Newly allocated textures while screen was off
-    new_tex: HashMap<GfxTextureId, GraphicsMethod>,
+    new_tex: HashMap<TextureId, GraphicsMethod>,
     /// Deleted objects
     del: Vec<GraphicsMethod>,
     /// Draw calls
-    dcs: HashMap<DcId, (BatchGuardId, Timestamp, GfxDrawCall)>,
+    dcs: HashMap<DcId, (BatchGuardId, Timestamp, DrawCall)>,
 
     epoch: EpochIndex,
 }
@@ -1273,7 +1271,7 @@ impl PruneMethodHeap {
                     self.del.push(method);
                 }
             }
-            GraphicsMethod::ReplaceDrawCalls { batch_id, timest, dcs } => {
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 self.method_replace_draw_calls(batch_id, timest, dcs)
             }
             // Discard batches since we will apply everything all at once anyway
@@ -1287,7 +1285,7 @@ impl PruneMethodHeap {
         &mut self,
         batch_id: BatchGuardId,
         timest: Timestamp,
-        dcs: Vec<(DcId, GfxDrawCall)>,
+        dcs: Vec<(DcId, DrawCall)>,
     ) {
         for (key, val) in dcs {
             match self.dcs.get_mut(&key) {
@@ -1318,7 +1316,7 @@ impl PruneMethodHeap {
         meth.extend(new_tex.into_values());
         meth.append(&mut self.del);
         for (dc_id, (batch_id, timest, dc)) in std::mem::take(&mut self.dcs) {
-            meth.push(GraphicsMethod::ReplaceDrawCalls {
+            meth.push(GraphicsMethod::ReplaceGfxDrawCalls {
                 batch_id,
                 timest,
                 dcs: vec![(dc_id, dc)],
@@ -1366,9 +1364,9 @@ impl EventHandler for Stage {
                 // We discard batches here but process_method uses them so implement this
                 // workaround.
                 match method {
-                    GraphicsMethod::ReplaceDrawCalls { batch_id: _, timest, dcs } => {
+                    GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest, dcs } => {
                         if let Err(err) = self.method_replace_draw_calls(timest, dcs) {
-                            e!("process_method for ReplaceDrawCalls failed err: {err:?}");
+                            e!("process_method for ReplaceGfxDrawCalls failed err: {err:?}");
                             panic!("process_method failed!")
                         }
                     }

@@ -27,7 +27,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
@@ -216,7 +216,7 @@ impl EmojiPicker {
         }
 
         let rect = self.rect.get();
-        let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
+        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
 
         let off_x = self.calc_off_x();
         let emoji_size = self.emoji_size.get();
@@ -229,10 +229,7 @@ impl EmojiPicker {
         for i in 0..emoji_list_len {
             let pos = Point::new(x, y);
             let mesh = emoji_meshes.get(i);
-            instrs.extend_from_slice(&[
-                GfxDrawInstruction::SetPos(pos),
-                GfxDrawInstruction::Draw(mesh),
-            ]);
+            instrs.extend_from_slice(&[DrawInstruction::SetPos(pos), DrawInstruction::Draw(mesh)]);
 
             x += off_x;
             if x > rect.w {
@@ -250,7 +247,7 @@ impl EmojiPicker {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "emoji"),
+                DrawCall::new(instrs, vec![], self.z_index.get(), "emoji"),
             )],
         })
     }

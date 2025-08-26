@@ -22,7 +22,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi},
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyStr, PropertyUint32, Role,
@@ -105,7 +105,7 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    async fn regen_mesh(&self) -> Vec<GfxDrawInstruction> {
+    async fn regen_mesh(&self) -> Vec<DrawInstruction> {
         let text = self.text.get();
         let font_size = self.font_size.get();
         let lineheight = self.lineheight.get();
@@ -159,14 +159,14 @@ impl Text {
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
 
-        let mut instrs = vec![GfxDrawInstruction::Move(rect.pos())];
+        let mut instrs = vec![DrawInstruction::Move(rect.pos())];
         instrs.append(&mut self.regen_mesh().await);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "text"),
+                DrawCall::new(instrs, vec![], self.z_index.get(), "text"),
             )],
         })
     }

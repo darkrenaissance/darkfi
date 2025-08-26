@@ -34,7 +34,7 @@ use std::{
 use crate::{
     error::Result,
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, TextureId,
         GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
@@ -152,7 +152,7 @@ pub struct EditBox {
     glyphs: SyncMutex<Vec<Glyph>>,
     /// DC key for the text
     text_dc_key: u64,
-    cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
+    cursor_mesh: SyncMutex<Option<DrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
 
@@ -316,7 +316,7 @@ impl EditBox {
     }
 
     /// Called whenever the text or any text property changes.
-    fn regen_text_mesh(&self, mut clip: Rectangle) -> GfxDrawMesh {
+    fn regen_text_mesh(&self, mut clip: Rectangle) -> DrawMesh {
         clip.x = 0.;
         clip.y = 0.;
 
@@ -388,7 +388,7 @@ impl EditBox {
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
     }
 
-    fn regen_cursor_mesh(&self) -> GfxDrawMesh {
+    fn regen_cursor_mesh(&self) -> DrawMesh {
         let cursor_width = self.cursor_width.get();
         let cursor_ascent = self.cursor_ascent.get();
         let cursor_descent = self.cursor_descent.get();
@@ -1191,13 +1191,13 @@ impl EditBox {
 
         let draw_calls = vec![(
             self.cursor_dc_key,
-            GfxDrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs_redr"),
+            DrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs_redr"),
         )];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
-    fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
+    fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
         if !self.is_focused.get() ||
             !self.cursor_is_visible.load(Ordering::Relaxed) ||
             self.hide_cursor.load(Ordering::Relaxed)
@@ -1214,7 +1214,7 @@ impl EditBox {
         if cursor_pos.x > rect_w {
             return vec![]
         }
-        cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
+        cursor_instrs.push(DrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
             let mut cursor_mesh = self.cursor_mesh.lock().unwrap();
@@ -1224,7 +1224,7 @@ impl EditBox {
             cursor_mesh.clone().unwrap()
         };
 
-        cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
+        cursor_instrs.push(DrawInstruction::Draw(cursor_mesh));
 
         cursor_instrs
     }
@@ -1240,10 +1240,10 @@ impl EditBox {
             draw_calls: vec![
                 (
                     self.text_dc_key,
-                    GfxDrawCall::new(
+                    DrawCall::new(
                         vec![
-                            GfxDrawInstruction::Move(rect.pos()),
-                            GfxDrawInstruction::Draw(text_mesh),
+                            DrawInstruction::Move(rect.pos()),
+                            DrawInstruction::Draw(text_mesh),
                         ],
                         vec![self.cursor_dc_key],
                         self.z_index.get(),
@@ -1252,7 +1252,7 @@ impl EditBox {
                 ),
                 (
                     self.cursor_dc_key,
-                    GfxDrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs"),
+                    DrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs"),
                 ),
             ],
         })

@@ -28,16 +28,16 @@ use std::{
     },
 };
 
-use super::{DrawCall, GfxBufferId, GfxDrawCall, GfxTextureId};
+use super::{BufferId, DrawCall, GfxDrawCall, TextureId};
 
 // This can be in instruction but also implement encodable
 // maybe just remove trax?
 
 /*
-type GfxFrameOpt = Arc<RwLock<Option<GfxSequenceAnimationFrame>>>;
+type FrameOpt = Arc<RwLock<Option<SequenceAnimationFrame>>>;
 
 pub struct SequenceAnimBuffer {
-    frames: Vec<GfxFrameOpt>
+    frames: Vec<FrameOpt>
 }
 
 impl SequenceAnimBuffer {
@@ -47,48 +47,48 @@ impl SequenceAnimBuffer {
 */
 
 #[derive(Debug, Clone, SerialEncodable)]
-pub struct GfxSequenceAnimation {
+pub struct SequenceAnimation {
     oneshot: bool,
-    frames: Vec<GfxSequenceAnimationFrame>,
+    frames: Vec<SequenceAnimationFrame>,
 }
 
-impl GfxSequenceAnimation {
-    pub fn new(oneshot: bool, frames: Vec<GfxSequenceAnimationFrame>) -> Self {
+impl SequenceAnimation {
+    pub fn new(oneshot: bool, frames: Vec<SequenceAnimationFrame>) -> Self {
         //let frames = frames.into_iter().map(|f| Arc::new(RwLock::new(
         Self { oneshot, frames }
     }
 
     pub(super) fn compile(
         self: Self,
-        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
-        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-    ) -> SequenceAnimation {
+        textures: &HashMap<TextureId, miniquad::TextureId>,
+        buffers: &HashMap<BufferId, miniquad::BufferId>,
+    ) -> GfxSequenceAnimation {
         let mut frames = Vec::with_capacity(self.frames.len());
         for gfxframe in self.frames {
             let duration = std::time::Duration::from_millis(gfxframe.duration as u64);
             let dc = gfxframe.dc.compile(textures, buffers, 0).unwrap();
-            frames.push(SequenceAnimationFrame { duration, dc });
+            frames.push(GfxGfxSequenceAnimationFrame { duration, dc });
         }
-        SequenceAnimation::new(self.oneshot, frames)
+        GfxSequenceAnimation::new(self.oneshot, frames)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct GfxSequenceAnimationFrame {
+pub struct SequenceAnimationFrame {
     /// Duration of this frame in ms
     duration: u32,
-    dc: GfxDrawCall,
+    dc: DrawCall,
 }
 
-impl GfxSequenceAnimationFrame {
-    pub fn new(duration: u32, dc: GfxDrawCall) -> Self {
+impl SequenceAnimationFrame {
+    pub fn new(duration: u32, dc: DrawCall) -> Self {
         Self { duration, dc }
     }
 }
 
 /// We have to implement this manually due to macro autism.
-/// Since it contains GfxDrawCall that contains Instruction that can contain this.
-impl Encodable for GfxSequenceAnimationFrame {
+/// Since it contains DrawCall that contains Instruction that can contain this.
+impl Encodable for SequenceAnimationFrame {
     fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
         let mut len = 0;
         len += self.duration.encode(s)?;
@@ -97,7 +97,7 @@ impl Encodable for GfxSequenceAnimationFrame {
     }
 }
 #[async_trait]
-impl AsyncEncodable for GfxSequenceAnimationFrame {
+impl AsyncEncodable for SequenceAnimationFrame {
     async fn encode_async<W: AsyncWrite + Unpin + Send>(
         &self,
         w: &mut W,
@@ -110,23 +110,23 @@ impl AsyncEncodable for GfxSequenceAnimationFrame {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct SequenceAnimation {
+pub(super) struct GfxSequenceAnimation {
     oneshot: bool,
-    frames: Vec<SequenceAnimationFrame>,
-    //incoming_frames: Vec<Arc<RwLock<Option<GfxSequenceAnimationFrame>>>>,
-    state: RefCell<SequenceAnimationState>,
+    frames: Vec<GfxGfxSequenceAnimationFrame>,
+    //incoming_frames: Vec<Arc<RwLock<Option<SequenceAnimationFrame>>>>,
+    state: RefCell<GfxSequenceAnimationState>,
 }
 
-impl SequenceAnimation {
-    fn new(oneshot: bool, frames: Vec<SequenceAnimationFrame>) -> Self {
+impl GfxSequenceAnimation {
+    fn new(oneshot: bool, frames: Vec<GfxGfxSequenceAnimationFrame>) -> Self {
         Self {
             oneshot,
             frames,
-            state: RefCell::new(SequenceAnimationState { timer: None, current_idx: 0 }),
+            state: RefCell::new(GfxSequenceAnimationState { timer: None, current_idx: 0 }),
         }
     }
 
-    pub fn tick(&self) -> DrawCall {
+    pub fn tick(&self) -> GfxDrawCall {
         let mut state = self.state.borrow_mut();
 
         let elapsed = state.timer.get_or_insert_with(|| std::time::Instant::now()).elapsed();
@@ -140,13 +140,13 @@ impl SequenceAnimation {
 }
 
 #[derive(Debug, Clone)]
-struct SequenceAnimationFrame {
+struct GfxGfxSequenceAnimationFrame {
     duration: std::time::Duration,
-    dc: DrawCall,
+    dc: GfxDrawCall,
 }
 
 #[derive(Debug, Clone)]
-struct SequenceAnimationState {
+struct GfxSequenceAnimationState {
     /// Timer between frames
     timer: Option<std::time::Instant>,
     current_idx: usize,

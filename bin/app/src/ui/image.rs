@@ -23,10 +23,7 @@ use rand::{rngs::OsRng, Rng};
 use std::{io::Cursor, sync::Arc};
 
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr, Rectangle,
-        RenderApi,
-    },
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi},
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
@@ -159,7 +156,7 @@ impl Image {
         let mesh = self.regen_mesh();
         let texture = self.texture.lock().clone().expect("Node missing texture_id!");
 
-        let mesh = GfxDrawMesh {
+        let mesh = DrawMesh {
             vertex_buffer: mesh.vertex_buffer,
             index_buffer: mesh.index_buffer,
             texture: Some(texture),
@@ -170,8 +167,8 @@ impl Image {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(
-                    vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)],
+                DrawCall::new(
+                    vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)],
                     vec![],
                     self.z_index.get(),
                     "img",

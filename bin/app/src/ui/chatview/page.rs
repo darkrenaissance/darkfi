@@ -27,7 +27,7 @@ use std::{
 
 use super::{max, MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, GfxDrawMesh, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawMesh, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_PINK, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
     text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
@@ -64,7 +64,7 @@ pub struct PrivMessage {
     wrapped_lines: Vec<Vec<Glyph>>,
 
     atlas: text::RenderedAtlas,
-    mesh_cache: Option<GfxDrawMesh>,
+    mesh_cache: Option<DrawMesh>,
 }
 
 impl PrivMessage {
@@ -141,7 +141,7 @@ impl PrivMessage {
         hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> GfxDrawMesh {
+    ) -> DrawMesh {
         if let Some(mesh) = &self.mesh_cache {
             return mesh.clone()
         }
@@ -374,7 +374,7 @@ pub struct DateMessage {
     glyphs: Vec<Glyph>,
 
     atlas: text::RenderedAtlas,
-    mesh_cache: Option<GfxDrawMesh>,
+    mesh_cache: Option<DrawMesh>,
 }
 
 impl DateMessage {
@@ -449,7 +449,7 @@ impl DateMessage {
         _text_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> GfxDrawMesh {
+    ) -> DrawMesh {
         let mut mesh = MeshBuilder::new(gfxtag!("chatview_datemsg"));
 
         let glyph_pos_iter =
@@ -557,7 +557,7 @@ impl Message {
         hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> GfxDrawMesh {
+    ) -> DrawMesh {
         match self {
             Self::Priv(m) => m.gen_mesh(
                 clip,
@@ -892,7 +892,7 @@ impl MessageBuffer {
     }
 
     /// Generate caches and return meshes
-    pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, GfxDrawMesh)> {
+    pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, DrawMesh)> {
         let line_height = self.line_height.get();
         let msg_spacing = self.msg_spacing.get();
         let baseline = self.baseline.get();

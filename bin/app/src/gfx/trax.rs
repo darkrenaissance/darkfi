@@ -21,7 +21,7 @@ use log::debug;
 use parking_lot::Mutex as SyncMutex;
 use std::{fs::File, sync::OnceLock};
 
-use super::{DebugTag, GfxBufferId, GfxDrawCall, GfxTextureId, Vertex};
+use super::{BufferId, DebugTag, DrawCall, TextureId, Vertex};
 use crate::{prop::BatchGuardId, EpochIndex};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx::trax", $($arg)*); } }
@@ -52,7 +52,7 @@ impl Trax {
         epoch: EpochIndex,
         batch_id: BatchGuardId,
         timest: u64,
-        dcs: &Vec<(u64, GfxDrawCall)>,
+        dcs: &Vec<(u64, DrawCall)>,
     ) {
         d!("put_dcs({epoch}, {batch_id}, {timest}, {dcs:?})");
         0u8.encode(&mut self.buf).unwrap();
@@ -80,7 +80,7 @@ impl Trax {
         batch_id.encode(&mut self.buf).unwrap();
     }
 
-    pub fn put_tex(&mut self, epoch: EpochIndex, tex: GfxTextureId, tag: DebugTag) {
+    pub fn put_tex(&mut self, epoch: EpochIndex, tex: TextureId, tag: DebugTag) {
         d!("put_tex({epoch}, {tex}, {tag:?})");
         3u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
@@ -91,7 +91,7 @@ impl Trax {
         &mut self,
         epoch: EpochIndex,
         verts: Vec<Vertex>,
-        buf: GfxBufferId,
+        buf: BufferId,
         tag: DebugTag,
         buftype: u8,
     ) {
@@ -107,7 +107,7 @@ impl Trax {
         &mut self,
         epoch: EpochIndex,
         idxs: Vec<u16>,
-        buf: GfxBufferId,
+        buf: BufferId,
         tag: DebugTag,
         buftype: u8,
     ) {
@@ -119,14 +119,14 @@ impl Trax {
         tag.encode(&mut self.buf).unwrap();
         buftype.encode(&mut self.buf).unwrap();
     }
-    pub fn del_tex(&mut self, epoch: EpochIndex, tex: GfxTextureId, tag: DebugTag) {
+    pub fn del_tex(&mut self, epoch: EpochIndex, tex: TextureId, tag: DebugTag) {
         d!("del_tex({epoch}, {tex}, {tag:?})");
         6u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         tex.encode(&mut self.buf).unwrap();
         tag.encode(&mut self.buf).unwrap();
     }
-    pub fn del_buf(&mut self, epoch: EpochIndex, buf: GfxBufferId, tag: DebugTag, buftype: u8) {
+    pub fn del_buf(&mut self, epoch: EpochIndex, buf: BufferId, tag: DebugTag, buftype: u8) {
         d!("del_buf({epoch}, {buf}, {tag:?}, {buftype})");
         7u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();

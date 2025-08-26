@@ -17,7 +17,7 @@
  */
 
 use crate::gfx::{
-    DebugTag, GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex,
+    DebugTag, DrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex,
 };
 
 pub type Color = [f32; 4];
@@ -49,8 +49,8 @@ pub struct MeshInfo {
 
 impl MeshInfo {
     /// Convenience method
-    pub fn draw_with_texture(self, texture: ManagedTexturePtr) -> GfxDrawMesh {
-        GfxDrawMesh {
+    pub fn draw_with_texture(self, texture: ManagedTexturePtr) -> DrawMesh {
+        DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
             texture: Some(texture),
@@ -58,8 +58,8 @@ impl MeshInfo {
         }
     }
     /// Convenience method
-    pub fn draw_untextured(self) -> GfxDrawMesh {
-        GfxDrawMesh {
+    pub fn draw_untextured(self) -> DrawMesh {
+        DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
             texture: None,

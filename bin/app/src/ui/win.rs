@@ -23,7 +23,7 @@ use std::sync::{Arc, Weak};
 use crate::{
     app::locale::read_locale_ftl,
     gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
+        gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
@@ -462,12 +462,8 @@ impl Window {
             child_calls.push(draw_update.key);
         }
 
-        let dc = GfxDrawCall::new(
-            vec![GfxDrawInstruction::SetScale(self.scale.get())],
-            child_calls,
-            0,
-            "win",
-        );
+        let dc =
+            DrawCall::new(vec![DrawInstruction::SetScale(self.scale.get())], child_calls, 0, "win");
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 

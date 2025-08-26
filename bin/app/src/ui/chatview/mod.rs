@@ -38,7 +38,7 @@ mod page;
 use page::MessageBuffer;
 
 use crate::{
-    gfx::{gfxtag, GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
         PropertyFloat32, PropertyRect, PropertyUint32, Role,
@@ -652,7 +652,7 @@ impl ChatView {
         &self,
         msgbuf: &mut MessageBuffer,
         rect: &Rectangle,
-    ) -> Vec<GfxDrawInstruction> {
+    ) -> Vec<DrawInstruction> {
         let scroll = self.scroll.get();
         //let total_height = msgbuf.calc_total_height().await;
 
@@ -675,8 +675,8 @@ impl ChatView {
             let off_y = scroll + start_pos - y_pos;
             let pos = Point::from([off_x, off_y]);
 
-            instrs.push(GfxDrawInstruction::SetPos(pos));
-            instrs.push(GfxDrawInstruction::Draw(mesh));
+            instrs.push(DrawInstruction::SetPos(pos));
+            instrs.push(DrawInstruction::Draw(mesh));
         }
 
         instrs
@@ -694,11 +694,11 @@ impl ChatView {
 
         let mut mesh_instrs = self.get_meshes(msgbuf, &rect).await;
 
-        let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
+        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
 
         let draw_calls =
-            vec![(self.dc_key, GfxDrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
+            vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
         self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
         t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
@@ -844,14 +844,14 @@ impl UIObject for ChatView {
         let mut mesh_instrs = self.get_meshes(&mut msgbuf, &rect).await;
         drop(msgbuf);
 
-        let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
+        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(instrs, vec![], self.z_index.get(), "chatview"),
+                DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"),
             )],
         })
     }

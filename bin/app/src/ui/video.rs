@@ -30,9 +30,8 @@ use std::{
 
 use crate::{
     gfx::{
-        anim::{GfxSequenceAnimation, GfxSequenceAnimationFrame},
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, ManagedTexturePtr, Rectangle,
-        RenderApi,
+        anim::{SequenceAnimation, SequenceAnimationFrame},
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -204,28 +203,28 @@ impl Video {
 
         let mut frames = Vec::with_capacity(textures.len());
         for texture in textures {
-            let mesh = GfxDrawMesh {
+            let mesh = DrawMesh {
                 vertex_buffer: mesh.vertex_buffer.clone(),
                 index_buffer: mesh.index_buffer.clone(),
                 texture: Some(texture),
                 num_elements: mesh.num_elements,
             };
-            let dc = GfxDrawCall {
-                instrs: vec![GfxDrawInstruction::Draw(mesh)],
+            let dc = DrawCall {
+                instrs: vec![DrawInstruction::Draw(mesh)],
                 dcs: vec![],
                 z_index: 0,
                 debug_str: "video",
             };
-            frames.push(GfxSequenceAnimationFrame::new(40, dc));
+            frames.push(SequenceAnimationFrame::new(40, dc));
         }
-        let anim = GfxSequenceAnimation::new(false, frames);
+        let anim = SequenceAnimation::new(false, frames);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall::new(
-                    vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Animation(anim)],
+                DrawCall::new(
+                    vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Animation(anim)],
                     vec![],
                     self.z_index.get(),
                     "vid",
