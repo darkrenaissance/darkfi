@@ -799,7 +799,7 @@ impl Validator {
             let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
 
             // Verify block
-            if verify_block(
+            if let Err(e) = verify_block(
                 &overlay,
                 &module,
                 &mut state_monotree,
@@ -808,9 +808,8 @@ impl Validator {
                 self.verify_fees,
             )
             .await
-            .is_err()
             {
-                error!(target: "validator::validate_blockchain", "Erroneous block found in set");
+                error!(target: "validator::validate_blockchain", "Erroneous block found in set: {e}");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
