@@ -289,7 +289,7 @@ impl ProtocolFud {
             let chunk_hash = chunked_file.get_chunks()[0].0;
             let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash).await;
             if let Ok(chunk) = chunk {
-                if !self.fud.geode.verify_chunk(&request.key, &chunk) {
+                if blake3::hash(blake3::hash(&chunk).as_bytes()) != request.key {
                     // TODO: Run geode GC
                     return false;
                 }
