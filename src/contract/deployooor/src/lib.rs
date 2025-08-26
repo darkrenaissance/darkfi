@@ -22,6 +22,7 @@ use darkfi_sdk::error::ContractError;
 
 /// Functions available in the contract
 #[repr(u8)]
+#[derive(Debug)]
 pub enum DeployFunction {
     DeployV1 = 0x00,
     LockV1 = 0x01,

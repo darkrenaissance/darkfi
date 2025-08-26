@@ -25,6 +25,7 @@ use darkfi_sdk::error::ContractError;
 
 /// Functions available in the contract
 #[repr(u8)]
+#[derive(Debug)]
 // ANCHOR: money-function
 pub enum MoneyFunction {
     FeeV1 = 0x00,
