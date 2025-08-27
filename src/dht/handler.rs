@@ -270,7 +270,7 @@ pub trait DhtHandler<N: DhtNode> {
         while let Some((queried_node, value_result)) = futures.next().await {
             match value_result {
                 Ok(mut nodes) => {
-                    info!(target: "dht::DhtHandler::lookup_nodes", "Queried {}, got {} nodes", bs58::encode(queried_node.id().as_bytes()).into_string(), nodes.len());
+                    info!(target: "dht::DhtHandler::lookup_nodes()", "Queried {}, got {} nodes", hash_to_string(&queried_node.id()), nodes.len());
 
                     // Remove ourselves and already known nodes from the new nodes
                     nodes.retain(|node| {
@@ -305,7 +305,7 @@ pub trait DhtHandler<N: DhtNode> {
                                     &self.dht().distance(key, &next_node.id()),
                                 );
                                 if furthest_dist < next_dist {
-                                    info!(target: "dht::DhtHandler::lookup_nodes", "Early termination for lookup nodes");
+                                    info!(target: "dht::DhtHandler::lookup_nodes()", "Early termination for lookup nodes");
                                     break;
                                 }
                             }
