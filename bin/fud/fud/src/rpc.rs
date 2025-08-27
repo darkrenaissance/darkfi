@@ -255,7 +255,7 @@ impl JsonRpcInterface {
     // Returns the current buckets.
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:13337"]]]], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [["abcdef", ["tcp://127.0.0.1:13337"]]], "id": 1}
     pub async fn list_buckets(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -284,7 +284,7 @@ impl JsonRpcInterface {
     // Returns the content of the seeders router.
     //
     // --> {"jsonrpc": "2.0", "method": "list_seeders", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdef": ["ghijkl"]}}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:13337"]]]}}, "id": 1}
     pub async fn list_seeders(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -292,11 +292,18 @@ impl JsonRpcInterface {
         }
         let mut seeders_router: HashMap<String, JsonValue> = HashMap::new();
         for (hash, items) in self.fud.seeders_router.read().await.iter() {
-            let mut node_ids = vec![];
+            let mut nodes = vec![];
             for item in items {
-                node_ids.push(JsonValue::String(hash_to_string(&item.node.id())));
+                let mut addresses = vec![];
+                for addr in &item.node.addresses {
+                    addresses.push(JsonValue::String(addr.to_string()));
+                }
+                nodes.push(JsonValue::Array(vec![
+                    JsonValue::String(hash_to_string(&item.node.id())),
+                    JsonValue::Array(addresses),
+                ]));
             }
-            seeders_router.insert(hash_to_string(hash), JsonValue::Array(node_ids));
+            seeders_router.insert(hash_to_string(hash), JsonValue::Array(nodes));
         }
         let mut res: HashMap<String, JsonValue> = HashMap::new();
         res.insert("seeders".to_string(), JsonValue::Object(seeders_router));
