@@ -18,7 +18,7 @@ darkfi = {path = "../../../", features = ["bs58", "validator"]}
 darkfi_money_contract = {path = "../../../src/contract/money", features = ["no-entrypoint", "client"]}
 darkfi-contract-test-harness = {path = "../../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = "0.5.0"
+darkfi-serial = "0.5.1"
 
 # Misc
 bs58 = "0.5.1"
