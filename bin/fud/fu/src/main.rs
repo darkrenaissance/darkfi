@@ -25,7 +25,7 @@ use std::{
     io::{stdout, Write},
     sync::Arc,
 };
-use termcolor::{ColorSpec, StandardStream, WriteColor};
+use termcolor::{StandardStream, WriteColor};
 use url::Url;
 
 use darkfi::{
@@ -41,13 +41,14 @@ use darkfi::{
 };
 
 use fud::{
-    resource::{Resource, ResourceStatus},
+    resource::{Resource, ResourceStatus, ResourceType},
     util::hash_to_string,
 };
 
 mod util;
 use crate::util::{
-    format_bytes, format_duration, format_progress_bytes, status_to_colorspec, type_to_colorspec,
+    format_bytes, format_duration, format_progress_bytes, optional_value, print_tree,
+    status_to_colorspec, type_to_colorspec, TreeNode,
 };
 
 #[derive(Parser)]
@@ -250,7 +251,10 @@ impl Fu {
                     let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
                     let info =
                         params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
-                    let hash = info.get("hash").unwrap().get::<String>().unwrap();
+                    let hash = match info.get("hash") {
+                        Some(hash_value) => hash_value.get::<String>().unwrap(),
+                        None => continue,
+                    };
                     if *hash != hash_ {
                         continue;
                     }
@@ -311,15 +315,80 @@ impl Fu {
         }
     }
 
-    async fn put(&self, path: String) -> Result<()> {
+    async fn put(&self, path: String, ex: ExecutorPtr) -> Result<()> {
+        let publisher = Publisher::new();
+        let subscription = Arc::new(publisher.clone().subscribe().await);
+        let subscriber_task = StoppableTask::new();
+        let publisher_ = publisher.clone();
+        let rpc_client_ = self.rpc_client.clone();
+        subscriber_task.clone().start(
+            async move {
+                let req = JsonRequest::new("subscribe", JsonValue::Array(vec![]));
+                rpc_client_.subscribe(req, publisher).await
+            },
+            move |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!("{e}");
+                        publisher_
+                            .notify(JsonResult::Error(JsonError::new(
+                                ErrorCode::InternalError,
+                                None,
+                                0,
+                            )))
+                            .await;
+                    }
+                }
+            },
+            Error::DetachedTaskStopped,
+            ex.clone(),
+        );
+
+        let rpc_client_putter = RpcClient::new(self.endpoint.clone(), ex.clone()).await?;
         let req = JsonRequest::new("put", JsonValue::Array(vec![JsonValue::String(path)]));
-        let rep = self.rpc_client.request(req).await?;
-        match rep {
-            JsonValue::String(id) => {
-                println!("{id}");
-                Ok(())
+        let rep = rpc_client_putter.request(req).await?;
+        let path_str = rep.get::<String>().unwrap().clone();
+
+        loop {
+            match subscription.receive().await {
+                JsonResult::Notification(n) => {
+                    let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
+                    let info =
+                        params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+                    let path = match info.get("path") {
+                        Some(path) => path.get::<String>().unwrap(),
+                        None => continue,
+                    };
+                    if *path != path_str {
+                        continue;
+                    }
+
+                    match params.get("event").unwrap().get::<String>().unwrap().as_str() {
+                        "insert_completed" => {
+                            let id = info.get("hash").unwrap().get::<String>().unwrap().to_string();
+                            println!("{id}");
+                            break Ok(())
+                        }
+                        "insert_error" => {
+                            return Err(Error::Custom(
+                                info.get("error").unwrap().get::<String>().unwrap().to_string(),
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+
+                JsonResult::Error(e) => {
+                    return Err(Error::UnexpectedJsonRpc(format!("Got error from JSON-RPC: {e:?}")))
+                }
+
+                x => {
+                    return Err(Error::UnexpectedJsonRpc(format!(
+                        "Got unexpected data from JSON-RPC: {x:?}"
+                    )))
+                }
             }
-            _ => Err(Error::ParseFailed("ID is not a string")),
         }
     }
 
@@ -330,51 +399,56 @@ impl Fu {
         let resources_json: Vec<JsonValue> = rep.clone().try_into().unwrap();
         let resources: Vec<Resource> = resources_json.into_iter().map(|v| v.into()).collect();
 
-        let mut tstdout = StandardStream::stdout(ColorChoice::Auto);
-
         for resource in resources.iter() {
-            tstdout.set_color(ColorSpec::new().set_bold(true)).unwrap();
-            println!("{}", resource.path.to_string_lossy());
-            tstdout.reset().unwrap();
-            println!("  ID: {}", hash_to_string(&resource.hash));
-            print!("  Type: ");
-            tstdout.set_color(&type_to_colorspec(&resource.rtype)).unwrap();
-            println!("{}", resource.rtype.as_str());
-            tstdout.reset().unwrap();
-            print!("  Status: ");
-            tstdout.set_color(&status_to_colorspec(&resource.status)).unwrap();
-            println!("{}", resource.status.as_str());
-            tstdout.reset().unwrap();
-            println!(
-                "  Chunks: {}/{} ({}/{})",
-                resource.total_chunks_downloaded,
-                match resource.total_chunks_count {
-                    0 => "?".to_string(),
-                    _ => resource.total_chunks_count.to_string(),
-                },
-                resource.target_chunks_downloaded,
-                match resource.target_chunks_count {
-                    0 => "?".to_string(),
-                    _ => resource.target_chunks_count.to_string(),
-                }
-            );
-            println!(
-                "  Bytes: {} ({})",
-                match resource.total_bytes_size {
-                    0 => "?".to_string(),
-                    _ => format_progress_bytes(
-                        resource.total_bytes_downloaded,
-                        resource.total_bytes_size
-                    ),
-                },
-                match resource.target_bytes_size {
-                    0 => "?".to_string(),
-                    _ => format_progress_bytes(
-                        resource.target_bytes_downloaded,
-                        resource.target_bytes_size
-                    ),
-                }
-            );
+            let tree: Vec<TreeNode<&str>> = vec![
+                TreeNode::kv("ID", hash_to_string(&resource.hash)),
+                TreeNode::kvc(
+                    "Type",
+                    resource.rtype.as_str().to_string(),
+                    type_to_colorspec(&resource.rtype),
+                ),
+                TreeNode::kvc(
+                    "Status",
+                    resource.status.as_str().to_string(),
+                    status_to_colorspec(&resource.status),
+                ),
+                TreeNode::kv("Chunks", {
+                    if let ResourceType::Directory = resource.rtype {
+                        format!(
+                            "{}/{} ({}/{})",
+                            resource.total_chunks_downloaded,
+                            optional_value!(resource.total_chunks_count),
+                            resource.target_chunks_downloaded,
+                            optional_value!(resource.target_chunks_count)
+                        )
+                    } else {
+                        format!(
+                            "{}/{}",
+                            resource.total_chunks_downloaded,
+                            optional_value!(resource.total_chunks_count)
+                        )
+                    }
+                }),
+                TreeNode::kv("Bytes", {
+                    if let ResourceType::Directory = resource.rtype {
+                        format!(
+                            "{} ({})",
+                            optional_value!(resource.total_bytes_size, |x: u64| {
+                                format_progress_bytes(resource.total_bytes_downloaded, x)
+                            }),
+                            optional_value!(resource.target_bytes_size, |x: u64| {
+                                format_progress_bytes(resource.target_bytes_downloaded, x)
+                            })
+                        )
+                    } else {
+                        optional_value!(resource.total_bytes_size, |x: u64| format_progress_bytes(
+                            resource.total_bytes_downloaded,
+                            x
+                        ))
+                    }
+                }),
+            ];
+            print_tree(&resource.path.to_string_lossy(), &tree);
         }
 
         Ok(())
@@ -392,17 +466,33 @@ impl Fu {
             }
             empty = false;
 
-            println!("Bucket {bucket_i}");
-            for n in nodes.clone() {
-                let node: Vec<JsonValue> = n.try_into().unwrap();
-                let node_id: JsonValue = node[0].clone();
-                let addresses: Vec<JsonValue> = node[1].clone().try_into().unwrap();
-                let mut addrs: Vec<String> = vec![];
-                for addr in addresses {
-                    addrs.push(addr.try_into().unwrap())
-                }
-                println!("\t{}: {}", node_id.stringify().unwrap(), addrs.join(", "));
-            }
+            let tree: Vec<TreeNode<String>> = nodes
+                .into_iter()
+                .map(|n| {
+                    let node: Vec<JsonValue> = n.try_into().unwrap();
+                    let node_id: JsonValue = node[0].clone();
+                    let addresses: Vec<JsonValue> = node[1].clone().try_into().unwrap();
+
+                    let addresses_vec: Vec<String> = addresses
+                        .into_iter()
+                        .map(|addr| TryInto::<String>::try_into(addr).unwrap())
+                        .collect();
+
+                    let node_id_string: String = node_id.try_into().unwrap();
+
+                    TreeNode {
+                        key: node_id_string,
+                        value: None,
+                        color: None,
+                        children: addresses_vec
+                            .into_iter()
+                            .map(|addr| TreeNode::key(addr.clone()))
+                            .collect(),
+                    }
+                })
+                .collect();
+
+            print_tree(format!("Bucket {bucket_i}").as_str(), &tree);
         }
 
         if empty {
@@ -420,15 +510,38 @@ impl Fu {
 
         if resources.is_empty() {
             println!("No known seeders");
-        } else {
-            for (hash, node_ids) in resources {
-                println!("{hash}");
-                let node_ids: Vec<JsonValue> = node_ids.try_into().unwrap();
-                for node_id in node_ids {
-                    let node_id: String = node_id.try_into().unwrap();
-                    println!("\t{node_id}");
-                }
-            }
+            return Ok(())
+        }
+
+        for (hash, nodes) in resources {
+            let nodes: Vec<JsonValue> = nodes.try_into().unwrap();
+            let tree: Vec<TreeNode<String>> = nodes
+                .into_iter()
+                .map(|n| {
+                    let node: Vec<JsonValue> = n.try_into().unwrap();
+                    let node_id: JsonValue = node[0].clone();
+                    let addresses: Vec<JsonValue> = node[1].clone().try_into().unwrap();
+
+                    let addresses_vec: Vec<String> = addresses
+                        .into_iter()
+                        .map(|addr| TryInto::<String>::try_into(addr).unwrap())
+                        .collect();
+
+                    let node_id_string: String = node_id.try_into().unwrap();
+
+                    TreeNode {
+                        key: node_id_string,
+                        value: None,
+                        color: None,
+                        children: addresses_vec
+                            .into_iter()
+                            .map(|addr| TreeNode::key(addr.clone()))
+                            .collect(),
+                    }
+                })
+                .collect();
+
+            print_tree(&hash, &tree);
         }
 
         Ok(())
@@ -687,7 +800,7 @@ fn main() -> Result<()> {
 
             match args.command {
                 Subcmd::Get { hash, path, files } => fu.get(hash, path, files, ex.clone()).await,
-                Subcmd::Put { path } => fu.put(path).await,
+                Subcmd::Put { path } => fu.put(path, ex.clone()).await,
                 Subcmd::Ls {} => fu.list_resources().await,
                 Subcmd::Watch {} => fu.watch(ex.clone()).await,
                 Subcmd::Rm { hash } => fu.remove(hash).await,

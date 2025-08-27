@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use termcolor::{Color, ColorSpec};
+use std::io::Write;
+
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use fud::resource::{ResourceStatus, ResourceType};
 
@@ -105,3 +107,81 @@ pub fn format_duration(seconds: u64) -> String {
 
     "0s".to_string()
 }
+
+/// Tree only used for printing.
+#[derive(Debug)]
+pub struct TreeNode<K> {
+    pub key: K,
+    pub value: Option<String>,
+    pub color: Option<ColorSpec>,
+    pub children: Vec<TreeNode<K>>,
+}
+impl<K> TreeNode<K> {
+    /// Key only
+    pub fn key(key: K) -> Self {
+        Self { key, value: None, color: None, children: vec![] }
+    }
+    /// Key + value
+    pub fn kv(key: K, value: String) -> Self {
+        Self { key, value: Some(value), color: None, children: vec![] }
+    }
+    /// Key + value + color
+    pub fn kvc(key: K, value: String, color: ColorSpec) -> Self {
+        Self { key, value: Some(value), color: Some(color), children: vec![] }
+    }
+}
+
+pub fn print_tree<K: AsRef<str> + std::fmt::Display>(root: &str, items: &[TreeNode<K>]) {
+    fn print_node<K: AsRef<str> + std::fmt::Display>(
+        node: &TreeNode<K>,
+        is_last: bool,
+        prefix: &str,
+    ) {
+        let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+
+        write!(&mut stdout, "{}{} {}", prefix, if is_last { "└─" } else { "├─" }, node.key)
+            .unwrap();
+
+        if let Some(value) = &node.value {
+            write!(&mut stdout, ": ").unwrap();
+            if let Some(spec) = &node.color {
+                stdout.set_color(spec).unwrap();
+            }
+            write!(&mut stdout, "{value}").unwrap();
+            stdout.reset().unwrap();
+        }
+
+        writeln!(&mut stdout).unwrap();
+
+        let new_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
+
+        for (i, child) in node.children.iter().enumerate() {
+            print_node(child, i == node.children.len() - 1, &new_prefix);
+        }
+    }
+
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    stdout.set_color(ColorSpec::new().set_bold(true)).unwrap();
+    writeln!(&mut stdout, "{root}").unwrap();
+    stdout.reset().unwrap();
+
+    for (i, item) in items.iter().enumerate() {
+        print_node(item, i == items.len() - 1, "");
+    }
+}
+
+macro_rules! optional_value {
+    ($value:expr) => {
+        match $value {
+            0 => "?".to_string(),
+            x => x.to_string(),
+        }
+    };
+    ($value:expr, $formatter:expr) => {
+        match $value {
+            0 => "?".to_string(),
+            x => $formatter(x),
+        }
+    };
+}
+pub(crate) use optional_value;
