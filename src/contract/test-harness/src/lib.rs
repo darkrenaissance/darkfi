@@ -276,8 +276,9 @@ impl TestHarness {
         vks::inject(&sled_db, &vks)?;
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
         deploy_native_contracts(&overlay, 90).await?;
-        genesis_block.header.state_root =
-            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
+        let mut state_monotree = overlay.lock().unwrap().contracts.get_state_monotree()?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&mut state_monotree)?;
+        genesis_block.header.state_root = state_monotree.get_headroot()?.unwrap();
 
         // Create `Wallet` instances
         let mut holders_map = HashMap::new();
