@@ -258,7 +258,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_str(atom, Role::App, "path", "assets/forest/forest_{frame}.png").unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_u32(atom, Role::App, "length", 357).unwrap();
-    let node = node.setup(|me| Video::new(me, app.render_api.clone())).await;
+    let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     // Create some text

@@ -31,6 +31,7 @@ use miniquad::{
 };
 use parking_lot::Mutex as SyncMutex;
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fs::File,
     io::Write,
@@ -42,7 +43,7 @@ use std::{
 };
 
 pub mod anim;
-use anim::{GfxSequenceAnimation, SequenceAnimation};
+use anim::{GfxSeqAnim, SeqAnim};
 mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
@@ -399,7 +400,7 @@ pub enum DrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
-    Animation(SequenceAnimation),
+    Animation(SeqAnim),
     EnableDebug,
 }
 
@@ -418,7 +419,9 @@ impl DrawInstruction {
             Self::Draw(mesh) => {
                 GfxDrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?)
             }
-            Self::Animation(anim) => GfxDrawInstruction::Animation(anim.compile(textures, buffers)),
+            Self::Animation(anim) => {
+                GfxDrawInstruction::Animation(RefCell::new(anim.compile(textures, buffers)))
+            }
             Self::EnableDebug => GfxDrawInstruction::EnableDebug,
         };
         Some(instr)
@@ -479,7 +482,7 @@ enum GfxDrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(GfxDrawMesh),
-    Animation(GfxSequenceAnimation),
+    Animation(RefCell<GfxSeqAnim>),
     EnableDebug,
 }
 
@@ -500,6 +503,10 @@ struct RenderContext<'a> {
     scale: f32,
     view: Rectangle,
     cursor: Point,
+
+    // Temp
+    textures: &'a HashMap<TextureId, miniquad::TextureId>,
+    buffers: &'a HashMap<BufferId, miniquad::BufferId>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -633,8 +640,9 @@ impl<'a> RenderContext<'a> {
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
                 GfxDrawInstruction::Animation(anim) => {
-                    let dc = anim.tick();
-                    self.draw_call(&dc, indent + 1, is_debug);
+                    if let Some(dc) = anim.borrow_mut().tick(self.textures, self.buffers) {
+                        self.draw_call(&dc, indent + 1, is_debug);
+                    }
                 }
                 GfxDrawInstruction::EnableDebug => {
                     if !is_debug {
@@ -1427,6 +1435,8 @@ impl EventHandler for Stage {
             scale: 1.,
             view: Rectangle::from([0., 0., screen_w, screen_h]),
             cursor: Point::from([0., 0.]),
+            textures: &self.textures,
+            buffers: &self.buffers,
         };
         render_ctx.draw();
 
