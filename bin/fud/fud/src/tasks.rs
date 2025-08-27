@@ -83,6 +83,47 @@ pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
     }
 }
 
+/// Triggered when calling the `fud.put()` method.
+pub async fn put_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
+    loop {
+        let path = fud.put_rx.recv().await.unwrap();
+
+        // Create the new task
+        let mut put_tasks = fud.put_tasks.write().await;
+        let task = StoppableTask::new();
+        put_tasks.insert(path.clone(), task.clone());
+        drop(put_tasks);
+
+        // Start the new task
+        let fud_1 = fud.clone();
+        let fud_2 = fud.clone();
+        let path_ = path.clone();
+        task.start(
+            async move { fud_1.insert_resource(&path_).await },
+            move |res| async move {
+                // Remove the task from the `fud.put_tasks` hashmap once it is
+                // stopped (error, manually, or just done).
+                let mut put_tasks = fud_2.put_tasks.write().await;
+                put_tasks.remove(&path);
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "fud::put_task()", "Error while inserting resource: {e}");
+
+                        // Send a InsertError for any error that stopped the fetch task
+                        notify_event!(fud_2, InsertError, {
+                            path,
+                            error: e.to_string(),
+                        });
+                    }
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
+    }
+}
+
 /// Background task that announces our files once every hour.
 /// Also removes seeders that did not announce for too long.
 pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {

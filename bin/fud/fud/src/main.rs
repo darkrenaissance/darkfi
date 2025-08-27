@@ -39,7 +39,7 @@ use fud::{
     proto::{FudFindNodesReply, ProtocolFud},
     rpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    tasks::{announce_seed_task, get_task, node_id_task},
+    tasks::{announce_seed_task, get_task, node_id_task, put_task},
     Fud,
 };
 
@@ -120,6 +120,20 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "fud", "Failed starting get task: {e}"),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting put task");
+    let put_task_ = StoppableTask::new();
+    put_task_.clone().start(
+        put_task(fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting put task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -214,6 +228,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "fud", "Stopping get task...");
     get_task_.stop().await;
+
+    info!(target: "fud", "Stopping put task...");
+    put_task_.stop().await;
 
     info!(target: "fud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;

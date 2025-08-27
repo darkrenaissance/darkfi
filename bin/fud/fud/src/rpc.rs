@@ -113,7 +113,7 @@ impl JsonRpcInterface {
             return JsonError::new(ErrorCode::InternalError, Some(format!("{e}")), id).into()
         }
 
-        JsonResponse::new(JsonValue::String(hash_to_string(&res.unwrap())), id).into()
+        JsonResponse::new(JsonValue::String(path.to_string_lossy().to_string()), id).into()
     }
 
     // RPCAPI:
@@ -183,7 +183,7 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Subscribe to download events.
+    // Subscribe to fud events.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": `event`, "id": 42}

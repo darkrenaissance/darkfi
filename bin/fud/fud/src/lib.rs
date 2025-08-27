@@ -163,8 +163,14 @@ pub struct Fud {
     get_tx: channel::Sender<(blake3::Hash, PathBuf, FileSelection)>,
     get_rx: channel::Receiver<(blake3::Hash, PathBuf, FileSelection)>,
 
-    /// Currently active includingdownloading tasks (running the `fud.fetch_resource()` method)
+    put_tx: channel::Sender<PathBuf>,
+    put_rx: channel::Receiver<PathBuf>,
+
+    /// Currently active downloading tasks (running the `fud.fetch_resource()` method)
     fetch_tasks: Arc<RwLock<HashMap<blake3::Hash, Arc<StoppableTask>>>>,
+
+    /// Currently active put tasks (running the `fud.insert_resource()` method)
+    put_tasks: Arc<RwLock<HashMap<PathBuf, Arc<StoppableTask>>>>,
 
     /// Used to send events to fud clients
     event_publisher: PublisherPtr<FudEvent>,
@@ -301,6 +307,7 @@ impl Fud {
             Arc::new(Dht::<FudNode>::new(&dht_settings, p2p.clone(), executor.clone()).await);
 
         let (get_tx, get_rx) = smol::channel::unbounded();
+        let (put_tx, put_rx) = smol::channel::unbounded();
         let fud = Self {
             node_data: Arc::new(RwLock::new(node_data)),
             secret_key: Arc::new(RwLock::new(secret_key)),
@@ -317,7 +324,10 @@ impl Fud {
             resources: Arc::new(RwLock::new(HashMap::new())),
             get_tx,
             get_rx,
+            put_tx,
+            put_rx,
             fetch_tasks: Arc::new(RwLock::new(HashMap::new())),
+            put_tasks: Arc::new(RwLock::new(HashMap::new())),
             event_publisher,
         };
 
@@ -878,7 +888,8 @@ impl Fud {
                 }
                 queried_seeders.insert(seeder.node.id());
 
-                if let Ok(channel) = self.get_channel(&seeder.node, Some(*hash)).await {
+                let channel = self.get_channel(&seeder.node, Some(*hash)).await;
+                if let Ok(channel) = channel {
                     let msg_subsystem = channel.message_subsystem();
                     msg_subsystem.add_dispatch::<FudChunkReply>().await;
                     msg_subsystem.add_dispatch::<FudFileReply>().await;
@@ -1078,7 +1089,7 @@ impl Fud {
             // If we could not find the metadata in geode, get it from the network
             Err(Error::GeodeFileNotFound) => {
                 // Find nodes close to the file hash
-                info!(target: "fud::fetch_resource()", "Requested metadata {} not found in Geode, triggering fetch", hash_to_string(hash));
+                info!(target: "fud::get_metadata()", "Requested metadata {} not found in Geode, triggering fetch", hash_to_string(hash));
                 let closest_nodes = self.lookup_nodes(hash).await.unwrap_or_default();
 
                 // Fetch file or directory metadata
@@ -1091,7 +1102,7 @@ impl Fud {
             }
 
             Err(e) => {
-                error!(target: "fud::fetch_resource()", "{e}");
+                error!(target: "fud::get_metadata()", "{e}");
                 Err(e)
             }
         }
@@ -1519,12 +1530,23 @@ impl Fud {
     }
 
     /// Add a resource from the file system.
-    pub async fn put(&self, path: &PathBuf) -> Result<blake3::Hash> {
+    pub async fn put(&self, path: &Path) -> Result<()> {
+        let put_tasks = self.put_tasks.read().await;
+        drop(put_tasks);
+
+        self.put_tx.send(path.to_path_buf()).await?;
+
+        Ok(())
+    }
+
+    /// Insert a file or directory from the file system.
+    /// Called when `put()` creates a new put task.
+    pub async fn insert_resource(&self, path: &PathBuf) -> Result<()> {
         let self_node = self.node().await;
 
         if self_node.addresses.is_empty() {
             return Err(Error::Custom(
-                "Cannot put file, you don't have any external address".to_string(),
+                "Cannot put resource, you don't have any external address".to_string(),
             ))
         }
 
@@ -1609,7 +1631,13 @@ impl Fud {
         let fud_announce = FudAnnounce { key: hash, seeders: vec![self_node.into()] };
         let _ = self.announce(&hash, &fud_announce, self.seeders_router.clone()).await;
 
-        Ok(hash)
+        // Send InsertCompleted event
+        notify_event!(self, InsertCompleted, {
+            hash,
+            path: path.to_path_buf()
+        });
+
+        Ok(())
     }
 
     /// Removes:
@@ -1652,7 +1680,7 @@ impl Fud {
         notify_event!(self, ResourceRemoved, { hash: *hash });
     }
 
-    /// Stop all tasks in `fetch_tasks`.
+    /// Stop all tasks in `fetch_tasks` and `put_tasks.
     pub async fn stop(&self) {
         // Create a clone of fetch_tasks because `task.stop()` needs a write lock
         let fetch_tasks = self.fetch_tasks.read().await;
@@ -1660,8 +1688,19 @@ impl Fud {
             fetch_tasks.iter().map(|(key, value)| (*key, value.clone())).collect();
         drop(fetch_tasks);
 
-        // Stop all tasks
+        // Stop all fetch tasks
         for task in cloned_fetch_tasks.values() {
+            task.stop().await;
+        }
+
+        // Create a clone of put_tasks because `task.stop()` needs a write lock
+        let put_tasks = self.put_tasks.read().await;
+        let cloned_put_tasks: HashMap<PathBuf, Arc<StoppableTask>> =
+            put_tasks.iter().map(|(key, value)| (key.clone(), value.clone())).collect();
+        drop(put_tasks);
+
+        // Stop all put tasks
+        for task in cloned_put_tasks.values() {
             task.stop().await;
         }
     }
