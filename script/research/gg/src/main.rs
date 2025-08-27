@@ -170,8 +170,7 @@ fn main() -> Result<()> {
                 genesis_block.header.transactions_root = tree.root(0).unwrap();
 
                 // Grab the updated contracts states root
-                let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
-                overlay.lock().unwrap().contracts.update_state_monotree(&mut state_monotree)?;
+                let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
                 let Some(state_root) = state_monotree.get_headroot()? else {
                     return Err(Error::ContractsStatesRootNotFoundError);
                 };

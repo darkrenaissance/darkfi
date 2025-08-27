@@ -490,8 +490,6 @@ impl ContractStoreOverlay {
     /// Generate a Monotree(SMT) containing all contracts states
     /// roots, along with the wasm bincodes monotree roots.
     /// Be carefull as this will open all states monotrees in the overlay.
-    /// If overlay holds changes the generated monotree must be updated
-    /// using update_state_monotree().
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree<MemoryDb>> {
@@ -566,6 +564,10 @@ impl ContractStoreOverlay {
             &wasm_monotree_root,
         )?;
         tree.set_headroot(root.as_ref());
+        drop(lock);
+
+        // Update the monotree to the latest overlay changes
+        self.update_state_monotree(&mut tree)?;
 
         Ok(tree)
     }
