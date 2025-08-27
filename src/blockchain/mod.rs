@@ -425,7 +425,7 @@ impl Blockchain {
     }
 
     /// Generate a Monotree(SMT) containing all contracts states
-    /// checksums, along with the wasm bincodes checksum.
+    /// roots, along with the wasm bincodes monotree root.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
@@ -693,9 +693,9 @@ impl BlockchainOverlay {
     }
 
     /// Generate a Monotree(SMT) containing all contracts states
-    /// checksums, along with the wasm bincodes checksum.
+    /// roots, along with the wasm bincodes monotree root.
     /// A clone is used so we are not affected by the opened trees
-    /// during checksum computing.
+    /// during roots computing.
     ///
     /// Note: native contracts zkas tree and wasm bincodes are excluded.
     pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {

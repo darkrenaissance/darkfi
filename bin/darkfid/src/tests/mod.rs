@@ -259,15 +259,14 @@ fn darkfid_programmatic_control() -> Result<()> {
                 )
                 .unwrap();
                 darkfi::validator::utils::deploy_native_contracts(&overlay, 20).await.unwrap();
-                let mut state_monotree =
-                    overlay.lock().unwrap().contracts.get_state_monotree().unwrap();
-                overlay
+                genesis_block.header.state_root = overlay
                     .lock()
                     .unwrap()
-                    .contracts
-                    .update_state_monotree(&mut state_monotree)
+                    .get_state_monotree()
+                    .unwrap()
+                    .get_headroot()
+                    .unwrap()
                     .unwrap();
-                genesis_block.header.state_root = state_monotree.get_headroot().unwrap().unwrap();
                 let bootstrap = genesis_block.header.timestamp.inner();
                 let config = darkfi::validator::ValidatorConfig {
                     confirmation_threshold: 1,

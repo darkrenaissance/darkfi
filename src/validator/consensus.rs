@@ -644,13 +644,13 @@ impl Consensus {
         Ok(())
     }
 
-    /// Auxiliary function to check current contracts states checksums
+    /// Auxiliary function to check current contracts states
     /// Monotree(SMT) validity in all active forks and canonical.
     pub async fn healthcheck(&self) -> Result<()> {
         // Grab a lock over current forks
         let lock = self.forks.read().await;
 
-        // Rebuild current canonical contract states checksums monotree
+        // Rebuild current canonical contract states monotree
         let state_monotree = self.blockchain.get_state_monotree()?;
 
         // Check that the root matches last block header state root
@@ -709,7 +709,7 @@ pub struct Fork {
     pub overlay: BlockchainOverlayPtr,
     /// Current PoW module state
     pub module: PoWModule,
-    /// Current contracts states checksums Monotree(SMT)
+    /// Current contracts states Monotree(SMT)
     pub state_monotree: Monotree<monotree::MemoryDb>,
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
@@ -727,7 +727,7 @@ impl Fork {
     pub async fn new(blockchain: Blockchain, module: PoWModule) -> Result<Self> {
         let mempool = blockchain.get_pending_txs()?.iter().map(|tx| tx.hash()).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
-        // Build current contract states checksums monotree
+        // Build current contract states monotree
         let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
         // Retrieve last block difficulty to access current ranks
         let last_difficulty = blockchain.last_block_difficulty()?;
@@ -927,22 +927,21 @@ impl Fork {
         })
     }
 
-    /// Build current contract states checksums monotree.
+    /// Build current contract states monotree.
     pub fn compute_monotree(&mut self) -> Result<()> {
         self.state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
         Ok(())
     }
 
-    /// Auxiliary function to check current contracts states checksums
+    /// Auxiliary function to check current contracts states
     /// Monotree(SMT) validity.
     ///
     /// Note: This should be executed on fresh forks and/or when
     ///       a fork doesn't contain changes over the last appended
     //        proposal.
     pub fn healthcheck(&self) -> Result<()> {
-        // Rebuild current contract states checksums monotree
-        let mut state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
-        self.overlay.lock().unwrap().contracts.update_state_monotree(&mut state_monotree)?;
+        // Rebuild current contract states monotree
+        let state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
 
         // Check that it matches forks' tree
         let Some(state_root) = state_monotree.get_headroot()? else {
