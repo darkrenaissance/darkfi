@@ -89,8 +89,9 @@ impl Harness {
         vks::inject(&sled_db, &vks)?;
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
         deploy_native_contracts(&overlay, config.pow_target).await?;
-        genesis_block.header.state_root =
-            overlay.lock().unwrap().contracts.get_state_monotree()?.get_headroot()?.unwrap();
+        let mut state_monotree = overlay.lock().unwrap().contracts.get_state_monotree()?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&mut state_monotree)?;
+        genesis_block.header.state_root = state_monotree.get_headroot()?.unwrap();
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
