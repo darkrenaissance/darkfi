@@ -39,7 +39,8 @@ use url::Url;
 
 use darkfi::{
     dht::{
-        impl_dht_node_defaults, Dht, DhtHandler, DhtNode, DhtRouterItem, DhtRouterPtr, DhtSettings,
+        impl_dht_node_defaults, tasks as dht_tasks, Dht, DhtHandler, DhtNode, DhtRouterItem,
+        DhtRouterPtr, DhtSettings,
     },
     geode::{hash_to_string, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
     net::{ChannelPtr, P2pPtr},
@@ -75,7 +76,7 @@ pub mod rpc;
 
 /// Background tasks
 pub mod tasks;
-use tasks::FetchReply;
+use tasks::{start_task, FetchReply};
 
 /// Bitcoin
 pub mod bitcoin;
@@ -172,8 +173,14 @@ pub struct Fud {
     /// Currently active put tasks (running the `fud.insert_resource()` method)
     put_tasks: Arc<RwLock<HashMap<PathBuf, Arc<StoppableTask>>>>,
 
+    /// Currently active tasks (defined in `tasks`, started with the `start_task` macro)
+    tasks: Arc<RwLock<HashMap<String, Arc<StoppableTask>>>>,
+
     /// Used to send events to fud clients
     event_publisher: PublisherPtr<FudEvent>,
+
+    /// Global multithreaded executor reference
+    pub executor: ExecutorPtr,
 }
 
 #[async_trait]
@@ -328,10 +335,21 @@ impl Fud {
             put_rx,
             fetch_tasks: Arc::new(RwLock::new(HashMap::new())),
             put_tasks: Arc::new(RwLock::new(HashMap::new())),
+            tasks: Arc::new(RwLock::new(HashMap::new())),
             event_publisher,
+            executor,
         };
 
         Ok(fud)
+    }
+
+    pub async fn start_tasks(self: &Arc<Self>) {
+        let mut tasks = self.tasks.write().await;
+        start_task!(self, "get", tasks::get_task, tasks);
+        start_task!(self, "put", tasks::put_task, tasks);
+        start_task!(self, "DHT channel", dht_tasks::channel_task::<Fud, FudNode>, tasks);
+        start_task!(self, "announce", tasks::announce_seed_task, tasks);
+        start_task!(self, "node ID", tasks::node_id_task, tasks);
     }
 
     /// Bootstrap the DHT, verify our resources, add ourselves to
@@ -1680,8 +1698,9 @@ impl Fud {
         notify_event!(self, ResourceRemoved, { hash: *hash });
     }
 
-    /// Stop all tasks in `fetch_tasks` and `put_tasks.
+    /// Stop all tasks.
     pub async fn stop(&self) {
+        info!("Stopping fetch tasks...");
         // Create a clone of fetch_tasks because `task.stop()` needs a write lock
         let fetch_tasks = self.fetch_tasks.read().await;
         let cloned_fetch_tasks: HashMap<blake3::Hash, Arc<StoppableTask>> =
@@ -1693,6 +1712,7 @@ impl Fud {
             task.stop().await;
         }
 
+        info!("Stopping put tasks...");
         // Create a clone of put_tasks because `task.stop()` needs a write lock
         let put_tasks = self.put_tasks.read().await;
         let cloned_put_tasks: HashMap<PathBuf, Arc<StoppableTask>> =
@@ -1703,5 +1723,13 @@ impl Fud {
         for task in cloned_put_tasks.values() {
             task.stop().await;
         }
+
+        // Stop all other tasks
+        let mut tasks = self.tasks.write().await;
+        for (name, task) in tasks.clone() {
+            info!("Stopping {name} task...");
+            task.stop().await;
+        }
+        *tasks = HashMap::new();
     }
 }

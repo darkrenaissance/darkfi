@@ -23,7 +23,7 @@ use log::{error, info, warn};
 use darkfi::{
     dht::{DhtHandler, DhtNode},
     geode::hash_to_string,
-    system::{sleep, ExecutorPtr, StoppableTask},
+    system::{sleep, StoppableTask},
     Error, Result,
 };
 
@@ -44,7 +44,7 @@ pub enum FetchReply {
 /// It creates a new StoppableTask (running `fud.fetch_resource()`) and inserts
 /// it into the `fud.fetch_tasks` hashmap. When the task is stopped it's
 /// removed from the hashmap.
-pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
+pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
     loop {
         let (hash, path, files) = fud.get_rx.recv().await.unwrap();
 
@@ -78,13 +78,13 @@ pub async fn get_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
                 }
             },
             Error::DetachedTaskStopped,
-            executor.clone(),
+            fud.executor.clone(),
         );
     }
 }
 
 /// Triggered when calling the `fud.put()` method.
-pub async fn put_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
+pub async fn put_task(fud: Arc<Fud>) -> Result<()> {
     loop {
         let path = fud.put_rx.recv().await.unwrap();
 
@@ -119,7 +119,7 @@ pub async fn put_task(fud: Arc<Fud>, executor: ExecutorPtr) -> Result<()> {
                 }
             },
             Error::DetachedTaskStopped,
-            executor.clone(),
+            fud.executor.clone(),
         );
     }
 }
@@ -245,3 +245,24 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
         // DHT will be bootstrapped on the next channel connection
     }
 }
+
+macro_rules! start_task {
+    ($fud:expr, $task_name:expr, $task_fn:expr, $tasks:expr) => {{
+        info!(target: "fud", "Starting {} task", $task_name);
+        let task = StoppableTask::new();
+        let fud_ = $fud.clone();
+        task.clone().start(
+            async move { $task_fn(fud_).await },
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "fud", "Failed starting {} task: {e}", $task_name),
+                }
+            },
+            Error::DetachedTaskStopped,
+            $fud.executor.clone(),
+        );
+        $tasks.insert($task_name.to_string(), task);
+    }};
+}
+pub(crate) use start_task;

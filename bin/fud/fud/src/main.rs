@@ -24,7 +24,6 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize,
-    dht::DhtHandler,
     net::{session::SESSION_DEFAULT, P2p, Settings as NetSettings},
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -36,10 +35,9 @@ use darkfi::{
     Error, Result,
 };
 use fud::{
-    proto::{FudFindNodesReply, ProtocolFud},
+    proto::ProtocolFud,
     rpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    tasks::{announce_seed_task, get_task, node_id_task, put_task},
     Fud,
 };
 
@@ -89,7 +87,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let fud: Arc<Fud> =
         Arc::new(Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?);
 
-    info!(target: "fud", "Starting download subs task");
+    fud.start_tasks().await;
+
+    info!(target: "fud", "Starting event subs task");
     let event_sub = JsonSubscriber::new("event");
     let event_sub_ = event_sub.clone();
     let event_task = StoppableTask::new();
@@ -106,34 +106,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => panic!("{e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    info!(target: "fud", "Starting get task");
-    let get_task_ = StoppableTask::new();
-    get_task_.clone().start(
-        get_task(fud.clone(), ex.clone()),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting get task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    info!(target: "fud", "Starting put task");
-    let put_task_ = StoppableTask::new();
-    put_task_.clone().start(
-        put_task(fud.clone(), ex.clone()),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting put task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -175,75 +147,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
     drop(p2p_settings);
 
-    info!(target: "fud", "Starting DHT tasks");
-    let dht_channel_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    dht_channel_task.clone().start(
-        async move { fud_.channel_task::<FudFindNodesReply>().await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht channel task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-    let announce_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    announce_task.clone().start(
-        async move { announce_seed_task(fud_.clone()).await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting announce task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    info!(target: "fud", "Starting node ID task");
-    let node_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    node_task.clone().start(
-        async move { node_id_task(fud_.clone()).await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting node ID task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "fud", "Caught termination signal, cleaning up and exiting...");
 
-    info!(target: "fud", "Stopping fetch tasks...");
     fud.stop().await;
-
-    info!(target: "fud", "Stopping get task...");
-    get_task_.stop().await;
-
-    info!(target: "fud", "Stopping put task...");
-    put_task_.stop().await;
 
     info!(target: "fud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
     info!(target: "fud", "Stopping P2P network...");
     p2p.stop().await;
-
-    info!(target: "fud", "Stopping DHT tasks...");
-    dht_channel_task.stop().await;
-    announce_task.stop().await;
-
-    info!(target: "fud", "Stopping node ID task...");
-    node_task.stop().await;
 
     info!(target: "fud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;

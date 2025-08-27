@@ -40,6 +40,8 @@ pub use settings::{DhtSettings, DhtSettingsOpt};
 pub mod handler;
 pub use handler::DhtHandler;
 
+pub mod tasks;
+
 pub trait DhtNode: Debug + Clone + Send + Sync + PartialEq + Eq + Hash {
     fn id(&self) -> blake3::Hash;
     fn addresses(&self) -> Vec<Url>;

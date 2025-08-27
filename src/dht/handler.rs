@@ -23,6 +23,7 @@ use num_bigint::BigUint;
 use smol::{lock::Semaphore, stream::StreamExt};
 use std::{
     collections::{HashMap, HashSet},
+    marker::Sync,
     sync::Arc,
     time::Duration,
 };
@@ -40,7 +41,7 @@ use crate::{
 };
 
 #[async_trait]
-pub trait DhtHandler<N: DhtNode> {
+pub trait DhtHandler<N: DhtNode>: Sync {
     fn dht(&self) -> Arc<Dht<N>>;
 
     /// Get our own node
@@ -95,53 +96,6 @@ pub trait DhtHandler<N: DhtNode> {
 
         if nodes.is_err() || nodes.map_or(true, |v| v.is_empty()) {
             self.dht().set_bootstrapped(false).await;
-        }
-    }
-
-    /// Send a DHT ping request when there is a new channel, to know the node id of the new peer,
-    /// Then fill the channel cache and the buckets
-    async fn channel_task<M: Message>(&self) -> Result<()> {
-        loop {
-            let channel_sub = self.dht().p2p.hosts().subscribe_channel().await;
-            let res = channel_sub.receive().await;
-            channel_sub.unsubscribe().await;
-            if res.is_err() {
-                continue;
-            }
-            let channel = res.unwrap();
-            let channel_cache_lock = self.dht().channel_cache.clone();
-            let mut channel_cache = channel_cache_lock.write().await;
-
-            // Skip this channel if it's stopped or not new.
-            if channel.is_stopped() || channel_cache.keys().any(|&k| k == channel.info.id) {
-                continue;
-            }
-            // Skip this channel if it's a seed or refine session.
-            if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
-                continue;
-            }
-
-            let ping_res = self.ping(channel.clone()).await;
-
-            if let Err(e) = ping_res {
-                warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
-                // channel.stop().await;
-                continue;
-            }
-
-            let node = ping_res.unwrap();
-
-            channel_cache.entry(channel.info.id).or_insert_with(|| ChannelCacheItem {
-                node: node.clone(),
-                topic: None,
-                usage_count: 0,
-            });
-            drop(channel_cache);
-
-            if !node.addresses().is_empty() {
-                self.add_node(node.clone()).await;
-                let _ = self.on_new_node(&node.clone()).await;
-            }
         }
     }
 
