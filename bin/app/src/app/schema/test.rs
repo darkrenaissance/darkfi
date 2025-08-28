@@ -35,12 +35,14 @@ const LIGHTMODE: bool = false;
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
     pub const KING_PATH: &str = "king.png";
+    pub const VID_PATH: &str = "forest/forest_{frame}.png";
 }
 
 #[cfg(not(target_os = "android"))]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const KING_PATH: &str = "assets/king.png";
+    pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
 }
 
 use ui_consts::*;
@@ -255,7 +257,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 1, 400.).unwrap();
     prop.set_f32(atom, Role::App, 2, 600.).unwrap();
     prop.set_f32(atom, Role::App, 3, 600.).unwrap();
-    node.set_property_str(atom, Role::App, "path", "assets/forest/forest_{frame}.png").unwrap();
+    node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_u32(atom, Role::App, "length", 357).unwrap();
     let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;

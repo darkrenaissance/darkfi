@@ -55,12 +55,19 @@ pub(super) struct GfxSeqAnim {
     /// Timer between frames
     timer: std::time::Instant,
     current_idx: usize,
+    pub(super) is_visible: bool,
 }
 
 impl GfxSeqAnim {
     pub fn new(frames_len: usize, oneshot: bool) -> Self {
         let frames = vec![None; frames_len];
-        Self { oneshot, frames, timer: std::time::Instant::now(), current_idx: 0 }
+        Self {
+            oneshot,
+            frames,
+            timer: std::time::Instant::now(),
+            current_idx: 0,
+            is_visible: false,
+        }
     }
 
     pub fn set(

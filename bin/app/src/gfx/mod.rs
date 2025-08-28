@@ -702,6 +702,7 @@ impl<'a> RenderContext<'a> {
                 }
                 GfxDrawInstruction::Animation(anim_id) => {
                     let anim = self.anims.get_mut(&anim_id).unwrap();
+                    anim.is_visible = true;
                     if let Some(dc) = anim.tick() {
                         self.draw_call(&dc, indent + 1, is_debug);
                     }
@@ -957,6 +958,18 @@ impl Stage {
             }
         });
         god.fg_runtime.push_task(sink_task);
+
+        #[cfg(target_os = "android")]
+        {
+            // For animations do periodic refresh every 40 ms
+            let refresh_task = god.fg_ex.spawn(async move {
+                loop {
+                    darkfi::system::msleep(40).await;
+                    miniquad::window::schedule_update();
+                }
+            });
+            god.fg_runtime.push_task(refresh_task);
+        }
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -1564,6 +1577,11 @@ impl EventHandler for Stage {
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
         let (screen_w, screen_h) = miniquad::window::screen_size();
+
+        // Mark all anims as invisible
+        for (_, anim) in self.anims.iter_mut() {
+            anim.is_visible = false;
+        }
 
         let mut render_ctx = RenderContext {
             ctx: &mut self.ctx,
