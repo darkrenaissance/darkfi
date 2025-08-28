@@ -36,78 +36,6 @@ use super::{BufferId, DrawCall, GfxDrawCall, TextureId};
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx::anim", $($arg)*); } }
 
 #[derive(Debug, Clone)]
-pub struct SeqAnim {
-    oneshot: bool,
-    frames: Vec<Option<Frame>>,
-    recv_frames: async_channel::Receiver<(usize, Frame)>,
-    state: State,
-}
-
-impl SeqAnim {
-    pub fn new(
-        oneshot: bool,
-        frames: Vec<Option<Frame>>,
-        recv_frames: async_channel::Receiver<(usize, Frame)>,
-        state: State,
-    ) -> Self {
-        Self { oneshot, frames, recv_frames, state }
-    }
-
-    pub(super) fn compile(
-        mut self: Self,
-        textures: &HashMap<TextureId, miniquad::TextureId>,
-        buffers: &HashMap<BufferId, miniquad::BufferId>,
-    ) -> GfxSeqAnim {
-        let mut frames = Vec::with_capacity(self.frames.len());
-        for frame in self.frames {
-            let Some(frame) = frame else {
-                frames.push(None);
-                continue
-            };
-            let duration = std::time::Duration::from_millis(frame.duration as u64);
-            let dc = frame.dc.compile(textures, buffers, 0).unwrap();
-            frames.push(Some(GfxFrame { duration, dc }));
-        }
-        GfxSeqAnim::new(self.oneshot, frames, self.recv_frames, self.state)
-    }
-}
-
-impl Encodable for SeqAnim {
-    fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += self.oneshot.encode(s)?;
-        // Write frames array
-        /*
-        len += VarInt(self.frames.len() as u64).encode(s)?;
-        for frame in &self.frames {
-            let frame = frame.read();
-            frame.encode(s)?;
-        }
-        */
-        Ok(len)
-    }
-}
-#[async_trait]
-impl AsyncEncodable for SeqAnim {
-    async fn encode_async<W: AsyncWrite + Unpin + Send>(
-        &self,
-        w: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut len = 0;
-        len += self.oneshot.encode_async(w).await?;
-        // Write frames array
-        /*
-        len += VarInt(self.frames.len() as u64).encode_async(w).await?;
-        for frame in &self.frames {
-            let frame = frame.read().clone();
-            frame.encode_async(w).await?;
-        }
-        */
-        Ok(len)
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Frame {
     /// Duration of this frame in ms
     duration: u32,
@@ -120,113 +48,58 @@ impl Frame {
     }
 }
 
-/// We have to implement this manually due to macro autism.
-/// Since it contains DrawCall that contains Instruction that can contain this.
-impl Encodable for Frame {
-    fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
-        let mut len = 0;
-        len += self.duration.encode(s)?;
-        len += self.dc.encode(s)?;
-        Ok(len)
-    }
-}
-#[async_trait]
-impl AsyncEncodable for Frame {
-    async fn encode_async<W: AsyncWrite + Unpin + Send>(
-        &self,
-        w: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut len = 0;
-        len += self.duration.encode_async(w).await?;
-        len += self.dc.encode_async(w).await?;
-        Ok(len)
-    }
-}
-
-#[derive(Debug)]
-struct InternalState {
+#[derive(Debug, Clone)]
+pub(super) struct GfxSeqAnim {
+    oneshot: bool,
+    frames: Vec<Option<GfxFrame>>,
     /// Timer between frames
     timer: std::time::Instant,
     current_idx: usize,
 }
 
-type InternalStatePtr = Arc<RefCell<InternalState>>;
-
-#[derive(Debug, Clone)]
-pub struct State(InternalStatePtr);
-
-impl State {
-    pub fn new() -> Self {
-        Self(Arc::new(RefCell::new(InternalState {
-            timer: std::time::Instant::now(),
-            current_idx: 0,
-        })))
-    }
-}
-
-unsafe impl Send for State {}
-unsafe impl Sync for State {}
-
-#[derive(Debug, Clone)]
-pub(super) struct GfxSeqAnim {
-    oneshot: bool,
-    frames: Vec<Option<GfxFrame>>,
-    /// Stream frames in
-    recv_frames: async_channel::Receiver<(usize, Frame)>,
-    state: State,
-}
-
 impl GfxSeqAnim {
-    fn new(
-        oneshot: bool,
-        frames: Vec<Option<GfxFrame>>,
-        recv_frames: async_channel::Receiver<(usize, Frame)>,
-        state: State,
-    ) -> Self {
-        Self { oneshot, frames, recv_frames, state }
+    pub fn new(frames_len: usize, oneshot: bool) -> Self {
+        let frames = vec![None; frames_len];
+        Self { oneshot, frames, timer: std::time::Instant::now(), current_idx: 0 }
     }
 
-    pub fn tick(
+    pub fn set(
         &mut self,
+        frame_idx: usize,
+        frame: Frame,
         textures: &HashMap<TextureId, miniquad::TextureId>,
         buffers: &HashMap<BufferId, miniquad::BufferId>,
-    ) -> Option<GfxDrawCall> {
-        t!("tick");
-        while let Ok((frame_idx, frame)) = self.recv_frames.try_recv() {
-            let duration = std::time::Duration::from_millis(frame.duration as u64);
-            let dc = frame.dc.compile(textures, buffers, 0).unwrap();
-            self.frames[frame_idx] = Some(GfxFrame { duration, dc });
-            t!("got frame {frame_idx}");
-            for i in 0..self.frames.len() {
-                if self.frames[i].is_none() {
-                    t!("frame {i} is none");
-                }
-            }
-        }
+    ) {
+        assert!(frame_idx < self.frames.len());
+        let duration = std::time::Duration::from_millis(frame.duration as u64);
+        let dc = frame.dc.compile(textures, buffers, 0).unwrap();
+        self.frames[frame_idx] = Some(GfxFrame { duration, dc });
+        //t!("got frame {frame_idx}");
+    }
 
-        let mut state = self.state.0.borrow_mut();
-
-        let elapsed = state.timer.elapsed();
-        assert!(state.current_idx < self.frames.len());
-        let frame = &self.frames[state.current_idx];
+    pub fn tick(&mut self) -> Option<GfxDrawCall> {
+        //t!("tick");
+        let elapsed = self.timer.elapsed();
+        assert!(self.current_idx < self.frames.len());
+        let frame = &self.frames[self.current_idx];
         let Some(frame) = frame else {
-            assert_eq!(state.current_idx, 0);
+            assert_eq!(self.current_idx, 0);
             return None
         };
 
         let curr_duration = frame.duration;
         if elapsed >= curr_duration {
-            let next_idx = (state.current_idx + 1) % self.frames.len();
+            let next_idx = (self.current_idx + 1) % self.frames.len();
             // Only advance when the next frame is Some
             // Otherwise stay on the same frame
             if self.frames[next_idx].is_some() {
-                state.current_idx = next_idx;
+                self.current_idx = next_idx;
                 // Reset the timer now we changed frame
-                state.timer = std::time::Instant::now();
+                self.timer = std::time::Instant::now();
             }
         }
 
-        let curr_frame = self.frames[state.current_idx].clone().unwrap();
+        let curr_frame = self.frames[self.current_idx].clone().unwrap();
         Some(curr_frame.dc)
     }
 }

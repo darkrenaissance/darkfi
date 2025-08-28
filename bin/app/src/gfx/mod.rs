@@ -43,7 +43,7 @@ use std::{
 };
 
 pub mod anim;
-use anim::{GfxSeqAnim, SeqAnim};
+use anim::{Frame as AnimFrame, GfxSeqAnim};
 mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
@@ -103,14 +103,15 @@ impl Vertex {
 
 pub type TextureId = u32;
 pub type BufferId = u32;
+pub type AnimId = u32;
 
 static NEXT_BUFFER_ID: AtomicU32 = AtomicU32::new(0);
 static NEXT_TEXTURE_ID: AtomicU32 = AtomicU32::new(0);
+static NEXT_ANIM_ID: AtomicU32 = AtomicU32::new(0);
 
 pub type ManagedTexturePtr = Arc<ManagedTexture>;
 
 /// Auto-deletes texture on drop
-#[derive(Clone)]
 pub struct ManagedTexture {
     id: TextureId,
     epoch: u32,
@@ -133,7 +134,6 @@ impl std::fmt::Debug for ManagedTexture {
 pub type ManagedBufferPtr = Arc<ManagedBuffer>;
 
 /// Auto-deletes buffer on drop
-#[derive(Clone)]
 pub struct ManagedBuffer {
     id: BufferId,
     epoch: u32,
@@ -151,6 +151,35 @@ impl Drop for ManagedBuffer {
 impl std::fmt::Debug for ManagedBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ManagedBuffer").field("id", &self.id).finish()
+    }
+}
+
+pub type ManagedSeqAnimPtr = Arc<ManagedSeqAnim>;
+
+pub struct ManagedSeqAnim {
+    frames_len: usize,
+    pub id: AnimId,
+    epoch: u32,
+    render_api: RenderApi,
+    tag: DebugTag,
+}
+
+impl ManagedSeqAnim {
+    pub fn update(&self, frame_idx: usize, frame: AnimFrame) {
+        assert!(frame_idx < self.frames_len);
+        self.render_api.update_unmanaged_anim(self.id, frame_idx, frame, self.epoch, self.tag);
+    }
+}
+
+impl Drop for ManagedSeqAnim {
+    fn drop(&mut self) {
+        self.render_api.delete_unmanaged_anim(self.id, self.epoch, self.tag);
+    }
+}
+
+impl std::fmt::Debug for ManagedSeqAnim {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ManagedSeqAnim").field("id", &self.id).finish()
     }
 }
 
@@ -256,6 +285,42 @@ impl RenderApi {
         buftype: u8,
     ) {
         let method = GraphicsMethod::DeleteBuffer((buffer, tag, buftype));
+        self.send_with_epoch(method, epoch);
+    }
+
+    fn new_unmanaged_anim(
+        &self,
+        frames_len: usize,
+        oneshot: bool,
+        tag: DebugTag,
+    ) -> (AnimId, EpochIndex) {
+        let gfx_anim_id = NEXT_ANIM_ID.fetch_add(1, Ordering::Relaxed);
+
+        let method = GraphicsMethod::NewSeqAnim { id: gfx_anim_id, frames_len, oneshot, tag };
+        let epoch = self.send(method);
+
+        (gfx_anim_id, epoch)
+    }
+
+    pub fn new_anim(&self, frames_len: usize, oneshot: bool, tag: DebugTag) -> ManagedSeqAnimPtr {
+        let (id, epoch) = self.new_unmanaged_anim(frames_len, oneshot, tag);
+        Arc::new(ManagedSeqAnim { frames_len, id, epoch, render_api: self.clone(), tag })
+    }
+
+    pub fn update_unmanaged_anim(
+        &self,
+        anim: AnimId,
+        frame_idx: usize,
+        frame: AnimFrame,
+        epoch: EpochIndex,
+        tag: DebugTag,
+    ) {
+        let method = GraphicsMethod::UpdateSeqAnim { id: anim, frame_idx, frame, tag };
+        self.send_with_epoch(method, epoch);
+    }
+
+    fn delete_unmanaged_anim(&self, anim: AnimId, epoch: EpochIndex, tag: DebugTag) {
+        let method = GraphicsMethod::DeleteSeqAnim((anim, tag));
         self.send_with_epoch(method, epoch);
     }
 
@@ -400,7 +465,7 @@ pub enum DrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
-    Animation(SeqAnim),
+    Animation(AnimId),
     EnableDebug,
 }
 
@@ -419,9 +484,7 @@ impl DrawInstruction {
             Self::Draw(mesh) => {
                 GfxDrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?)
             }
-            Self::Animation(anim) => {
-                GfxDrawInstruction::Animation(RefCell::new(anim.compile(textures, buffers)))
-            }
+            Self::Animation(anim) => GfxDrawInstruction::Animation(anim),
             Self::EnableDebug => GfxDrawInstruction::EnableDebug,
         };
         Some(instr)
@@ -482,7 +545,7 @@ enum GfxDrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(GfxDrawMesh),
-    Animation(RefCell<GfxSeqAnim>),
+    Animation(AnimId),
     EnableDebug,
 }
 
@@ -504,9 +567,7 @@ struct RenderContext<'a> {
     view: Rectangle,
     cursor: Point,
 
-    // Temp
-    textures: &'a HashMap<TextureId, miniquad::TextureId>,
-    buffers: &'a HashMap<BufferId, miniquad::BufferId>,
+    anims: &'a mut HashMap<AnimId, GfxSeqAnim>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -639,8 +700,9 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
-                GfxDrawInstruction::Animation(anim) => {
-                    if let Some(dc) = anim.borrow_mut().tick(self.textures, self.buffers) {
+                GfxDrawInstruction::Animation(anim_id) => {
+                    let anim = self.anims.get_mut(&anim_id).unwrap();
+                    if let Some(dc) = anim.tick() {
                         self.draw_call(&dc, indent + 1, is_debug);
                     }
                 }
@@ -692,6 +754,9 @@ pub enum GraphicsMethod {
     NewVertexBuffer((Vec<Vertex>, BufferId, DebugTag)),
     NewIndexBuffer((Vec<u16>, BufferId, DebugTag)),
     DeleteBuffer((BufferId, DebugTag, u8)),
+    NewSeqAnim { id: AnimId, frames_len: usize, oneshot: bool, tag: DebugTag },
+    UpdateSeqAnim { id: AnimId, frame_idx: usize, frame: AnimFrame, tag: DebugTag },
+    DeleteSeqAnim((AnimId, DebugTag)),
     ReplaceGfxDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, DrawCall)> },
     StartBatch((BatchGuardId, Option<&'static str>)),
     EndBatch(BatchGuardId),
@@ -705,6 +770,9 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::NewVertexBuffer(_) => write!(f, "NewVertexBuffer"),
             Self::NewIndexBuffer(_) => write!(f, "NewIndexBuffer"),
             Self::DeleteBuffer(_) => write!(f, "DeleteBuffer"),
+            Self::NewSeqAnim { .. } => write!(f, "NewSeqAnim"),
+            Self::UpdateSeqAnim { .. } => write!(f, "UpdateSeqAnim"),
+            Self::DeleteSeqAnim(_) => write!(f, "DeleteSeqAnim"),
             Self::ReplaceGfxDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
                 write!(f, "ReplaceGfxDrawCalls({bid})")
             }
@@ -848,6 +916,7 @@ struct Stage {
 
     textures: HashMap<TextureId, miniquad::TextureId>,
     buffers: HashMap<BufferId, miniquad::BufferId>,
+    anims: HashMap<AnimId, GfxSeqAnim>,
 
     epoch: EpochIndex,
     method_queue: Arc<SyncMutex<Vec<(EpochIndex, GraphicsMethod)>>>,
@@ -945,6 +1014,7 @@ impl Stage {
 
             textures: HashMap::new(),
             buffers: HashMap::new(),
+            anims: HashMap::new(),
 
             epoch,
             method_queue,
@@ -969,6 +1039,13 @@ impl Stage {
                 self.method_new_index_buffer(indices, *gbuff_id)
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => self.method_delete_buffer(*gbuff_id),
+            GraphicsMethod::NewSeqAnim { id, frames_len, oneshot, tag: _ } => {
+                self.method_new_anim(*id, *frames_len, *oneshot)
+            }
+            GraphicsMethod::UpdateSeqAnim { id, frame_idx, frame, tag: _ } => {
+                self.method_update_anim(*id, *frame_idx, frame.clone())
+            }
+            GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => self.method_delete_anim(*ganim_id),
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
                 //t!("Commit dc to {batch_id}: {debug_strs:?}");
@@ -1134,6 +1211,47 @@ impl Stage {
         }
         Ok(())
     }
+    fn method_new_anim(
+        &mut self,
+        gfx_anim_id: AnimId,
+        frames_len: usize,
+        oneshot: bool,
+    ) -> Result<()> {
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: new_anim({gfx_anim_id}, {frames_len}, {oneshot})");
+        }
+        if let Some(_) = self.anims.insert(gfx_anim_id, GfxSeqAnim::new(frames_len, oneshot)) {
+            //panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
+            return Err(Error::GfxDuplicateAnimID)
+        }
+        Ok(())
+    }
+    fn method_update_anim(
+        &mut self,
+        gfx_anim_id: AnimId,
+        frame_idx: usize,
+        frame: AnimFrame,
+    ) -> Result<()> {
+        let Some(anim) = self.anims.get_mut(&gfx_anim_id) else {
+            //.expect("couldn't find gfx_anim_id");
+            return Err(Error::GfxUnknownAnimID)
+        };
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: update_anim({gfx_anim_id}[{frame_idx}] => {frame:?})");
+        }
+        anim.set(frame_idx, frame, &self.textures, &self.buffers);
+        Ok(())
+    }
+    fn method_delete_anim(&mut self, gfx_anim_id: AnimId) -> Result<()> {
+        let Some(anim) = self.anims.remove(&gfx_anim_id) else {
+            //.expect("couldn't find gfx_anim_id");
+            return Err(Error::GfxUnknownAnimID)
+        };
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
+        }
+        Ok(())
+    }
     fn method_replace_draw_calls(
         &mut self,
         timest: Timestamp,
@@ -1194,6 +1312,15 @@ impl Stage {
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, tag, buftype)) => {
                 trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
+            }
+            GraphicsMethod::NewSeqAnim { id, frames_len, oneshot, tag } => {
+                //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
+            }
+            GraphicsMethod::UpdateSeqAnim { .. } => {
+                //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
+            }
+            GraphicsMethod::DeleteSeqAnim((ganim_id, tag)) => {
+                //trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 trax.put_dcs(epoch, *batch_id, *timest, dcs);
@@ -1278,6 +1405,17 @@ impl PruneMethodHeap {
                 if self.new_buf.remove(&gbuff_id).is_none() {
                     self.del.push(method);
                 }
+            }
+            GraphicsMethod::NewSeqAnim { id: _, frames_len, oneshot, tag } => {
+                //self.new_buf.insert(gbuff_id, method);
+            }
+            GraphicsMethod::UpdateSeqAnim { .. } => {
+                //self.new_buf.insert(gbuff_id, method);
+            }
+            GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => {
+                //if self.new_buf.remove(&gbuff_id).is_none() {
+                //    self.del.push(method);
+                //}
             }
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 self.method_replace_draw_calls(batch_id, timest, dcs)
@@ -1435,8 +1573,7 @@ impl EventHandler for Stage {
             scale: 1.,
             view: Rectangle::from([0., 0., screen_w, screen_h]),
             cursor: Point::from([0., 0.]),
-            textures: &self.textures,
-            buffers: &self.buffers,
+            anims: &mut self.anims,
         };
         render_ctx.draw();
 

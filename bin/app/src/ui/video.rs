@@ -30,8 +30,8 @@ use std::{
 
 use crate::{
     gfx::{
-        anim::{Frame, SeqAnim, State as AnimState},
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi,
+        anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedSeqAnimPtr,
+        ManagedTexturePtr, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -48,6 +48,19 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::video", $($arg)*); } }
 
 pub type VideoPtr = Arc<Video>;
 
+#[derive(Clone)]
+struct StreamedVideoData {
+    textures: Vec<Option<ManagedTexturePtr>>,
+    anim: ManagedSeqAnimPtr,
+}
+
+impl StreamedVideoData {
+    fn new(len: usize, render_api: &RenderApi) -> Self {
+        let anim = render_api.new_anim(len, false, gfxtag!("video"));
+        Self { textures: vec![None; len], anim }
+    }
+}
+
 pub struct Video {
     node: SceneNodeWeak,
     render_api: RenderApi,
@@ -57,10 +70,9 @@ pub struct Video {
     stop_load: Arc<AtomicBool>,
     dc_key: u64,
 
-    anim_state: AnimState,
     textures_pub: async_broadcast::Sender<(usize, ManagedTexturePtr)>,
     textures_sub: async_broadcast::Receiver<(usize, ManagedTexturePtr)>,
-    textures: Arc<SyncMutex<Vec<Option<ManagedTexturePtr>>>>,
+    vid_data: Arc<SyncMutex<Option<StreamedVideoData>>>,
     // Do we need this?
     _load_handles: SyncMutex<[Option<std::thread::JoinHandle<()>>; N_LOADERS]>,
 
@@ -97,10 +109,9 @@ impl Video {
             stop_load: Arc::new(AtomicBool::new(false)),
             dc_key: OsRng.gen(),
 
-            anim_state: AnimState::new(),
             textures_pub,
             textures_sub,
-            textures: Arc::new(SyncMutex::new(vec![])),
+            vid_data: Arc::new(SyncMutex::new(None)),
             _load_handles: SyncMutex::new([const { None }; 4]),
 
             rect,
@@ -146,8 +157,8 @@ impl Video {
         //            send to gfx
 
         {
-            let mut textures = self.textures.lock();
-            *textures = vec![None; vid_len];
+            let mut vid_data = self.vid_data.lock();
+            *vid_data = Some(StreamedVideoData::new(vid_len, &self.render_api));
             self.textures_pub.clone().set_capacity(vid_len);
         }
 
@@ -156,7 +167,7 @@ impl Video {
             let path_fmt = path_fmt.clone();
             let render_api = self.render_api.clone();
             let stop_load = self.stop_load.clone();
-            let textures = self.textures.clone();
+            let vid_data = self.vid_data.clone();
             let textures_pub = self.textures_pub.clone();
 
             let handle = std::thread::spawn(move || {
@@ -166,16 +177,15 @@ impl Video {
                     if stop_load.load(Ordering::Relaxed) {
                         return
                     }
-                    t!("frame_idx = {frame_idx} [thread={thread_idx}]");
+                    //t!("frame_idx = {frame_idx} [thread={thread_idx}]");
                     let path = path_fmt.replace("{frame}", &format!("{frame_idx:#03}"));
                     let texture = Self::load_texture(path, &render_api);
                     // Make editing textures array and broadcasting an atomic op
                     {
-                        let mut textures = textures.lock();
-                        // set texture slot
-                        // panic here? hows that possible
-                        // happened on app close
-                        textures[frame_idx] = Some(texture.clone());
+                        let mut vid_data = vid_data.lock();
+                        // panic here on unwrap None when closing app
+                        let mut vid_data = vid_data.as_mut().unwrap();
+                        vid_data.textures[frame_idx] = Some(texture.clone());
                         // broadcast
                         textures_pub.try_broadcast((frame_idx, texture)).unwrap();
                     }
@@ -251,33 +261,29 @@ impl Video {
         // Begin subscribing before we clone Mutex, but actually
         // we need the length of the textures stored, so lets just hold it,
         // do the clones THEN release.
-        let (textures, tsubs) = {
-            let textures = self.textures.lock();
+        let (vid_data, tsubs) = {
+            let vid_data = self.vid_data.lock();
+            let vid_data = vid_data.clone().unwrap();
             // Possibly triggered by race condition.
             // Check it anyway since generally should work.
-            assert_eq!(textures.len(), self.vid_len.get() as usize);
-            let tsubs = vec![self.textures_sub.clone(); textures.len()];
-            (textures.clone(), tsubs)
+            assert_eq!(vid_data.textures.len(), self.vid_len.get() as usize);
+            let tsubs = vec![self.textures_sub.clone(); vid_data.textures.len()];
+            (vid_data, tsubs)
         };
-        assert_eq!(textures.len(), tsubs.len());
+        assert_eq!(vid_data.textures.len(), tsubs.len());
 
         // Only used in this function so fine to hold the entire time
         let mut load_tasks = self.load_tasks.lock();
         load_tasks.clear();
 
-        let (send_frames, recv_frames) = async_channel::bounded(textures.len());
-
-        let mut frames = Vec::with_capacity(textures.len());
         for (texture_idx, (mut texture, mut tsub)) in
-            textures.into_iter().zip(tsubs.into_iter()).enumerate()
+            vid_data.textures.into_iter().zip(tsubs.into_iter()).enumerate()
         {
             let vertex_buffer = mesh.vertex_buffer.clone();
             let index_buffer = mesh.index_buffer.clone();
 
             let Some(texture) = texture.take() else {
-                frames.push(None);
-
-                let send_frames = send_frames.clone();
+                let anim = vid_data.anim.clone();
                 let task = self.ex.spawn(async move {
                     while let Ok((frame_idx, texture)) = tsub.recv().await {
                         if frame_idx != texture_idx {
@@ -297,8 +303,8 @@ impl Video {
                             debug_str: "video",
                         };
 
-                        // send here
-                        send_frames.send((frame_idx, Frame::new(40, dc)));
+                        //t!("sending {frame_idx}");
+                        anim.update(frame_idx, Frame::new(40, dc));
                         break
                     }
                 });
@@ -318,16 +324,18 @@ impl Video {
                 z_index: 0,
                 debug_str: "video",
             };
-            frames.push(Some(Frame::new(40, dc)));
+            vid_data.anim.update(texture_idx, Frame::new(40, dc));
         }
-        let anim = SeqAnim::new(false, frames, recv_frames, self.anim_state.clone());
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
                 DrawCall::new(
-                    vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Animation(anim)],
+                    vec![
+                        DrawInstruction::Move(rect.pos()),
+                        DrawInstruction::Animation(vid_data.anim.id),
+                    ],
                     vec![],
                     self.z_index.get(),
                     "vid",
@@ -362,7 +370,7 @@ impl UIObject for Video {
     fn stop(&self) {
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
-        self.textures.lock().clear();
+        *self.vid_data.lock() = None;
     }
 
     async fn draw(
