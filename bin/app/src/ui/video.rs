@@ -30,7 +30,7 @@ use std::{
 
 use crate::{
     gfx::{
-        anim::{Frame, SeqAnim},
+        anim::{Frame, SeqAnim, State as AnimState},
         gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
@@ -57,6 +57,7 @@ pub struct Video {
     stop_load: Arc<AtomicBool>,
     dc_key: u64,
 
+    anim_state: AnimState,
     textures_pub: async_broadcast::Sender<(usize, ManagedTexturePtr)>,
     textures_sub: async_broadcast::Receiver<(usize, ManagedTexturePtr)>,
     textures: Arc<SyncMutex<Vec<Option<ManagedTexturePtr>>>>,
@@ -96,6 +97,7 @@ impl Video {
             stop_load: Arc::new(AtomicBool::new(false)),
             dc_key: OsRng.gen(),
 
+            anim_state: AnimState::new(),
             textures_pub,
             textures_sub,
             textures: Arc::new(SyncMutex::new(vec![])),
@@ -171,6 +173,8 @@ impl Video {
                     {
                         let mut textures = textures.lock();
                         // set texture slot
+                        // panic here? hows that possible
+                        // happened on app close
                         textures[frame_idx] = Some(texture.clone());
                         // broadcast
                         textures_pub.try_broadcast((frame_idx, texture)).unwrap();
@@ -316,15 +320,14 @@ impl Video {
             };
             frames.push(Some(Frame::new(40, dc)));
         }
-        let anim = SeqAnim::new(false, frames, recv_frames);
+        let anim = SeqAnim::new(false, frames, recv_frames, self.anim_state.clone());
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
                 DrawCall::new(
-                    //vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Animation(anim)],
-                    vec![],
+                    vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Animation(anim)],
                     vec![],
                     self.z_index.get(),
                     "vid",
