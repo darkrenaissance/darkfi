@@ -54,7 +54,7 @@ use trax::get_trax;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardId, PropertyAtomicGuard},
-    GOD,
+    ExecutorPtr, GOD,
 };
 
 // This is very noisy so suppress output by default
@@ -925,6 +925,9 @@ struct Stage {
 
     pruner: PruneMethodHeap,
     screen_was_off: bool,
+    ex: ExecutorPtr,
+    #[cfg(target_os = "android")]
+    refresh_task: Option<smol::Task<()>>,
 }
 
 impl Stage {
@@ -943,9 +946,10 @@ impl Stage {
         let method_recv = god.method_recv.clone();
         let event_pub = god.event_pub.clone();
 
+        let ex = god.fg_ex.clone();
         let method_queue = Arc::new(SyncMutex::new(vec![]));
         let method_queue2 = method_queue.clone();
-        let sink_task = god.fg_ex.spawn(async move {
+        let sink_task = ex.spawn(async move {
             // Pull from render_api
             while let Ok((epoch, method)) = method_recv.recv().await {
                 let is_replace_dc = matches!(method, GraphicsMethod::ReplaceGfxDrawCalls { .. });
@@ -958,18 +962,6 @@ impl Stage {
             }
         });
         god.fg_runtime.push_task(sink_task);
-
-        #[cfg(target_os = "android")]
-        {
-            // For animations do periodic refresh every 40 ms
-            let refresh_task = god.fg_ex.spawn(async move {
-                loop {
-                    darkfi::system::msleep(40).await;
-                    miniquad::window::schedule_update();
-                }
-            });
-            god.fg_runtime.push_task(refresh_task);
-        }
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -1035,6 +1027,9 @@ impl Stage {
 
             pruner: PruneMethodHeap::new(epoch),
             screen_was_off: false,
+            ex,
+            #[cfg(target_os = "android")]
+            refresh_task: None,
         }
     }
 
@@ -1492,6 +1487,11 @@ impl EventHandler for Stage {
         let methods = std::mem::take(&mut *self.method_queue.lock());
 
         if self.egl_ctx_is_disabled() {
+            #[cfg(target_os = "android")]
+            {
+                self.refresh_task = None;
+            }
+
             // Immediately apply any pending batches when the screen is switched off
             let batch_ids: Vec<_> = self.batches.keys().cloned().collect();
             for batch_id in batch_ids {
@@ -1503,6 +1503,17 @@ impl EventHandler for Stage {
             self.pruner.drain(methods);
             self.screen_was_off = true;
             return
+        }
+
+        #[cfg(target_os = "android")]
+        if self.refresh_task.is_none() {
+            // For animations do periodic refresh every 40 ms
+            self.refresh_task = Some(self.ex.spawn(async move {
+                loop {
+                    darkfi::system::msleep(40).await;
+                    miniquad::window::schedule_update();
+                }
+            }));
         }
 
         // We actually want to skip draining the prune queue the first time so

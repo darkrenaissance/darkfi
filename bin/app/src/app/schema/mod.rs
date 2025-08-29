@@ -22,7 +22,7 @@ use std::fs::File;
 
 use crate::{
     app::{
-        node::{create_image, create_layer, create_shortcut, create_vector_art},
+        node::{create_image, create_layer, create_shortcut, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
@@ -30,7 +30,7 @@ use crate::{
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape},
+    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -56,6 +56,7 @@ mod ui_consts {
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "bg.png";
+    pub const VID_PATH: &str = "forest/forest_{frame}.png";
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -80,6 +81,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "assets/bg.png";
+    pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
@@ -232,8 +234,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
         window.link(layer_node.clone());
 
+        let node = create_video("king");
+
         // Create a bg image
-        let node = create_image("bg_image");
+        //let node = create_image("bg_image");
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
         prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -269,9 +273,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     ").unwrap();
         prop.set_expr(atom, Role::App, 3, code).unwrap();
 
-        node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
+        //node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
+        node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
+        //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
+        //layer_node.link(node);
+        node.set_property_u32(atom, Role::App, "length", 357).unwrap();
+        let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
         layer_node.link(node);
 
         // Create a bg mesh on top to fade the bg image
