@@ -957,6 +957,7 @@ impl Stage {
                 method_queue2.lock().push((epoch, method));
                 // If ReplaceGfxDrawCall then wake up miniquad
                 if is_replace_dc {
+                    #[cfg(target_os = "android")]
                     miniquad::window::schedule_update();
                 }
             }
