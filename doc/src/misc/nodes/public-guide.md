@@ -242,6 +242,47 @@ inbound = ["tcp://127.0.0.1:26663"]
 external_addrs = ["i2p://youraddress.b32.i2p:26663"]
 ```
 
+### Autohost
+
+#### Ipv6
+You can autohost a public `IPv6` node without manually specifying your external
+`IPv6` address. Your `Ipv6` address will be automatically detected and used to configure
+an inbound node. To enable this, edit the `inbound` and `external_addrs` fields
+in the `tcp+tls` profile as shown below.
+
+```toml
+[net.profiles."tcp+tls"]
+## P2P accept addresses
+inbound = ["tcp+tls://[::]:26661"]
+
+## Addresses we want to advertise to peers
+external_addrs = ["tcp+tls://[::]:26661"]
+
+## Seed nodes to connect to
+seeds = ["tcp+tls://lilith0.dark.fi:25551", "tcp+tls://lilith1.dark.fi:25551"]
+```
+
+#### Tor
+You can autohost a public `Tor` node using `Arti` without manually specifying
+your external address. `Arti` will automatically create an `ephemeral` onion
+address and an inbound node will be setup at that address. To enable this,
+edit the `inbound` field in the `tor` as shown below.
+
+```toml
+[net.profiles."tor"]
+## P2P accept addresses
+inbound = ["tor://127.0.0.1:26661"]
+
+## Addresses we want to advertise to peers
+external_addrs = []
+
+## Seed nodes to connect to
+seeds = [
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+]
+```
+
 ## Test your node
 
 You can test if your node is configured properly on the network. Use 
