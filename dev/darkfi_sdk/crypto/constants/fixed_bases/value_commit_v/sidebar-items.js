@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GENERATOR","U_SHORT","Z_SHORT"],"fn":["generator"]};

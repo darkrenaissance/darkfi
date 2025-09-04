@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["C","INV_TWO_POW_K","K","L_ORCHARD_MERKLE","MERKLE_CRH_PERSONALIZATION","Q_COMMIT_IVK_M_GENERATOR","Q_MERKLE_CRH","Q_NOTE_COMMITMENT_M_GENERATOR"],"enum":["OrchardCommitDomains","OrchardHashDomains"],"fn":["i2lebsp_k","lebs2ip_k"]};
