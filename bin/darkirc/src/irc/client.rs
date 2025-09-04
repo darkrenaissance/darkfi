@@ -422,10 +422,10 @@ impl Client {
         let mut line = line.to_string();
 
         // Remove CRLF
-        if &line[(line.len() - 2)..] == "\r\n" {
+        if line.ends_with("\r\n") {
             line.pop();
             line.pop();
-        } else if &line[(line.len() - 1)..] == "\n" {
+        } else if line.ends_with("\n") {
             line.pop();
         } else {
             return Err(Error::ParseFailed("Line doesn't end with CR/LF"))
