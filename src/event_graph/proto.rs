@@ -522,7 +522,7 @@ impl ProtocolEventGraph {
             // reading our db and steal our bandwidth.
             let mut events = vec![];
             for event_id in event_ids.iter() {
-                /*if !self.event_graph.broadcasted_ids.read().await.contains(event_id) {
+                if !self.event_graph.header_dag.contains_key(event_id.as_bytes())? {
                     let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
                     if malicious_count + 1 == MALICIOUS_THRESHOLD {
                         error!(
@@ -540,7 +540,7 @@ impl ProtocolEventGraph {
                         self.channel.address(), event_id,
                     );
                     continue
-                }*/
+                }
 
                 // At this point we should have it in our DAG.
                 // This code panics if this is not the case.
@@ -549,7 +549,12 @@ impl ProtocolEventGraph {
                     "Fetching event {:?} from DAG", event_id,
                 );
 
-                events.push(self.event_graph.dag_get(event_id).await?.ok_or(Error::EventNotFound("Event Not Found in DAG".to_owned()))?);
+                events.push(
+                    self.event_graph
+                        .dag_get(event_id)
+                        .await?
+                        .ok_or(Error::EventNotFound("Event Not Found in DAG".to_owned()))?,
+                );
             }
 
             // Check if the incoming event is older than the genesis event. If so, something
