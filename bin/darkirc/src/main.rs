@@ -94,6 +94,10 @@ struct Args {
     /// Optional TLS certificate key file path if `irc_listen` uses TLS
     irc_tls_secret: Option<String>,
 
+    /// How many DAGs to sync.
+    #[structopt(short, long, default_value = "1")]
+    dags_count: usize,
+
     #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
@@ -362,7 +366,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         replay_datastore.clone(),
         replay_mode,
         fast_mode,
-        "darkirc_dag",
         1,
         ex.clone(),
     )
@@ -506,7 +509,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // Initial DAG sync
-    if let Err(e) = sync_task(&p2p, &event_graph, args.skip_dag_sync, args.fast_mode).await {
+    if let Err(e) =
+        sync_task(&p2p, &event_graph, args.skip_dag_sync, args.fast_mode, args.dags_count).await
+    {
         error!("DAG sync task failed to start: {e}");
         return Err(e);
     };
@@ -514,7 +519,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Stoppable task to monitor network and resync on disconnect.
     let sync_mon_task = StoppableTask::new();
     sync_mon_task.clone().start(
-        sync_and_monitor(p2p.clone(), event_graph.clone(), args.skip_dag_sync, args.fast_mode),
+        sync_and_monitor(
+            p2p.clone(),
+            event_graph.clone(),
+            args.skip_dag_sync,
+            args.fast_mode,
+            args.dags_count,
+        ),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
@@ -561,6 +572,7 @@ async fn sync_task(
     event_graph: &EventGraphPtr,
     skip_dag_sync: bool,
     fast_mode: bool,
+    dags_count: usize,
 ) -> Result<()> {
     let comms_timeout = p2p.settings().read_arc().await.outbound_connect_timeout_max();
 
@@ -570,7 +582,7 @@ async fn sync_task(
             // We'll attempt to sync for ever
             if !skip_dag_sync {
                 info!("Syncing event DAG");
-                match event_graph.dag_sync(fast_mode).await {
+                match event_graph.sync_selected(dags_count, fast_mode).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
@@ -598,6 +610,7 @@ async fn sync_and_monitor(
     event_graph: EventGraphPtr,
     skip_dag_sync: bool,
     fast_mode: bool,
+    dags_count: usize,
 ) -> Result<()> {
     loop {
         let net_subscription = p2p.hosts().subscribe_disconnect().await;
@@ -610,7 +623,7 @@ async fn sync_and_monitor(
                 // Sync node again
                 info!("Network disconnection detected, resyncing...");
                 *event_graph.synced.write().await = false;
-                sync_task(&p2p, &event_graph, skip_dag_sync, fast_mode).await?;
+                sync_task(&p2p, &event_graph, skip_dag_sync, fast_mode, dags_count).await?;
             }
             Err(e) => return Err(e),
         }

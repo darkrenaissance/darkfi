@@ -1,6 +1,11 @@
 ## IRC listen URL
 irc_listen = "tcp://127.0.0.1:22022"
 
+## How many DAGs to be synced (currently each DAG represents a 24hr msg
+## history counting from UTC midnight), increasing this number means 
+## you get/sync previous days msg history as well (max. 5) 
+dags_count = 1
+
 ## Sets Datastore Path
 datastore = "darkirc1"
 
@@ -8,9 +13,13 @@ datastore = "darkirc1"
 autojoin = ["#dev", "#test"]
 
 # Log to file. Off by default.
-#log = "/tmp/darkirc1.log"
+log = "/tmp/darkirc1.log"
 # Set log level. 1 is info (default), 2 is debug, 3 is trace
 #verbose = 2
+
+## Running darkirc in header-only mode
+## history won't be fetched but DAG sync fast
+#fast_mod = false
 
 ## JSON-RPC settings
 [rpc]
