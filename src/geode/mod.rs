@@ -307,7 +307,7 @@ impl Geode {
         chunk_hashes: &[blake3::Hash],
         relative_files: &[(PathBuf, u64)],
     ) -> Result<()> {
-        info!(target: "geode::insert_metadata()", "[Geode] Inserting directory metadata");
+        info!(target: "geode::insert_metadata()", "[Geode] Inserting metadata");
 
         // Verify the metadata
         if !self.verify_metadata(hash, chunk_hashes, relative_files) {
