@@ -18,6 +18,7 @@
 
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -28,7 +29,7 @@ use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncod
 use log::{debug, error, trace, warn};
 use smol::Executor;
 
-use super::{event::Header, Event, EventGraphPtr, NULL_ID};
+use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID};
 use crate::{
     impl_p2p_message,
     net::{
@@ -151,7 +152,7 @@ impl_p2p_message!(HeaderPut, "EventGraph::HeaderPut", 0, 0, DEFAULT_METERING_CON
 
 /// A P2P message representing a header request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct HeaderReq {}
+pub struct HeaderReq(pub String);
 impl_p2p_message!(HeaderReq, "EventGraph::HeaderReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing a header reply
@@ -161,12 +162,12 @@ impl_p2p_message!(HeaderRep, "EventGraph::HeaderRep", 0, 0, DEFAULT_METERING_CON
 
 /// A P2P message representing a request for a peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct TipReq {}
+pub struct TipReq(pub String);
 impl_p2p_message!(TipReq, "EventGraph::TipReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing a reply for the peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct TipRep(pub BTreeMap<u64, HashSet<blake3::Hash>>);
+pub struct TipRep(pub LayerUTips);
 impl_p2p_message!(TipRep, "EventGraph::TipRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 #[async_trait]
@@ -177,7 +178,7 @@ impl ProtocolBase for ProtocolEventGraph {
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;
         // self.jobsman.clone().spawn(self.clone().handle_header_put(), ex.clone()).await;
         // self.jobsman.clone().spawn(self.clone().handle_header_req(), ex.clone()).await;
-        self.jobsman.clone().spawn(self.clone().handle_header_rep(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_header_req(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_tip_req(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().broadcast_rate_limiter(), ex.clone()).await;
         Ok(())
@@ -263,7 +264,7 @@ impl ProtocolEventGraph {
             };
             trace!(
                  target: "event_graph::protocol::handle_event_put()",
-                 "Got EventPut: {} [{}]", event.header.id(), self.channel.address(),
+                 "Got EventPut: {} [{}]", event.id(), self.channel.address(),
             );
 
             // Check if node has finished syncing its DAG
@@ -276,8 +277,19 @@ impl ProtocolEventGraph {
             }
 
             // If we have already seen the event, we'll stay quiet.
-            let event_id = event.header.id();
-            if self.event_graph.main_dag.contains_key(event_id.as_bytes()).unwrap() {
+            let current_genesis = self.event_graph.current_genesis.read().await;
+            let dag_name = current_genesis.id().to_string();
+            let hdr_tree_name = format!("headers_{dag_name}");
+            let event_id = event.id();
+            if self
+                .event_graph
+                .dag_store
+                .read()
+                .await
+                .get_dag(&hdr_tree_name)
+                .contains_key(event_id.as_bytes())
+                .unwrap()
+            {
                 debug!(
                     target: "event_graph::protocol::handle_event_put()",
                     "Event {} is already known", event_id,
@@ -311,7 +323,7 @@ impl ProtocolEventGraph {
                 debug!(
                     target: "event_graph::protocol::handle_event_put()",
                     "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{}`",
-                event.header.id(), event.header.timestamp, genesis_timestamp
+                event.id(), event.header.timestamp, genesis_timestamp
                 );
             }
 
@@ -341,7 +353,15 @@ impl ProtocolEventGraph {
                     continue
                 }
 
-                if !self.event_graph.main_dag.contains_key(parent_id.as_bytes()).unwrap() {
+                if !self
+                    .event_graph
+                    .dag_store
+                    .read()
+                    .await
+                    .get_dag(&hdr_tree_name)
+                    .contains_key(parent_id.as_bytes())
+                    .unwrap()
+                {
                     missing_parents.insert(*parent_id);
                 }
             }
@@ -362,6 +382,10 @@ impl ProtocolEventGraph {
                     target: "event_graph::protocol::handle_event_put()",
                     "Event has {} missing parents. Requesting...", missing_parents.len(),
                 );
+
+                let current_genesis = self.event_graph.current_genesis.read().await;
+                let dag_name = current_genesis.id().to_string();
+                let hdr_tree_name = format!("headers_{dag_name}");
 
                 while !missing_parents.is_empty() {
                     // for parent_id in missing_parents.clone().iter() {
@@ -394,12 +418,12 @@ impl ProtocolEventGraph {
                     let parents = parents.0.clone();
 
                     for parent in parents {
-                        let parent_id = parent.header.id();
+                        let parent_id = parent.id();
                         if !missing_parents.contains(&parent_id) {
                             error!(
                                 target: "event_graph::protocol::handle_event_put()",
                                 "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
-                                self.channel.address(), parent.header.id(),
+                                self.channel.address(), parent.id(),
                             );
                             self.channel.stop().await;
                             return Err(Error::ChannelStopped)
@@ -407,7 +431,7 @@ impl ProtocolEventGraph {
 
                         debug!(
                             target: "event_graph::protocol::handle_event_put()",
-                            "Got correct parent event {}", parent.header.id(),
+                            "Got correct parent event {}", parent.id(),
                         );
 
                         if let Some(layer_events) = received_events.get_mut(&parent.header.layer) {
@@ -430,7 +454,10 @@ impl ProtocolEventGraph {
                                 !received_events_hashes.contains(upper_parent) &&
                                 !self
                                     .event_graph
-                                    .main_dag
+                                    .dag_store
+                                    .read()
+                                    .await
+                                    .get_dag(&hdr_tree_name)
                                     .contains_key(upper_parent.as_bytes())
                                     .unwrap()
                             {
@@ -453,13 +480,13 @@ impl ProtocolEventGraph {
                     }
                 }
                 let headers = events.iter().map(|x| x.header.clone()).collect();
-                if self.event_graph.header_dag_insert(headers).await.is_err() {
+                if self.event_graph.header_dag_insert(headers, &dag_name).await.is_err() {
                     self.clone().increase_malicious_count().await?;
                     continue
                 }
                 // FIXME
                 if !self.event_graph.fast_mode {
-                    if self.event_graph.dag_insert(&events).await.is_err() {
+                    if self.event_graph.dag_insert(&events, &dag_name).await.is_err() {
                         self.clone().increase_malicious_count().await?;
                         continue
                     }
@@ -473,12 +500,17 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            if self.event_graph.header_dag_insert(vec![event.header.clone()]).await.is_err() {
+            if self
+                .event_graph
+                .header_dag_insert(vec![event.header.clone()], &dag_name)
+                .await
+                .is_err()
+            {
                 self.clone().increase_malicious_count().await?;
                 continue
             }
 
-            if self.event_graph.dag_insert(&[event.clone()]).await.is_err() {
+            if self.event_graph.dag_insert(&[event.clone()], &dag_name).await.is_err() {
                 self.clone().increase_malicious_count().await?;
                 continue
             }
@@ -522,7 +554,20 @@ impl ProtocolEventGraph {
             // reading our db and steal our bandwidth.
             let mut events = vec![];
             for event_id in event_ids.iter() {
-                if !self.event_graph.header_dag.contains_key(event_id.as_bytes())? {
+                if let Ok(event) = self
+                    .event_graph
+                    .fetch_event_from_dags(event_id)
+                    .await?
+                    .ok_or(Error::EventNotFound("The requested event is not found".to_owned()))
+                {
+                    // At this point we should have it in our DAG.
+                    // This code panics if this is not the case.
+                    debug!(
+                        target: "event_graph::protocol::handle_event_req()",
+                        "Fetching event {:?} from DAG", event_id,
+                    );
+                    events.push(event);
+                } else {
                     let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
                     if malicious_count + 1 == MALICIOUS_THRESHOLD {
                         error!(
@@ -541,20 +586,6 @@ impl ProtocolEventGraph {
                     );
                     continue
                 }
-
-                // At this point we should have it in our DAG.
-                // This code panics if this is not the case.
-                debug!(
-                    target: "event_graph::protocol::handle_event_req()",
-                    "Fetching event {:?} from DAG", event_id,
-                );
-
-                events.push(
-                    self.event_graph
-                        .dag_get(event_id)
-                        .await?
-                        .ok_or(Error::EventNotFound("Event Not Found in DAG".to_owned()))?,
-                );
             }
 
             // Check if the incoming event is older than the genesis event. If so, something
@@ -569,7 +600,7 @@ impl ProtocolEventGraph {
                         target: "event_graph::protocol::handle_event_req()",
                         "Requested event by peer {} is older than previous rotation period. It should have been pruned.
                     Event timestamp: `{}`. Genesis timestamp: `{}`",
-                    event.header.id(), event.header.timestamp, genesis_timestamp
+                    event.id(), event.header.timestamp, genesis_timestamp
                     );
                 }
 
@@ -591,16 +622,15 @@ impl ProtocolEventGraph {
         }
     }
 
-    // async fn handle_header_req(self: Arc<Self>) -> Result<()> {
-    //     Ok(())
-    // }
-
     /// Protocol function handling `HeaderReq`.
     /// This is triggered whenever someone requests syncing headers by
     /// sending their current headers.
-    async fn handle_header_rep(self: Arc<Self>) -> Result<()> {
+    async fn handle_header_req(self: Arc<Self>) -> Result<()> {
         loop {
-            self.hdr_req_sub.receive().await?;
+            let dag_name = match self.hdr_req_sub.receive().await {
+                Ok(v) => v.0.clone(),
+                Err(_) => continue,
+            };
             trace!(
                 target: "event_graph::protocol::handle_tip_req()",
                 "Got TipReq [{}]", self.channel.address(),
@@ -619,8 +649,9 @@ impl ProtocolEventGraph {
 
             // We received header request. Let's find them, add them to
             // our bcast ids list, and reply with them.
+            let main_dag = self.event_graph.dag_store.read().await.get_dag(&dag_name);
             let mut headers = vec![];
-            for item in self.event_graph.main_dag.iter() {
+            for item in main_dag.iter() {
                 let (_, event) = item.unwrap();
                 let event: Event = deserialize_async(&event).await.unwrap();
                 if !headers.contains(&event.header) || event.header.layer != 0 {
@@ -645,7 +676,10 @@ impl ProtocolEventGraph {
     /// tips of our DAG.
     async fn handle_tip_req(self: Arc<Self>) -> Result<()> {
         loop {
-            self.tip_req_sub.receive().await?;
+            let dag_name = match self.tip_req_sub.receive().await {
+                Ok(v) => v.0.clone(),
+                Err(_) => continue,
+            };
             trace!(
                 target: "event_graph::protocol::handle_tip_req()",
                 "Got TipReq [{}]", self.channel.address(),
@@ -664,7 +698,13 @@ impl ProtocolEventGraph {
 
             // We received a tip request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let layers = self.event_graph.unreferenced_tips.read().await.clone();
+            let dag_name_hash = blake3::Hash::from_str(&dag_name).unwrap();
+            let store = self.event_graph.dag_store.read().await;
+            let (_, layers) = match store.header_dags.get(&dag_name_hash) {
+                Some(v) => v,
+                None => continue,
+            };
+            // let layers = self.event_graph.dag_store.read().await.find_unreferenced_tips(&dag_name).await;
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
             for (_, tips) in layers.iter() {
                 for tip in tips {
@@ -673,7 +713,7 @@ impl ProtocolEventGraph {
             }
             drop(bcast_ids);
 
-            self.channel.send(&TipRep(layers)).await?;
+            self.channel.send(&TipRep(layers.clone())).await?;
         }
     }
 
