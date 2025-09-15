@@ -794,7 +794,7 @@ impl EventGraph {
         for event in events {
             let event_id = event.id();
             if event.header.layer == 0 {
-                return Ok(vec![])
+                break
             }
             debug!(
                 target: "event_graph::dag_insert()",
