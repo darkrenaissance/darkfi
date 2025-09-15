@@ -89,8 +89,8 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Put a file onto the network. Takes a local filesystem path as a parameter.
-    // Returns the file hash that serves as a pointer to the uploaded file.
+    // Put a file/directory onto the network. Takes a local filesystem path as a parameter.
+    // Returns the resource hash that serves as a pointer to the file/directory.
     //
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
@@ -290,8 +290,8 @@ impl JsonRpcInterface {
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
-        let mut seeders_router: HashMap<String, JsonValue> = HashMap::new();
-        for (hash, items) in self.fud.seeders_router.read().await.iter() {
+        let mut seeders_table: HashMap<String, JsonValue> = HashMap::new();
+        for (hash, items) in self.fud.dht.hash_table.read().await.iter() {
             let mut nodes = vec![];
             for item in items {
                 let mut addresses = vec![];
@@ -303,10 +303,10 @@ impl JsonRpcInterface {
                     JsonValue::Array(addresses),
                 ]));
             }
-            seeders_router.insert(hash_to_string(hash), JsonValue::Array(nodes));
+            seeders_table.insert(hash_to_string(hash), JsonValue::Array(nodes));
         }
         let mut res: HashMap<String, JsonValue> = HashMap::new();
-        res.insert("seeders".to_string(), JsonValue::Object(seeders_router));
+        res.insert("seeders".to_string(), JsonValue::Object(seeders_table));
 
         JsonResponse::new(JsonValue::Object(res), id).into()
     }

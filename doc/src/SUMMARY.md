@@ -23,6 +23,7 @@
     - [Tor Nodes](misc/nodes/tor-guide.md)
     - [I2p Nodes](misc/nodes/i2p-guide.md)
     - [Nym Nodes](misc/nodes/nym-guide.md)
+    - [Whonix Setup](misc/nodes/whonix-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
 - [Merge Mining](testnet/merge-mining.md)
 

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use log::{error, info, warn};
 
@@ -27,18 +27,7 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::{
-    event,
-    event::notify_event,
-    proto::{FudAnnounce, FudChunkReply, FudDirectoryReply, FudFileReply},
-    Fud, FudEvent,
-};
-
-pub enum FetchReply {
-    Directory(FudDirectoryReply),
-    File(FudFileReply),
-    Chunk(FudChunkReply),
-}
+use crate::{event, event::notify_event, proto::FudAnnounce, Fud, FudEvent};
 
 /// Triggered when calling the `fud.get()` method.
 /// It creates a new StoppableTask (running `fud.fetch_resource()`) and inserts
@@ -64,6 +53,13 @@ pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
                 // stopped (error, manually, or just done).
                 let mut fetch_tasks = fud_2.fetch_tasks.write().await;
                 fetch_tasks.remove(&hash);
+
+                // If there is still a lookup task for this hash, stop it
+                let lookup_tasks = fud_2.lookup_tasks.read().await;
+                if let Some(lookup_task) = lookup_tasks.get(&hash) {
+                    lookup_task.stop().await;
+                }
+
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
@@ -124,6 +120,41 @@ pub async fn put_task(fud: Arc<Fud>) -> Result<()> {
     }
 }
 
+/// Triggered when you need to lookup seeders for a resource.
+pub async fn lookup_task(fud: Arc<Fud>) -> Result<()> {
+    loop {
+        let (key, seeders_pub) = fud.lookup_rx.recv().await.unwrap();
+
+        let mut lookup_tasks = fud.lookup_tasks.write().await;
+        let task = StoppableTask::new();
+        lookup_tasks.insert(key, task.clone());
+        drop(lookup_tasks);
+
+        let fud_1 = fud.clone();
+        let fud_2 = fud.clone();
+        task.start(
+            async move {
+                fud_1.dht.lookup_value(&key, seeders_pub).await?;
+                Ok(())
+            },
+            move |res| async move {
+                // Remove the task from the `fud.lookup_tasks` hashmap once it is
+                // stopped (error, manually, or just done).
+                let mut lookup_tasks = fud_2.lookup_tasks.write().await;
+                lookup_tasks.remove(&key);
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "dht::lookup_task()", "Error in DHT lookup task: {e}");
+                    }
+                }
+            },
+            Error::DetachedTaskStopped,
+            fud.executor.clone(),
+        );
+    }
+}
+
 /// Background task that announces our files once every hour.
 /// Also removes seeders that did not announce for too long.
 pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
@@ -131,8 +162,6 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
 
     loop {
         sleep(interval).await;
-
-        let seeders = vec![fud.node().await.into()];
 
         info!(target: "fud::announce_seed_task()", "Verifying seeds...");
         let seeding_resources = match fud.verify_resources(None).await {
@@ -145,17 +174,19 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
 
         info!(target: "fud::announce_seed_task()", "Announcing files...");
         for resource in seeding_resources {
+            let seeders = vec![fud.new_seeder(&resource.hash).await];
             let _ = fud
+                .dht
                 .announce(
                     &resource.hash,
-                    &FudAnnounce { key: resource.hash, seeders: seeders.clone() },
-                    fud.seeders_router.clone(),
+                    &seeders.clone(),
+                    &FudAnnounce { key: resource.hash, seeders },
                 )
                 .await;
         }
 
         info!(target: "fud::announce_seed_task()", "Pruning seeders...");
-        fud.dht().prune_router(fud.seeders_router.clone(), interval.try_into().unwrap()).await;
+        fud.prune_seeders(interval.try_into().unwrap()).await;
     }
 }
 
@@ -199,11 +230,11 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
             drop(buckets);
 
             // Removes nodes in the seeders router with unknown BTC block hashes
-            let mut seeders_router = fud.seeders_router.write().await;
-            for (key, seeders) in seeders_router.iter_mut() {
-                for seeder in seeders.clone().iter() {
+            let mut seeders_table = fud.dht.hash_table.write().await;
+            for (key, seeders) in seeders_table.iter_mut() {
+                for (i, seeder) in seeders.clone().iter().enumerate().rev() {
                     if !btc.block_hashes.contains(&seeder.node.data.btc_block_hash) {
-                        seeders.remove(seeder);
+                        seeders.remove(i);
                         info!(target: "fud::node_id_task()", "Removed node {} from the seeders of key {} (BTC block hash too old or unknown)", hash_to_string(&seeder.node.id()), hash_to_string(key));
                     }
                 }
@@ -232,11 +263,8 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
         }
         drop(channel_cache);
 
-        // Reset the DHT
+        // Reset the DHT: removes known nodes and seeders
         dht.reset().await;
-
-        // Reset the seeders router
-        *fud.seeders_router.write().await = HashMap::new();
 
         // Update our node data and our secret key
         *fud.node_data.write().await = node_data;

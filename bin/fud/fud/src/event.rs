@@ -244,7 +244,7 @@ impl From<FudEvent> for JsonValue {
 /// Macro calling `fud.event_publisher.notify()`
 macro_rules! notify_event {
     // This is for any `FudEvent`
-    ($fud:ident, $event:ident, { $($fields:tt)* }) => {
+    ($fud:expr, $event:ident, { $($fields:tt)* }) => {
         $fud
             .event_publisher
             .notify(FudEvent::$event(event::$event {
@@ -253,7 +253,7 @@ macro_rules! notify_event {
             .await;
     };
     // This is for `FudEvent`s that only have a hash and resource
-    ($fud:ident, $event:ident, $resource:expr) => {
+    ($fud:expr, $event:ident, $resource:expr) => {
         $fud
             .event_publisher
             .notify(FudEvent::$event(event::$event {

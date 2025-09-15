@@ -85,7 +85,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let event_pub = Publisher::new();
 
     let fud: Arc<Fud> =
-        Arc::new(Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?);
+        Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?;
 
     fud.start_tasks().await;
 

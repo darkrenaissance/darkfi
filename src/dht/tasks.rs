@@ -27,7 +27,7 @@ use crate::{
 
 /// Send a DHT ping request when there is a new channel, to know the node id of the new peer,
 /// Then fill the channel cache and the buckets
-pub async fn channel_task<H: DhtHandler<N>, N: DhtNode>(handler: Arc<H>) -> Result<()> {
+pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
     loop {
         let channel_sub = handler.dht().p2p.hosts().subscribe_channel().await;
         let res = channel_sub.receive().await;
@@ -51,7 +51,7 @@ pub async fn channel_task<H: DhtHandler<N>, N: DhtNode>(handler: Arc<H>) -> Resu
         let ping_res = handler.ping(channel.clone()).await;
 
         if let Err(e) = ping_res {
-            warn!(target: "dht::DhtHandler::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
+            warn!(target: "dht::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
             // channel.stop().await;
             continue;
         }
@@ -66,7 +66,7 @@ pub async fn channel_task<H: DhtHandler<N>, N: DhtNode>(handler: Arc<H>) -> Resu
         drop(channel_cache);
 
         if !node.addresses().is_empty() {
-            handler.add_node(node.clone()).await;
+            handler.dht().add_node(node.clone()).await;
             let _ = handler.on_new_node(&node.clone()).await;
         }
     }
