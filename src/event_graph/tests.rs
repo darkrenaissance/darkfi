@@ -99,7 +99,7 @@ async fn spawn_node(
     let p2p = P2p::new(settings, ex.clone()).await.unwrap();
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
     let event_graph =
-        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, false, "dag", 1, ex.clone())
+        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, false, 1, ex.clone())
             .await
             .unwrap();
     *event_graph.synced.write().await = true;
@@ -162,15 +162,20 @@ async fn bootstrap_nodes(
 
 async fn assert_dags(eg_instances: &[Arc<EventGraph>], expected_len: usize, rng: &mut ThreadRng) {
     let random_node = eg_instances.choose(rng).unwrap();
-    let last_layer_tips =
-        random_node.unreferenced_tips.read().await.last_key_value().unwrap().1.clone();
+    let random_node_genesis = random_node.current_genesis.read().await.id();
+    let store = random_node.dag_store.read().await;
+    let (_, unreferenced_tips) = store.main_dags.get(&random_node_genesis).unwrap();
+    let last_layer_tips = unreferenced_tips.last_key_value().unwrap().1.clone();
     for (i, eg) in eg_instances.iter().enumerate() {
-        let node_last_layer_tips =
-            eg.unreferenced_tips.read().await.last_key_value().unwrap().1.clone();
+        let current_genesis = eg.current_genesis.read().await;
+        let dag_name = current_genesis.id().to_string();
+        let dag = eg.dag_store.read().await.get_dag(&dag_name);
+        let unreferenced_tips = eg.dag_store.read().await.find_unreferenced_tips(&dag).await;
+        let node_last_layer_tips = unreferenced_tips.last_key_value().unwrap().1.clone();
         assert!(
-            eg.main_dag.len() == expected_len,
+            dag.len() == expected_len,
             "Node {i}, expected {expected_len} events, have {}",
-            eg.main_dag.len()
+            dag.len()
         );
         assert_eq!(
             node_last_layer_tips, last_layer_tips,
@@ -213,8 +218,12 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
 
     // Grab genesis event
     let random_node = eg_instances.choose(&mut rng).unwrap();
-    let (id, _) = random_node.main_dag.last().unwrap().unwrap();
+    let current_genesis = random_node.current_genesis.read().await;
+    let dag_name = current_genesis.id().to_string();
+    let (id, _) = random_node.dag_store.read().await.get_dag(&dag_name).last().unwrap().unwrap();
     let genesis_event_id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+
+    drop(current_genesis);
 
     // =========================================
     // 1. Assert that everyone's DAG is the same
@@ -225,16 +234,22 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // 2. Create an event in one node and publish
     // ==========================================
     let random_node = eg_instances.choose(&mut rng).unwrap();
+    let current_genesis = random_node.current_genesis.read().await;
+    let dag_name = current_genesis.id().to_string();
     let event = Event::new(vec![1, 2, 3, 4], random_node).await;
     assert!(event.header.parents.contains(&genesis_event_id));
     // The node adds it to their DAG, on layer 1.
-    random_node.header_dag_insert(vec![event.header.clone()]).await.unwrap();
-    let event_id = random_node.dag_insert(slice::from_ref(&event)).await.unwrap()[0];
-    let tips_layers = random_node.unreferenced_tips.read().await;
+    random_node.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+    let event_id = random_node.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap()[0];
+
+    let store = random_node.dag_store.read().await;
+    let (_, tips_layers) = store.header_dags.get(&current_genesis.id()).unwrap();
+
     // Since genesis was referenced, its layer (0) have been removed
     assert_eq!(tips_layers.len(), 1);
     assert!(tips_layers.last_key_value().unwrap().1.get(&event_id).is_some());
-    drop(tips_layers);
+    drop(store);
+    drop(current_genesis);
     info!("Broadcasting event {event_id}");
     random_node.p2p.broadcast(&EventPut(event)).await;
     info!("Waiting 5s for event propagation");
@@ -252,20 +267,25 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ==============================================================
     let random_node = eg_instances.choose(&mut rng).unwrap();
     let event0 = Event::new(vec![1, 2, 3, 4, 0], random_node).await;
-    random_node.header_dag_insert(vec![event0.header.clone()]).await.unwrap();
-    let event0_id = random_node.dag_insert(slice::from_ref(&event0)).await.unwrap()[0];
+    random_node.header_dag_insert(vec![event0.header.clone()], &dag_name).await.unwrap();
+    let event0_id = random_node.dag_insert(slice::from_ref(&event0), &dag_name).await.unwrap()[0];
     let event1 = Event::new(vec![1, 2, 3, 4, 1], random_node).await;
-    random_node.header_dag_insert(vec![event1.header.clone()]).await.unwrap();
-    let event1_id = random_node.dag_insert(slice::from_ref(&event1)).await.unwrap()[0];
+    random_node.header_dag_insert(vec![event1.header.clone()], &dag_name).await.unwrap();
+    let event1_id = random_node.dag_insert(slice::from_ref(&event1), &dag_name).await.unwrap()[0];
     let event2 = Event::new(vec![1, 2, 3, 4, 2], random_node).await;
-    random_node.header_dag_insert(vec![event2.header.clone()]).await.unwrap();
-    let event2_id = random_node.dag_insert(slice::from_ref(&event2)).await.unwrap()[0];
+    random_node.header_dag_insert(vec![event2.header.clone()], &dag_name).await.unwrap();
+    let event2_id = random_node.dag_insert(slice::from_ref(&event2), &dag_name).await.unwrap()[0];
     // Genesis event + event from 2. + upper 3 events (layer 4)
-    assert_eq!(random_node.main_dag.len(), 5);
-    let tips_layers = random_node.unreferenced_tips.read().await;
+    let current_genesis = random_node.current_genesis.read().await;
+    let dag_name = current_genesis.id().to_string();
+    assert_eq!(random_node.dag_store.read().await.get_dag(&dag_name).len(), 5);
+    let random_node_genesis = random_node.current_genesis.read().await.id();
+    let store = random_node.dag_store.read().await;
+    let (_, tips_layers) = store.header_dags.get(&random_node_genesis).unwrap();
     assert_eq!(tips_layers.len(), 1);
     assert!(tips_layers.get(&4).unwrap().get(&event2_id).is_some());
-    drop(tips_layers);
+    drop(current_genesis);
+    drop(store);
 
     let event_chain = vec![
         (event0_id, event0.header.parents),
@@ -291,20 +311,20 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =======
     let node1 = eg_instances.choose(&mut rng).unwrap();
     let event0_1 = Event::new(vec![1, 2, 3, 4, 3], node1).await;
-    node1.header_dag_insert(vec![event0_1.header.clone()]).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event0_1)).await.unwrap();
+    node1.header_dag_insert(vec![event0_1.header.clone()], &dag_name).await.unwrap();
+    node1.dag_insert(slice::from_ref(&event0_1), &dag_name).await.unwrap();
     node1.p2p.broadcast(&EventPut(event0_1)).await;
     msleep(300).await;
 
     let event1_1 = Event::new(vec![1, 2, 3, 4, 4], node1).await;
-    node1.header_dag_insert(vec![event1_1.header.clone()]).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event1_1)).await.unwrap();
+    node1.header_dag_insert(vec![event1_1.header.clone()], &dag_name).await.unwrap();
+    node1.dag_insert(slice::from_ref(&event1_1), &dag_name).await.unwrap();
     node1.p2p.broadcast(&EventPut(event1_1)).await;
     msleep(300).await;
 
     let event2_1 = Event::new(vec![1, 2, 3, 4, 5], node1).await;
-    node1.header_dag_insert(vec![event2_1.header.clone()]).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event2_1)).await.unwrap();
+    node1.header_dag_insert(vec![event2_1.header.clone()], &dag_name).await.unwrap();
+    node1.dag_insert(slice::from_ref(&event2_1), &dag_name).await.unwrap();
     node1.p2p.broadcast(&EventPut(event2_1)).await;
     msleep(300).await;
 
@@ -313,20 +333,20 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =======
     let node2 = eg_instances.choose(&mut rng).unwrap();
     let event0_2 = Event::new(vec![1, 2, 3, 4, 6], node2).await;
-    node2.header_dag_insert(vec![event0_2.header.clone()]).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event0_2)).await.unwrap();
+    node2.header_dag_insert(vec![event0_2.header.clone()], &dag_name).await.unwrap();
+    node2.dag_insert(slice::from_ref(&event0_2), &dag_name).await.unwrap();
     node2.p2p.broadcast(&EventPut(event0_2)).await;
     msleep(300).await;
 
     let event1_2 = Event::new(vec![1, 2, 3, 4, 7], node2).await;
-    node2.header_dag_insert(vec![event1_2.header.clone()]).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event1_2)).await.unwrap();
+    node2.header_dag_insert(vec![event1_2.header.clone()], &dag_name).await.unwrap();
+    node2.dag_insert(slice::from_ref(&event1_2), &dag_name).await.unwrap();
     node2.p2p.broadcast(&EventPut(event1_2)).await;
     msleep(300).await;
 
     let event2_2 = Event::new(vec![1, 2, 3, 4, 8], node2).await;
-    node2.header_dag_insert(vec![event2_2.header.clone()]).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event2_2)).await.unwrap();
+    node2.header_dag_insert(vec![event2_2.header.clone()], &dag_name).await.unwrap();
+    node2.dag_insert(slice::from_ref(&event2_2), &dag_name).await.unwrap();
     node2.p2p.broadcast(&EventPut(event2_2)).await;
     msleep(300).await;
 
@@ -335,20 +355,20 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =======
     let node3 = eg_instances.choose(&mut rng).unwrap();
     let event0_3 = Event::new(vec![1, 2, 3, 4, 9], node3).await;
-    node3.header_dag_insert(vec![event0_3.header.clone()]).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event0_3)).await.unwrap();
+    node3.header_dag_insert(vec![event0_3.header.clone()], &dag_name).await.unwrap();
+    node3.dag_insert(slice::from_ref(&event0_3), &dag_name).await.unwrap();
     node3.p2p.broadcast(&EventPut(event0_3)).await;
     msleep(300).await;
 
     let event1_3 = Event::new(vec![1, 2, 3, 4, 10], node3).await;
-    node3.header_dag_insert(vec![event1_3.header.clone()]).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event1_3)).await.unwrap();
+    node3.header_dag_insert(vec![event1_3.header.clone()], &dag_name).await.unwrap();
+    node3.dag_insert(slice::from_ref(&event1_3), &dag_name).await.unwrap();
     node3.p2p.broadcast(&EventPut(event1_3)).await;
     msleep(300).await;
 
     let event2_3 = Event::new(vec![1, 2, 3, 4, 11], node3).await;
-    node3.header_dag_insert(vec![event2_3.header.clone()]).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event2_3)).await.unwrap();
+    node3.header_dag_insert(vec![event2_3.header.clone()], &dag_name).await.unwrap();
+    node3.dag_insert(slice::from_ref(&event2_3), &dag_name).await.unwrap();
     node3.p2p.broadcast(&EventPut(event2_3)).await;
     msleep(300).await;
 
@@ -404,7 +424,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
         info!("Waiting 5s for new node connection");
         sleep(5).await;
 
-        event_graph.dag_sync(false).await.unwrap()
+        event_graph.sync_selected(1, false).await.unwrap();
     }
 
     // ============================================================
@@ -443,8 +463,10 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
     for i in 0..n_events {
         let random_node = eg_instances.choose(&mut rng).unwrap();
         let event = Event::new(i.to_be_bytes().to_vec(), random_node).await;
-        random_node.header_dag_insert(vec![event.header.clone()]).await.unwrap();
-        random_node.dag_insert(slice::from_ref(&event)).await.unwrap();
+        let current_genesis = random_node.current_genesis.read().await;
+        let dag_name = current_genesis.id().to_string();
+        random_node.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+        random_node.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         random_node.p2p.broadcast(&EventPut(event)).await;
     }
     info!("Waiting 5s for events propagation");
@@ -483,7 +505,7 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
         info!("Waiting 5s for new node connection");
         sleep(5).await;
 
-        event_graph.dag_sync(false).await.unwrap()
+        event_graph.sync_selected(2, false).await.unwrap()
     }
 
     // ============================================================

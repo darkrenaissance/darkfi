@@ -44,12 +44,14 @@ pub struct Header {
 impl Header {
     // Create a new Header given EventGraph to retrieve the correct layout
     pub async fn new(event_graph: &EventGraph) -> Self {
-        let (layer, parents) = event_graph.get_next_layer_with_parents().await;
+        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
     }
 
     pub async fn with_timestamp(timestamp: u64, event_graph: &EventGraph) -> Self {
-        let (layer, parents) = event_graph.get_next_layer_with_parents().await;
+        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self { timestamp, parents, layer }
     }
 
@@ -68,23 +70,15 @@ impl Header {
     /// to use that instead of actual referenced DAG.
     pub async fn validate(
         &self,
-        dag: &sled::Tree,
-        genesis_timestamp: u64,
+        header_dag: &sled::Tree,
         days_rotation: u64,
         overlay: Option<&SledTreeOverlay>,
     ) -> Result<bool> {
-        // Check if the event timestamp is after genesis timestamp
-        if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT {
-            info!("timestampe");
-            return Ok(false)
-        }
-
         // If a rotation has been set, check if the event timestamp
         // is after the next genesis timestamp
         if days_rotation > 0 {
             let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
             if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
-                info!("rotation");
                 return Ok(false)
             }
         }
@@ -98,33 +92,28 @@ impl Header {
 
         for parent_id in self.parents.iter() {
             if parent_id == &NULL_ID {
-                info!("null");
                 continue
             }
 
             if parent_id == &self_id {
-                info!("self");
                 return Ok(false)
             }
 
             if seen.contains(parent_id) {
-                info!("seen");
                 return Ok(false)
             }
 
             let parent_bytes = if let Some(overlay) = overlay {
                 overlay.get(parent_id.as_bytes())?
             } else {
-                dag.get(parent_id.as_bytes())?
+                header_dag.get(parent_id.as_bytes())?
             };
             if parent_bytes.is_none() {
-                info!("none");
                 return Ok(false)
             }
 
             let parent: Header = deserialize_async(&parent_bytes.unwrap()).await?;
             if self.layer <= parent.layer {
-                info!("layer");
                 return Ok(false)
             }
 
@@ -154,6 +143,10 @@ impl Event {
         Self { header, content: data }
     }
 
+    pub fn id(&self) -> blake3::Hash {
+        self.header.id()
+    }
+
     /// Same as `Event::new()` but allows specifying the timestamp explicitly.
     pub async fn with_timestamp(timestamp: u64, data: Vec<u8>, event_graph: &EventGraph) -> Self {
         let header = Header::with_timestamp(timestamp, event_graph).await;
@@ -171,25 +164,19 @@ impl Event {
     /// to use that instead of actual referenced DAG.
     /// TODO: is this necessary? we validate headers and events should
     /// be downloaded into the correct structure.
-    pub async fn validate(&self, _dag: &sled::Tree) -> Result<bool> {
-        // Let's not bother with empty events
-        if self.content.is_empty() {
-            info!("empty");
-            return Ok(false)
-        }
-
-        Ok(true)
-    }
+    // pub async fn validate(&self) -> Result<bool> {
+    //     Ok(true)
+    // }
 
     /// Fully validate an event for the correct layout against provided
     /// [`EventGraph`] reference and enforce relevant age, assuming some
     /// possibility for a time drift.
-    pub async fn dag_validate(&self, event_graph: &EventGraph) -> Result<bool> {
-        // Grab genesis timestamp
-        // let genesis_timestamp = event_graph.current_genesis.read().await.header.timestamp;
-
+    pub async fn dag_validate(&self, header_dag: &sled::Tree) -> Result<bool> {
+        if self.content.is_empty() {
+            return Ok(false)
+        }
         // Perform validation
-        self.validate(&event_graph.header_dag).await
+        self.header.validate(&header_dag, 1, None).await
     }
 
     /// Validate a new event for the correct layout and enforce relevant age,
@@ -252,7 +239,7 @@ mod tests {
         let ex = Arc::new(Executor::new());
         let p2p = P2p::new(Settings::default(), ex.clone()).await?;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        EventGraph::new(p2p, sled_db, "/tmp".into(), false, false, "dag", 1, ex).await
+        EventGraph::new(p2p, sled_db, "/tmp".into(), false, false, 1, ex).await
     }
 
     #[test]
@@ -261,11 +248,15 @@ mod tests {
             // Generate a dummy event graph
             let event_graph = make_event_graph().await?;
 
+            let dag_name = event_graph.current_genesis.read().await.id().to_string();
+            let hdr_tree_name = format!("headers_{dag_name}");
+            let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
+
             // Create a new valid event
             let valid_event = Event::new(vec![1u8], &event_graph).await;
 
             // Validate our test Event struct
-            assert!(valid_event.dag_validate(&event_graph).await?);
+            assert!(valid_event.dag_validate(&header_dag).await?);
 
             // Thanks for reading
             Ok(())
@@ -278,33 +269,37 @@ mod tests {
             // Generate a dummy event graph
             let event_graph = make_event_graph().await?;
 
+            let dag_name = event_graph.current_genesis.read().await.id().to_string();
+            let hdr_tree_name = format!("headers_{dag_name}");
+            let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
+
             // Create a new valid event
             let valid_event = Event::new(vec![1u8], &event_graph).await;
 
             let mut event_empty_content = valid_event.clone();
             event_empty_content.content = vec![];
-            assert!(!event_empty_content.dag_validate(&event_graph).await?);
+            assert!(!event_empty_content.dag_validate(&header_dag).await?);
 
             let mut event_timestamp_too_old = valid_event.clone();
             event_timestamp_too_old.header.timestamp = 0;
-            assert!(!event_timestamp_too_old.dag_validate(&event_graph).await?);
+            assert!(!event_timestamp_too_old.dag_validate(&header_dag).await?);
 
             let mut event_timestamp_too_new = valid_event.clone();
             event_timestamp_too_new.header.timestamp = u64::MAX;
-            assert!(!event_timestamp_too_new.dag_validate(&event_graph).await?);
+            assert!(!event_timestamp_too_new.dag_validate(&header_dag).await?);
 
             let mut event_duplicated_parents = valid_event.clone();
             event_duplicated_parents.header.parents[1] = valid_event.header.parents[0];
-            assert!(!event_duplicated_parents.dag_validate(&event_graph).await?);
+            assert!(!event_duplicated_parents.dag_validate(&header_dag).await?);
 
             let mut event_null_parents = valid_event.clone();
             let all_null_parents = [NULL_ID, NULL_ID, NULL_ID, NULL_ID, NULL_ID];
             event_null_parents.header.parents = all_null_parents;
-            assert!(!event_null_parents.dag_validate(&event_graph).await?);
+            assert!(!event_null_parents.dag_validate(&header_dag).await?);
 
             let mut event_same_layer_as_parents = valid_event.clone();
             event_same_layer_as_parents.header.layer = 0;
-            assert!(!event_same_layer_as_parents.dag_validate(&event_graph).await?);
+            assert!(!event_same_layer_as_parents.dag_validate(&header_dag).await?);
 
             // Thanks for reading
             Ok(())

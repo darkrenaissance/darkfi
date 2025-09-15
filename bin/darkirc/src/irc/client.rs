@@ -195,12 +195,14 @@ impl Client {
                                 // Update the last sent event.
                                 let event_id = event.header.id();
                                 *self.last_sent.write().await = event_id;
+                                let current_genesis = self.server.darkirc.event_graph.current_genesis.read().await;
+                                let dag_name = current_genesis.id().to_string();
 
                                 // If it fails for some reason, for now, we just note it and pass.
-                                if let Err(e) = self.server.darkirc.event_graph.header_dag_insert(vec![event.header.clone()]).await {
+                                if let Err(e) = self.server.darkirc.event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await {
                                     error!("[IRC CLIENT] Failed inserting new header to Header DAG: {}", e);
                                 }
-                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event)).await {
+                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event), &dag_name).await {
                                     error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
                                 } else {
                                     // We sent this, so it should be considered seen.

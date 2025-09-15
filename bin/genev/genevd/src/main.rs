@@ -133,7 +133,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         replay_datastore,
         replay_mode,
         fast_mode,
-        "genevd_dag",
         1,
         executor.clone(),
     )
@@ -160,7 +159,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     if !settings.skip_dag_sync {
         for i in 1..=6 {
             info!("Syncing event DAG (attempt #{i})");
-            match event_graph.dag_sync(settings.fast_mode).await {
+            match event_graph.sync_selected(1, settings.fast_mode).await {
                 Ok(()) => break,
                 Err(e) => {
                     if i == 6 {
