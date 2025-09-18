@@ -10,10 +10,10 @@
 ## TLS secret key path if IRC acceptor uses TLS (optional)
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
-## How many DAGs to be synced (currently each DAG represents a 24hr msg
-## history counting from UTC midnight), increasing this number means 
-## you get/sync previous days msg history as well (max. 5) 
-#dags_count = 1
+## How many DAGs to be synced (each DAG represents a 1hr msg history),
+## increasing this number means you get/sync previous hours msg history 
+## as well (max. 24)
+#dags_count = 8
 
 ## Sets Datastore Path
 #datastore = "~/.local/share/darkfi/darkirc/darkirc_db"
