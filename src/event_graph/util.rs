@@ -47,33 +47,33 @@ use {
 
 use super::event::Header;
 
-/// MilliSeconds in a day
-pub(super) const DAY: i64 = 86_400_000;
+/// MilliSeconds in an hour
+pub(super) const HOUR: i64 = 3_600_000;
 
-/// Calculate the midnight timestamp given a number of days.
-/// If `days` is 0, calculate the midnight timestamp of today.
-pub(super) fn midnight_timestamp(days: i64) -> u64 {
+/// Calculate the next hour timestamp given a number of hours.
+/// If `hours` is 0, calculate the timestamp of this hour.
+pub(super) fn next_hour_timestamp(hours: i64) -> u64 {
     // Get current time
     let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as i64;
 
-    // Find the timestamp for the midnight of the current day
-    let cur_midnight = (now / DAY) * DAY;
+    // Find the timestamp for the next hour
+    let next_hour = (now / HOUR) * HOUR;
 
-    // Adjust for days_from_now
-    (cur_midnight + (DAY * days)) as u64
+    // Adjust for hours_from_now
+    (next_hour + (HOUR * hours)) as u64
 }
 
-/// Calculate the number of days since a given midnight timestamp.
-pub(super) fn days_since(midnight_ts: u64) -> u64 {
+/// Calculate the number of hours since a given timestamp.
+pub(super) fn hours_since(next_hour_ts: u64) -> u64 {
     // Get current time
     let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
 
     // Calculate the difference between the current timestamp
     // and the given midnight timestamp
-    let elapsed_seconds = now - midnight_ts;
+    let elapsed_seconds = now - next_hour_ts;
 
-    // Convert the elapsed seconds into days
-    elapsed_seconds / DAY as u64
+    // Convert the elapsed seconds into hours
+    elapsed_seconds / HOUR as u64
 }
 
 /// Calculate the timestamp of the next DAG rotation.
@@ -82,26 +82,26 @@ pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) ->
     if rotation_period == 0 {
         panic!("Rotation period cannot be 0");
     }
-    // Calculate the number of days since the given starting point
-    let days_passed = days_since(starting_timestamp);
+    // Calculate the number of hours since the given starting point
+    let hours_passed = hours_since(starting_timestamp);
 
     // Find out how many rotation periods have occurred since
     // the starting point.
-    // Note: when rotation_period = 1, rotations_since_start = days_passed
-    let rotations_since_start = days_passed.div_ceil(rotation_period);
+    // Note: when rotation_period = 1, rotations_since_start = hours_passed
+    let rotations_since_start = hours_passed.div_ceil(rotation_period);
 
-    // Find out the number of days until the next rotation. Panic if result is beyond the range
+    // Find out the number of hours until the next rotation. Panic if result is beyond the range
     // of i64.
-    let days_until_next_rotation: i64 =
-        (rotations_since_start * rotation_period - days_passed).try_into().unwrap();
+    let hours_until_next_rotation: i64 =
+        (rotations_since_start * rotation_period - hours_passed).try_into().unwrap();
 
     // Get the timestamp for the next rotation
-    if days_until_next_rotation == 0 {
-        // If there are 0 days until the next rotation, we want
-        // to rotate tomorrow, at midnight. This is a special case.
-        return midnight_timestamp(1)
+    if hours_until_next_rotation == 0 {
+        // If there are 0 hours until the next rotation, we want
+        // to rotate next hour. This is a special case.
+        return next_hour_timestamp(1)
     }
-    midnight_timestamp(days_until_next_rotation)
+    next_hour_timestamp(hours_until_next_rotation)
 }
 
 /// Calculate the time in milliseconds until the next_rotation, given
@@ -119,19 +119,19 @@ pub fn millis_until_next_rotation(next_rotation: u64) -> u64 {
 }
 
 /// Generate a deterministic genesis event corresponding to the DAG's configuration.
-pub fn generate_genesis(days_rotation: u64) -> Event {
-    // Days rotation is u64 except zero
-    let timestamp = if days_rotation == 0 {
+pub fn generate_genesis(hours_rotation: u64) -> Event {
+    // Hours rotation is u64 except zero
+    let timestamp = if hours_rotation == 0 {
         INITIAL_GENESIS
     } else {
-        // First check how many days passed since initial genesis.
-        let days_passed = days_since(INITIAL_GENESIS);
+        // First check how many hours passed since initial genesis.
+        let hours_passed = hours_since(INITIAL_GENESIS);
 
-        // Calculate the number of days_rotation intervals since INITIAL_GENESIS
-        let rotations_since_genesis = days_passed / days_rotation;
+        // Calculate the number of hours_rotation intervals since INITIAL_GENESIS
+        let rotations_since_genesis = hours_passed / hours_rotation;
 
         // Calculate the timestamp of the most recent event
-        INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
+        INITIAL_GENESIS + (rotations_since_genesis * hours_rotation * HOUR as u64)
     };
     let header = Header { timestamp, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
     Event { header, content: GENESIS_CONTENTS.to_vec() }
@@ -208,30 +208,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_days_since() {
-        let five_days_ago = midnight_timestamp(-5);
-        assert_eq!(days_since(five_days_ago), 5);
+    fn test_hours_since() {
+        let five_hours_ago = next_hour_timestamp(-5);
+        assert_eq!(hours_since(five_hours_ago), 5);
 
-        let today = midnight_timestamp(0);
-        assert_eq!(days_since(today), 0);
+        let this_hour = next_hour_timestamp(0);
+        assert_eq!(hours_since(this_hour), 0);
     }
 
     #[test]
     fn test_next_rotation_timestamp() {
-        let starting_point = midnight_timestamp(-10);
+        let starting_point = next_hour_timestamp(-10);
         let rotation_period = 7;
 
-        // The first rotation since the starting point would be 3 days ago.
-        // So the next rotation should be 4 days from now.
-        let expected = midnight_timestamp(4);
+        // The first rotation since the starting point would be 3 hours ago.
+        // So the next rotation should be 4 hours from now.
+        let expected = next_hour_timestamp(4);
         assert_eq!(next_rotation_timestamp(starting_point, rotation_period), expected);
 
-        // When starting from today with a rotation period of 1 (day),
-        // we should get tomorrow's timestamp.
+        // When starting from current hour with a rotation period of 1 (hour),
+        // we should get next hours's timestamp.
         // This is a special case.
-        let midnight_today: u64 = midnight_timestamp(0);
-        let midnight_tomorrow = midnight_today + 86_400_000u64; // add a day
-        assert_eq!(midnight_tomorrow, next_rotation_timestamp(midnight_today, 1));
+        let this_hour: u64 = next_hour_timestamp(0);
+        let next_hour = this_hour + 3_600_000u64; // add an hour
+        assert_eq!(next_hour, next_rotation_timestamp(this_hour, 1));
     }
 
     #[test]
@@ -248,10 +248,10 @@ mod tests {
 
     #[test]
     fn test_millis_until_next_rotation_is_within_rotation_interval() {
-        let days_rotation = 1u64;
+        let hours_rotation = 1u64;
         // The amount of time in seconds between rotations.
-        let rotation_interval = days_rotation * 86_400_000u64;
-        let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+        let rotation_interval = hours_rotation * 3_600_000u64;
+        let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, hours_rotation);
         let s = millis_until_next_rotation(next_rotation_timestamp);
         assert!(s < rotation_interval);
     }
