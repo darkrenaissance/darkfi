@@ -1,9 +1,9 @@
 ## IRC listen URL
 irc_listen = "tcp://127.0.0.1:22024"
 
-## How many DAGs to be synced (currently each DAG represents a 24hr msg
-## history counting from UTC midnight), increasing this number means 
-## you get/sync previous days msg history as well (max. 5) 
+## How many DAGs to be synced (each DAG represents a 1hr msg history),
+## increasing this number means you get/sync previous hours msg history 
+## as well (max. 24)
 dags_count = 1
 
 ## Sets Datastore Path

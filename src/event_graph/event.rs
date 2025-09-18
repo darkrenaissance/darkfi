@@ -22,7 +22,7 @@ use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, 
 use sled_overlay::{sled, SledTreeOverlay};
 use tracing::info;
 
-use crate::Result;
+use crate::{event_graph::util::generate_genesis, Result};
 
 use super::{
     util::next_rotation_timestamp, EventGraph, EVENT_TIME_DRIFT, INITIAL_GENESIS, NULL_ID,
@@ -71,13 +71,21 @@ impl Header {
     pub async fn validate(
         &self,
         header_dag: &sled::Tree,
-        days_rotation: u64,
+        hours_rotation: u64,
         overlay: Option<&SledTreeOverlay>,
     ) -> Result<bool> {
+        // Check if the event is not older than the oldest genesis
+        let genesis_timestamp = generate_genesis(1).header.timestamp;
+        // A day ago genesis same hour
+        let oldest_genesis_ts = genesis_timestamp - 86_400_000u64;
+        if self.timestamp < oldest_genesis_ts - EVENT_TIME_DRIFT {
+            return Ok(false)
+        }
+
         // If a rotation has been set, check if the event timestamp
         // is after the next genesis timestamp
-        if days_rotation > 0 {
-            let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+        if hours_rotation > 0 {
+            let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, hours_rotation);
             if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
                 return Ok(false)
             }
@@ -157,16 +165,6 @@ impl Event {
     pub fn content(&self) -> &[u8] {
         &self.content
     }
-
-    /// Fully validate an event for the correct layout against provided
-    /// DAG [`sled::Tree`] reference and enforce relevant age, assuming
-    /// some possibility for a time drift. Optionally, provide an overlay
-    /// to use that instead of actual referenced DAG.
-    /// TODO: is this necessary? we validate headers and events should
-    /// be downloaded into the correct structure.
-    // pub async fn validate(&self) -> Result<bool> {
-    //     Ok(true)
-    // }
 
     /// Fully validate an event for the correct layout against provided
     /// [`EventGraph`] reference and enforce relevant age, assuming some
@@ -281,7 +279,7 @@ mod tests {
             assert!(!event_empty_content.dag_validate(&header_dag).await?);
 
             let mut event_timestamp_too_old = valid_event.clone();
-            event_timestamp_too_old.header.timestamp = 0;
+            event_timestamp_too_old.header.timestamp = 1000;
             assert!(!event_timestamp_too_old.dag_validate(&header_dag).await?);
 
             let mut event_timestamp_too_new = valid_event.clone();

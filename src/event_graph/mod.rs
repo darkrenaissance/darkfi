@@ -43,7 +43,7 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::{
-    event_graph::util::{midnight_timestamp, replayer_log},
+    event_graph::util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
@@ -68,7 +68,7 @@ use proto::{EventRep, EventReq, HeaderRep, HeaderReq, TipRep, TipReq};
 
 /// Utility functions
 pub mod util;
-use util::{generate_genesis, millis_until_next_rotation, next_rotation_timestamp};
+use util::{generate_genesis, millis_until_next_rotation};
 
 // Debugging event graph
 pub mod deg;
@@ -91,7 +91,7 @@ const EVENT_TIME_DRIFT: u64 = 60_000;
 pub const NULL_ID: Hash = Hash::from_bytes([0x00; blake3::OUT_LEN]);
 
 /// Maximum number of DAGs to store, this should be configurable
-pub const DAGS_MAX_NUMBER: i8 = 5;
+pub const DAGS_MAX_NUMBER: i8 = 24;
 
 /// Atomic pointer to an [`EventGraph`] instance.
 pub type EventGraphPtr = Arc<EventGraph>;
@@ -105,15 +105,18 @@ pub struct DAGStore {
 }
 
 impl DAGStore {
-    pub async fn new(&self, sled_db: sled::Db, days_rotation: u64) -> Self {
+    pub async fn new(&self, sled_db: sled::Db, hours_rotation: u64) -> Self {
         let mut considered_trees = HashMap::new();
         let mut considered_header_trees = HashMap::new();
-        if days_rotation > 0 {
+        if hours_rotation > 0 {
             // Create previous genesises if not existing, since they are deterministic.
             for i in 1..=DAGS_MAX_NUMBER {
-                let i_days_ago = midnight_timestamp((i - DAGS_MAX_NUMBER).into());
-                let header =
-                    Header { timestamp: i_days_ago, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
+                let i_hours_ago = next_hour_timestamp((i - DAGS_MAX_NUMBER).into());
+                let header = Header {
+                    timestamp: i_hours_ago,
+                    parents: [NULL_ID; N_EVENT_PARENTS],
+                    layer: 0,
+                };
                 let genesis = Event { header, content: GENESIS_CONTENTS.to_vec() };
 
                 let tree_name = genesis.id().to_string();
@@ -359,8 +362,8 @@ pub struct EventGraph {
     pub event_pub: PublisherPtr<Event>,
     /// Current genesis event
     pub current_genesis: RwLock<Event>,
-    /// Currently configured DAG rotation, in days
-    days_rotation: u64,
+    /// Currently configured DAG rotation, in hours
+    hours_rotation: u64,
     /// Flag signalling DAG has finished initial sync
     pub synced: RwLock<bool>,
     /// Enable graph debugging
@@ -376,14 +379,14 @@ impl EventGraph {
     /// Create a new [`EventGraph`] instance, creates a new Genesis
     /// event and checks if it
     /// is containd in DAG, if not prunes DAG, may also start a pruning
-    /// task based on `days_rotation`, and return an atomic instance of
+    /// task based on `hours_rotation`, and return an atomic instance of
     /// `Self`
     /// * `p2p` atomic pointer to p2p.
     /// * `sled_db` sled DB instance.
     /// * `datastore` path where we should log db instrucion if run in
     ///   replay mode.
     /// * `replay_mode` set the flag to keep a log of db instructions.
-    /// * `days_rotation` marks the lifetime of the DAG before it's
+    /// * `hours_rotation` marks the lifetime of the DAG before it's
     ///   pruned.
     pub async fn new(
         p2p: P2pPtr,
@@ -391,21 +394,21 @@ impl EventGraph {
         datastore: PathBuf,
         replay_mode: bool,
         fast_mode: bool,
-        days_rotation: u64,
+        hours_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_pub = Publisher::new();
 
-        // Create the current genesis event based on the `days_rotation`
-        let current_genesis = generate_genesis(days_rotation);
+        // Create the current genesis event based on the `hours_rotation`
+        let current_genesis = generate_genesis(hours_rotation);
         let current_dag_tree_name = current_genesis.id().to_string();
         let dag_store = DAGStore {
             db: sled_db.clone(),
             header_dags: HashMap::default(),
             main_dags: HashMap::default(),
         }
-        .new(sled_db, days_rotation)
+        .new(sled_db, hours_rotation)
         .await;
 
         let self_ = Arc::new(Self {
@@ -418,7 +421,7 @@ impl EventGraph {
             prune_task: OnceCell::new(),
             event_pub,
             current_genesis: RwLock::new(current_genesis.clone()),
-            days_rotation,
+            hours_rotation,
             synced: RwLock::new(false),
             deg_enabled: RwLock::new(false),
             deg_publisher: Publisher::new(),
@@ -436,12 +439,12 @@ impl EventGraph {
         }
 
         // Spawn the DAG pruning task
-        if days_rotation > 0 {
+        if hours_rotation > 0 {
             let prune_task = StoppableTask::new();
             let _ = self_.prune_task.set(prune_task.clone()).await;
 
             prune_task.clone().start(
-                 self_.clone().dag_prune_task(days_rotation),
+                 self_.clone().dag_prune_task(hours_rotation),
                  |res| async move {
                      match res {
                          Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -456,8 +459,8 @@ impl EventGraph {
         Ok(self_)
     }
 
-    pub fn days_rotation(&self) -> u64 {
-        self.days_rotation
+    pub fn hours_rotation(&self) -> u64 {
+        self.hours_rotation
     }
 
     /// Sync the DAG from connected peers
@@ -742,7 +745,7 @@ impl EventGraph {
     }
 
     /// Background task periodically pruning the DAG.
-    async fn dag_prune_task(self: Arc<Self>, days_rotation: u64) -> Result<()> {
+    async fn dag_prune_task(self: Arc<Self>, hours_rotation: u64) -> Result<()> {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
@@ -751,7 +754,7 @@ impl EventGraph {
 
         loop {
             // Find the next rotation timestamp:
-            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, hours_rotation);
 
             let header =
                 Header { timestamp: next_rotation, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
@@ -946,7 +949,7 @@ impl EventGraph {
                 target: "event_graph::header_dag_insert()",
                 "Inserting header {} into the DAG", header_id,
             );
-            if !header.validate(&header_dag, self.days_rotation, Some(&overlay)).await? {
+            if !header.validate(&header_dag, self.hours_rotation, Some(&overlay)).await? {
                 error!(target: "event_graph::header_dag_insert()", "Header {} is invalid!", header_id);
                 return Err(Error::HeaderIsInvalid)
             }

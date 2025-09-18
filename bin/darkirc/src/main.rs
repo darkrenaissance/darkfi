@@ -95,7 +95,7 @@ struct Args {
     irc_tls_secret: Option<String>,
 
     /// How many DAGs to sync.
-    #[structopt(short, long, default_value = "1")]
+    #[structopt(short, long, default_value = "8")]
     dags_count: usize,
 
     #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc_db")]
