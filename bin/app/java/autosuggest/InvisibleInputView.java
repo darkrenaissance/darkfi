@@ -136,7 +136,7 @@ public class InvisibleInputView extends View {
                     CustomInputConnection.onSetComposeRegion(
                         id, selectionStart + 1, selectionStart + 2);
                 }
-            } else {
+            } /* else {
                 int unicodeChar = event.getUnicodeChar();
                 if (unicodeChar != 0) {
                     int selectionEnd = Selection.getSelectionEnd(editable);
@@ -152,7 +152,7 @@ public class InvisibleInputView extends View {
                     CustomInputConnection.onCompose(
                         id, inputChar, selectionStart, true);
                 }
-            }
+            } */
         }
         return super.onKeyDown(keyCode, event);
     }

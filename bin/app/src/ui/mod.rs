@@ -36,8 +36,10 @@ pub use chatview::{ChatView, ChatViewPtr};
 mod baseedit;
 mod chatedit;
 pub use chatedit::{ChatEdit, ChatEditPtr};
-//mod editbox;
-//pub use editbox::{EditBox, EditBoxPtr};
+mod edit;
+pub use edit::{BaseEdit, BaseEditPtr, BaseEditType};
+mod editbox;
+pub use editbox::{EditBox, EditBoxPtr};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod gesture;
@@ -201,8 +203,9 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Layer(obj) => obj.clone(),
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
-        //Pimpl::EditBox(obj) => obj.clone(),
+        Pimpl::EditBox(obj) => obj.clone(),
         Pimpl::ChatEdit(obj) => obj.clone(),
+        Pimpl::Edit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
         Pimpl::Video(obj) => obj.clone(),
@@ -218,8 +221,9 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Layer(obj) => obj.as_ref(),
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
-        //Pimpl::EditBox(obj) => obj.as_ref(),
+        Pimpl::EditBox(obj) => obj.as_ref(),
         Pimpl::ChatEdit(obj) => obj.as_ref(),
+        Pimpl::Edit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Video(obj) => obj.as_ref(),

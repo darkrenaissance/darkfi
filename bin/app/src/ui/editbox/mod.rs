@@ -34,18 +34,18 @@ use std::{
 use crate::{
     error::Result,
     gfx::{
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, TextureId,
-        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex,
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
+        RenderApi, TextureId, Vertex,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
-        PropertyRect, PropertyStr, PropertyUint32, Role,
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
+        PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, unixtime, zip3},
+    util::{enumerate_ref, unixtime, zip3},
     ExecutorPtr,
 };
 
@@ -66,11 +66,7 @@ const CURSOR_EOL_WS_NUDGE: f32 = 0.8;
 const CURSOR_EOL_NUDGE: f32 = 0.2;
 
 pub fn eol_nudge(font_size: f32, glyphs: &Vec<Glyph>) -> f32 {
-    if is_whitespace(&glyphs.last().unwrap().substr) {
-        (font_size * CURSOR_EOL_WS_NUDGE).round()
-    } else {
-        (font_size * CURSOR_EOL_NUDGE).round()
-    }
+    (font_size * CURSOR_EOL_NUDGE).round()
 }
 
 #[derive(Clone)]
@@ -205,7 +201,6 @@ impl EditBox {
         window_scale: PropertyFloat32,
         render_api: RenderApi,
         text_shaper: TextShaperPtr,
-        ex: ExecutorPtr,
     ) -> Pimpl {
         t!("EditBox::new()");
 
@@ -338,7 +333,7 @@ impl EditBox {
         let atlas =
             text::make_texture_atlas(&self.render_api, gfxtag!("editbox_txt"), &rendered.glyphs);
 
-        let mut mesh = MeshBuilder::with_clip(gfxtag!("editbox_txt"), clip.clone());
+        let mut mesh = MeshBuilder::new(gfxtag!("editbox_txt"));
 
         let selections = self.select.lock().unwrap().clone();
         // Just an assert
@@ -635,7 +630,7 @@ impl EditBox {
             editable.get_text()
         };
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         self.text.set(atom, text);
 
         self.pause_blinking();
@@ -807,9 +802,6 @@ impl EditBox {
             while cpos_start > 0 {
                 // Is the glyph before this pos just whitespace?
                 let glyph_str = &rendered.glyphs[cpos_start - 1].substr;
-                if is_whitespace(glyph_str) {
-                    break
-                }
                 cpos_start -= 1;
             }
             // Find word end
@@ -817,9 +809,6 @@ impl EditBox {
             while cpos_end < rendered.glyphs.len() {
                 cpos_end += 1;
                 let glyph_str = &rendered.glyphs[cpos_end].substr;
-                if is_whitespace(glyph_str) {
-                    break
-                }
             }
 
             let cidx_start = rendered.pos_to_idx(cpos_start);
@@ -981,7 +970,7 @@ impl EditBox {
 
     async fn handle_touch_move(&self, pos: Point) -> bool {
         t!("handle_touch_move({pos:?})");
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         let touch_state = {
             let mut touch_info = self.touch_info.lock().unwrap();
             touch_info.update(&pos);
@@ -1175,14 +1164,14 @@ impl EditBox {
         t!("redraw()");
 
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
-        self.rect.eval(&parent_rect).expect("unable to eval rect");
+        //self.rect.eval(&parent_rect).expect("unable to eval rect");
 
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::editbox", "Text failed to draw");
             return
         };
 
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        //self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
     }
 
     fn redraw_cursor(&self) {
@@ -1194,7 +1183,7 @@ impl EditBox {
             DrawCall::new(cursor_instrs, vec![], self.z_index.get(), "editbox_curs_redr"),
         )];
 
-        self.render_api.replace_draw_calls(timest, draw_calls);
+        //self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
     fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
@@ -1241,10 +1230,7 @@ impl EditBox {
                 (
                     self.text_dc_key,
                     DrawCall::new(
-                        vec![
-                            DrawInstruction::Move(rect.pos()),
-                            DrawInstruction::Draw(text_mesh),
-                        ],
+                        vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(text_mesh)],
                         vec![self.cursor_dc_key],
                         self.z_index.get(),
                         "editbox_txt",
@@ -1257,12 +1243,17 @@ impl EditBox {
             ],
         })
     }
+
+    async fn insert(&self, txt: &str, atom: &mut PropertyAtomicGuard) {
+        //let mut editor = self.lock_editor().await;
+        //editor.insert(txt, atom).await;
+    }
 }
 
 impl Drop for EditBox {
     fn drop(&mut self) {
-        self.render_api
-            .replace_draw_calls(unixtime(), vec![(self.text_dc_key, Default::default())]);
+        //self.render_api
+        //    .replace_draw_calls(unixtime(), vec![(self.text_dc_key, Default::default())]);
     }
 }
 
@@ -1276,21 +1267,21 @@ impl UIObject for EditBox {
         let me = Arc::downgrade(&self);
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
-        on_modify.when_change(self.is_focused.prop(), Self::change_focus);
+        //on_modify.when_change(self.is_focused.prop(), Self::change_focus);
 
         // When text has been changed.
         // Cursor and selection might be invalidated.
-        async fn reset(self_: Arc<EditBox>) {
+        async fn reset(self_: Arc<EditBox>, batch: BatchGuardPtr) {
             self_.editable.lock().unwrap().end_compose();
             self_.editable.lock().unwrap().set_text(self_.text.get(), String::new());
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut PropertyAtomicGuard::none();
             self_.cursor_pos.set(atom, 0);
             self_.selected.clone().set_null(atom, Role::Internal, 0).unwrap();
             self_.selected.clone().set_null(atom, Role::Internal, 1).unwrap();
             self_.scroll.set(atom, 0.);
             self_.redraw();
         }
-        async fn redraw(self_: Arc<EditBox>) {
+        async fn redraw(self_: Arc<EditBox>, batch: BatchGuardPtr) {
             self_.redraw().await;
         }
         on_modify.when_change(self.rect.prop(), redraw);
@@ -1309,7 +1300,7 @@ impl UIObject for EditBox {
         on_modify.when_change(self.z_index.prop(), redraw);
         on_modify.when_change(self.debug.prop(), redraw);
 
-        async fn regen_cursor(self_: Arc<EditBox>) {
+        async fn regen_cursor(self_: Arc<EditBox>, batch: BatchGuardPtr) {
             let mesh = std::mem::take(&mut *self_.cursor_mesh.lock().unwrap());
         }
         on_modify.when_change(self.cursor_color.prop(), regen_cursor);
@@ -1351,7 +1342,7 @@ impl UIObject for EditBox {
         t!("EditBox::draw() [trace_id={trace_id}]");
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.rect.eval(&parent_rect).ok()?;
+        //self.rect.eval(&parent_rect).ok()?;
 
         self.clamp_scroll(atom);
         self.make_draw_calls()
@@ -1367,7 +1358,12 @@ impl UIObject for EditBox {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let actions = {
+            let mut repeater = self.key_repeat.lock().unwrap();
+            repeater.key_down(PressedKey::Char(key), repeat)
+        };
+
+        let atom = &mut self.render_api.make_guard(gfxtag!("EditBox::handle_char"));
 
         if mods.ctrl || mods.alt {
             if repeat {
@@ -1377,14 +1373,15 @@ impl UIObject for EditBox {
             return true
         }
 
-        let actions = {
-            let mut repeater = self.key_repeat.lock().unwrap();
-            repeater.key_down(PressedKey::Char(key), repeat)
-        };
-        t!("Key {key:?} has {actions} actions");
-        for _ in 0..actions {
-            self.insert_char(key).await;
+        // Do nothing
+        if actions == 0 {
+            return true
         }
+
+        t!("Key {key:?} has {actions} actions");
+        let key_str = key.to_string().repeat(actions as usize);
+        self.insert(&key_str, atom).await;
+        //self.redraw(atom).await;
         true
     }
 
@@ -1404,7 +1401,7 @@ impl UIObject for EditBox {
             repeater.key_down(PressedKey::Key(key), repeat)
         };
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
 
         // Suppress noisy message
         if actions > 0 {
@@ -1426,7 +1423,7 @@ impl UIObject for EditBox {
         }
 
         let rect = self.rect.get();
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
 
         // clicking inside box will:
         // 1. make it active
@@ -1531,7 +1528,7 @@ impl UIObject for EditBox {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
 
         let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.max_cursor_scroll());
@@ -1578,7 +1575,7 @@ impl UIObject for EditBox {
             editable.compose(suggest_text, is_commit);
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         //self.apply_cursor_scrolling();
         self.clamp_scroll(atom);
         self.redraw().await;

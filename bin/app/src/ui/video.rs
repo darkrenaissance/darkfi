@@ -183,7 +183,7 @@ impl Video {
                     // Make editing textures array and broadcasting an atomic op
                     {
                         let mut vid_data = vid_data.lock();
-                        // panic here on unwrap None when closing app
+                        // FIXME panic here on unwrap None when closing app
                         let mut vid_data = vid_data.as_mut().unwrap();
                         vid_data.textures[frame_idx] = Some(texture.clone());
                         // broadcast

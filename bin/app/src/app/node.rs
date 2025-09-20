@@ -338,6 +338,186 @@ pub fn create_editbox(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_baseedit(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::ChatEdit);
+
+    let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
+    prop.set_ui_text("Is Active", "An active EditBox can be focused");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("is_focused", PropertyType::Bool, PropertySubType::Null);
+    prop.set_ui_text("Is Focused", "A focused EditBox receives input");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("lineheight", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Line Height", "Line height/lead (em)");
+    prop.set_defaults_f32(vec![1.2]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll_speed", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Scroll Speed", "Scrolling speed");
+    prop.set_defaults_f32(vec![4.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_hi_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_cmd_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_width", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_defaults_f32(vec![2.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_ascent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_defaults_f32(vec![10.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_descent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("select_ascent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_defaults_f32(vec![10.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("select_descent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("handle_descent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("hi_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cmd_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("select_text", PropertyType::Str, PropertySubType::Null);
+    prop.allow_null_values();
+    prop.set_defaults_null().unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_blink_time", PropertyType::Uint32, PropertySubType::Null);
+    prop.set_defaults_u32(vec![500]).unwrap();
+    prop.set_range_u32(0, u32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_idle_time", PropertyType::Uint32, PropertySubType::Null);
+    prop.set_defaults_u32(vec![150]).unwrap();
+    prop.set_range_u32(0, u32::MAX);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
+    node.add_signal("focus_request", "Request to gain focus", vec![]).unwrap();
+    node.add_signal("paste_request", "Request to show paste dialog", vec![]).unwrap();
+
+    // Used by emoji_picker
+    node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();
+    node.add_method("focus", vec![], None).unwrap();
+    node.add_method("unfocus", vec![], None).unwrap();
+
+    node
+}
+
+pub fn create_singleline_edit(name: &str) -> SceneNode {
+    let mut node = create_baseedit(name);
+
+    // TEMPORARY
+
+    let mut prop = Property::new("height_range", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
+    // Maybe this shouldnt even be a property
+    let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Content Height", "The actual text's inner height");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Inner Padding", "Top and bottom padding inside");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
+    node
+}
+
+pub fn create_multiline_edit(name: &str) -> SceneNode {
+    let mut node = create_baseedit(name);
+
+    let mut prop = Property::new("height_range", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Content Height", "The actual text's inner height");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Inner Padding", "Top and bottom padding inside");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
+    node
+}
+
 pub fn create_chatedit(name: &str) -> SceneNode {
     t!("create_chatedit({name})");
     let mut node = SceneNode::new(name, SceneNodeType::ChatEdit);

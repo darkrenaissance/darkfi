@@ -18,14 +18,17 @@
 
 use crate::{
     app::{
-        node::{create_chatedit, create_layer, create_text, create_vector_art, create_video},
+        node::{
+            create_chatedit, create_editbox, create_layer, create_singleline_edit, create_text,
+            create_vector_art, create_video,
+        },
         App,
     },
     expr,
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{ChatEdit, Layer, Text, VectorArt, VectorShape, Video},
+    ui::{BaseEdit, BaseEditType, ChatEdit, EditBox, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -294,102 +297,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
 
     /*
-    // Text edit
-    let node = create_editbox("editz");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 150.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 150.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 380.).unwrap();
-    //let code = vec![Op::Sub((
-    //    Box::new(Op::LoadVar("h".to_string())),
-    //    Box::new(Op::ConstFloat32(60.)),
-    //))];
-    //prop.set_expr(atom, Role::App, 1, code).unwrap();
-    //let code = vec![Op::Sub((
-    //    Box::new(Op::LoadVar("w".to_string())),
-    //    Box::new(Op::ConstFloat32(120.)),
-    //))];
-    //prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 60.).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", 40.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", 20.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
-    node.set_property_str(atom, Role::App, "text", "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}")
-        .unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if LIGHTMODE {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
-    let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_ascent", 40.).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_descent", 40.).unwrap();
-    node.set_property_f32(atom, Role::App, "select_ascent", 60.).unwrap();
-    node.set_property_f32(atom, Role::App, "select_descent", 60.).unwrap();
-    let prop = node.get_property("hi_bg_color").unwrap();
-    if LIGHTMODE {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.5).unwrap();
-    }
-    let prop = node.get_property("selected").unwrap();
-    prop.set_null(atom, Role::App, 0).unwrap();
-    prop.set_null(atom, Role::App, 1).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-
-    //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
-    //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
-    //let darkirc_backend = app.darkirc_backend.clone();
-    //let task = app.ex.spawn(async move {
-    //    while let Ok(_) = btn_click_recvr.recv().await {
-    //        let text = editbox_text.get();
-    //        editbox_text.prop().unset(Role::App, 0).unwrap();
-    //        // Clicking outside the editbox makes it lose focus
-    //        // So lets focus it again
-    //        editbox_focus.set(true);
-
-    //        debug!(target: "app", "sending text {text}");
-
-    //        let privmsg =
-    //            Privmsg { channel: "#random".to_string(), nick: "king".to_string(), msg: text };
-    //        darkirc_backend.send(privmsg).await;
-    //    }
-    //});
-    //tasks.push(task);
-
-    let node = node
-        .setup(|me| {
-            EditBox::new(
-                me,
-                window_scale.clone(),
-                app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
-            )
-        })
-        .await;
-    layer_node.link(node);
-
     // ChatView
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
@@ -477,30 +384,37 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
     */
 
-    /*
     // Text edit
-    let node = create_chatedit("editz");
+    let node = create_singleline_edit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
+
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 300.).unwrap();
+
+    //prop.set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
+
+    // Only used in singleline edit
+    prop.set_f32(atom, Role::App, 2, 400.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+
+    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+
+    node.set_property_f32(atom, Role::App, "baseline", 34.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
+
+    //////////////////////////////////////////////////////////////////////
+    // Only for multiline edit
+    //////////////////////////////////////////////////////////////////////
 
     let prop = node.get_property("height_range").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 400.).unwrap();
 
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 300.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
-    //prop.set_f32(atom, Role::App, 3, 50.).unwrap();
-
-    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-
     let prop = node.get_property("padding").unwrap();
     prop.set_f32(atom, Role::App, 0, 20.).unwrap();
     prop.set_f32(atom, Role::App, 1, 20.).unwrap();
-
-    node.set_property_f32(atom, Role::App, "baseline", 34.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
 
     #[cfg(target_os = "android")]
     {
@@ -510,6 +424,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         node.set_property_f32(atom, Role::App, "font_size", 60.).unwrap();
     }
+
+    //////////////////////////////////////////////////////////////////////
 
     //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -538,8 +454,16 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let node =
-        node.setup(|me| ChatEdit::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| {
+            BaseEdit::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                BaseEditType::SingleLine,
+            )
+        })
+        .await;
     layer_node.link(node.clone());
 
     // android: show on screen keyboard
@@ -548,5 +472,4 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.call_method("focus", vec![]).await.unwrap();
     });
     app.tasks.lock().unwrap().push(focus_task);
-    */
 }
