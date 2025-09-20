@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NONCE_LEN","P_STRING","P_STRING_LEN"],"enum":["HashError","RuntimeOption"],"struct":["Challenge","EquiXBuilder","EquiXPow","Solution","SolverMemory"]};
