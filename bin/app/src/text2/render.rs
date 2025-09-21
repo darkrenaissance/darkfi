@@ -105,7 +105,7 @@ fn render_glyph_run(
     }
 
     for glyph in glyph_run.glyphs() {
-        let glyph_inf = atlas.fetch_uv(glyph.id).expect("missing glyph UV rect");
+        let glyph_inf = atlas.fetch_uv(glyph.id as u16).expect("missing glyph UV rect");
 
         let glyph_x = run_x + glyph.x;
         let glyph_y = run_y - glyph.y;
@@ -188,7 +188,7 @@ fn create_atlas(
 
     let mut atlas = Atlas::new(scaler, render_api, tag);
     for glyph in glyph_run.glyphs() {
-        atlas.push_glyph(glyph.id);
+        atlas.push_glyph(glyph.id as u16);
     }
     //atlas.dump(&format!("/tmp/atlas_{run_idx}.png"));
     atlas.make()

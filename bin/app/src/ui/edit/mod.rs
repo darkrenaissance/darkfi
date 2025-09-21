@@ -417,7 +417,7 @@ impl BaseEdit {
         let rect = self.rect.get();
         *point -= rect.pos();
         *point -= self.behave.inner_pos();
-        point.y += self.scroll.get();
+        *point -= self.behave.scroll();
     }
 
     /// Gets the real cursor pos within the rect.
@@ -1051,13 +1051,11 @@ impl BaseEdit {
         //t!("regen_phone_select_handle_mesh()");
         let (first, last) = self.get_select_handles().await.unwrap();
 
-        let scroll = self.scroll.get();
-
         let editor = self.lock_editor().await;
         let sel = editor.selection();
         assert!(!sel.is_collapsed());
 
-        let pos = self.behave.inner_pos() + Point::new(0., -scroll);
+        let pos = self.behave.inner_pos() + self.behave.scroll();
 
         // We could cache this and use Move instead but why bother?
         let mut mesh = MeshBuilder::new(gfxtag!("chatedit_phone_select_handle"));
