@@ -237,6 +237,9 @@ impl Editor {
     pub fn set_width(&mut self, w: f32) {
         self.width = Some(w);
     }
+    pub fn width(&self) -> f32 {
+        self.layout().full_width()
+    }
     pub fn height(&self) -> f32 {
         self.layout().height()
     }

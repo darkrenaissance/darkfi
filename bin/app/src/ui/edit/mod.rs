@@ -316,7 +316,9 @@ impl BaseEdit {
         let behave: Box<dyn EditorBehavior> = match edit_type {
             BaseEditType::SingleLine => Box::new(SingleLine {
                 content_height: content_height.clone(),
+                scroll: scroll.clone(),
                 rect: rect.clone(),
+                cursor_width: cursor_width.clone(),
                 parent_rect: parent_rect.clone(),
                 editor: editor.clone(),
             }),
@@ -324,8 +326,11 @@ impl BaseEdit {
                 min_height: min_height.clone(),
                 max_height: max_height.clone(),
                 content_height: content_height.clone(),
+                scroll: scroll.clone(),
                 rect: rect.clone(),
+                baseline: baseline.clone(),
                 padding: padding.clone(),
+                cursor_descent: cursor_descent.clone(),
                 parent_rect: parent_rect.clone(),
                 editor: editor.clone(),
             }),
@@ -412,19 +417,6 @@ impl BaseEdit {
         *point -= rect.pos();
         *point -= self.behave.inner_pos();
         point.y += self.scroll.get();
-    }
-
-    /// Maximum allowed scroll value
-    /// * `content_height` measures the height of the actual content.
-    /// * `outer_height` applies the inner padding.
-    /// * `rect_h` then clips the `outer_height` to min/max values.
-    /// We only allow scrolling when max clipping has been applied.
-    fn max_scroll(&self) -> f32 {
-        let content_height = self.content_height.get();
-        let outer_height = content_height + self.padding_top() + self.padding_bottom();
-        let rect_h = self.rect.get_height();
-        //t!("max_scroll content_height={content_height}, rect_h={rect_h}");
-        (outer_height - rect_h).max(0.)
     }
 
     /// Gets the real cursor pos within the rect.
@@ -551,7 +543,7 @@ impl BaseEdit {
                     if let Some(txt) = miniquad::window::clipboard_get() {
                         self.insert(&txt, atom).await;
                         // Maybe insert should call this?
-                        self.apply_cursor_scrolling(atom).await;
+                        self.behave.apply_cursor_scroll(atom).await;
                     }
                 }
             }
@@ -687,7 +679,7 @@ impl BaseEdit {
         drop(editor);
         drop(txt_ctx);
 
-        self.apply_cursor_scrolling(atom).await;
+        self.behave.apply_cursor_scroll(atom).await;
         self.pause_blinking();
         self.redraw(atom).await;
 
@@ -868,7 +860,7 @@ impl BaseEdit {
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 let y_dist = start_pos.y - touch_pos.y;
                 let mut scroll = scroll_start + y_dist;
-                scroll = scroll.clamp(0., self.max_scroll());
+                scroll = scroll.clamp(0., self.behave.max_scroll().await);
                 if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
                 }
@@ -920,29 +912,6 @@ impl BaseEdit {
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
     }
 
-    /// Whenever the cursor is modified this MUST be called
-    /// to recalculate the scroll y property.
-    async fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
-        let mut scroll = self.scroll.get();
-        let rect_h = self.rect.get_height();
-        let cursor_y0 = self.get_cursor_pos().await.y;
-        let cursor_h = self.baseline.get() + self.cursor_descent.get();
-        // The bottom
-        let cursor_y1 = cursor_y0 + cursor_h;
-        //t!("apply_cursor_scrolling() cursor = [{cursor_y0}, {cursor_y1}] rect_h={rect_h} scroll={scroll}");
-
-        if cursor_y1 > rect_h + scroll {
-            //t!("  cursor bottom below rect");
-            // We want cursor_y1 = rect_h + scroll by adjusting scroll
-            scroll = cursor_y1 - rect_h;
-            self.scroll.set(atom, scroll);
-        } else if cursor_y0 < scroll {
-            //t!("  cursor top above rect");
-            scroll = cursor_y0;
-            self.scroll.set(atom, scroll);
-        }
-    }
-
     fn pause_blinking(&self) {
         self.blink_is_paused.store(true, Ordering::Relaxed);
         self.cursor_is_visible.store(true, Ordering::Relaxed);
@@ -963,12 +932,10 @@ impl BaseEdit {
 
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
-        let mut content_instrs = vec![
-            DrawInstruction::ApplyView(rect.with_zero_pos()),
-            DrawInstruction::Move(Point::new(0., -scroll)),
-        ];
+        let mut content_instrs = vec![DrawInstruction::ApplyView(rect.with_zero_pos())];
         let mut bg_instrs = self.regen_bg_mesh();
         content_instrs.append(&mut bg_instrs);
+        content_instrs.push(DrawInstruction::Move(self.behave.scroll()));
 
         let draw_main = vec![
             (
@@ -1109,11 +1076,9 @@ impl BaseEdit {
         self.behave.eval_rect(atom).await;
 
         let rect = self.rect.get();
-        let max_scroll = self.max_scroll();
-        let mut scroll = self.scroll.get();
-        if scroll > max_scroll {
-            scroll = max_scroll;
-            self.scroll.set(atom, scroll);
+        let max_scroll = self.behave.max_scroll().await;
+        if self.scroll.get() > max_scroll {
+            self.scroll.set(atom, max_scroll);
         }
 
         let cursor_instrs = self.get_cursor_instrs().await;
@@ -1121,12 +1086,10 @@ impl BaseEdit {
         let sel_instrs = self.regen_select_mesh().await;
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
-        let mut content_instrs = vec![
-            DrawInstruction::ApplyView(rect.with_zero_pos()),
-            DrawInstruction::Move(Point::new(0., -scroll)),
-        ];
+        let mut content_instrs = vec![DrawInstruction::ApplyView(rect.with_zero_pos())];
         let mut bg_instrs = self.regen_bg_mesh();
         content_instrs.append(&mut bg_instrs);
+        content_instrs.push(DrawInstruction::Move(self.behave.scroll()));
 
         // + root (move)
         // -+ content (apply view)
@@ -1290,7 +1253,7 @@ impl BaseEdit {
                 editor.on_buffer_changed(atom).await;
                 drop(editor);
 
-                self.apply_cursor_scrolling(atom).await;
+                self.behave.apply_cursor_scroll(atom).await;
             }
         }
 
@@ -1513,6 +1476,7 @@ impl UIObject for BaseEdit {
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
         self.insert(&key_str, atom).await;
+        self.behave.apply_cursor_scroll(atom).await;
         self.redraw(atom).await;
         true
     }
@@ -1651,7 +1615,7 @@ impl UIObject for BaseEdit {
         }
 
         self.pause_blinking();
-        self.apply_cursor_scrolling(atom).await;
+        self.behave.apply_cursor_scroll(atom).await;
         self.redraw_scroll(atom.batch_id).await;
         self.redraw_cursor(atom.batch_id).await;
         self.redraw_select(atom.batch_id).await;
@@ -1666,7 +1630,7 @@ impl UIObject for BaseEdit {
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
-        scroll = scroll.clamp(0., self.max_scroll());
+        scroll = scroll.clamp(0., self.behave.max_scroll().await);
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(atom, scroll);
         self.redraw_scroll(atom.batch_id).await;

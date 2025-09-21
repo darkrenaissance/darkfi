@@ -29,6 +29,8 @@ use crate::{
 
 use super::EditorHandle;
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit::behave", $($arg)*); } }
+
 pub enum BaseEditType {
     SingleLine,
     MultiLine,
@@ -38,7 +40,14 @@ pub enum BaseEditType {
 pub(super) trait EditorBehavior: Send + Sync {
     async fn eval_rect(&self, atom: &mut PropertyAtomicGuard);
 
-    //fn scroll(&self) -> Point;
+    /// Whenever the cursor is modified this MUST be called
+    /// to recalculate the scroll value.
+    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard);
+
+    fn scroll(&self) -> Point;
+
+    /// Maximum allowed scroll value
+    async fn max_scroll(&self) -> f32;
 
     /// Inner position used for rendering
     fn inner_pos(&self) -> Point;
@@ -50,8 +59,11 @@ pub(super) struct MultiLine {
     pub min_height: PropertyFloat32,
     pub max_height: PropertyFloat32,
     pub content_height: PropertyFloat32,
+    pub scroll: PropertyFloat32,
     pub rect: PropertyRect,
+    pub baseline: PropertyFloat32,
     pub padding: PropertyPtr,
+    pub cursor_descent: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     pub editor: Arc<AsyncMutex<Option<Editor>>>,
 }
@@ -71,6 +83,14 @@ impl MultiLine {
     }
     fn padding_bottom(&self) -> f32 {
         self.padding.get_f32(1).unwrap()
+    }
+
+    /// Gets the real cursor pos within the rect.
+    async fn get_cursor_pos(&self) -> Point {
+        // This is the position within the content.
+        let cursor_pos = self.lock_editor().await.get_cursor_pos();
+        // Apply the inner padding
+        cursor_pos + self.inner_pos()
     }
 }
 
@@ -118,6 +138,44 @@ impl EditorBehavior for MultiLine {
             .unwrap();
     }
 
+    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard) {
+        let mut scroll = self.scroll.get();
+        let rect_h = self.rect.get_height();
+        let cursor_y0 = self.get_cursor_pos().await.y;
+        let cursor_h = self.baseline.get() + self.cursor_descent.get();
+        // The bottom
+        let cursor_y1 = cursor_y0 + cursor_h;
+        //t!("apply_cursor_scrolling() cursor = [{cursor_y0}, {cursor_y1}] rect_h={rect_h} scroll={scroll}");
+
+        if cursor_y1 > rect_h + scroll {
+            //t!("  cursor bottom below rect");
+            // We want cursor_y1 = rect_h + scroll by adjusting scroll
+            scroll = cursor_y1 - rect_h;
+            self.scroll.set(atom, scroll);
+        } else if cursor_y0 < scroll {
+            //t!("  cursor top above rect");
+            scroll = cursor_y0;
+            self.scroll.set(atom, scroll);
+        }
+    }
+
+    fn scroll(&self) -> Point {
+        Point::new(0., -self.scroll.get())
+    }
+
+    /// Maximum allowed scroll value
+    /// * `content_height` measures the height of the actual content.
+    /// * `outer_height` applies the inner padding.
+    /// * `rect_h` then clips the `outer_height` to min/max values.
+    /// We only allow scrolling when max clipping has been applied.
+    async fn max_scroll(&self) -> f32 {
+        let content_height = self.content_height.get();
+        let outer_height = content_height + self.padding_top() + self.padding_bottom();
+        let rect_h = self.rect.get_height();
+        //t!("max_scroll content_height={content_height}, rect_h={rect_h}");
+        (outer_height - rect_h).max(0.)
+    }
+
     /// Inner position used for rendering
     fn inner_pos(&self) -> Point {
         let pad_top = self.padding_top();
@@ -142,7 +200,9 @@ impl EditorBehavior for MultiLine {
 
 pub(super) struct SingleLine {
     pub content_height: PropertyFloat32,
+    pub scroll: PropertyFloat32,
     pub rect: PropertyRect,
+    pub cursor_width: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     pub editor: Arc<AsyncMutex<Option<Editor>>>,
 }
@@ -157,11 +217,6 @@ impl SingleLine {
 #[async_trait]
 impl EditorBehavior for SingleLine {
     async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
-        {
-            let mut editor = self.lock_editor().await;
-            editor.refresh().await;
-        }
-
         let content_height = {
             let mut editor = self.lock_editor().await;
             editor.refresh().await;
@@ -181,6 +236,29 @@ impl EditorBehavior for SingleLine {
                 ],
             )
             .unwrap();
+    }
+
+    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard) {
+        let scroll = self.scroll.get();
+        let rect_w = self.rect.get_width();
+        let cursor_x0 = self.lock_editor().await.get_cursor_pos().x;
+        let cursor_x1 = cursor_x0 + self.cursor_width.get();
+        if cursor_x0 < scroll {
+            self.scroll.set(atom, cursor_x0);
+        } else if cursor_x1 > rect_w + scroll {
+            let scroll = cursor_x1 - rect_w;
+            self.scroll.set(atom, scroll);
+        }
+    }
+
+    fn scroll(&self) -> Point {
+        Point::new(-self.scroll.get(), 0.)
+    }
+
+    async fn max_scroll(&self) -> f32 {
+        let rect_w = self.rect.get_width();
+        let content_w = self.lock_editor().await.width() + self.cursor_width.get();
+        (content_w - rect_w).max(0.)
     }
 
     fn inner_pos(&self) -> Point {

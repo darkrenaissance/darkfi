@@ -363,6 +363,8 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
+    // Deprecate this
+    // No need to be a property
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
