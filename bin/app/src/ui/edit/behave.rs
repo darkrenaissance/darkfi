@@ -53,6 +53,29 @@ pub(super) trait EditorBehavior: Send + Sync {
     fn inner_pos(&self) -> Point;
 
     fn allow_endl(&self) -> bool;
+
+    fn finger_scroll_dir(&self) -> FingerScrollDir;
+}
+
+pub(super) enum FingerScrollDir {
+    Vert,
+    Horiz,
+}
+
+impl FingerScrollDir {
+    pub fn cmp(&self, grad: f32) -> bool {
+        match self {
+            Self::Vert => grad.abs() > 0.5,
+            Self::Horiz => grad.abs() < 0.5,
+        }
+    }
+
+    pub fn travel(&self, start_pos: Point, touch_pos: Point) -> f32 {
+        match self {
+            Self::Vert => start_pos.y - touch_pos.y,
+            Self::Horiz => start_pos.x - touch_pos.x,
+        }
+    }
 }
 
 pub(super) struct MultiLine {
@@ -196,6 +219,10 @@ impl EditorBehavior for MultiLine {
     fn allow_endl(&self) -> bool {
         true
     }
+
+    fn finger_scroll_dir(&self) -> FingerScrollDir {
+        FingerScrollDir::Vert
+    }
 }
 
 pub(super) struct SingleLine {
@@ -271,5 +298,9 @@ impl EditorBehavior for SingleLine {
 
     fn allow_endl(&self) -> bool {
         false
+    }
+
+    fn finger_scroll_dir(&self) -> FingerScrollDir {
+        FingerScrollDir::Horiz
     }
 }

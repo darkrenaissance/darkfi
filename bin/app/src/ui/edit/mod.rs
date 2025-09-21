@@ -57,7 +57,7 @@ use super::{
 
 mod behave;
 pub use behave::BaseEditType;
-use behave::{EditorBehavior, MultiLine, SingleLine};
+use behave::{EditorBehavior, FingerScrollDir, MultiLine, SingleLine};
 
 /// The travel threshold on long hold select before activating select.
 const HOLD_TRAVEL_THRESHOLD_SQ: f32 = 100.;
@@ -85,11 +85,12 @@ enum TouchStateAction {
 struct TouchInfo {
     state: TouchStateAction,
     scroll: PropertyFloat32,
+    finger_scroll_dir: FingerScrollDir,
 }
 
 impl TouchInfo {
-    fn new(scroll: PropertyFloat32) -> Self {
-        Self { state: TouchStateAction::Inactive, scroll }
+    fn new(scroll: PropertyFloat32, finger_scroll_dir: FingerScrollDir) -> Self {
+        Self { state: TouchStateAction::Inactive, scroll, finger_scroll_dir }
     }
 
     fn start(&mut self, pos: Point) {
@@ -115,7 +116,7 @@ impl TouchInfo {
                         debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
-                } else if grad.abs() > 0.5 {
+                } else if self.finger_scroll_dir.cmp(grad) {
                     // Vertical movement
                     debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
                     let scroll_start = self.scroll.get();
@@ -387,7 +388,7 @@ impl BaseEdit {
             blink_is_paused: AtomicBool::new(false),
             hide_cursor: AtomicBool::new(false),
 
-            touch_info: SyncMutex::new(TouchInfo::new(scroll)),
+            touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.finger_scroll_dir())),
             is_phone_select: AtomicBool::new(false),
 
             window_scale: window_scale.clone(),
@@ -858,8 +859,8 @@ impl BaseEdit {
                 self.redraw_select(atom.batch_id).await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
-                let y_dist = start_pos.y - touch_pos.y;
-                let mut scroll = scroll_start + y_dist;
+                let travel_dist = self.behave.finger_scroll_dir().travel(*start_pos, touch_pos);
+                let mut scroll = scroll_start + travel_dist;
                 scroll = scroll.clamp(0., self.behave.max_scroll().await);
                 if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
