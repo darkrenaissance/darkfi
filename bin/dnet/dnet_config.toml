@@ -1,14 +1,38 @@
-[[nodes]]
-name = "darkirc"
-host = "localhost"
-port = 26660
-type = "NORMAL"
+#[[nodes]]
+#name = "darkirc"
+#host = "localhost"
+#port = 26660
+#type = "NORMAL"
 
-[[nodes]]
-name = "taud"
-host = "localhost"
-port = 23330
-type = "NORMAL"
+#[[nodes]]
+#name = "taud"
+#host = "localhost"
+#port = 23330
+#type = "NORMAL"
+
+#[[nodes]]
+#name = "fud"
+#host = "localhost"
+#port = 13336
+#type = "NORMAL"
+
+#[[nodes]]
+#name = "darkfid-testnet"
+#host = "localhost"
+#port = 8340
+#type = "NORMAL"
+
+#[[nodes]]
+#name = "darkfid-mainnet"
+#host = "localhost"
+#port = 8440
+#type = "NORMAL"
+
+#[[nodes]]
+#name = "darkfid-localnet"
+#host = "localhost"
+#port = 8240
+#type = "NORMAL"
 
 #[[nodes]]
 #name = "evgrd"

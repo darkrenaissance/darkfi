@@ -1,10 +1,14 @@
 # dnet
 
-A simple tui to explore darkfi p2p network topology. Displays:
+A simple tui to explore darkfi p2p network topology. Connects to nodes
+on the darkfi network using RPC and displays the following info:
 
-1. Active p2p nodes
-2. Outgoing, incoming, manual and seed sessions
-3. Each associated connection and recent messages.
+1. Every inbound, outbound and manual connections.
+2. Events such as peer discovery, new connections, disconnections etc.
+3. All messages per connection.
+
+All darkfi node types are supported, i.e. darkfid, darkirc, taud,
+fud, etc.
 
 `dnet` is based on the design-pattern Model, View, Controller. We create
 a logical seperation between the underlying data structure or Model;
@@ -59,11 +63,28 @@ If you don't require a venv, install the requirements and run dnet as follows:
 On first run, `dnet` will create a config file in the config directory
 specific to your operating system.
 
-To use `dnet` you will need to open the config file and modify it. Enter
-the RPC ports of the nodes you want to connect to and title them as you
-see fit. The default config file uses localhost, but you can replace
-this with hostnames or external IP addresses. You must also specify
-whether it is a `NORMAL` or a `LILITH` node.
+To use `dnet` you will need to open the config file and modify it to
+display the individual nodes you want to inspect. By node we mean daemon
+such as darkirc, darkfid, taud etc. Each node in the `dnet` config has
+the following parameters:
+
+* `name`: An arbitary string (whatever you want to call your node,
+e.g. darkirc).
+* `host`: The network host, set to `localhost` by default, but you can
+replace this with hostnames or external IP addresses.
+* `port`: The `rpc_listen` port of the node you want to connect to.
+* `type`: Specify whether it is a `NORMAL` or a `LILITH` node. (If you
+don't know what this means, such stick with `NORMAL`).
+
+Next, make sure that this line is commented in the config file of the
+node you are trying to connect to:
+
+```toml
+## Disabled RPC methods
+#rpc_disabled_methods = ["p2p.get_info"]
+```
+
+If necessary, restart the node to apply the change.
 
 ## Usage
 

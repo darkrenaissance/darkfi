@@ -37,7 +37,7 @@ pub struct PluginSettings {
 }
 impl PluginSettings {
     pub fn add_setting(&self, name: &str, default: PropertyValue) -> Option<SceneNodePtr> {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         let node = match default {
             PropertyValue::Bool(b) => {
                 let mut node = SceneNode::new(name, SceneNodeType::Setting);
@@ -85,7 +85,7 @@ impl PluginSettings {
         match node {
             Some(n) => {
                 let node_ptr = Arc::new(n);
-                self.setting_root.clone().link(node_ptr.clone().into());
+                self.setting_root.link(node_ptr.clone().into());
                 Some(node_ptr)
             }
             None => None,
@@ -94,7 +94,7 @@ impl PluginSettings {
 
     // For all settings, copy the value from sled into the setting node's value property
     pub fn load_settings(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
                 continue
@@ -241,10 +241,6 @@ impl PluginSettings {
             "net.outbound_peer_discovery_cooloff_time",
             PropertyValue::Uint32(p2p_settings.outbound_peer_discovery_cooloff_time as u32),
         );
-        self.add_setting(
-            "net.transport_mixing",
-            PropertyValue::Bool(p2p_settings.transport_mixing),
-        );
         self.add_setting("net.localnet", PropertyValue::Bool(p2p_settings.localnet));
         self.add_setting(
             "net.greylist_refinery_interval",
@@ -298,8 +294,6 @@ impl PluginSettings {
             .unwrap()
             .get_property_u32("value")
             .unwrap() as u64;
-        p2p_settings.transport_mixing =
-            self.get_setting("net.transport_mixing").unwrap().get_property_bool("value").unwrap();
         p2p_settings.localnet =
             self.get_setting("net.localnet").unwrap().get_property_bool("value").unwrap();
         p2p_settings.greylist_refinery_interval = self

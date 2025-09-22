@@ -61,6 +61,12 @@ class Cursor:
             raise Exception("invalid read")
         return slice
 
+    def remain_data(self):
+        return self.by[self.i:]
+
+    def is_end(self):
+        return not bool(self.remain_data())
+
 def read_u8(cur):
     b = cur.read(1)
     return int.from_bytes(b, "little")
@@ -80,6 +86,10 @@ def read_u64(cur):
 def read_f32(cur):
     by = cur.read(4)
     return struct.unpack("<f", by)[0]
+
+def read_i32(cur):
+    by = cur.read(4)
+    return struct.unpack("<i", by)[0]
 
 def decode_varint(cur):
     n = read_u8(cur)

@@ -22,9 +22,11 @@ use crate::{
         App,
     },
     expr,
+    gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
 };
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
@@ -60,23 +62,23 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.clone().lookup_node("/setting/scale").unwrap(),
+        &app.sg_root.lookup_node("/setting/scale").unwrap(),
         Role::Internal,
         "value",
         0,
     )
     .unwrap();
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     // Main view
     let layer_node = create_layer("menu_layer");
     let prop = layer_node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
@@ -85,10 +87,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Channels label bg
     let node = create_vector_art("channels_label_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -120,46 +122,49 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     );
 
     let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    layer_node.clone().link(node);
+    layer_node.link(node);
 
     // Create some text
     let node = create_text("channels_label");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
-    prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
+    prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "CHANNELS").unwrap();
+    node.set_property_bool(atom, Role::App, "use_i18n", true).unwrap();
+    node.set_property_str(atom, Role::App, "text", "channels-label").unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.clone().set_f32(atom, Role::App, 0, 0.65).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.87).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.83).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.65).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.87).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
-    layer_node.clone().link(node);
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .await;
+    layer_node.link(node);
 
     let mut channel_y = CHANNEL_LABEL_LINESPACE;
 
     for (i, channel) in CHANNELS.iter().enumerate() {
         let node = create_vector_art(&(channel.to_string() + "_channel_label_bg"));
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, channel_y).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, channel_y).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
         let mut shape = VectorShape::new();
@@ -187,7 +192,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         );
 
         let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-        layer_node.clone().link(node);
+        layer_node.link(node);
 
         // Desktop platforms
         //#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
@@ -199,10 +204,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         // Create some text
         let node = create_text(&(channel.to_string() + "_channel_label"));
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, channel_y + CHANNEL_LABEL_Y).unwrap();
-        prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
+        prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
+        prop.set_f32(atom, Role::App, 1, channel_y + CHANNEL_LABEL_Y).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 200.).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
         node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
         node.set_property_str(atom, Role::App, "text", text).unwrap();
@@ -211,43 +216,47 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         let color_prop = node.get_property("text_color").unwrap();
         let set_normal_color = move |atom: &mut PropertyAtomicGuard| {
             if COLOR_SCHEME == ColorScheme::DarkMode {
-                color_prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                color_prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+                color_prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                color_prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                color_prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             } else if COLOR_SCHEME == ColorScheme::PaperLight {
-                color_prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
-                color_prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                color_prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+                color_prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+                color_prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+                color_prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
         };
         set_normal_color(atom);
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-        let node =
-            node.setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone())).await;
-        layer_node.clone().link(node);
+        let node = node
+            .setup(|me| {
+                Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone())
+            })
+            .await;
+        layer_node.link(node);
 
         // Create the button
         let node = create_button(&(channel.to_string() + "_channel_btn"));
         node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, channel_y).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, channel_y).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
 
         let (slot, recvr) = Slot::new(channel.to_string() + "_clicked");
         node.register("click", slot).unwrap();
         let chatview_path = "/window/".to_string() + channel + "_chat_layer";
-        let chatview_node = app.sg_root.clone().lookup_node(chatview_path).unwrap();
+        let chatview_node = app.sg_root.lookup_node(chatview_path).unwrap();
         let chatview_is_visible =
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();
         let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
 
+        let render_api = app.render_api.clone();
         let select_channel = move || {
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api.make_guard(gfxtag!("channel_clicked"));
             info!(target: "app::menu", "clicked: {channel}!");
             chatview_is_visible.set(atom, true);
             menu_is_visible.set(atom, false);
@@ -263,7 +272,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         app.tasks.lock().unwrap().push(listen_click);
 
         let node = node.setup(|me| Button::new(me)).await;
-        layer_node.clone().link(node);
+        layer_node.link(node);
 
         // Create shortcut
         let channel_id = i + 1;
@@ -285,7 +294,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         app.tasks.lock().unwrap().push(listen_enter);
 
         let node = node.setup(|me| Shortcut::new(me)).await;
-        layer_node.clone().link(node);
+        layer_node.link(node);
 
         channel_y += CHANNEL_LABEL_LINESPACE;
     }

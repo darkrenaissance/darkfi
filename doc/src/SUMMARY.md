@@ -22,6 +22,8 @@
     - [Public Node Configurations](misc/nodes/public-guide.md)
     - [Tor Nodes](misc/nodes/tor-guide.md)
     - [I2p Nodes](misc/nodes/i2p-guide.md)
+    - [Nym Nodes](misc/nodes/nym-guide.md)
+    - [Whonix Setup](misc/nodes/whonix-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
 - [Merge Mining](testnet/merge-mining.md)
 
@@ -29,7 +31,6 @@
 
 - [Development](dev/dev.md)
   - [Contribute](dev/contrib/contrib.md)
-    - [Hiring](dev/contrib/hiring.md)
     - [Using Tor](dev/contrib/tor.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)
@@ -80,6 +81,8 @@
 - [DEP 0002: Smart Contract Composability (deprecated)](dep/0002.md)
 - [DEP 0003: Token Mint Authorization (accepted)](dep/0003.md)
 - [DEP 0004: Client wallet WASM modules (draft)](dep/0004.md)
+- [DEP 0006: App Identifier for Version and Verack Messages (draft)](dep/0006.md)
+- [DEP 0007: Network profiles (draft)](dep/0007.md)
 
 # Specs
 

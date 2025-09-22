@@ -27,6 +27,7 @@ use std::{
 use tinyjson::JsonValue;
 
 use darkfi::{
+    dht::DhtNode,
     geode::hash_to_string,
     net::P2pPtr,
     rpc::{
@@ -39,7 +40,7 @@ use darkfi::{
     Result,
 };
 
-use crate::Fud;
+use crate::{util::FileSelection, Fud};
 
 pub struct JsonRpcInterface {
     fud: Arc<Fud>,
@@ -88,8 +89,8 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Put a file onto the network. Takes a local filesystem path as a parameter.
-    // Returns the file hash that serves as a pointer to the uploaded file.
+    // Put a file/directory onto the network. Takes a local filesystem path as a parameter.
+    // Returns the resource hash that serves as a pointer to the file/directory.
     //
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
@@ -112,18 +113,19 @@ impl JsonRpcInterface {
             return JsonError::new(ErrorCode::InternalError, Some(format!("{e}")), id).into()
         }
 
-        JsonResponse::new(JsonValue::String(hash_to_string(&res.unwrap())), id).into()
+        JsonResponse::new(JsonValue::String(path.to_string_lossy().to_string()), id).into()
     }
 
     // RPCAPI:
-    // Fetch a resource from the network. Takes a hash and path (absolute or relative) as parameters.
+    // Fetch a resource from the network. Takes a hash, path (absolute or relative), and an
+    // optional list of file paths (only used for directories) as parameters.
     // Returns the path where the resource will be located once downloaded.
     //
-    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg"], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg", null], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "/home/user/myfile.jpg", "id": 42}
     async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
+        if params.len() != 3 || !params[0].is_string() || !params[1].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
@@ -157,8 +159,23 @@ impl JsonRpcInterface {
             None => self.fud.downloads_path.join(&hash_str),
         };
 
+        let files: FileSelection = match &params[2] {
+            JsonValue::Array(files) => files
+                .iter()
+                .filter_map(|v| {
+                    if let JsonValue::String(file) = v {
+                        Some(PathBuf::from(file.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            JsonValue::Null => FileSelection::All,
+            _ => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
+        };
+
         // Start downloading the resource
-        if let Err(e) = self.fud.get(&hash, &path).await {
+        if let Err(e) = self.fud.get(&hash, &path, files).await {
             return JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
         }
 
@@ -166,7 +183,7 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Subscribe to download events.
+    // Subscribe to fud events.
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": `event`, "id": 42}
@@ -238,7 +255,7 @@ impl JsonRpcInterface {
     // Returns the current buckets.
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:13337"]]]], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [["abcdef", ["tcp://127.0.0.1:13337"]]], "id": 1}
     pub async fn list_buckets(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -249,11 +266,11 @@ impl JsonRpcInterface {
             let mut nodes = vec![];
             for node in bucket.nodes.clone() {
                 let mut addresses = vec![];
-                for addr in node.addresses {
+                for addr in &node.addresses {
                     addresses.push(JsonValue::String(addr.to_string()));
                 }
                 nodes.push(JsonValue::Array(vec![
-                    JsonValue::String(hash_to_string(&node.id)),
+                    JsonValue::String(hash_to_string(&node.id())),
                     JsonValue::Array(addresses),
                 ]));
             }
@@ -267,22 +284,29 @@ impl JsonRpcInterface {
     // Returns the content of the seeders router.
     //
     // --> {"jsonrpc": "2.0", "method": "list_seeders", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdef": ["ghijkl"]}}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:13337"]]]}}, "id": 1}
     pub async fn list_seeders(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
-        let mut seeders_router: HashMap<String, JsonValue> = HashMap::new();
-        for (hash, items) in self.fud.seeders_router.read().await.iter() {
-            let mut node_ids = vec![];
+        let mut seeders_table: HashMap<String, JsonValue> = HashMap::new();
+        for (hash, items) in self.fud.dht.hash_table.read().await.iter() {
+            let mut nodes = vec![];
             for item in items {
-                node_ids.push(JsonValue::String(hash_to_string(&item.node.id)));
+                let mut addresses = vec![];
+                for addr in &item.node.addresses {
+                    addresses.push(JsonValue::String(addr.to_string()));
+                }
+                nodes.push(JsonValue::Array(vec![
+                    JsonValue::String(hash_to_string(&item.node.id())),
+                    JsonValue::Array(addresses),
+                ]));
             }
-            seeders_router.insert(hash_to_string(hash), JsonValue::Array(node_ids));
+            seeders_table.insert(hash_to_string(hash), JsonValue::Array(nodes));
         }
         let mut res: HashMap<String, JsonValue> = HashMap::new();
-        res.insert("seeders".to_string(), JsonValue::Object(seeders_router));
+        res.insert("seeders".to_string(), JsonValue::Object(seeders_table));
 
         JsonResponse::new(JsonValue::Object(res), id).into()
     }

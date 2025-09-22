@@ -114,6 +114,7 @@ impl TextContext {
             FONT_STACK.into(),
         )));
         builder.push_default(parley::StyleProperty::Brush(text_color));
+        builder.push_default(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
 
         for underline in underlines {
             builder.push(parley::StyleProperty::Underline(true), underline.clone());

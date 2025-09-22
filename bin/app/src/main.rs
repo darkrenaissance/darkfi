@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use clap::Parser;
 use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
 
@@ -70,7 +71,8 @@ use net::ZeroMQAdapter;
 #[cfg(feature = "enable-plugins")]
 use {
     darkfi_serial::{deserialize, Decodable, Encodable},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyStr, Role},
+    gfx::RenderApi,
+    prop::{PropertyBool, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     std::io::Cursor,
     ui::chatview,
@@ -102,8 +104,8 @@ struct God {
     _bg_runtime: AsyncRuntime,
     _bg_ex: ExecutorPtr,
 
-    fg_runtime: AsyncRuntime,
-    _fg_ex: ExecutorPtr,
+    pub fg_runtime: AsyncRuntime,
+    pub fg_ex: ExecutorPtr,
 
     /// App must fully finish setup() before start() is allowed to begin.
     cv_app_is_setup: Arc<CondVar>,
@@ -113,20 +115,20 @@ struct God {
     /// We have a ref here so the gfx subsystem can increment the epoch counter.
     render_api: gfx::RenderApi,
     /// This is how the gfx subsystem receives messages from the render API.
-    method_rep: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
+    method_recv: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
     /// Publisher to send input and window events to subscribers.
     event_pub: gfx::GraphicsEventPublisherPtr,
 }
 
 impl God {
     fn new() -> Self {
-        info!(target: "main", "Creating the app");
-
         // Abort the application on panic right away
         std::panic::set_hook(Box::new(panic_hook));
 
         text2::init_txt_ctx();
         logger::setup_logging();
+
+        info!(target: "main", "Creating the app");
 
         #[cfg(target_os = "android")]
         {
@@ -150,23 +152,12 @@ impl God {
         let bg_runtime = AsyncRuntime::new(bg_ex.clone(), "bg");
         bg_runtime.start();
 
-        #[cfg(feature = "enable-netdebug")]
-        {
-            let sg_root = sg_root.clone();
-            let ex = bg_ex.clone();
-            let zmq_task = bg_ex.spawn(async {
-                let zmq_rpc = ZeroMQAdapter::new(sg_root, ex).await;
-                zmq_rpc.run().await;
-            });
-            bg_runtime.push_task(zmq_task);
-        }
-
         let fg_runtime = AsyncRuntime::new(fg_ex.clone(), "fg");
 
-        let (method_req, method_rep) = async_channel::unbounded();
+        let (method_send, method_recv) = async_channel::unbounded();
         // The UI actually needs to be running for this to reply back.
         // Otherwise calls will just hang.
-        let render_api = gfx::RenderApi::new(method_req);
+        let render_api = gfx::RenderApi::new(method_send);
         let event_pub = gfx::GraphicsEventPublisher::new();
 
         let text_shaper = TextShaper::new();
@@ -182,12 +173,25 @@ impl God {
         });
         fg_runtime.push_task(app_task);
 
+        #[cfg(feature = "enable-netdebug")]
+        {
+            let sg_root = sg_root.clone();
+            let ex = bg_ex.clone();
+            let render_api = render_api.clone();
+            let zmq_task = bg_ex.spawn(async {
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, render_api, ex).await;
+                zmq_rpc.run().await;
+            });
+            bg_runtime.push_task(zmq_task);
+        }
+
         #[cfg(feature = "enable-plugins")]
         {
             let ex = bg_ex.clone();
             let cv = cv_app_is_setup.clone();
+            let render_api = render_api.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, cv).await;
+                load_plugins(ex, sg_root, render_api, cv).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -200,12 +204,12 @@ impl God {
             _bg_ex: bg_ex,
 
             fg_runtime,
-            _fg_ex: fg_ex,
+            fg_ex,
             cv_app_is_setup,
             app,
 
             render_api,
-            method_rep,
+            method_recv,
             event_pub,
         }
     }
@@ -259,10 +263,15 @@ impl std::fmt::Debug for God {
 static GOD: OnceLock<God> = OnceLock::new();
 
 #[cfg(feature = "enable-plugins")]
-async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) {
+async fn load_plugins(
+    ex: ExecutorPtr,
+    sg_root: SceneNodePtr,
+    render_api: RenderApi,
+    cv: Arc<CondVar>,
+) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
-    sg_root.clone().link(plugin.clone());
+    sg_root.link(plugin.clone());
 
     let darkirc = create_darkirc("darkirc");
     let darkirc = darkirc
@@ -275,9 +284,10 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
+    let render_api2 = render_api.clone();
     let listen_recv = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api2.make_guard(gfxtag!("darkirc msg recv"));
 
             let mut cur = Cursor::new(&data);
             let channel = String::decode(&mut cur).unwrap();
@@ -288,7 +298,7 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
 
             let node_path = format!("/window/{channel}_chat_layer/content/chatty");
             t!("Attempting to relay message to {node_path}");
-            let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
+            let Some(chatview) = sg_root2.lookup_node(&node_path) else {
                 d!("Ignoring message since {node_path} doesn't exist");
                 continue
             };
@@ -308,26 +318,26 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
 
             // Apply coloring when you get a message
             let chat_path = format!("/window/{channel}_chat_layer");
-            let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
+            let chat_layer = sg_root2.lookup_node(chat_path).unwrap();
             if chat_layer.get_property_bool("is_visible").unwrap() {
                 continue
             }
 
             let node_path = format!("/window/menu_layer/{channel}_channel_label");
-            let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
+            let menu_label = sg_root2.lookup_node(&node_path).unwrap();
             let prop = menu_label.get_property("text_color").unwrap();
             if msg.contains(&darkirc_nick.get()) {
                 // Nick highlight
-                prop.clone().set_f32(atom, Role::App, 0, 0.56).unwrap();
-                prop.clone().set_f32(atom, Role::App, 1, 0.61).unwrap();
-                prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
-                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
+                prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
+                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             } else {
                 // Normal channel activity
-                prop.clone().set_f32(atom, Role::App, 0, 0.36).unwrap();
-                prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
-                prop.clone().set_f32(atom, Role::App, 2, 0.51).unwrap();
-                prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
+                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
         }
     });
@@ -337,10 +347,10 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
     let sg_root2 = sg_root.clone();
     let listen_connect = ex.spawn(async move {
         cv.wait().await;
-        let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
-        let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
-        let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
-        let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
+        let net0 = sg_root2.lookup_node("/window/netstatus_layer/net0").unwrap();
+        let net1 = sg_root2.lookup_node("/window/netstatus_layer/net1").unwrap();
+        let net2 = sg_root2.lookup_node("/window/netstatus_layer/net2").unwrap();
+        let net3 = sg_root2.lookup_node("/window/netstatus_layer/net3").unwrap();
 
         let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
         let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
@@ -350,7 +360,7 @@ async fn load_plugins(ex: ExecutorPtr, sg_root: SceneNodePtr, cv: Arc<CondVar>) 
         while let Ok(data) = recvr.recv().await {
             let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api.make_guard(gfxtag!("netstatus change"));
 
             if peers_count == 0 {
                 net0_is_visible.set(atom, true);
@@ -433,14 +443,41 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     node
 }
 
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// On Linux use the X11 backend
+    #[arg(long)]
+    linux_x11_backend: bool,
+
+    /// On Linux use the wayland backend
+    #[arg(long)]
+    linux_wayland_backend: bool,
+}
+
 fn main() {
+    let args = Args::parse();
+
     GOD.get_or_init(God::new);
 
     // Reuse render_api, event_pub and text_shaper
     // No need for setup(), just wait for gfx start then call .start()
     // ZMQ, darkirc stay running
 
-    gfx::run_gui();
+    let linux_backend = if args.linux_wayland_backend {
+        if args.linux_x11_backend {
+            miniquad::conf::LinuxBackend::WaylandWithX11Fallback
+        } else {
+            miniquad::conf::LinuxBackend::WaylandOnly
+        }
+    } else if args.linux_x11_backend {
+        miniquad::conf::LinuxBackend::X11Only
+    } else {
+        miniquad::conf::LinuxBackend::WaylandWithX11Fallback
+    };
+
+    gfx::run_gui(linux_backend);
     debug!(target: "main", "Started GFX backend");
 }
 

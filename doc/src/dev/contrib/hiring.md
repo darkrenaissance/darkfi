@@ -1,5 +1,7 @@
 # Hiring Process
 
+NEW HIRES FOR DARKFI ARE FROZEN
+
 Follow this guide to work on DarkFi and get paid.
 
 If you're not a dev, see the [learn] section. We offer mentoring.

@@ -10,6 +10,7 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
 darkfi = {path = "../../../", features = ["util", "rpc"]}
+fud = {path = "../fud/"}
 
 # Async
 smol = "2.0.2"

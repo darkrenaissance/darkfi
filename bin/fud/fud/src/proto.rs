@@ -22,7 +22,7 @@ use smol::Executor;
 use std::{path::StripPrefixError, sync::Arc};
 
 use darkfi::{
-    dht::{DhtHandler, DhtNode, DhtRouterItem},
+    dht::DhtHandler,
     geode::hash_to_string,
     impl_p2p_message,
     net::{
@@ -32,9 +32,13 @@ use darkfi::{
     },
     Error, Result,
 };
+use darkfi_sdk::crypto::schnorr::{SchnorrSecret, Signature};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::Fud;
+use crate::{
+    dht::{FudNode, FudSeeder},
+    Fud,
+};
 
 /// Message representing a file reply from the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -55,7 +59,7 @@ impl_p2p_message!(FudDirectoryReply, "FudDirectoryReply", 0, 0, DEFAULT_METERING
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudAnnounce {
     pub key: blake3::Hash,
-    pub seeders: Vec<DhtRouterItem>,
+    pub seeders: Vec<FudSeeder>,
 }
 impl_p2p_message!(FudAnnounce, "FudAnnounce", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -74,13 +78,17 @@ impl_p2p_message!(FudNotFound, "FudNotFound", 0, 0, DEFAULT_METERING_CONFIGURATI
 
 /// Message representing a ping request on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct FudPingRequest;
+pub struct FudPingRequest {
+    pub random: u64,
+}
 impl_p2p_message!(FudPingRequest, "FudPingRequest", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Message representing a ping reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudPingReply {
-    pub node: DhtNode,
+    pub node: FudNode,
+    /// Signature of the random u64 from the ping request
+    pub sig: Signature,
 }
 impl_p2p_message!(FudPingReply, "FudPingReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -102,7 +110,7 @@ impl_p2p_message!(FudFindNodesRequest, "FudFindNodesRequest", 0, 0, DEFAULT_METE
 /// Message representing a find nodes reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindNodesReply {
-    pub nodes: Vec<DhtNode>,
+    pub nodes: Vec<FudNode>,
 }
 impl_p2p_message!(FudFindNodesReply, "FudFindNodesReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -122,7 +130,8 @@ impl_p2p_message!(
 /// Message representing a find seeders reply on the network
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FudFindSeedersReply {
-    pub seeders: Vec<DhtRouterItem>,
+    pub seeders: Vec<FudSeeder>,
+    pub nodes: Vec<FudNode>,
 }
 impl_p2p_message!(FudFindSeedersReply, "FudFindSeedersReply", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
@@ -174,7 +183,7 @@ impl ProtocolFud {
         debug!(target: "fud::ProtocolFud::handle_fud_ping_request()", "START");
 
         loop {
-            let _ = match self.ping_request_sub.receive().await {
+            let ping_req = match self.ping_request_sub.receive().await {
                 Ok(v) => v,
                 Err(Error::ChannelStopped) => continue,
                 Err(e) => {
@@ -182,9 +191,12 @@ impl ProtocolFud {
                     continue
                 }
             };
-            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING");
+            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING REQUEST");
 
-            let reply = FudPingReply { node: self.fud.dht.node().await };
+            let reply = FudPingReply {
+                node: self.fud.node().await,
+                sig: self.fud.secret_key.read().await.sign(&ping_req.random.to_be_bytes()),
+            };
             match self.channel.send(&reply).await {
                 Ok(()) => continue,
                 Err(_e) => continue,
@@ -208,7 +220,7 @@ impl ProtocolFud {
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
-                self.fud.update_node(&node).await;
+                self.fud.dht.update_node(&node).await;
             }
 
             if self.handle_fud_chunk_request(&request).await {
@@ -246,11 +258,14 @@ impl ProtocolFud {
             return false;
         }
 
-        let chunk = self.fud.geode.get_chunk(&mut chunked.unwrap(), &request.key, &path).await;
+        let chunk = self.fud.geode.get_chunk(&mut chunked.unwrap(), &request.key).await;
         if let Ok(chunk) = chunk {
-            // TODO: Run geode GC
+            if !self.fud.geode.verify_chunk(&request.key, &chunk) {
+                // TODO: Run geode GC
+                return false;
+            }
             let reply = FudChunkReply { chunk };
-            info!(target: "fud::ProtocolFud::handle_fud_find_request()", "Sending chunk {}", hash_to_string(&request.key));
+            info!(target: "fud::ProtocolFud::handle_fud_chunk_request()", "Sending chunk {}", hash_to_string(&request.key));
             let _ = self.channel.send(&reply).await;
             return true;
         }
@@ -276,9 +291,12 @@ impl ProtocolFud {
         // If it's a file with a single chunk, just reply with the chunk
         if chunked_file.len() == 1 && !chunked_file.is_dir() {
             let chunk_hash = chunked_file.get_chunks()[0].0;
-            let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash, &path).await;
+            let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash).await;
             if let Ok(chunk) = chunk {
-                // TODO: Run geode GC
+                if blake3::hash(blake3::hash(&chunk).as_bytes()) != request.key {
+                    // TODO: Run geode GC
+                    return false;
+                }
                 let reply = FudChunkReply { chunk };
                 info!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Sending chunk (file has a single chunk) {}", hash_to_string(&chunk_hash));
                 let _ = self.channel.send(&reply).await;
@@ -345,7 +363,7 @@ impl ProtocolFud {
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
-                self.fud.update_node(&node).await;
+                self.fud.dht.update_node(&node).await;
             }
 
             let reply = FudFindNodesReply {
@@ -374,21 +392,38 @@ impl ProtocolFud {
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
-                self.fud.update_node(&node).await;
+                self.fud.dht.update_node(&node).await;
             }
 
-            let router = self.fud.seeders_router.read().await;
+            let router = self.fud.dht.hash_table.read().await;
             let peers = router.get(&request.key);
 
             match peers {
                 Some(seeders) => {
                     let _ = self
                         .channel
-                        .send(&FudFindSeedersReply { seeders: seeders.iter().cloned().collect() })
+                        .send(&FudFindSeedersReply {
+                            seeders: seeders.to_vec(),
+                            nodes: self
+                                .fud
+                                .dht()
+                                .find_neighbors(&request.key, self.fud.dht().settings.k)
+                                .await,
+                        })
                         .await;
                 }
                 None => {
-                    let _ = self.channel.send(&FudFindSeedersReply { seeders: vec![] }).await;
+                    let _ = self
+                        .channel
+                        .send(&FudFindSeedersReply {
+                            seeders: vec![],
+                            nodes: self
+                                .fud
+                                .dht()
+                                .find_neighbors(&request.key, self.fud.dht().settings.k)
+                                .await,
+                        })
+                        .await;
                 }
             };
         }
@@ -410,7 +445,7 @@ impl ProtocolFud {
 
             let node = self.fud.dht().get_node_from_channel(self.channel.info.id).await;
             if let Some(node) = node {
-                self.fud.update_node(&node).await;
+                self.fud.dht.update_node(&node).await;
             }
 
             let mut seeders = vec![];
@@ -423,7 +458,7 @@ impl ProtocolFud {
                 seeders.push(seeder);
             }
 
-            self.fud.add_to_router(self.fud.seeders_router.clone(), &request.key, seeders).await;
+            self.fud.add_value(&request.key, &seeders).await;
         }
     }
 }

@@ -75,10 +75,10 @@ impl TcpDialer {
         }
 
         if let Some(ttl) = self.ttl {
-            socket.set_ttl(ttl)?;
+            socket.set_ttl_v4(ttl)?;
         }
 
-        socket.set_nodelay(true)?;
+        socket.set_tcp_nodelay(true)?;
         let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
         socket.set_tcp_keepalive(&keepalive)?;
         socket.enable_reuse_port()?;
@@ -165,7 +165,7 @@ impl TcpListener {
             socket.set_only_v6(true)?;
         }
 
-        socket.set_nodelay(true)?;
+        socket.set_tcp_nodelay(true)?;
         let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
         socket.set_tcp_keepalive(&keepalive)?;
         socket.enable_reuse_port()?;

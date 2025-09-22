@@ -16,9 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use smol::{
+    fs::{self, File},
+    stream::StreamExt,
+};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
+
+pub use darkfi::geode::hash_to_string;
 use darkfi::Result;
-use smol::{fs, stream::StreamExt};
-use std::path::{Path, PathBuf};
 
 pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     let mut files = Vec::new();
@@ -38,4 +46,33 @@ pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     }
 
     Ok(files)
+}
+
+pub async fn create_all_files(files: &[PathBuf]) -> Result<()> {
+    for file_path in files.iter() {
+        if !file_path.exists() {
+            if let Some(dir) = file_path.parent() {
+                fs::create_dir_all(dir).await?;
+            }
+            File::create(&file_path).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// An enum to represent a set of files, where you can use `All` if you want
+/// all files without having to specify all of them.
+/// We could use an `Option<HashSet<PathBuf>>`, but this is more explicit.
+#[derive(Clone, Debug)]
+pub enum FileSelection {
+    All,
+    Set(HashSet<PathBuf>),
+}
+
+impl FromIterator<PathBuf> for FileSelection {
+    fn from_iter<I: IntoIterator<Item = PathBuf>>(iter: I) -> Self {
+        let paths: HashSet<PathBuf> = iter.into_iter().collect();
+        FileSelection::Set(paths)
+    }
 }

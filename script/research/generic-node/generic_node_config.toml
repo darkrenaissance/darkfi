@@ -25,8 +25,9 @@ inbound = ["tcp+tls://0.0.0.0:38967"]
 # Whitelisted network transports for outbound connections
 #allowed_transports = ["tcp+tls"]
 
-# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
+# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
+# if tcp is added to mixed_transports and tor is added to allowed_transports)
+#mixed_transports = []
 
 # Outbound connection slots number, this many connections will be
 # attempted. (This does not include manual connections)

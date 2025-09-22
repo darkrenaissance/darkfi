@@ -80,6 +80,7 @@ impl Editor {
         )));
         styles.insert(parley::StyleProperty::FontStack(parley::FontStack::List(FONT_STACK.into())));
         styles.insert(parley::StyleProperty::Brush(text_color));
+        styles.insert(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
         *self.editor.edit_styles() = styles;
 
         let mut txt_ctx = TEXT_CTX.get().await;
@@ -122,6 +123,9 @@ impl Editor {
 
     pub fn set_width(&mut self, w: f32) {
         self.editor.set_width(Some(w));
+    }
+    pub fn width(&self) -> f32 {
+        self.layout().full_width()
     }
     pub fn height(&self) -> f32 {
         self.layout().height()

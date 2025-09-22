@@ -40,7 +40,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyAtomicGuard, PropertyStr, Role},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
@@ -184,7 +184,7 @@ impl DarkIrc {
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.clone().link(setting_root.clone());
+        node_ref.link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
@@ -226,6 +226,9 @@ impl DarkIrc {
             p2p_settings.outbound_connect_timeout = 40;
             p2p_settings.channel_handshake_timeout = 30;
 
+            p2p_settings.outbound_connections = 1;
+            p2p_settings.inbound_connections = 0;
+
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
         }
@@ -264,7 +267,7 @@ impl DarkIrc {
         };
 
         if let Ok(prev_nick) = std::fs::read_to_string(nick_filename()) {
-            nick.set(&mut PropertyAtomicGuard::new(), prev_nick);
+            nick.set(&mut PropertyAtomicGuard::none(), prev_nick);
         }
 
         let self_ = Arc::new(Self {
@@ -493,7 +496,7 @@ impl DarkIrc {
         self.p2p.broadcast(&EventPut(event)).await;
     }
 
-    async fn apply_settings(self_: Arc<Self>) {
+    async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {
         self_.settings.save_settings();
 
         let p2p_settings = self_.p2p.settings();
@@ -522,7 +525,7 @@ impl DarkIrc {
             ex.spawn(async move { while Self::process_send(&me2, &method_sub).await {} });
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
-        async fn save_nick(self_: Arc<DarkIrc>) {
+        async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
         }
         on_modify.when_change(self.nick.prop(), save_nick);

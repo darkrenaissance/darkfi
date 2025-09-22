@@ -203,7 +203,7 @@ class View():
             case "outbound":
                 key = (focus_w[0].name, "outbound")
                 info = self.model.nodes.get(focus_w[0].name)
-                if key in info['event']:
+                if info and key in info['event']:
                     ev = info['event'].get(key)
                     self.pile.contents.append((
                         urwid.Text(f" {ev}"),
@@ -214,7 +214,7 @@ class View():
                 name = focus_w[0].name
                 info = self.model.nodes.get(name)
 
-                if addr in info['msgs']:
+                if info and addr in info['msgs']:
                     msg = info['msgs'].get(addr)
                     for m in msg:
                         time = m[0]
@@ -228,6 +228,9 @@ class View():
                 spawn_name = focus_w[0].id
                 lilith = self.model.liliths.get(name)
                 spawns = lilith.get('spawns')
+                if spawns is None:
+                    return
+
                 info = spawns.get(spawn_name)
 
                 if info['urls']:

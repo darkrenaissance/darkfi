@@ -22,7 +22,7 @@ use crate::{
         PropertyUint32, Role,
     },
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace},
+    util::enumerate_ref,
 };
 
 pub type TextPos = usize;

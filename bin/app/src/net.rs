@@ -24,7 +24,8 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    prop::{PropertyAtomicGuard, PropertyType, Role},
+    gfx::{gfxtag, RenderApi},
+    prop::{PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
 };
@@ -75,6 +76,7 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     sg_root: SceneNodePtr,
+    render_api: RenderApi,
     _ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
@@ -82,7 +84,7 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Arc<Self> {
+    pub async fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
 
@@ -91,6 +93,7 @@ impl ZeroMQAdapter {
 
         Arc::new(Self {
             sg_root,
+            render_api,
             _ex: ex,
             zmq_rep: Mutex::new(zmq_rep),
             _zmq_pub: Mutex::new(zmq_pub),
@@ -153,8 +156,7 @@ impl ZeroMQAdapter {
             Command::GetChildren => {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 debug!(target: "req", "{cmd:?}({node_path})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 let children: Vec<_> = node
                     .get_children()
@@ -180,8 +182,7 @@ impl ZeroMQAdapter {
             Command::GetProperties => {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 debug!(target: "req", "{cmd:?}({node_path})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 VarInt(node.props.len() as u64).encode(&mut reply).unwrap();
                 for prop in &node.props {
@@ -210,8 +211,7 @@ impl ZeroMQAdapter {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let prop_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {prop_name})");
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
                 prop.typ.encode(&mut reply).unwrap();
@@ -239,11 +239,11 @@ impl ZeroMQAdapter {
                 let prop_type = PropertyType::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {prop_name}, {prop_i}, {prop_type:?})");
 
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
-                let atom = &mut PropertyAtomicGuard::new();
+                let atom =
+                    &mut self.render_api.make_guard(gfxtag!("ZeroMQAdapter::SetPropertyValue"));
 
                 match prop_type {
                     PropertyType::Null => {
@@ -563,8 +563,7 @@ impl ZeroMQAdapter {
                 let arg_data = Vec::<u8>::decode(&mut cur).unwrap();
                 debug!(target: "req", "{cmd:?}({node_path}, {method_name}, ...)");
 
-                let node =
-                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let result = node.call_method(&method_name, arg_data).await?;
                 result.encode(&mut reply).unwrap();
             }

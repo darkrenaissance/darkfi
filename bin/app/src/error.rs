@@ -107,9 +107,6 @@ pub enum Error {
     #[error("S-expr global not found")]
     SExprGlobalNotFound = 32,
 
-    #[error("Graphics window closed")]
-    GfxWindowClosed = 33,
-
     #[error("Publisher was destroyed")]
     PublisherDestroyed = 34,
 
@@ -136,6 +133,12 @@ pub enum Error {
 
     #[error("Unknown buffer ID")]
     GfxUnknownBufferID = 44,
+
+    #[error("Duplicate anim ID")]
+    GfxDuplicateAnimID = 45,
+
+    #[error("Unknown anim ID")]
+    GfxUnknownAnimID = 46,
 }
 
 impl From<sled::Error> for Error {

@@ -27,15 +27,18 @@ use crate::android;
 
 use crate::{
     error::Error,
-    gfx::{EpochIndex, GraphicsEventPublisherPtr, RenderApi},
+    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, RenderApi},
     plugin::PluginSettings,
     prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
     text::TextShaperPtr,
     ui::{chatview, Window},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
+pub mod locale;
+use locale::read_locale_ftl;
 mod node;
 mod schema;
 use schema::get_settingsdb_path;
@@ -86,6 +89,8 @@ impl App {
 
         let mut window = SceneNode::new("window", SceneNodeType::Window);
 
+        let i18n_fish = self.setup_locale(&mut window);
+
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_array_len(2);
         window.add_property(prop).unwrap();
@@ -120,13 +125,16 @@ impl App {
             self.tasks.lock().unwrap().push(setting_task);
         }
 
-        let window =
-            window.setup(|me| Window::new(me, self.render_api.clone(), setting_root.clone())).await;
+        let window = window
+            .setup(|me| {
+                Window::new(me, self.render_api.clone(), i18n_fish.clone(), setting_root.clone())
+            })
+            .await;
 
-        self.sg_root.clone().link(window.clone());
-        self.sg_root.clone().link(setting_root.clone());
+        self.sg_root.link(window.clone());
+        self.sg_root.link(setting_root.clone());
 
-        schema::make(&self, window.clone()).await;
+        schema::test::make(&self, window.clone(), &i18n_fish).await;
 
         //settings::make(&self, window, self.ex.clone()).await;
 
@@ -135,17 +143,54 @@ impl App {
         Ok(None)
     }
 
+    fn setup_locale(&self, window: &mut SceneNode) -> I18nBabelFish {
+        /*
+        let i18n_src = indoc::indoc! {"
+            hello-world = Hello, world!
+            channels-label = CHANNELS
+        "}
+        .to_owned();
+        */
+        let locale = "en-US";
+        let i18n_src = read_locale_ftl(locale);
+        // Will be managed by settings eventually
+        let i18n_fish = I18nBabelFish::new(i18n_src, locale);
+
+        // sys-locale = "0.3"
+        // fluent-langneg = "0.14"
+        /*
+        use fluent_langneg::{
+            negotiate_languages,
+            NegotiationStrategy,
+            convert_vec_str_to_langids_lossy,
+            LanguageIdentifier
+        };
+        let mut locales: Vec<_> = sys_locale::get_locales().collect();
+        let en_US = "en-US".to_string();
+        if !locales.contains(&en_US) {
+            locales.push(en_US);
+        }
+        info!(target: "app", "Locale: {:?}", locales);
+        */
+
+        let mut prop = Property::new("locale", PropertyType::Str, PropertySubType::Locale);
+        prop.set_defaults_str(vec![locale.to_string()]).unwrap();
+        window.add_property(prop).unwrap();
+
+        i18n_fish
+    }
+
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
-        let mut atom = PropertyAtomicGuard::new();
+        let mut atom = PropertyAtomicGuard::none();
 
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         let prop = window_node.get_property("screen_size").unwrap();
         // We can only do this once the window has been created in miniquad.
         let (screen_width, screen_height) = miniquad::window::screen_size();
-        prop.clone().set_f32(&mut atom, Role::App, 0, screen_width).unwrap();
-        prop.clone().set_f32(&mut atom, Role::App, 1, screen_height).unwrap();
+        prop.set_f32(&mut atom, Role::App, 0, screen_width).unwrap();
+        prop.set_f32(&mut atom, Role::App, 1, screen_height).unwrap();
 
         drop(atom);
 
@@ -160,7 +205,7 @@ impl App {
     }
 
     pub fn init(&self) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.init(),
             _ => panic!("wrong pimpl"),
@@ -168,7 +213,7 @@ impl App {
     }
 
     pub fn stop(&self) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.stop(),
             _ => panic!("wrong pimpl"),
@@ -176,14 +221,15 @@ impl App {
     }
 
     async fn trigger_draw(&self) {
-        let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
+        let atom = &mut self.render_api.make_guard(gfxtag!("App::trigger_draw"));
+        let window_node = self.sg_root.lookup_node("/window").expect("no window attached!");
         match window_node.pimpl() {
-            Pimpl::Window(win) => win.draw().await,
+            Pimpl::Window(win) => win.draw(atom).await,
             _ => panic!("wrong pimpl"),
         }
     }
     async fn start_procs(&self, event_pub: GraphicsEventPublisherPtr) {
-        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
             Pimpl::Window(win) => win.clone().start(event_pub, self.ex.clone()).await,
             _ => panic!("wrong pimpl"),

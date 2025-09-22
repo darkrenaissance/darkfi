@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::path::PathBuf;
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -75,6 +76,16 @@ pub struct DownloadError {
     pub hash: blake3::Hash,
     pub error: String,
 }
+#[derive(Clone, Debug)]
+pub struct InsertCompleted {
+    pub hash: blake3::Hash,
+    pub path: PathBuf,
+}
+#[derive(Clone, Debug)]
+pub struct InsertError {
+    pub path: PathBuf,
+    pub error: String,
+}
 
 #[derive(Clone, Debug)]
 pub enum FudEvent {
@@ -88,6 +99,8 @@ pub enum FudEvent {
     MetadataNotFound(MetadataNotFound),
     MissingChunks(MissingChunks),
     DownloadError(DownloadError),
+    InsertCompleted(InsertCompleted),
+    InsertError(InsertError),
 }
 
 impl From<DownloadStarted> for JsonValue {
@@ -168,6 +181,22 @@ impl From<DownloadError> for JsonValue {
         ])
     }
 }
+impl From<InsertCompleted> for JsonValue {
+    fn from(info: InsertCompleted) -> JsonValue {
+        json_map([
+            ("hash", JsonValue::String(hash_to_string(&info.hash))),
+            ("path", JsonValue::String(info.path.to_string_lossy().to_string())),
+        ])
+    }
+}
+impl From<InsertError> for JsonValue {
+    fn from(info: InsertError) -> JsonValue {
+        json_map([
+            ("path", JsonValue::String(info.path.to_string_lossy().to_string())),
+            ("error", JsonValue::String(info.error)),
+        ])
+    }
+}
 impl From<FudEvent> for JsonValue {
     fn from(event: FudEvent) -> JsonValue {
         match event {
@@ -202,6 +231,36 @@ impl From<FudEvent> for JsonValue {
             FudEvent::DownloadError(info) => {
                 json_map([("event", json_str("download_error")), ("info", info.into())])
             }
+            FudEvent::InsertCompleted(info) => {
+                json_map([("event", json_str("insert_completed")), ("info", info.into())])
+            }
+            FudEvent::InsertError(info) => {
+                json_map([("event", json_str("insert_error")), ("info", info.into())])
+            }
         }
     }
 }
+
+/// Macro calling `fud.event_publisher.notify()`
+macro_rules! notify_event {
+    // This is for any `FudEvent`
+    ($fud:expr, $event:ident, { $($fields:tt)* }) => {
+        $fud
+            .event_publisher
+            .notify(FudEvent::$event(event::$event {
+                $($fields)*
+            }))
+            .await;
+    };
+    // This is for `FudEvent`s that only have a hash and resource
+    ($fud:expr, $event:ident, $resource:expr) => {
+        $fud
+            .event_publisher
+            .notify(FudEvent::$event(event::$event {
+                hash: $resource.hash,
+                resource: $resource.clone(),
+            }))
+            .await;
+    };
+}
+pub(crate) use notify_event;

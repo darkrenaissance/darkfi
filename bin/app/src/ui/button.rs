@@ -77,9 +77,9 @@ impl UIObject for Button {
         &self,
         parent_rect: Rectangle,
         _trace_id: u32,
-        _atom: &mut PropertyAtomicGuard,
+        atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        let _ = self.rect.eval(&parent_rect);
+        let _ = self.rect.eval(atom, &parent_rect);
         None
     }
 

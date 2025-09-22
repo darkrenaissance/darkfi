@@ -25,7 +25,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, GfxDrawMesh, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawMesh, Rectangle, RenderApi},
     mesh::{MeshBuilder, COLOR_WHITE},
     text::{self, TextShaperPtr},
 };
@@ -49,7 +49,7 @@ pub struct EmojiMeshes {
     text_shaper: TextShaperPtr,
     emoji_size: f32,
     emoji_list: LazyLock<Vec<String>>,
-    meshes: Vec<GfxDrawMesh>,
+    meshes: Vec<DrawMesh>,
 }
 
 impl EmojiMeshes {
@@ -71,7 +71,7 @@ impl EmojiMeshes {
         self.meshes.clear();
     }
 
-    pub fn get(&mut self, i: usize) -> GfxDrawMesh {
+    pub fn get(&mut self, i: usize) -> DrawMesh {
         let emoji_list = self.get_list();
         assert!(i < emoji_list.len());
         self.meshes.reserve_exact(emoji_list.len());
@@ -89,7 +89,7 @@ impl EmojiMeshes {
     }
 
     /// Make mesh for this emoji centered at (0, 0)
-    fn gen_emoji_mesh(&self, emoji: &str) -> GfxDrawMesh {
+    fn gen_emoji_mesh(&self, emoji: &str) -> DrawMesh {
         //d!("rendering emoji: '{emoji}'");
         // The params here don't actually matter since we're talking about BMP fixed sizes
         let glyphs = self.text_shaper.shape(emoji.to_string(), 10., 1.);

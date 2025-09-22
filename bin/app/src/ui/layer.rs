@@ -23,10 +23,10 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::unixtime,
+    util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
 };
 
@@ -83,18 +83,18 @@ impl Layer {
         get_children_ordered(&node)
     }
 
-    async fn redraw(self: Arc<Self>) {
-        let atom = &mut PropertyAtomicGuard::new();
+    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
         let trace_id = rand::random();
         let timest = unixtime();
         t!("Layer::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
+        let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom).await else {
             error!(target: "ui::layer", "Layer failed to draw [trace_id={trace_id}]");
             return
         };
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
         t!(
             "Layer::redraw({:?}) DONE [timest={timest}, trace_id={trace_id}]",
             self.node.upgrade().unwrap()
@@ -107,7 +107,7 @@ impl Layer {
         trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        self.rect.eval(&parent_rect).ok()?;
+        self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
         t!("Layer::get_draw_calls() [rect={rect:?}, dc={}, trace_id={trace_id}]", self.dc_key);
 
@@ -131,8 +131,8 @@ impl Layer {
             }
         }
 
-        let dc = GfxDrawCall::new(
-            vec![GfxDrawInstruction::ApplyView(rect)],
+        let dc = DrawCall::new(
+            vec![DrawInstruction::ApplyView(rect)],
             child_calls,
             self.z_index.get(),
             "layer",
@@ -313,5 +313,12 @@ impl UIObject for Layer {
             }
         }
         false
+    }
+
+    fn set_i18n(&self, i18n_fish: &I18nBabelFish) {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.set_i18n(i18n_fish);
+        }
     }
 }

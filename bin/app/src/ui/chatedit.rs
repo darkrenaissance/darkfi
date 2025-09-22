@@ -35,13 +35,11 @@ use std::{
 #[cfg(target_os = "android")]
 use crate::AndroidSuggestEvent;
 use crate::{
-    gfx::{
-        gfxtag, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Point, Rectangle, RenderApi, Vertex,
-    },
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
     mesh::MeshBuilder,
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
-        PropertyRect, PropertyStr, PropertyUint32, Role,
+        BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
+        PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text2::{self, Editor},
@@ -203,7 +201,7 @@ pub struct ChatEdit {
     select_dc_key: u64,
     text_dc_key: u64,
     cursor_dc_key: u64,
-    cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
+    cursor_mesh: SyncMutex<Option<DrawMesh>>,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -432,7 +430,7 @@ impl ChatEdit {
         EditorHandle { guard: self.editor.lock().await }
     }
 
-    fn regen_cursor_mesh(&self) -> GfxDrawMesh {
+    fn regen_cursor_mesh(&self) -> DrawMesh {
         let cursor_width = self.cursor_width.get();
         let cursor_ascent = self.cursor_ascent.get();
         let cursor_descent = self.cursor_descent.get();
@@ -492,14 +490,15 @@ impl ChatEdit {
         mesh.append(verts, indices);
     }
 
-    async fn change_focus(self: Arc<Self>) {
+    async fn change_focus(self: Arc<Self>, batch: BatchGuardPtr) {
         if !self.is_active.get() {
             return
         }
         t!("Focus changed");
 
+        let atom = &mut batch.spawn();
         // Cursor visibility will change so just redraw everything lol
-        self.redraw().await;
+        self.redraw(atom).await;
     }
 
     async fn handle_shortcut(
@@ -549,7 +548,7 @@ impl ChatEdit {
             _ => return false,
         }
 
-        self.redraw().await;
+        self.redraw(atom).await;
         true
     }
 
@@ -678,7 +677,7 @@ impl ChatEdit {
 
         self.apply_cursor_scrolling(atom).await;
         self.pause_blinking();
-        self.redraw().await;
+        self.redraw(atom).await;
 
         return true
     }
@@ -788,7 +787,7 @@ impl ChatEdit {
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_move({touch_pos:?})");
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_touch_move"));
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -806,7 +805,7 @@ impl ChatEdit {
                 } else {
                     self.abs_to_local(&mut touch_pos);
                     self.start_touch_select(touch_pos, atom).await;
-                    self.redraw_select().await;
+                    self.redraw_select(atom.batch_id).await;
                 }
                 d!("touch state: StartSelect -> Select");
                 self.touch_info.lock().state = TouchStateAction::Select;
@@ -852,7 +851,7 @@ impl ChatEdit {
                 editor.set_selection(select.start, select.end);
                 drop(editor);
 
-                self.redraw_select().await;
+                self.redraw_select(atom.batch_id).await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 let y_dist = start_pos.y - touch_pos.y;
@@ -862,7 +861,7 @@ impl ChatEdit {
                     return true
                 }
                 self.scroll.set(atom, scroll);
-                self.redraw_scroll().await;
+                self.redraw_scroll(atom.batch_id).await;
             }
             TouchStateAction::SetCursorPos => {
                 // TBH I can't even see the cursor under my thumb so I'll just
@@ -872,7 +871,7 @@ impl ChatEdit {
         }
         true
     }
-    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
+    async fn handle_touch_end(&self, atom: &mut PropertyAtomicGuard, mut touch_pos: Point) -> bool {
         //t!("handle_touch_end({touch_pos:?})");
         self.abs_to_local(&mut touch_pos);
 
@@ -880,8 +879,8 @@ impl ChatEdit {
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                self.touch_set_cursor_pos(touch_pos).await;
-                self.redraw().await;
+                self.touch_set_cursor_pos(atom, touch_pos).await;
+                self.redraw(atom).await;
             }
             _ => {}
         }
@@ -891,7 +890,7 @@ impl ChatEdit {
         true
     }
 
-    async fn touch_set_cursor_pos(&self, touch_pos: Point) {
+    async fn touch_set_cursor_pos(&self, atom: &mut PropertyAtomicGuard, touch_pos: Point) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
         let mut editor = self.lock_editor().await;
@@ -900,7 +899,7 @@ impl ChatEdit {
         drop(editor);
 
         self.pause_blinking();
-        self.finish_select(&mut PropertyAtomicGuard::new());
+        self.finish_select(atom);
     }
 
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
@@ -937,16 +936,15 @@ impl ChatEdit {
         self.cursor_is_visible.store(true, Ordering::Relaxed);
     }
 
-    async fn redraw(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+    async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
         let draw_update = self.make_draw_calls(trace_id, atom).await;
-        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
     }
 
     /// Called when scroll changes. Moves content up or down. Nothing more.
-    async fn redraw_scroll(&self) {
+    async fn redraw_scroll(&self, batch_id: BatchGuardId) {
         let timest = unixtime();
         let rect = self.rect.get();
         let scroll = self.scroll.get();
@@ -954,8 +952,8 @@ impl ChatEdit {
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
         let mut content_instrs = vec![
-            GfxDrawInstruction::ApplyView(rect.with_zero_pos()),
-            GfxDrawInstruction::Move(Point::new(0., -scroll)),
+            DrawInstruction::ApplyView(rect.with_zero_pos()),
+            DrawInstruction::Move(Point::new(0., -scroll)),
         ];
         let mut bg_instrs = self.regen_bg_mesh();
         content_instrs.append(&mut bg_instrs);
@@ -963,7 +961,7 @@ impl ChatEdit {
         let draw_main = vec![
             (
                 self.content_dc_key,
-                GfxDrawCall::new(
+                DrawCall::new(
                     content_instrs,
                     vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                     0,
@@ -972,35 +970,34 @@ impl ChatEdit {
             ),
             (
                 self.phone_select_handle_dc_key,
-                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll"),
+                DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll"),
             ),
         ];
-        self.render_api.replace_draw_calls(timest, draw_main);
+        self.render_api.replace_draw_calls(batch_id, timest, draw_main);
     }
 
-    async fn redraw_cursor(&self) {
+    async fn redraw_cursor(&self, batch_id: BatchGuardId) {
         let timest = unixtime();
         let instrs = self.get_cursor_instrs().await;
-        let draw_calls =
-            vec![(self.cursor_dc_key, GfxDrawCall::new(instrs, vec![], 2, "curs_redr"))];
-        self.render_api.replace_draw_calls(timest, draw_calls);
+        let draw_calls = vec![(self.cursor_dc_key, DrawCall::new(instrs, vec![], 2, "curs_redr"))];
+        self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
     }
 
-    async fn redraw_select(&self) {
+    async fn redraw_select(&self, batch_id: BatchGuardId) {
         let timest = unixtime();
         let sel_instrs = self.regen_select_mesh().await;
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
         let draw_calls = vec![
-            (self.select_dc_key, GfxDrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
+            (self.select_dc_key, DrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
             (
                 self.phone_select_handle_dc_key,
-                GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
+                DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
             ),
         ];
-        self.render_api.replace_draw_calls(timest, draw_calls);
+        self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
     }
 
-    async fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
+    async fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
         if !self.is_focused.get() ||
             !self.cursor_is_visible.load(Ordering::Relaxed) ||
             self.hide_cursor.load(Ordering::Relaxed)
@@ -1011,13 +1008,10 @@ impl ChatEdit {
         let cursor_mesh =
             self.cursor_mesh.lock().get_or_insert_with(|| self.regen_cursor_mesh()).clone();
 
-        vec![
-            GfxDrawInstruction::Move(self.get_cursor_pos().await),
-            GfxDrawInstruction::Draw(cursor_mesh),
-        ]
+        vec![DrawInstruction::Move(self.get_cursor_pos().await), DrawInstruction::Draw(cursor_mesh)]
     }
 
-    fn regen_bg_mesh(&self) -> Vec<GfxDrawInstruction> {
+    fn regen_bg_mesh(&self) -> Vec<DrawInstruction> {
         if !self.debug.get() {
             return vec![]
         }
@@ -1034,11 +1028,11 @@ impl ChatEdit {
         rect.h -= padding_top + padding_bottom;
         mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
 
-        vec![GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
+        vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
     }
 
-    async fn regen_txt_mesh(&self) -> Vec<GfxDrawInstruction> {
-        let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
+    async fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
+        let mut instrs = vec![DrawInstruction::Move(self.inner_pos())];
 
         let editor = self.lock_editor().await;
         let layout = editor.layout();
@@ -1050,8 +1044,8 @@ impl ChatEdit {
         instrs
     }
 
-    async fn regen_select_mesh(&self) -> Vec<GfxDrawInstruction> {
-        let mut instrs = vec![GfxDrawInstruction::Move(self.inner_pos())];
+    async fn regen_select_mesh(&self) -> Vec<DrawInstruction> {
+        let mut instrs = vec![DrawInstruction::Move(self.inner_pos())];
 
         let editor = self.lock_editor().await;
         let layout = editor.layout();
@@ -1064,13 +1058,13 @@ impl ChatEdit {
                 mesh.draw_filled_box(&rect.into(), sel_color);
             });
 
-            instrs.push(GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
         }
 
         instrs
     }
 
-    async fn regen_phone_select_handle_mesh(&self) -> Vec<GfxDrawInstruction> {
+    async fn regen_phone_select_handle_mesh(&self) -> Vec<DrawInstruction> {
         if !self.is_phone_select.load(Ordering::Relaxed) {
             return vec![]
         }
@@ -1090,8 +1084,8 @@ impl ChatEdit {
         self.draw_phone_select_handle(&mut mesh, first, -1.);
         self.draw_phone_select_handle(&mut mesh, last, 1.);
         vec![
-            GfxDrawInstruction::Move(pos),
-            GfxDrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()),
+            DrawInstruction::Move(pos),
+            DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()),
         ]
     }
 
@@ -1104,6 +1098,7 @@ impl ChatEdit {
         // First we evaluate the width based off the parent dimensions
         self.rect
             .eval_with(
+                atom,
                 vec![2],
                 vec![
                     ("parent_w".to_string(), parent_rect.w),
@@ -1128,6 +1123,7 @@ impl ChatEdit {
         // Finally calculate the position
         self.rect
             .eval_with(
+                atom,
                 vec![0, 1],
                 vec![
                     ("parent_w".to_string(), parent_rect.w),
@@ -1156,8 +1152,8 @@ impl ChatEdit {
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
         let mut content_instrs = vec![
-            GfxDrawInstruction::ApplyView(rect.with_zero_pos()),
-            GfxDrawInstruction::Move(Point::new(0., -scroll)),
+            DrawInstruction::ApplyView(rect.with_zero_pos()),
+            DrawInstruction::Move(Point::new(0., -scroll)),
         ];
         let mut bg_instrs = self.regen_bg_mesh();
         content_instrs.append(&mut bg_instrs);
@@ -1181,8 +1177,8 @@ impl ChatEdit {
             draw_calls: vec![
                 (
                     self.root_dc_key,
-                    GfxDrawCall::new(
-                        vec![GfxDrawInstruction::Move(rect.pos())],
+                    DrawCall::new(
+                        vec![DrawInstruction::Move(rect.pos())],
                         vec![self.content_dc_key, self.phone_select_handle_dc_key],
                         self.z_index.get(),
                         "chatedit_root",
@@ -1190,19 +1186,19 @@ impl ChatEdit {
                 ),
                 (
                     self.content_dc_key,
-                    GfxDrawCall::new(
+                    DrawCall::new(
                         content_instrs,
                         vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
                         0,
                         "chatedit_content",
                     ),
                 ),
-                (self.select_dc_key, GfxDrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
-                (self.text_dc_key, GfxDrawCall::new(txt_instrs, vec![], 1, "chatedit_text")),
-                (self.cursor_dc_key, GfxDrawCall::new(cursor_instrs, vec![], 2, "chatedit_curs")),
+                (self.select_dc_key, DrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
+                (self.text_dc_key, DrawCall::new(txt_instrs, vec![], 1, "chatedit_text")),
+                (self.cursor_dc_key, DrawCall::new(cursor_instrs, vec![], 2, "chatedit_curs")),
                 (
                     self.phone_select_handle_dc_key,
-                    GfxDrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),
+                    DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),
                 ),
             ],
         }
@@ -1238,9 +1234,10 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom =
+            &mut self_.render_api.make_guard(gfxtag!("ChatEdit::process_insert_text_method"));
         self_.insert(&text, atom).await;
-        self_.redraw().await;
+        self_.redraw(atom).await;
         true
     }
 
@@ -1290,6 +1287,7 @@ impl ChatEdit {
             return
         }
 
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_android_event"));
         match ev {
             AndroidSuggestEvent::Init => {
                 let mut editor = self.lock_editor().await;
@@ -1316,7 +1314,6 @@ impl ChatEdit {
                 self.is_phone_select.store(false, Ordering::Relaxed);
                 self.hide_cursor.store(false, Ordering::Relaxed);
 
-                let atom = &mut PropertyAtomicGuard::new();
                 self.finish_select(atom);
 
                 let mut editor = self.lock_editor().await;
@@ -1330,15 +1327,19 @@ impl ChatEdit {
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready
         if self.parent_rect.lock().is_some() {
-            self.redraw().await;
+            self.redraw(atom).await;
         }
     }
 }
 
 impl Drop for ChatEdit {
     fn drop(&mut self) {
-        self.render_api
-            .replace_draw_calls(unixtime(), vec![(self.text_dc_key, Default::default())]);
+        let atom = self.render_api.make_guard(gfxtag!("ChatEdit::drop"));
+        self.render_api.replace_draw_calls(
+            atom.batch_id,
+            unixtime(),
+            vec![(self.text_dc_key, Default::default())],
+        );
     }
 }
 
@@ -1387,18 +1388,20 @@ impl UIObject for ChatEdit {
 
         // When text has been changed.
         // Cursor and selection might be invalidated.
-        async fn reset(self_: Arc<ChatEdit>) {
-            let atom = &mut PropertyAtomicGuard::new();
+        async fn reset(self_: Arc<ChatEdit>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
             self_.scroll.set(atom, 0.);
-            self_.redraw().await;
+            self_.redraw(atom).await;
         }
-        async fn redraw(self_: Arc<ChatEdit>) {
-            self_.redraw().await;
+        async fn redraw(self_: Arc<ChatEdit>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.redraw(atom).await;
         }
-        async fn set_text(self_: Arc<ChatEdit>) {
+        async fn set_text(self_: Arc<ChatEdit>, batch: BatchGuardPtr) {
             self_.lock_editor().await.on_text_prop_changed().await;
-            self_.redraw().await;
+            let atom = &mut batch.spawn();
+            self_.redraw(atom).await;
         }
 
         on_modify.when_change(self.rect.prop(), redraw);
@@ -1423,7 +1426,7 @@ impl UIObject for ChatEdit {
         on_modify.when_change(self.z_index.prop(), redraw);
         on_modify.when_change(self.debug.prop(), redraw);
 
-        async fn regen_cursor(self_: Arc<ChatEdit>) {
+        async fn regen_cursor(self_: Arc<ChatEdit>, _batch: BatchGuardPtr) {
             // Free the cache
             *self_.cursor_mesh.lock() = None;
         }
@@ -1452,7 +1455,8 @@ impl UIObject for ChatEdit {
 
                 // Invert the bool
                 self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
-                self_.redraw_cursor().await;
+                let atom = &mut self_.render_api.make_guard(gfxtag!("ChatEdit::start"));
+                self_.redraw_cursor(atom.batch_id).await;
             }
         });
 
@@ -1523,7 +1527,7 @@ impl UIObject for ChatEdit {
             repeater.key_down(PressedKey::Char(key), repeat)
         };
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_char"));
 
         if mods.ctrl || mods.alt || mods.logo {
             if repeat {
@@ -1540,7 +1544,7 @@ impl UIObject for ChatEdit {
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
         self.insert(&key_str, atom).await;
-        self.redraw().await;
+        self.redraw(atom).await;
         true
     }
 
@@ -1566,7 +1570,7 @@ impl UIObject for ChatEdit {
             t!("Key {:?} has {} actions", key, actions);
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_key_down"));
 
         let mut is_handled = false;
         for _ in 0..actions {
@@ -1598,7 +1602,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_btn_down"));
 
         // clicking inside box will:
         // 1. make it active
@@ -1627,7 +1631,7 @@ impl UIObject for ChatEdit {
         self.mouse_btn_held.store(true, Ordering::Relaxed);
 
         self.pause_blinking();
-        self.redraw().await;
+        self.redraw(atom).await;
         true
     }
 
@@ -1653,7 +1657,7 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_move"));
 
         // if active and selection_active, then use x to modify the selection.
         // also implement scrolling when cursor is to the left or right
@@ -1679,9 +1683,9 @@ impl UIObject for ChatEdit {
 
         self.pause_blinking();
         self.apply_cursor_scrolling(atom).await;
-        self.redraw_scroll().await;
-        self.redraw_cursor().await;
-        self.redraw_select().await;
+        self.redraw_scroll(atom.batch_id).await;
+        self.redraw_cursor(atom.batch_id).await;
+        self.redraw_select(atom.batch_id).await;
         true
     }
 
@@ -1690,13 +1694,13 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.max_scroll());
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(atom, scroll);
-        self.redraw_scroll().await;
+        self.redraw_scroll(atom.batch_id).await;
 
         true
     }
@@ -1711,10 +1715,12 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let atom = &mut self.render_api.make_guard(gfxtag!("ChatEdit::handle_touch"));
+
         match phase {
             TouchPhase::Started => self.handle_touch_start(touch_pos).await,
             TouchPhase::Moved => self.handle_touch_move(touch_pos).await,
-            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
+            TouchPhase::Ended => self.handle_touch_end(atom, touch_pos).await,
             TouchPhase::Cancelled => false,
         }
     }

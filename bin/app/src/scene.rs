@@ -113,6 +113,7 @@ pub enum SceneNodeType {
     ChatView = 16,
     EditBox = 17,
     ChatEdit = 18,
+    Edit = 26,
     Image = 19,
     Button = 20,
     Shortcut = 21,
@@ -192,7 +193,7 @@ impl SceneNode {
         self.pimpl.get().unwrap()
     }
 
-    pub fn link(self: Arc<Self>, child: SceneNodePtr) {
+    pub fn link(self: &Arc<Self>, child: SceneNodePtr) {
         let mut childs_parent = child.parent.write().unwrap();
         assert!(childs_parent.is_none());
         *childs_parent = Some(Arc::downgrade(&self));
@@ -206,11 +207,11 @@ impl SceneNode {
         self.children.read().unwrap().clone()
     }
 
-    pub fn lookup_node<P: Into<ScenePath>>(self: Arc<Self>, path: P) -> Option<SceneNodePtr> {
+    pub fn lookup_node<P: Into<ScenePath>>(self: &Arc<Self>, path: P) -> Option<SceneNodePtr> {
         let path: ScenePath = path.into();
         let mut path = path.0;
         if path.is_empty() {
-            return Some(self)
+            return Some(self.clone())
         }
         let child_name = path.pop_front().unwrap();
         for child in self.get_children() {
@@ -540,10 +541,12 @@ pub enum Pimpl {
     Layer(ui::LayerPtr),
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
-    //EditBox(ui::EditBoxPtr),
+    EditBox(ui::EditBoxPtr),
     ChatEdit(ui::ChatEditPtr),
     ChatView(ui::ChatViewPtr),
+    Edit(ui::BaseEditPtr),
     Image(ui::ImagePtr),
+    Video(ui::VideoPtr),
     Button(ui::ButtonPtr),
     Shortcut(ui::ShortcutPtr),
     Gesture(ui::GesturePtr),

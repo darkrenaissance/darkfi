@@ -22,20 +22,22 @@ use std::fs::File;
 
 use crate::{
     app::{
-        node::{create_image, create_layer, create_shortcut, create_vector_art},
+        node::{create_image, create_layer, create_shortcut, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
+    gfx::gfxtag,
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape},
+    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape, Video},
+    util::i18n::I18nBabelFish,
 };
 
 mod chat;
 mod menu;
 //mod settings;
-//mod test;
+pub mod test;
 
 const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
@@ -54,6 +56,7 @@ mod ui_consts {
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "bg.png";
+    pub const VID_PATH: &str = "forest/forest_{frame}.png";
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -78,6 +81,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "assets/bg.png";
+    pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
@@ -124,12 +128,12 @@ enum ColorScheme {
     PaperLight,
 }
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
 
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     let node = create_shortcut("zoom_out_shortcut");
     node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
@@ -137,8 +141,9 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let (slot, recvr) = Slot::new("zoom_out_pressed");
     node.register("shortcut", slot).unwrap();
-    let window_scale = app.sg_root.clone().lookup_node("/setting/scale").unwrap();
+    let window_scale = app.sg_root.lookup_node("/setting/scale").unwrap();
     let window_scale2 = window_scale.clone();
+    let render_api = app.render_api.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
@@ -151,13 +156,13 @@ pub async fn make(app: &App, window: SceneNodePtr) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api.make_guard(gfxtag!("zoom_out shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Shortcut::new(me)).await;
-    window.clone().link(node);
+    window.link(node);
 
     let node = create_shortcut("zoom_in_shortcut");
     node.set_property_str(atom, Role::App, "key", "ctrl+=").unwrap();
@@ -166,6 +171,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let (slot, recvr) = Slot::new("zoom_in_pressed");
     node.register("shortcut", slot).unwrap();
     let window_scale2 = window_scale.clone();
+    let render_api = app.render_api.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
@@ -178,13 +184,13 @@ pub async fn make(app: &App, window: SceneNodePtr) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut PropertyAtomicGuard::new();
+            let atom = &mut render_api.make_guard(gfxtag!("zoom_in shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Shortcut::new(me)).await;
-    window.clone().link(node);
+    window.link(node);
 
     /*
     let node = create_gesture("zoom_gesture");
@@ -212,29 +218,31 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     });
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Gesture::new(me)).await;
-    window.clone().link(node);
+    window.link(node);
     */
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         // Bg layer
         let layer_node = create_layer("bg_layer");
         let prop = layer_node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
         layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-        window.clone().link(layer_node.clone());
+        window.link(layer_node.clone());
+
+        let node = create_video("king");
 
         // Create a bg image
-        let node = create_image("bg_image");
+        //let node = create_image("bg_image");
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
         // Image aspect ratio
         //let R = 1.78;
@@ -242,8 +250,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         cc.add_const_f32("R", r);
 
         let prop = node.get_property("uv").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
         #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
@@ -253,7 +261,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             1
         }
     ").unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, code).unwrap();
+        prop.set_expr(atom, Role::App, 2, code).unwrap();
         #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
@@ -263,20 +271,24 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             R / r
         }
     ").unwrap();
-        prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
+        prop.set_expr(atom, Role::App, 3, code).unwrap();
 
-        node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
+        //node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
+        node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
-        layer_node.clone().link(node);
+        //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
+        //layer_node.link(node);
+        node.set_property_u32(atom, Role::App, "length", 357).unwrap();
+        let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
+        layer_node.link(node);
 
         // Create a bg mesh on top to fade the bg image
         let node = create_vector_art("bg");
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
         //let c = if LIGHTMODE { 1. } else { 0. };
@@ -291,14 +303,14 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             [c, c, c, 0.3],
         );
         let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-        layer_node.clone().link(node);
+        layer_node.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
         let prop = node.get_property("rect").unwrap();
-        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
         let c = 1.;
@@ -312,78 +324,78 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             [c, c, c, 0.3],
         );
         let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-        window.clone().link(node);
+        window.link(node);
     }
 
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
-    prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    //prop.clone().set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    //prop.clone().set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-    prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    //prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    //prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.clone().link(netlayer_node.clone());
+    window.link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net0_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    netlayer_node.clone().link(net0_node);
+    netlayer_node.link(net0_node);
 
     let node = create_vector_art("net1");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net1_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    netlayer_node.clone().link(net1_node);
+    netlayer_node.link(net1_node);
 
     let node = create_vector_art("net2");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net2_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    netlayer_node.clone().link(net2_node);
+    netlayer_node.link(net2_node);
 
     let node = create_vector_art("net3");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net3_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    netlayer_node.clone().link(net3_node);
+    netlayer_node.link(net3_node);
 
     // Navbar Settings Button
 
@@ -392,38 +404,38 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let settingslayer_node = create_layer("settings_button_layer");
     let prop = settingslayer_node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE - SETTINGS_ICON_SIZE").unwrap();
-    prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let settingslayer_node =
         settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.clone().link(settingslayer_node.clone());
+    window.link(settingslayer_node.clone());
 
     // Background
     let node = create_vector_art("settings_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    settingslayer_node.clone().link(node);
+    settingslayer_node.link(node);
 
     // Button
     let node = create_button("settings_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
 
     let sg_root = app.sg_root.clone();
     let settings = move || {
@@ -447,7 +459,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         //  router currently points to view1 and we call router.goto("./view2")).
         //
         //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
-        let windows = sg_root.clone().lookup_node("/window").unwrap().get_children();
+        let windows = sg_root.lookup_node("/window").unwrap().get_children();
         let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
         for node in windows.iter() {
             if target_substrings.iter().any(|&s| node.name.contains(s)) {
@@ -458,7 +470,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         }
 
         // Show settings
-        let settings_node = sg_root.clone().lookup_node("/window/settings_layer").unwrap();
+        let settings_node = sg_root.lookup_node("/window/settings_layer").unwrap();
         settings_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     };
 
@@ -473,7 +485,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
-    settingslayer_node.clone().link(node);
+    settingslayer_node.link(node);
     */
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(
@@ -504,13 +516,22 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
     for channel in CHANNELS {
-        chat::make(app, window.clone(), channel, &db, emoji_meshes.clone(), is_first_time).await;
+        chat::make(
+            app,
+            window.clone(),
+            channel,
+            &db,
+            i18n_fish,
+            emoji_meshes.clone(),
+            is_first_time,
+        )
+        .await;
     }
-    menu::make(app, window.clone()).await;
+    menu::make(app, window.clone(), i18n_fish).await;
 
     // @@@ Debug stuff @@@
-    //let chatview_node = app.sg_root.clone().lookup_node("/window/dev_chat_layer").unwrap();
+    //let chatview_node = app.sg_root.lookup_node("/window/dev_chat_layer").unwrap();
     //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    //let menu_node = app.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
+    //let menu_node = app.sg_root.lookup_node("/window/menu_layer").unwrap();
     //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }

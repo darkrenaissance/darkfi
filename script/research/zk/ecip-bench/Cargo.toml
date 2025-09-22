@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 darkfi = {path = "../../../../", features = ["zk"]}
 darkfi-sdk = {path = "../../../../src/sdk"}
-halo2_proofs = "0.3.0"
+halo2_proofs = "0.3.1"
 halo2_gadgets = "0.3.1"
 rand = "0.8.5"
 hex = "0.4.3"

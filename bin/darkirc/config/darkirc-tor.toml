@@ -44,5 +44,5 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
-## Enable transport mixing
-transport_mixing = false
+## Transports to be mixed
+mixed_transports = []

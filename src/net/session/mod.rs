@@ -83,7 +83,7 @@ pub async fn remove_sub_on_stop(
         // error in this case.
         match hosts.fetch_last_seen(addr) {
             Some(last_seen) => {
-                if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey) {
+                if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey).await {
                     error!(target: "net::session::remove_sub_on_stop()",
             "Failed to move host {} to Greylist! Err={e}", addr.clone());
                 }
@@ -203,7 +203,10 @@ pub trait Session: Sync {
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    self.p2p().hosts().move_host(channel.address(), last_seen, HostColor::Gold)?;
+                    self.p2p()
+                        .hosts()
+                        .move_host(channel.address(), last_seen, HostColor::Gold)
+                        .await?;
                 }
 
                 // Attempt to add channel to registry

@@ -24,7 +24,7 @@ channel_heartbeat_interval = 90
 outbound_peer_discovery_cooloff_time = 60
 
 ## Whitelisted transports for outbound connections
-allowed_transports = ["tcp+tls", "tor"]
+allowed_transports = ["tcp+tls", "tor", "tor+tls"]
 
 ## Addresses we want to advertise to peers
 external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661", "tor://youraddress.onion:25551"]
@@ -45,5 +45,5 @@ outbound_connections = 8
 ## Inbound connection slots
 inbound_connections = 64
 
-## Enable transport mixing
-transport_mixing = true
+## Transports to be mixed
+mixed_transports = ["tcp", "tcp+tls"]

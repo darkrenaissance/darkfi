@@ -1,0 +1,21 @@
+[package]
+name = "equix"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "equix_pow"
+path = "src/lib.rs"
+
+[workspace]
+
+[dependencies]
+blake2 = "0.10.6"
+criterion = { version = "0.7.0", features = ["html_reports"] }
+equix = "0.2.5"
+rand = "0.8.5"
+
+[[bench]]
+name = "equix"
+harness = false
+path = "src/bench.rs"

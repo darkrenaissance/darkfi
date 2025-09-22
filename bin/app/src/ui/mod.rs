@@ -22,9 +22,10 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, Point, Rectangle},
-    prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
+    gfx::{DrawCall, Point, Rectangle},
+    prop::{BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -35,14 +36,18 @@ pub use chatview::{ChatView, ChatViewPtr};
 mod baseedit;
 mod chatedit;
 pub use chatedit::{ChatEdit, ChatEditPtr};
-//mod editbox;
-//pub use editbox::{EditBox, EditBoxPtr};
+mod edit;
+pub use edit::{BaseEdit, BaseEditPtr, BaseEditType};
+mod editbox;
+pub use editbox::{EditBox, EditBoxPtr};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod gesture;
 pub use gesture::GesturePtr;
 mod image;
 pub use image::{Image, ImagePtr};
+mod video;
+pub use video::{Video, VideoPtr};
 mod vector_art;
 pub use vector_art::{
     shape::{ShapeVertex, VectorShape},
@@ -106,11 +111,13 @@ pub trait UIObject: Sync {
     async fn handle_touch(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
         false
     }
+
+    fn set_i18n(&self, _i18n_fish: &I18nBabelFish) {}
 }
 
 pub struct DrawUpdate {
     pub key: u64,
-    pub draw_calls: Vec<(u64, GfxDrawCall)>,
+    pub draw_calls: Vec<(u64, DrawCall)>,
 }
 
 pub struct OnModify<T> {
@@ -126,8 +133,11 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         Self { ex, node, me, tasks: vec![] }
     }
 
-    pub fn when_change<F>(&mut self, prop: PropertyPtr, f: impl Fn(Arc<T>) -> F + Send + 'static)
-    where
+    pub fn when_change<F>(
+        &mut self,
+        prop: PropertyPtr,
+        f: impl Fn(Arc<T>, BatchGuardPtr) -> F + Send + 'static,
+    ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
         let mut on_modify_subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
@@ -143,24 +153,24 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 for (i, (prop_weak, prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
                     let recv = on_modify_sub.receive();
                     poll_queues.push(async move {
-                        let (role, action) = recv.await.ok()?;
-                        Some((i, prop_weak, prop_i, role, action))
+                        let (role, action, batch_guard) = recv.await.ok()?;
+                        Some((i, prop_weak, prop_i, role, action, batch_guard))
                     });
                 }
 
-                let Some(Some((idx, prop_weak, prop_i, role, action))) = poll_queues.next().await else {
+                let Some(Some((idx, prop_weak, prop_i, role, action, batch_guard))) = poll_queues.next().await else {
                     e!("Property {:?} on_modify pipe is broken", prop);
                     return
                 };
 
                 // Skip internal messages from ourselves or explicitly marked ignored
-                if (idx == 0 && role == Role::Internal) || role == Role::Ignored{
+                if (idx == 0 && role == Role::Internal) || role == Role::Ignored {
                     continue
                 }
                 if let Some(prop_i) = prop_i {
                     match action {
                         ModifyAction::Set(i) => if *prop_i != i { continue },
-                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue },
+                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue }
                         _ => continue
                     }
                 }
@@ -181,7 +191,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 };
 
                 //debug!(target: "app", "property modified");
-                f(self_).await;
+                f(self_, batch_guard).await;
             }
         });
         self.tasks.push(task);
@@ -193,10 +203,12 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Layer(obj) => obj.clone(),
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
-        //Pimpl::EditBox(obj) => obj.clone(),
+        Pimpl::EditBox(obj) => obj.clone(),
         Pimpl::ChatEdit(obj) => obj.clone(),
+        Pimpl::Edit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
+        Pimpl::Video(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
         Pimpl::EmojiPicker(obj) => obj.clone(),
         Pimpl::Shortcut(obj) => obj.clone(),
@@ -209,10 +221,12 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Layer(obj) => obj.as_ref(),
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
-        //Pimpl::EditBox(obj) => obj.as_ref(),
+        Pimpl::EditBox(obj) => obj.as_ref(),
         Pimpl::ChatEdit(obj) => obj.as_ref(),
+        Pimpl::Edit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
+        Pimpl::Video(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
         Pimpl::Shortcut(obj) => obj.as_ref(),

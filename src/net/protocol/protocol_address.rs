@@ -34,7 +34,7 @@ use super::{
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
 };
-use crate::{Error, Result};
+use crate::Result;
 
 /// Defines address and get-address messages.
 ///
@@ -141,18 +141,20 @@ impl ProtocolAddress {
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
             );
 
-            // Check that this peer isn't requesting more transports than we support
-            // (the max number of all transports, plus mixing).
-            if get_addrs_msg.transports.len() > TRANSPORT_COMBOS.len() {
-                return Err(Error::InvalidTransportRequest);
-            }
+            // Filter out transports not meant to be shared like Socks5 and Socks5+tls
+            let requested_transports: Vec<String> = get_addrs_msg
+                .transports
+                .iter()
+                .filter(|tp| TRANSPORT_COMBOS.contains(&tp.as_str()))
+                .cloned()
+                .collect();
 
             // First we grab address with the requested transports from the gold list
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching gold entries with schemes");
             let mut addrs = self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::Gold,
-                &get_addrs_msg.transports,
+                &requested_transports,
                 get_addrs_msg.max,
             );
 
@@ -161,7 +163,7 @@ impl ProtocolAddress {
             "Fetching whitelist entries with schemes");
             addrs.append(&mut self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::White,
-                &get_addrs_msg.transports,
+                &requested_transports,
                 get_addrs_msg.max,
             ));
 
@@ -174,7 +176,7 @@ impl ProtocolAddress {
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
                 HostColor::Gold,
-                &get_addrs_msg.transports,
+                &requested_transports,
                 remain,
             ));
 
@@ -184,7 +186,7 @@ impl ProtocolAddress {
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
                 HostColor::White,
-                &get_addrs_msg.transports,
+                &requested_transports,
                 remain,
             ));
 
@@ -199,6 +201,9 @@ impl ProtocolAddress {
             "Fetching dark entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain));
+
+            // Filter out transports not meant to be shared like Socks5 and Socks5+tls
+            addrs.retain(|addr| TRANSPORT_COMBOS.contains(&addr.0.scheme()));
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
@@ -286,8 +291,11 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
         // Send get_address message.
-        let get_addrs =
-            GetAddrsMessage { max: outbound_connections as u32, transports: allowed_transports };
+        // We ask for a maximum of u8::MAX addresses from a single node
+        let get_addrs = GetAddrsMessage {
+            max: outbound_connections.min(u8::MAX as usize) as u32,
+            transports: allowed_transports,
+        };
         self.channel.send(&get_addrs).await?;
 
         debug!(
@@ -299,5 +307,25 @@ impl ProtocolBase for ProtocolAddress {
     }
     fn name(&self) -> &'static str {
         PROTO_NAME
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use darkfi_serial::serialize;
+
+    use crate::net::message::GET_ADDRS_MAX_BYTES;
+
+    use super::{GetAddrsMessage, TRANSPORT_COMBOS};
+
+    // Helps to check if the MAX_BYTES for GetAddrs message is valid as new transports are added
+    #[test]
+    fn test_get_addrs_msg_size() {
+        let message = GetAddrsMessage {
+            max: u8::MAX as u32,
+            transports: TRANSPORT_COMBOS.iter().map(|x| x.to_string()).collect(),
+        };
+
+        assert_eq!(serialize(&message).len() as u64, GET_ADDRS_MAX_BYTES);
     }
 }

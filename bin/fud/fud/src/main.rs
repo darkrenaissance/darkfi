@@ -20,96 +20,44 @@ use log::{debug, error, info, warn};
 use sled_overlay::sled;
 use smol::{stream::StreamExt, Executor};
 use std::sync::Arc;
-use structopt_toml::{structopt::StructOpt, StructOptToml};
+use structopt_toml::StructOptToml;
 
 use darkfi::{
-    async_daemonize, cli_desc,
-    dht::{Dht, DhtHandler, DhtSettings, DhtSettingsOpt},
-    geode::hash_to_string,
-    net::{session::SESSION_DEFAULT, settings::SettingsOpt, P2p, Settings as NetSettings},
+    async_daemonize,
+    net::{session::SESSION_DEFAULT, P2p, Settings as NetSettings},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
-        settings::{RpcSettings, RpcSettingsOpt},
+        settings::RpcSettings,
     },
     system::{Publisher, StoppableTask},
     util::path::expand_path,
     Error, Result,
 };
-
 use fud::{
-    get_node_id,
-    proto::{FudFindNodesReply, ProtocolFud},
+    proto::ProtocolFud,
     rpc::JsonRpcInterface,
-    tasks::{announce_seed_task, get_task},
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     Fud,
 };
-
-const CONFIG_FILE: &str = "fud_config.toml";
-const CONFIG_FILE_CONTENTS: &str = include_str!("../fud_config.toml");
-const NODE_ID_PATH: &str = "node_id";
-
-#[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
-#[serde(default)]
-#[structopt(name = "fud", about = cli_desc!())]
-struct Args {
-    #[structopt(short, parse(from_occurrences))]
-    /// Increase verbosity (-vvv supported)
-    verbose: u8,
-
-    #[structopt(short, long)]
-    /// Configuration file to use
-    config: Option<String>,
-
-    #[structopt(long)]
-    /// Set log file path to output daemon logs into
-    log: Option<String>,
-
-    #[structopt(long, default_value = "~/.local/share/darkfi/fud")]
-    /// Base directory for filesystem storage
-    base_dir: String,
-
-    #[structopt(short, long)]
-    /// Default path to store downloaded files (defaults to <base_dir>/downloads)
-    downloads_path: Option<String>,
-
-    #[structopt(long, default_value = "60")]
-    /// Chunk transfer timeout in seconds
-    chunk_timeout: u64,
-
-    #[structopt(flatten)]
-    /// Network settings
-    net: SettingsOpt,
-
-    #[structopt(flatten)]
-    /// JSON-RPC settings
-    rpc: RpcSettingsOpt,
-
-    #[structopt(flatten)]
-    /// DHT settings
-    dht: DhtSettingsOpt,
-}
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // The working directory for this daemon and geode.
     let basedir = expand_path(&args.base_dir)?;
 
-    // The directory to store the downloaded files
-    let downloads_path = match args.downloads_path {
-        Some(downloads_path) => expand_path(&downloads_path)?,
-        None => basedir.join("downloads"),
-    };
+    // Cloned args
+    let args_ = args.clone();
 
     // Sled database init
-    info!("Instantiating database");
+    info!(target: "fud", "Instantiating database");
     let sled_db = sled::open(basedir.join("db"))?;
 
-    info!("Instantiating P2P network");
+    info!(target: "fud", "Instantiating P2P network");
     let net_settings: NetSettings = args.net.into();
     let p2p = P2p::new(net_settings.clone(), ex.clone()).await?;
 
-    info!("Starting dnet subs task");
+    info!(target: "fud", "Starting dnet subs task");
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
     let dnet_sub_ = dnet_sub.clone();
     let p2p_ = p2p.clone();
@@ -133,30 +81,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    let mut node_id_path = basedir.to_path_buf();
-    node_id_path.push(NODE_ID_PATH);
-    let node_id = get_node_id(&node_id_path).await?;
-
-    info!(target: "fud", "Your node ID: {}", hash_to_string(&node_id));
-
     // Daemon instantiation
     let event_pub = Publisher::new();
-    let dht_settings: DhtSettings = args.dht.into();
-    let dht: Arc<Dht> = Arc::new(Dht::new(&node_id, &dht_settings, p2p.clone(), ex.clone()).await);
-    let fud: Arc<Fud> = Arc::new(
-        Fud::new(
-            p2p.clone(),
-            basedir,
-            downloads_path,
-            args.chunk_timeout,
-            dht.clone(),
-            sled_db.open_tree("path")?,
-            event_pub.clone(),
-        )
-        .await?,
-    );
 
-    info!(target: "fud", "Starting download subs task");
+    let fud: Arc<Fud> =
+        Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?;
+
+    fud.start_tasks().await;
+
+    info!(target: "fud", "Starting event subs task");
     let event_sub = JsonSubscriber::new("event");
     let event_sub_ = event_sub.clone();
     let event_task = StoppableTask::new();
@@ -173,20 +106,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => panic!("{e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    info!(target: "fud", "Starting get task");
-    let get_task_ = StoppableTask::new();
-    get_task_.clone().start(
-        get_task(fud.clone(), ex.clone()),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting get task: {e}"),
             }
         },
         Error::DetachedTaskStopped,
@@ -210,7 +129,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!("Starting P2P protocols");
+    info!(target: "fud", "Starting P2P protocols");
     let registry = p2p.protocol_registry();
     let fud_ = fud.clone();
     registry
@@ -228,68 +147,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
     drop(p2p_settings);
 
-    info!(target: "fud", "Starting DHT tasks");
-    let dht_channel_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    dht_channel_task.clone().start(
-        async move { fud_.channel_task::<FudFindNodesReply>().await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht channel task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-    let dht_disconnect_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    dht_disconnect_task.clone().start(
-        async move { fud_.disconnect_task().await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting dht disconnect task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-    let announce_task = StoppableTask::new();
-    let fud_ = fud.clone();
-    announce_task.clone().start(
-        async move { announce_seed_task(fud_.clone()).await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting announce task: {e}"),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "fud", "Caught termination signal, cleaning up and exiting...");
 
-    info!(target: "fud", "Stopping fetch tasks...");
     fud.stop().await;
-
-    info!(target: "fud", "Stopping get task...");
-    get_task_.stop().await;
 
     info!(target: "fud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
     info!(target: "fud", "Stopping P2P network...");
     p2p.stop().await;
-
-    info!(target: "fud", "Stopping DHT tasks");
-    dht_channel_task.stop().await;
-    dht_disconnect_task.stop().await;
-    announce_task.stop().await;
 
     info!(target: "fud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;

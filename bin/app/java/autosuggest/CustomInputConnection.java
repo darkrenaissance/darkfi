@@ -266,8 +266,10 @@ public class CustomInputConnection extends BaseInputConnection {
                         selectionStart = selectionEnd;
                         selectionEnd = temp;
                     }
-                    editable.replace(selectionStart, selectionEnd,
-                            Character.toString((char)unicodeChar));
+
+                    String inputChar = Character.toString((char)unicodeChar);
+                    editable.replace(selectionStart, selectionEnd, inputChar);
+                    onCompose(id, inputChar, selectionStart, true);
                 }
             }
         }

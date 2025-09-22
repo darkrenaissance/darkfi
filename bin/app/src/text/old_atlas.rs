@@ -28,7 +28,7 @@ use super::{Glyph, Sprite};
 
 pub struct RenderedAtlas {
     pub uv_rects: Vec<Rectangle>,
-    pub texture_id: TextureId,
+    pub texture_id: GfxTextureId,
 }
 
 const ATLAS_GAP: usize = 2;

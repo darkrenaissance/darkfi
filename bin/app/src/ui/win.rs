@@ -21,20 +21,24 @@ use parking_lot::Mutex as SyncMutex;
 use std::sync::{Arc, Weak};
 
 use crate::{
+    app::locale::read_locale_ftl,
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
+        gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
-    prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, Role},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::unixtime,
+    util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
 };
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
+macro_rules! i { ($($arg:tt)*) => { info!(target: "ui::window", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::window", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::window", $($arg)*); } }
 
@@ -48,33 +52,45 @@ pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node: SceneNodeWeak,
-
+    render_api: RenderApi,
+    i18n_fish: I18nBabelFish,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
+
+    locale: PropertyStr,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
-    render_api: RenderApi,
 }
 
 impl Window {
     pub async fn new(
         node: SceneNodeWeak,
         render_api: RenderApi,
+        i18n_fish: I18nBabelFish,
         setting_root: SceneNodePtr,
     ) -> Pimpl {
         t!("Window::new()");
 
         let node_ref = &node.upgrade().unwrap();
+        let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
         let scale = PropertyFloat32::wrap(
-            &setting_root.clone().lookup_node("/scale").unwrap(),
+            &setting_root.lookup_node("/scale").unwrap(),
             Role::Internal,
             "value",
             0,
         )
         .unwrap();
 
-        let self_ =
-            Arc::new(Self { node, tasks: SyncMutex::new(vec![]), screen_size, scale, render_api });
+        let self_ = Arc::new(Self {
+            node,
+            render_api,
+            i18n_fish,
+            tasks: SyncMutex::new(vec![]),
+
+            locale,
+            screen_size,
+            scale,
+        });
 
         Pimpl::Window(self_)
     }
@@ -102,17 +118,17 @@ impl Window {
                 };
 
                 d!("Window resized {size:?}");
-                let atom = &mut PropertyAtomicGuard::new();
-
-                // Now update the properties
-                screen_size2.set(atom, size);
 
                 let Some(self_) = me2.upgrade() else {
                     // Should not happen
                     panic!("self destroyed before modify_task was stopped!");
                 };
 
-                self_.draw().await;
+                let atom = &mut self_.render_api.make_guard(gfxtag!("Window::resize_task"));
+                // Now update the properties
+                screen_size2.set(atom, size);
+
+                self_.draw(atom).await;
             }
         });
 
@@ -154,12 +170,18 @@ impl Window {
         let me2 = me.clone();
         let touch_task = ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
-        let redraw_fn = move |self_: Arc<Self>| async move {
-            self_.draw().await;
-        };
+        async fn reload_locale(self_: Arc<Window>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.reload_locale(atom).await;
+        }
+        async fn redraw(self_: Arc<Window>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.draw(atom).await;
+        }
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
-        on_modify.when_change(self.scale.prop(), redraw_fn);
+        on_modify.when_change(self.locale.prop(), reload_locale);
+        on_modify.when_change(self.scale.prop(), redraw);
 
         let mut tasks = vec![
             resize_task,
@@ -418,8 +440,7 @@ impl Window {
         }
     }
 
-    pub async fn draw(&self) {
-        let atom = &mut PropertyAtomicGuard::new();
+    pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
 
@@ -441,17 +462,37 @@ impl Window {
             child_calls.push(draw_update.key);
         }
 
-        let dc = GfxDrawCall::new(
-            vec![GfxDrawInstruction::SetScale(self.scale.get())],
-            child_calls,
-            0,
-            "win",
-        );
+        let dc =
+            DrawCall::new(vec![DrawInstruction::SetScale(self.scale.get())], child_calls, 0, "win");
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(timest, draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_calls);
 
         t!("Window::draw() - replaced draw call [timest={timest}, trace_id={trace_id}]");
+    }
+
+    async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {
+        /*
+        let i18n_src = indoc::indoc! {"
+            hello-world = Hello, world!
+            channels-label = KANALLAR
+        "}
+        .to_owned();
+        */
+
+        let locale = self.locale.get();
+        let i18n_src = read_locale_ftl(&locale);
+        i!("Changed locale to: {locale}");
+        i!("loaded {i18n_src}");
+        assert_eq!(locale, "tr");
+        let i18n_fish = I18nBabelFish::new(i18n_src, &locale);
+        self.i18n_fish.set(&i18n_fish);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            obj.set_i18n(&i18n_fish);
+        }
+        // Just redraw everything lol
+        self.draw(atom).await;
     }
 }
