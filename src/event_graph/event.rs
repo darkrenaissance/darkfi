@@ -44,13 +44,13 @@ pub struct Header {
 impl Header {
     // Create a new Header given EventGraph to retrieve the correct layout
     pub async fn new(event_graph: &EventGraph) -> Self {
-        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let current_dag_name = event_graph.current_genesis.read().await.header.timestamp;
         let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
     }
 
     pub async fn with_timestamp(timestamp: u64, event_graph: &EventGraph) -> Self {
-        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let current_dag_name = event_graph.current_genesis.read().await.header.timestamp;
         let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self { timestamp, parents, layer }
     }
@@ -246,7 +246,7 @@ mod tests {
             // Generate a dummy event graph
             let event_graph = make_event_graph().await?;
 
-            let dag_name = event_graph.current_genesis.read().await.id().to_string();
+            let dag_name = event_graph.current_genesis.read().await.header.timestamp.to_string();
             let hdr_tree_name = format!("headers_{dag_name}");
             let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
 
@@ -267,7 +267,7 @@ mod tests {
             // Generate a dummy event graph
             let event_graph = make_event_graph().await?;
 
-            let dag_name = event_graph.current_genesis.read().await.id().to_string();
+            let dag_name = event_graph.current_genesis.read().await.header.timestamp.to_string();
             let hdr_tree_name = format!("headers_{dag_name}");
             let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
 

@@ -102,8 +102,8 @@ pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
 #[derive(Clone)]
 pub struct DAGStore {
     db: sled::Db,
-    header_dags: HashMap<Hash, (sled::Tree, LayerUTips)>,
-    main_dags: HashMap<Hash, (sled::Tree, LayerUTips)>,
+    header_dags: HashMap<u64, (sled::Tree, LayerUTips)>,
+    main_dags: HashMap<u64, (sled::Tree, LayerUTips)>,
 }
 
 impl DAGStore {
@@ -121,7 +121,7 @@ impl DAGStore {
                 };
                 let genesis = Event { header, content: GENESIS_CONTENTS.to_vec() };
 
-                let tree_name = genesis.id().to_string();
+                let tree_name = genesis.header.timestamp.to_string();
                 let hdr_tree_name = format!("headers_{tree_name}");
                 let hdr_dag = sled_db.open_tree(hdr_tree_name).unwrap();
                 let dag = sled_db.open_tree(tree_name).unwrap();
@@ -161,12 +161,12 @@ impl DAGStore {
                     }
                 }
                 let utips = self.find_unreferenced_tips(&dag).await;
-                considered_header_trees.insert(genesis.id(), (hdr_dag, utips.clone()));
-                considered_trees.insert(genesis.id(), (dag, utips));
+                considered_header_trees.insert(genesis.header.timestamp, (hdr_dag, utips.clone()));
+                considered_trees.insert(genesis.header.timestamp, (dag, utips));
             }
         } else {
             let genesis = generate_genesis(0);
-            let tree_name = genesis.id().to_string();
+            let tree_name = genesis.header.timestamp.to_string();
             let hdr_tree_name = format!("headers_{tree_name}");
             let hdr_dag = sled_db.open_tree(hdr_tree_name).unwrap();
             let dag = sled_db.open_tree(tree_name).unwrap();
@@ -205,8 +205,8 @@ impl DAGStore {
                 }
             }
             let utips = self.find_unreferenced_tips(&dag).await;
-            considered_header_trees.insert(genesis.id(), (hdr_dag, utips.clone()));
-            considered_trees.insert(genesis.id(), (dag, utips));
+            considered_header_trees.insert(genesis.header.timestamp, (hdr_dag, utips.clone()));
+            considered_trees.insert(genesis.header.timestamp, (dag, utips));
         }
 
         Self { db: sled_db, header_dags: considered_header_trees, main_dags: considered_trees }
@@ -227,7 +227,7 @@ impl DAGStore {
                 // since dags are sorted in reverse
                 let oldest_tree = sorted_dags.last().unwrap().name();
                 let oldest_key = String::from_utf8_lossy(&oldest_tree);
-                let oldest_key = blake3::Hash::from_str(&oldest_key).unwrap();
+                let oldest_key = u64::from_str(&oldest_key).unwrap();
 
                 let oldest_hdr_tree = self.header_dags.remove(&oldest_key).unwrap();
                 let oldest_tree = self.main_dags.remove(&oldest_key).unwrap();
@@ -246,8 +246,8 @@ impl DAGStore {
         let dag = self.get_dag(dag_name);
         dag.insert(genesis_event.id().as_bytes(), serialize_async(genesis_event).await).unwrap();
         let utips = self.find_unreferenced_tips(&dag).await;
-        self.header_dags.insert(genesis_event.id(), (hdr_dag, utips.clone()));
-        self.main_dags.insert(genesis_event.id(), (dag, utips));
+        self.header_dags.insert(genesis_event.header.timestamp, (hdr_dag, utips.clone()));
+        self.main_dags.insert(genesis_event.header.timestamp, (dag, utips));
     }
 
     // Get a DAG providing its name.
@@ -404,7 +404,7 @@ impl EventGraph {
 
         // Create the current genesis event based on the `hours_rotation`
         let current_genesis = generate_genesis(hours_rotation);
-        let current_dag_tree_name = current_genesis.id().to_string();
+        let current_dag_tree_name = current_genesis.header.timestamp.to_string();
         let dag_store = DAGStore {
             db: sled_db.clone(),
             header_dags: HashMap::default(),
@@ -735,7 +735,7 @@ impl EventGraph {
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
         let mut current_genesis = self.current_genesis.write().await;
 
-        let dag_name = genesis_event.id().to_string();
+        let dag_name = genesis_event.header.timestamp.to_string();
         self.dag_store.write().await.add_dag(&dag_name, &genesis_event).await;
 
         // Clear bcast ids
@@ -794,7 +794,7 @@ impl EventGraph {
         }
 
         // Acquire exclusive locks to `broadcasted_ids`
-        let dag_name_hash = blake3::Hash::from_str(dag_name).unwrap();
+        let dag_timestamp = u64::from_str(dag_name).unwrap();
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
 
         let main_dag = self.dag_store.read().await.get_dag(dag_name);
@@ -859,7 +859,7 @@ impl EventGraph {
         }
 
         let mut dag_store = self.dag_store.write().await;
-        let (_, unreferenced_tips) = &mut dag_store.main_dags.get_mut(&dag_name_hash).unwrap();
+        let (_, unreferenced_tips) = &mut dag_store.main_dags.get_mut(&dag_timestamp).unwrap();
 
         // Iterate over given events to update references and
         // send out notifications about them
@@ -910,8 +910,8 @@ impl EventGraph {
             self.event_pub.notify(event.clone()).await;
         }
 
-        dag_store.header_dags.get_mut(&dag_name_hash).unwrap().1 =
-            dag_store.main_dags.get(&dag_name_hash).unwrap().1.clone();
+        dag_store.header_dags.get_mut(&dag_timestamp).unwrap().1 =
+            dag_store.main_dags.get(&dag_timestamp).unwrap().1.clone();
 
         // Drop the exclusive locks
         drop(dag_store);
@@ -987,7 +987,7 @@ impl EventGraph {
     /// parents.
     async fn get_next_layer_with_parents(
         &self,
-        dag_name: &Hash,
+        dag_name: &u64,
     ) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
         let store = self.dag_store.read().await;
         let (_, unreferenced_tips) = store.header_dags.get(dag_name).unwrap();
@@ -1113,7 +1113,7 @@ impl EventGraph {
     #[cfg(feature = "rpc")]
     pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
         let current_genesis = self.current_genesis.read().await;
-        let dag_name = current_genesis.id().to_string();
+        let dag_name = current_genesis.header.timestamp.to_string();
         let mut graph = HashMap::new();
         for iter_elem in self.dag_store.read().await.get_dag(&dag_name).iter() {
             let (id, val) = iter_elem.unwrap();
@@ -1146,7 +1146,7 @@ impl EventGraph {
         );
 
         let current_genesis = self.current_genesis.read().await;
-        let dag_name = current_genesis.id().to_string();
+        let dag_name = current_genesis.header.timestamp.to_string();
         let mut graph = HashMap::new();
         for iter_elem in self.dag_store.read().await.get_dag(&dag_name).iter() {
             let (id, val) = iter_elem.unwrap();

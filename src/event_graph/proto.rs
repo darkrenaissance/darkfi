@@ -279,7 +279,7 @@ impl ProtocolEventGraph {
 
             // If we have already seen the event, we'll stay quiet.
             let current_genesis = self.event_graph.current_genesis.read().await;
-            let dag_name = current_genesis.id().to_string();
+            let dag_name = current_genesis.header.timestamp.to_string();
             let hdr_tree_name = format!("headers_{dag_name}");
             let event_id = event.id();
             if self
@@ -382,7 +382,7 @@ impl ProtocolEventGraph {
                 );
 
                 let current_genesis = self.event_graph.current_genesis.read().await;
-                let dag_name = current_genesis.id().to_string();
+                let dag_name = current_genesis.header.timestamp.to_string();
                 let hdr_tree_name = format!("headers_{dag_name}");
 
                 while !missing_parents.is_empty() {
@@ -650,7 +650,12 @@ impl ProtocolEventGraph {
 
             // We received header request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let main_dag = self.event_graph.dag_store.read().await.get_dag(&dag_name);
+            let dag_timestamp = u64::from_str(&dag_name)?;
+            let store = self.event_graph.dag_store.read().await;
+            if !store.header_dags.contains_key(&dag_timestamp) {
+                continue
+            }
+            let main_dag = store.get_dag(&dag_name);
             let mut headers = vec![];
             for item in main_dag.iter() {
                 let (_, event) = item.unwrap();
@@ -699,9 +704,9 @@ impl ProtocolEventGraph {
 
             // We received a tip request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let dag_name_hash = blake3::Hash::from_str(&dag_name).unwrap();
+            let dag_timestamp = u64::from_str(&dag_name)?;
             let store = self.event_graph.dag_store.read().await;
-            let (_, layers) = match store.header_dags.get(&dag_name_hash) {
+            let (_, layers) = match store.header_dags.get(&dag_timestamp) {
                 Some(v) => v,
                 None => continue,
             };
