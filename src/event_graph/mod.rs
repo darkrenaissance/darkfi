@@ -102,14 +102,14 @@ pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
 #[derive(Clone)]
 pub struct DAGStore {
     db: sled::Db,
-    header_dags: HashMap<u64, (sled::Tree, LayerUTips)>,
-    main_dags: HashMap<u64, (sled::Tree, LayerUTips)>,
+    header_dags: BTreeMap<u64, (sled::Tree, LayerUTips)>,
+    main_dags: BTreeMap<u64, (sled::Tree, LayerUTips)>,
 }
 
 impl DAGStore {
     pub async fn new(&self, sled_db: sled::Db, hours_rotation: u64) -> Self {
-        let mut considered_trees = HashMap::new();
-        let mut considered_header_trees = HashMap::new();
+        let mut considered_trees = BTreeMap::new();
+        let mut considered_header_trees = BTreeMap::new();
         if hours_rotation > 0 {
             // Create previous genesises if not existing, since they are deterministic.
             for i in 1..=DAGS_MAX_NUMBER {
@@ -219,21 +219,14 @@ impl DAGStore {
         if self.main_dags.len() != self.header_dags.len() {
             panic!("main dags length is not the same as header dags")
         }
-        // TODO: sort dags by timestamp and drop the oldest
-        if self.main_dags.len() > DAGS_MAX_NUMBER.try_into().unwrap() {
-            while self.main_dags.len() >= DAGS_MAX_NUMBER.try_into().unwrap() {
-                debug!("[EVENTGRAPH] dropping oldest dag");
-                let sorted_dags = self.sort_dags().await;
-                // since dags are sorted in reverse
-                let oldest_tree = sorted_dags.last().unwrap().name();
-                let oldest_key = String::from_utf8_lossy(&oldest_tree);
-                let oldest_key = u64::from_str(&oldest_key).unwrap();
 
-                let oldest_hdr_tree = self.header_dags.remove(&oldest_key).unwrap();
-                let oldest_tree = self.main_dags.remove(&oldest_key).unwrap();
-                self.db.drop_tree(oldest_hdr_tree.0.name()).unwrap();
-                self.db.drop_tree(oldest_tree.0.name()).unwrap();
-            }
+        if self.main_dags.len() >= DAGS_MAX_NUMBER.try_into().unwrap() {
+            debug!("[EVENTGRAPH] dropping oldest dag");
+            let (oldest_hdr_tree, _) = self.header_dags.pop_first().unwrap().1;
+            let (oldest_tree, _) = self.main_dags.pop_first().unwrap().1;
+
+            self.db.drop_tree(oldest_hdr_tree.name()).unwrap();
+            self.db.drop_tree(oldest_tree.name()).unwrap();
         }
 
         // Insert genesis
@@ -263,9 +256,7 @@ impl DAGStore {
 
     /// Sort DAGs chronologically
     async fn sort_dags(&self) -> Vec<sled::Tree> {
-        let mut vec_dags = vec![];
-
-        let dags = self
+        let mut dags = self
             .main_dags
             .iter()
             .map(|x| {
@@ -273,17 +264,10 @@ impl DAGStore {
                 trees.0.clone()
             })
             .collect::<Vec<_>>();
+        // The BtreeMap stores from oldest to newest, so reverse it to make it chronological
+        dags.reverse();
 
-        for dag in dags {
-            let genesis = dag.first().unwrap().unwrap().1;
-            let genesis_event: Event = deserialize_async(&genesis).await.unwrap();
-            vec_dags.push((genesis_event.header.timestamp, dag));
-        }
-
-        vec_dags.sort_by_key(|&(ts, _)| ts);
-        vec_dags.reverse();
-
-        vec_dags.into_iter().map(|(_, dag)| dag).collect()
+        dags
     }
 
     /// Find the unreferenced tips in the current DAG state, mapped by their layers.
@@ -407,8 +391,8 @@ impl EventGraph {
         let current_dag_tree_name = current_genesis.header.timestamp.to_string();
         let dag_store = DAGStore {
             db: sled_db.clone(),
-            header_dags: HashMap::default(),
-            main_dags: HashMap::default(),
+            header_dags: BTreeMap::default(),
+            main_dags: BTreeMap::default(),
         }
         .new(sled_db, hours_rotation)
         .await;
