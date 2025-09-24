@@ -323,7 +323,7 @@ async fn start_sync_loop(
                     // If it fails for some reason, for now, we just note it
                     // and pass.
                     let current_genesis = event_graph.current_genesis.read().await;
-                    let dag_name = current_genesis.id().to_string();
+                    let dag_name = current_genesis.header.timestamp.to_string();
                     if let Err(e) = event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await {
                         error!(target: "taud", "Failed inserting new header to DAG: {}", e);
                     }
