@@ -209,7 +209,7 @@ impl JsonRpcInterface {
         let event = Event::new(serialize_async(&genevent).await, &self.event_graph).await;
 
         let current_genesis = self.event_graph.current_genesis.read().await;
-        let dag_name = current_genesis.id().to_string();
+        let dag_name = current_genesis.header.timestamp.to_string();
         if let Err(e) =
             self.event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await
         {
