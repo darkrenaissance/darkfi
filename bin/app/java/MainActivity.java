@@ -124,8 +124,12 @@ public boolean setSelection(int id, int start, int end) {
     }
 
     iv.inputConnection.beginBatchEdit();
+    // Not sure if this is needed
+    //if (start != end)
+    //  iv.inputConnection.finishComposingText();
     iv.inputConnection.setSelection(start, end);
     iv.inputConnection.endBatchEdit();
+
     return true;
 }
 public boolean commitText(int id, String txt) {

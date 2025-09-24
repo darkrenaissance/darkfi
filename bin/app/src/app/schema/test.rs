@@ -385,8 +385,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     */
 
     // Text edit
-    //let node = create_singleline_edit("editz");
-    let node = create_multiline_edit("editz");
+    let node = create_singleline_edit("editz");
+    //let node = create_multiline_edit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
@@ -397,8 +397,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     //prop.set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
 
     // Only used in singleline edit
-    prop.set_f32(atom, Role::App, 2, 400.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 600.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
 
     node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
@@ -461,8 +461,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                //BaseEditType::SingleLine,
-                BaseEditType::MultiLine,
+                BaseEditType::SingleLine,
+                //BaseEditType::MultiLine,
             )
         })
         .await;

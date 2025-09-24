@@ -279,10 +279,11 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean finishComposingText() {
-        log("finishComposingText()");
         if (getComposingSpanStart(mEditable) == getComposingSpanEnd(mEditable)) {
+            log("finishComposingText() [DISABLED]");
             return true;
         }
+        log("finishComposingText()");
         super.finishComposingText();
         onFinishCompose(id);
         return true;

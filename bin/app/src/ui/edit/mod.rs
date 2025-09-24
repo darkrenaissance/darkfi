@@ -452,8 +452,7 @@ impl BaseEdit {
         mesh.alloc(&self.render_api).draw_untextured()
     }
 
-    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, pos: Point, side: f32) {
-        let scroll = self.scroll.get();
+    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, mut pos: Point, side: f32) {
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
@@ -462,12 +461,11 @@ impl BaseEdit {
         let mut color_trans = color.clone();
         color_trans[3] = 0.;
 
+        pos += self.behave.inner_pos();
         let x = pos.x;
         let mut y = pos.y + baseline;
 
-        if y - scroll < 0. {
-            return
-        }
+        // We can cache this
 
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
@@ -908,6 +906,7 @@ impl BaseEdit {
     }
 
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
+        t!("finish_select()");
         self.is_phone_select.store(false, Ordering::Relaxed);
         self.hide_cursor.store(false, Ordering::Relaxed);
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
@@ -938,21 +937,20 @@ impl BaseEdit {
         content_instrs.append(&mut bg_instrs);
         content_instrs.push(DrawInstruction::Move(self.behave.scroll()));
 
-        let draw_main = vec![
-            (
-                self.content_dc_key,
-                DrawCall::new(
-                    content_instrs,
-                    vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
-                    0,
-                    "chatedit_content",
-                ),
+        let draw_main = vec![(
+            self.content_dc_key,
+            DrawCall::new(
+                content_instrs,
+                vec![
+                    self.text_dc_key,
+                    self.phone_select_handle_dc_key,
+                    self.cursor_dc_key,
+                    self.select_dc_key,
+                ],
+                0,
+                "chatedit_content",
             ),
-            (
-                self.phone_select_handle_dc_key,
-                DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_scroll"),
-            ),
-        ];
+        )];
         self.render_api.replace_draw_calls(batch_id, timest, draw_main);
     }
 
@@ -1046,6 +1044,7 @@ impl BaseEdit {
 
     async fn regen_phone_select_handle_mesh(&self) -> Vec<DrawInstruction> {
         if !self.is_phone_select.load(Ordering::Relaxed) {
+            //t!("regen_phone_select_handle_mesh() [DISABLED]");
             return vec![]
         }
         //t!("regen_phone_select_handle_mesh()");
@@ -1055,16 +1054,11 @@ impl BaseEdit {
         let sel = editor.selection();
         assert!(!sel.is_collapsed());
 
-        let pos = self.behave.inner_pos() + self.behave.scroll();
-
         // We could cache this and use Move instead but why bother?
         let mut mesh = MeshBuilder::new(gfxtag!("chatedit_phone_select_handle"));
         self.draw_phone_select_handle(&mut mesh, first, -1.);
         self.draw_phone_select_handle(&mut mesh, last, 1.);
-        vec![
-            DrawInstruction::Move(pos),
-            DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()),
-        ]
+        vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
     }
 
     fn bounded_height(&self, height: f32) -> f32 {
@@ -1094,13 +1088,11 @@ impl BaseEdit {
         // -+ content (apply view)
         //  └╴select
         //  └╴text
+        //  └╴phone_handle
         //  └╴cursor
-        // - phone_handle
 
         // Why do we have such a complicated layout?
-        // Firstly phone select handles should never be clipped. So we must draw them outside
-        // of ApplyView.
-        // Then when adjusting selection, it's slow to redraw everything, so the selection
+        // When adjusting selection, it's slow to redraw everything, so the selection
         // must be drawn separately.
         // Lastly the cursor is blinking and that's on top but with clipping.
 
@@ -1111,7 +1103,7 @@ impl BaseEdit {
                     self.root_dc_key,
                     DrawCall::new(
                         vec![DrawInstruction::Move(rect.pos())],
-                        vec![self.content_dc_key, self.phone_select_handle_dc_key],
+                        vec![self.content_dc_key],
                         self.z_index.get(),
                         "chatedit_root",
                     ),
@@ -1120,7 +1112,12 @@ impl BaseEdit {
                     self.content_dc_key,
                     DrawCall::new(
                         content_instrs,
-                        vec![self.text_dc_key, self.cursor_dc_key, self.select_dc_key],
+                        vec![
+                            self.text_dc_key,
+                            self.phone_select_handle_dc_key,
+                            self.cursor_dc_key,
+                            self.select_dc_key,
+                        ],
                         0,
                         "chatedit_content",
                     ),
@@ -1229,8 +1226,7 @@ impl BaseEdit {
                 //self.hide_cursor.store(true, Ordering::Relaxed);
 
                 // Debug code if we set text in editor.init()
-                //let atom = &mut PropertyAtomicGuard::new();
-                //editor.on_buffer_changed(atom).await;
+                //editor.on_buffer_changed(&mut PropertyAtomicGuard::none()).await;
                 return
             }
             AndroidSuggestEvent::CreateInputConnect => {
@@ -1239,7 +1235,6 @@ impl BaseEdit {
             }
             // Destructive text edits
             AndroidSuggestEvent::ComposeRegion { .. } |
-            AndroidSuggestEvent::FinishCompose |
             AndroidSuggestEvent::Compose { .. } |
             AndroidSuggestEvent::DeleteSurroundingText { .. } => {
                 // Any editing will collapse selections
@@ -1253,6 +1248,10 @@ impl BaseEdit {
                 drop(editor);
 
                 self.behave.apply_cursor_scroll(atom).await;
+            }
+            AndroidSuggestEvent::FinishCompose => {
+                let mut editor = self.lock_editor().await;
+                editor.on_buffer_changed(atom).await;
             }
         }
 
