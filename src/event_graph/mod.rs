@@ -597,7 +597,7 @@ impl EventGraph {
                     header_sorted.push(val);
                 }
             }
-            header_sorted.sort_by(|x, y| y.layer.cmp(&x.layer));
+            header_sorted.sort_by(|x, y| x.layer.cmp(&y.layer));
 
             info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Retrieving {} Events", header_sorted.len());
             // Implement parallel download of events with a batch size
@@ -796,7 +796,7 @@ impl EventGraph {
         for event in events {
             let event_id = event.id();
             if event.header.parents == NULL_PARENTS {
-                break
+                continue
             }
             debug!(
                 target: "event_graph::dag_insert",
@@ -849,6 +849,9 @@ impl EventGraph {
         // send out notifications about them
         for event in events {
             let event_id = event.id();
+            if event.header.parents == NULL_PARENTS {
+                continue
+            }
 
             // Update the unreferenced DAG tips set
             debug!(
