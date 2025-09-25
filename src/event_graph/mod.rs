@@ -89,6 +89,8 @@ pub const N_EVENT_PARENTS: usize = 5;
 const EVENT_TIME_DRIFT: u64 = 60_000;
 /// Null event ID
 pub const NULL_ID: Hash = Hash::from_bytes([0x00; blake3::OUT_LEN]);
+/// Null parents
+pub const NULL_PARENTS: [Hash; N_EVENT_PARENTS] = [NULL_ID; N_EVENT_PARENTS];
 
 /// Maximum number of DAGs to store, this should be configurable
 pub const DAGS_MAX_NUMBER: i8 = 24;
@@ -607,7 +609,9 @@ impl EventGraph {
             for iter_elem in header_dag.iter() {
                 let (_, val) = iter_elem.unwrap();
                 let val: Header = deserialize_async(&val).await.unwrap();
-                header_sorted.push(val);
+                if val.parents != NULL_PARENTS {
+                    header_sorted.push(val);
+                }
             }
             header_sorted.sort_by(|x, y| y.layer.cmp(&x.layer));
 
@@ -803,14 +807,11 @@ impl EventGraph {
         // Create an overlay over the DAG tree
         let mut overlay = SledTreeOverlay::new(&main_dag);
 
-        // Grab genesis timestamp
-        // let genesis_timestamp = self.current_genesis.read().await.header.timestamp;
-
         // Iterate over given events to validate them and
         // write them to the overlay
         for event in events {
             let event_id = event.id();
-            if event.header.layer == 0 {
+            if event.header.parents == NULL_PARENTS {
                 break
             }
             debug!(
@@ -856,9 +857,6 @@ impl EventGraph {
         if let Err(e) = main_dag.apply_batch(batch) {
             panic!("Failed applying dag_insert batch to sled: {e}");
         }
-
-        drop(main_dag);
-        drop(header_dag);
 
         let mut dag_store = self.dag_store.write().await;
         let (_, unreferenced_tips) = &mut dag_store.main_dags.get_mut(&dag_name_hash).unwrap();
@@ -912,15 +910,12 @@ impl EventGraph {
             self.event_pub.notify(event.clone()).await;
         }
 
-        // Drop the exclusive locks
-        drop(dag_store);
-        drop(broadcasted_ids);
-
-        let mut dag_store = self.dag_store.write().await;
         dag_store.header_dags.get_mut(&dag_name_hash).unwrap().1 =
             dag_store.main_dags.get(&dag_name_hash).unwrap().1.clone();
 
+        // Drop the exclusive locks
         drop(dag_store);
+        drop(broadcasted_ids);
 
         Ok(ids)
     }
@@ -931,10 +926,6 @@ impl EventGraph {
         // Create an overlay over the DAG tree
         let mut overlay = SledTreeOverlay::new(&header_dag);
 
-        // Acquire exclusive locks to `unreferenced_tips and broadcasted_ids`
-        // let mut unreferenced_header = self.unreferenced_tips.write().await;
-        // let mut broadcasted_ids = self.broadcasted_ids.write().await;
-
         let mut hdrs = headers;
         hdrs.sort_by(|x, y| x.layer.cmp(&y.layer));
 
@@ -942,7 +933,7 @@ impl EventGraph {
         // write them to the overlay
         for header in hdrs {
             let header_id = header.id();
-            if header.layer == 0 {
+            if header.parents == NULL_PARENTS {
                 continue
             }
             debug!(
@@ -1048,7 +1039,6 @@ impl EventGraph {
         vec_tips
     }
 
-    // TODO: Fix fetching all events from all dags and then order and retrun them
     /// Perform a topological sort of the DAG.
     pub async fn order_events(&self) -> Vec<Event> {
         let mut ordered_events = VecDeque::new();
