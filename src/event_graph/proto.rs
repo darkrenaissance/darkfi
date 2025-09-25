@@ -29,7 +29,7 @@ use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncod
 use log::{debug, error, trace, warn};
 use smol::Executor;
 
-use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID};
+use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS};
 use crate::{
     impl_p2p_message,
     net::{
@@ -342,9 +342,6 @@ impl ProtocolEventGraph {
                 "Event {} is new", event_id,
             );
 
-            // TODO: when in fast mode (headers only mode) if someone
-            // sends us an event this block will try to request all
-            // the events parents
             let mut missing_parents = HashSet::new();
             for parent_id in event.header.parents.iter() {
                 // `event.validate_new()` should have already made sure that
@@ -654,7 +651,7 @@ impl ProtocolEventGraph {
             for item in main_dag.iter() {
                 let (_, event) = item.unwrap();
                 let event: Event = deserialize_async(&event).await.unwrap();
-                if !headers.contains(&event.header) || event.header.layer != 0 {
+                if !headers.contains(&event.header) || event.header.parents != NULL_PARENTS {
                     headers.push(event.header);
                 }
             }
