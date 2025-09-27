@@ -552,22 +552,20 @@ impl EventGraph {
         }
         drop(tips);
 
-        if fast_mode {
-            // Now begin fetching the events backwards.
-            let mut missing_parents = HashSet::new();
-            for tip in considered_tips.iter() {
-                assert!(tip != &NULL_ID);
+        // Check if already in sync.
+        let mut missing_parents = HashSet::new();
+        for tip in considered_tips.iter() {
+            assert!(tip != &NULL_ID);
 
-                if !dag.contains_key(tip.as_bytes()).unwrap() {
-                    missing_parents.insert(*tip);
-                }
+            if !dag.contains_key(tip.as_bytes()).unwrap() {
+                missing_parents.insert(*tip);
             }
+        }
 
-            if missing_parents.is_empty() {
-                *self.synced.write().await = true;
-                info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
-                return Ok(())
-            }
+        if missing_parents.is_empty() {
+            *self.synced.write().await = true;
+            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
+            return Ok(())
         }
 
         // Header sync first
