@@ -319,6 +319,7 @@ impl BaseEdit {
                 content_height: content_height.clone(),
                 scroll: scroll.clone(),
                 rect: rect.clone(),
+                padding: padding.clone(),
                 cursor_width: cursor_width.clone(),
                 parent_rect: parent_rect.clone(),
                 editor: editor.clone(),
@@ -404,13 +405,6 @@ impl BaseEdit {
 
     fn node(&self) -> SceneNodePtr {
         self.node.upgrade().unwrap()
-    }
-
-    fn padding_top(&self) -> f32 {
-        self.padding.get_f32(0).unwrap()
-    }
-    fn padding_bottom(&self) -> f32 {
-        self.padding.get_f32(1).unwrap()
     }
 
     fn abs_to_local(&self, point: &mut Point) {
@@ -928,7 +922,6 @@ impl BaseEdit {
     async fn redraw_scroll(&self, batch_id: BatchGuardId) {
         let timest = unixtime();
         let rect = self.rect.get();
-        let scroll = self.scroll.get();
 
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
@@ -994,16 +987,20 @@ impl BaseEdit {
             return vec![]
         }
 
-        let padding_top = self.padding_top();
-        let padding_bottom = self.padding_bottom();
-
         let mut rect = self.rect.get().with_zero_pos();
 
         let mut mesh = MeshBuilder::new(gfxtag!("chatedit_bg"));
         mesh.draw_outline(&rect, [0., 1., 0., 1.], 1.);
 
-        rect.y = padding_top;
-        rect.h -= padding_top + padding_bottom;
+        let pad_top = self.padding.get_f32(0).unwrap();
+        let pad_right = self.padding.get_f32(1).unwrap();
+        let pad_bottom = self.padding.get_f32(2).unwrap();
+        let pad_left = self.padding.get_f32(3).unwrap();
+
+        rect.x = pad_left;
+        rect.y = pad_top;
+        rect.w -= pad_left + pad_right;
+        rect.h -= pad_top + pad_bottom;
         mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
 
         vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
@@ -1067,12 +1064,7 @@ impl BaseEdit {
 
     async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
         self.behave.eval_rect(atom).await;
-
         let rect = self.rect.get();
-        let max_scroll = self.behave.max_scroll().await;
-        if self.scroll.get() > max_scroll {
-            self.scroll.set(atom, max_scroll);
-        }
 
         let cursor_instrs = self.get_cursor_instrs().await;
         let txt_instrs = self.regen_txt_mesh().await;

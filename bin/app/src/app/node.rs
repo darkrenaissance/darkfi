@@ -363,6 +363,12 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Inner Padding", "Padding inside - top, right, bottom, left");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(4);
+    node.add_property(prop).unwrap();
+
     // Deprecate this
     // No need to be a property
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
@@ -489,12 +495,6 @@ pub fn create_singleline_edit(name: &str) -> SceneNode {
     prop.set_ui_text("Content Height", "The actual text's inner height");
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Inner Padding", "Top and bottom padding inside");
-    prop.set_range_f32(0., f32::MAX);
-    prop.set_array_len(2);
-    node.add_property(prop).unwrap();
-
     node
 }
 
@@ -509,12 +509,6 @@ pub fn create_multiline_edit(name: &str) -> SceneNode {
 
     let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Content Height", "The actual text's inner height");
-    node.add_property(prop).unwrap();
-
-    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Inner Padding", "Top and bottom padding inside");
-    prop.set_range_f32(0., f32::MAX);
-    prop.set_array_len(2);
     node.add_property(prop).unwrap();
 
     node
