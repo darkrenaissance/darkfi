@@ -595,8 +595,7 @@ impl EventGraph {
         }
 
         if missing_parents.is_empty() {
-            *self.synced.write().await = true;
-            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
+            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
             return Ok(())
         }
 
@@ -714,8 +713,6 @@ impl EventGraph {
         }
         // <-- end download payload
 
-        *self.synced.write().await = true;
-
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
         Ok(())
     }
@@ -734,6 +731,7 @@ impl EventGraph {
             }
         }
 
+        *self.synced.write().await = true;
         Ok(())
     }
 
