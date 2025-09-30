@@ -524,6 +524,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
             let outbound_peer_discovery_attempt_time =
                 settings.outbound_peer_discovery_attempt_time;
             let outbound_connections = settings.outbound_connections;
+            let getaddrs_max = settings.getaddrs_max;
             let allowed_transports = settings.allowed_transports.clone();
             let seeds = settings.seeds.clone();
             drop(settings);
@@ -567,7 +568,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 });
 
                 let get_addrs = GetAddrsMessage {
-                    max: outbound_connections as u32,
+                    max: getaddrs_max.unwrap_or(outbound_connections).min(u8::MAX as usize) as u32,
                     transports: allowed_transports,
                 };
 

@@ -100,6 +100,10 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
+    /// Maximum number of addresses (with preferred transports) to receive from
+    /// seeds and peers.
+    /// If undefined, `outbound_connections` will be used instead.
+    pub getaddrs_max: Option<usize>,
     /// P2P datastore path
     pub p2p_datastore: Option<String>,
     /// Hostlist storage path
@@ -153,6 +157,7 @@ impl Default for Settings {
             localnet: false,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
+            getaddrs_max: None,
             p2p_datastore: None,
             hostlist: None,
             greylist_refinery_interval: 15,
@@ -286,6 +291,12 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
 
+    /// Maximum number of addresses (with preferred transports) to receive from
+    /// seeds and peers.
+    /// If undefined, `outbound_connections` will be used instead.
+    #[structopt(skip)]
+    pub getaddrs_max: Option<usize>,
+
     /// P2P datastore path
     #[serde(default)]
     #[structopt(long)]
@@ -368,6 +379,7 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
+            getaddrs_max: opt.getaddrs_max,
             p2p_datastore: opt.p2p_datastore,
             hostlist: opt.hostlist,
             greylist_refinery_interval: opt

@@ -279,6 +279,7 @@ impl ProtocolBase for ProtocolAddress {
 
         let settings = self.settings.read().await;
         let outbound_connections = settings.outbound_connections;
+        let getaddrs_max = settings.getaddrs_max;
         let allowed_transports = settings.allowed_transports.clone();
         drop(settings);
 
@@ -293,7 +294,7 @@ impl ProtocolBase for ProtocolAddress {
         // Send get_address message.
         // We ask for a maximum of u8::MAX addresses from a single node
         let get_addrs = GetAddrsMessage {
-            max: outbound_connections.min(u8::MAX as usize) as u32,
+            max: getaddrs_max.unwrap_or(outbound_connections).min(u8::MAX as usize) as u32,
             transports: allowed_transports,
         };
         self.channel.send(&get_addrs).await?;
