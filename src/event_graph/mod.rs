@@ -1401,6 +1401,7 @@ async fn request_header(
         return Err(Error::EventNotFound("Peer didn't reply with headers in time".to_owned()));
     };
 
+    hdr_rep_sub.unsubscribe().await;
     let peer_headers = &peer_headers.0;
     Ok(peer_headers.to_vec())
 }
@@ -1461,6 +1462,8 @@ async fn request_event(
             peer,
         );
     };
+
+    ev_rep_sub.unsubscribe().await;
 
     (Ok(event.0.clone()), chunk_id, peer)
 }

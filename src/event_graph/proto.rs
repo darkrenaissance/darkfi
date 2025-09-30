@@ -413,6 +413,9 @@ impl ProtocolEventGraph {
                 continue
             }
 
+            // Remove lingering messages from dag_sync event request response
+            _ = self.ev_rep_sub.clean().await;
+
             // If we have already seen the event, we'll stay quiet.
             let current_genesis = self.event_graph.current_genesis.read().await;
             let genesis_timestamp = current_genesis.header.timestamp;
