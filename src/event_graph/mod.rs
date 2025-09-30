@@ -619,10 +619,11 @@ impl EventGraph {
             info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
             let mut header_sorted = vec![];
 
+            let main_dag = self.dag_store.read().await.get_dag(&dag_name);
             for iter_elem in header_dag.iter() {
-                let (_, val) = iter_elem.unwrap();
+                let (hash_bytes , val) = iter_elem.unwrap();
                 let val: Header = deserialize_async(&val).await.unwrap();
-                if val.parents != NULL_PARENTS {
+                if val.parents != NULL_PARENTS && !main_dag.contains_key(hash_bytes)? {
                     header_sorted.push(val);
                 }
             }
