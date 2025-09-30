@@ -23,8 +23,8 @@ use std::time::UNIX_EPOCH;
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_emoji_picker, create_layer,
-            create_shortcut, create_text, create_vector_art,
+            create_button, create_chatview, create_emoji_picker, create_layer,
+            create_multiline_edit, create_shortcut, create_text, create_vector_art,
         },
         App,
     },
@@ -38,8 +38,8 @@ use crate::{
     scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{
-        chatview, emoji_picker, Button, ChatEdit, ChatView, EmojiPicker, Layer, Shortcut, Text,
-        VectorArt, VectorShape,
+        chatview, emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker, Layer,
+        Shortcut, Text, VectorArt, VectorShape,
     },
     util::{i18n::I18nBabelFish, unixtime},
 };
@@ -665,7 +665,7 @@ pub async fn make(
     layer_node.link(node);
 
     // Text edit
-    let node = create_chatedit("editz");
+    let node = create_multiline_edit("editz");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
@@ -686,7 +686,9 @@ pub async fn make(
 
     let prop = node.get_property("padding").unwrap();
     prop.set_f32(atom, Role::App, 0, TEXTBAR_BASELINE * 0.4).unwrap();
-    prop.set_f32(atom, Role::App, 1, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
@@ -773,8 +775,11 @@ pub async fn make(
     //});
     //tasks.push(task);
 
-    let node =
-        node.setup(|me| ChatEdit::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node
+        .setup(|me| {
+            BaseEdit::new(me, window_scale.clone(), app.render_api.clone(), BaseEditType::MultiLine)
+        })
+        .await;
     let chatedit_node = node.clone();
     layer_node.link(node);
 

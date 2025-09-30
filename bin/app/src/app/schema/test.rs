@@ -19,8 +19,8 @@
 use crate::{
     app::{
         node::{
-            create_chatedit, create_editbox, create_layer, create_multiline_edit,
-            create_singleline_edit, create_text, create_vector_art, create_video,
+            create_layer, create_multiline_edit, create_singleline_edit, create_text,
+            create_vector_art, create_video,
         },
         App,
     },
@@ -28,7 +28,7 @@ use crate::{
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{BaseEdit, BaseEditType, ChatEdit, EditBox, Layer, Text, VectorArt, VectorShape, Video},
+    ui::{BaseEdit, BaseEditType, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -207,34 +207,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         expr::load_var("w"),
         expr::load_var("h"),
         [0., 1., 0., 1.],
-    );
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
-
-    // Another debug tool for the chatedit
-    let node = create_vector_art("debugtool-chatedit");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 300. - 5.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, 400. + 10.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::const_f32(5.),
-        [0., 1., 1., 1.],
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        cc.compile("h - 5").unwrap(),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 1., 1., 1.],
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;

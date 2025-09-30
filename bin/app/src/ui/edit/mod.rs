@@ -47,17 +47,15 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{
-    baseedit::{
-        repeat::{PressedKey, PressedKeysSmoothRepeat},
-        ALLOWED_KEYCODES, DISALLOWED_CHARS,
-    },
-    DrawUpdate, OnModify, UIObject,
-};
+use super::{DrawUpdate, OnModify, UIObject};
 
+mod filter;
+use filter::{ALLOWED_KEYCODES, DISALLOWED_CHARS};
 mod behave;
 pub use behave::BaseEditType;
 use behave::{EditorBehavior, FingerScrollDir, MultiLine, SingleLine};
+mod repeat;
+use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
 /// The travel threshold on long hold select before activating select.
 const HOLD_TRAVEL_THRESHOLD_SQ: f32 = 100.;

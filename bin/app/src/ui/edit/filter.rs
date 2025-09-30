@@ -18,8 +18,6 @@
 
 use miniquad::KeyCode;
 
-pub mod repeat;
-
 /// Filter these char events from being handled since we handle them
 /// using the key_up/key_down events.
 /// Avoids duplicate processing of keyboard input events.
