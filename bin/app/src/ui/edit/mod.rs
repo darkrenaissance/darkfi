@@ -20,6 +20,7 @@ use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use darkfi::system::msleep;
 use darkfi_serial::Decodable;
+use futures::{select, FutureExt};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
@@ -53,7 +54,7 @@ mod filter;
 use filter::{ALLOWED_KEYCODES, DISALLOWED_CHARS};
 mod behave;
 pub use behave::BaseEditType;
-use behave::{EditorBehavior, FingerScrollDir, MultiLine, SingleLine};
+use behave::{EditorBehavior, MultiLine, ScrollDir, SingleLine};
 mod repeat;
 use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
@@ -65,6 +66,11 @@ const HOLD_ENABLE_TIME: u128 = 500;
 /// Minimum dist to update scroll when finger scrolling.
 /// Avoid updating too much makes scrolling smoother.
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
+
+/// How often to update the scrolling selection with mouse.
+const SELECT_TASK_UPDATE_TIME: u64 = 100;
+// Should be a property
+const SELECT_SCROLL_TRAVEL_SPEED: f32 = 1.;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::edit", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit", $($arg)*); } }
@@ -83,12 +89,12 @@ enum TouchStateAction {
 struct TouchInfo {
     state: TouchStateAction,
     scroll: PropertyFloat32,
-    finger_scroll_dir: FingerScrollDir,
+    scroll_ctrl: ScrollDir,
 }
 
 impl TouchInfo {
-    fn new(scroll: PropertyFloat32, finger_scroll_dir: FingerScrollDir) -> Self {
-        Self { state: TouchStateAction::Inactive, scroll, finger_scroll_dir }
+    fn new(scroll: PropertyFloat32, scroll_ctrl: ScrollDir) -> Self {
+        Self { state: TouchStateAction::Inactive, scroll, scroll_ctrl }
     }
 
     fn start(&mut self, pos: Point) {
@@ -114,7 +120,7 @@ impl TouchInfo {
                         debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
-                } else if self.finger_scroll_dir.cmp(grad) {
+                } else if self.scroll_ctrl.cmp(grad) {
                     // Vertical movement
                     debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
                     let scroll_start = self.scroll.get();
@@ -243,6 +249,8 @@ pub struct BaseEdit {
     blink_is_paused: AtomicBool,
     /// Used to explicitly hide the cursor. Must be manually re-enabled.
     hide_cursor: AtomicBool,
+    /// Used to start select and scroll when mouse moves outside widget rect.
+    sel_sender: SyncMutex<Option<async_channel::Sender<Option<Point>>>>,
 
     touch_info: SyncMutex<TouchInfo>,
     is_phone_select: AtomicBool,
@@ -386,8 +394,9 @@ impl BaseEdit {
             cursor_is_visible: AtomicBool::new(true),
             blink_is_paused: AtomicBool::new(false),
             hide_cursor: AtomicBool::new(false),
+            sel_sender: SyncMutex::new(None),
 
-            touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.finger_scroll_dir())),
+            touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.scroll_ctrl())),
             is_phone_select: AtomicBool::new(false),
 
             window_scale: window_scale.clone(),
@@ -849,7 +858,7 @@ impl BaseEdit {
                 self.redraw_select(atom.batch_id).await;
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
-                let travel_dist = self.behave.finger_scroll_dir().travel(*start_pos, touch_pos);
+                let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
                 let mut scroll = scroll_start + travel_dist;
                 scroll = scroll.clamp(0., self.behave.max_scroll().await);
                 if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
@@ -902,6 +911,52 @@ impl BaseEdit {
         self.is_phone_select.store(false, Ordering::Relaxed);
         self.hide_cursor.store(false, Ordering::Relaxed);
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
+    }
+
+    async fn handle_select(&self, mouse_pos: Point) {
+        let rect = self.rect.get();
+        let is_mouse_hover = rect.contains(mouse_pos);
+
+        let mut clip_mouse_pos = rect.clip_point(mouse_pos);
+
+        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
+
+        // Handle scrolling
+        if !is_mouse_hover {
+            let scroll_ctrl = self.behave.scroll_ctrl();
+            // How far is the cursor outside the widget rect
+            let travel = scroll_ctrl.travel(mouse_pos, clip_mouse_pos);
+            //t!("select autoscroll travel={travel}");
+
+            let max_scroll = self.behave.max_scroll().await;
+            let delta = travel * SELECT_SCROLL_TRAVEL_SPEED;
+            let scroll = (self.scroll.get() + delta).clamp(0., max_scroll);
+            self.scroll.set(atom, scroll);
+
+            self.redraw_scroll(atom.batch_id).await;
+        }
+
+        // Move mouse pos within this widget
+        self.abs_to_local(&mut clip_mouse_pos);
+
+        let seltext = {
+            let mut txt_ctx = text2::TEXT_CTX.get().await;
+            let mut editor = self.lock_editor().await;
+            let mut drv = editor.driver(&mut txt_ctx).unwrap();
+            drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
+            editor.selected_text()
+        };
+        d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?})");
+
+        // Will be None when drag select just started
+        if let Some(seltext) = seltext {
+            self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+        }
+
+        self.pause_blinking();
+        //self.behave.apply_cursor_scroll(atom).await;
+        self.redraw_cursor(atom.batch_id).await;
+        self.redraw_select(atom.batch_id).await;
     }
 
     fn pause_blinking(&self) {
@@ -1380,7 +1435,45 @@ impl UIObject for BaseEdit {
             }
         });
 
-        let mut tasks = vec![insert_text_task, focus_task, unfocus_task, blinking_cursor_task];
+        let (sel_sender, sel_recvr) = async_channel::unbounded();
+        *self.sel_sender.lock() = Some(sel_sender);
+        let me2 = me.clone();
+        // We don't get continuous mouse move events. Instead this task is used to smoothly
+        // scroll when selecting text.
+        let sel_task = ex.spawn(async move {
+            let mut scroll_stat = None;
+            // Too much code duplication here but I didn't find a solution that looks any cleaner.
+            loop {
+                if scroll_stat.is_some() {
+                    futures::select! {
+                        rcv = sel_recvr.recv().fuse() => {
+                            scroll_stat = rcv.unwrap();
+
+                            if let Some(mouse_pos) = scroll_stat {
+                                let self_ = me2.upgrade().unwrap();
+                                self_.handle_select(mouse_pos).await;
+                            };
+                        }
+                        _ = msleep(SELECT_TASK_UPDATE_TIME).fuse() => {
+                            if let Some(mouse_pos) = scroll_stat {
+                                let self_ = me2.upgrade().unwrap();
+                                self_.handle_select(mouse_pos).await;
+                            };
+                        }
+                    }
+                } else {
+                    scroll_stat = sel_recvr.recv().await.unwrap();
+
+                    if let Some(mouse_pos) = scroll_stat {
+                        let self_ = me2.upgrade().unwrap();
+                        self_.handle_select(mouse_pos).await;
+                    };
+                }
+            }
+        });
+
+        let mut tasks =
+            vec![insert_text_task, focus_task, unfocus_task, blinking_cursor_task, sel_task];
         tasks.append(&mut on_modify.tasks);
 
         #[cfg(target_os = "android")]
@@ -1561,6 +1654,10 @@ impl UIObject for BaseEdit {
             return false
         }
 
+        // Stop any selection scrolling
+        let scroll_sender = self.sel_sender.lock().clone().unwrap();
+        scroll_sender.send(None).await.unwrap();
+
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
         false
@@ -1572,41 +1669,26 @@ impl UIObject for BaseEdit {
         }
 
         let rect = self.rect.get();
-        self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
+        let is_mouse_hover = rect.contains(mouse_pos);
+        self.is_mouse_hover.store(is_mouse_hover, Ordering::Relaxed);
 
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
-
-        // if active and selection_active, then use x to modify the selection.
-        // also implement scrolling when cursor is to the left or right
-        // just scroll to the end
-        // also set cursor_pos too
-
-        // Move mouse pos within this widget
-        self.abs_to_local(&mut mouse_pos);
-
-        let seltext = {
-            let mut txt_ctx = text2::TEXT_CTX.get().await;
-            let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut txt_ctx).unwrap();
-            drv.extend_selection_to_point(mouse_pos.x, mouse_pos.y);
-            editor.selected_text()
-        };
-        d!("Select {seltext:?} from {mouse_pos:?}");
-
-        // Will be None when drag select just started
-        if let Some(seltext) = seltext {
-            self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+        let sel_sender = self.sel_sender.lock().clone().unwrap();
+        // Mouse is outside rect?
+        // If so we gotta scroll it while selecting.
+        if !is_mouse_hover {
+            // This process will begin selecting text and applying scroll too.
+            sel_sender.send(Some(mouse_pos)).await.unwrap();
+        } else {
+            // Stop any existing select/scroll process
+            sel_sender.send(None).await.unwrap();
+            // Mouse is inside so just select the text once and be done.
+            self.handle_select(mouse_pos).await;
         }
 
-        self.pause_blinking();
-        self.behave.apply_cursor_scroll(atom).await;
-        self.redraw_scroll(atom.batch_id).await;
-        self.redraw_cursor(atom.batch_id).await;
-        self.redraw_select(atom.batch_id).await;
         true
     }
 

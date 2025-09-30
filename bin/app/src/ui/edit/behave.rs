@@ -41,6 +41,7 @@ pub(super) trait EditorBehavior: Send + Sync {
 
     /// Whenever the cursor is modified this MUST be called
     /// to recalculate the scroll value.
+    /// Must call redraw after this.
     async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard);
 
     fn scroll(&self) -> Point;
@@ -53,15 +54,15 @@ pub(super) trait EditorBehavior: Send + Sync {
 
     fn allow_endl(&self) -> bool;
 
-    fn finger_scroll_dir(&self) -> FingerScrollDir;
+    fn scroll_ctrl(&self) -> ScrollDir;
 }
 
-pub(super) enum FingerScrollDir {
+pub(super) enum ScrollDir {
     Vert,
     Horiz,
 }
 
-impl FingerScrollDir {
+impl ScrollDir {
     pub fn cmp(&self, grad: f32) -> bool {
         match self {
             Self::Vert => grad.abs() > 0.5,
@@ -230,8 +231,8 @@ impl EditorBehavior for MultiLine {
         true
     }
 
-    fn finger_scroll_dir(&self) -> FingerScrollDir {
-        FingerScrollDir::Vert
+    fn scroll_ctrl(&self) -> ScrollDir {
+        ScrollDir::Vert
     }
 }
 
@@ -321,7 +322,7 @@ impl EditorBehavior for SingleLine {
         false
     }
 
-    fn finger_scroll_dir(&self) -> FingerScrollDir {
-        FingerScrollDir::Horiz
+    fn scroll_ctrl(&self) -> ScrollDir {
+        ScrollDir::Horiz
     }
 }

@@ -226,7 +226,7 @@ pub fn create_text(name: &str) -> SceneNode {
 }
 
 pub fn create_baseedit(name: &str) -> SceneNode {
-    let mut node = SceneNode::new(name, SceneNodeType::ChatEdit);
+    let mut node = SceneNode::new(name, SceneNodeType::Edit);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
     prop.set_ui_text("Is Active", "An active EditBox can be focused");

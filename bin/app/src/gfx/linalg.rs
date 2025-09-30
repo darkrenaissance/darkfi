@@ -211,7 +211,7 @@ impl Rectangle {
         Self::new(0., 0., self.w, self.h)
     }
 
-    pub fn clip_point(&self, point: &mut Point) {
+    pub fn clip_point(&self, mut point: Point) -> Point {
         if point.x < self.x {
             point.x = self.x;
         }
@@ -224,6 +224,7 @@ impl Rectangle {
         if point.y > self.y + self.h {
             point.y = self.y + self.h;
         }
+        point
     }
 
     pub fn contains(&self, point: Point) -> bool {
