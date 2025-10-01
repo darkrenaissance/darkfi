@@ -183,8 +183,9 @@ impl Video {
                     // Make editing textures array and broadcasting an atomic op
                     {
                         let mut vid_data = vid_data.lock();
-                        // FIXME panic here on unwrap None when closing app
-                        let mut vid_data = vid_data.as_mut().unwrap();
+                        // vid_data becomes None if the stop() is called. In which case
+                        // we just stop loading and return from this thread.
+                        let Some(mut vid_data) = vid_data.as_mut() else { return };
                         vid_data.textures[frame_idx] = Some(texture.clone());
                         // broadcast
                         textures_pub.try_broadcast((frame_idx, texture)).unwrap();
