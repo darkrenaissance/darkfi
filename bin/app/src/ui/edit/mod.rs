@@ -18,6 +18,7 @@
 
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
+use atomic_float::AtomicF32;
 use darkfi::system::msleep;
 use darkfi_serial::Decodable;
 use futures::{select, FutureExt};
@@ -88,12 +89,12 @@ enum TouchStateAction {
 
 struct TouchInfo {
     state: TouchStateAction,
-    scroll: PropertyFloat32,
+    scroll: Arc<AtomicF32>,
     scroll_ctrl: ScrollDir,
 }
 
 impl TouchInfo {
-    fn new(scroll: PropertyFloat32, scroll_ctrl: ScrollDir) -> Self {
+    fn new(scroll: Arc<AtomicF32>, scroll_ctrl: ScrollDir) -> Self {
         Self { state: TouchStateAction::Inactive, scroll, scroll_ctrl }
     }
 
@@ -123,7 +124,7 @@ impl TouchInfo {
                 } else if self.scroll_ctrl.cmp(grad) {
                     // Vertical movement
                     debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
-                    let scroll_start = self.scroll.get();
+                    let scroll_start = self.scroll.load(Ordering::Relaxed);
                     self.state =
                         TouchStateAction::ScrollVert { start_pos: *start_pos, scroll_start };
                 } else {
@@ -214,13 +215,9 @@ pub struct BaseEdit {
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
-    min_height: PropertyFloat32,
-    max_height: PropertyFloat32,
-    content_height: PropertyFloat32,
     rect: PropertyRect,
     baseline: PropertyFloat32,
     lineheight: PropertyFloat32,
-    scroll: PropertyFloat32,
     scroll_speed: PropertyFloat32,
     padding: PropertyPtr,
     font_size: PropertyFloat32,
@@ -251,6 +248,7 @@ pub struct BaseEdit {
     hide_cursor: AtomicBool,
     /// Used to start select and scroll when mouse moves outside widget rect.
     sel_sender: SyncMutex<Option<async_channel::Sender<Option<Point>>>>,
+    scroll: Arc<AtomicF32>,
 
     touch_info: SyncMutex<TouchInfo>,
     is_phone_select: AtomicBool,
@@ -275,16 +273,9 @@ impl BaseEdit {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();
-        let min_height =
-            PropertyFloat32::wrap(node_ref, Role::Internal, "height_range", 0).unwrap();
-        let max_height =
-            PropertyFloat32::wrap(node_ref, Role::Internal, "height_range", 1).unwrap();
-        let content_height =
-            PropertyFloat32::wrap(node_ref, Role::Internal, "content_height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
-        let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_speed", 0).unwrap();
         let padding = node_ref.get_property("padding").unwrap();
@@ -320,28 +311,36 @@ impl BaseEdit {
 
         let parent_rect = Arc::new(SyncMutex::new(None));
         let editor = Arc::new(AsyncMutex::new(None));
+        let scroll = Arc::new(AtomicF32::new(0.));
         let behave: Box<dyn EditorBehavior> = match edit_type {
             BaseEditType::SingleLine => Box::new(SingleLine {
-                content_height: content_height.clone(),
-                scroll: scroll.clone(),
                 rect: rect.clone(),
                 padding: padding.clone(),
                 cursor_width: cursor_width.clone(),
                 parent_rect: parent_rect.clone(),
                 editor: editor.clone(),
-            }),
-            BaseEditType::MultiLine => Box::new(MultiLine {
-                min_height: min_height.clone(),
-                max_height: max_height.clone(),
-                content_height: content_height.clone(),
+                content_height: AtomicF32::new(0.),
                 scroll: scroll.clone(),
-                rect: rect.clone(),
-                baseline: baseline.clone(),
-                padding: padding.clone(),
-                cursor_descent: cursor_descent.clone(),
-                parent_rect: parent_rect.clone(),
-                editor: editor.clone(),
             }),
+            BaseEditType::MultiLine => {
+                let min_height =
+                    PropertyFloat32::wrap(node_ref, Role::Internal, "height_range", 0).unwrap();
+                let max_height =
+                    PropertyFloat32::wrap(node_ref, Role::Internal, "height_range", 1).unwrap();
+
+                Box::new(MultiLine {
+                    min_height: min_height.clone(),
+                    max_height: max_height.clone(),
+                    rect: rect.clone(),
+                    baseline: baseline.clone(),
+                    padding: padding.clone(),
+                    cursor_descent: cursor_descent.clone(),
+                    parent_rect: parent_rect.clone(),
+                    editor: editor.clone(),
+                    content_height: AtomicF32::new(0.),
+                    scroll: scroll.clone(),
+                })
+            }
         };
 
         let self_ = Arc::new(Self {
@@ -360,13 +359,9 @@ impl BaseEdit {
 
             is_active,
             is_focused,
-            min_height,
-            max_height,
-            content_height,
             rect,
             baseline,
             lineheight: lineheight.clone(),
-            scroll: scroll.clone(),
             scroll_speed,
             padding,
             font_size: font_size.clone(),
@@ -395,6 +390,7 @@ impl BaseEdit {
             blink_is_paused: AtomicBool::new(false),
             hide_cursor: AtomicBool::new(false),
             sel_sender: SyncMutex::new(None),
+            scroll: scroll.clone(),
 
             touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.scroll_ctrl())),
             is_phone_select: AtomicBool::new(false),
@@ -861,10 +857,10 @@ impl BaseEdit {
                 let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
                 let mut scroll = scroll_start + travel_dist;
                 scroll = scroll.clamp(0., self.behave.max_scroll().await);
-                if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
+                if (self.scroll.load(Ordering::Relaxed) - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
                 }
-                self.scroll.set(atom, scroll);
+                self.scroll.store(scroll, Ordering::Release);
                 self.redraw_scroll(atom.batch_id).await;
             }
             TouchStateAction::SetCursorPos => {
@@ -930,8 +926,8 @@ impl BaseEdit {
 
             let max_scroll = self.behave.max_scroll().await;
             let delta = travel * SELECT_SCROLL_TRAVEL_SPEED;
-            let scroll = (self.scroll.get() + delta).clamp(0., max_scroll);
-            self.scroll.set(atom, scroll);
+            let scroll = (self.scroll.load(Ordering::Relaxed) + delta).clamp(0., max_scroll);
+            self.scroll.store(scroll, Ordering::Release);
 
             self.redraw_scroll(atom.batch_id).await;
         }
@@ -1109,10 +1105,6 @@ impl BaseEdit {
         self.draw_phone_select_handle(&mut mesh, first, -1.);
         self.draw_phone_select_handle(&mut mesh, last, 1.);
         vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
-    }
-
-    fn bounded_height(&self, height: f32) -> f32 {
-        height.clamp(self.min_height.get(), self.max_height.get())
     }
 
     async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
@@ -1367,7 +1359,7 @@ impl UIObject for BaseEdit {
         async fn reset(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
-            self_.scroll.set(atom, 0.);
+            self_.scroll.store(0., Ordering::Release);
             self_.redraw(atom).await;
         }
         async fn redraw(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
@@ -1699,10 +1691,11 @@ impl UIObject for BaseEdit {
 
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_wheel"));
 
-        let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
+        let mut scroll =
+            self.scroll.load(Ordering::Relaxed) - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.behave.max_scroll().await);
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
-        self.scroll.set(atom, scroll);
+        self.scroll.store(scroll, Ordering::Release);
         self.redraw_scroll(atom.batch_id).await;
 
         true

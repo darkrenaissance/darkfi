@@ -17,8 +17,9 @@
 
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
+use atomic_float::AtomicF32;
 use parking_lot::Mutex as SyncMutex;
-use std::sync::Arc;
+use std::sync::{atomic::Ordering, Arc};
 
 use crate::{
     gfx::{Point, Rectangle},
@@ -81,14 +82,14 @@ impl ScrollDir {
 pub(super) struct MultiLine {
     pub min_height: PropertyFloat32,
     pub max_height: PropertyFloat32,
-    pub content_height: PropertyFloat32,
-    pub scroll: PropertyFloat32,
     pub rect: PropertyRect,
     pub baseline: PropertyFloat32,
     pub padding: PropertyPtr,
     pub cursor_descent: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     pub editor: Arc<AsyncMutex<Option<Editor>>>,
+    pub content_height: AtomicF32,
+    pub scroll: Arc<AtomicF32>,
 }
 
 impl MultiLine {
@@ -144,7 +145,7 @@ impl EditorBehavior for MultiLine {
             editor.refresh().await;
             editor.height()
         };
-        self.content_height.set(atom, content_height);
+        self.content_height.store(content_height, Ordering::Relaxed);
         let outer_height = content_height + self.padding_top() + self.padding_bottom();
         let rect_h = self.bounded_height(outer_height);
         self.rect.prop().set_f32(atom, Role::Internal, 3, rect_h).unwrap();
@@ -168,7 +169,7 @@ impl EditorBehavior for MultiLine {
         //let pad_top = self.padding_top();
         let pad_bot = self.padding_bottom();
 
-        let mut scroll = self.scroll.get();
+        let mut scroll = self.scroll.load(Ordering::Relaxed);
         let rect_h = self.max_height.get() - pad_bot;
         let cursor_y0 = self.get_cursor_pos().await.y;
         let cursor_h = self.baseline.get() + self.cursor_descent.get();
@@ -181,17 +182,17 @@ impl EditorBehavior for MultiLine {
             //t!("  cursor bottom below rect");
             // We want cursor_y1 = rect_h + scroll by adjusting scroll
             scroll = (cursor_y1 - rect_h).clamp(0., max_scroll);
-            self.scroll.set(atom, scroll);
+            self.scroll.store(scroll, Ordering::Release);
         } else if cursor_y0 < scroll {
             //t!("  cursor top above rect");
             scroll = cursor_y0.max(0.);
             assert!(scroll >= 0.);
-            self.scroll.set(atom, scroll);
+            self.scroll.store(scroll, Ordering::Release);
         }
     }
 
     fn scroll(&self) -> Point {
-        Point::new(0., -self.scroll.get())
+        Point::new(0., -self.scroll.load(Ordering::Relaxed))
     }
 
     /// Maximum allowed scroll value
@@ -200,7 +201,7 @@ impl EditorBehavior for MultiLine {
     /// * `rect_h` then clips the `outer_height` to min/max values.
     /// We only allow scrolling when max clipping has been applied.
     async fn max_scroll(&self) -> f32 {
-        let content_height = self.content_height.get();
+        let content_height = self.content_height.load(Ordering::Relaxed);
         let outer_height = content_height + self.padding_top() + self.padding_bottom();
         let rect_h = self.rect.get_height();
         //t!("max_scroll content_height={content_height}, rect_h={rect_h}");
@@ -213,7 +214,7 @@ impl EditorBehavior for MultiLine {
         let pad_bot = self.padding_bottom();
         let pad_left = self.padding.get_f32(3).unwrap();
 
-        let content_height = self.content_height.get();
+        let content_height = self.content_height.load(Ordering::Relaxed);
         let outer_height = content_height + pad_top + pad_bot;
         let rect_h = self.rect.get_height();
         let mut inner_pos = Point::zero();
@@ -237,13 +238,13 @@ impl EditorBehavior for MultiLine {
 }
 
 pub(super) struct SingleLine {
-    pub content_height: PropertyFloat32,
-    pub scroll: PropertyFloat32,
     pub rect: PropertyRect,
     pub padding: PropertyPtr,
     pub cursor_width: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     pub editor: Arc<AsyncMutex<Option<Editor>>>,
+    pub content_height: AtomicF32,
+    pub scroll: Arc<AtomicF32>,
 }
 
 impl SingleLine {
@@ -261,7 +262,7 @@ impl EditorBehavior for SingleLine {
             editor.refresh().await;
             editor.height()
         };
-        self.content_height.set(atom, content_height);
+        self.content_height.store(content_height, Ordering::Relaxed);
 
         let parent_rect = self.parent_rect.lock().clone().unwrap();
         //self.rect.eval(atom, &parent_rect).unwrap();
@@ -280,7 +281,7 @@ impl EditorBehavior for SingleLine {
     async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard) {
         let pad_right = self.padding.get_f32(1).unwrap();
         let pad_left = self.padding.get_f32(3).unwrap();
-        let mut scroll = self.scroll.get();
+        let mut scroll = self.scroll.load(Ordering::Relaxed);
         let rect_w = self.rect.get_width() - pad_right;
         let cursor_x0 = self.lock_editor().await.get_cursor_pos().x + pad_left;
         let cursor_x1 = cursor_x0 + self.cursor_width.get();
@@ -288,16 +289,16 @@ impl EditorBehavior for SingleLine {
         if cursor_x0 < scroll {
             assert!(cursor_x0 >= 0.);
             scroll = cursor_x0.max(0.);
-            self.scroll.set(atom, cursor_x0);
+            self.scroll.store(cursor_x0, Ordering::Release);
         } else if cursor_x1 > rect_w + scroll {
             let max_scroll = self.max_scroll().await;
             let scroll = (cursor_x1 - rect_w).clamp(0., max_scroll);
-            self.scroll.set(atom, scroll);
+            self.scroll.store(scroll, Ordering::Release);
         }
     }
 
     fn scroll(&self) -> Point {
-        Point::new(-self.scroll.get(), 0.)
+        Point::new(-self.scroll.load(Ordering::Relaxed), 0.)
     }
 
     async fn max_scroll(&self) -> f32 {
@@ -310,7 +311,7 @@ impl EditorBehavior for SingleLine {
 
     fn inner_pos(&self) -> Point {
         let pad_left = self.padding.get_f32(3).unwrap();
-        let content_height = self.content_height.get();
+        let content_height = self.content_height.load(Ordering::Relaxed);
         let rect_h = self.rect.get_height();
         let mut inner_pos = Point::zero();
         inner_pos.x = pad_left;

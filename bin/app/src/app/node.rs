@@ -256,12 +256,6 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     prop.set_array_len(4);
     node.add_property(prop).unwrap();
 
-    // Deprecate this
-    // No need to be a property
-    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_range_f32(0., f32::MAX);
-    node.add_property(prop).unwrap();
-
     let mut prop = Property::new("scroll_speed", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Scroll Speed", "Scrolling speed");
     prop.set_defaults_f32(vec![4.]).unwrap();
@@ -367,22 +361,8 @@ pub fn create_baseedit(name: &str) -> SceneNode {
 }
 
 pub fn create_singleline_edit(name: &str) -> SceneNode {
-    let mut node = create_baseedit(name);
-
-    // TEMPORARY
-
-    let mut prop = Property::new("height_range", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
-    prop.set_range_f32(0., f32::MAX);
-    prop.set_array_len(2);
-    node.add_property(prop).unwrap();
-
-    // Maybe this shouldnt even be a property
-    let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Content Height", "The actual text's inner height");
-    node.add_property(prop).unwrap();
-
-    node
+    // No additional properties to add
+    create_baseedit(name)
 }
 
 pub fn create_multiline_edit(name: &str) -> SceneNode {
@@ -392,10 +372,6 @@ pub fn create_multiline_edit(name: &str) -> SceneNode {
     prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
     prop.set_range_f32(0., f32::MAX);
     prop.set_array_len(2);
-    node.add_property(prop).unwrap();
-
-    let mut prop = Property::new("content_height", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Content Height", "The actual text's inner height");
     node.add_property(prop).unwrap();
 
     node
