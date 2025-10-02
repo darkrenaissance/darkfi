@@ -627,11 +627,11 @@ impl ProtocolEventGraph {
                     continue
                 }
                 // FIXME
-                if !self.event_graph.fast_mode {
-                    if self.event_graph.dag_insert(&events, &dag_name).await.is_err() {
-                        self.clone().increase_malicious_count().await?;
-                        continue
-                    }
+                if !self.event_graph.fast_mode &&
+                    self.event_graph.dag_insert(&events, &dag_name).await.is_err()
+                {
+                    self.clone().increase_malicious_count().await?;
+                    continue
                 }
             } // <-- !missing_parents.is_empty()
 

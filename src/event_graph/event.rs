@@ -183,7 +183,7 @@ impl Event {
             return Ok(false)
         }
         // Perform validation
-        self.header.validate(&header_dag, 1, None).await
+        self.header.validate(header_dag, 1, None).await
     }
 
     /// Validate a new event for the correct layout and enforce relevant age,

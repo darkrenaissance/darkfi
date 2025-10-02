@@ -297,7 +297,7 @@ impl DAGStore {
         // Build the layers map
         let mut map: LayerUTips = BTreeMap::new();
         for tip in tips {
-            let event = self.fetch_event_from_dag(&tip, &dag).await.unwrap().unwrap();
+            let event = self.fetch_event_from_dag(&tip, dag).await.unwrap().unwrap();
             if let Some(layer_tips) = map.get_mut(&event.header.layer) {
                 layer_tips.insert(tip);
             } else {
@@ -321,7 +321,7 @@ impl DAGStore {
         };
         let event: Event = deserialize_async(&bytes).await?;
 
-        return Ok(Some(event))
+        Ok(Some(event))
     }
 }
 
@@ -807,7 +807,7 @@ impl EventGraph {
         }
 
         // Acquire exclusive locks to `broadcasted_ids`
-        let dag_timestamp = u64::from_str(dag_name).unwrap();
+        let dag_timestamp = u64::from_str(dag_name)?;
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
 
         let main_dag = self.dag_store.read().await.get_dag(dag_name);
@@ -1085,7 +1085,7 @@ impl EventGraph {
         let mut vec_tips = vec![];
         let mut tips_sorted = [NULL_ID; N_EVENT_PARENTS];
         for (i, _) in self.dag_store.read().await.header_dags.iter() {
-            let (_, tips) = self.get_next_layer_with_parents(&i).await;
+            let (_, tips) = self.get_next_layer_with_parents(i).await;
             // Convert the hash to BigUint for sorting
             let mut sorted: Vec<_> =
                 tips.iter().map(|x| BigUint::from_bytes_be(x.as_bytes())).collect();
@@ -1218,7 +1218,7 @@ impl EventGraph {
         let current_genesis = self.current_genesis.read().await;
         let dag_name = current_genesis.header.timestamp.to_string();
         let mut graph = HashMap::new();
-        for iter_elem in self.dag_store.read().await.get_dag(&dag_name).iter() {
+        for iter_elem in self.dag_store.read().await.get_dag(dag_name).iter() {
             let (id, val) = iter_elem.unwrap();
             let hash = Hash::from_bytes((&id as &[u8]).try_into().unwrap());
             let event: Event = deserialize_async(&val).await.unwrap();
