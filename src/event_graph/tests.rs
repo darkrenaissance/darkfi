@@ -881,3 +881,459 @@ fn dag_insert_valid_event() -> Result<()> {
         Ok(())
     })
 }
+
+/*
+   This function builds the following graph
+
+   Layer    3           2                    1                    0
+        [Event3A]-----[Event2A]-------|
+                                      |-----[Event1A]-----|
+                                               |          |
+                                      ---------|          |
+        [Event3B]-----[Event2B]-------|                   |
+                                      |                   |
+                                      |-----[Event1B]-----|-----[GENESIS]
+                                                          |
+        [Event3C]-----[Event2C]----|                      |
+                                   |  |-----[Event1C]-----|
+                                   ---|                   |
+                                   |  |                   |
+        [Event3D]-----[Event2D]----|  |------[Event1D]----|
+*/
+async fn build_graph() -> Result<(EventGraphPtr, Vec<Event>)> {
+    let event_graph = make_event_graph().await?;
+    let mut events = vec![];
+    let dag_name = event_graph
+        .dag_store
+        .read()
+        .await
+        .main_dags
+        .last_key_value()
+        .unwrap()
+        .0
+        .clone()
+        .to_string();
+
+    let current_dag_genesis_hash = event_graph.current_genesis.read().await.id();
+
+    // first layer
+    let mut parents = [NULL_ID; N_EVENT_PARENTS];
+    parents[0] = current_dag_genesis_hash;
+    let event1a = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 1,
+            layer: 1,
+            parents,
+        },
+        content: "Event1A".as_bytes().to_vec(),
+    };
+    events.push(event1a.clone());
+
+    let event1b = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 2,
+            layer: 1,
+            parents,
+        },
+        content: "Event1B".as_bytes().to_vec(),
+    };
+    events.push(event1b.clone());
+
+    let event1c = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 3,
+            layer: 1,
+            parents,
+        },
+        content: "Event1C".as_bytes().to_vec(),
+    };
+    events.push(event1c.clone());
+
+    let event1d = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 4,
+            layer: 1,
+            parents,
+        },
+        content: "Event1D".as_bytes().to_vec(),
+    };
+    events.push(event1d.clone());
+
+    // second layer
+    parents[0] = event1a.id();
+    let event2a = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 5,
+            layer: 2,
+            parents,
+        },
+        content: "Event2A".as_bytes().to_vec(),
+    };
+    events.push(event2a.clone());
+
+    parents[1] = event1b.id();
+    let event2b = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 6,
+            layer: 2,
+            parents,
+        },
+        content: "Event2B".as_bytes().to_vec(),
+    };
+    events.push(event2b.clone());
+
+    parents[0] = event1c.id();
+    parents[1] = event1d.id();
+    let event2c = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 7,
+            layer: 2,
+            parents,
+        },
+        content: "Event2C".as_bytes().to_vec(),
+    };
+    events.push(event2c.clone());
+
+    let event2d = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 8,
+            layer: 2,
+            parents,
+        },
+        content: "Event2D".as_bytes().to_vec(),
+    };
+    events.push(event2d.clone());
+
+    // third layer
+    let mut parents = [NULL_ID; N_EVENT_PARENTS];
+    parents[0] = event2a.id();
+    let event3a = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 9,
+            layer: 3,
+            parents,
+        },
+        content: "Event3A".as_bytes().to_vec(),
+    };
+    events.push(event3a.clone());
+
+    parents[0] = event2b.id();
+    let event3b = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 10,
+            layer: 3,
+            parents,
+        },
+        content: "Event3B".as_bytes().to_vec(),
+    };
+    events.push(event3b.clone());
+
+    parents[0] = event2c.id();
+    let event3c = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 11,
+            layer: 3,
+            parents,
+        },
+        content: "Event3C".as_bytes().to_vec(),
+    };
+    events.push(event3c.clone());
+
+    parents[0] = event2d.id();
+    let event3d = Event {
+        header: Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 12,
+            layer: 3,
+            parents,
+        },
+        content: "Event3D".as_bytes().to_vec(),
+    };
+    events.push(event3d.clone());
+
+    // Insert events 1a to 1d
+    event_graph
+        .header_dag_insert(
+            vec![
+                event1a.header.clone(),
+                event1b.header.clone(),
+                event1c.header.clone(),
+                event1d.header.clone(),
+            ],
+            &dag_name,
+        )
+        .await?;
+    event_graph.dag_insert(&[event1a, event1b, event1c, event1d], &dag_name).await?;
+    // Insert events 2a to 2d
+    event_graph
+        .header_dag_insert(
+            vec![
+                event2a.header.clone(),
+                event2b.header.clone(),
+                event2c.header.clone(),
+                event2d.header.clone(),
+            ],
+            &dag_name,
+        )
+        .await?;
+    event_graph.dag_insert(&[event2a, event2b, event2c, event2d], &dag_name).await?;
+    // Insert events 3a to 3d
+    event_graph
+        .header_dag_insert(
+            vec![
+                event3a.header.clone(),
+                event3b.header.clone(),
+                event3c.header.clone(),
+                event3d.header.clone(),
+            ],
+            &dag_name,
+        )
+        .await?;
+    event_graph.dag_insert(&[event3a, event3b, event3c, event3d], &dag_name).await?;
+
+    //panic!("REACHED HERE");
+
+    Ok((event_graph, events))
+}
+
+#[test]
+fn find_ancestors_of_an_event() -> Result<()> {
+    smol::block_on(async {
+        let (event_graph, events) = build_graph().await?;
+
+        let dag_name = event_graph
+            .dag_store
+            .read()
+            .await
+            .main_dags
+            .last_key_value()
+            .unwrap()
+            .0
+            .clone()
+            .to_string();
+
+        let tree = event_graph.dag_store.read().await.get_dag(&format!("headers_{dag_name}"));
+
+        let events_map: HashMap<String, Event> =
+            events.into_iter().map(|e| (String::from_utf8_lossy(&e.content).into(), e)).collect();
+        let genesis_header = event_graph.current_genesis.read().await.header.clone();
+        let genesis_hash = genesis_header.id();
+        // Genesis layer
+        let mut genesis_ancestors = HashSet::new();
+        event_graph.get_ancestors(&mut genesis_ancestors, genesis_header, &tree).await?;
+        assert!(genesis_ancestors.is_empty());
+
+        // 1st layer
+        let mut event1a_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event1a_ancestors,
+                events_map.get("Event1A").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event1b_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event1b_ancestors,
+                events_map.get("Event1B").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event1c_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event1c_ancestors,
+                events_map.get("Event1C").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event1d_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event1d_ancestors,
+                events_map.get("Event1D").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+
+        // Only genesis is the ancestor
+        assert!(event1a_ancestors.len() == 1 && event1a_ancestors.contains(&genesis_hash));
+        assert!(event1b_ancestors.len() == 1 && event1b_ancestors.contains(&genesis_hash));
+        assert!(event1c_ancestors.len() == 1 && event1c_ancestors.contains(&genesis_hash));
+        assert!(event1d_ancestors.len() == 1 && event1d_ancestors.contains(&genesis_hash));
+
+        // 2nd layer
+        let event2a_expected_ancestors =
+            HashSet::from([genesis_hash, events_map.get("Event1A").unwrap().id()]);
+        let event2b_expected_ancestors = HashSet::from([
+            genesis_hash,
+            events_map.get("Event1B").unwrap().id(),
+            events_map.get("Event1A").unwrap().id(),
+        ]);
+        let event2cd_expected_ancestors = HashSet::from([
+            genesis_hash,
+            events_map.get("Event1C").unwrap().id(),
+            events_map.get("Event1D").unwrap().id(),
+        ]);
+
+        let mut event2a_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event2a_ancestors,
+                events_map.get("Event2A").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event2b_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event2b_ancestors,
+                events_map.get("Event2B").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event2c_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event2c_ancestors,
+                events_map.get("Event2C").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event2d_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event2d_ancestors,
+                events_map.get("Event2D").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+
+        assert_eq!(event2a_ancestors, event2a_expected_ancestors);
+        assert_eq!(event2b_ancestors, event2b_expected_ancestors);
+        assert_eq!(event2c_ancestors, event2cd_expected_ancestors);
+        assert_eq!(event2d_ancestors, event2cd_expected_ancestors);
+
+        // 3rd layer
+        let mut event3a_expected_ancestors = event2a_expected_ancestors.clone();
+        event3a_expected_ancestors.insert(events_map.get("Event2A").unwrap().header.clone().id());
+        let mut event3b_expected_ancestors = event2b_expected_ancestors.clone();
+        event3b_expected_ancestors.insert(events_map.get("Event2B").unwrap().header.clone().id());
+        let mut event3c_expected_ancestors = event2cd_expected_ancestors.clone();
+        event3c_expected_ancestors.insert(events_map.get("Event2C").unwrap().header.clone().id());
+        let mut event3d_expected_ancestors = event2cd_expected_ancestors.clone();
+        event3d_expected_ancestors.insert(events_map.get("Event2D").unwrap().header.clone().id());
+
+        let mut event3a_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event3a_ancestors,
+                events_map.get("Event3A").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event3b_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event3b_ancestors,
+                events_map.get("Event3B").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event3c_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event3c_ancestors,
+                events_map.get("Event3C").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+        let mut event3d_ancestors = HashSet::new();
+        event_graph
+            .get_ancestors(
+                &mut event3d_ancestors,
+                events_map.get("Event3D").unwrap().header.clone(),
+                &tree,
+            )
+            .await?;
+
+        assert_eq!(event3a_ancestors, event3a_expected_ancestors);
+        assert_eq!(event3b_ancestors, event3b_expected_ancestors);
+        assert_eq!(event3c_ancestors, event3c_expected_ancestors);
+        assert_eq!(event3d_ancestors, event3d_expected_ancestors);
+
+        Ok(())
+    })
+}
+
+#[test]
+fn fetches_headers_with_tips() -> Result<()> {
+    smol::block_on(async {
+        let (event_graph, events) = build_graph().await?;
+
+        let dag_name = event_graph
+            .dag_store
+            .read()
+            .await
+            .main_dags
+            .last_key_value()
+            .unwrap()
+            .0
+            .clone()
+            .to_string();
+
+        let map: HashMap<blake3::Hash, String> = events
+            .into_iter()
+            .map(|e| (e.id(), String::from_utf8_lossy(&e.content).into()))
+            .collect();
+        let name_map: HashMap<String, blake3::Hash> =
+            map.iter().map(|(hash, content)| (content.clone(), *hash)).collect();
+
+        let genesis_hash = event_graph.current_genesis.read().await.id();
+        let patha = ["Event3A", "Event2A", "Event1A"];
+        let pathb = ["Event3B", "Event2B", "Event1B", "Event1A"];
+        let pathc = ["Event3C", "Event2C", "Event1C", "Event1D"];
+        let pathd = ["Event3D", "Event2D", "Event1C", "Event1D"];
+
+        let patha_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3A").unwrap()]))]);
+        // Should be only headers that are not ancestors of Event3A
+        let headers = event_graph.fetch_headers_with_tips(&dag_name, &patha_tip).await?;
+        assert!(headers.iter().all(
+            |h| h.id() != genesis_hash && !patha.contains(&map.get(&h.id()).unwrap().as_str())
+        ));
+
+        let pathb_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3B").unwrap()]))]);
+        // Should be only headers that are not ancestors of Event3B
+        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathb_tip).await?;
+        assert!(headers.iter().all(
+            |h| h.id() != genesis_hash && !pathb.contains(&map.get(&h.id()).unwrap().as_str())
+        ));
+
+        let pathc_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3C").unwrap()]))]);
+        // Should be only headers that are not ancestors of Event3C
+        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathc_tip).await?;
+        assert!(headers.iter().all(
+            |h| h.id() != genesis_hash && !pathc.contains(&map.get(&h.id()).unwrap().as_str())
+        ));
+
+        let pathd_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3D").unwrap()]))]);
+        // Should be only headers that are not ancestors of Event3D
+        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathd_tip).await?;
+        assert!(headers.iter().all(
+            |h| h.id() != genesis_hash && !pathd.contains(&map.get(&h.id()).unwrap().as_str())
+        ));
+
+        // Two tips Event3A and Event3D
+        let mut comb_tip = BTreeMap::new();
+        comb_tip.extend(patha_tip);
+        comb_tip.get_mut(&3).unwrap().extend(pathd_tip.get(&3).unwrap());
+
+        // Should be only headers that are not ancestors of Event3A and Event3D
+        let headers = event_graph.fetch_headers_with_tips(&dag_name, &comb_tip).await?;
+        assert!(headers.iter().all(|h| h.id() != genesis_hash &&
+            !patha.contains(&map.get(&h.id()).unwrap().as_str()) &&
+            !pathd.contains(&map.get(&h.id()).unwrap().as_str())));
+
+        Ok(())
+    })
+}

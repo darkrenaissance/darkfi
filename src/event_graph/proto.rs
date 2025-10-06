@@ -174,7 +174,7 @@ impl_p2p_message!(HeaderPut, "EventGraph::HeaderPut", 0, 0, DEFAULT_METERING_CON
 
 /// A P2P message representing a header request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct HeaderReq(pub String);
+pub struct HeaderReq(pub String, pub LayerUTips);
 impl_p2p_message!(HeaderReq, "EventGraph::HeaderReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing a header reply
@@ -917,10 +917,9 @@ impl ProtocolEventGraph {
     /// sending their current headers.
     async fn handle_header_req(self: Arc<Self>) -> Result<()> {
         loop {
-            let dag_name = match self.hdr_req_sub.receive().await {
-                Ok(v) => v.0.clone(),
-                Err(_) => continue,
-            };
+            let Ok(v) = self.hdr_req_sub.receive().await else { continue };
+            let (dag_name, tips) = (&v.0, &v.1);
+
             trace!(
                 target: "event_graph::protocol::handle_tip_req",
                 "Got TipReq [{}]", self.channel.display_address(),
@@ -939,20 +938,12 @@ impl ProtocolEventGraph {
 
             // We received header request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let dag_timestamp = u64::from_str(&dag_name)?;
+            let dag_timestamp = u64::from_str(dag_name)?;
             let store = self.event_graph.dag_store.read().await;
             if !store.header_dags.contains_key(&dag_timestamp) {
                 continue
             }
-            let main_dag = store.get_dag(&dag_name);
-            let mut headers = vec![];
-            for item in main_dag.iter() {
-                let (_, event) = item.unwrap();
-                let event: Event = deserialize_async(&event).await.unwrap();
-                if !headers.contains(&event.header) || event.header.parents != NULL_PARENTS {
-                    headers.push(event.header);
-                }
-            }
+            let headers = self.event_graph.fetch_headers_with_tips(dag_name, tips).await?;
             // let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
             // for (_, tips) in layers.iter() {
             //     for tip in tips {

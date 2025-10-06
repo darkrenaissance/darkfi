@@ -595,19 +595,22 @@ impl EventGraph {
         }
 
         if missing_parents.is_empty() {
-            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
+            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
             return Ok(())
         }
-
-        // Header sync first
-        // TODO: requesting headers should be in a way that we wouldn't
-        // recieve the same header(s) again, by sending our tip, other
-        // nodes should send back the ones after it
         let hdr_tree_name = format!("headers_{dag_name}");
         let header_dag = self.dag_store.read().await.get_dag(&hdr_tree_name);
+        let dag_timestamp = u64::from_str(&dag_name)?;
+        let our_tips =
+            self.dag_store.read().await.header_dags.get(&dag_timestamp).unwrap().1.clone();
         let mut headers_requests = FuturesUnordered::new();
         for channel in channels.iter() {
-            headers_requests.push(request_header(&channel, dag_name.clone(), comms_timeout))
+            headers_requests.push(request_header(
+                channel,
+                dag_name.clone(),
+                our_tips.clone(),
+                comms_timeout,
+            ))
         }
 
         while let Some(peer_headers) = headers_requests.next().await {
@@ -616,12 +619,12 @@ impl EventGraph {
 
         // start download payload
         if !fast_mode {
-            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
+            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Fetching events");
             let mut header_sorted = vec![];
 
             let main_dag = self.dag_store.read().await.get_dag(&dag_name);
             for iter_elem in header_dag.iter() {
-                let (hash_bytes , val) = iter_elem.unwrap();
+                let (hash_bytes, val) = iter_elem.unwrap();
                 let val: Header = deserialize_async(&val).await.unwrap();
                 if val.parents != NULL_PARENTS && !main_dag.contains_key(hash_bytes)? {
                     header_sorted.push(val);
@@ -629,7 +632,7 @@ impl EventGraph {
             }
             header_sorted.sort_by(|x, y| x.layer.cmp(&y.layer));
 
-            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Retrieving {} Events", header_sorted.len());
+            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Retrieving {} Events", header_sorted.len());
             // Implement parallel download of events with a batch size
             let batch = 20;
             // Mapping of the chunk group id to the chunk, using a BTreeMap help us to
@@ -689,7 +692,7 @@ impl EventGraph {
                     peer_status.insert(free_channels[i].address().clone(), PeerStatus::Busy);
                 }
 
-                info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Retrieving Events from {} peers", futures.len());
+                info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Retrieving Events from {} peers", futures.len());
                 if let Some(resp) = futures.next().await {
                     let (events, chunk_id, channel) = resp;
                     if let Ok(events) = events {
@@ -701,7 +704,7 @@ impl EventGraph {
                         peer_status.insert(channel.address().clone(), PeerStatus::Failed);
                     }
 
-                    info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Retrieved Events: {}/{}", retrieved_count, header_sorted.len());
+                    info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Retrieved Events: {}/{}", retrieved_count, header_sorted.len());
                 }
             }
 
@@ -709,12 +712,12 @@ impl EventGraph {
             for (_, chunk) in received_events {
                 verified_count += chunk.len();
                 self.dag_insert(&chunk, &dag_name).await?;
-                info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Verified Events: {}/{}", verified_count, retrieved_count);
+                info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Verified Events: {}/{}", verified_count, retrieved_count);
             }
         }
         // <-- end download payload
 
-        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
+        info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
         Ok(())
     }
 
@@ -843,7 +846,7 @@ impl EventGraph {
             }
 
             if !event.dag_validate(&header_dag).await? {
-                error!(target: "event_graph::dag_insert()", "Event {} is invalid!", event_id);
+                error!(target: "event_graph::dag_insert", "Event {} is invalid!", event_id);
                 return Err(Error::EventIsInvalid)
             }
 
@@ -953,11 +956,11 @@ impl EventGraph {
                 continue
             }
             debug!(
-                target: "event_graph::header_dag_insert()",
+                target: "event_graph::header_dag_insert",
                 "Inserting header {} into the DAG", header_id,
             );
             if !header.validate(&header_dag, self.hours_rotation, Some(&overlay)).await? {
-                error!(target: "event_graph::header_dag_insert()", "Header {} is invalid!", header_id);
+                error!(target: "event_graph::header_dag_insert", "Header {} is invalid!", header_id);
                 return Err(Error::HeaderIsInvalid)
             }
             let header_se = serialize_async(&header).await;
@@ -1207,6 +1210,74 @@ impl EventGraph {
         JsonResponse::new(result, id).into()
     }
 
+    /// Fetch all events that are not ancestors of the tips
+    pub async fn fetch_headers_with_tips(
+        &self,
+        dag_name: &str,
+        tips: &LayerUTips,
+    ) -> Result<Vec<Header>> {
+        debug!(
+             target: "event_graph::fetch_headers_with_tips",
+             "fetching headers with tips {tips:?}"
+        );
+
+        let tree = self.dag_store.read().await.get_dag(&format!("headers_{dag_name}"));
+
+        // Let's identify all the events that are ancestors of the tips so that we don't send those
+        let mut ancestors = HashSet::new();
+
+        for hashes in tips.values() {
+            for hash in hashes {
+                ancestors.insert(*hash);
+                let val = tree
+                    .get(hash.as_bytes())?
+                    .ok_or_else(|| Error::EventNotFound("The Tip is not found".to_owned()))?;
+                let header: Header = deserialize_async(&val).await?;
+                self.get_ancestors(&mut ancestors, header, &tree).await?
+            }
+        }
+
+        let mut result = Vec::with_capacity(tree.len() - ancestors.len());
+        // Now find the events that are not ancestors of the tips
+        // it is a set difference operation: unseen_events = all_events - tip_ancestors
+        for iter_elem in tree.iter() {
+            let (id, val) = iter_elem?;
+            let hash = Hash::from_bytes((&id as &[u8]).try_into()?);
+            if !ancestors.contains(&hash) {
+                let header: Header = deserialize_async(&val).await?;
+                result.push(header);
+            }
+        }
+
+        result.sort_unstable_by(|a, b| a.layer.cmp(&b.layer));
+
+        Ok(result)
+    }
+
+    /// Finds all the ancestors of an event
+    async fn get_ancestors(
+        &self,
+        visited: &mut HashSet<Hash>,
+        header: Header,
+        tree: &sled::Tree,
+    ) -> Result<()> {
+        let mut stack = VecDeque::new();
+        stack.push_back(header);
+
+        while let Some(hdr) = stack.pop_back() {
+            for parent in hdr.parents {
+                if parent != NULL_ID && !visited.contains(&parent) {
+                    visited.insert(parent);
+                    let val = tree.get(parent.as_bytes())?.unwrap();
+                    let header: Header = deserialize_async(&val).await?;
+                    stack.push_back(header);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Fetch all the events that are on a higher layers than the
     /// provided ones.
     pub async fn fetch_successors_of(&self, tips: LayerUTips) -> Result<Vec<Event>> {
@@ -1218,7 +1289,7 @@ impl EventGraph {
         let current_genesis = self.current_genesis.read().await;
         let dag_name = current_genesis.header.timestamp.to_string();
         let mut graph = HashMap::new();
-        for iter_elem in self.dag_store.read().await.get_dag(dag_name).iter() {
+        for iter_elem in self.dag_store.read().await.get_dag(&dag_name).iter() {
             let (id, val) = iter_elem.unwrap();
             let hash = Hash::from_bytes((&id as &[u8]).try_into().unwrap());
             let event: Event = deserialize_async(&val).await.unwrap();
@@ -1367,6 +1438,7 @@ impl EventGraph {
 async fn request_header(
     peer: &Channel,
     tree_name: String,
+    tips: LayerUTips,
     comms_timeout: u64,
 ) -> Result<Vec<Header>> {
     let url = peer.address();
@@ -1375,7 +1447,7 @@ async fn request_header(
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "event_graph::dag_sync()",
+                target: "event_graph::dag_sync",
                 "[EVENTGRAPH] Sync: Couldn't subscribe HeaderReq for peer {}, skipping ({})",
                 url, e,
             );
@@ -1383,9 +1455,9 @@ async fn request_header(
         }
     };
 
-    if let Err(e) = peer.send(&HeaderReq(tree_name)).await {
+    if let Err(e) = peer.send(&HeaderReq(tree_name, tips)).await {
         error!(
-            target: "event_graph::dag_sync()",
+            target: "event_graph::dag_sync",
             "[EVENTGRAPH] Sync: Couldn't contact peer {}, skipping ({})", url, e,
         );
         return Err(Error::EventNotFound("Couldn't contact peer".to_owned()));
@@ -1394,7 +1466,7 @@ async fn request_header(
     // Node waits for response
     let Ok(peer_headers) = hdr_rep_sub.receive_with_timeout(comms_timeout).await else {
         error!(
-            target: "event_graph::dag_sync()",
+            target: "event_graph::dag_sync",
             "[EVENTGRAPH] Sync: Peer {} didn't reply with headers in time, skipping", url,
         );
         // communicated_peers -= 1;
@@ -1415,7 +1487,7 @@ async fn request_event(
     let url = peer.address();
 
     debug!(
-        target: "event_graph::dag_sync()",
+        target: "event_graph::dag_sync",
         "Requesting {:?} from {}...", headers, url,
     );
 
@@ -1423,7 +1495,7 @@ async fn request_event(
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "event_graph::dag_sync()",
+                target: "event_graph::dag_sync",
                 "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",
                 url, e,
             );
@@ -1438,7 +1510,7 @@ async fn request_event(
     // let request_missing_events = missing_parents.clone().into_iter().collect();
     if let Err(e) = peer.send(&EventReq(headers.clone())).await {
         error!(
-            target: "event_graph::dag_sync()",
+            target: "event_graph::dag_sync",
             "[EVENTGRAPH] Sync: Failed communicating EventReq({:?}) to {}: {}",
             headers, url, e,
         );
@@ -1452,7 +1524,7 @@ async fn request_event(
     // Node waits for response
     let Ok(event) = ev_rep_sub.receive_with_timeout(comms_timeout).await else {
         error!(
-            target: "event_graph::dag_sync()",
+            target: "event_graph::dag_sync",
             "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
             headers, url,
         );
