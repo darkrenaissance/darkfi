@@ -786,8 +786,11 @@ impl BaseEdit {
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
+        if !self.is_active.get() {
+            return false
+        }
+
         //t!("handle_touch_move({touch_pos:?})");
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_move"));
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -804,6 +807,8 @@ impl BaseEdit {
                     self.node().trigger("paste_request", vec![]).await.unwrap();
                 } else {
                     self.abs_to_local(&mut touch_pos);
+
+                    let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_move"));
                     self.start_touch_select(touch_pos, atom).await;
                     self.redraw_select(atom.batch_id).await;
                 }
@@ -812,6 +817,28 @@ impl BaseEdit {
             }
             TouchStateAction::DragSelectHandle { side } => {
                 let handle_descent = self.handle_descent.get();
+
+                // New code
+
+                let rect = self.rect.get();
+                let is_touch_hover = rect.contains(touch_pos);
+
+                let sel_sender = self.sel_sender.lock().clone().unwrap();
+                // Mouse is outside rect?
+                // If so we gotta scroll it while selecting.
+                if !is_touch_hover {
+                    // This process will begin selecting text and applying scroll too.
+                    sel_sender.send(Some(touch_pos)).await.unwrap();
+                } else {
+                    // Stop any existing select/scroll process
+                    sel_sender.send(None).await.unwrap();
+                    // Mouse is inside so just select the text once and be done.
+                    self.handle_select(touch_pos).await;
+                }
+
+                // Old code
+
+                /*
                 self.abs_to_local(&mut touch_pos);
 
                 let editor = self.lock_editor().await;
@@ -852,6 +879,7 @@ impl BaseEdit {
                 drop(editor);
 
                 self.redraw_select(atom.batch_id).await;
+                */
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
@@ -861,6 +889,7 @@ impl BaseEdit {
                     return true
                 }
                 self.scroll.store(scroll, Ordering::Release);
+                let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_move"));
                 self.redraw_scroll(atom.batch_id).await;
             }
             TouchStateAction::SetCursorPos => {
@@ -884,6 +913,10 @@ impl BaseEdit {
             }
             _ => {}
         }
+
+        // Stop any selection scrolling
+        let scroll_sender = self.sel_sender.lock().clone().unwrap();
+        scroll_sender.send(None).await.unwrap();
 
         self.node().trigger("focus_request", vec![]).await.unwrap();
 
