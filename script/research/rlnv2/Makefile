@@ -6,7 +6,7 @@ CARGO = cargo
 # Compile target
 RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 
-PROOFS_SRC = signal.zk slash.zk
+PROOFS_SRC = register.zk signal.zk slash.zk
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 ZKAS = ../../../../zkas
