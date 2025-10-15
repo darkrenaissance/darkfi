@@ -31,7 +31,7 @@ fn tcp_transport() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        let url = Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap();
+        let url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
 
         let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
@@ -66,7 +66,7 @@ fn tcp_tls_transport() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        let url = Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap();
+        let url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
 
         let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor

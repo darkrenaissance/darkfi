@@ -22,7 +22,3 @@ getrandom = { version = "0.2.8", features = ["custom"] }
 [features]
 default = []
 no-entrypoint = []
-
-#[lints]
-#workspace = true
-
