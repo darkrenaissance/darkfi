@@ -35,6 +35,7 @@ pub trait HandlerP2p: Sync + Send {
                 net::session::SESSION_MANUAL => "manual",
                 net::session::SESSION_REFINE => "refine",
                 net::session::SESSION_SEED => "seed",
+                net::session::SESSION_DIRECT => "direct",
                 _ => panic!("invalid result from channel.session_type_id()"),
             };
 

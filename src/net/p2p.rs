@@ -34,8 +34,9 @@ use super::{
     message::{Message, SerializedMessage},
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
-        InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession, SeedSyncSessionPtr,
+        DirectSession, DirectSessionPtr, InboundSession, InboundSessionPtr, ManualSession,
+        ManualSessionPtr, OutboundSession, OutboundSessionPtr, RefineSession, RefineSessionPtr,
+        SeedSyncSession, SeedSyncSessionPtr,
     },
     settings::Settings,
 };
@@ -71,6 +72,8 @@ pub struct P2p {
     session_refine: RefineSessionPtr,
     /// Reference to configured [`SeedSyncSession`]
     session_seedsync: SeedSyncSessionPtr,
+    /// Reference to configured [`DirectSession`]
+    session_direct: DirectSessionPtr,
     /// Enable network debugging
     pub dnet_enabled: AtomicBool,
     /// The publisher for which we can give dnet info over
@@ -112,6 +115,7 @@ impl P2p {
             session_outbound: OutboundSession::new(p2p.clone()),
             session_refine: RefineSession::new(p2p.clone()),
             session_seedsync: SeedSyncSession::new(p2p.clone()),
+            session_direct: DirectSession::new(p2p.clone()),
             dnet_enabled: AtomicBool::new(false),
             dnet_publisher: Publisher::new(),
         });
@@ -146,6 +150,9 @@ impl P2p {
         // Start the refine session
         self.session_refine().start().await;
 
+        // Start the direct session
+        self.session_direct().start().await;
+
         info!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
         Ok(())
     }
@@ -168,6 +175,7 @@ impl P2p {
         self.session_seedsync().stop().await;
         self.session_outbound().stop().await;
         self.session_refine().stop().await;
+        self.session_direct().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active peers.
@@ -257,6 +265,11 @@ impl P2p {
     /// Get pointer to seedsync session
     pub fn session_seedsync(&self) -> SeedSyncSessionPtr {
         self.session_seedsync.clone()
+    }
+
+    /// Get pointer to direct session
+    pub fn session_direct(&self) -> DirectSessionPtr {
+        self.session_direct.clone()
     }
 
     /// Enable network debugging

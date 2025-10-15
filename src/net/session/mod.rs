@@ -38,17 +38,20 @@ pub mod seedsync_session;
 pub use seedsync_session::{SeedSyncSession, SeedSyncSessionPtr};
 pub mod refine_session;
 pub use refine_session::{RefineSession, RefineSessionPtr};
+pub mod direct_session;
+pub use direct_session::{DirectSession, DirectSessionPtr};
 
 /// Bitwise selectors for the `protocol_registry`
 pub type SessionBitFlag = u32;
-pub const SESSION_INBOUND: SessionBitFlag = 0b00001;
-pub const SESSION_OUTBOUND: SessionBitFlag = 0b00010;
-pub const SESSION_MANUAL: SessionBitFlag = 0b00100;
-pub const SESSION_SEED: SessionBitFlag = 0b01000;
-pub const SESSION_REFINE: SessionBitFlag = 0b10000;
+pub const SESSION_INBOUND: SessionBitFlag = 0b000001;
+pub const SESSION_OUTBOUND: SessionBitFlag = 0b000010;
+pub const SESSION_MANUAL: SessionBitFlag = 0b000100;
+pub const SESSION_SEED: SessionBitFlag = 0b001000;
+pub const SESSION_REFINE: SessionBitFlag = 0b010000;
+pub const SESSION_DIRECT: SessionBitFlag = 0b100000;
 
-pub const SESSION_DEFAULT: SessionBitFlag = 0b00111;
-pub const SESSION_ALL: SessionBitFlag = 0b11111;
+pub const SESSION_DEFAULT: SessionBitFlag = 0b100111;
+pub const SESSION_ALL: SessionBitFlag = 0b111111;
 
 pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
@@ -73,7 +76,7 @@ pub async fn remove_sub_on_stop(
     );
 
     // Downgrade to greylist if this is a outbound session.
-    if type_id & SESSION_OUTBOUND != 0 {
+    if type_id & (SESSION_OUTBOUND | SESSION_DIRECT) != 0 {
         debug!(
             target: "net::session::remove_sub_on_stop()",
             "Downgrading {}",
@@ -199,7 +202,7 @@ pub trait Session: Sync {
         match protocol_version.run(executor.clone()).await {
             Ok(()) => {
                 // Upgrade to goldlist if this is a outbound session.
-                if self.type_id() & SESSION_OUTBOUND != 0 {
+                if self.type_id() & (SESSION_OUTBOUND | SESSION_DIRECT) != 0 {
                     debug!(
                         target: "net::session::perform_handshake_protocols()",
                         "Upgrading {}", channel.display_address(),

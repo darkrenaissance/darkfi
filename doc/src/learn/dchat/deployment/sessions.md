@@ -6,8 +6,8 @@ network. An inbound node receives connections. An outbound node makes
 connections.
 
 The behavior of these nodes is defined in what is called a
-[Session](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/mod.rs#L111).
-There are four types of sessions: `Manual`, `Inbound`, `Outbound` and `SeedSync`.
+[Session](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/mod.rs#L119).
+There are five types of sessions: `Manual`, `Inbound`, `Outbound`, `SeedSync` and `Direct`.
 
 There behavior is as follows: 
 
@@ -26,3 +26,8 @@ a specified address.
 Loops through all the configured seeds and tries to connect to them
 using a `Connector`. Either connects successfully, fails with an error or
 times out.
+
+**Direct**: Creates a connection to a single address using 
+`DirectSession::create_channel`. The address may or may not already be in a
+hostlist. Once the channel is stopped this session will not try to reconnect.
+Used by protocols to create a temporary connection to a specific address.
