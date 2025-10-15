@@ -202,7 +202,7 @@ impl ProtocolEventGraph {
             error!(
                 target: "event_graph::protocol::handle_event_put()",
                 "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
-                self.channel.address(),
+                self.channel.display_address(),
             );
             self.channel.stop().await;
             return Err(Error::ChannelStopped)
@@ -210,7 +210,7 @@ impl ProtocolEventGraph {
 
         warn!(
             target: "event_graph::protocol::handle_event_put()",
-            "[EVENTGRAPH] Peer {} sent us a malicious event", self.channel.address(),
+            "[EVENTGRAPH] Peer {} sent us a malicious event", self.channel.display_address(),
         );
 
         Ok(())
@@ -230,7 +230,7 @@ impl ProtocolEventGraph {
             };
             trace!(
                  target: "event_graph::protocol::handle_event_put()",
-                 "Got EventPut: {} [{}]", event.id(), self.channel.address(),
+                 "Got EventPut: {} [{}]", event.id(), self.channel.display_address(),
             );
 
             // Check if node has finished syncing its DAG
@@ -349,7 +349,7 @@ impl ProtocolEventGraph {
                         error!(
                             target: "event_graph::protocol::handle_event_put()",
                             "[EVENTGRAPH] Timeout while waiting for parents {missing_parents:?} from {}",
-                            self.channel.address(),
+                            self.channel.display_address(),
                         );
                         self.channel.stop().await;
                         return Err(Error::ChannelStopped)
@@ -363,7 +363,7 @@ impl ProtocolEventGraph {
                             error!(
                                 target: "event_graph::protocol::handle_event_put()",
                                 "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
-                                self.channel.address(), parent.id(),
+                                self.channel.display_address(), parent.id(),
                             );
                             self.channel.stop().await;
                             return Err(Error::ChannelStopped)
@@ -448,7 +448,7 @@ impl ProtocolEventGraph {
             };
             trace!(
                 target: "event_graph::protocol::handle_event_req()",
-                "Got EventReq: {event_ids:?} [{}]", self.channel.address(),
+                "Got EventReq: {event_ids:?} [{}]", self.channel.display_address(),
             );
 
             // Check if node has finished syncing its DAG
@@ -479,7 +479,7 @@ impl ProtocolEventGraph {
                         error!(
                             target: "event_graph::protocol::handle_event_req()",
                             "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
-                            self.channel.address(),
+                            self.channel.display_address(),
                         );
                         self.channel.stop().await;
                         return Err(Error::ChannelStopped)
@@ -488,7 +488,7 @@ impl ProtocolEventGraph {
                     warn!(
                         target: "event_graph::protocol::handle_event_req()",
                         "[EVENTGRAPH] Peer {} requested an unexpected event {event_id:?}",
-                        self.channel.address()
+                        self.channel.display_address()
                     );
                     continue
                 }
@@ -544,7 +544,7 @@ impl ProtocolEventGraph {
             self.tip_req_sub.receive().await?;
             trace!(
                 target: "event_graph::protocol::handle_tip_req()",
-                "Got TipReq [{}]", self.channel.address(),
+                "Got TipReq [{}]", self.channel.display_address(),
             );
 
             // Check if node has finished syncing its DAG

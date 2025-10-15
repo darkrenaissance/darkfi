@@ -76,7 +76,7 @@ impl ProtocolJobsManager {
         debug!(
             target: "net::protocol_jobs_manager",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",
-            self.name, self.channel.address(),
+            self.name, self.channel.display_address(),
         );
 
         let tasks = std::mem::take(&mut *self.tasks.lock().await);

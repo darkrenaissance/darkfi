@@ -229,7 +229,7 @@ impl EventGraph {
         // Let's first ask all of our peers for their tips and collect them
         // in our hashmap above.
         for channel in channels.iter() {
-            let url = channel.address();
+            let url = channel.display_address();
 
             let tip_rep_sub = match channel.subscribe_msg::<TipRep>().await {
                 Ok(v) => v,
@@ -324,7 +324,7 @@ impl EventGraph {
             let mut found_event = false;
 
             for channel in channels.iter() {
-                let url = channel.address();
+                let url = channel.display_address();
 
                 debug!(
                     target: "event_graph::dag_sync()",

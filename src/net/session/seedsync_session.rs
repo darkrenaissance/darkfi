@@ -216,7 +216,8 @@ impl Slot {
                 Ok((url, ch)) => {
                     info!(
                         target: "net::session::seedsync_session",
-                        "[P2P] Connected seed [{url}]",
+                        "[P2P] Connected seed [{}]",
+                        ch.display_address()
                     );
 
                     match self.session().register_channel(ch.clone(), ex.clone()).await {
@@ -225,7 +226,8 @@ impl Slot {
 
                             info!(
                                 target: "net::session::seedsync_session",
-                                "[P2P] Disconnecting from seed [{url}]"
+                                "[P2P] Disconnecting from seed [{}]",
+                                ch.display_address()
                             );
                             ch.stop().await;
 

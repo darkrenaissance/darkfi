@@ -176,7 +176,7 @@ impl InboundSession {
     ) {
         info!(
              target: "net::inbound_session::setup_channel",
-             "[P2P] Connected Inbound #{index} [{}]", channel.address()
+             "[P2P] Connected Inbound #{index} [{}]", channel.display_address()
         );
 
         dnetev!(self, InboundConnected, {

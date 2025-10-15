@@ -330,12 +330,13 @@ impl Slot {
 
             info!(
                 target: "net::outbound_session::try_connect()",
-                "[P2P] Outbound slot #{slot} connected [{addr}]"
+                "[P2P] Outbound slot #{slot} connected [{}]",
+                channel.display_address()
             );
 
             dnetev!(self, OutboundSlotConnected, {
                 slot: self.slot,
-                addr: addr.clone(),
+                addr: channel.display_address().clone(),
                 channel_id: channel.info.id
             });
 
@@ -357,7 +358,8 @@ impl Slot {
 
                 warn!(
                     target: "net::outbound_session::try_connect()",
-                    "[P2P] Suspending addr=[{addr}] slot #{slot}"
+                    "[P2P] Suspending addr=[{}] slot #{slot}",
+                    channel.display_address()
                 );
 
                 // Peer disconnected during the registry process. We'll downgrade this peer now.

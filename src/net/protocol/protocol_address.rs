@@ -105,14 +105,14 @@ impl ProtocolAddress {
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_address::handle_receive_addrs()",
-            "[START] address={}", self.channel.address(),
+            "[START] address={}", self.channel.display_address(),
         );
 
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(
                 target: "net::protocol_address::handle_receive_addrs()",
-                "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
+                "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.display_address(),
             );
 
             debug!(
@@ -130,7 +130,7 @@ impl ProtocolAddress {
     async fn handle_receive_get_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_address::handle_receive_get_addrs()",
-            "[START] address={}", self.channel.address(),
+            "[START] address={}", self.channel.display_address(),
         );
 
         loop {
@@ -138,7 +138,7 @@ impl ProtocolAddress {
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
-                "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
+                "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.display_address(),
             );
 
             // Filter out transports not meant to be shared like Socks5 and Socks5+tls
@@ -207,7 +207,7 @@ impl ProtocolAddress {
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
-                "Sending {} addresses to {}", addrs.len(), self.channel.address(),
+                "Sending {} addresses to {}", addrs.len(), self.channel.display_address(),
             );
 
             let addrs_msg = AddrsMessage { addrs };
@@ -220,7 +220,7 @@ impl ProtocolAddress {
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_address::send_my_addrs",
-            "[START] channel address={}", self.channel.address(),
+            "[START] channel address={}", self.channel.display_address(),
         );
 
         if self.channel.session_type_id() != SESSION_OUTBOUND {
@@ -258,7 +258,7 @@ impl ProtocolAddress {
 
         debug!(
             target: "net::protocol_address::send_my_addrs",
-            "[END] channel address={}", self.channel.address(),
+            "[END] channel address={}", self.channel.display_address(),
         );
 
         Ok(())
@@ -274,7 +274,7 @@ impl ProtocolBase for ProtocolAddress {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(
             target: "net::protocol_address::start()",
-            "START => address={}", self.channel.address(),
+            "START => address={}", self.channel.display_address(),
         );
 
         let settings = self.settings.read().await;
@@ -300,7 +300,7 @@ impl ProtocolBase for ProtocolAddress {
 
         debug!(
             target: "net::protocol_address::start()",
-            "END => address={}", self.channel.address(),
+            "END => address={}", self.channel.display_address(),
         );
 
         Ok(())

@@ -65,7 +65,7 @@ impl ProtocolVersion {
     /// info and wait for version ack. Wait for version info and send
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.address());
+        debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.display_address());
         let timeout =
             Timer::after(Duration::from_secs(self.settings.read().await.channel_handshake_timeout));
         let version = self.clone().exchange_versions(executor);
@@ -79,7 +79,7 @@ impl ProtocolVersion {
         match select(version, timeout).await {
             Either::Left((Ok(_), _)) => {
                 debug!(target: "net::protocol_version::run()", "END => address={}",
-                self.channel.address());
+                self.channel.display_address());
 
                 Ok(())
             }
@@ -87,7 +87,7 @@ impl ProtocolVersion {
                 error!(
                     target: "net::protocol_version::run()",
                     "[P2P] Version Exchange failed [{}]: {e}",
-                    self.channel.address()
+                    self.channel.display_address()
                 );
 
                 self.channel.stop().await;
@@ -98,7 +98,7 @@ impl ProtocolVersion {
                 error!(
                     target: "net::protocol_version::run()",
                     "[P2P] Version Exchange timed out [{}]",
-                    self.channel.address(),
+                    self.channel.display_address(),
                 );
 
                 self.channel.stop().await;
@@ -111,7 +111,7 @@ impl ProtocolVersion {
     async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(
             target: "net::protocol_version::exchange_versions()",
-            "START => address={}", self.channel.address(),
+            "START => address={}", self.channel.display_address(),
         );
 
         let send = executor.spawn(self.clone().send_version());
@@ -136,7 +136,7 @@ impl ProtocolVersion {
 
         debug!(
             target: "net::protocol_version::exchange_versions()",
-            "END => address={}", self.channel.address(),
+            "END => address={}", self.channel.display_address(),
         );
         Ok(())
     }
@@ -146,7 +146,7 @@ impl ProtocolVersion {
     async fn send_version(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_version::send_version()",
-            "START => address={}", self.channel.address(),
+            "START => address={}", self.channel.display_address(),
         );
 
         let settings = self.settings.read().await;
@@ -187,7 +187,7 @@ impl ProtocolVersion {
             error!(
                 target: "net::protocol_version::send_version()",
                 "[P2P] Version mismatch from {}. Disconnecting...",
-                self.channel.address(),
+                self.channel.display_address(),
             );
 
             self.channel.stop().await;
@@ -197,7 +197,7 @@ impl ProtocolVersion {
         // Versions are compatible
         debug!(
             target: "net::protocol_version::send_version()",
-            "END => address={}", self.channel.address(),
+            "END => address={}", self.channel.display_address(),
         );
         Ok(())
     }
@@ -207,7 +207,7 @@ impl ProtocolVersion {
     async fn recv_version(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_version::recv_version()",
-            "START => address={}", self.channel.address(),
+            "START => address={}", self.channel.display_address(),
         );
 
         // Receive version message
@@ -224,7 +224,7 @@ impl ProtocolVersion {
 
         debug!(
             target: "net::protocol_version::recv_version()",
-            "END => address={}", self.channel.address(),
+            "END => address={}", self.channel.display_address(),
         );
         Ok(())
     }

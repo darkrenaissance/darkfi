@@ -68,14 +68,16 @@ pub async fn remove_sub_on_stop(
 
     debug!(
         target: "net::session::remove_sub_on_stop()",
-        "Received stop event. Removing channel {addr}"
+        "Received stop event. Removing channel {}",
+        channel.display_address()
     );
 
     // Downgrade to greylist if this is a outbound session.
     if type_id & SESSION_OUTBOUND != 0 {
         debug!(
             target: "net::session::remove_sub_on_stop()",
-            "Downgrading {addr}"
+            "Downgrading {}",
+            channel.display_address()
         );
 
         // If the host we are downgrading has been moved to blacklist,
@@ -85,12 +87,12 @@ pub async fn remove_sub_on_stop(
             Some(last_seen) => {
                 if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey).await {
                     error!(target: "net::session::remove_sub_on_stop()",
-            "Failed to move host {} to Greylist! Err={e}", addr.clone());
+            "Failed to move host {} to Greylist! Err={e}", channel.display_address());
                 }
             }
             None => {
                 error!(target: "net::session::remove_sub_on_stop()",
-               "Failed to fetch last seen for {addr}");
+               "Failed to fetch last seen for {}", channel.display_address());
             }
         }
     }
@@ -141,7 +143,7 @@ pub trait Session: Sync {
         let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
         debug!(
             target: "net::session::register_channel()",
-            "Performing handshake protocols {}", channel.clone().address(),
+            "Performing handshake protocols {}", channel.clone().display_address(),
         );
 
         let handshake_task =
@@ -154,11 +156,11 @@ pub trait Session: Sync {
         match handshake_task.await {
             Ok(()) => {
                 debug!(target: "net::session::register_channel()",
-                "Handshake successful {}", channel.clone().address());
+                "Handshake successful {}", channel.clone().display_address());
             }
             Err(e) => {
                 debug!(target: "net::session::register_channel()",
-                "Handshake error {e} {}", channel.clone().address());
+                "Handshake error {e} {}", channel.clone().display_address());
 
                 return Err(e)
             }
@@ -198,7 +200,7 @@ pub trait Session: Sync {
                 if self.type_id() & SESSION_OUTBOUND != 0 {
                     debug!(
                         target: "net::session::perform_handshake_protocols()",
-                        "Upgrading {}", channel.address(),
+                        "Upgrading {}", channel.display_address(),
                     );
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();

@@ -51,7 +51,7 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         let ping_res = handler.ping(channel.clone()).await;
 
         if let Err(e) = ping_res {
-            warn!(target: "dht::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.address());
+            warn!(target: "dht::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.display_address());
             // channel.stop().await;
             continue;
         }

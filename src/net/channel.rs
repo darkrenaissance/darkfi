@@ -412,7 +412,7 @@ impl Channel {
                         info!(
                             target: "net::channel::main_receive_loop()",
                             "[P2P] Channel {} disconnected",
-                            self.address()
+                            self.display_address()
                         );
                     } else if let Error::MessageInvalid = err {
                         // The command name length has exceeded the limit, this is possibly a malicious attack so ban it
@@ -426,7 +426,7 @@ impl Channel {
                         error!(
                             target: "net::channel::main_receive_loop()",
                             "[P2P] Read error on channel {}: {err}",
-                            self.address()
+                            self.display_address()
                         );
                     }
 
@@ -487,7 +487,7 @@ impl Channel {
     /// Ban a malicious peer and stop the channel.
     pub async fn ban(&self) {
         debug!(target: "net::channel::ban()", "START {self:?}");
-        debug!(target: "net::channel::ban()", "Peer: {:?}", self.address());
+        debug!(target: "net::channel::ban()", "Peer: {:?}", self.display_address());
 
         // Just store the hostname if this is an inbound session.
         // This will block all ports from this peer by setting
@@ -495,7 +495,7 @@ impl Channel {
         let peer = {
             if self.session_type_id() & SESSION_INBOUND != 0 {
                 if self.address().host().is_none() {
-                    error!("[P2P] ban() caught Url without host: {:?}", self.address());
+                    error!("[P2P] ban() caught Url without host: {:?}", self.display_address());
                     return
                 }
 
@@ -546,6 +546,12 @@ impl Channel {
             }
         }
         &self.info.connect_addr
+    }
+
+    /// Returns the address used for UI purposes like in logging or tools like dnet.
+    /// For transport_mixed connection shows the mixed address.
+    pub fn display_address(&self) -> &Url {
+        self.info.resolve_addr.as_ref().unwrap_or(&self.info.connect_addr)
     }
 
     /// Returns the socket address that has undergone transport
@@ -602,6 +608,6 @@ impl Channel {
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Channel addr='{}' id={}>", self.address(), self.info.id)
+        write!(f, "<Channel addr='{}' id={}>", self.display_address(), self.info.id)
     }
 }

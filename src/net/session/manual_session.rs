@@ -188,7 +188,8 @@ impl Slot {
                 Ok((url, channel)) => {
                     info!(
                         target: "net::manual_session",
-                        "[P2P] Manual outbound connected [{url}]"
+                        "[P2P] Manual outbound connected [{}]",
+                        channel.display_address()
                     );
 
                     let stop_sub = channel.subscribe_stop().await?;
@@ -203,7 +204,8 @@ impl Slot {
 
                             info!(
                                 target: "net::manual_session",
-                                "[P2P] Manual outbound disconnected [{url}]"
+                                "[P2P] Manual outbound disconnected [{}]",
+                                channel.display_address()
                             );
                         }
                         Err(e) => {

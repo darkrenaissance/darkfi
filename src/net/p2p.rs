@@ -302,7 +302,7 @@ async fn broadcast_serialized_to<M: Message>(
                     error!(
                         target: "net::p2p::broadcast()",
                         "[P2P] Broadcasting message to {} failed: {e}",
-                        channel.address()
+                        channel.display_address()
                     );
                     // If the channel is stopped then it should automatically die
                     // and the session will remove it from p2p.

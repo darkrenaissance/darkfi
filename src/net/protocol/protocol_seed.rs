@@ -59,7 +59,7 @@ impl ProtocolSeed {
     pub async fn send_my_addrs(&self) -> Result<()> {
         debug!(
             target: "net::protocol_seed::send_my_addrs",
-            "[START] channel address={}", self.channel.address(),
+            "[START] channel address={}", self.channel.display_address(),
         );
 
         let external_addrs = self.channel.hosts().external_addrs().await;
@@ -89,7 +89,7 @@ impl ProtocolSeed {
 
         debug!(
             target: "net::protocol_seed::send_my_addrs",
-            "[END] channel address={}", self.channel.address(),
+            "[END] channel address={}", self.channel.display_address(),
         );
 
         Ok(())
@@ -103,7 +103,7 @@ impl ProtocolBase for ProtocolSeed {
     /// to the seed server.  Sends a get-address message and receives an
     /// address messsage.
     async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
+        debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.display_address());
 
         // Send own address to the seed server
         self.send_my_addrs().await?;
@@ -125,7 +125,7 @@ impl ProtocolBase for ProtocolSeed {
         let addrs_msg = self.addr_sub.receive().await?;
         debug!(
             target: "net::protocol_seed::start()",
-            "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
+            "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.display_address(),
         );
 
         if !addrs_msg.addrs.is_empty() {
@@ -136,7 +136,7 @@ impl ProtocolBase for ProtocolSeed {
             self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
         }
 
-        debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
+        debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.display_address());
         Ok(())
     }
 
