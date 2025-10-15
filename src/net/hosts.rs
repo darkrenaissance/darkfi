@@ -936,7 +936,7 @@ impl Hosts {
         // Then ensure we aren't currently trying to add this peer to the hostlist.
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
             if let Err(e) = self.try_register(addr.clone(), HostState::Insert) {
-                debug!(target: "net::hosts::store_or_update", "Cannot insert addr={}, err={e}",
+                debug!(target: "net::hosts::insert()", "Cannot insert addr={}, err={e}",
                        addr.clone());
 
                 continue
@@ -948,7 +948,9 @@ impl Hosts {
             self.container.sort_by_last_seen(color.clone() as usize);
             self.container.resize(color.clone());
 
-            self.unregister(addr);
+            if let Err(e) = self.unregister(addr) {
+                warn!(target: "net::hosts::insert()", "Error while unregistering addr={addr}, err={e}");
+            }
         }
 
         self.store_publisher.notify(addrs_len).await;
@@ -1048,10 +1050,11 @@ impl Hosts {
     }
 
     /// Mark as host as Free which frees it up for most future operations.
-    pub(in crate::net) fn unregister(&self, addr: &Url) {
+    pub(in crate::net) fn unregister(&self, addr: &Url) -> Result<()> {
         let age = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        self.try_register(addr.clone(), HostState::Free(age)).unwrap();
+        self.try_register(addr.clone(), HostState::Free(age))?;
         debug!(target: "net::hosts::unregister()", "Unregistered: {}", &addr);
+        Ok(())
     }
 
     /// Return the list of all connected channels, including seed and
@@ -1433,9 +1436,7 @@ impl Hosts {
         self.move_host(addr, last_seen, HostColor::Grey).await?;
 
         // Free up this addr for future operations.
-        self.unregister(addr);
-
-        Ok(())
+        self.unregister(addr)
     }
 
     pub async fn whitelist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
@@ -1443,9 +1444,7 @@ impl Hosts {
         self.move_host(addr, last_seen, HostColor::White).await?;
 
         // Free up this addr for future operations.
-        self.unregister(addr);
-
-        Ok(())
+        self.unregister(addr)
     }
 
     /// A single function for moving hosts between hostlists. Called on the following occasions:

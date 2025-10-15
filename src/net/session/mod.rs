@@ -102,7 +102,9 @@ pub async fn remove_sub_on_stop(
     // don't call this on refine sessions since the unregister() call
     // happens in the refinery directly.
     if type_id & SESSION_REFINE == 0 {
-        hosts.unregister(channel.address());
+        if let Err(e) = hosts.unregister(channel.address()) {
+            error!(target: "net::session::remove_sub_on_stop()", "Error while unregistering addr={}, err={e}", channel.display_address());
+        }
     }
 
     if !p2p.is_connected() {

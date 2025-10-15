@@ -216,7 +216,9 @@ impl Slot {
                             );
 
                             // Free up this addr for future operations.
-                            self.p2p().hosts().unregister(channel.address());
+                            if let Err(e) = self.p2p().hosts().unregister(channel.address()) {
+                                warn!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
+                            }
                         }
                     }
                 }
@@ -227,7 +229,9 @@ impl Slot {
                     );
 
                     // Free up this addr for future operations.
-                    self.p2p().hosts().unregister(&self.addr);
+                    if let Err(e) = self.p2p().hosts().unregister(&self.addr) {
+                        warn!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", self.addr);
+                    }
                 }
             }
 

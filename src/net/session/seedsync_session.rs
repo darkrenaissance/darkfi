@@ -275,7 +275,9 @@ impl Slot {
         self.failed.store(true, SeqCst);
 
         // Free up this addr for future operations.
-        self.p2p().hosts().unregister(addr);
+        if let Err(e) = self.p2p().hosts().unregister(addr) {
+            warn!(target: "net::session::seedsync_session", "[P2P] Error while unregistering addr={addr}, err={e}");
+        }
 
         // Reset the CondVar for future use.
         self.reset();

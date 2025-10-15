@@ -363,13 +363,22 @@ impl Slot {
                 );
 
                 // Peer disconnected during the registry process. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(channel.address(), last_seen, HostColor::Grey).await?;
+                if let Err(e) = self
+                    .p2p()
+                    .hosts()
+                    .move_host(channel.address(), last_seen, HostColor::Grey)
+                    .await
+                {
+                    warn!(target: "net::outbound_session", "Error while moving addr={} to greylist: {e}", channel.display_address());
+                    continue
+                }
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
-                self.p2p()
-                    .hosts()
-                    .try_register(channel.address().clone(), HostState::Suspend)
-                    .unwrap();
+                if let Err(e) =
+                    self.p2p().hosts().try_register(channel.address().clone(), HostState::Suspend)
+                {
+                    warn!(target: "net::outbound_session", "Error while suspending addr={}: {e}", channel.display_address());
+                }
 
                 continue
             }
@@ -412,7 +421,9 @@ impl Slot {
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
-                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
+                if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Suspend) {
+                    warn!(target: "net::outbound_session::try_connect()", "Error while suspending addr={addr}: {e}");
+                }
 
                 // Notify that channel processing failed
                 self.p2p().hosts().channel_publisher.notify(Err(err.clone())).await;
