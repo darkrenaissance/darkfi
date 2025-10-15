@@ -566,7 +566,7 @@ impl<H: DhtHandler> Dht<H> {
                 return Err(Error::ConnectTimeout);
             };
             if connect_res.is_err() {
-                warn!(target: "dht::get_channel()", "Error while connecting to {addr}: {}", connect_res.unwrap_err());
+                warn!(target: "dht::get_channel()", "Error while connecting: {}", connect_res.unwrap_err());
                 continue;
             }
             let (_, channel) = connect_res.unwrap();

@@ -1133,7 +1133,7 @@ impl Hosts {
         // This will error if we are already connected to this peer, this peer
         // is suspended, or this peer is currently being inserted into the hostlist.
         // None of these scenarios should ever happen.
-        if let Err(e) = self.try_register(address.clone(), HostState::Connected(channel.clone())) {
+        if let Err(e) = self.try_register(address, HostState::Connected(channel.clone())) {
             warn!(target: "net::hosts::register_channel", "Error while registering channel {channel:?}: {e:?}");
             return
         }

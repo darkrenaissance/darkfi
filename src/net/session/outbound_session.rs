@@ -306,7 +306,7 @@ impl Slot {
                 addr: host.clone(),
             });
 
-            let (addr, channel) = match self.try_connect(host.clone(), last_seen).await {
+            let (_, channel) = match self.try_connect(host.clone(), last_seen).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
                     debug!(
@@ -397,15 +397,15 @@ impl Slot {
             Err(err) => {
                 info!(
                     target: "net::outbound_session::try_connect()",
-                    "[P2P] Unable to connect outbound slot #{} [{addr}]: {err}",
+                    "[P2P] Unable to connect outbound slot #{} {err}",
                     self.slot
                 );
 
                 // Immediately return if the Connector has stopped.
                 // This indicates a shutdown of the P2P network and
                 // should not result in hostlist modifications.
-                if let Error::ConnectorStopped = err {
-                    return Err(Error::ConnectFailed);
+                if let Error::ConnectorStopped(message) = err {
+                    return Err(Error::ConnectFailed(message));
                 }
 
                 // At this point we failed to connect. We'll downgrade this peer now.
@@ -415,9 +415,9 @@ impl Slot {
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
 
                 // Notify that channel processing failed
-                self.p2p().hosts().channel_publisher.notify(Err(Error::ConnectFailed)).await;
+                self.p2p().hosts().channel_publisher.notify(Err(err.clone())).await;
 
-                Err(Error::ConnectFailed)
+                Err(err)
             }
         }
     }

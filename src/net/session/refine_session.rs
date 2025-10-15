@@ -163,7 +163,7 @@ impl RefineSession {
             }
 
             Err(e) => {
-                debug!(target: "net::refinery::handshake_node()", "Failed to connect to {addr}, ({e})");
+                debug!(target: "net::refinery::handshake_node()", "Failed to connect ({e})");
                 false
             }
         }

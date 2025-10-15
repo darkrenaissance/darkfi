@@ -59,7 +59,7 @@ impl Connector {
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
         if hosts.container.contains(HostColor::Black as usize, url) || hosts.block_all_ports(url) {
             warn!(target: "net::connector::connect", "Peer {url} is blacklisted");
-            return Err(Error::ConnectFailed)
+            return Err(Error::ConnectFailed(format!("[{url}]: Peer is blacklisted")));
         }
 
         let settings = self.settings.read().await;
@@ -86,7 +86,11 @@ impl Connector {
             (url.clone(), false)
         };
 
-        let dialer = Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await?;
+        let dialer = match Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await {
+            Ok(dialer) => dialer,
+            Err(err) => return Err(Error::ConnectFailed(format!("[{endpoint}]: {err}"))),
+        };
+
         let timeout = Duration::from_secs(outbound_connect_timeout);
 
         let stop_fut = async {
@@ -121,10 +125,10 @@ impl Connector {
                         .ipv6_available
                         .store(false, Ordering::SeqCst);
                 }
-                Err(e.into())
+                Err(Error::ConnectFailed(format!("[{endpoint}]: {e}")))
             }
 
-            Either::Right((_, _)) => Err(Error::ConnectorStopped),
+            Either::Right((_, _)) => Err(Error::ConnectorStopped(format!("[{endpoint}]"))),
         }
     }
 

@@ -115,8 +115,8 @@ pub enum Error {
     #[error("Transport request exceeds number of accepted transports")]
     InvalidTransportRequest,
 
-    #[error("Connection failed")]
-    ConnectFailed,
+    #[error("Connection failed: {0}")]
+    ConnectFailed(String),
 
     #[cfg(feature = "system")]
     #[error(transparent)]
@@ -146,8 +146,8 @@ pub enum Error {
     #[error("Accept a new tls connection from the listener {0} failed")]
     AcceptTlsConnectionFailed(String),
 
-    #[error("Connector stopped")]
-    ConnectorStopped,
+    #[error("Connector stopped: {0}")]
+    ConnectorStopped(String),
 
     #[error("Network operation failed")]
     NetworkOperationFailed,

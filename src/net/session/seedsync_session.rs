@@ -213,7 +213,7 @@ impl Slot {
             }
 
             match self.connector.connect(&self.addr).await {
-                Ok((url, ch)) => {
+                Ok((_, ch)) => {
                     info!(
                         target: "net::session::seedsync_session",
                         "[P2P] Connected seed [{}]",
@@ -242,7 +242,12 @@ impl Slot {
                         }
 
                         Err(e) => {
-                            self.handle_failure(e, ch.address());
+                            warn!(
+                                target: "net::session::seedsync_session",
+                                "[P2P] Unable to connect to seed [{}]: {e}",
+                                ch.display_address()
+                            );
+                            self.handle_failure(ch.address());
 
                             continue
                         }
@@ -250,7 +255,11 @@ impl Slot {
                 }
 
                 Err(e) => {
-                    self.handle_failure(e, &self.addr);
+                    warn!(
+                        target: "net::session::seedsync_session",
+                        "[P2P] Unable to connect to seed: {e}",
+                    );
+                    self.handle_failure(&self.addr);
 
                     continue
                 }
@@ -262,13 +271,7 @@ impl Slot {
         }
     }
 
-    fn handle_failure(&self, error: Error, addr: &Url) {
-        warn!(
-            target: "net::session::seedsync_session",
-            "[P2P] Unable to connect to seed [{}]: {error}",
-            self.addr
-        );
-
+    fn handle_failure(&self, addr: &Url) {
         self.failed.store(true, SeqCst);
 
         // Free up this addr for future operations.
