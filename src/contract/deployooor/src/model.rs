@@ -29,12 +29,14 @@ pub struct DeployUpdateV1 {
     pub contract_id: ContractId,
 }
 
+// ANCHOR: deploy-lock-params
 /// Parameters for `Deploy::Lock`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct LockParamsV1 {
     /// Public key used to sign the transaction and derive the `ContractId`
     pub public_key: PublicKey,
 }
+// ANCHOR_END: deploy-lock-params
 
 /// State update for `Deploy::Lock`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

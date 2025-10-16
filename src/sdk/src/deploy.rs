@@ -22,6 +22,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::crypto::PublicKey;
 
+// ANCHOR: deploy-deploy-params
 /// Parameters for `Deploy::Deploy`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct DeployParamsV1 {
@@ -32,3 +33,4 @@ pub struct DeployParamsV1 {
     /// Serialized deployment payload instruction
     pub ix: Vec<u8>,
 }
+// ANCHOR_END: deploy-deploy-params
