@@ -34,11 +34,11 @@ fn deploy_integration() -> Result<()> {
         // WASM bincode to deploy
         let wasm_bincode = include_bytes!("../../dao/darkfi_dao_contract.wasm");
 
-        info!("[Alice] Building deploy tx");
+        info!(target: "deploy", "[Alice] Building deploy tx");
         let (deploy_tx, deploy_params, fee_params) =
             th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
 
-        info!("[Alice] Executing deploy tx");
+        info!(target: "deploy", "[Alice] Executing deploy tx");
         th.execute_deploy_tx(
             &Holder::Alice,
             deploy_tx,
@@ -48,6 +48,73 @@ fn deploy_integration() -> Result<()> {
             true,
         )
         .await?;
+
+        // WASM bincode to deploy as a replacement
+        let wasm_bincode = include_bytes!("../../money/darkfi_money_contract.wasm");
+
+        info!(target: "deploy", "[Alice] Building deploy replacement tx");
+        let (deploy_tx, deploy_params, fee_params) =
+            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
+
+        info!(target: "deploy", "[Alice] Executing deploy replacement tx");
+        th.execute_deploy_tx(
+            &Holder::Alice,
+            deploy_tx,
+            &deploy_params,
+            &fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
+
+        info!(target: "deploy", "[Alice] Building deploy lock tx");
+        let (lock_tx, lock_params, fee_params) =
+            th.lock_contract(&Holder::Alice, current_block_height).await?;
+
+        info!(target: "deploy", "[Alice] Executing deploy lock tx");
+        th.execute_lock_tx(
+            &Holder::Alice,
+            lock_tx,
+            &lock_params,
+            &fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
+
+        info!(target: "deploy", "[Malicious] ===============================");
+        info!(target: "deploy", "[Malicious] Checking locking contract again");
+        info!(target: "deploy", "[Malicious] ===============================");
+        let (lock_tx, lock_params, fee_params) =
+            th.lock_contract(&Holder::Alice, current_block_height).await?;
+        assert!(th
+            .execute_lock_tx(
+                &Holder::Alice,
+                lock_tx,
+                &lock_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await
+            .is_err());
+
+        info!(target: "deploy", "[Malicious] ====================================");
+        info!(target: "deploy", "[Malicious] Checking deploy on a locked contract");
+        info!(target: "deploy", "[Malicious] ====================================");
+        let (deploy_tx, deploy_params, fee_params) =
+            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
+        assert!(th
+            .execute_deploy_tx(
+                &Holder::Alice,
+                deploy_tx,
+                &deploy_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await
+            .is_err());
 
         // Thanks for reading
         Ok(())

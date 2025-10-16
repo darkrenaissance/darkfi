@@ -26,7 +26,6 @@ use darkfi::net::transport::{Dialer, Listener};
 fn tcp_transport() {
     let executor = LocalExecutor::new();
 
-
     smol::block_on(executor.run(async {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();

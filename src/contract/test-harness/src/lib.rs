@@ -70,6 +70,9 @@ mod money_otc_swap;
 /// `Deployooor::Deploy` functionality
 mod contract_deploy;
 
+/// `Deployooor::Lock` functionality
+mod contract_lock;
+
 /// `Dao::Mint` functionality
 mod dao_mint;
 
