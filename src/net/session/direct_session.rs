@@ -436,7 +436,7 @@ impl PeerDiscovery {
                 });
 
                 let get_addrs = GetAddrsMessage {
-                    max: getaddrs_max.unwrap_or(1).min(u8::MAX as usize) as u32,
+                    max: getaddrs_max.unwrap_or(1),
                     transports: allowed_transports,
                 };
 

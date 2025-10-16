@@ -103,7 +103,7 @@ pub struct Settings {
     /// Maximum number of addresses (with preferred transports) to receive from
     /// seeds and peers.
     /// If undefined, `outbound_connections` will be used instead.
-    pub getaddrs_max: Option<usize>,
+    pub getaddrs_max: Option<u32>,
     /// P2P datastore path
     pub p2p_datastore: Option<String>,
     /// Hostlist storage path
@@ -295,7 +295,7 @@ pub struct SettingsOpt {
     /// seeds and peers.
     /// If undefined, `outbound_connections` will be used instead.
     #[structopt(skip)]
-    pub getaddrs_max: Option<usize>,
+    pub getaddrs_max: Option<u32>,
 
     /// P2P datastore path
     #[serde(default)]

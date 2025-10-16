@@ -579,7 +579,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 });
 
                 let get_addrs = GetAddrsMessage {
-                    max: getaddrs_max.unwrap_or(outbound_connections).min(u8::MAX as usize) as u32,
+                    max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
                     transports: allowed_transports,
                 };
 

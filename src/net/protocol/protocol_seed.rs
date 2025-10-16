@@ -117,7 +117,7 @@ impl ProtocolBase for ProtocolSeed {
         // Send get address message
         // We ask for a maximum of u8::MAX addresses from a single node
         let get_addr = GetAddrsMessage {
-            max: getaddrs_max.unwrap_or(outbound_connections).min(u8::MAX as usize) as u32,
+            max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
             transports: allowed_transports,
         };
         self.channel.send(&get_addr).await?;
