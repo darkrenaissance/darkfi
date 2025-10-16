@@ -494,7 +494,8 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let wasm_path = Arg::with_name("wasm-path").help("Path to contract wasm bincode");
 
-    let deploy_ix = Arg::with_name("deploy-ix").help("Path to serialized deploy instruction");
+    let deploy_ix =
+        Arg::with_name("deploy-ix").help("Optional path to serialized deploy instruction");
 
     let deploy = SubCommand::with_name("deploy").about("Deploy a smart contract").args(&vec![
         deploy_auth.clone(),

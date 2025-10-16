@@ -530,8 +530,8 @@ enum ContractSubcmd {
         /// Path to contract wasm bincode
         wasm_path: String,
 
-        /// Path to serialized deploy instruction
-        deploy_ix: String,
+        /// Optional path to serialized deploy instruction
+        deploy_ix: Option<String>,
     },
 
     /// Lock a smart contract
@@ -2607,7 +2607,10 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             ContractSubcmd::Deploy { deploy_auth, wasm_path, deploy_ix } => {
                 // Read the wasm bincode and deploy instruction
                 let wasm_bin = smol::fs::read(expand_path(&wasm_path)?).await?;
-                let deploy_ix = smol::fs::read(expand_path(&deploy_ix)?).await?;
+                let deploy_ix = match deploy_ix {
+                    Some(p) => smol::fs::read(expand_path(&p)?).await?,
+                    None => vec![],
+                };
 
                 let drk = new_wallet(
                     blockchain_config.cache_path,

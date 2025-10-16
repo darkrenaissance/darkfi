@@ -365,7 +365,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "token mint " => Some(("<token> <amount> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
         "token freeze " => Some(("<token>".to_string(), color, bold)),
         "contract " => Some(("(generate-deploy|list|deploy|lock)".to_string(), color, bold)),
-        "contract deploy " => Some(("<deploy-auth> <wasm-path> <deploy-ix>".to_string(), color, bold)),
+        "contract deploy " => Some(("<deploy-auth> <wasm-path> [deploy-ix]".to_string(), color, bold)),
         "contract lock " => Some(("<deploy-auth>".to_string(), color, bold)),
         _ => None,
     }
@@ -3144,9 +3144,9 @@ async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
 /// Auxiliary function to define the contract deploy subcommand handling.
 async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 5 {
+    if parts.len() != 4 && parts.len() != 5 {
         output.push(String::from("Malformed `contract deploy` subcommand"));
-        output.push(String::from("Usage: contract deploy <deploy-auth> <wasm-path> <deploy-ix>"));
+        output.push(String::from("Usage: contract deploy <deploy-auth> <wasm-path> [deploy-ix]"));
         return
     }
 
@@ -3174,19 +3174,23 @@ async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<S
         }
     };
 
-    let file_path = match expand_path(parts[4]) {
-        Ok(p) => p,
-        Err(e) => {
-            output.push(format!("Error while expanding deploy instruction file path: {e}"));
-            return
+    let deploy_ix = if parts.len() == 5 {
+        let file_path = match expand_path(parts[4]) {
+            Ok(p) => p,
+            Err(e) => {
+                output.push(format!("Error while expanding deploy instruction file path: {e}"));
+                return
+            }
+        };
+        match smol::fs::read(file_path).await {
+            Ok(d) => d,
+            Err(e) => {
+                output.push(format!("Error while reading deploy instruction file: {e}"));
+                return
+            }
         }
-    };
-    let deploy_ix = match smol::fs::read(file_path).await {
-        Ok(d) => d,
-        Err(e) => {
-            output.push(format!("Error while reading deploy instruction file: {e}"));
-            return
-        }
+    } else {
+        vec![]
     };
 
     let lock = drk.read().await;
