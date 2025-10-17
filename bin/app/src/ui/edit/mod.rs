@@ -69,7 +69,7 @@ const HOLD_ENABLE_TIME: u128 = 500;
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 
 /// How often to update the scrolling selection with mouse.
-const SELECT_TASK_UPDATE_TIME: u64 = 100;
+const SELECT_TASK_UPDATE_TIME: u64 = 500;
 // Should be a property
 const SELECT_SCROLL_TRAVEL_SPEED: f32 = 1.;
 
@@ -935,8 +935,8 @@ impl BaseEdit {
             //let mut drv = editor.driver(&mut txt_ctx).unwrap();
             //drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
             let layout = editor.layout();
-            let sel =
-                editor.selection().extend_to_point(layout, clip_mouse_pos.x, clip_mouse_pos.y);
+            let prev_sel = editor.selection();
+            let sel = prev_sel.extend_to_point(layout, clip_mouse_pos.x, clip_mouse_pos.y);
             let (mut start, mut end) = (sel.anchor().index(), sel.focus().index());
             //t!("handle_select() setting ({start}, {end})");
 
@@ -956,6 +956,11 @@ impl BaseEdit {
                     end = std::cmp::max(end, min_end);
                     //t!("handle_select(): RHS set end={end} after {min_end}");
                 }
+            }
+
+            if start == prev_sel.anchor().index() && end == prev_sel.focus().index() {
+                // No change so just return
+                return
             }
 
             editor.set_selection(start, end);
