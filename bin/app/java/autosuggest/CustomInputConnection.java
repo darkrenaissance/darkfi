@@ -32,7 +32,7 @@ import android.view.inputmethod.SurroundingText;
 import android.view.inputmethod.InputMethodManager;
 
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
     private int id = -1;
 
     private View mInternalView;

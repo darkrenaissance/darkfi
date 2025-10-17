@@ -24,7 +24,10 @@ use crate::{
     text2::{TextContext, TEXT_CTX},
     AndroidSuggestEvent,
 };
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    cmp::{max, min},
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 
@@ -102,7 +105,7 @@ impl Editor {
         }
 
         //android::focus(self.composer_id).unwrap();
-        //let atxt = "A berry is small 😊 and pulpy.";
+        //let atxt = "A berry is small juicy 😊 pulpy and edible.";
         //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
         //let atxt = "small berry terry";
         //android::set_text(self.composer_id, atxt);
@@ -194,7 +197,7 @@ impl Editor {
         android::set_selection(self.composer_id, pos, pos);
     }
 
-    pub fn select_word_at_point(&self, pos: Point) {
+    pub fn select_word_at_point(&mut self, pos: Point) {
         let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
         assert!(!select.is_collapsed());
         let select = select.text_range();
@@ -251,9 +254,10 @@ impl Editor {
         if edit.select_start == edit.select_end {
             return None
         }
-        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
-        Some(edit.buffer[select_start..select_end].to_string())
+        let anchor = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
+        let index = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+        let (start, end) = (min(anchor, index), max(anchor, index));
+        Some(edit.buffer[start..end].to_string())
     }
     pub fn selection(&self) -> parley::Selection {
         let edit = android::get_editable(self.composer_id).unwrap();
@@ -272,8 +276,8 @@ impl Editor {
 
         parley::Selection::new(anchor, focus)
     }
-    pub fn set_selection(&self, select_start: usize, select_end: usize) {
-        t!("set_selection({select_start}, {select_end})");
+    pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
+        //t!("set_selection({select_start}, {select_end})");
         let edit = android::get_editable(self.composer_id).unwrap();
         let select_start = byte_to_char16_index(&edit.buffer, select_start).unwrap();
         let select_end = byte_to_char16_index(&edit.buffer, select_end).unwrap();

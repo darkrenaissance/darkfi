@@ -76,7 +76,7 @@ const SELECT_SCROLL_TRAVEL_SPEED: f32 = 1.;
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::edit", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit", $($arg)*); } }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum TouchStateAction {
     Inactive,
     Started { pos: Point, instant: std::time::Instant },
@@ -247,7 +247,7 @@ pub struct BaseEdit {
     /// Used to explicitly hide the cursor. Must be manually re-enabled.
     hide_cursor: AtomicBool,
     /// Used to start select and scroll when mouse moves outside widget rect.
-    sel_sender: SyncMutex<Option<async_channel::Sender<Option<Point>>>>,
+    sel_sender: SyncMutex<Option<async_channel::Sender<Option<(Point, Option<isize>)>>>>,
     scroll: Arc<AtomicF32>,
 
     touch_info: SyncMutex<TouchInfo>,
@@ -697,6 +697,7 @@ impl BaseEdit {
         drop(editor);
 
         // if start != end {
+        t!("is_phone_select = true");
         self.is_phone_select.store(true, Ordering::Relaxed);
         self.hide_cursor.store(true, Ordering::Relaxed);
         // }
@@ -720,8 +721,7 @@ impl BaseEdit {
         true
     }
 
-    async fn get_select_handles(&self) -> Option<(Point, Point)> {
-        let editor = self.lock_editor().await;
+    async fn get_select_handles(&self, editor: &Editor) -> Option<(Point, Point)> {
         let layout = editor.layout();
 
         let sel = editor.selection();
@@ -736,7 +736,10 @@ impl BaseEdit {
     }
 
     async fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
-        let Some((mut first, mut last)) = self.get_select_handles().await else { return false };
+        let editor = self.lock_editor().await;
+        let Some((mut first, mut last)) = self.get_select_handles(&editor).await else {
+            return false
+        };
 
         self.abs_to_local(&mut touch_pos);
         t!("localize touch_pos = {touch_pos:?}");
@@ -790,7 +793,6 @@ impl BaseEdit {
             return false
         }
 
-        //t!("handle_touch_move({touch_pos:?})");
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -800,6 +802,7 @@ impl BaseEdit {
             touch_info.update(&touch_pos);
             touch_info.state.clone()
         };
+        t!("handle_touch_move({touch_pos:?})  touch_state={touch_state:?}");
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
@@ -808,7 +811,8 @@ impl BaseEdit {
                 } else {
                     self.abs_to_local(&mut touch_pos);
 
-                    let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_move"));
+                    let atom =
+                        &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_move"));
                     self.start_touch_select(touch_pos, atom).await;
                     self.redraw_select(atom.batch_id).await;
                 }
@@ -828,58 +832,13 @@ impl BaseEdit {
                 // If so we gotta scroll it while selecting.
                 if !is_touch_hover {
                     // This process will begin selecting text and applying scroll too.
-                    sel_sender.send(Some(touch_pos)).await.unwrap();
+                    sel_sender.send(Some((touch_pos, Some(*side)))).await.unwrap();
                 } else {
                     // Stop any existing select/scroll process
                     sel_sender.send(None).await.unwrap();
                     // Mouse is inside so just select the text once and be done.
-                    self.handle_select(touch_pos).await;
+                    self.handle_select(touch_pos, Some(*side)).await;
                 }
-
-                // Old code
-
-                /*
-                self.abs_to_local(&mut touch_pos);
-
-                let editor = self.lock_editor().await;
-                let sel = editor.selection();
-
-                assert!(*side == -1 || *side == 1);
-                assert!(self.is_phone_select.load(Ordering::Relaxed));
-                assert!(!sel.is_collapsed());
-
-                let mut pos = touch_pos;
-                // Only allow selecting text that is visible in the box
-                // We do our calcs relative to (0, 0) so bhs = rect_h
-                pos.y -= handle_descent + 25.;
-                //let bhs = wrapped_lines.height();
-                //pos.y = min_f32(pos.y, bhs);
-
-                let mut select = sel.text_range();
-
-                let layout = editor.layout();
-                t!("select  (pre): {:?}", sel.text_range());
-                let cursor = parley::Cursor::from_point(layout, pos.x, pos.y).index();
-                t!("cursor: {cursor}");
-
-                // The selection is NOT allowed to cross over itself.
-                if *side == -1 {
-                    let max_start = sel.focus().previous_visual(layout).index();
-                    t!("side == -1  max={max_start}");
-                    select.start = std::cmp::min(cursor, max_start);
-                } else {
-                    assert_eq!(*side, 1);
-                    let min_end = sel.anchor().next_visual(layout).index();
-                    t!("side == +1  min={min_end}");
-                    select.end = std::cmp::max(cursor, min_end);
-                };
-                t!("set_select({select:?})");
-
-                editor.set_selection(select.start, select.end);
-                drop(editor);
-
-                self.redraw_select(atom.batch_id).await;
-                */
             }
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
@@ -936,13 +895,13 @@ impl BaseEdit {
     }
 
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
-        t!("finish_select()");
-        self.is_phone_select.store(false, Ordering::Relaxed);
-        self.hide_cursor.store(false, Ordering::Relaxed);
+        self.is_phone_select.store(false, Ordering::Release);
+        self.hide_cursor.store(false, Ordering::Release);
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
     }
 
-    async fn handle_select(&self, mouse_pos: Point) {
+    async fn handle_select(&self, mouse_pos: Point, side: Option<isize>) {
+        //t!("handle_select({mouse_pos:?}, {side:?})");
         let rect = self.rect.get();
         let is_mouse_hover = rect.contains(mouse_pos);
 
@@ -968,14 +927,51 @@ impl BaseEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut clip_mouse_pos);
 
-        let seltext = {
-            let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let (seltext, sel_start, sel_end) = {
             let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut txt_ctx).unwrap();
-            drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
-            editor.selected_text()
+
+            // The below lines rely on parley driver which android does not use
+            //let mut txt_ctx = text2::TEXT_CTX.get().await;
+            //let mut drv = editor.driver(&mut txt_ctx).unwrap();
+            //drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
+            let layout = editor.layout();
+            let sel =
+                editor.selection().extend_to_point(layout, clip_mouse_pos.x, clip_mouse_pos.y);
+            let (mut start, mut end) = (sel.anchor().index(), sel.focus().index());
+            //t!("handle_select() setting ({start}, {end})");
+
+            // When dragging phone handles we prevent the selection crossing over itself.
+            // Mouse select does not have this limitation.
+            if let Some(side) = side {
+                assert!(side.abs() == 1);
+                assert!(self.is_phone_select.load(Ordering::Relaxed));
+
+                // Prevent selection crossing itself
+                if side == -1 {
+                    let max_start = sel.focus().previous_visual(layout).index();
+                    start = std::cmp::min(start, max_start);
+                    //t!("handle_select(): LHS set start={start} before {max_start}");
+                } else {
+                    let min_end = sel.anchor().next_visual(layout).index();
+                    end = std::cmp::max(end, min_end);
+                    //t!("handle_select(): RHS set end={end} after {min_end}");
+                }
+            }
+
+            editor.set_selection(start, end);
+            editor.refresh().await;
+
+            (editor.selected_text(), start, end)
         };
-        d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?})");
+        //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?}) to ({sel_start}, {sel_end})");
+        // Android editor impl detail: selection disappears when anchor == index
+        #[cfg(target_os = "android")]
+        {
+            assert!(sel_start != sel_end);
+            //if sel_start == sel_end {
+            //    self.finish_select(atom);
+            //}
+        }
 
         // Will be None when drag select just started
         if let Some(seltext) = seltext {
@@ -1122,14 +1118,13 @@ impl BaseEdit {
     }
 
     async fn regen_phone_select_handle_mesh(&self) -> Vec<DrawInstruction> {
-        if !self.is_phone_select.load(Ordering::Relaxed) {
+        if !self.is_phone_select.load(Ordering::Acquire) {
             //t!("regen_phone_select_handle_mesh() [DISABLED]");
             return vec![]
         }
-        //t!("regen_phone_select_handle_mesh()");
-        let (first, last) = self.get_select_handles().await.unwrap();
-
         let editor = self.lock_editor().await;
+        let (first, last) = self.get_select_handles(&editor).await.unwrap();
+
         let sel = editor.selection();
         assert!(!sel.is_collapsed());
 
@@ -1281,10 +1276,10 @@ impl BaseEdit {
 
     #[cfg(target_os = "android")]
     async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
-        t!("handle_android_event({ev:?})");
         if !self.is_active.get() {
             return
         }
+        t!("handle_android_event({ev:?})");
 
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
         match ev {
@@ -1308,9 +1303,6 @@ impl BaseEdit {
             AndroidSuggestEvent::Compose { .. } |
             AndroidSuggestEvent::DeleteSurroundingText { .. } => {
                 // Any editing will collapse selections
-                self.is_phone_select.store(false, Ordering::Relaxed);
-                self.hide_cursor.store(false, Ordering::Relaxed);
-
                 self.finish_select(atom);
 
                 let mut editor = self.lock_editor().await;
@@ -1474,24 +1466,27 @@ impl UIObject for BaseEdit {
                         rcv = sel_recvr.recv().fuse() => {
                             scroll_stat = rcv.unwrap();
 
-                            if let Some(mouse_pos) = scroll_stat {
+                            if let Some((mouse_pos, side)) = scroll_stat {
                                 let self_ = me2.upgrade().unwrap();
-                                self_.handle_select(mouse_pos).await;
+                                t!("select task interrupt: {mouse_pos:?} (side={side:?})");
+                                self_.handle_select(mouse_pos, side).await;
                             };
                         }
                         _ = msleep(SELECT_TASK_UPDATE_TIME).fuse() => {
-                            if let Some(mouse_pos) = scroll_stat {
+                            if let Some((mouse_pos, side)) = scroll_stat {
                                 let self_ = me2.upgrade().unwrap();
-                                self_.handle_select(mouse_pos).await;
+                                t!("select task update: {mouse_pos:?} (side={side:?})");
+                                self_.handle_select(mouse_pos, side).await;
                             };
                         }
                     }
                 } else {
                     scroll_stat = sel_recvr.recv().await.unwrap();
 
-                    if let Some(mouse_pos) = scroll_stat {
+                    if let Some((mouse_pos, side)) = scroll_stat {
                         let self_ = me2.upgrade().unwrap();
-                        self_.handle_select(mouse_pos).await;
+                        t!("select task wake up: {mouse_pos:?} (side={side:?})");
+                        self_.handle_select(mouse_pos, side).await;
                     };
                 }
             }
@@ -1706,12 +1701,12 @@ impl UIObject for BaseEdit {
         // If so we gotta scroll it while selecting.
         if !is_mouse_hover {
             // This process will begin selecting text and applying scroll too.
-            sel_sender.send(Some(mouse_pos)).await.unwrap();
+            sel_sender.send(Some((mouse_pos, None))).await.unwrap();
         } else {
             // Stop any existing select/scroll process
             sel_sender.send(None).await.unwrap();
             // Mouse is inside so just select the text once and be done.
-            self.handle_select(mouse_pos).await;
+            self.handle_select(mouse_pos, None).await;
         }
 
         true
