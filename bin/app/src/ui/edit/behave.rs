@@ -29,7 +29,7 @@ use crate::{
 
 use super::EditorHandle;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit::behave", $($arg)*); } }
+//macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit::behave", $($arg)*); } }
 
 pub enum BaseEditType {
     SingleLine,
@@ -43,7 +43,7 @@ pub(super) trait EditorBehavior: Send + Sync {
     /// Whenever the cursor is modified this MUST be called
     /// to recalculate the scroll value.
     /// Must call redraw after this.
-    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard);
+    async fn apply_cursor_scroll(&self);
 
     fn scroll(&self) -> Point;
 
@@ -165,7 +165,7 @@ impl EditorBehavior for MultiLine {
             .unwrap();
     }
 
-    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard) {
+    async fn apply_cursor_scroll(&self) {
         //let pad_top = self.padding_top();
         let pad_bot = self.padding_bottom();
 
@@ -278,17 +278,16 @@ impl EditorBehavior for SingleLine {
             .unwrap();
     }
 
-    async fn apply_cursor_scroll(&self, atom: &mut PropertyAtomicGuard) {
+    async fn apply_cursor_scroll(&self) {
         let pad_right = self.padding.get_f32(1).unwrap();
         let pad_left = self.padding.get_f32(3).unwrap();
-        let mut scroll = self.scroll.load(Ordering::Relaxed);
+        let scroll = self.scroll.load(Ordering::Relaxed);
         let rect_w = self.rect.get_width() - pad_right;
         let cursor_x0 = self.lock_editor().await.get_cursor_pos().x + pad_left;
         let cursor_x1 = cursor_x0 + self.cursor_width.get();
 
         if cursor_x0 < scroll {
             assert!(cursor_x0 >= 0.);
-            scroll = cursor_x0.max(0.);
             self.scroll.store(cursor_x0, Ordering::Release);
         } else if cursor_x1 > rect_w + scroll {
             let max_scroll = self.max_scroll().await;

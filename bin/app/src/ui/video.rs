@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use image::ImageReader;
-use parking_lot::{Mutex as SyncMutex, RwLock};
+use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
@@ -185,7 +185,7 @@ impl Video {
                         let mut vid_data = vid_data.lock();
                         // vid_data becomes None if the stop() is called. In which case
                         // we just stop loading and return from this thread.
-                        let Some(mut vid_data) = vid_data.as_mut() else { return };
+                        let Some(vid_data) = vid_data.as_mut() else { return };
                         vid_data.textures[frame_idx] = Some(texture.clone());
                         // broadcast
                         textures_pub.try_broadcast((frame_idx, texture)).unwrap();

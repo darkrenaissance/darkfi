@@ -16,24 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
-use darkfi_serial::{
-    AsyncEncodable, AsyncWrite, Encodable, FutAsyncWriteExt, SerialEncodable, VarInt,
-};
-use parking_lot::RwLock;
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    io::Write,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::collections::HashMap;
 
 use super::{BufferId, DrawCall, GfxDrawCall, TextureId};
-
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx::anim", $($arg)*); } }
 
 #[derive(Debug, Clone)]
 pub struct Frame {
@@ -84,17 +69,34 @@ impl GfxSeqAnim {
         //t!("got frame {frame_idx}");
     }
 
+    fn curr_frame(&self) -> Option<&GfxFrame> {
+        assert!(self.current_idx < self.frames.len());
+        self.frames[self.current_idx].as_ref()
+    }
+
     pub fn tick(&mut self) -> Option<GfxDrawCall> {
         //t!("tick");
-        let elapsed = self.timer.elapsed();
-        assert!(self.current_idx < self.frames.len());
-        let frame = &self.frames[self.current_idx];
-        let Some(frame) = frame else {
+        if self.curr_frame().is_none() {
             assert_eq!(self.current_idx, 0);
             return None
         };
 
+        self.increment();
+
+        let curr_frame = self.curr_frame().unwrap().clone();
+        Some(curr_frame.dc)
+    }
+
+    fn increment(&mut self) {
+        // One shot anims dont loop
+        if self.oneshot && self.current_idx + 1 == self.frames.len() {
+            return
+        }
+
+        let elapsed = self.timer.elapsed();
+        let frame = self.curr_frame().unwrap();
         let curr_duration = frame.duration;
+
         if elapsed >= curr_duration {
             let next_idx = (self.current_idx + 1) % self.frames.len();
             // Only advance when the next frame is Some
@@ -105,9 +107,6 @@ impl GfxSeqAnim {
                 self.timer = std::time::Instant::now();
             }
         }
-
-        let curr_frame = self.frames[self.current_idx].clone().unwrap();
-        Some(curr_frame.dc)
     }
 }
 

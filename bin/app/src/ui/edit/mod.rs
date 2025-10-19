@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
 use darkfi_serial::Decodable;
-use futures::{select, FutureExt};
+use futures::FutureExt;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
@@ -540,7 +540,7 @@ impl BaseEdit {
                     if let Some(txt) = miniquad::window::clipboard_get() {
                         self.insert(&txt, atom).await;
                         // Maybe insert should call this?
-                        self.behave.apply_cursor_scroll(atom).await;
+                        self.behave.apply_cursor_scroll().await;
                     }
                 }
             }
@@ -676,7 +676,7 @@ impl BaseEdit {
         drop(editor);
         drop(txt_ctx);
 
-        self.behave.apply_cursor_scroll(atom).await;
+        self.behave.apply_cursor_scroll().await;
         self.pause_blinking();
         self.redraw(atom).await;
 
@@ -821,10 +821,6 @@ impl BaseEdit {
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
-                let handle_descent = self.handle_descent.get();
-
-                // New code
-
                 let rect = self.rect.get();
                 let is_touch_hover = rect.contains(touch_pos);
 
@@ -933,7 +929,7 @@ impl BaseEdit {
             sel_side = side;
         }
 
-        let (seltext, sel_start, sel_end) = {
+        let seltext = {
             let mut editor = self.lock_editor().await;
 
             // The below lines rely on parley driver which android does not use
@@ -941,7 +937,7 @@ impl BaseEdit {
             //let mut drv = editor.driver(&mut txt_ctx).unwrap();
             //drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
             let layout = editor.layout();
-            let mut prev_sel = editor.selection(sel_side);
+            let prev_sel = editor.selection(sel_side);
             let sel = prev_sel.extend_to_point(layout, clip_mouse_pos.x, clip_mouse_pos.y);
             let (mut prev_start, mut prev_end) =
                 (prev_sel.anchor().index(), prev_sel.focus().index());
@@ -981,7 +977,7 @@ impl BaseEdit {
             editor.set_selection(start, end);
             editor.refresh().await;
 
-            (editor.selected_text(), start, end)
+            editor.selected_text()
         };
         //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?}) to ({sel_start}, {sel_end})");
         // Android editor impl detail: selection disappears when anchor == index
@@ -999,7 +995,7 @@ impl BaseEdit {
         }
 
         self.pause_blinking();
-        //self.behave.apply_cursor_scroll(atom).await;
+        //self.behave.apply_cursor_scroll().await;
         self.redraw_cursor(atom.batch_id).await;
         self.redraw_select(atom.batch_id).await;
     }
@@ -1020,8 +1016,6 @@ impl BaseEdit {
     async fn redraw_scroll(&self, batch_id: BatchGuardId) {
         let timest = unixtime();
         let rect = self.rect.get();
-
-        let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
         let mut content_instrs = vec![DrawInstruction::ApplyView(rect.with_zero_pos())];
         let mut bg_instrs = self.regen_bg_mesh();
@@ -1329,7 +1323,7 @@ impl BaseEdit {
                 editor.on_buffer_changed(atom).await;
                 drop(editor);
 
-                self.behave.apply_cursor_scroll(atom).await;
+                self.behave.apply_cursor_scroll().await;
             }
             AndroidSuggestEvent::FinishCompose => {
                 let mut editor = self.lock_editor().await;
@@ -1597,7 +1591,7 @@ impl UIObject for BaseEdit {
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
         self.insert(&key_str, atom).await;
-        self.behave.apply_cursor_scroll(atom).await;
+        self.behave.apply_cursor_scroll().await;
         self.redraw(atom).await;
         true
     }
@@ -1703,7 +1697,7 @@ impl UIObject for BaseEdit {
         false
     }
 
-    async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }

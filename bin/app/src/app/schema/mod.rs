@@ -22,7 +22,7 @@ use std::fs::File;
 
 use crate::{
     app::{
-        node::{create_image, create_layer, create_shortcut, create_vector_art, create_video},
+        node::{create_layer, create_shortcut, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
@@ -30,14 +30,14 @@ use crate::{
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Image, Layer, Shortcut, VectorArt, VectorShape, Video},
+    ui::{emoji_picker, Layer, Shortcut, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
 mod chat;
 mod menu;
 //mod settings;
-pub mod test;
+//pub mod test;
 
 const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
@@ -55,7 +55,7 @@ mod ui_consts {
     use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
-    pub const BG_PATH: &str = "bg.png";
+    //pub const BG_PATH: &str = "bg.png";
     pub const VID_PATH: &str = "forest/forest_{frame}.png";
     pub use super::android_ui_consts::*;
 
@@ -80,7 +80,7 @@ mod ui_consts {
 mod desktop_paths {
     use std::path::PathBuf;
 
-    pub const BG_PATH: &str = "assets/bg.png";
+    //pub const BG_PATH: &str = "assets/bg.png";
     pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
 
     pub fn get_chatdb_path() -> PathBuf {

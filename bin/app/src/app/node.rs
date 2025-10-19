@@ -123,6 +123,7 @@ pub fn create_gesture(name: &str) -> SceneNode {
     node
 }
 
+#[allow(dead_code)]
 pub fn create_image(name: &str) -> SceneNode {
     t!("create_image({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);
@@ -360,6 +361,7 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     node
 }
 
+#[allow(dead_code)]
 pub fn create_singleline_edit(name: &str) -> SceneNode {
     // No additional properties to add
     create_baseedit(name)

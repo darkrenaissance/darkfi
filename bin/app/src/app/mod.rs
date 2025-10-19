@@ -134,7 +134,7 @@ impl App {
         self.sg_root.link(window.clone());
         self.sg_root.link(setting_root.clone());
 
-        schema::test::make(&self, window.clone(), &i18n_fish).await;
+        schema::make(&self, window.clone(), &i18n_fish).await;
 
         //settings::make(&self, window, self.ex.clone()).await;
 

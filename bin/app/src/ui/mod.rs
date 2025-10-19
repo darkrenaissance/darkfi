@@ -40,6 +40,7 @@ pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod gesture;
 pub use gesture::GesturePtr;
 mod image;
+#[allow(unused_imports)]
 pub use image::{Image, ImagePtr};
 mod video;
 pub use video::{Video, VideoPtr};

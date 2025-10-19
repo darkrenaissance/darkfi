@@ -31,7 +31,6 @@ use miniquad::{
 };
 use parking_lot::Mutex as SyncMutex;
 use std::{
-    cell::RefCell,
     collections::HashMap,
     fs::File,
     io::Write,
@@ -54,7 +53,7 @@ use trax::get_trax;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardId, PropertyAtomicGuard},
-    ExecutorPtr, GOD,
+    GOD,
 };
 
 // This is very noisy so suppress output by default
@@ -925,7 +924,6 @@ struct Stage {
 
     pruner: PruneMethodHeap,
     screen_was_off: bool,
-    ex: ExecutorPtr,
     #[cfg(target_os = "android")]
     refresh_task: Option<smol::Task<()>>,
 }
@@ -1028,7 +1026,6 @@ impl Stage {
 
             pruner: PruneMethodHeap::new(epoch),
             screen_was_off: false,
-            ex,
             #[cfg(target_os = "android")]
             refresh_task: None,
         }
@@ -1322,13 +1319,13 @@ impl Stage {
             GraphicsMethod::DeleteBuffer((gbuff_id, tag, buftype)) => {
                 trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
-            GraphicsMethod::NewSeqAnim { id, frames_len, oneshot, tag } => {
+            GraphicsMethod::NewSeqAnim { .. } => {
                 //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
             }
             GraphicsMethod::UpdateSeqAnim { .. } => {
                 //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
             }
-            GraphicsMethod::DeleteSeqAnim((ganim_id, tag)) => {
+            GraphicsMethod::DeleteSeqAnim(..) => {
                 //trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
@@ -1415,13 +1412,13 @@ impl PruneMethodHeap {
                     self.del.push(method);
                 }
             }
-            GraphicsMethod::NewSeqAnim { id: _, frames_len, oneshot, tag } => {
+            GraphicsMethod::NewSeqAnim { .. } => {
                 //self.new_buf.insert(gbuff_id, method);
             }
             GraphicsMethod::UpdateSeqAnim { .. } => {
                 //self.new_buf.insert(gbuff_id, method);
             }
-            GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => {
+            GraphicsMethod::DeleteSeqAnim(..) => {
                 //if self.new_buf.remove(&gbuff_id).is_none() {
                 //    self.del.push(method);
                 //}
