@@ -485,7 +485,7 @@ impl ChatView {
         self.motion_cv.notify();
     }
 
-    async fn handle_movement(&self, atom: &mut PropertyAtomicGuard) {
+    async fn handle_movement(&self) {
         // We need to fix this impl because it depends very much on the speed of the device
         // that it's running on.
         // Look into optimizing scrollview() so scrolling is smooth.
@@ -513,6 +513,7 @@ impl ChatView {
             }
 
             let scroll = self.scroll.get() + speed;
+            let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::motion_task"));
             let dist = self.scrollview(scroll, atom).await;
 
             // We reached the end so just stop
@@ -525,7 +526,7 @@ impl ChatView {
 
     async fn handle_bgload(&self) {
         let trace_id = rand::random();
-        t!("ChatView::handle_bgload() [trace_id={trace_id}]");
+        //t!("ChatView::handle_bgload() [trace_id={trace_id}]");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let rect = self.rect.get();
@@ -538,20 +539,20 @@ impl ChatView {
         let total_height = msgbuf.calc_total_height().await;
         if total_height > top + preload_height {
             // Nothing to do here
-            t!("bgloader: buffer is sufficient [trace_id={trace_id}]");
+            //t!("bgloader: buffer is sufficient [trace_id={trace_id}]");
             return
         }
 
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
         let mut remaining_visible = top - total_height;
-        t!("bgloader: remaining px = {remaining_load_height}, remaining_visible={remaining_visible} [trace_id={trace_id}]");
+        //t!("bgloader: remaining px = {remaining_load_height}, remaining_visible={remaining_visible} [trace_id={trace_id}]");
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
                 // iterate from there
-                t!("preloading from {oldest_timest} [trace_id={trace_id}]");
+                //t!("preloading from {oldest_timest} [trace_id={trace_id}]");
                 let timest = (oldest_timest - 1).to_be_bytes();
                 let mut key = [0u8; 8 + 32];
                 key[..8].clone_from_slice(&timest);
@@ -560,7 +561,7 @@ impl ChatView {
                 iter
             }
             None => {
-                t!("initial load [trace_id={trace_id}]");
+                //t!("initial load [trace_id={trace_id}]");
                 self.tree.iter().rev()
             }
         };
@@ -574,7 +575,7 @@ impl ChatView {
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
 
-            t!("{timest:?} {chatmsg:?} [trace_id={trace_id}]");
+            //t!("{timest:?} {chatmsg:?} [trace_id={trace_id}]");
             let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 
             remaining_load_height -= msg_height;
@@ -588,7 +589,7 @@ impl ChatView {
             }
             remaining_visible -= msg_height;
         }
-        t!("do_redraw = {do_redraw} [trace_id={trace_id}]");
+        //t!("do_redraw = {do_redraw} [trace_id={trace_id}]");
         if do_redraw {
             let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_bgload"));
             self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
@@ -597,7 +598,7 @@ impl ChatView {
 
     async fn scrollview(&self, mut scroll: f32, atom: &mut PropertyAtomicGuard) -> f32 {
         let trace_id = rand::random();
-        t!("scrollview({scroll}) [trace_id={trace_id}]");
+        //t!("scrollview({scroll}) [trace_id={trace_id}]");
         let old_scroll = self.scroll.get();
 
         let rect = self.rect.get();
@@ -688,7 +689,7 @@ impl ChatView {
         msgbuf: &mut MessageBuffer,
         trace_id: u32,
     ) {
-        t!("ChatView::redraw_cached() [trace_id={trace_id}]");
+        //t!("ChatView::redraw_cached() [trace_id={trace_id}]");
         let timest = unixtime();
         let rect = self.rect.get();
 
@@ -701,7 +702,7 @@ impl ChatView {
             vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
         self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
-        t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
+        //t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
     }
 
     /// Invalidates cache and redraws everything
@@ -752,8 +753,7 @@ impl UIObject for ChatView {
                     // Should not happen
                     panic!("self destroyed before motion_task was stopped!");
                 };
-                let atom = &mut self_.render_api.make_guard(gfxtag!("ChatView::motion_task"));
-                self_.handle_movement(atom).await;
+                self_.handle_movement().await;
                 cv.reset();
             }
         });
@@ -907,7 +907,7 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
-        t!("handle_mouse_move({mouse_pos:?})");
+        //t!("handle_mouse_move({mouse_pos:?})");
 
         // We store the mouse pos for use in handle_mouse_wheel()
         *self.mouse_pos.lock() = mouse_pos.clone();
@@ -929,7 +929,7 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
-        t!("handle_mouse_wheel({wheel_pos:?})");
+        //t!("handle_mouse_wheel({wheel_pos:?})");
 
         let rect = self.rect.get();
 

@@ -860,7 +860,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> f32 {
-        t!("push_privmsg({timest}, {msg_id}, {nick}, {text})");
+        //t!("push_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
@@ -945,7 +945,7 @@ impl MessageBuffer {
             current_pos += mesh_height;
         }
 
-        t!("gen_meshes() returning {} meshes", meshes.len());
+        //t!("gen_meshes() returning {} meshes", meshes.len());
         meshes
     }
 
