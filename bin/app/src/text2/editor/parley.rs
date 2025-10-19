@@ -134,7 +134,8 @@ impl Editor {
     pub fn selected_text(&self) -> Option<String> {
         self.editor.selected_text().map(str::to_string)
     }
-    pub fn selection(&self) -> parley::Selection {
+    pub fn selection(&self, side: isize) -> parley::Selection {
+        assert!(side == 1);
         *self.editor.raw_selection()
     }
     /// Android uses byte indexes whereas parley has its own things. So this API is a compromise

@@ -27,6 +27,7 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
+    mem::swap,
     ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -724,7 +725,7 @@ impl BaseEdit {
     async fn get_select_handles(&self, editor: &Editor) -> Option<(Point, Point)> {
         let layout = editor.layout();
 
-        let sel = editor.selection();
+        let sel = editor.selection(1);
         if sel.is_collapsed() {
             assert!(!self.is_phone_select.load(Ordering::Relaxed));
             return None
@@ -802,7 +803,7 @@ impl BaseEdit {
             touch_info.update(&touch_pos);
             touch_info.state.clone()
         };
-        t!("handle_touch_move({touch_pos:?})  touch_state={touch_state:?}");
+        //t!("handle_touch_move({touch_pos:?})  touch_state={touch_state:?}");
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
@@ -927,6 +928,11 @@ impl BaseEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut clip_mouse_pos);
 
+        let mut sel_side = 1;
+        if let Some(side) = side {
+            sel_side = side;
+        }
+
         let (seltext, sel_start, sel_end) = {
             let mut editor = self.lock_editor().await;
 
@@ -935,8 +941,10 @@ impl BaseEdit {
             //let mut drv = editor.driver(&mut txt_ctx).unwrap();
             //drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
             let layout = editor.layout();
-            let prev_sel = editor.selection();
+            let mut prev_sel = editor.selection(sel_side);
             let sel = prev_sel.extend_to_point(layout, clip_mouse_pos.x, clip_mouse_pos.y);
+            let (mut prev_start, mut prev_end) =
+                (prev_sel.anchor().index(), prev_sel.focus().index());
             let (mut start, mut end) = (sel.anchor().index(), sel.focus().index());
             //t!("handle_select() setting ({start}, {end})");
 
@@ -948,21 +956,27 @@ impl BaseEdit {
 
                 // Prevent selection crossing itself
                 if side == -1 {
-                    let max_start = sel.focus().previous_visual(layout).index();
-                    start = std::cmp::min(start, max_start);
-                    //t!("handle_select(): LHS set start={start} before {max_start}");
+                    let max_end = sel.anchor().previous_visual(layout).index();
+                    end = std::cmp::min(end, max_end);
+                    //t!("handle_select(): LHS set focus {end} before {max_end}");
+                    // When selecting from the LHS these will be swapped so swap them back
+                    swap(&mut start, &mut end);
+                    swap(&mut prev_start, &mut prev_end);
                 } else {
                     let min_end = sel.anchor().next_visual(layout).index();
                     end = std::cmp::max(end, min_end);
-                    //t!("handle_select(): RHS set end={end} after {min_end}");
+                    //t!("handle_select(): RHS set focus {end} after {min_end}");
                 }
             }
 
-            if start == prev_sel.anchor().index() && end == prev_sel.focus().index() {
+            if start == prev_start && end == prev_end {
                 // No change so just return
+                //t!("handle_select(): no change early exit");
                 return
             }
+            assert!(start <= end);
 
+            //t!("handle_select(): set_selection({start}, {end})");
             editor.set_selection(start, end);
             editor.refresh().await;
 
@@ -1108,7 +1122,7 @@ impl BaseEdit {
         let editor = self.lock_editor().await;
         let layout = editor.layout();
 
-        let sel = editor.selection();
+        let sel = editor.selection(1);
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
             let mut mesh = MeshBuilder::new(gfxtag!("chatedit_select_mesh"));
@@ -1130,7 +1144,7 @@ impl BaseEdit {
         let editor = self.lock_editor().await;
         let (first, last) = self.get_select_handles(&editor).await.unwrap();
 
-        let sel = editor.selection();
+        let sel = editor.selection(1);
         assert!(!sel.is_collapsed());
 
         // We could cache this and use Move instead but why bother?
@@ -1473,14 +1487,14 @@ impl UIObject for BaseEdit {
 
                             if let Some((mouse_pos, side)) = scroll_stat {
                                 let self_ = me2.upgrade().unwrap();
-                                t!("select task interrupt: {mouse_pos:?} (side={side:?})");
+                                //t!("select task interrupt: {mouse_pos:?} (side={side:?})");
                                 self_.handle_select(mouse_pos, side).await;
                             };
                         }
                         _ = msleep(SELECT_TASK_UPDATE_TIME).fuse() => {
                             if let Some((mouse_pos, side)) = scroll_stat {
                                 let self_ = me2.upgrade().unwrap();
-                                t!("select task update: {mouse_pos:?} (side={side:?})");
+                                //t!("select task update: {mouse_pos:?} (side={side:?})");
                                 self_.handle_select(mouse_pos, side).await;
                             };
                         }
@@ -1490,7 +1504,7 @@ impl UIObject for BaseEdit {
 
                     if let Some((mouse_pos, side)) = scroll_stat {
                         let self_ = me2.upgrade().unwrap();
-                        t!("select task wake up: {mouse_pos:?} (side={side:?})");
+                        //t!("select task wake up: {mouse_pos:?} (side={side:?})");
                         self_.handle_select(mouse_pos, side).await;
                     };
                 }

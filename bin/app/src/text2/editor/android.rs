@@ -259,20 +259,24 @@ impl Editor {
         let (start, end) = (min(anchor, index), max(anchor, index));
         Some(edit.buffer[start..end].to_string())
     }
-    pub fn selection(&self) -> parley::Selection {
+    pub fn selection(&self, side: isize) -> parley::Selection {
+        assert!(side.abs() == 1);
         let edit = android::get_editable(self.composer_id).unwrap();
 
-        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+        let mut select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
+        let mut select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
         //t!("selection() -> ({select_start}, {select_end})");
 
-        let anchor = parley::Cursor::from_byte_index(
-            &self.layout,
-            select_start,
-            parley::Affinity::Downstream,
-        );
+        let (anchor, focus) = match side {
+            -1 => (select_end, select_start),
+            1 => (select_start, select_end),
+            _ => panic!(),
+        };
+
+        let anchor =
+            parley::Cursor::from_byte_index(&self.layout, anchor, parley::Affinity::Downstream);
         let focus =
-            parley::Cursor::from_byte_index(&self.layout, select_end, parley::Affinity::Downstream);
+            parley::Cursor::from_byte_index(&self.layout, focus, parley::Affinity::Downstream);
 
         parley::Selection::new(anchor, focus)
     }
