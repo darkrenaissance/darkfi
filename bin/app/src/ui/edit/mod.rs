@@ -974,6 +974,7 @@ impl BaseEdit {
                 //t!("handle_select(): no change early exit");
                 return
             }
+            #[cfg(target_os = "android")]
             assert!(start <= end);
 
             //t!("handle_select(): set_selection({start}, {end})");
@@ -1126,7 +1127,7 @@ impl BaseEdit {
         let sel_color = self.hi_bg_color.get();
         if !sel.is_collapsed() {
             let mut mesh = MeshBuilder::new(gfxtag!("chatedit_select_mesh"));
-            sel.geometry_with(layout, |rect: parley::Rect, _| {
+            sel.geometry_with(layout, |rect: parley::BoundingBox, _| {
                 mesh.draw_filled_box(&rect.into(), sel_color);
             });
 

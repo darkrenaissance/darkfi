@@ -328,8 +328,8 @@ impl std::fmt::Debug for Rectangle {
     }
 }
 
-impl From<parley::Rect> for Rectangle {
-    fn from(rect: parley::Rect) -> Self {
+impl From<parley::BoundingBox> for Rectangle {
+    fn from(rect: parley::BoundingBox) -> Self {
         Self::new(rect.x0 as f32, rect.y0 as f32, rect.width() as f32, rect.height() as f32)
     }
 }

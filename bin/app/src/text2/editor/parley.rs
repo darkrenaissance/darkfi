@@ -141,14 +141,8 @@ impl Editor {
     /// Android uses byte indexes whereas parley has its own things. So this API is a compromise
     /// between them both.
     pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        let anchor = parley::Cursor::from_byte_index(
-            &self.layout,
-            select_start,
-            parley::Affinity::Downstream,
-        );
-        let focus =
-            parley::Cursor::from_byte_index(&self.layout, select_end, parley::Affinity::Downstream);
-
+        let anchor = self.editor.cursor_at(select_start);
+        let focus = self.editor.cursor_at(select_end);
         let sel = parley::Selection::new(anchor, focus);
         self.editor.set_selection(sel);
     }
