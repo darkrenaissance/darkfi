@@ -295,7 +295,7 @@ pub fn fp_mod_fv(x: &Bound<Fp>) -> Fq {
 }
 
 pub fn create_module(py: pyo3::Python<'_>) -> PyResult<Bound<PyModule>> {
-    let submod = PyModule::new_bound(py, "pasta")?;
+    let submod = PyModule::new(py, "pasta")?;
 
     submod.add_class::<Fp>()?;
     submod.add_class::<Fq>()?;

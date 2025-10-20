@@ -29,9 +29,6 @@ mod crypto;
 mod zkas;
 
 #[pyo3::prelude::pymodule]
-// We allow unexpected configs here since `pyo3::py_run!` macro
-// uses `#[cfg(feature = "gil-refs")]`.
-#[allow(unexpected_cfgs)]
 fn darkfi_sdk(
     py: pyo3::Python<'_>,
     m: &pyo3::Bound<'_, pyo3::prelude::PyModule>,

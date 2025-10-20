@@ -58,7 +58,7 @@ impl MerkleTree {
 
 /// Wrapper function for creating this Python module.
 pub(crate) fn create_module(py: pyo3::Python<'_>) -> PyResult<Bound<PyModule>> {
-    let submod = PyModule::new_bound(py, "merkle")?;
+    let submod = PyModule::new(py, "merkle")?;
     submod.add_class::<MerkleTree>()?;
     Ok(submod)
 }

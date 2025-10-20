@@ -68,7 +68,7 @@ pub fn pedersen_commitment_base(value: &Bound<Fp>, blind: &Bound<Fq>) -> Ep {
 
 /// Wrapper function for creating this Python module.
 pub(crate) fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
-    let submod = PyModule::new_bound(py, "crypto")?;
+    let submod = PyModule::new(py, "crypto")?;
     submod.add_function(wrap_pyfunction!(poseidon_hash, &submod)?)?;
     submod.add_function(wrap_pyfunction!(pedersen_commitment_u64, &submod)?)?;
     submod.add_function(wrap_pyfunction!(pedersen_commitment_base, &submod)?)?;

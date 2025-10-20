@@ -185,8 +185,8 @@ impl ZkCircuit {
     }
 
     fn opvalues(&self) -> Vec<(DebugOpValue, Vec<Fp>)> {
-        let opvalue_binding = self.0.tracer.opvalues.borrow();
-        let opvalues = opvalue_binding.as_ref().unwrap();
+        let opvalue_guard = self.0.tracer.opvalues.lock().unwrap();
+        let opvalues = opvalue_guard.as_ref().unwrap();
         let mut result = Vec::new();
         for opvalue in opvalues {
             match opvalue {
@@ -355,7 +355,7 @@ impl MockProver {
 }
 
 pub fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
-    let submod = PyModule::new_bound(py, "zkas")?;
+    let submod = PyModule::new(py, "zkas")?;
 
     submod.add_class::<ZkBinary>()?;
     submod.add_class::<ZkCircuit>()?;
