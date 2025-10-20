@@ -1150,7 +1150,10 @@ impl BaseEdit {
     }
 
     async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
-        self.behave.eval_rect(atom).await;
+        {
+            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
+            self.behave.eval_rect(atom).await;
+        }
         let rect = self.rect.get();
 
         let cursor_instrs = self.get_cursor_instrs().await;
