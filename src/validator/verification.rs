@@ -625,14 +625,23 @@ pub async fn verify_transaction(
     let mut fee_call_idx = 0;
 
     if verify_fee {
+        // Verify that there is a single money fee call in the transaction
         let mut found_fee = false;
-        // Verify that there is a money fee call in the transaction
         for (call_idx, call) in tx.calls.iter().enumerate() {
-            if call.data.is_money_fee() {
-                found_fee = true;
-                fee_call_idx = call_idx;
-                break
+            if !call.data.is_money_fee() {
+                continue
             }
+
+            if found_fee {
+                error!(
+                    target: "validator::verification::verify_transcation",
+                    "[VALIDATOR] Transaction {tx_hash} contains multiple fee payment calls"
+                );
+                return Err(TxVerifyFailed::InvalidFee.into())
+            }
+
+            found_fee = true;
+            fee_call_idx = call_idx;
         }
 
         if !found_fee {
@@ -648,6 +657,9 @@ pub async fn verify_transaction(
     let mut payload = vec![];
     tx.calls.encode_async(&mut payload).await?;
 
+    // Define a buffer in case we want to use a different payload in a specific call
+    let mut _call_payload = vec![];
+
     // We'll also take note of all the circuits in a Vec so we can calculate their verification cost.
     let mut circuits_to_verify = vec![];
 
@@ -661,6 +673,15 @@ pub async fn verify_transaction(
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
 
+        // Check if its the fee call so we only pass its payload
+        let (call_idx, call_payload) = if call.data.is_money_fee() {
+            _call_payload = vec![];
+            vec![call.clone()].encode_async(&mut _call_payload).await?;
+            (0_u8, &_call_payload)
+        } else {
+            (idx as u8, &payload)
+        };
+
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
         let mut runtime = Runtime::new(
@@ -670,11 +691,11 @@ pub async fn verify_transaction(
             verifying_block_height,
             block_target,
             tx_hash,
-            idx as u8,
+            call_idx,
         )?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
-        let metadata = runtime.metadata(&payload)?;
+        let metadata = runtime.metadata(call_payload)?;
 
         // Decode the metadata retrieved from the execution
         let mut decoder = Cursor::new(&metadata);
@@ -722,7 +743,7 @@ pub async fn verify_transaction(
         // by the call function ID, enforcing the state update function in the contract.
         debug!(target: "validator::verification::verify_transaction", "Executing \"exec\" call");
         let mut state_update = vec![call.data.data[0]];
-        state_update.append(&mut runtime.exec(&payload)?);
+        state_update.append(&mut runtime.exec(call_payload)?);
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"exec\" call");
 
         // If that was successful, we apply the state update in the ephemeral overlay.
@@ -748,7 +769,7 @@ pub async fn verify_transaction(
                 verifying_block_height,
                 block_target,
                 tx_hash,
-                idx as u8,
+                call_idx,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;
