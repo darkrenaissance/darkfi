@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex as SyncMutex};
 
 use darkfi_sdk::{crypto::constants::OrchardFixedBases, pasta::pallas};
 use halo2_gadgets::ecc as ecc_gadget;
@@ -31,14 +31,14 @@ pub enum DebugOpValue {
 
 #[derive(Clone)]
 pub struct ZkTracer {
-    pub opvalues: RefCell<Option<Vec<DebugOpValue>>>,
+    pub opvalues: Arc<SyncMutex<Option<Vec<DebugOpValue>>>>,
     init_allowed: bool,
     is_enabled: bool,
 }
 
 impl ZkTracer {
     pub(crate) fn new(init_allowed: bool) -> Self {
-        Self { opvalues: RefCell::new(None), init_allowed, is_enabled: false }
+        Self { opvalues: Arc::new(SyncMutex::new(None)), init_allowed, is_enabled: false }
     }
 
     pub(crate) fn init(&mut self) {
@@ -46,7 +46,7 @@ impl ZkTracer {
             panic!("Cannot initialize tracer for verifier circuit!");
         }
         self.is_enabled = true;
-        *self.opvalues.borrow_mut() = Some(Vec::new());
+        *self.opvalues.lock().unwrap() = Some(Vec::new());
     }
 
     pub(crate) fn clear(&self) {
@@ -54,13 +54,11 @@ impl ZkTracer {
             return
         }
 
-        self.opvalues.borrow_mut().as_mut().unwrap().clear();
+        self.opvalues.lock().unwrap().as_mut().unwrap().clear();
     }
 
     fn push(&self, value: DebugOpValue) {
-        let mut binding = self.opvalues.borrow_mut();
-        let opvalues = binding.as_mut().unwrap();
-        opvalues.push(value);
+        self.opvalues.lock().unwrap().as_mut().unwrap().push(value);
     }
 
     pub(crate) fn push_ecpoint(
@@ -100,7 +98,7 @@ impl ZkTracer {
             return
         }
 
-        let opvalues_len = self.opvalues.borrow().as_ref().map_or(0, |v| v.len());
+        let opvalues_len = self.opvalues.lock().unwrap().as_ref().map_or(0, |v| v.len());
         assert_eq!(opvalues_len, opcodes_len);
     }
 }
