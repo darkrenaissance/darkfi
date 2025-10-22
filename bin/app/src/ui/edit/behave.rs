@@ -106,7 +106,7 @@ impl MultiLine {
         self.padding.get_f32(0).unwrap()
     }
     fn padding_bottom(&self) -> f32 {
-        self.padding.get_f32(1).unwrap()
+        self.padding.get_f32(2).unwrap()
     }
 
     /// Gets the real cursor pos within the rect.
