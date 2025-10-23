@@ -39,23 +39,23 @@ linux-release: build-release
 	-mv darkfi-app darkfi-app.linux
 linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
-win-release: $(SRC) fonts
+win-release: $(SRC) fonts forest.zip
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app.exe .
-win-debug: $(SRC) fonts
+win-debug: $(SRC) fonts forest.zip
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
-android-release: $(SRC) fonts
+android-release: $(SRC) fonts forest.zip
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
 android-debug: $(SRC) fonts
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
-build-release: $(SRC) fonts
+build-release: $(SRC) fonts forest.zip
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-build-debug: $(SRC) fonts
+build-debug: $(SRC) fonts forest.zip
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
@@ -69,14 +69,18 @@ ibm-plex-mono-regular.otf:
 NotoColorEmoji.ttf:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
 
+forest.zip:
+	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest.zip
+	cd assets && unzip ../forest.zip
+
 # Developer targets
 
-dev: $(SRC) fonts
+dev: $(SRC) fonts forest.zip
 	$(CARGO) lbuild $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: $(SRC) fonts
+apk: $(SRC) fonts forest.zip
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 
