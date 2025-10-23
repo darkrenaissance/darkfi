@@ -108,34 +108,25 @@ where
     cast(count)
 }
 
+static BIT_MASKS: [u8; 8] = [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01];
+
 /// Get `i`-th bit from bytes slice. Index `i` starts from 0.
+#[inline]
 pub fn bit<T: PrimInt + NumCast>(bytes: &[u8], i: T) -> bool {
-    let q = i.to_usize().expect("bit(): usize") / 8;
-    let r = i.to_u8().expect("bit(): u8") % 8;
-    (bytes[q] >> (7 - r)) & 0x01 == 0x01
+    let i_usize = i.to_usize().unwrap();
+    let q = i_usize >> 3;
+    let r = i_usize & 7;
+    if q >= bytes.len() {
+        return false;
+    }
+    bytes[q] & BIT_MASKS[r] != 0
 }
 
 /// Get the required length of bytes from a `Range`, bits indices across the bytes.
 pub fn nbytes_across<T: PrimInt + NumCast>(start: T, end: T) -> T {
-    let n = (end - (start - start % cast(8))) / cast(8);
-
-    if end % cast(8) == cast(0) {
-        n
-    } else {
-        n + cast(1)
-    }
-}
-
-/// Adjust the bytes representation for `Bits` when shifted.
-/// Returns a bytes shift, `n` and thereby resulting shifted range, `R`.
-pub fn offsets<T: PrimInt + NumCast>(range: &Range<T>, n: T, tail: bool) -> (T, Range<T>) {
-    let x = range.start + n;
-    let e: T = cast(8);
-    if tail {
-        (nbytes_across(range.start, x), range.start..x)
-    } else {
-        (x / e, x % e..range.end - e * (x / e))
-    }
+    let eight = cast(8);
+    let bits = end - (start - start % eight);
+    (bits + eight - T::one()) / eight
 }
 
 /// Convert big-endian bytes into base10 or decimal number.
@@ -176,4 +167,77 @@ where
 /// Convert bits, Vec slice of `bool` into bytes, `Vec<u8>`.
 pub fn bits_to_bytes(bits: &[bool]) -> Vec<u8> {
     bits.rchunks(8).rev().map(|v| bits_to_usize(v) as u8).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_bit() {
+        let bytes = [0x73, 0x6f, 0x66, 0x69, 0x61];
+        assert_eq!(bit(&bytes, 10), true);
+        assert_eq!(bit(&bytes, 20), false);
+        assert_eq!(bit(&bytes, 30), false);
+    }
+
+    #[test]
+    fn test_nbyte_across() {
+        assert_eq!(nbytes_across(0, 8), 1);
+        assert_eq!(nbytes_across(1, 7), 1);
+        assert_eq!(nbytes_across(5, 9), 2);
+        assert_eq!(nbytes_across(9, 16), 1);
+        assert_eq!(nbytes_across(7, 19), 3);
+    }
+
+    #[test]
+    fn test_bytes_to_int() {
+        let number: usize = bytes_to_int(&[0x73, 0x6f, 0x66, 0x69, 0x61]);
+        assert_eq!(number, 495790221665usize);
+    }
+
+    #[test]
+    fn test_usize_to_bytes() {
+        assert_eq!(int_to_bytes(495790221665u64), [0x73, 0x6f, 0x66, 0x69, 0x61]);
+    }
+
+    #[test]
+    fn test_bytes_to_bits() {
+        assert_eq!(
+            bytes_to_bits(&[0x33, 0x33]),
+            [
+                false, false, true, true, false, false, true, true, false, false, true, true,
+                false, false, true, true,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bits_to_bytes() {
+        let bits = [
+            false, false, true, true, false, false, true, true, false, false, true, true, false,
+            false, true, true,
+        ];
+        assert_eq!(bits_to_bytes(&bits), [0x33, 0x33]);
+    }
+
+    #[test]
+    fn test_bits_to_usize() {
+        assert_eq!(
+            bits_to_usize(&[
+                false, false, true, true, false, false, true, true, false, false, true, true,
+                false, false, true, true,
+            ]),
+            13107usize
+        );
+    }
+
+    #[test]
+    fn test_len_lcp() {
+        let sofia = [0x73, 0x6f, 0x66, 0x69, 0x61];
+        let maria = [0x6d, 0x61, 0x72, 0x69, 0x61];
+        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(0..3)), 3);
+        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(5..9)), 0);
+        assert_eq!(len_lcp(&sofia, &(2..9), &maria, &(18..30)), 5);
+        assert_eq!(len_lcp(&sofia, &(20..30), &maria, &(3..15)), 4);
+    }
 }

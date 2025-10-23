@@ -17,16 +17,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, ops::Range};
+use std::ops::Range;
 
 use super::{
-    utils::{bit, bytes_to_int, len_lcp, offsets},
+    utils::{bit, bytes_to_int, len_lcp, nbytes_across},
     BitsLen,
 };
 use crate::GenericResult;
 
+#[derive(Debug, Clone, PartialEq)]
 /// `BitVec` implementation based on bytes slice.
-#[derive(Debug, Clone)]
 pub struct Bits<'a> {
     pub path: &'a [u8],
     pub range: Range<BitsLen>,
@@ -34,7 +34,7 @@ pub struct Bits<'a> {
 
 impl<'a> Bits<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
-        Self { path: bytes, range: 0..(bytes.len() as BitsLen * 8) }
+        Bits { path: bytes, range: 0..(bytes.len() as BitsLen * 8) }
     }
 
     /// Construct `Bits` instance by deserializing bytes slice.
@@ -47,7 +47,21 @@ impl<'a> Bits<'a> {
 
     /// Serialize `Bits` into bytes.
     pub fn to_bytes(&self) -> GenericResult<Vec<u8>> {
-        Ok([&self.range.start.to_be_bytes(), &self.range.end.to_be_bytes(), self.path].concat())
+        let start = (self.range.start / 8) as usize;
+        let end = self.range.end.div_ceil(8) as usize;
+        let mut path = self.path[start..end].to_owned();
+        let r = (self.range.start % 8) as u8;
+        if r != 0 {
+            let mask = 0xffu8 >> r;
+            path[0] &= mask;
+        }
+        let r = (self.range.end % 8) as u8;
+        if r != 0 {
+            let mask = 0xffu8 << (8 - r);
+            let last = path.len() - 1;
+            path[last] &= mask;
+        }
+        Ok([&self.range.start.to_be_bytes(), &self.range.end.to_be_bytes(), &path[..]].concat())
     }
 
     /// Get the very first bit.
@@ -63,63 +77,24 @@ impl<'a> Bits<'a> {
         self.len() == 0 || self.path.len() == 0
     }
 
-    /// Get the resulting `Bits` when shifted with the given size.
-    pub fn shift(&self, n: BitsLen, tail: bool) -> Self {
-        let (q, range) = offsets(&self.range, n, tail);
-        if tail {
-            Self { path: &self.path[..q as usize], range }
-        } else {
-            Self { path: &self.path[q as usize..], range }
-        }
+    /// Get the first `n` bits.
+    pub fn take(&self, n: BitsLen) -> Self {
+        let x = self.range.start + n;
+        let q = nbytes_across(self.range.start, x);
+        let range = self.range.start..x;
+        Self { path: &self.path[..q as usize], range }
+    }
+
+    /// Skip the first `n` bits.
+    pub fn drop(&self, n: BitsLen) -> Self {
+        let x = self.range.start + n;
+        let q = x / 8;
+        let range = x % 8..self.range.end - 8 * (x / 8);
+        Self { path: &self.path[q as usize..], range }
     }
 
     /// Get length of the longest common prefix bits for the given two `Bits`.
     pub fn len_common_bits(a: &Self, b: &Self) -> BitsLen {
         len_lcp(a.path, &a.range, b.path, &b.range)
-    }
-
-    /// Get the bit at position `i` within this Bits range
-    pub fn bit(&self, i: BitsLen) -> bool {
-        assert!(i < self.len(), "Bit index out of range");
-        bit(self.path, self.range.start + i)
-    }
-
-    /// Compare bits lexicographically (MSB to LSB)
-    pub fn lexical_cmp(&self, other: &Self) -> Ordering {
-        let min_len = std::cmp::min(self.len(), other.len());
-
-        // Compare bit by bit from start of range
-        for i in 0..min_len {
-            match (self.bit(i), other.bit(i)) {
-                (false, true) => return Ordering::Less,
-                (true, false) => return Ordering::Greater,
-                _ => continue,
-            }
-        }
-
-        // All compared bits equal, compare lengths
-        self.len().cmp(&other.len())
-    }
-}
-
-// Implement equality/ordering based on actual bit values
-impl PartialEq for Bits<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.len() == other.len() && (0..self.len()).all(|i| self.bit(i) == other.bit(i))
-    }
-}
-
-impl Eq for Bits<'_> {}
-
-#[allow(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd for Bits<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.lexical_cmp(other))
-    }
-}
-
-impl Ord for Bits<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.lexical_cmp(other)
     }
 }

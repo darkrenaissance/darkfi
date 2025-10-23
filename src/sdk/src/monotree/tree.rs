@@ -223,35 +223,31 @@ impl Monotree {
     ///   Immediately split node into two with the longest common prefix,
     ///   then wind the recursive stack from there returning resulting hashes.
     fn put(&mut self, root: &[u8], bits: Bits, leaf: &[u8]) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("bytes");
-        let (lc, rc) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = lc.as_ref().expect("put(): left-unit");
+        let bytes = self.db.get(root)?.expect("put(): bytes");
+        let (left, right) = Node::cells_from_bytes(&bytes, bits.first())?;
+        let unit = left.as_ref().expect("put(): left-unit");
         let n = Bits::len_common_bits(&unit.bits, &bits);
 
         match n {
-            0 => self.put_node(Node::new(lc, Some(Unit { hash: leaf, bits }))),
-            n if n == bits.len() => self.put_node(Node::new(Some(Unit { hash: leaf, bits }), rc)),
+            0 => self.put_node(Node::new(left, Some(Unit { hash: leaf, bits }))),
+            n if n == bits.len() => {
+                self.put_node(Node::new(Some(Unit { hash: leaf, bits }), right))
+            }
             n if n == unit.bits.len() => {
-                let hash = &self.put(unit.hash, bits.shift(n, false), leaf)?.expect("put(): hash");
+                let hash =
+                    &self.put(unit.hash, bits.drop(n), leaf)?.expect("put(): consume & pass-over");
 
-                let unit = unit.to_owned();
-                self.put_node(Node::new(Some(Unit { hash, ..unit }), rc))
+                self.put_node(Node::new(Some(Unit { hash, bits: unit.bits.to_owned() }), right))
             }
             _ => {
-                let bits = bits.shift(n, false);
-                let ru = Unit { hash: leaf, bits };
+                let hash = &self
+                    .put_node(Node::new(
+                        Some(Unit { hash: unit.hash, bits: unit.bits.drop(n) }),
+                        Some(Unit { hash: leaf, bits: bits.drop(n) }),
+                    ))?
+                    .expect("put(): split-node");
 
-                let (cloned, unit) = (unit.bits.clone(), unit.to_owned());
-                let (hash, bits) = (unit.hash, unit.bits.shift(n, false));
-                let lu = Unit { hash, bits };
-
-                // ENFORCE DETERMINISTIC ORDERING
-                let (left, right) = if lu.bits < ru.bits { (lu, ru) } else { (ru, lu) };
-
-                let hash =
-                    &self.put_node(Node::new(Some(left), Some(right)))?.expect("put(): hash");
-                let bits = cloned.shift(n, true);
-                self.put_node(Node::new(Some(Unit { hash, bits }), rc))
+                self.put_node(Node::new(Some(Unit { hash, bits: unit.bits.take(n) }), right))
             }
         }
     }
@@ -265,13 +261,13 @@ impl Monotree {
     }
 
     fn find_key(&mut self, root: &[u8], bits: Bits) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("bytes");
+        let bytes = self.db.get(root)?.expect("find_key(): bytes");
         let (cell, _) = Node::cells_from_bytes(&bytes, bits.first())?;
         let unit = cell.as_ref().expect("find_key(): left-unit");
         let n = Bits::len_common_bits(&unit.bits, &bits);
         match n {
             n if n == bits.len() => Ok(Some(slice_to_hash(unit.hash))),
-            n if n == unit.bits.len() => self.find_key(unit.hash, bits.shift(n, false)),
+            n if n == unit.bits.len() => self.find_key(unit.hash, bits.drop(n)),
             _ => Ok(None),
         }
     }
@@ -285,25 +281,25 @@ impl Monotree {
     }
 
     fn delete_key(&mut self, root: &[u8], bits: Bits) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("bytes");
-        let (lc, rc) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = lc.as_ref().expect("delete_key(): left-unit");
+        let bytes = self.db.get(root)?.expect("delete_key(): bytes");
+        let (left, right) = Node::cells_from_bytes(&bytes, bits.first())?;
+        let unit = left.as_ref().expect("delete_key(): left-unit");
         let n = Bits::len_common_bits(&unit.bits, &bits);
 
         match n {
-            n if n == bits.len() => match rc {
-                Some(_) => self.put_node(Node::new(None, rc)),
+            n if n == bits.len() => match right {
+                Some(_) => self.put_node(Node::new(None, right)),
                 None => Ok(None),
             },
             n if n == unit.bits.len() => {
-                let hash = self.delete_key(unit.hash, bits.shift(n, false))?;
-                match (hash, &rc) {
+                let hash = self.delete_key(unit.hash, bits.drop(n))?;
+                match (hash, &right) {
                     (None, None) => Ok(None),
-                    (None, Some(_)) => self.put_node(Node::new(None, rc)),
+                    (None, Some(_)) => self.put_node(Node::new(None, right)),
                     (Some(ref hash), _) => {
                         let unit = unit.to_owned();
-                        let lc = Some(Unit { hash, ..unit });
-                        self.put_node(Node::new(lc, rc))
+                        let left = Some(Unit { hash, ..unit });
+                        self.put_node(Node::new(left, right))
                     }
                 }
             }
@@ -374,7 +370,7 @@ impl Monotree {
         bits: Bits,
         proof: &mut Proof,
     ) -> GenericResult<Option<Proof>> {
-        let bytes = self.db.get(root)?.expect("bytes");
+        let bytes = self.db.get(root)?.expect("gen_proof(): bytes");
         let (cell, _) = Node::cells_from_bytes(&bytes, bits.first())?;
         let unit = cell.as_ref().expect("gen_proof(): left-unit");
         let n = Bits::len_common_bits(&unit.bits, &bits);
@@ -386,7 +382,7 @@ impl Monotree {
             }
             n if n == unit.bits.len() => {
                 proof.push(self.encode_proof(&bytes, bits.first())?);
-                self.gen_proof(unit.hash, bits.shift(n, false), proof)
+                self.gen_proof(unit.hash, bits.drop(n), proof)
             }
             _ => Ok(None),
         }

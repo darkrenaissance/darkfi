@@ -59,12 +59,12 @@ pub struct Unit<'a> {
 /// By default `HashLen = 32`, `BitsLen = 2`.
 ///
 /// _SoftNode_ = `Cell` + `0x00`(1), where
-/// `Cell` = `hash`(`HASH_LEN`) + `path`(`< HASH_LEN`) + `range_start`(`BitsLen`) + `range_end`(`BitsLen`).
+/// `Cell` = `hash`(`HASH_LEN`) + `range_start`(`BitsLen`) + `range_end`(`BitsLen`) + `path`(`< HASH_LEN`).
 /// `0x00` is an indicator for soft node.
 ///
 /// _HardNode_ = `Cell_L` + `Cell_R` + `0x01`(1), where
-/// `Cell_L` = `hash_L`(`HASH_LEN`) + `path_L`(`< HASH_LEN`) + `range_L_start`(`BitsLen`) + `range_L_end`(`BitsLen`
-/// `Cell_R` = `path_R`(`< HASH_LEN`) _ `range_R_start`(`BitsLen`) + `range_R_end`(`BitsLen`) + `hash_R`(`HASH_LEN`).
+/// `Cell_L` = `hash_L`(`HASH_LEN`) + `range_L_start`(`BitsLen`) + `range_L_end`(`BitsLen`) + `path_L`(`< HASH_LEN`)
+/// `Cell_R` = `range_R_start`(`BitsLen`) + `range_R_end`(`BitsLen`) + path_R`(`< HASH_LEN`) + `hash_R`(`HASH_LEN`).
 /// `0x01` is an indicator for hard node.
 ///
 /// To make ***Merkle proof*** easier, we purposely placed the _hashes_ on outskirts of the serialized form.
