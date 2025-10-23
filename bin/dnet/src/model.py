@@ -37,6 +37,8 @@ class Model:
         self.nodes[name]['outbound'] = {}
         self.nodes[name]['inbound'] = {}
         self.nodes[name]['manual'] = {}
+        self.nodes[name]['direct'] = {}
+        self.nodes[name]['direct_peer_discovery'] = None
         self.nodes[name]['event'] = {}
         self.nodes[name]['seed'] = {}
         self.nodes[name]['msgs'] = dd(list)
@@ -73,6 +75,13 @@ class Model:
             id = channel['id']
             url = channel['url']
             self.nodes[name]['manual'][f'{id}'] = url
+
+        for channel in channels:
+            if channel['session'] != 'direct':
+                continue
+            id = channel['id']
+            url = channel['url']
+            self.nodes[name]['direct'][f'{url}'] = [url, id]
     
     def add_offline(self, node, is_lilith: bool):
         name = list(node.keys())[0]
@@ -153,6 +162,34 @@ class Model:
                 state = info['state']
                 event = self.nodes[name]['event']
                 key = (f'{name}', 'outbound')
+                event[key] = f'peer discovery: {state} (attempt {attempt})'
+                logging.debug(f'{current_time}  peer_discovery: {state} (attempt {attempt})')
+            case 'direct_connecting':
+                connect_addr = info['connect_addr']
+                event = self.nodes[name]['event']
+                event[(f'{name}', f'{connect_addr}')] = [f'connecting: addr={connect_addr}', 0]
+                self.nodes[name]['direct'][f'{connect_addr}'] = ['', 0]
+                logging.debug(f'{current_time}  direct (connecting):   addr={connect_addr}')
+            case 'direct_connected':
+                connect_addr = info['connect_addr']
+                addr = info['addr']
+                id = info['channel_id']
+                event = self.nodes[name]['event']
+                event[(f'{name}', f'{connect_addr}')] = [addr, id]
+                self.nodes[name]['direct'][f'{connect_addr}'] = [addr, id]
+                logging.debug(f'{current_time}  direct (connected):    addr={addr}')
+            case 'direct_disconnected':
+                connect_addr = info['connect_addr']
+                err = info['err']
+                self.nodes[name]['direct'][f'{connect_addr}'] = {}
+                logging.debug(f'{current_time}  direct (disconnected): addr={connect_addr} err={err}')
+            case 'direct_peer_discovery':
+                if self.nodes[name]['direct_peer_discovery'] is None:
+                    self.nodes[name]['direct_peer_discovery'] = 0
+                attempt = info['attempt']
+                state = info['state']
+                event = self.nodes[name]['event']
+                key = (f'{name}', 'direct')
                 event[key] = f'peer discovery: {state} (attempt {attempt})'
                 logging.debug(f'{current_time}  peer_discovery: {state} (attempt {attempt})')
 

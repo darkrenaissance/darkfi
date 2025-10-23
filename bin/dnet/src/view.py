@@ -78,6 +78,10 @@ class Slot(DnetWidget):
                 self.addr = addr
                 txt = urwid.Text(f"    {self.addr}")
                 super().update(txt)
+            case "direct-slot":
+                self.addr = addr[0] if addr else addr
+                txt = urwid.Text(f"    {self.addr}")
+                super().update(txt)
     
 
 class View():
@@ -110,12 +114,19 @@ class View():
         self.add_sessions(name, info)
 
     def add_sessions(self, name, info):
-        for session in ['outbound', 'inbound', 'manual', 'seed']:
+        for session in ['outbound', 'inbound', 'manual', 'seed', 'direct']:
             if session in info and info[session]:
                 session_widget = Session(name, session)
                 session_widget.set_txt()
                 self.listwalker.append(session_widget)
                 self.add_slots(name, session, info[session])
+
+            # If the direct session's peer discovery is active, show the
+            # session even if there is currently no direct channel
+            elif self.model.nodes[name] and self.model.nodes[name]['direct_peer_discovery'] is not None and session == 'direct':
+                session_widget = Session(name, session)
+                session_widget.set_txt()
+                self.listwalker.append(session_widget)
 
     def add_slots(self, name, session, slots):
         for i, addr in slots.items():
@@ -126,7 +137,7 @@ class View():
                 case "outbound":
                     if addr[1] > 0:
                         self.sessions.add(addr[1])
-                case "inbound" | "manual " | "seed":
+                case "inbound" | "manual " | "seed" | "direct":
                     self.sessions.add(i)
 
     def add_lilith(self, name, info, state):
@@ -170,7 +181,7 @@ class View():
     def update_slots(self, name, info):
         if info is None:
             return
-        for session in ['outbound', 'inbound', 'manual', 'seed']:
+        for session in ['outbound', 'inbound', 'manual', 'seed', 'direct']:
             if session in info and info[session]:
                 for i, addr in info[session].items():
                     self.update_slot(name, session, i, addr)
@@ -200,8 +211,8 @@ class View():
         kind = focus_w[0].kind
 
         match kind:
-            case "outbound":
-                key = (focus_w[0].name, "outbound")
+            case "outbound" | "direct":
+                key = (focus_w[0].name, kind)
                 info = self.model.nodes.get(focus_w[0].name)
                 if info and key in info['event']:
                     ev = info['event'].get(key)
@@ -209,7 +220,7 @@ class View():
                         urwid.Text(f" {ev}"),
                         self.pile.options()))
             case "outbound-slot" | "inbound-slot" | \
-                    "manual-slot" | "seed-slot":
+                    "manual-slot" | "seed-slot" | "direct-slot":
                 addr = focus_w[0].addr
                 name = focus_w[0].name
                 info = self.model.nodes.get(name)
@@ -322,7 +333,7 @@ class View():
                         start_index = self.update_node(name, info)
                         if start_index is not None:
                             self.update_slots(name, info)
-                    # Check for outbound or inbound connections coming
+                    # Check for outbound, inbound, or direct connections coming
                     # online or going offline, which requires a redraw.
                     if 'outbound' in info:
                         for i, (addr, id) in info['outbound'].items():
@@ -343,6 +354,25 @@ class View():
                                 logging.debug(f"Inbound {key}, {addr} came online.")
                                 self.refresh_needed = True
                                 break
+
+                    if 'direct' in info:
+                        for key, val in info['direct'].items():
+                            if key in self.sessions and not val:
+                                logging.debug(f"Direct outbound {key} went offline.")
+                                # Delete this key from the model.
+                                del(info['direct'][f'{key}'])
+                                self.refresh_needed = True     
+                                break
+                            if key not in self.sessions:
+                                logging.debug(f"Direct outbound {key} came online.")
+                                self.refresh_needed = True
+                                break
+
+                    if self.model.nodes[name] and self.model.nodes[name]['direct_peer_discovery'] == 0:
+                        logging.debug(f"Direct peer discovery detected.")
+                        self.model.nodes[name]['direct_peer_discovery'] = 1
+                        self.refresh_needed = True
+                        break
 
                 # Check for new lilith nodes. 
                 for name, info in self.model.liliths.items():
