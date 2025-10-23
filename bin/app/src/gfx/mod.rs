@@ -53,7 +53,7 @@ use trax::get_trax;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardId, PropertyAtomicGuard},
-    GOD,
+    ExecutorPtr, GOD,
 };
 
 // This is very noisy so suppress output by default
@@ -925,6 +925,8 @@ struct Stage {
     pruner: PruneMethodHeap,
     screen_was_off: bool,
     #[cfg(target_os = "android")]
+    ex: ExecutorPtr,
+    #[cfg(target_os = "android")]
     refresh_task: Option<smol::Task<()>>,
 }
 
@@ -1026,6 +1028,8 @@ impl Stage {
 
             pruner: PruneMethodHeap::new(epoch),
             screen_was_off: false,
+            #[cfg(target_os = "android")]
+            ex,
             #[cfg(target_os = "android")]
             refresh_task: None,
         }

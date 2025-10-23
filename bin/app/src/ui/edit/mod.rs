@@ -973,7 +973,7 @@ impl BaseEdit {
                 return
             }
             #[cfg(target_os = "android")]
-            assert!(start <= end);
+            assert!(start < end);
 
             //t!("handle_select(): set_selection({start}, {end})");
             editor.set_selection(start, end);
@@ -982,10 +982,12 @@ impl BaseEdit {
             editor.selected_text()
         };
         //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?}) to ({sel_start}, {sel_end})");
+
         // Android editor impl detail: selection disappears when anchor == index
+        // But we disallow this so it should never happen. Just making a note of it here.
+        // See the android only assert that `start < end` in the block above.
         #[cfg(target_os = "android")]
         {
-            assert!(sel_start != sel_end);
             //if sel_start == sel_end {
             //    self.finish_select(atom);
             //}
