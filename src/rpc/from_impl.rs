@@ -96,6 +96,34 @@ impl From<net::dnet::OutboundPeerDiscovery> for JsonValue {
 }
 
 #[cfg(feature = "net")]
+impl From<net::dnet::DirectConnecting> for JsonValue {
+    fn from(info: net::dnet::DirectConnecting) -> JsonValue {
+        json_map([("connect_addr", JsonStr(info.connect_addr.to_string()))])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::DirectConnected> for JsonValue {
+    fn from(info: net::dnet::DirectConnected) -> JsonValue {
+        json_map([
+            ("connect_addr", JsonStr(info.connect_addr.to_string())),
+            ("addr", JsonStr(info.addr.to_string())),
+            ("channel_id", JsonNum(info.channel_id.into())),
+        ])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::DirectDisconnected> for JsonValue {
+    fn from(info: net::dnet::DirectDisconnected) -> JsonValue {
+        json_map([
+            ("connect_addr", JsonStr(info.connect_addr.to_string())),
+            ("err", JsonStr(info.err)),
+        ])
+    }
+}
+
+#[cfg(feature = "net")]
 impl From<net::dnet::DnetEvent> for JsonValue {
     fn from(event: net::dnet::DnetEvent) -> JsonValue {
         match event {
@@ -125,6 +153,18 @@ impl From<net::dnet::DnetEvent> for JsonValue {
             }
             net::dnet::DnetEvent::OutboundPeerDiscovery(info) => {
                 json_map([("event", json_str("outbound_peer_discovery")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::DirectConnecting(info) => {
+                json_map([("event", json_str("direct_connecting")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::DirectConnected(info) => {
+                json_map([("event", json_str("direct_connected")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::DirectDisconnected(info) => {
+                json_map([("event", json_str("direct_disconnected")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::DirectPeerDiscovery(info) => {
+                json_map([("event", json_str("direct_peer_discovery")), ("info", info.into())])
             }
         }
     }

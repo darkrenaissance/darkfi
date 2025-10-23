@@ -43,19 +43,15 @@ use url::Url;
 use super::{
     super::{
         connector::Connector,
+        dnet::{self, dnetev, DnetEvent},
+        hosts::{HostColor, HostState},
+        message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_DIRECT,
 };
 use crate::{
-    net::{
-        dnet,
-        dnet::{dnetev, DnetEvent},
-        hosts::HostState,
-        message::GetAddrsMessage,
-        session::HostColor,
-        ChannelPtr,
-    },
+    net::ChannelPtr,
     system::{sleep, timeout::timeout, CondVar, PublisherPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -321,6 +317,10 @@ impl ChannelBuilder {
             return Err(e)
         }
 
+        dnetev!(self, DirectConnecting, {
+            connect_addr: addr.clone(),
+        });
+
         match self.connector().connect(addr).await {
             Ok((_, channel)) => {
                 info!(
@@ -328,6 +328,12 @@ impl ChannelBuilder {
                     "[P2P] Direct outbound connected [{}]",
                     channel.display_address()
                 );
+
+                dnetev!(self, DirectConnected, {
+                    connect_addr: channel.info.connect_addr.clone(),
+                    addr: channel.display_address().clone(),
+                    channel_id: channel.info.id
+                });
 
                 // Register the new channel
                 match self
@@ -346,6 +352,11 @@ impl ChannelBuilder {
                             channel.display_address(),
                         );
 
+                        dnetev!(self, DirectDisconnected, {
+                            connect_addr: channel.info.connect_addr.clone(),
+                            err: e.to_string()
+                        });
+
                         // Free up this addr for future operations.
                         if let Err(e) = self.session().p2p().hosts().unregister(channel.address()) {
                             warn!(target: "net::direct_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
@@ -360,6 +371,11 @@ impl ChannelBuilder {
                     target: "net::direct_session",
                     "[P2P] Unable to connect to direct outbound: {e}",
                 );
+
+                dnetev!(self, DirectDisconnected, {
+                    connect_addr: addr.clone(),
+                    err: e.to_string()
+                });
 
                 // Free up this addr for future operations.
                 if let Err(e) = self.session().p2p().hosts().unregister(addr) {
@@ -436,7 +452,7 @@ impl PeerDiscovery {
 
         let mut current_attempt = 0;
         loop {
-            dnetev!(self, OutboundPeerDiscovery, {
+            dnetev!(self, DirectPeerDiscovery, {
                 attempt: current_attempt,
                 state: "wait",
             });
@@ -460,7 +476,7 @@ impl PeerDiscovery {
                     "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
 
-                dnetev!(self, OutboundPeerDiscovery, {
+                dnetev!(self, DirectPeerDiscovery, {
                     attempt: current_attempt,
                     state: "sleep",
                 });
@@ -474,6 +490,11 @@ impl PeerDiscovery {
             // whitelist, or greylist.
             let mut channel = None;
             if !self.p2p().is_connected() {
+                dnetev!(self, DirectPeerDiscovery, {
+                    attempt: current_attempt,
+                    state: "newchan",
+                });
+
                 for color in [HostColor::Gold, HostColor::White, HostColor::Grey].iter() {
                     if let Some((entry, _)) = self
                         .p2p()
@@ -496,7 +517,7 @@ impl PeerDiscovery {
                     target: "net::direct_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
-                dnetev!(self, OutboundPeerDiscovery, {
+                dnetev!(self, DirectPeerDiscovery, {
                     attempt: current_attempt,
                     state: "getaddr",
                 });
@@ -548,7 +569,7 @@ impl PeerDiscovery {
                     target: "net::direct_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 
-                dnetev!(self, OutboundPeerDiscovery, {
+                dnetev!(self, DirectPeerDiscovery, {
                     attempt: current_attempt,
                     state: "seed",
                 });

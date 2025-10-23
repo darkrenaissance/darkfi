@@ -25,7 +25,13 @@ use async_trait::async_trait;
 use log::{debug, error, trace};
 use smol::Executor;
 
-use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
+use super::{
+    channel::ChannelPtr,
+    dnet::{self, dnetev, DnetEvent},
+    hosts::HostColor,
+    p2p::P2pPtr,
+    protocol::ProtocolVersion,
+};
 use crate::{system::Subscription, Error, Result};
 
 pub mod inbound_session;
@@ -108,6 +114,13 @@ pub async fn remove_sub_on_stop(
         if let Err(e) = hosts.unregister(channel.address()) {
             error!(target: "net::session::remove_sub_on_stop()", "Error while unregistering addr={}, err={e}", channel.display_address());
         }
+    }
+
+    if type_id & SESSION_DIRECT != 0 {
+        dnetev!(p2p.session_direct(), DirectDisconnected, {
+            connect_addr: channel.info.connect_addr.clone(),
+            err: "Channel stopped".to_string()
+        });
     }
 
     if !p2p.is_connected() {

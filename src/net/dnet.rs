@@ -84,6 +84,26 @@ pub struct OutboundPeerDiscovery {
 }
 
 #[derive(Clone, Debug)]
+pub struct DirectConnecting {
+    pub connect_addr: Url,
+}
+
+#[derive(Clone, Debug)]
+pub struct DirectConnected {
+    pub connect_addr: Url,
+    pub addr: Url,
+    pub channel_id: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct DirectDisconnected {
+    pub connect_addr: Url,
+    pub err: String,
+}
+
+pub type DirectPeerDiscovery = OutboundPeerDiscovery;
+
+#[derive(Clone, Debug)]
 pub enum DnetEvent {
     SendMessage(MessageInfo),
     RecvMessage(MessageInfo),
@@ -94,4 +114,8 @@ pub enum DnetEvent {
     OutboundSlotConnected(OutboundSlotConnected),
     OutboundSlotDisconnected(OutboundSlotDisconnected),
     OutboundPeerDiscovery(OutboundPeerDiscovery),
+    DirectConnecting(DirectConnecting),
+    DirectConnected(DirectConnected),
+    DirectDisconnected(DirectDisconnected),
+    DirectPeerDiscovery(DirectPeerDiscovery),
 }
