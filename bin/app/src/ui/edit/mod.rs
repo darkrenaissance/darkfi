@@ -547,6 +547,7 @@ impl BaseEdit {
             _ => return false,
         }
 
+        self.eval_rect().await;
         self.redraw(atom).await;
         true
     }
@@ -676,6 +677,7 @@ impl BaseEdit {
         drop(editor);
         drop(txt_ctx);
 
+        self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
         self.pause_blinking();
         self.redraw(atom).await;
@@ -1149,11 +1151,15 @@ impl BaseEdit {
         vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
     }
 
+    /// This does not make use of an atom since we want to de-atomize updating this widget from
+    /// its dependencies so theres zero latency when typing.
+    /// Should be called when text contents changes.
+    async fn eval_rect(&self) {
+        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
+        self.behave.eval_rect(atom).await;
+    }
+
     async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
-        {
-            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
-            self.behave.eval_rect(atom).await;
-        }
         let rect = self.rect.get();
 
         let cursor_instrs = self.get_cursor_instrs().await;
@@ -1248,6 +1254,7 @@ impl BaseEdit {
         let atom =
             &mut self_.render_api.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
         self_.insert(&text, atom).await;
+        self_.eval_rect().await;
         self_.redraw(atom).await;
         true
     }
@@ -1326,6 +1333,7 @@ impl BaseEdit {
                 editor.on_buffer_changed(atom).await;
                 drop(editor);
 
+                self.eval_rect().await;
                 self.behave.apply_cursor_scroll().await;
             }
             AndroidSuggestEvent::FinishCompose => {
@@ -1402,15 +1410,18 @@ impl UIObject for BaseEdit {
             let atom = &mut batch.spawn();
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
             self_.scroll.store(0., Ordering::Release);
+            self_.eval_rect().await;
             self_.redraw(atom).await;
         }
         async fn redraw(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
+            self_.eval_rect().await;
             self_.redraw(atom).await;
         }
         async fn set_text(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
             self_.lock_editor().await.on_text_prop_changed().await;
             let atom = &mut batch.spawn();
+            self_.eval_rect().await;
             self_.redraw(atom).await;
         }
 
@@ -1554,7 +1565,7 @@ impl UIObject for BaseEdit {
     ) -> Option<DrawUpdate> {
         t!("BaseEdit::draw({:?}, {trace_id})", self.node());
         *self.parent_rect.lock() = Some(parent_rect);
-
+        self.eval_rect().await;
         Some(self.make_draw_calls(trace_id, atom).await)
     }
 
@@ -1594,6 +1605,7 @@ impl UIObject for BaseEdit {
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
         self.insert(&key_str, atom).await;
+        self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
         self.redraw(atom).await;
         true
@@ -1682,6 +1694,7 @@ impl UIObject for BaseEdit {
         self.mouse_btn_held.store(true, Ordering::Relaxed);
 
         self.pause_blinking();
+        self.eval_rect().await;
         self.redraw(atom).await;
         true
     }
