@@ -73,6 +73,8 @@ pub struct DirectSession {
     retries_tasks: Arc<AsyncMutex<HashMap<Url, Arc<StoppableTask>>>>,
     /// Peer discovery task
     peer_discovery: Arc<PeerDiscovery>,
+    /// Channel ID -> usage count
+    channels_usage: Arc<AsyncMutex<HashMap<u32, u32>>>,
 }
 
 impl DirectSession {
@@ -83,6 +85,7 @@ impl DirectSession {
             channel_builder: Arc::new(AsyncMutex::new(ChannelBuilder::new(session.clone()))),
             retries_tasks: Arc::new(AsyncMutex::new(HashMap::new())),
             peer_discovery: PeerDiscovery::new(session.clone()),
+            channels_usage: Arc::new(AsyncMutex::new(HashMap::new())),
         })
     }
 
@@ -109,23 +112,32 @@ impl DirectSession {
         self.peer_discovery.notify();
     }
 
-    /// Create a new channel to `addr` in the direct session.
-    pub async fn create_channel(&self, addr: &Url) -> Result<ChannelPtr> {
+    /// If there is an existing channel to the same address, this method will
+    /// return it (even if the channel was not created by the direct session).
+    /// Otherwise it will create a new channel to `addr` in the direct session.
+    pub async fn get_channel(&self, addr: &Url) -> Result<ChannelPtr> {
+        let channels = self.p2p().hosts().channels();
+        let channel = channels.iter().find(|&chan| chan.address() == addr).cloned();
+        if let Some(channel) = channel {
+            let mut channels_usage = self.channels_usage.lock().await;
+            let usage_count = channels_usage.get_mut(&channel.info.id);
+            if let Some(count) = usage_count {
+                *count += 1;
+            }
+            return Ok(channel)
+        }
         self.channel_builder.lock().await.new_channel(addr).await
     }
 
     /// Try to create a new channel until it succeeds, then notify `channel_pub`.
     /// If it fails to create a channel, a task will sleep
     /// `outbound_connect_timeout` seconds and try again.
-    pub async fn create_channel_with_retries(
-        &self,
-        addr: Url,
-        channel_pub: PublisherPtr<ChannelPtr>,
-    ) {
+    pub async fn get_channel_with_retries(&self, addr: Url, channel_pub: PublisherPtr<ChannelPtr>) {
         let channel_builder = self.channel_builder.clone();
         let task = StoppableTask::new();
         let retries_tasks_lock = self.retries_tasks.clone();
         let mut retries_tasks = self.retries_tasks.lock().await;
+        let channels_usage = self.channels_usage.clone();
         let p2p = self.p2p().clone();
         retries_tasks.insert(addr.clone(), task.clone());
         drop(retries_tasks);
@@ -133,6 +145,22 @@ impl DirectSession {
         task.clone().start(
             async move {
                 loop {
+                    // Check if there is already a channel to this addr
+                    let channels = p2p.hosts().channels();
+                    let channel = channels.iter().find(|&chan| chan.address() == &addr).cloned();
+                    if let Some(channel) = channel {
+                        let mut chan_usage = channels_usage.lock().await;
+                        let usage_count = chan_usage.get_mut(&channel.info.id);
+                        if let Some(count) = usage_count {
+                            *count += 1;
+                        }
+                        channel_pub.notify(channel).await;
+                        let mut retries_tasks = retries_tasks_lock.lock().await;
+                        retries_tasks.remove(&addr);
+                        break
+                    }
+
+                    // Try to create a new channel
                     let mut builder = channel_builder.lock().await;
                     let res = builder.new_channel(&addr).await;
                     match res {
@@ -165,6 +193,37 @@ impl DirectSession {
             self.p2p().executor(),
         );
     }
+
+    /// Close a direct channel if it's not used by anything.
+    /// `AsyncDrop` would be great here (<https://doc.rust-lang.org/std/future/trait.AsyncDrop.html>)
+    /// but it's still in nightly. For now you must call this method manually
+    /// once you are done with a direct channel.
+    /// Returns `true` if the channel is stopped.
+    pub async fn cleanup_channel(&self, channel: ChannelPtr) -> bool {
+        if channel.session_type_id() & SESSION_DIRECT == 0 {
+            // Do nothing if this is not a channel created by the direct session
+            return false
+        }
+
+        let mut channels_usage = self.channels_usage.lock().await;
+        let usage_count = channels_usage.get_mut(&channel.info.id);
+        if usage_count.is_none() {
+            channel.stop().await;
+            return true
+        }
+        let usage_count = usage_count.unwrap();
+        if *usage_count > 0 {
+            *usage_count -= 1;
+        }
+
+        if *usage_count == 0 {
+            channels_usage.remove(&channel.info.id);
+            channel.stop().await;
+            return true
+        }
+
+        false
+    }
 }
 
 #[async_trait]
@@ -191,6 +250,10 @@ impl ChannelBuilder {
 
     fn session(&self) -> DirectSessionPtr {
         self.session.upgrade().unwrap()
+    }
+
+    fn p2p(&self) -> P2pPtr {
+        self.session().p2p()
     }
 
     fn connector(&mut self) -> Arc<Connector> {
@@ -272,7 +335,10 @@ impl ChannelBuilder {
                     .register_channel(channel.clone(), self.session().p2p().executor())
                     .await
                 {
-                    Ok(()) => Ok(channel),
+                    Ok(()) => {
+                        self.session().channels_usage.lock().await.insert(channel.info.id, 1);
+                        Ok(channel)
+                    }
                     Err(e) => {
                         warn!(
                             target: "net::direct_session",
@@ -415,7 +481,7 @@ impl PeerDiscovery {
                         .container
                         .fetch_random_with_schemes(color.clone(), &allowed_transports)
                     {
-                        channel = self.p2p().session_direct().create_channel(&entry.0).await.ok();
+                        channel = self.p2p().session_direct().get_channel(&entry.0).await.ok();
                         break;
                     }
                 }
