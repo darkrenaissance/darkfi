@@ -175,9 +175,9 @@ mod tests {
     #[test]
     fn test_bit() {
         let bytes = [0x73, 0x6f, 0x66, 0x69, 0x61];
-        assert_eq!(bit(&bytes, 10), true);
-        assert_eq!(bit(&bytes, 20), false);
-        assert_eq!(bit(&bytes, 30), false);
+        assert!(bit(&bytes, 10));
+        assert!(!bit(&bytes, 20));
+        assert!(!bit(&bytes, 30));
     }
 
     #[test]
