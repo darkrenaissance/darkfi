@@ -263,8 +263,8 @@ impl Editor {
         assert!(side.abs() == 1);
         let edit = android::get_editable(self.composer_id).unwrap();
 
-        let mut select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-        let mut select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
+        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
+        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
         //t!("selection() -> ({select_start}, {select_end})");
 
         let (anchor, focus) = match side {

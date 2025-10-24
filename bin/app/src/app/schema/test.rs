@@ -19,8 +19,7 @@
 use crate::{
     app::{
         node::{
-            create_layer, create_multiline_edit, create_singleline_edit, create_text,
-            create_vector_art, create_video,
+            create_layer, create_singleline_edit, create_text, create_vector_art, create_video,
         },
         App,
     },
@@ -36,20 +35,21 @@ const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
-    pub const KING_PATH: &str = "king.png";
+    //pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
+    //pub const KING_PATH: &str = "king.png";
     pub const VID_PATH: &str = "forest/forest_{frame}.png";
 }
 
 #[cfg(not(target_os = "android"))]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "chatdb";
-    pub const KING_PATH: &str = "assets/king.png";
+    //pub const CHATDB_PATH: &str = "chatdb";
+    //pub const KING_PATH: &str = "assets/king.png";
     pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
 }
 
 use ui_consts::*;
 
+#[allow(dead_code)]
 pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let atom = &mut PropertyAtomicGuard::none();
 

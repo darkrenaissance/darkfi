@@ -687,7 +687,7 @@ impl ChatView {
         &self,
         batch_id: BatchGuardId,
         msgbuf: &mut MessageBuffer,
-        trace_id: u32,
+        _trace_id: u32,
     ) {
         //t!("ChatView::redraw_cached() [trace_id={trace_id}]");
         let timest = unixtime();

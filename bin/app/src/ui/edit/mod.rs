@@ -1012,7 +1012,7 @@ impl BaseEdit {
     async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
-        let draw_update = self.make_draw_calls(trace_id, atom).await;
+        let draw_update = self.make_draw_calls(trace_id).await;
         self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
     }
 
@@ -1161,7 +1161,7 @@ impl BaseEdit {
         self.behave.eval_rect(atom).await;
     }
 
-    async fn make_draw_calls(&self, _trace_id: u32, atom: &mut PropertyAtomicGuard) -> DrawUpdate {
+    async fn make_draw_calls(&self, _trace_id: u32) -> DrawUpdate {
         let rect = self.rect.get();
 
         let cursor_instrs = self.get_cursor_instrs().await;
@@ -1563,12 +1563,12 @@ impl UIObject for BaseEdit {
         &self,
         parent_rect: Rectangle,
         trace_id: u32,
-        atom: &mut PropertyAtomicGuard,
+        _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("BaseEdit::draw({:?}, {trace_id})", self.node());
         *self.parent_rect.lock() = Some(parent_rect);
         self.eval_rect().await;
-        Some(self.make_draw_calls(trace_id, atom).await)
+        Some(self.make_draw_calls(trace_id).await)
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
