@@ -9,6 +9,7 @@ import android.text.TextWatcher;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.view.inputmethod.BaseInputConnection;
+import android.view.WindowInsets.Type;
 import java.util.HashMap;
 
 import autosuggest.InvisibleInputView;
@@ -178,6 +179,15 @@ public int getKeyboardHeight() {
 
 public float getScreenDensity() {
     return getResources().getDisplayMetrics().density;
+}
+
+public boolean isImeVisible() {
+    View decorView = getWindow().getDecorView();
+    WindowInsets insets = decorView.getRootWindowInsets();
+    Insets imeInsets = insets.getInsets(WindowInsets.Type.ime());
+    if (imeInsets == null)
+        return false;
+    return insets.isVisible(Type.ime());
 }
 
 //% END

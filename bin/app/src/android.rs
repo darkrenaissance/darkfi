@@ -52,6 +52,15 @@ macro_rules! call_mainactivity_float_method {
         }
     }};
 }
+macro_rules! call_mainactivity_bool_method {
+    ($method:expr) => {{
+        unsafe {
+            let env = android::attach_jni_env();
+            ndk_utils::call_method!(CallBooleanMethod, env, android::ACTIVITY, $method, "()Z") !=
+                0u8
+        }
+    }};
+}
 
 struct GlobalData {
     senders: HashMap<usize, async_channel::Sender<AndroidSuggestEvent>>,
@@ -334,4 +343,8 @@ pub fn get_keyboard_height() -> usize {
 
 pub fn get_screen_density() -> f32 {
     call_mainactivity_float_method!("getScreenDensity")
+}
+
+pub fn is_ime_visible() -> bool {
+    call_mainactivity_bool_method!("isImeVisible")
 }

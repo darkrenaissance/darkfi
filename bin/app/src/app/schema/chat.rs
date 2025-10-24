@@ -177,6 +177,14 @@ fn android_keyboard_height() -> f32 {
     unreachable!()
 }
 
+fn is_ime_visible() -> bool {
+    #[cfg(target_os = "android")]
+    return crate::android::is_ime_visible();
+
+    #[cfg(not(target_os = "android"))]
+    false
+}
+
 pub async fn make(
     app: &App,
     window: SceneNodePtr,
@@ -946,6 +954,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, EMOJIBTN_BOX[2]).unwrap();
     prop.set_f32(atom, Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
 
+    // Chatedit is clicked and requests keyboard. Only show if emoji picker isnt visible.
     let (slot, recvr) = Slot::new("reqkeyb");
     chatedit_node.register("focus_request", slot).unwrap();
     let chatedit_node2 = chatedit_node.clone();
@@ -960,6 +969,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
+    // Emoji button is clicked
     let (slot, recvr) = Slot::new("emoji_clicked");
     let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
@@ -988,7 +998,8 @@ pub async fn make(
             }
 
             if emoji_btn_is_visible.get() {
-                chatedit_node2.call_method("focus", vec![]).await.unwrap();
+                // Open emoji panel and close IME keyboard
+                chatedit_node2.call_method("unfocus", vec![]).await.unwrap();
 
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
@@ -1000,6 +1011,8 @@ pub async fn make(
                 //    msleep(10).await;
                 //}
             } else {
+                assert!(!is_ime_visible());
+                // Hide emoji panel and show the keyboard
                 chatedit_node2.call_method("focus", vec![]).await.unwrap();
 
                 assert!(emoji_close_is_visible.get());
