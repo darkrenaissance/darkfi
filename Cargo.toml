@@ -122,7 +122,7 @@ wasmer-compiler-singlepass = {version = "6.1.0-rc.2", optional = true}
 wasmer-middlewares = {version = "6.1.0-rc.2", optional = true}
 
 # Blockchain store
-sled-overlay = {version = "0.1.9", optional = true}
+sled-overlay = {version = "0.1.10", optional = true}
 
 # Miner
 randomx = {git = "https://codeberg.org/darkrenaissance/RandomX", optional = true, rev = "91cd62809e006f1dcee31ab62160ca5dc71f4c2d"}
