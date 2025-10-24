@@ -16,25 +16,35 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
+    zkas::ZkBinary,
     Error, Result,
 };
 use darkfi_deployooor_contract::{
     client::{deploy_v1::DeployCallBuilder, lock_v1::LockCallBuilder},
+    model::LockParamsV1,
     DeployFunction,
 };
+use darkfi_money_contract::MONEY_CONTRACT_ZKAS_FEE_NS_V1;
 use darkfi_sdk::{
-    crypto::{ContractId, Keypair, DEPLOYOOOR_CONTRACT_ID},
+    crypto::{
+        ContractId, Keypair, PublicKey, SecretKey, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
+    deploy::DeployParamsV1,
+    tx::TransactionHash,
     ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
+use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
 use rusqlite::types::Value;
 
-use crate::{convert_named_params, error::WalletDbResult, Drk};
+use crate::{convert_named_params, error::WalletDbResult, rpc::ScanCache, Drk};
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -172,28 +182,151 @@ impl Drk {
         Ok(ret)
     }
 
-    /// Retrieve a deploy authority keypair given an index
-    async fn get_deploy_auth(&self, idx: u64) -> Result<Keypair> {
+    /// Retrieve a deploy authority keypair and status for provided
+    /// index.
+    async fn get_deploy_auth(&self, idx: u64) -> Result<(Keypair, bool)> {
         // Find the deploy authority keypair
         let row = match self.wallet.query_single(
             &DEPLOY_AUTH_TABLE,
-            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
+            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY, DEPLOY_AUTH_COL_IS_FROZEN],
             convert_named_params! {(DEPLOY_AUTH_COL_ID, idx)},
         ) {
             Ok(v) => v,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[deploy_contract] Failed to retrieve deploy authority keypair: {e}"
+                    "[get_deploy_auth] Failed to retrieve deploy authority keypair: {e}"
                 )))
             }
         };
 
         let Value::Blob(ref keypair_bytes) = row[0] else {
-            return Err(Error::ParseFailed("[deploy_contract] Failed to parse keypair bytes"))
+            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse keypair bytes"))
         };
         let keypair: Keypair = deserialize_async(keypair_bytes).await?;
 
-        Ok(keypair)
+        let Value::Integer(locked) = row[1] else {
+            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse \"is_frozen\""))
+        };
+
+        Ok((keypair, locked != 0))
+    }
+
+    /// Retrieve contract deploy authorities public keys from the
+    /// wallet.
+    pub async fn get_deploy_auths_keys_map(&self) -> Result<HashMap<[u8; 32], SecretKey>> {
+        let rows = match self.wallet.query_multiple(
+            &DEPLOY_AUTH_TABLE,
+            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
+            &[],
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                "[get_deploy_auths_keys_map] Failed to retrieve deploy authorities keypairs: {e}",
+            )))
+            }
+        };
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let Value::Blob(ref keypair_bytes) = row[0] else {
+                return Err(Error::ParseFailed(
+                    "[get_deploy_auths_keys_map] Failed to parse keypair bytes",
+                ))
+            };
+            let keypair: Keypair = deserialize_async(keypair_bytes).await?;
+            ret.insert(keypair.public.to_bytes(), keypair.secret);
+        }
+
+        Ok(ret)
+    }
+
+    /// Auxiliary function to apply `DeployFunction::DeployV1` call
+    /// data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
+    fn apply_deploy_deploy_data(
+        &self,
+        scan_cache: &ScanCache,
+        params: &DeployParamsV1,
+        _tx_hash: &TransactionHash,
+        _block_height: &u32,
+    ) -> Result<bool> {
+        // Check if we have the deploy authority key
+        let Some(_secret_key) = scan_cache.own_deploy_auths.get(&params.public_key.to_bytes())
+        else {
+            return Ok(false)
+        };
+
+        // Create a new history record containing the deployment data
+        // TODO
+
+        Ok(true)
+    }
+
+    /// Auxiliary function to apply `DeployFunction::LockV1` call
+    /// data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our
+    /// own wallet.
+    fn apply_deploy_lock_data(
+        &self,
+        scan_cache: &ScanCache,
+        public_key: &PublicKey,
+        _tx_hash: &TransactionHash,
+        freeze_height: &u32,
+    ) -> Result<bool> {
+        // Check if we have the deploy authority key
+        let Some(secret_key) = scan_cache.own_deploy_auths.get(&public_key.to_bytes()) else {
+            return Ok(false)
+        };
+
+        // Freeze contract
+        let query = format!(
+            "UPDATE {} SET {} = 1, {} = ?1 WHERE {} = ?2;",
+            *DEPLOY_AUTH_TABLE,
+            DEPLOY_AUTH_COL_IS_FROZEN,
+            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
+            DEPLOY_AUTH_COL_DEPLOY_AUTHORITY
+        );
+        if let Err(e) = self.wallet.exec_sql(
+            &query,
+            rusqlite::params![Some(*freeze_height), serialize(&Keypair::new(*secret_key))],
+        ) {
+            return Err(Error::DatabaseError(format!(
+                "[apply_deploy_lock_data] Lock deploy authority failed: {e}"
+            )))
+        }
+
+        // Create a new history record for the lock transaction
+        // TODO
+
+        Ok(true)
+    }
+
+    /// Append data related to DeployoOor contract transactions into
+    /// the wallet database and update the provided scan cache.
+    /// Returns a flag indicating if provided data refer to our own
+    /// wallet.
+    pub async fn apply_tx_deploy_data(
+        &self,
+        scan_cache: &mut ScanCache,
+        data: &[u8],
+        tx_hash: &TransactionHash,
+        block_height: &u32,
+    ) -> Result<bool> {
+        // Run through the transaction call data and see what we got:
+        match DeployFunction::try_from(data[0])? {
+            DeployFunction::DeployV1 => {
+                scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::DeployV1 call"));
+                let params: DeployParamsV1 = deserialize_async(&data[1..]).await?;
+                self.apply_deploy_deploy_data(scan_cache, &params, tx_hash, block_height)
+            }
+            DeployFunction::LockV1 => {
+                scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::LockV1 call"));
+                let params: LockParamsV1 = deserialize_async(&data[1..]).await?;
+                self.apply_deploy_lock_data(scan_cache, &params.public_key, tx_hash, block_height)
+            }
+        }
     }
 
     /// Create a feeless contract deployment transaction.
@@ -203,8 +336,30 @@ impl Drk {
         wasm_bincode: Vec<u8>,
         deploy_ix: Vec<u8>,
     ) -> Result<Transaction> {
-        // Fetch the keypair
-        let deploy_keypair = self.get_deploy_auth(deploy_auth).await?;
+        // Fetch the keypair and its status
+        let (deploy_keypair, is_locked) = self.get_deploy_auth(deploy_auth).await?;
+
+        // Check lock status
+        if is_locked {
+            return Err(Error::Custom("[deploy_contract] Contract is locked".to_string()))
+        }
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("[deploy_contract] Fee circuit not found".to_string()))
+        };
+
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+
+        // Creating Fee circuit proving keys
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
 
         // Create the contract call
         let deploy_call = DeployCallBuilder { deploy_keypair, wasm_bincode, deploy_ix };
@@ -214,20 +369,60 @@ impl Drk {
         let mut data = vec![DeployFunction::DeployV1 as u8];
         deploy_debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above cal
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
-        tx.signatures = vec![sigs];
+        tx.signatures.push(sigs);
+
+        let tree = self.get_money_tree().await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }
 
     /// Create a feeless contract redeployment lock transaction.
     pub async fn lock_contract(&self, deploy_auth: u64) -> Result<Transaction> {
-        // Fetch the keypair
-        let deploy_keypair = self.get_deploy_auth(deploy_auth).await?;
+        // Fetch the keypair and its status
+        let (deploy_keypair, is_locked) = self.get_deploy_auth(deploy_auth).await?;
+
+        // Check lock status
+        if is_locked {
+            return Err(Error::Custom("[lock_contract] Contract is already locked".to_string()))
+        }
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("[lock_contract] Fee circuit not found".to_string()))
+        };
+
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+
+        // Creating Fee circuit proving keys
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
 
         // Create the contract call
         let lock_call = LockCallBuilder { deploy_keypair };
@@ -237,12 +432,30 @@ impl Drk {
         let mut data = vec![DeployFunction::LockV1 as u8];
         lock_debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above cal
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
-        tx.signatures = vec![sigs];
+        tx.signatures.push(sigs);
+
+        let tree = self.get_money_tree().await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }

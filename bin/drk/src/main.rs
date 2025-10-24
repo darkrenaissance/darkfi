@@ -2622,17 +2622,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                let mut tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
-                    Ok(t) => t,
+                let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+                    Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {e}");
                         exit(2);
                     }
-                };
-
-                if let Err(e) = drk.attach_fee(&mut tx).await {
-                    eprintln!("Failed to attach the fee call to the transaction: {e}");
-                    exit(2);
                 };
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
@@ -2651,17 +2646,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                let mut tx = match drk.lock_contract(deploy_auth).await {
-                    Ok(t) => t,
+                let tx = match drk.lock_contract(deploy_auth).await {
+                    Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Error creating contract lock tx: {e}");
                         exit(2);
                     }
-                };
-
-                if let Err(e) = drk.attach_fee(&mut tx).await {
-                    eprintln!("Failed to attach the fee call to the transaction: {e}");
-                    exit(2);
                 };
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));

@@ -3193,18 +3193,9 @@ async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<S
         vec![]
     };
 
-    let lock = drk.read().await;
-    let mut tx = match lock.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
-        Ok(v) => v,
-        Err(e) => {
-            output.push(format!("Error creating contract deployment tx: {e}"));
-            return
-        }
-    };
-
-    match lock.attach_fee(&mut tx).await {
-        Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
-        Err(e) => output.push(format!("Failed to attach the fee call to the transaction: {e}")),
+    match drk.read().await.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+        Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
+        Err(e) => output.push(format!("Failed to create contract deployment transaction: {e}")),
     }
 }
 
@@ -3225,17 +3216,8 @@ async fn handle_contract_lock(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
         }
     };
 
-    let lock = drk.read().await;
-    let mut tx = match lock.lock_contract(deploy_auth).await {
-        Ok(v) => v,
-        Err(e) => {
-            output.push(format!("Error creating contract lock tx: {e}"));
-            return
-        }
-    };
-
-    match lock.attach_fee(&mut tx).await {
-        Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
-        Err(e) => output.push(format!("Failed to attach the fee call to the transaction: {e}")),
+    match drk.read().await.lock_contract(deploy_auth).await {
+        Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
+        Err(e) => output.push(format!("Failed to create contract lock transaction: {e}")),
     }
 }

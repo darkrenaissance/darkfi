@@ -78,6 +78,8 @@ pub struct ScanCache {
     pub own_daos: HashMap<DaoBulla, (Option<SecretKey>, Option<SecretKey>)>,
     /// Our own DAOs proposals with their corresponding DAO reference
     pub own_proposals: HashMap<DaoProposalBulla, DaoBulla>,
+    /// Our own deploy authorities
+    pub own_deploy_auths: HashMap<[u8; 32], SecretKey>,
     /// Messages buffer for better downstream prints handling
     pub messages_buffer: Vec<String>,
 }
@@ -129,6 +131,7 @@ impl Drk {
         for proposal in self.get_proposals().await? {
             own_proposals.insert(proposal.bulla(), proposal.proposal.dao_bulla);
         }
+        let own_deploy_auths = self.get_deploy_auths_keys_map().await?;
 
         Ok(ScanCache {
             money_tree,
@@ -140,6 +143,7 @@ impl Drk {
             dao_proposals_tree,
             own_daos,
             own_proposals,
+            own_deploy_auths,
             messages_buffer: vec![],
         })
     }
@@ -202,7 +206,17 @@ impl Drk {
 
                 if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID {
                     scan_cache.log(format!("[scan_block] Found DeployoOor contract in call {i}"));
-                    // TODO: implement
+                    if self
+                        .apply_tx_deploy_data(
+                            scan_cache,
+                            &call.data.data,
+                            &tx_hash,
+                            &block.header.height,
+                        )
+                        .await?
+                    {
+                        wallet_tx = true;
+                    }
                     continue
                 }
 
