@@ -198,7 +198,15 @@ impl PtListener for SmolTcpListener {
             Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp://{peer_addr}")).unwrap();
+        let url = match Url::parse(&format!("tcp://{peer_addr}")) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid peer address '{peer_addr}': {e}"),
+                ))
+            }
+        };
         Ok((Box::new(stream), url))
     }
 }
@@ -216,7 +224,15 @@ impl PtListener for (TlsAcceptor, SmolTcpListener) {
             Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp+tls://{peer_addr}")).unwrap();
+        let url = match Url::parse(&format!("tcp+tls://{peer_addr}")) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid peer address '{peer_addr}': {e}"),
+                ))
+            }
+        };
 
         Ok((Box::new(TlsStream::Server(stream)), url))
     }
