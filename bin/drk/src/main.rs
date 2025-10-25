@@ -44,8 +44,8 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
-        DAO_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, ContractId, FuncId, FuncRef, Keypair, PublicKey,
+        SecretKey, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -525,7 +525,7 @@ enum ContractSubcmd {
     /// Deploy a smart contract
     Deploy {
         /// Contract ID (deploy authority)
-        deploy_auth: u64,
+        deploy_auth: String,
 
         /// Path to contract wasm bincode
         wasm_path: String,
@@ -537,7 +537,7 @@ enum ContractSubcmd {
     /// Lock a smart contract
     Lock {
         /// Contract ID (deploy authority)
-        deploy_auth: u64,
+        deploy_auth: String,
     },
 }
 
@@ -2585,14 +2585,14 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Index", "Contract ID", "Frozen", "Freeze Height"]);
+                table.set_titles(row!["Contract ID", "Secret Key", "Locked", "Lock Height"]);
 
-                for (idx, contract_id, frozen, freeze_height) in auths {
-                    let freeze_height = match freeze_height {
-                        Some(freeze_height) => freeze_height.to_string(),
+                for (contract_id, secret_key, is_locked, lock_height) in auths {
+                    let lock_height = match lock_height {
+                        Some(lock_height) => lock_height.to_string(),
                         None => String::from("-"),
                     };
-                    table.add_row(row![idx, contract_id, frozen, freeze_height]);
+                    table.add_row(row![contract_id, secret_key, is_locked, lock_height]);
                 }
 
                 if table.is_empty() {
@@ -2605,6 +2605,15 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             }
 
             ContractSubcmd::Deploy { deploy_auth, wasm_path, deploy_ix } => {
+                // Parse the deployment authority contract id
+                let deploy_auth = match ContractId::from_str(&deploy_auth) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("Invalid deploy authority: {e}");
+                        exit(2);
+                    }
+                };
+
                 // Read the wasm bincode and deploy instruction
                 let wasm_bin = smol::fs::read(expand_path(&wasm_path)?).await?;
                 let deploy_ix = match deploy_ix {
@@ -2622,7 +2631,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+                let tx = match drk.deploy_contract(&deploy_auth, wasm_bin, deploy_ix).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {e}");
@@ -2636,6 +2645,15 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             }
 
             ContractSubcmd::Lock { deploy_auth } => {
+                // Parse the deployment authority contract id
+                let deploy_auth = match ContractId::from_str(&deploy_auth) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("Invalid deploy authority: {e}");
+                        exit(2);
+                    }
+                };
+
                 let drk = new_wallet(
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
@@ -2646,7 +2664,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 )
                 .await;
 
-                let tx = match drk.lock_contract(deploy_auth).await {
+                let tx = match drk.lock_contract(&deploy_auth).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Error creating contract lock tx: {e}");

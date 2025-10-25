@@ -48,8 +48,8 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
-        DAO_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, ContractId, FuncId, FuncRef, Keypair, PublicKey,
+        SecretKey, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -3124,14 +3124,14 @@ async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
 
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Index", "Contract ID", "Frozen", "Freeze Height"]);
+    table.set_titles(row!["Contract ID", "Secret Key", "Locked", "Lock Height"]);
 
-    for (idx, contract_id, frozen, freeze_height) in auths {
-        let freeze_height = match freeze_height {
-            Some(freeze_height) => freeze_height.to_string(),
+    for (contract_id, secret_key, is_locked, lock_height) in auths {
+        let lock_height = match lock_height {
+            Some(lock_height) => lock_height.to_string(),
             None => String::from("-"),
         };
-        table.add_row(row![idx, contract_id, frozen, freeze_height]);
+        table.add_row(row![contract_id, secret_key, is_locked, lock_height]);
     }
 
     if table.is_empty() {
@@ -3150,7 +3150,7 @@ async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<S
         return
     }
 
-    let deploy_auth = match u64::from_str(parts[2]) {
+    let deploy_auth = match ContractId::from_str(parts[2]) {
         Ok(d) => d,
         Err(e) => {
             output.push(format!("Invalid deploy authority: {e}"));
@@ -3193,7 +3193,7 @@ async fn handle_contract_deploy(drk: &DrkPtr, parts: &[&str], output: &mut Vec<S
         vec![]
     };
 
-    match drk.read().await.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+    match drk.read().await.deploy_contract(&deploy_auth, wasm_bin, deploy_ix).await {
         Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
         Err(e) => output.push(format!("Failed to create contract deployment transaction: {e}")),
     }
@@ -3208,7 +3208,7 @@ async fn handle_contract_lock(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
         return
     }
 
-    let deploy_auth = match u64::from_str(parts[2]) {
+    let deploy_auth = match ContractId::from_str(parts[2]) {
         Ok(d) => d,
         Err(e) => {
             output.push(format!("Invalid deploy authority: {e}"));
@@ -3216,7 +3216,7 @@ async fn handle_contract_lock(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
         }
     };
 
-    match drk.read().await.lock_contract(deploy_auth).await {
+    match drk.read().await.lock_contract(&deploy_auth).await {
         Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
         Err(e) => output.push(format!("Failed to create contract lock transaction: {e}")),
     }

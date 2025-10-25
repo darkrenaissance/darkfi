@@ -41,7 +41,7 @@ use darkfi_sdk::{
     tx::TransactionHash,
     ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 use rusqlite::types::Value;
 
 use crate::{convert_named_params, error::WalletDbResult, rpc::ScanCache, Drk};
@@ -54,10 +54,10 @@ lazy_static! {
 }
 
 // DEPLOY_AUTH_TABLE
-pub const DEPLOY_AUTH_COL_ID: &str = "id";
-pub const DEPLOY_AUTH_COL_DEPLOY_AUTHORITY: &str = "deploy_authority";
-pub const DEPLOY_AUTH_COL_IS_FROZEN: &str = "is_frozen";
-pub const DEPLOY_AUTH_COL_FREEZE_HEIGHT: &str = "freeze_height";
+pub const DEPLOY_AUTH_COL_CONTRACT_ID: &str = "contract_id";
+pub const DEPLOY_AUTH_COL_SECRET_KEY: &str = "secret_key";
+pub const DEPLOY_AUTH_COL_IS_LOCKED: &str = "is_locked";
+pub const DEPLOY_AUTH_COL_LOCK_HEIGHT: &str = "lock_height";
 
 impl Drk {
     /// Initialize wallet with tables for the Deployooor contract.
@@ -73,63 +73,72 @@ impl Drk {
     pub async fn deploy_auth_keygen(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Generating a new keypair"));
 
-        let keypair = Keypair::random(&mut OsRng);
-        let freeze_height: Option<u32> = None;
+        let secret_key = SecretKey::random(&mut OsRng);
+        let contract_id = ContractId::derive_public(PublicKey::from_secret(secret_key));
+        let lock_height: Option<u32> = None;
 
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            "INSERT INTO {} ({}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4);",
             *DEPLOY_AUTH_TABLE,
-            DEPLOY_AUTH_COL_DEPLOY_AUTHORITY,
-            DEPLOY_AUTH_COL_IS_FROZEN,
-            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
+            DEPLOY_AUTH_COL_CONTRACT_ID,
+            DEPLOY_AUTH_COL_SECRET_KEY,
+            DEPLOY_AUTH_COL_IS_LOCKED,
+            DEPLOY_AUTH_COL_LOCK_HEIGHT,
         );
         self.wallet.exec_sql(
             &query,
-            rusqlite::params![serialize_async(&keypair).await, 0, freeze_height],
+            rusqlite::params![
+                serialize_async(&contract_id).await,
+                serialize_async(&secret_key).await,
+                0,
+                lock_height
+            ],
         )?;
 
         output.push(String::from("Created new contract deploy authority"));
-        output.push(format!("Contract ID: {}", ContractId::derive_public(keypair.public)));
+        output.push(format!("Contract ID: {contract_id}"));
 
         Ok(())
     }
 
-    /// Reset all token deploy authorities frozen status in the wallet.
+    /// Reset all token deploy authorities locked status in the wallet.
     pub fn reset_deploy_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
-        output.push(String::from("Resetting deploy authorities frozen status"));
+        output.push(String::from("Resetting deploy authorities locked status"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL;",
-            *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_IS_FROZEN, DEPLOY_AUTH_COL_FREEZE_HEIGHT
+            *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_IS_LOCKED, DEPLOY_AUTH_COL_LOCK_HEIGHT
         );
         self.wallet.exec_sql(&query, &[])?;
-        output.push(String::from("Successfully reset deploy authorities frozen status"));
+        output.push(String::from("Successfully reset deploy authorities locked status"));
 
         Ok(())
     }
 
-    /// Remove deploy authorities frozen status in the wallet that
-    /// where frozen after provided height.
-    pub fn unfreeze_deploy_authorities_after(
+    /// Remove deploy authorities locked status in the wallet that
+    /// where locked after provided height.
+    pub fn unlock_deploy_authorities_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
     ) -> WalletDbResult<()> {
-        output.push(format!("Resetting deploy authorities frozen status after: {height}"));
+        output.push(format!("Resetting deploy authorities locked status after: {height}"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL WHERE {} > ?1;",
             *DEPLOY_AUTH_TABLE,
-            DEPLOY_AUTH_COL_IS_FROZEN,
-            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
-            DEPLOY_AUTH_COL_FREEZE_HEIGHT
+            DEPLOY_AUTH_COL_IS_LOCKED,
+            DEPLOY_AUTH_COL_LOCK_HEIGHT,
+            DEPLOY_AUTH_COL_LOCK_HEIGHT
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
-        output.push(String::from("Successfully reset deploy authorities frozen status"));
+        output.push(String::from("Successfully reset deploy authorities locked status"));
 
         Ok(())
     }
 
     /// List contract deploy authorities from the wallet
-    pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool, Option<u32>)>> {
+    pub async fn list_deploy_auth(
+        &self,
+    ) -> Result<Vec<(ContractId, SecretKey, bool, Option<u32>)>> {
         let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
@@ -141,55 +150,53 @@ impl Drk {
 
         let mut ret = Vec::with_capacity(rows.len());
         for row in rows {
-            let Value::Integer(idx) = row[0] else {
-                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse index"))
+            let Value::Blob(ref contract_id_bytes) = row[0] else {
+                return Err(Error::ParseFailed(
+                    "[list_deploy_auth] Failed to parse contract id bytes",
+                ))
+            };
+            let contract_id: ContractId = deserialize_async(contract_id_bytes).await?;
+
+            let Value::Blob(ref secret_key_bytes) = row[1] else {
+                return Err(Error::ParseFailed(
+                    "[list_deploy_auth] Failed to parse secret key bytes",
+                ))
+            };
+            let secret_key: SecretKey = deserialize_async(secret_key_bytes).await?;
+
+            let Value::Integer(locked) = row[2] else {
+                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse \"is_locked\""))
             };
 
-            let Value::Blob(ref auth_bytes) = row[1] else {
-                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse keypair bytes"))
-            };
-            let deploy_auth: Keypair = deserialize_async(auth_bytes).await?;
-
-            let Value::Integer(frozen) = row[2] else {
-                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse \"is_frozen\""))
-            };
-
-            let freeze_height = match row[3] {
-                Value::Integer(freeze_height) => {
-                    let Ok(freeze_height) = u32::try_from(freeze_height) else {
+            let lock_height = match row[3] {
+                Value::Integer(lock_height) => {
+                    let Ok(lock_height) = u32::try_from(lock_height) else {
                         return Err(Error::ParseFailed(
-                            "[list_deploy_auth] Freeze height parsing failed",
+                            "[list_deploy_auth] Lock height parsing failed",
                         ))
                     };
-                    Some(freeze_height)
+                    Some(lock_height)
                 }
                 Value::Null => None,
                 _ => {
-                    return Err(Error::ParseFailed(
-                        "[list_deploy_auth] Freeze height parsing failed",
-                    ))
+                    return Err(Error::ParseFailed("[list_deploy_auth] Lock height parsing failed"))
                 }
             };
 
-            ret.push((
-                idx,
-                ContractId::derive_public(deploy_auth.public),
-                frozen != 0,
-                freeze_height,
-            ))
+            ret.push((contract_id, secret_key, locked != 0, lock_height))
         }
 
         Ok(ret)
     }
 
     /// Retrieve a deploy authority keypair and status for provided
-    /// index.
-    async fn get_deploy_auth(&self, idx: u64) -> Result<(Keypair, bool)> {
+    /// contract id.
+    async fn get_deploy_auth(&self, contract_id: &ContractId) -> Result<(Keypair, bool)> {
         // Find the deploy authority keypair
         let row = match self.wallet.query_single(
             &DEPLOY_AUTH_TABLE,
-            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY, DEPLOY_AUTH_COL_IS_FROZEN],
-            convert_named_params! {(DEPLOY_AUTH_COL_ID, idx)},
+            &[DEPLOY_AUTH_COL_SECRET_KEY, DEPLOY_AUTH_COL_IS_LOCKED],
+            convert_named_params! {(DEPLOY_AUTH_COL_CONTRACT_ID, serialize_async(contract_id).await)},
         ) {
             Ok(v) => v,
             Err(e) => {
@@ -199,43 +206,43 @@ impl Drk {
             }
         };
 
-        let Value::Blob(ref keypair_bytes) = row[0] else {
-            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse keypair bytes"))
+        let Value::Blob(ref secret_key_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse secret key bytes"))
         };
-        let keypair: Keypair = deserialize_async(keypair_bytes).await?;
+        let secret_key: SecretKey = deserialize_async(secret_key_bytes).await?;
+        let keypair = Keypair::new(secret_key);
 
         let Value::Integer(locked) = row[1] else {
-            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse \"is_frozen\""))
+            return Err(Error::ParseFailed("[get_deploy_auth] Failed to parse \"is_locked\""))
         };
 
         Ok((keypair, locked != 0))
     }
 
-    /// Retrieve contract deploy authorities public keys from the
-    /// wallet.
+    /// Retrieve contract deploy authorities keys map from the wallet.
     pub async fn get_deploy_auths_keys_map(&self) -> Result<HashMap<[u8; 32], SecretKey>> {
         let rows = match self.wallet.query_multiple(
             &DEPLOY_AUTH_TABLE,
-            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
+            &[DEPLOY_AUTH_COL_SECRET_KEY],
             &[],
         ) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                "[get_deploy_auths_keys_map] Failed to retrieve deploy authorities keypairs: {e}",
+                "[get_deploy_auths_keys_map] Failed to retrieve deploy authorities secret keys: {e}",
             )))
             }
         };
 
         let mut ret = HashMap::new();
         for row in rows {
-            let Value::Blob(ref keypair_bytes) = row[0] else {
+            let Value::Blob(ref secret_key_bytes) = row[0] else {
                 return Err(Error::ParseFailed(
-                    "[get_deploy_auths_keys_map] Failed to parse keypair bytes",
+                    "[get_deploy_auths_keys_map] Failed to parse secret key bytes",
                 ))
             };
-            let keypair: Keypair = deserialize_async(keypair_bytes).await?;
-            ret.insert(keypair.public.to_bytes(), keypair.secret);
+            let secret_key: SecretKey = deserialize_async(secret_key_bytes).await?;
+            ret.insert(PublicKey::from_secret(secret_key).to_bytes(), secret_key);
         }
 
         Ok(ret)
@@ -268,30 +275,30 @@ impl Drk {
     /// data to the wallet.
     /// Returns a flag indicating if the provided call refers to our
     /// own wallet.
-    fn apply_deploy_lock_data(
+    async fn apply_deploy_lock_data(
         &self,
         scan_cache: &ScanCache,
         public_key: &PublicKey,
         _tx_hash: &TransactionHash,
-        freeze_height: &u32,
+        lock_height: &u32,
     ) -> Result<bool> {
         // Check if we have the deploy authority key
         let Some(secret_key) = scan_cache.own_deploy_auths.get(&public_key.to_bytes()) else {
             return Ok(false)
         };
 
-        // Freeze contract
+        // Lock contract
+        let secret_key = serialize_async(secret_key).await;
         let query = format!(
             "UPDATE {} SET {} = 1, {} = ?1 WHERE {} = ?2;",
             *DEPLOY_AUTH_TABLE,
-            DEPLOY_AUTH_COL_IS_FROZEN,
-            DEPLOY_AUTH_COL_FREEZE_HEIGHT,
-            DEPLOY_AUTH_COL_DEPLOY_AUTHORITY
+            DEPLOY_AUTH_COL_IS_LOCKED,
+            DEPLOY_AUTH_COL_LOCK_HEIGHT,
+            DEPLOY_AUTH_COL_SECRET_KEY
         );
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![Some(*freeze_height), serialize(&Keypair::new(*secret_key))],
-        ) {
+        if let Err(e) =
+            self.wallet.exec_sql(&query, rusqlite::params![Some(*lock_height), secret_key])
+        {
             return Err(Error::DatabaseError(format!(
                 "[apply_deploy_lock_data] Lock deploy authority failed: {e}"
             )))
@@ -325,6 +332,7 @@ impl Drk {
                 scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::LockV1 call"));
                 let params: LockParamsV1 = deserialize_async(&data[1..]).await?;
                 self.apply_deploy_lock_data(scan_cache, &params.public_key, tx_hash, block_height)
+                    .await
             }
         }
     }
@@ -332,7 +340,7 @@ impl Drk {
     /// Create a feeless contract deployment transaction.
     pub async fn deploy_contract(
         &self,
-        deploy_auth: u64,
+        deploy_auth: &ContractId,
         wasm_bincode: Vec<u8>,
         deploy_ix: Vec<u8>,
     ) -> Result<Transaction> {
@@ -398,7 +406,7 @@ impl Drk {
     }
 
     /// Create a feeless contract redeployment lock transaction.
-    pub async fn lock_contract(&self, deploy_auth: u64) -> Result<Transaction> {
+    pub async fn lock_contract(&self, deploy_auth: &ContractId) -> Result<Transaction> {
         // Fetch the keypair and its status
         let (deploy_keypair, is_locked) = self.get_deploy_auth(deploy_auth).await?;
 

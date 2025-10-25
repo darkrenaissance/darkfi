@@ -226,8 +226,8 @@ impl Drk {
         // height.
         self.remove_dao_votes_after(&height, output)?;
 
-        // Unfreeze all contracts frozen after the reset height
-        self.unfreeze_deploy_authorities_after(&height, output)?;
+        // Unlock all contracts frozen after the reset height
+        self.unlock_deploy_authorities_after(&height, output)?;
 
         // Set reverted status to all transactions executed after reset
         // height.
