@@ -169,7 +169,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let mut shape = VectorShape::new();
         let bg_color = match COLOR_SCHEME {
-            ColorScheme::DarkMode => [0.05, 0.05, 0.05, 1.],
+            ColorScheme::DarkMode => [0., 0.1, 0.07, 0.7],
             ColorScheme::PaperLight => [1., 1., 1., 1.],
         };
         shape.add_filled_box(
