@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["KDF_SAPLING_PERSONALIZATION"],"fn":["kdf_sapling","sapling_ka_agree"]};
