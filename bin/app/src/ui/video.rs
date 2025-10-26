@@ -17,15 +17,11 @@
  */
 
 use async_trait::async_trait;
-use image::ImageReader;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::{
-    io::Cursor,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use crate::{
@@ -42,9 +38,10 @@ use crate::{
 
 use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
 
-pub const N_LOADERS: usize = 4;
+pub const N_LOADERS: usize = 6;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::video", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::video", $($arg)*); } }
 
 pub type VideoPtr = Arc<Video>;
 
@@ -112,7 +109,7 @@ impl Video {
             textures_pub,
             textures_sub,
             vid_data: Arc::new(SyncMutex::new(None)),
-            _load_handles: SyncMutex::new([const { None }; 4]),
+            _load_handles: SyncMutex::new([const { None }; N_LOADERS]),
 
             rect,
             uv,
@@ -162,7 +159,7 @@ impl Video {
             self.textures_pub.clone().set_capacity(vid_len);
         }
 
-        let mut handles = [const { None }; 4];
+        let mut handles = [const { None }; N_LOADERS];
         for thread_idx in 0..N_LOADERS {
             let path_fmt = path_fmt.clone();
             let render_api = self.render_api.clone();
@@ -171,13 +168,13 @@ impl Video {
             let textures_pub = self.textures_pub.clone();
 
             let handle = std::thread::spawn(move || {
+                let now = std::time::Instant::now();
                 let mut frame_idx = thread_idx;
                 while frame_idx < vid_len {
                     // Stop loading instantly
                     if stop_load.load(Ordering::Relaxed) {
                         return
                     }
-                    //t!("frame_idx = {frame_idx} [thread={thread_idx}]");
                     let path = path_fmt.replace("{frame}", &format!("{frame_idx:#03}"));
                     let texture = Self::load_texture(path, &render_api);
                     // Make editing textures array and broadcasting an atomic op
@@ -193,6 +190,7 @@ impl Video {
 
                     frame_idx += N_LOADERS;
                 }
+                d!("thread {thread_idx} finished took {:?}", now.elapsed());
             });
             handles[thread_idx] = Some(handle);
         }
@@ -210,16 +208,9 @@ impl Video {
                 panic!("Resource not found! {e}");
             }
         });
-        let data = std::mem::take(&mut *data.lock());
-        let img =
-            ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode().unwrap();
-        let img = img.to_rgba8();
-
-        //let img = image::ImageReader::open(path).unwrap().decode().unwrap().to_rgba8();
-
-        let width = img.width() as u16;
-        let height = img.height() as u16;
-        let bmp = img.into_raw();
+        let (header, bmp) = qoi::decode_to_vec(&*data.lock()).unwrap();
+        let width = header.width as u16;
+        let height = header.height as u16;
 
         render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }

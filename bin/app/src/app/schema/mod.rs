@@ -56,7 +56,7 @@ mod ui_consts {
     use std::path::PathBuf;
 
     //pub const BG_PATH: &str = "bg.png";
-    pub const VID_PATH: &str = "forest/forest_{frame}.png";
+    pub const VID_PATH: &str = "forest6/forest_02cjpg{frame}.qoi";
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -81,7 +81,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     //pub const BG_PATH: &str = "assets/bg.png";
-    pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
+    pub const VID_PATH: &str = "assets/forest6/forest_02cjpg{frame}.qoi";
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
@@ -278,7 +278,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
         //layer_node.link(node);
-        node.set_property_u32(atom, Role::App, "length", 357).unwrap();
+        node.set_property_u32(atom, Role::App, "length", 150).unwrap();
         let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
         layer_node.link(node);
 

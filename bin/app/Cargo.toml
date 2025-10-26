@@ -18,6 +18,7 @@ harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = 
 freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
 image = "0.25.5"
+qoi = "0.4.1"
 log = { version = "0.4.27", features = ["release_max_level_info"] }
 glam = "0.29.2"
 #zmq = "0.10.0"
