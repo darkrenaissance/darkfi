@@ -41,7 +41,7 @@ use darkfi_sdk::{
     tx::TransactionHash,
     ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
+use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
 use rusqlite::types::Value;
 
 use crate::{convert_named_params, error::WalletDbResult, rpc::ScanCache, Drk};
@@ -51,6 +51,8 @@ use crate::{convert_named_params, error::WalletDbResult, rpc::ScanCache, Drk};
 lazy_static! {
     pub static ref DEPLOY_AUTH_TABLE: String =
         format!("{}_deploy_auth", DEPLOYOOOR_CONTRACT_ID.to_string());
+    pub static ref DEPLOY_HISTORY_TABLE: String =
+        format!("{}_deploy_history", DEPLOYOOOR_CONTRACT_ID.to_string());
 }
 
 // DEPLOY_AUTH_TABLE
@@ -58,6 +60,14 @@ pub const DEPLOY_AUTH_COL_CONTRACT_ID: &str = "contract_id";
 pub const DEPLOY_AUTH_COL_SECRET_KEY: &str = "secret_key";
 pub const DEPLOY_AUTH_COL_IS_LOCKED: &str = "is_locked";
 pub const DEPLOY_AUTH_COL_LOCK_HEIGHT: &str = "lock_height";
+
+// DEPLOY_HISTORY_TABLE
+pub const DEPLOY_HISTORY_COL_TX_HASH: &str = "tx_hash";
+pub const DEPLOY_HISTORY_COL_CONTRACT: &str = "contract";
+pub const DEPLOY_HISTORY_COL_TYPE: &str = "type";
+pub const DEPLOY_HISTORY_COL_BLOCK_HEIGHT: &str = "block_height";
+pub const DEPLOY_HISTORY_COL_WASM_BINCODE: &str = "wasm_bincode";
+pub const DEPLOY_HISTORY_COL_DEPLOY_IX: &str = "deploy_ix";
 
 impl Drk {
     /// Initialize wallet with tables for the Deployooor contract.
@@ -101,7 +111,42 @@ impl Drk {
         Ok(())
     }
 
-    /// Reset all token deploy authorities locked status in the wallet.
+    /// Insert a deploy authority history record into the wallet.
+    pub fn put_deploy_history_record(
+        &self,
+        tx_hash: &TransactionHash,
+        contract: &ContractId,
+        tx_type: &str,
+        block_height: &u32,
+        wasm_bincode: &Option<Vec<u8>>,
+        deploy_ix: &Option<Vec<u8>>,
+    ) -> WalletDbResult<()> {
+        let query = format!(
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+            *DEPLOY_HISTORY_TABLE,
+            DEPLOY_HISTORY_COL_TX_HASH,
+            DEPLOY_HISTORY_COL_CONTRACT,
+            DEPLOY_HISTORY_COL_TYPE,
+            DEPLOY_HISTORY_COL_BLOCK_HEIGHT,
+            DEPLOY_HISTORY_COL_WASM_BINCODE,
+            DEPLOY_HISTORY_COL_DEPLOY_IX,
+        );
+        self.wallet.exec_sql(
+            &query,
+            rusqlite::params![
+                tx_hash.to_string(),
+                serialize(contract),
+                tx_type,
+                block_height,
+                serialize(wasm_bincode),
+                serialize(deploy_ix),
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Reset all contract deploy authorities locked status in the wallet.
     pub fn reset_deploy_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting deploy authorities locked status"));
         let query = format!(
@@ -131,6 +176,34 @@ impl Drk {
         );
         self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
         output.push(String::from("Successfully reset deploy authorities locked status"));
+
+        Ok(())
+    }
+
+    /// Reset all contracts history records in the wallet.
+    pub fn reset_deploy_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+        output.push(String::from("Resetting deployment history"));
+        let query = format!("DELETE FROM {};", *DEPLOY_HISTORY_TABLE);
+        self.wallet.exec_sql(&query, &[])?;
+        output.push(String::from("Successfully deployment history"));
+
+        Ok(())
+    }
+
+    /// Remove the contracts history records in the wallet that were
+    /// created after provided height.
+    pub fn remove_deploy_history_after(
+        &self,
+        height: &u32,
+        output: &mut Vec<String>,
+    ) -> WalletDbResult<()> {
+        output.push(format!("Removing deployment history records after: {height}"));
+        let query = format!(
+            "DELETE FROM {} WHERE {} > ?1;",
+            *DEPLOY_HISTORY_TABLE, DEPLOY_HISTORY_COL_BLOCK_HEIGHT
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![height])?;
+        output.push(String::from("Successfully removed deployment history records"));
 
         Ok(())
     }
@@ -248,6 +321,90 @@ impl Drk {
         Ok(ret)
     }
 
+    /// Retrieve all deploy history records basic information, for
+    /// provided contract id.
+    pub async fn get_deploy_auth_history(
+        &self,
+        contract_id: &ContractId,
+    ) -> Result<Vec<(String, String, u32)>> {
+        let rows = match self.wallet.query_multiple(
+            &DEPLOY_HISTORY_TABLE,
+            &[DEPLOY_HISTORY_COL_TX_HASH, DEPLOY_HISTORY_COL_TYPE, DEPLOY_HISTORY_COL_BLOCK_HEIGHT],
+            convert_named_params! {(DEPLOY_HISTORY_COL_CONTRACT, serialize_async(contract_id).await)},
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                "[get_deploy_auth_history] Failed to retrieve deploy authority history records: {e}",
+            )))
+            }
+        };
+
+        let mut ret = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Value::Text(ref tx_hash) = row[0] else {
+                return Err(Error::ParseFailed(
+                    "[get_deploy_auth_history] Transaction hash parsing failed",
+                ))
+            };
+
+            let Value::Text(ref tx_type) = row[1] else {
+                return Err(Error::ParseFailed("[get_deploy_auth_history] Type parsing failed"))
+            };
+
+            let Value::Integer(block_height) = row[2] else {
+                return Err(Error::ParseFailed(
+                    "[get_deploy_auth_history] Block height parsing failed",
+                ))
+            };
+            let Ok(block_height) = u32::try_from(block_height) else {
+                return Err(Error::ParseFailed(
+                    "[get_deploy_auth_history] Block height parsing failed",
+                ))
+            };
+
+            ret.push((tx_hash.clone(), tx_type.clone(), block_height));
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve deploy history record WASM bincode and deployed
+    /// instruction, for provided transaction hash.
+    pub async fn get_deploy_history_record_data(
+        &self,
+        tx_hash: &str,
+    ) -> Result<(Option<Vec<u8>>, Option<Vec<u8>>)> {
+        let row = match self.wallet.query_single(
+            &DEPLOY_HISTORY_TABLE,
+            &[DEPLOY_HISTORY_COL_WASM_BINCODE, DEPLOY_HISTORY_COL_DEPLOY_IX],
+            convert_named_params! {(DEPLOY_HISTORY_COL_TX_HASH, tx_hash)},
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                    "[get_deploy_history_record] Failed to retrieve deploy history record: {e}"
+                )))
+            }
+        };
+
+        let Value::Blob(ref wasm_bincode_bytes) = row[0] else {
+            return Err(Error::ParseFailed(
+                "[get_deploy_history_record] Failed to parse wasm bincode bytes",
+            ))
+        };
+        let wasm_bincode: Option<Vec<u8>> = deserialize_async(wasm_bincode_bytes).await?;
+
+        let Value::Blob(ref deploy_ix_bytes) = row[1] else {
+            return Err(Error::ParseFailed(
+                "[get_deploy_history_record] Failed to parse deploy ix bytes",
+            ))
+        };
+        let deploy_ix: Option<Vec<u8>> = deserialize_async(deploy_ix_bytes).await?;
+
+        Ok((wasm_bincode, deploy_ix))
+    }
+
     /// Auxiliary function to apply `DeployFunction::DeployV1` call
     /// data to the wallet.
     /// Returns a flag indicating if the provided call refers to our
@@ -256,17 +413,27 @@ impl Drk {
         &self,
         scan_cache: &ScanCache,
         params: &DeployParamsV1,
-        _tx_hash: &TransactionHash,
-        _block_height: &u32,
+        tx_hash: &TransactionHash,
+        block_height: &u32,
     ) -> Result<bool> {
         // Check if we have the deploy authority key
-        let Some(_secret_key) = scan_cache.own_deploy_auths.get(&params.public_key.to_bytes())
-        else {
+        let Some(_) = scan_cache.own_deploy_auths.get(&params.public_key.to_bytes()) else {
             return Ok(false)
         };
 
         // Create a new history record containing the deployment data
-        // TODO
+        if let Err(e) = self.put_deploy_history_record(
+            tx_hash,
+            &ContractId::derive_public(params.public_key),
+            "DEPLOYMENT",
+            block_height,
+            &Some(params.wasm_bincode.clone()),
+            &Some(params.ix.clone()),
+        ) {
+            return Err(Error::DatabaseError(format!(
+                "[apply_deploy_deploy_data] Inserting deploy history recod failed: {e}"
+            )))
+        }
 
         Ok(true)
     }
@@ -279,7 +446,7 @@ impl Drk {
         &self,
         scan_cache: &ScanCache,
         public_key: &PublicKey,
-        _tx_hash: &TransactionHash,
+        tx_hash: &TransactionHash,
         lock_height: &u32,
     ) -> Result<bool> {
         // Check if we have the deploy authority key
@@ -305,7 +472,18 @@ impl Drk {
         }
 
         // Create a new history record for the lock transaction
-        // TODO
+        if let Err(e) = self.put_deploy_history_record(
+            tx_hash,
+            &ContractId::derive_public(*public_key),
+            "LOCK",
+            lock_height,
+            &None,
+            &None,
+        ) {
+            return Err(Error::DatabaseError(format!(
+                "[apply_deploy_lock_data] Inserting deploy history recod failed: {e}"
+            )))
+        }
 
         Ok(true)
     }

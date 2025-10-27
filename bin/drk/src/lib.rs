@@ -145,6 +145,7 @@ impl Drk {
         self.reset_dao_proposals(output)?;
         self.reset_dao_votes(output)?;
         self.reset_deploy_authorities(output)?;
+        self.reset_deploy_history(output)?;
         self.reset_tx_history(output)?;
         output.push(String::from("Successfully reset full wallet state"));
         Ok(())

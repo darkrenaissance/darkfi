@@ -180,7 +180,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("Read a transaction from stdin and mark its input coins as spent");
 
     // Unspend
-    let coin = Arg::with_name("coin").help("base58-encoded coin to mark as unspent");
+    let coin = Arg::with_name("coin").help("base64-encoded coin to mark as unspent");
 
     let unspend = SubCommand::with_name("unspend").about("Unspend a coin").arg(coin);
 
@@ -338,7 +338,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         SubCommand::with_name("exec").about("Execute a DAO proposal").args(&vec![bulla, early]);
 
     let spend_hook_cmd = SubCommand::with_name("spend-hook")
-        .about("Print the DAO contract base58-encoded spend hook");
+        .about("Print the DAO contract base64-encoded spend hook");
 
     let dao = SubCommand::with_name("dao").about("DAO functionalities").subcommands(vec![
         create,
@@ -381,7 +381,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     // Explorer
     let tx_hash = Arg::with_name("tx-hash").help("Transaction hash");
 
-    let encode = Arg::with_name("encode").long("encode").help("Encode transaction to base58");
+    let encode = Arg::with_name("encode").long("encode").help("Encode transaction to base64");
 
     let fetch_tx = SubCommand::with_name("fetch-tx")
         .about("Fetch a blockchain transaction by hash")
@@ -394,7 +394,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let encode = Arg::with_name("encode")
         .long("encode")
-        .help("Encode specific history record transaction to base58");
+        .help("Encode specific history record transaction to base64");
 
     let txs_history = SubCommand::with_name("txs-history")
         .about("Fetch broadcasted transactions history")
@@ -488,7 +488,17 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let generate_deploy =
         SubCommand::with_name("generate-deploy").about("Generate a new deploy authority");
 
-    let list = SubCommand::with_name("list").about("List deploy authorities in the wallet");
+    let contract_id = Arg::with_name("contract-id").help("Contract ID (optional)");
+
+    let list = SubCommand::with_name("list")
+        .about("List deploy authorities in the wallet (or a specific one)")
+        .args(&vec![contract_id]);
+
+    let tx_hash = Arg::with_name("tx-hash").help("Record transaction hash");
+
+    let export_data = SubCommand::with_name("export-data")
+        .about("Export a contract history record wasm bincode and deployment instruction, encoded to base64")
+        .args(&vec![tx_hash]);
 
     let deploy_auth = Arg::with_name("deploy-auth").help("Contract ID (deploy authority)");
 
@@ -508,7 +518,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let contract = SubCommand::with_name("contract")
         .about("Contract functionalities")
-        .subcommands(vec![generate_deploy, list, deploy, lock]);
+        .subcommands(vec![generate_deploy, list, export_data, deploy, lock]);
 
     // Main arguments
     let config = Arg::with_name("config")

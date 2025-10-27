@@ -291,6 +291,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "contract");
         lc.push(prefix.clone() + "contract generate-deploy");
         lc.push(prefix.clone() + "contract list");
+        lc.push(prefix.clone() + "contract export-data");
         lc.push(prefix.clone() + "contract deploy");
         lc.push(prefix + "contract lock");
         return
@@ -365,6 +366,8 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "token mint " => Some(("<token> <amount> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
         "token freeze " => Some(("<token>".to_string(), color, bold)),
         "contract " => Some(("(generate-deploy|list|deploy|lock)".to_string(), color, bold)),
+        "contract list " => Some(("[contract-id]".to_string(), color, bold)),
+        "contract export-data " => Some(("<tx-hash>".to_string(), color, bold)),
         "contract deploy " => Some(("<deploy-auth> <wasm-path> [deploy-ix]".to_string(), color, bold)),
         "contract lock " => Some(("<deploy-auth>".to_string(), color, bold)),
         _ => None,
@@ -3082,6 +3085,7 @@ async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
     match parts[1] {
         "generate-deploy" => handle_contract_generate_deploy(drk, parts, output).await,
         "list" => handle_contract_list(drk, parts, output).await,
+        "export-data" => handle_contract_export_data(drk, parts, output).await,
         "deploy" => handle_contract_deploy(drk, parts, output).await,
         "lock" => handle_contract_lock(drk, parts, output).await,
         _ => {
@@ -3108,9 +3112,42 @@ async fn handle_contract_generate_deploy(drk: &DrkPtr, parts: &[&str], output: &
 /// Auxiliary function to define the contract list subcommand handling.
 async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 2 {
+    if parts.len() != 2 || parts.len() != 3 {
         output.push(String::from("Malformed `contract list` subcommand"));
-        output.push(String::from("Usage: contract list"));
+        output.push(String::from("Usage: contract list [contract-id]"));
+        return
+    }
+
+    if parts.len() == 3 {
+        let deploy_auth = match ContractId::from_str(parts[2]) {
+            Ok(d) => d,
+            Err(e) => {
+                output.push(format!("Invalid deploy authority: {e}"));
+                return
+            }
+        };
+
+        let history = match drk.read().await.get_deploy_auth_history(&deploy_auth).await {
+            Ok(a) => a,
+            Err(e) => {
+                output.push(format!("Failed to fetch deploy authority history records: {e}"));
+                return
+            }
+        };
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+        table.set_titles(row!["Transaction Hash", "Type", "Block Height"]);
+
+        for (tx_hash, tx_type, block_height) in history {
+            table.add_row(row![tx_hash, tx_type, block_height]);
+        }
+
+        if table.is_empty() {
+            output.push(String::from("No history records found"));
+        } else {
+            output.push(format!("{table}"));
+        }
         return
     }
 
@@ -3138,6 +3175,21 @@ async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
         output.push(String::from("No deploy authorities found"));
     } else {
         output.push(format!("{table}"));
+    }
+}
+
+/// Auxiliary function to define the contract export data subcommand handling.
+async fn handle_contract_export_data(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `contract export-data` subcommand"));
+        output.push(String::from("Usage: contract export-data <tx-hash>"));
+        return
+    }
+
+    match drk.read().await.get_deploy_history_record_data(parts[2]).await {
+        Ok(pair) => output.push(base64::encode(&serialize_async(&pair).await)),
+        Err(e) => output.push(format!("Failed to retrieve history record: {e}")),
     }
 }
 

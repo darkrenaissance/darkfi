@@ -130,7 +130,7 @@ enum Subcmd {
 
     /// Unspend a coin
     Unspend {
-        /// base58-encoded coin to mark as unspent
+        /// base64-encoded coin to mark as unspent
         coin: String,
     },
 
@@ -403,7 +403,7 @@ enum DaoSubcmd {
         early: bool,
     },
 
-    /// Print the DAO contract base58-encoded spend hook
+    /// Print the DAO contract base64-encoded spend hook
     SpendHook,
 }
 
@@ -415,7 +415,7 @@ enum ExplorerSubcmd {
         tx_hash: String,
 
         #[structopt(long)]
-        /// Encode transaction to base58
+        /// Encode transaction to base64
         encode: bool,
     },
 
@@ -428,7 +428,7 @@ enum ExplorerSubcmd {
         tx_hash: Option<String>,
 
         #[structopt(long)]
-        /// Encode specific history record transaction to base58
+        /// Encode specific history record transaction to base64
         encode: bool,
     },
 
@@ -519,8 +519,17 @@ enum ContractSubcmd {
     /// Generate a new deploy authority
     GenerateDeploy,
 
-    /// List deploy authorities in the wallet
-    List,
+    /// List deploy authorities in the wallet (or a specific one)
+    List {
+        /// Contract ID (optional)
+        contract_id: Option<String>,
+    },
+
+    /// Export a contract history record wasm bincode and deployment instruction, encoded to base64
+    ExportData {
+        /// Record transaction hash
+        tx_hash: String,
+    },
 
     /// Deploy a smart contract
     Deploy {
@@ -2571,7 +2580,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 Ok(())
             }
 
-            ContractSubcmd::List => {
+            ContractSubcmd::List { contract_id } => {
                 let drk = new_wallet(
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
@@ -2581,6 +2590,35 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     args.fun,
                 )
                 .await;
+
+                if let Some(contract_id) = contract_id {
+                    let contract_id = match ContractId::from_str(&contract_id) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            eprintln!("Invalid contract id: {e}");
+                            exit(2);
+                        }
+                    };
+
+                    let history = drk.get_deploy_auth_history(&contract_id).await?;
+
+                    let mut table = Table::new();
+                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                    table.set_titles(row!["Transaction Hash", "Type", "Block Height"]);
+
+                    for (tx_hash, tx_type, block_height) in history {
+                        table.add_row(row![tx_hash, tx_type, block_height]);
+                    }
+
+                    if table.is_empty() {
+                        println!("No history records found");
+                    } else {
+                        println!("{table}");
+                    }
+
+                    return Ok(())
+                }
+
                 let auths = drk.list_deploy_auth().await?;
 
                 let mut table = Table::new();
@@ -2600,6 +2638,24 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 } else {
                     println!("{table}");
                 }
+
+                Ok(())
+            }
+
+            ContractSubcmd::ExportData { tx_hash } => {
+                let drk = new_wallet(
+                    blockchain_config.cache_path,
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    &ex,
+                    args.fun,
+                )
+                .await;
+
+                let pair = drk.get_deploy_history_record_data(&tx_hash).await?;
+
+                println!("{}", base64::encode(&serialize_async(&pair).await));
 
                 Ok(())
             }

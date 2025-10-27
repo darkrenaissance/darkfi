@@ -229,6 +229,10 @@ impl Drk {
         // Unlock all contracts frozen after the reset height
         self.unlock_deploy_authorities_after(&height, output)?;
 
+        // Remove all contracts history records created after the reset
+        // height.
+        self.remove_deploy_history_after(&height, output)?;
+
         // Set reverted status to all transactions executed after reset
         // height.
         self.revert_transactions_after(&height, output)?;
