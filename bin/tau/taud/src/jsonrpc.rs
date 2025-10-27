@@ -17,7 +17,7 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::create_dir_all,
     path::PathBuf,
     sync::Arc,
@@ -50,14 +50,12 @@ use taud::{
 
 use crate::Workspace;
 
-const DEFAULT_WORKSPACE: &str = "darkfi-dev";
-
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
     notify_queue_sender: smol::channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Mutex<String>,
-    workspaces: Arc<HashMap<String, Workspace>>,
+    workspaces: Arc<BTreeMap<String, Workspace>>,
     p2p: net::P2pPtr,
     event_graph: EventGraphPtr,
     dnet_sub: JsonSubscriber,
@@ -115,13 +113,14 @@ impl JsonRpcInterface {
         dataset_path: PathBuf,
         notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
-        workspaces: Arc<HashMap<String, Workspace>>,
+        workspace: String,
+        workspaces: Arc<BTreeMap<String, Workspace>>,
         p2p: net::P2pPtr,
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
     ) -> Self {
-        let workspace = Mutex::new(DEFAULT_WORKSPACE.to_string());
+        let workspace = Mutex::new(workspace);
         Self {
             dataset_path,
             nickname,
@@ -271,6 +270,12 @@ impl JsonRpcInterface {
             _ => return Err(TaudError::InvalidData("Invalid parameter \"rank\"".to_string())),
         };
 
+        let bounty = match params["bounty"] {
+            JsonValue::Null => None,
+            JsonValue::Number(numba) => Some(numba as f32),
+            _ => return Err(TaudError::InvalidData("Invalid parameter \"bounty\"".to_string())),
+        };
+
         let tags = {
             let mut tags = vec![];
 
@@ -332,6 +337,7 @@ impl JsonRpcInterface {
             due,
             rank,
             Timestamp::from_u64(created_at.unwrap()),
+            bounty,
         )?;
         new_task.set_project(&projects);
         new_task.set_assign(&assigns);
@@ -712,6 +718,17 @@ impl JsonRpcInterface {
                 JsonValue::Number(rank) => {
                     task.set_rank(Some(rank as f32));
                     set_event(&mut task, "rank", &self.nickname, &rank.to_string())
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        if fields.contains_key("bounty") {
+            match fields["bounty"] {
+                JsonValue::Null => set_event(&mut task, "bounty", &self.nickname, "None"),
+                JsonValue::Number(bounty) => {
+                    task.set_bounty(Some(bounty as f32));
+                    set_event(&mut task, "bounty", &self.nickname, &bounty.to_string())
                 }
                 _ => unreachable!(),
             }
