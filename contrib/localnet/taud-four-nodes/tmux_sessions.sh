@@ -11,7 +11,7 @@ TAU="python $TAU_CLI/tau"
 # Source tau-cli python venv
 . $TAU_CLI/venv/bin/activate
 
-session=taud
+session=taud-local
 
 tmux new-session -d -s $session -n "seed"
 tmux send-keys -t $session "$TAUD --config seed.toml --skip-dag-sync" Enter

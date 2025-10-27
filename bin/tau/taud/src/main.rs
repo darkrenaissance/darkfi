@@ -17,7 +17,7 @@
  */
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     env,
     ffi::CString,
     fs::{create_dir_all, remove_dir_all},
@@ -165,8 +165,8 @@ fn try_decrypt_task(
     Ok(signed_task)
 }
 
-fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Workspace>> {
-    let mut ret = HashMap::new();
+fn parse_configured_workspaces(data: &toml::Value) -> Result<BTreeMap<String, Workspace>> {
+    let mut ret = BTreeMap::new();
 
     let Some(table) = data.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
     let Some(workspace) = table.get("workspace") else { return Ok(ret) };
@@ -251,7 +251,7 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
     Ok(ret)
 }
 
-async fn get_workspaces(settings: &Args) -> Result<HashMap<String, Workspace>> {
+async fn get_workspaces(settings: &Args) -> Result<BTreeMap<String, Workspace>> {
     let config_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
     let contents = fs::read_to_string(config_path).await?;
     let contents = match toml::from_str(&contents) {
@@ -296,7 +296,7 @@ pub async fn is_seen(
 async fn start_sync_loop(
     event_graph: EventGraphPtr,
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
-    workspaces: Arc<HashMap<String, Workspace>>,
+    workspaces: Arc<BTreeMap<String, Workspace>>,
     sled_db: sled::Db,
     settings: Args,
     p2p: P2pPtr,
@@ -362,7 +362,7 @@ async fn start_sync_loop(
 /// to a named pipe and save it on disk.
 async fn on_receive_task(
     enc_task: &EncryptedTask,
-    workspaces: &HashMap<String, Workspace>,
+    workspaces: &BTreeMap<String, Workspace>,
     settings: &Args,
 ) -> TaudResult<()> {
     for (ws_name, workspace) in workspaces.iter() {
@@ -505,6 +505,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     }
 
     let workspaces = Arc::new(get_workspaces(&settings).await?);
+    let (workspace, _) = workspaces.first_key_value().unwrap();
     // let verified = Arc::new(Mutex::new(false));
 
     if workspaces.is_empty() {
@@ -691,6 +692,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         datastore_path.clone(),
         broadcast_snd,
         nickname.unwrap(),
+        workspace.to_string(),
         workspaces.clone(),
         p2p.clone(),
         event_graph.clone(),
