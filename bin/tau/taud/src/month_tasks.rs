@@ -271,6 +271,7 @@ mod tests {
             None,
             Some(0.0),
             Timestamp::current_time(),
+            None,
         )?;
 
         task.save(&dataset_path)?;
@@ -319,6 +320,7 @@ mod tests {
             None,
             Some(0.0),
             Timestamp::current_time(),
+            None,
         )?;
 
         task.save(&dataset_path)?;

@@ -202,6 +202,7 @@ pub struct TaskInfo {
     pub rank: Option<f32>,
     pub created_at: Timestamp,
     pub state: String,
+    pub bounty: Option<f32>,
     pub events: Vec<TaskEvent>,
     pub comments: Vec<Comment>,
 }
@@ -233,6 +234,12 @@ impl From<&TaskInfo> for JsonValue {
             JsonValue::Null
         };
 
+        let bounty = if let Some(bounty) = task.bounty {
+            JsonValue::Number(bounty.into())
+        } else {
+            JsonValue::Null
+        };
+
         let created_at = JsonValue::String(task.created_at.inner().to_string());
         let state = JsonValue::String(task.state.clone());
         let events: Vec<JsonValue> = task.events.iter().map(|x| x.clone().into()).collect();
@@ -251,6 +258,7 @@ impl From<&TaskInfo> for JsonValue {
             ("rank".to_string(), rank),
             ("created_at".to_string(), created_at),
             ("state".to_string(), state),
+            ("bounty".to_string(), bounty),
             ("events".to_string(), JsonValue::Array(events)),
             ("comments".to_string(), JsonValue::Array(comments)),
         ]))
@@ -282,6 +290,14 @@ impl From<JsonValue> for TaskInfo {
             }
         };
 
+        let bounty = {
+            if value["bounty"].is_null() {
+                None
+            } else {
+                Some(*value["bounty"].get::<f64>().unwrap() as f32)
+            }
+        };
+
         let created_at = {
             let u64_str = value["created_at"].get::<String>().unwrap();
             Timestamp::from_u64(u64_str.parse::<u64>().unwrap())
@@ -303,6 +319,7 @@ impl From<JsonValue> for TaskInfo {
             rank,
             created_at,
             state: value["state"].get::<String>().unwrap().clone(),
+            bounty,
             events,
             comments,
         }
@@ -318,6 +335,7 @@ impl TaskInfo {
         due: Option<Timestamp>,
         rank: Option<f32>,
         created_at: Timestamp,
+        bounty: Option<f32>,
     ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = gen_id(30);
@@ -341,6 +359,7 @@ impl TaskInfo {
             rank,
             created_at,
             state: "open".into(),
+            bounty,
             comments: vec![],
             events: vec![],
         })
@@ -445,6 +464,11 @@ impl TaskInfo {
     pub fn set_rank(&mut self, r: Option<f32>) {
         debug!(target: "tau", "TaskInfo::set_rank()");
         self.rank = r;
+    }
+
+    pub fn set_bounty(&mut self, b: Option<f32>) {
+        debug!(target: "tau", "TaskInfo::set_bounty()");
+        self.bounty = b;
     }
 
     pub fn set_due(&mut self, d: Option<Timestamp>) {

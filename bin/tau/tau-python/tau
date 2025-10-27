@@ -8,7 +8,7 @@ from colorama import Fore, Style
 
 import api, lib.util
 
-known_attrs = ["desc", "rank", "due", "project"]
+known_attrs = ["desc", "rank", "due", "project", "bounty"]
 
 async def add_task(task_args, server_name, port):
     task = {
@@ -19,6 +19,7 @@ async def add_task(task_args, server_name, port):
         "project": [],
         "due": None,
         "rank": None,
+        "bounty": None,
         "created_at": lib.util.now(),
         "state": "open"
     }
@@ -58,6 +59,9 @@ async def add_task(task_args, server_name, port):
     
     if task["rank"] is not None:
         task["rank"] = round(task["rank"], 4)
+
+    if task["bounty"] is not None:
+        task["bounty"] = round(task["bounty"], 4)
     
     try:
         if task["ref_id"].strip() == '':
@@ -145,6 +149,13 @@ def convert_attr_val(attr, val):
             print(f"error: rank value {val} isn't convertable to float",
                   file=sys.stderr)
             sys.exit(-1)
+    elif attr == "bounty":
+        try:
+            return float(val)
+        except ValueError:
+            print(f"error: bounty value {val} isn't convertable to float",
+                  file=sys.stderr)
+            sys.exit(-1)
     elif attr == "due":
         # Other date formats not yet supported... ez to add
         if len(val) != 4:
@@ -229,7 +240,8 @@ async def show_log(server_name, port, timeframe):
 def list_tasks(tasks, workspace, filters):
     print(f"Workspace: {workspace}")
     headers = ["ID", "Title", "Status", "Project",
-               "Tags", "assign", "Rank", "Due", "RefID"]
+               "Tags", "assign", "Rank", "Due", 
+               "Bounty", "RefID"]
     table_rows = []
     for id, task in enumerate(tasks, 1):
         if task is None:
@@ -251,6 +263,8 @@ def list_tasks(tasks, workspace, filters):
 
         rank = round(task["rank"], 4) if task["rank"] is not None else ""
 
+        bounty = "$" + str(round(task["bounty"], 4)) if task["bounty"] is not None else ""
+
         if status == "start":
             id =        Fore.GREEN + str(id)         + Style.RESET_ALL
             title =     Fore.GREEN + str(title)      + Style.RESET_ALL
@@ -260,6 +274,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.GREEN + str(assign)     + Style.RESET_ALL
             rank =      Fore.GREEN + str(rank)       + Style.RESET_ALL
             due =       Fore.GREEN + str(due)        + Style.RESET_ALL
+            bounty =    Fore.GREEN + str(bounty)     + Style.RESET_ALL
             ref_id =    Fore.GREEN + str(ref_id)     + Style.RESET_ALL
         elif status == "pause":
             id =        Fore.YELLOW + str(id)        + Style.RESET_ALL
@@ -270,6 +285,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.YELLOW + str(assign)    + Style.RESET_ALL
             rank =      Fore.YELLOW + str(rank)      + Style.RESET_ALL
             due =       Fore.YELLOW + str(due)       + Style.RESET_ALL
+            bounty =    Fore.YELLOW + str(bounty)    + Style.RESET_ALL
             ref_id =    Fore.YELLOW + str(ref_id)    + Style.RESET_ALL
         elif status == "stop":
             id =        Fore.RED + str(id)           + Style.RESET_ALL
@@ -280,6 +296,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.RED + str(assign)       + Style.RESET_ALL
             rank =      Fore.RED + str(rank)         + Style.RESET_ALL
             due =       Fore.RED + str(due)          + Style.RESET_ALL
+            bounty =    Fore.RED + str(bounty)       + Style.RESET_ALL
             ref_id =    Fore.RED + str(ref_id)       + Style.RESET_ALL
         else:
             #id =       Style.DIM  + str(id)         + Style.RESET_ALL
@@ -290,6 +307,7 @@ def list_tasks(tasks, workspace, filters):
             #assign =   Style.DIM  + str(assign)     + Style.RESET_ALL
             rank =      Style.DIM  + str(rank)       + Style.RESET_ALL
             due =       Style.DIM  + str(due)        + Style.RESET_ALL
+            bounty =    Style.DIM  + str(bounty)     + Style.RESET_ALL
             #ref_id =   Style.DIM  + str(ref_id)     + Style.RESET_ALL
 
         rank_value = task["rank"] if task["rank"] is not None else 0
@@ -302,6 +320,7 @@ def list_tasks(tasks, workspace, filters):
             assign,
             rank,
             due,
+            bounty,
             ref_id
         ]
         table_rows.append((rank_value, row))
@@ -325,6 +344,7 @@ def tabulate_task(task, prompt):
     assign = " ".join(f"{assign}" for assign in task["assign"])
     project = " ".join(f"{project}" for project in task["project"])
     rank = round(task["rank"], 4) if task["rank"] is not None else ""
+    bounty = round(task["bounty"], 4) if task["bounty"] is not None else ""
     if task["due"] is None:
         due = ""
     else:
@@ -350,6 +370,7 @@ def tabulate_task(task, prompt):
         ["Assign:", assign],
         ["Rank:", rank],
         ["Due:", due],
+        ["Bounty:", bounty],
         ["Created:", created_at],
     ]
     return tabulate(table, headers=["Attribute", "Value"])
@@ -460,7 +481,7 @@ async def modify_task(refid, args, server_name, port):
         elif ":" in arg:
             attr, val = arg.split(":", 1)
             if val.lower() == "none":
-                if attr not in ["project", "rank", "due"]:
+                if attr not in ["project", "rank", "due", "bounty"]:
                     print(f"error: invalid you cannot set {attr} to none",
                           file=sys.stderr)
                     return -1
@@ -529,7 +550,7 @@ def is_filtered(task, filters):
         elif ":" in fltr:
             attr, val = fltr.split(":", 1)
             if val.lower() == "none":
-                if attr not in ["project", "rank", "due"]:
+                if attr not in ["project", "rank", "due", "bounty"]:
                     print(f"error: invalid you cannot set {attr} to none",
                             file=sys.stderr)
                     sys.exit(-1)
