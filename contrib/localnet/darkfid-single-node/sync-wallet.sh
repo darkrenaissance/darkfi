@@ -13,4 +13,3 @@ while true; do
 done
 
 $DRK scan
-$DRK subscribe

@@ -1489,7 +1489,7 @@ async fn handle_dao_view(parts: &[&str], input: &[String], output: &mut Vec<Stri
         return
     }
 
-    // Parse line from input or fallback to stdin if its empty
+    // Parse lines from input or fallback to stdin if its empty
     let buf = match input.len() {
         0 => {
             let mut buf = String::new();
@@ -1499,11 +1499,7 @@ async fn handle_dao_view(parts: &[&str], input: &[String], output: &mut Vec<Stri
             };
             buf
         }
-        1 => input[0].clone(),
-        _ => {
-            output.push(String::from("Multiline input provided"));
-            return
-        }
+        _ => input.join("\n"),
     };
 
     let params = match DaoParams::from_toml_str(&buf) {
@@ -1531,7 +1527,7 @@ async fn handle_dao_import(
         return
     }
 
-    // Parse line from input or fallback to stdin if its empty
+    // Parse lines from input or fallback to stdin if its empty
     let buf = match input.len() {
         0 => {
             let mut buf = String::new();
@@ -1541,11 +1537,7 @@ async fn handle_dao_import(
             };
             buf
         }
-        1 => input[0].clone(),
-        _ => {
-            output.push(String::from("Multiline input provided"));
-            return
-        }
+        _ => input.join("\n"),
     };
 
     let params = match DaoParams::from_toml_str(&buf) {
@@ -1575,7 +1567,7 @@ async fn handle_dao_update_keys(
         return
     }
 
-    // Parse line from input or fallback to stdin if its empty
+    // Parse lines from input or fallback to stdin if its empty
     let buf = match input.len() {
         0 => {
             let mut buf = String::new();
@@ -1585,11 +1577,7 @@ async fn handle_dao_update_keys(
             };
             buf
         }
-        1 => input[0].clone(),
-        _ => {
-            output.push(String::from("Multiline input provided"));
-            return
-        }
+        _ => input.join("\n"),
     };
 
     let params = match DaoParams::from_toml_str(&buf) {
@@ -1859,8 +1847,7 @@ async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
 
     let mut index = 2;
     let (export, mint_proposal) = if parts.len() == 4 {
-        index += 1;
-        match parts[index] {
+        let flags = match parts[index] {
             "--export" => (true, false),
             "--mint-proposal" => (false, true),
             _ => {
@@ -1868,7 +1855,9 @@ async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
                 output.push(String::from("Usage: dao proposal [--(export|mint-proposal)] <bulla>"));
                 return
             }
-        }
+        };
+        index += 1;
+        flags
     } else {
         (false, false)
     };
@@ -2174,6 +2163,7 @@ async fn handle_dao_proposal_import(
         if let Err(e) = lock.put_dao_proposal(&proposal).await {
             output.push(format!("Failed to put DAO proposal: {e}"));
         }
+        return
     }
 
     output.push(String::from("Couldn't decrypt the proposal with out DAO keys"));
