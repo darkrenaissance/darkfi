@@ -18,6 +18,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
+    sync::Arc,
     time::Instant,
 };
 
@@ -31,7 +32,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         util::JsonValue,
     },
-    system::{ExecutorPtr, Publisher, StoppableTask},
+    system::{ExecutorPtr, Publisher, StoppableTaskPtr},
     tx::Transaction,
     util::encoding::base64,
     Error, Result,
@@ -582,6 +583,7 @@ impl Drk {
 /// the sequence after the reorg.
 pub async fn subscribe_blocks(
     drk: &DrkPtr,
+    rpc_task: StoppableTaskPtr,
     shell_sender: Sender<Vec<String>>,
     endpoint: Url,
     ex: &ExecutorPtr,
@@ -638,17 +640,18 @@ pub async fn subscribe_blocks(
     let publisher = Publisher::new();
     let subscription = publisher.clone().subscribe().await;
     let _publisher = publisher.clone();
-    let _ex = ex.clone();
-    StoppableTask::new().start(
+    let rpc_client = Arc::new(RpcClient::new(endpoint, ex.clone()).await?);
+    let rpc_client_ = rpc_client.clone();
+    rpc_task.start(
         // Weird hack to prevent lifetimes hell
         async move {
-            let rpc_client = RpcClient::new(endpoint, _ex).await?;
             let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
-            rpc_client.subscribe(req, _publisher).await
+            rpc_client_.subscribe(req, _publisher).await
         },
         |res| async move {
+            rpc_client.stop().await;
             match res {
-                Ok(()) => { /* Do nothing */ }
+                Ok(()) | Err(Error::DetachedTaskStopped) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => {
                     eprintln!("[subscribe_blocks] JSON-RPC server error: {e}");
                     publisher
