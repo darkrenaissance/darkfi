@@ -6,15 +6,7 @@ Let's try to send some `ANON` tokens to
 `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`:
 
 ```shell
-$ ./drk transfer 2.69 ANON 8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj > payment.tx
-```
-
-The above command will create a transfer transaction and place it into
-the file called `payment.tx`. Then we can broadcast this transaction to
-the network:
-
-```shell
-$ ./drk broadcast < payment.tx
+drk> transfer 2.69 ANON 8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj | broadcast
 
 [mark_tx_spend] Processing transaction: 47b4818caec22470427922f506d72788233001a79113907fd1a93b7756b07395
 [mark_tx_spend] Found Money contract in call 0
@@ -32,7 +24,7 @@ will receive the tokens you've sent.
 We can see the spent coin in our wallet.
 
 ```shell
-$ ./drk wallet coins
+drk> wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------
@@ -47,7 +39,7 @@ We have to wait until the next block to see our change balance reappear
 in our wallet.
 
 ```shell
-$ ./drk wallet balance
+drk> wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------

@@ -108,7 +108,7 @@ Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it 
 ```
 
 ```shell
-$ ./drk wallet address
+$ ./drk interactive
 
 Config file created in "~/.config/darkfi/drk_config.toml". Please review it and try again.
 ```
@@ -357,17 +357,25 @@ network.
 
 ### Wallet sync
 
+From this point forward in the guide we will use `drk` in `interactive`
+mode for all our wallet operations. In another terminal, run the
+following command:
+
+```shell
+$ ./drk interactive
+
+drk>
+```
+
 In order to receive incoming coins, you'll need to use the `drk`
 tool to subscribe on `darkfid` so you can receive notifications for
 incoming blocks. The blocks have to be scanned for transactions,
-and to find coins that are intended for you. In another terminal,
-you can run the following commands to first scan the blockchain,
-and then to subscribe to new blocks:
+and to find coins that are intended for you. In the interactive shell,
+run the following command to subscribe to new blocks:
 
 ```shell
-$ ./drk scan
+drk> subscribe
 
-...
 Requested to scan from block number: 0
 Last confirmed block reported by darkfid: 1 - da4455f461df6833a68b659d1770f58e44b6bc4abdd934cb22d084c24333255f
 Requesting block 0...
@@ -393,19 +401,10 @@ Block 1 received! Scanning block...
 Requested to scan from block number: 2
 Last confirmed block reported by darkfid: 1 - da4455f461df6833a68b659d1770f58e44b6bc4abdd934cb22d084c24333255f
 Finished scanning blockchain
-```
-
-```shell
-$ ./drk subscribe
-
 Subscribing to receive notifications of incoming blocks
 Detached subscription to background
 All is good. Waiting for block notifications...
 ```
-
-Now you can leave the subscriber running. In case you stop it, just
-run `drk scan` again until the chain is fully scanned, and then you
-should be able to subscribe again.
 
 ## Local Deployment
 

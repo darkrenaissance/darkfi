@@ -14,7 +14,7 @@ with. Note that the coin overview might look very different depending
 on your activity:
 
 ```shell
-$ ./drk wallet coins
+drk> wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------
@@ -29,28 +29,28 @@ $ ./drk wallet coins
 You'll have to initiate the swap and build your half of the swap tx:
 
 ```shell
-$ ./drk otc init -v 40.0:20.0 -t ANON:DAWN > half_swap
+drk> otc init 40.0:20.0 ANON:DAWN > half_swap
 ```
 
 Then you can send this `half_swap` file to your counterparty and they
 can create the other half and sign it by running:
 
 ```shell
-$ ./drk otc join < half_swap > full_swap
+drk> otc join < half_swap > full_swap
 ```
 
 They can now send it back to you. Finally, to make the swap transaction
 valid, you need to sign it as well
 
 ```shell
-$ ./drk otc sign < full_swap > signed_swap
+drk> otc sign < full_swap > signed_swap
 ```
 
 Now that the swap is signed, one of the parties (or a third one)
 must attach the corresponding fee:
 
 ```shell
-$ ./drk attach-fee < signed_swap > full_swap_with_fee
+drk> attach-fee < signed_swap > full_swap_with_fee
 ```
 
 Since a new call has been added to the transaction, both parties
@@ -59,19 +59,19 @@ must re-sign the full_swap_with_fee file, one by one.
 Party A:
 
 ```shell
-$ ./drk otc sign < full_swap_with_fee > signed_full_swap_with_fee
+drk> otc sign < full_swap_with_fee > signed_full_swap_with_fee
 ```
 
 Party B:
 
 ```shell
-$ ./drk otc sign < signed_full_swap_with_fee > swap.tx
+drk> otc sign < signed_full_swap_with_fee > swap.tx
 ```
 
 Now the complete swap transaction can be broadcasted:
 
 ```shell
-$ ./drk broadcast < swap.tx
+drk> broadcast < swap.tx
 
 [mark_tx_spend] Processing transaction: d2a5e288e6ba44583ee12db9c7a0ed154c736d1aa841d70c7d3fa121c92dfc69
 [mark_tx_spend] Found Money contract in call 0
@@ -88,7 +88,7 @@ also be in the mempool, so you should wait again until it's confirmed.
 After a while you should see the change in balances in your wallet:
 
 ```shell
-$ ./drk wallet balance
+drk> wallet balance
 
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+-------------
@@ -102,7 +102,7 @@ unchanged. We can confirm it actually happened successfully by checking
 our coins:
 
 ```shell
-$ ./drk wallet coins
+drk> wallet coins
 
  Coin            | Spent | Token ID        | Aliases | Value                    | Spend Hook | User Data | Spent TX
 -----------------+-------+-----------------+---------+--------------------------+------------+-----------+-----------------
