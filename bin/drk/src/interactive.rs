@@ -271,6 +271,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "contract");
         lc.push(prefix.clone() + "contract generate-deploy");
         lc.push(prefix.clone() + "contract list");
+        lc.push(prefix.clone() + "contract export-data");
         lc.push(prefix.clone() + "contract deploy");
         lc.push(prefix + "contract lock");
         return
@@ -365,7 +366,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "token import " => Some(("<secret-key> <token-blind>".to_string(), color, bold)),
         "token mint " => Some(("<token> <amount> <recipient> [spend-hook] [user-data]".to_string(), color, bold)),
         "token freeze " => Some(("<token>".to_string(), color, bold)),
-        "contract " => Some(("(generate-deploy|list|deploy|lock)".to_string(), color, bold)),
+        "contract " => Some(("(generate-deploy|list|export-data|deploy|lock)".to_string(), color, bold)),
         "contract list " => Some(("[contract-id]".to_string(), color, bold)),
         "contract export-data " => Some(("<tx-hash>".to_string(), color, bold)),
         "contract deploy " => Some(("<deploy-auth> <wasm-path> [deploy-ix]".to_string(), color, bold)),
@@ -3105,7 +3106,7 @@ async fn handle_contract_generate_deploy(drk: &DrkPtr, parts: &[&str], output: &
 /// Auxiliary function to define the contract list subcommand handling.
 async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
     // Check correct subcommand structure
-    if parts.len() != 2 || parts.len() != 3 {
+    if parts.len() != 2 && parts.len() != 3 {
         output.push(String::from("Malformed `contract list` subcommand"));
         output.push(String::from("Usage: contract list [contract-id]"));
         return
