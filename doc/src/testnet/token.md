@@ -21,6 +21,7 @@ You can check your wallet balance using `drk`:
 
 ```shell
 drk> wallet balance
+
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+---------
  241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 20

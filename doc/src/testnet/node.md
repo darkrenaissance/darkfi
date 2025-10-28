@@ -449,7 +449,8 @@ $ ./wallet-balance.sh
 
 Don't forget that when using this local node, all operations
 should be executed inside the `contrib/localnet/darkfid-single-node`
-folder, and `./drk` command to be replaced by `../../../drk -c drk.toml`
+folder, and `./drk` command to be replaced by
+`../../../drk -c drk.toml`. All paths should be relative to this one.
 
 ## Advanced Usage
 

@@ -16,6 +16,7 @@
 - [Payments](testnet/payment.md)
 - [Atomic Swap](testnet/atomic-swap.md)
 - [DAO](testnet/dao.md)
+- [Contracts](testnet/contract.md)
 - [DarkIRC](misc/darkirc/darkirc.md)
 	- [Private Message](misc/darkirc/private_message.md)
 - [Node Configurations](misc/nodes/node-configurations.md)
