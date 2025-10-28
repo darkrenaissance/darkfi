@@ -556,7 +556,7 @@ impl Drk {
         deploy_debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
 
-        // Create the TransactionBuilder containing above cal
+        // Create the TransactionBuilder containing above call
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
@@ -619,7 +619,7 @@ impl Drk {
         lock_debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
 
-        // Create the TransactionBuilder containing above cal
+        // Create the TransactionBuilder containing above call
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
