@@ -19,6 +19,9 @@
 use darkfi_sdk::{error::ContractError, pasta::pallas};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
+
 /// Functions available in the contract
 #[repr(u8)]
 pub enum ContractFunction {

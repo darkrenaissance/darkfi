@@ -122,9 +122,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
     }
 
-    let mut update_data = vec![func as u8];
-    commitment.encode(&mut update_data)?;
-    wasm::util::set_return_data(&serialize(&update_data))
+    wasm::util::set_return_data(&serialize(&commitment))
 }
 
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
