@@ -68,17 +68,15 @@ impl MeshInfo {
     }
 }
 
-// TODO: remove clipper => simplify impl
 pub struct MeshBuilder {
     pub verts: Vec<Vertex>,
     pub indices: Vec<u16>,
-    clipper: Option<Rectangle>,
     tag: DebugTag,
 }
 
 impl MeshBuilder {
     pub fn new(tag: DebugTag) -> Self {
-        Self { verts: vec![], indices: vec![], clipper: None, tag }
+        Self { verts: vec![], indices: vec![], tag }
     }
 
     pub fn append(&mut self, mut verts: Vec<Vertex>, indices: Vec<u16>) {
@@ -88,36 +86,11 @@ impl MeshBuilder {
     }
 
     pub fn draw_box(&mut self, obj: &Rectangle, color: Color, uv: &Rectangle) {
-        let clipped = match &self.clipper {
-            Some(clipper) => {
-                let Some(clipped) = clipper.clip(&obj) else { return };
-                clipped
-            }
-            None => obj.clone(),
-        };
-
-        let (x1, y1) = clipped.pos().unpack();
-        let (x2, y2) = clipped.corner().unpack();
+        let (x1, y1) = obj.pos().unpack();
+        let (x2, y2) = obj.corner().unpack();
 
         let (u1, v1) = uv.pos().unpack();
         let (u2, v2) = uv.corner().unpack();
-
-        // Interpolate UV coords
-
-        let i = (clipped.x - obj.x) / obj.w;
-        let clip_u1 = u1 + i * (u2 - u1);
-
-        let i = (clipped.rhs() - obj.x) / obj.w;
-        let clip_u2 = u1 + i * (u2 - u1);
-
-        let i = (clipped.y - obj.y) / obj.h;
-        let clip_v1 = v1 + i * (v2 - v1);
-
-        let i = (clipped.bhs() - obj.y) / obj.h;
-        let clip_v2 = v1 + i * (v2 - v1);
-
-        let (u1, u2) = (clip_u1, clip_u2);
-        let (v1, v2) = (clip_v1, clip_v2);
 
         let verts = vec![
             // top left

@@ -17,6 +17,7 @@
  */
 
 use darkfi_serial::Encodable;
+use indoc::indoc;
 use sled_overlay::sled;
 use std::fs::File;
 
@@ -81,7 +82,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     //pub const BG_PATH: &str = "assets/bg.png";
-    pub const VID_PATH: &str = "assets/forest6/forest_02cjpg{frame}.qoi";
+    pub const VID_PATH: &str = "assets/forest8/forest_02cjpg{frame}.qoi";
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
@@ -245,32 +246,50 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
         // Image aspect ratio
-        //let R = 1.78;
-        let r = 1.555;
+        let r = 1.78;
         cc.add_const_f32("R", r);
 
         let prop = node.get_property("uv").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
         #[rustfmt::skip]
-    let code = cc.compile("
-        r = w / h;
-        if r < R {
-            r / R
-        } else {
-            1
-        }
-    ").unwrap();
+        let code = cc.compile(indoc! {"
+            r = w / h;
+            # r < R means screen narrower than image
+            if r < R {
+                0.5 - (r / (2 * R))
+            } else {
+                0
+            }
+        "}).unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        #[rustfmt::skip]
+        let code = cc.compile(indoc! {"
+            r = w / h;
+            if r < R {
+                0
+            } else {
+                0.5 - (R / (2 * r))
+            }
+        "}).unwrap();
+        prop.set_expr(atom, Role::App, 1, code).unwrap();
+        #[rustfmt::skip]
+        let code = cc.compile(indoc! {"
+            r = w / h;
+            if r < R {
+                r / R
+            } else {
+                1
+            }
+        "}).unwrap();
         prop.set_expr(atom, Role::App, 2, code).unwrap();
         #[rustfmt::skip]
-    let code = cc.compile("
-        r = w / h;
-        if r < R {
-            1
-        } else {
-            R / r
-        }
-    ").unwrap();
+        let code = cc.compile(indoc! {"
+            r = w / h;
+            if r < R {
+                1
+            } else {
+                R / r
+            }
+        "}).unwrap();
         prop.set_expr(atom, Role::App, 3, code).unwrap();
 
         //node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
