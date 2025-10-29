@@ -21,7 +21,7 @@ use std::{fs::create_dir_all, sync::Arc};
 use smol::lock::RwLock;
 use url::Url;
 
-use darkfi::{rpc::client::RpcClient, system::ExecutorPtr, util::path::expand_path, Error, Result};
+use darkfi::{system::ExecutorPtr, util::path::expand_path, Error, Result};
 
 /// Error codes
 pub mod error;
@@ -29,6 +29,7 @@ use error::{WalletDbError, WalletDbResult};
 
 /// darkfid JSON-RPC related methods
 pub mod rpc;
+use rpc::DarkfidRpcClient;
 
 /// Payment methods
 pub mod transfer;
@@ -78,7 +79,7 @@ pub struct Drk {
     /// Wallet database operations handler
     pub wallet: WalletPtr,
     /// JSON-RPC client to execute requests to darkfid daemon
-    pub rpc_client: Option<RpcClient>,
+    pub rpc_client: Option<RwLock<DarkfidRpcClient>>,
     /// Flag indicating if fun stuff are enabled
     pub fun: bool,
 }
@@ -112,7 +113,7 @@ impl Drk {
 
         // Initialize rpc client
         let rpc_client = if let Some(endpoint) = endpoint {
-            Some(RpcClient::new(endpoint, ex.clone()).await?)
+            Some(RwLock::new(DarkfidRpcClient::new(endpoint, ex.clone()).await))
         } else {
             None
         };

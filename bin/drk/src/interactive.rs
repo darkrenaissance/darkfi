@@ -536,13 +536,11 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                         &subscription_tasks,
                         &shell_sender,
                         ex,
-                        &mut output,
                     )
                     .await
                 }
                 "unsubscribe" => {
-                    handle_unsubscribe(&mut subscription_active, &subscription_tasks, &mut output)
-                        .await
+                    handle_unsubscribe(&mut subscription_active, &subscription_tasks).await
                 }
                 "snooze" => snooze_active = true,
                 "unsnooze" => snooze_active = false,
@@ -610,10 +608,8 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
     }
 
     // Stop the subscription tasks if they are active
-    if subscription_active {
-        subscription_tasks[0].stop().await;
-        subscription_tasks[1].stop().await;
-    }
+    subscription_tasks[0].stop_nowait();
+    subscription_tasks[1].stop_nowait();
 
     // Write history file
     let _ = linenoise_history_save(history_file);
@@ -2353,12 +2349,11 @@ async fn handle_subscribe(
     subscription_tasks: &[StoppableTaskPtr; 2],
     shell_sender: &Sender<Vec<String>>,
     ex: &ExecutorPtr,
-    output: &mut Vec<String>,
 ) {
-    if *subscription_active {
-        output.push(String::from("Subscription is already active!"));
-        return
-    }
+    // Kill zombie tasks if they failed
+    subscription_tasks[0].stop_nowait();
+    subscription_tasks[1].stop_nowait();
+    *subscription_active = true;
 
     // Start the subcristion task
     let drk_ = drk.clone();
@@ -2377,22 +2372,15 @@ async fn handle_subscribe(
         Error::DetachedTaskStopped,
         ex.clone(),
     );
-
-    *subscription_active = true;
 }
 
 /// Auxiliary function to define the unsubscribe command handling.
 async fn handle_unsubscribe(
     subscription_active: &mut bool,
     subscription_tasks: &[StoppableTaskPtr; 2],
-    output: &mut Vec<String>,
 ) {
-    if !*subscription_active {
-        output.push(String::from("Subscription is already inactive!"));
-        return
-    }
-    subscription_tasks[0].stop().await;
-    subscription_tasks[1].stop().await;
+    subscription_tasks[0].stop_nowait();
+    subscription_tasks[1].stop_nowait();
     *subscription_active = false;
 }
 

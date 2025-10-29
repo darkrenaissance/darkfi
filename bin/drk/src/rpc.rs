@@ -59,6 +59,28 @@ use crate::{
     Drk, DrkPtr,
 };
 
+/// Structure to hold a JSON-RPC client and its config,
+/// so we can recreate it in case of an error.
+pub struct DarkfidRpcClient {
+    endpoint: Url,
+    ex: ExecutorPtr,
+    client: Option<RpcClient>,
+}
+
+impl DarkfidRpcClient {
+    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Self {
+        let client = RpcClient::new(endpoint.clone(), ex.clone()).await.ok();
+        Self { endpoint, ex, client }
+    }
+
+    /// Stop the client.
+    pub async fn stop(&self) {
+        if let Some(ref client) = self.client {
+            client.stop().await
+        }
+    }
+}
+
 /// Auxiliary structure holding various in memory caches to use during scan
 pub struct ScanCache {
     /// The Money Merkle tree containing coins
@@ -559,15 +581,28 @@ impl Drk {
         params: &JsonValue,
     ) -> Result<JsonValue> {
         let Some(ref rpc_client) = self.rpc_client else { return Err(Error::RpcClientStopped) };
+        let mut lock = rpc_client.write().await;
+        let Some(ref client) = lock.client else { return Err(Error::RpcClientStopped) };
         let req = JsonRequest::new(method, params.clone());
-        let rep = rpc_client.request(req).await?;
+
+        // Execute request
+        if let Ok(rep) = client.request(req.clone()).await {
+            drop(lock);
+            return Ok(rep)
+        }
+
+        // Reset the rpc client in case of an error and try again
+        let client = RpcClient::new(lock.endpoint.clone(), lock.ex.clone()).await?;
+        let rep = client.request(req).await?;
+        lock.client = Some(client);
+        drop(lock);
         Ok(rep)
     }
 
     /// Auxiliary function to stop current JSON-RPC client, if its initialized.
     pub async fn stop_rpc_client(&self) -> Result<()> {
         if let Some(ref rpc_client) = self.rpc_client {
-            rpc_client.stop().await;
+            rpc_client.read().await.stop().await;
         };
         Ok(())
     }
@@ -621,6 +656,7 @@ pub async fn subscribe_blocks(
             return Err(Error::Custom(err_msg))
         }
     };
+    drop(lock);
 
     // Check if other blocks have been created
     if last_confirmed_height != last_scanned_height || last_confirmed_hash != last_scanned_hash {
@@ -670,7 +706,6 @@ pub async fn subscribe_blocks(
     shell_message.push(String::from("Detached subscription to background"));
     shell_message.push(String::from("All is good. Waiting for block notifications..."));
     shell_sender.send(shell_message).await?;
-    drop(lock);
 
     let e = 'outer: loop {
         match subscription.receive().await {
