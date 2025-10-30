@@ -51,9 +51,9 @@ You can list your mint authorities with:
 ```shell
 drk> token list
 
- Token ID | Aliases | Mint Authority          | Token Blind    | Frozen
-----------+---------+-------------------------+----------------+--------
- {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false
+ Token ID | Aliases | Mint Authority          | Token Blind    | Frozen | Freeze Height
+----------+---------+-------------------------+----------------+--------+---------------
+ {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false  | -
 
 ```
 
@@ -71,10 +71,10 @@ Verify you have two tokens by running:
 ```shell
 drk> token list
 
- Token ID | Aliases | Mint Authority          | Token Blind    | Frozen
-----------+---------+-------------------------+----------------+--------
- {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false
- {TOKEN2} | -       | {TOKEN2_MINT_AUTHORITY} | {TOKEN2_BLIND} | false
+ Token ID | Aliases | Mint Authority          | Token Blind    | Frozen | Freeze Height
+----------+---------+-------------------------+----------------+--------+---------------
+ {TOKEN1} | -       | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false  | -
+ {TOKEN2} | -       | {TOKEN2_MINT_AUTHORITY} | {TOKEN2_BLIND} | false  | -
 
 ```
 
@@ -176,4 +176,32 @@ drk> wallet balance
  241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 19.98451279
  {TOKEN1}                                     | ANON    | 42.69
  {TOKEN2}                                     | DAWN    | 20
+```
+
+## Freeze transaction
+
+We can lock a tokens supply dissallowing further mints by executing:
+
+
+```shell
+drk> token freeze DAWN | broadcast
+
+[mark_tx_spend] Processing transaction: 138274448ac3af26f253e0a40d0964dc125b99b3c826ba321bcb989cabfb6df6
+[mark_tx_spend] Found Money contract in call 0
+[mark_tx_spend] Found Money contract in call 1
+Broadcasting transaction...
+Transaction ID: 138274448ac3af26f253e0a40d0964dc125b99b3c826ba321bcb989cabfb6df6
+```
+
+After the transaction has been confirmed, we will see the token freeze
+flag set to `true`, along with the block height it was frozen on:
+
+```shell
+drk> token list
+
+ Token ID | Aliases | Mint Authority          | Token Blind    | Frozen | Freeze Height
+----------+---------+-------------------------+----------------+--------+---------------
+ {TOKEN1} | ANON    | {TOKEN1_MINT_AUTHORITY} | {TOKEN1_BLIND} | false  | -
+ {TOKEN2} | DAWN    | {TOKEN2_MINT_AUTHORITY} | {TOKEN2_BLIND} | true   | 4
+
 ```
