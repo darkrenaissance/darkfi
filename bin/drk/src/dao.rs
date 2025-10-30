@@ -1807,34 +1807,6 @@ impl Drk {
         Ok(())
     }
 
-    /// Update given DAO params into the wallet, if the corresponding DAO exists.
-    pub async fn update_dao_keys(
-        &self,
-        params: &DaoParams,
-        output: &mut Vec<String>,
-    ) -> Result<()> {
-        // Grab the params DAO
-        let bulla = params.dao.to_bulla();
-        let Ok(dao) = self.get_dao_by_bulla(&bulla).await else {
-            return Err(Error::DatabaseError(format!("[import_dao] DAO {bulla} was not found")))
-        };
-
-        output.push(format!("Updating \"{}\" DAO keys into the wallet", dao.name));
-
-        let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-            *DAO_DAOS_TABLE, DAO_DAOS_COL_PARAMS, DAO_DAOS_COL_BULLA,
-        );
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![serialize_async(params).await, serialize_async(&bulla).await,],
-        ) {
-            return Err(Error::DatabaseError(format!("[update_dao_keys] DAO update failed: {e}")))
-        };
-
-        Ok(())
-    }
-
     /// Fetch a DAO given its bulla.
     pub async fn get_dao_by_bulla(&self, bulla: &DaoBulla) -> Result<DaoRecord> {
         let row = match self.wallet.query_single(

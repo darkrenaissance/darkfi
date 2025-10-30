@@ -183,7 +183,6 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "dao create");
         lc.push(prefix.clone() + "dao view");
         lc.push(prefix.clone() + "dao import");
-        lc.push(prefix.clone() + "dao update-keys");
         lc.push(prefix.clone() + "dao list");
         lc.push(prefix.clone() + "dao balance");
         lc.push(prefix.clone() + "dao mint");
@@ -340,7 +339,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), color, bold)),
         "otc " => Some(("(init|join|inspect|sign)".to_string(), color, bold)),
         "otc init " => Some(("<value_pair> <token_pair>".to_string(), color, bold)),
-        "dao " => Some(("(create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), color, bold)),
+        "dao " => Some(("(create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), color, bold)),
         "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), color, bold)),
         "dao import " => Some(("<name>".to_string(), color, bold)),
         "dao list " => Some(("[name]".to_string(), color, bold)),
@@ -1347,7 +1346,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
     // Check correct command structure
     if parts.len() < 2 {
         output.push(String::from("Malformed `dao` command"));
-        output.push(String::from("Usage: dao (create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+        output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
         return
     }
 
@@ -1356,7 +1355,6 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "create" => handle_dao_create(drk, parts, output).await,
         "view" => handle_dao_view(parts, input, output).await,
         "import" => handle_dao_import(drk, parts, input, output).await,
-        "update-keys" => handle_dao_update_keys(drk, parts, input, output).await,
         "list" => handle_dao_list(drk, parts, output).await,
         "balance" => handle_dao_balance(drk, parts, output).await,
         "mint" => handle_dao_mint(drk, parts, output).await,
@@ -1370,7 +1368,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "spend-hook" => handle_dao_spend_hook(parts, output).await,
         _ => {
             output.push(format!("Unreconized DAO subcommand: {}", parts[1]));
-            output.push(String::from("Usage: dao (create|view|import|update-keys|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+            output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
         }
     }
 }
@@ -1547,46 +1545,6 @@ async fn handle_dao_import(
 
     if let Err(e) = drk.read().await.import_dao(parts[2], &params, output).await {
         output.push(format!("Failed to import DAO: {e}"))
-    }
-}
-
-/// Auxiliary function to define the dao update keys subcommand handling.
-async fn handle_dao_update_keys(
-    drk: &DrkPtr,
-    parts: &[&str],
-    input: &[String],
-    output: &mut Vec<String>,
-) {
-    // Check correct subcommand structure
-    if parts.len() != 2 {
-        output.push(String::from("Malformed `dao update-keys` subcommand"));
-        output.push(String::from("Usage: dao update-keys"));
-        return
-    }
-
-    // Parse lines from input or fallback to stdin if its empty
-    let buf = match input.len() {
-        0 => {
-            let mut buf = String::new();
-            if let Err(e) = stdin().read_to_string(&mut buf) {
-                output.push(format!("Failed to read from stdin: {e}"));
-                return
-            };
-            buf
-        }
-        _ => input.join("\n"),
-    };
-
-    let params = match DaoParams::from_toml_str(&buf) {
-        Ok(p) => p,
-        Err(e) => {
-            output.push(format!("Error while parsing DAO params: {e}"));
-            return
-        }
-    };
-
-    if let Err(e) = drk.read().await.update_dao_keys(&params, output).await {
-        output.push(format!("Failed to update DAO keys: {e}"))
     }
 }
 
@@ -3072,7 +3030,9 @@ async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
         "lock" => handle_contract_lock(drk, parts, output).await,
         _ => {
             output.push(format!("Unreconized contract subcommand: {}", parts[1]));
-            output.push(String::from("Usage: contract (generate-deploy|list|export-data|deploy|lock)"));
+            output.push(String::from(
+                "Usage: contract (generate-deploy|list|export-data|deploy|lock)",
+            ));
         }
     }
 }

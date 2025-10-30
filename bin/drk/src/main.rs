@@ -301,9 +301,6 @@ enum DaoSubcmd {
         name: String,
     },
 
-    /// Update DAO keys from stdin
-    UpdateKeys,
-
     /// List imported DAOs (or info about a specific one)
     List {
         /// Name identifier for the DAO (optional)
@@ -1293,31 +1290,6 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 if let Err(e) = drk.import_dao(&name, &params, &mut output).await {
                     print_output(&output);
                     eprintln!("Failed to import DAO: {e}");
-                    exit(2);
-                }
-                print_output(&output);
-
-                Ok(())
-            }
-
-            DaoSubcmd::UpdateKeys => {
-                let mut buf = String::new();
-                stdin().read_to_string(&mut buf)?;
-                let params = DaoParams::from_toml_str(&buf)?;
-
-                let drk = new_wallet(
-                    blockchain_config.cache_path,
-                    blockchain_config.wallet_path,
-                    blockchain_config.wallet_pass,
-                    None,
-                    &ex,
-                    args.fun,
-                )
-                .await;
-                let mut output = vec![];
-                if let Err(e) = drk.update_dao_keys(&params, &mut output).await {
-                    print_output(&output);
-                    eprintln!("Failed to update DAO keys: {e}");
                     exit(2);
                 }
                 print_output(&output);
