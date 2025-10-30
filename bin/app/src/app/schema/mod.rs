@@ -57,7 +57,7 @@ mod ui_consts {
     use std::path::PathBuf;
 
     //pub const BG_PATH: &str = "bg.png";
-    pub const VID_PATH: &str = "forest8/forest_02cjpg{frame}.qoi";
+    pub const VID_PATH: &str = "forest8/forest{frame}.qoi";
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -82,7 +82,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     //pub const BG_PATH: &str = "assets/bg.png";
-    pub const VID_PATH: &str = "assets/forest8/forest_02cjpg{frame}.qoi";
+    pub const VID_PATH: &str = "assets/forest8/forest{frame}.qoi";
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
