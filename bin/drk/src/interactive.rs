@@ -3059,7 +3059,7 @@ async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
     // Check correct command structure
     if parts.len() < 2 {
         output.push(String::from("Malformed `contract` command"));
-        output.push(String::from("Usage: contract (generate-deploy|list|deploy|lock)"));
+        output.push(String::from("Usage: contract (generate-deploy|list|export-data|deploy|lock)"));
         return
     }
 
@@ -3072,7 +3072,7 @@ async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
         "lock" => handle_contract_lock(drk, parts, output).await,
         _ => {
             output.push(format!("Unreconized contract subcommand: {}", parts[1]));
-            output.push(String::from("Usage: contract (generate-deploy|list|deploy|lock)"));
+            output.push(String::from("Usage: contract (generate-deploy|list|export-data|deploy|lock)"));
         }
     }
 }
