@@ -80,9 +80,9 @@ You can list your mint authorities with:
 ```shell
 drk> contract list
 
- Index | Contract ID   | Locked | Lock Height
--------+---------------+--------+-------------
- 1     | {CONTRACT_ID} | false  | -
+ Contract ID   | Secret Key            | Locked | Lock Height
+---------------+-----------------------+--------+-------------
+ {CONTRACT_ID} | {CONTRACT_SECRET_KEY} | false  | -
 ```
 
 ## Deploy transaction
@@ -144,9 +144,9 @@ locked on:
 ```shell
 drk> contract list
 
- Index | Contract ID   | Locked | Lock Height
--------+---------------+--------+-------------
- 1     | {CONTRACT_ID} | true   | 36
+ Contract ID   | Secret Key            | Locked | Lock Height
+---------------+-----------------------+--------+-------------
+ {CONTRACT_ID} | {CONTRACT_SECRET_KEY} | true   | 36
 ```
 
 We will also see the lock transaction in its history:
