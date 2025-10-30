@@ -17,7 +17,7 @@
  */
 
 use std::{
-    fs::{read_dir, read_to_string},
+    fs::{create_dir, read_dir, read_to_string},
     io::{stdin, Cursor, Read},
     process::exit,
     str::FromStr,
@@ -145,6 +145,9 @@ fn main() -> Result<()> {
 
                 // Grab genesis transactions from folder
                 let txs_folder = expand_path(&txs_folder).unwrap();
+                if !txs_folder.exists() {
+                    create_dir(&txs_folder)?;
+                }
                 let mut tree = MerkleTree::new(1);
                 for file in read_dir(txs_folder)? {
                     let file = file?;
