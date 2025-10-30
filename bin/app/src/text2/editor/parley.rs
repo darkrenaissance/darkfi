@@ -95,7 +95,7 @@ impl Editor {
     pub fn move_to_pos(&self, _pos: Point) {
         unimplemented!()
     }
-    pub fn select_word_at_point(&mut self, _pos: Point) {
+    pub async fn select_word_at_point(&mut self, _pos: Point) {
         unimplemented!()
     }
 
@@ -140,11 +140,11 @@ impl Editor {
     }
     /// Android uses byte indexes whereas parley has its own things. So this API is a compromise
     /// between them both.
-    pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        let anchor = self.editor.cursor_at(select_start);
-        let focus = self.editor.cursor_at(select_end);
-        let sel = parley::Selection::new(anchor, focus);
-        self.editor.set_selection(sel);
+    pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
+        let mut txt_ctx = TEXT_CTX.get().await;
+        let (font_ctx, layout_ctx) = txt_ctx.borrow();
+        let mut drv = self.editor.driver(font_ctx, layout_ctx);
+        drv.select_byte_range(select_start, select_end);
     }
 
     #[allow(dead_code)]

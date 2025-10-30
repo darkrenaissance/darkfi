@@ -52,7 +52,7 @@ clap = { version = "4.5", features = ["derive"] }
 file-rotate = "0.7.6"
 parking_lot = { version = "0.12.4", features = ["nightly"] }
 regex = "1.11"
-parley = { git = "https://github.com/narodnik/parley.git" }
+parley = { git = "https://github.com/linebender/parley.git" }
 swash = "0.2.5"
 zeno = "0.3.3"
 peniko = "*"

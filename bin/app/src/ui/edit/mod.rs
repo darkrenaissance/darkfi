@@ -690,7 +690,7 @@ impl BaseEdit {
         t!("start_touch_select({touch_pos:?})");
 
         let mut editor = self.lock_editor().await;
-        editor.select_word_at_point(touch_pos);
+        editor.select_word_at_point(touch_pos).await;
         editor.refresh().await;
 
         let seltext = editor.selected_text().unwrap();
@@ -976,7 +976,7 @@ impl BaseEdit {
             assert!(start < end);
 
             //t!("handle_select(): set_selection({start}, {end})");
-            editor.set_selection(start, end);
+            editor.set_selection(start, end).await;
             editor.refresh().await;
 
             editor.selected_text()

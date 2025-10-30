@@ -197,11 +197,11 @@ impl Editor {
         android::set_selection(self.composer_id, pos, pos);
     }
 
-    pub fn select_word_at_point(&mut self, pos: Point) {
+    pub async fn select_word_at_point(&mut self, pos: Point) {
         let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
         assert!(!select.is_collapsed());
         let select = select.text_range();
-        self.set_selection(select.start, select.end);
+        self.set_selection(select.start, select.end).await;
     }
 
     pub fn get_cursor_pos(&self) -> Point {
@@ -280,7 +280,7 @@ impl Editor {
 
         parley::Selection::new(anchor, focus)
     }
-    pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
+    pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
         //t!("set_selection({select_start}, {select_end})");
         let edit = android::get_editable(self.composer_id).unwrap();
         let select_start = byte_to_char16_index(&edit.buffer, select_start).unwrap();
