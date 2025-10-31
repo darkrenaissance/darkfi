@@ -1780,28 +1780,47 @@ impl Drk {
         params: &DaoParams,
         output: &mut Vec<String>,
     ) -> Result<()> {
-        // First let's check if we've imported this DAO with the given name before.
-        if self.get_dao_by_name(name).await.is_ok() {
-            return Err(Error::DatabaseError(
-                "[import_dao] This DAO has already been imported".to_string(),
-            ))
-        }
+        // Grab the params DAO
+        let bulla = params.dao.to_bulla();
 
-        output.push(format!("Importing \"{name}\" DAO into the wallet"));
-
-        let query = format!(
-            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            *DAO_DAOS_TABLE, DAO_DAOS_COL_BULLA, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PARAMS,
-        );
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                serialize_async(&params.dao.to_bulla()).await,
-                name,
-                serialize_async(params).await,
-            ],
-        ) {
-            return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e}")))
+        // Check if we already have imported the DAO so we retain its
+        // mint information.
+        match self.get_dao_by_bulla(&bulla).await {
+            Ok(dao) => {
+                output.push(format!("Updating \"{}\" DAO keys into the wallet", dao.name));
+                let query = format!(
+                    "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+                    *DAO_DAOS_TABLE, DAO_DAOS_COL_PARAMS, DAO_DAOS_COL_BULLA,
+                );
+                if let Err(e) =
+                    self.wallet.exec_sql(
+                        &query,
+                        rusqlite::params![
+                            serialize_async(params).await,
+                            serialize_async(&bulla).await,
+                        ],
+                    )
+                {
+                    return Err(Error::DatabaseError(format!("[import_dao] DAO update failed: {e}")))
+                };
+            }
+            Err(_) => {
+                output.push(format!("Importing \"{name}\" DAO into the wallet"));
+                let query = format!(
+                    "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+                    *DAO_DAOS_TABLE, DAO_DAOS_COL_BULLA, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PARAMS,
+                );
+                if let Err(e) = self.wallet.exec_sql(
+                    &query,
+                    rusqlite::params![
+                        serialize_async(&params.dao.to_bulla()).await,
+                        name,
+                        serialize_async(params).await,
+                    ],
+                ) {
+                    return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e}")))
+                };
+            }
         };
 
         Ok(())
