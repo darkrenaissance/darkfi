@@ -582,13 +582,15 @@ impl Drk {
     ) -> Result<JsonValue> {
         let Some(ref rpc_client) = self.rpc_client else { return Err(Error::RpcClientStopped) };
         let mut lock = rpc_client.write().await;
-        let Some(ref client) = lock.client else { return Err(Error::RpcClientStopped) };
         let req = JsonRequest::new(method, params.clone());
 
-        // Execute request
-        if let Ok(rep) = client.request(req.clone()).await {
-            drop(lock);
-            return Ok(rep)
+        // Check the client is initialized
+        if let Some(ref client) = lock.client {
+            // Execute request
+            if let Ok(rep) = client.request(req.clone()).await {
+                drop(lock);
+                return Ok(rep);
+            }
         }
 
         // Reset the rpc client in case of an error and try again
