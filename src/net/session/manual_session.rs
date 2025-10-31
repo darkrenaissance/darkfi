@@ -36,7 +36,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{
@@ -49,6 +49,7 @@ use super::{
 use crate::{
     net::{hosts::HostState, settings::Settings},
     system::{sleep, StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -154,7 +155,7 @@ impl Slot {
         loop {
             attempts += 1;
 
-            info!(
+            verbose!(
                 target: "net::manual_session",
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
                 self.addr, attempts
@@ -186,7 +187,7 @@ impl Slot {
 
             match self.connector.connect(&self.addr).await {
                 Ok((_, channel)) => {
-                    info!(
+                    verbose!(
                         target: "net::manual_session",
                         "[P2P] Manual outbound connected [{}]",
                         channel.display_address()
@@ -202,7 +203,7 @@ impl Slot {
                             // Wait for channel to close
                             stop_sub.receive().await;
 
-                            info!(
+                            verbose!(
                                 target: "net::manual_session",
                                 "[P2P] Manual outbound disconnected [{}]",
                                 channel.display_address()
@@ -235,7 +236,7 @@ impl Slot {
                 }
             }
 
-            info!(
+            verbose!(
                 target: "net::manual_session",
                 "[P2P] Waiting {outbound_connect_timeout} seconds until next manual outbound connection attempt [{}]",
                 self.addr,

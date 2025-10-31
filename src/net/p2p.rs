@@ -24,7 +24,7 @@ use std::sync::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{
@@ -42,7 +42,7 @@ use super::{
 };
 use crate::{
     system::{ExecutorPtr, Publisher, PublisherPtr, Subscription},
-    util::path::expand_path,
+    util::{logger::verbose, path::expand_path},
     Result,
 };
 
@@ -129,7 +129,7 @@ impl P2p {
     pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::start", "P2P::start() [BEGIN] [magic_bytes={:?}]",
                self.settings.read().await.magic_bytes.0);
-        info!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
+        verbose!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
 
         // Start the inbound session
         if let Err(err) = self.session_inbound().start().await {
@@ -153,7 +153,7 @@ impl P2p {
         // Start the direct session
         self.session_direct().start().await;
 
-        info!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
+        verbose!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
         Ok(())
     }
 

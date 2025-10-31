@@ -29,7 +29,7 @@ use std::{
     },
     time::{Instant, UNIX_EPOCH},
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 use url::{Host, Url};
 
 use super::{
@@ -41,6 +41,7 @@ use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
         file::{load_file, save_file},
+        logger::verbose,
         most_frequent_or_any,
         path::expand_path,
         ringbuffer::RingBuffer,
@@ -790,7 +791,7 @@ impl HostContainer {
         }
 
         if !tsv.is_empty() {
-            info!(target: "net::hosts::save_hosts()", "Saving hosts to: {path:?}");
+            verbose!(target: "net::hosts::save_hosts()", "Saving hosts to: {path:?}");
             if let Err(e) = save_file(&path, &tsv) {
                 error!(target: "net::hosts::save_hosts()", "Failed saving hosts: {e}");
             }

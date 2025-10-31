@@ -25,7 +25,7 @@ use std::{
 };
 
 use smol::Executor;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 use url::Url;
 
 use super::{
@@ -36,6 +36,7 @@ use super::{
 };
 use crate::{
     system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -75,7 +76,7 @@ impl Acceptor {
         #[cfg(feature = "p2p-tor")]
         if endpoint.scheme() == "tor" {
             let onion_addr = listener.endpoint().await;
-            info!("[P2P] Adding {onion_addr} to external_addrs");
+            verbose!("[P2P] Adding {onion_addr} to external_addrs");
             self.session
                 .upgrade()
                 .unwrap()

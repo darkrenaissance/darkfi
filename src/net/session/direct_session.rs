@@ -37,7 +37,7 @@ use std::{
 
 use async_trait::async_trait;
 use smol::lock::Mutex as AsyncMutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{
@@ -53,6 +53,7 @@ use super::{
 use crate::{
     net::ChannelPtr,
     system::{sleep, timeout::timeout, CondVar, PublisherPtr, StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -268,7 +269,7 @@ impl ChannelBuilder {
     /// Create a new channel to `addr` in the direct session.
     /// The transport is verified before the connection is started.
     pub async fn new_channel(&mut self, addr: &Url) -> Result<ChannelPtr> {
-        info!(
+        verbose!(
             target: "net::direct_session",
             "[P2P] Connecting to direct outbound [{addr}]",
         );
@@ -323,7 +324,7 @@ impl ChannelBuilder {
 
         match self.connector().connect(addr).await {
             Ok((_, channel)) => {
-                info!(
+                verbose!(
                     target: "net::direct_session",
                     "[P2P] Direct outbound connected [{}]",
                     channel.display_address()
@@ -471,7 +472,7 @@ impl PeerDiscovery {
             current_attempt += 1;
 
             if current_attempt >= 4 {
-                info!(
+                verbose!(
                     target: "net::direct_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
@@ -513,7 +514,7 @@ impl PeerDiscovery {
             if self.p2p().is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
-                info!(
+                verbose!(
                     target: "net::direct_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
@@ -540,7 +541,7 @@ impl PeerDiscovery {
 
                 match result {
                     Ok(addrs_len) => {
-                        info!(
+                        verbose!(
                             target: "net::direct_session::peer_discovery()",
                             "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
@@ -565,7 +566,7 @@ impl PeerDiscovery {
                 // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
-                info!(
+                verbose!(
                     target: "net::direct_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 

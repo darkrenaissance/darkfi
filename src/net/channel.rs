@@ -35,7 +35,7 @@ use smol::{
     lock::{Mutex as AsyncMutex, OnceCell},
     Executor,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 use url::Url;
 
 use super::{
@@ -54,7 +54,7 @@ use super::{
 use crate::{
     net::BanPolicy,
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
-    util::time::NanoTimestamp,
+    util::{logger::verbose, time::NanoTimestamp},
     Error, Result,
 };
 
@@ -409,7 +409,7 @@ impl Channel {
                 Ok(command) => command,
                 Err(err) => {
                     if Self::is_eof_error(&err) {
-                        info!(
+                        verbose!(
                             target: "net::channel::main_receive_loop()",
                             "[P2P] Channel {} disconnected",
                             self.display_address()
@@ -520,10 +520,10 @@ impl Channel {
         };
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        info!(target: "net::channel::ban()", "Blacklisting peer={peer}");
+        verbose!(target: "net::channel::ban()", "Blacklisting peer={peer}");
         match self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).await {
             Ok(()) => {
-                info!(target: "net::channel::ban()", "Peer={peer} blacklisted successfully");
+                verbose!(target: "net::channel::ban()", "Peer={peer} blacklisted successfully");
             }
             Err(e) => {
                 warn!(target: "net::channel::ban()", "Could not blacklisted peer={peer}, err={e}");

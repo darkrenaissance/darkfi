@@ -37,7 +37,7 @@ use std::{
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{
@@ -53,6 +53,7 @@ use super::{
 };
 use crate::{
     system::{sleep, timeout::timeout, CondVar, StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -81,7 +82,7 @@ impl OutboundSession {
     /// Start the outbound session. Runs the channel connect loop.
     pub(crate) async fn start(self: Arc<Self>) {
         let n_slots = self.p2p().settings().read().await.outbound_connections;
-        info!(target: "net::outbound_session", "[P2P] Starting {n_slots} outbound connection slots.");
+        verbose!(target: "net::outbound_session", "[P2P] Starting {n_slots} outbound connection slots.");
 
         // Activate mutex lock on connection slots.
         let mut slots = self.slots.lock().await;
@@ -296,7 +297,7 @@ impl Slot {
             let last_seen = addr.1;
             let slot = self.slot;
 
-            info!(
+            verbose!(
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Connecting outbound slot #{slot} [{host}]"
             );
@@ -328,7 +329,7 @@ impl Slot {
             // At this point we've managed to connect.
             let stop_sub = channel.subscribe_stop().await?;
 
-            info!(
+            verbose!(
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Outbound slot #{slot} connected [{}]",
                 channel.display_address()
@@ -344,7 +345,7 @@ impl Slot {
             if let Err(err) =
                 self.session().register_channel(channel.clone(), self.p2p().executor()).await
             {
-                info!(
+                verbose!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{slot} disconnected: {err}"
                 );
@@ -404,7 +405,7 @@ impl Slot {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(err) => {
-                info!(
+                verbose!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} {err}",
                     self.slot
@@ -549,7 +550,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
             }
 
             if current_attempt >= 4 {
-                info!(
+                verbose!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
@@ -569,7 +570,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
             if self.p2p().is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
-                info!(
+                verbose!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
@@ -596,7 +597,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
                 match result {
                     Ok(addrs_len) => {
-                        info!(
+                        verbose!(
                             target: "net::outbound_session::peer_discovery()",
                             "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
@@ -617,7 +618,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
-                info!(
+                verbose!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 

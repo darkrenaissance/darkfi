@@ -51,7 +51,7 @@ use std::sync::{
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 use url::Url;
 
 use super::{
@@ -66,6 +66,7 @@ use super::{
 use crate::{
     net::hosts::HostState,
     system::{CondVar, StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error,
 };
 
@@ -214,7 +215,7 @@ impl Slot {
 
             match self.connector.connect(&self.addr).await {
                 Ok((_, ch)) => {
-                    info!(
+                    verbose!(
                         target: "net::session::seedsync_session",
                         "[P2P] Connected seed [{}]",
                         ch.display_address()
@@ -224,7 +225,7 @@ impl Slot {
                         Ok(()) => {
                             self.failed.store(false, SeqCst);
 
-                            info!(
+                            verbose!(
                                 target: "net::session::seedsync_session",
                                 "[P2P] Disconnecting from seed [{}]",
                                 ch.display_address()

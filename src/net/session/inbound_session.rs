@@ -27,7 +27,7 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use smol::{lock::Mutex, Executor};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{
@@ -41,6 +41,7 @@ use super::{
 };
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscription},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -70,7 +71,7 @@ impl InboundSession {
         let inbound_addrs = self.p2p().settings().read().await.inbound_addrs.clone();
 
         if inbound_addrs.is_empty() {
-            info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
+            verbose!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
             return Ok(())
         }
 
@@ -114,7 +115,7 @@ impl InboundSession {
     /// Stops the inbound session.
     pub async fn stop(&self) {
         if self.p2p().settings().read().await.inbound_addrs.is_empty() {
-            info!(target: "net::inbound_session", "[P2P] Stopping inbound session.");
+            verbose!(target: "net::inbound_session", "[P2P] Stopping inbound session.");
             return
         }
 
@@ -137,7 +138,7 @@ impl InboundSession {
         acceptor: AcceptorPtr,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{index} on {accept_addr}");
+        verbose!(target: "net::inbound_session", "[P2P] Starting Inbound session #{index} on {accept_addr}");
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
         if let Err(e) = &result {
@@ -174,7 +175,7 @@ impl InboundSession {
         channel: ChannelPtr,
         ex: Arc<Executor<'_>>,
     ) {
-        info!(
+        verbose!(
              target: "net::inbound_session::setup_channel",
              "[P2P] Connected Inbound #{index} [{}]", channel.display_address()
         );

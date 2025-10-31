@@ -45,11 +45,11 @@ use tor_error::ErrorReport;
 use tor_hsservice::{HsNickname, RendRequest, RunningOnionService};
 use tor_proto::stream::IncomingStreamRequest;
 use tor_rtcompat::PreferredRuntime;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::util::path::expand_path;
+use crate::util::{logger::verbose, path::expand_path};
 
 /// A static for `TorClient` reusability
 static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
@@ -236,7 +236,7 @@ impl TorListener {
             }
         };
 
-        info!(
+        verbose!(
             target: "net::tor::do_listen",
             "[P2P] Established Tor listener on tor://{}:{port}",
             onion_service.onion_address().unwrap()
