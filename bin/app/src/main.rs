@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Hides the cmd.exe terminal on Windows.
+// Enable this when making release builds.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use clap::Parser;
 use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
@@ -86,10 +90,6 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 #[cfg(feature = "enable-plugins")]
 macro_rules! i { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
-
-// Hides the cmd.exe terminal on Windows.
-// Enable this when making release builds.
-//#![windows_subsystem = "windows"]
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
