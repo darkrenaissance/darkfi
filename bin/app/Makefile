@@ -39,23 +39,23 @@ linux-release: build-release
 	-mv darkfi-app darkfi-app.linux
 linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
-win-release: $(SRC) fonts forest.zip
+win-release: $(SRC) fonts
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app.exe .
-win-debug: $(SRC) fonts forest.zip
+win-debug: $(SRC) fonts
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
-android-release: $(SRC) fonts forest.zip
+android-release: $(SRC) fonts forest_720x1080
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
-android-debug: $(SRC) fonts
+android-debug: $(SRC) fonts forest_720x1080
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
-build-release: $(SRC) fonts forest.zip
+build-release: $(SRC) fonts forest_1920x1080
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-build-debug: $(SRC) fonts forest.zip
+build-debug: $(SRC) fonts forest_1920x1080
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
@@ -69,18 +69,28 @@ ibm-plex-mono-regular.otf:
 NotoColorEmoji.ttf:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
 
-forest.zip:
-	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest.zip
-	cd assets && unzip ../forest.zip
+forest_1920x1080.zip:
+	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest_1920x1080.zip
+assets/forest_1920x1080/000.qoi:
+	cd assets && unzip ../forest_1920x1080.zip
+forest_1920x1080: forest_1920x1080.zip assets/forest_1920x1080/000.qoi
+	rm -fr assets/forest_729x1280/
+
+forest_720x1280.zip:
+	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest_720x1280.zip
+assets/forest_720x1280/000.qoi:
+	cd assets && unzip ../forest_720x1280.zip
+forest_720x1280: forest_720x1280.zip assets/forest_720x1280/000.qoi
+	rm -fr assets/forest_1920x1080/
 
 # Developer targets
 
-dev: $(SRC) fonts forest.zip
+dev: $(SRC) fonts forest_1920x1080
 	$(CARGO) lbuild $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: $(SRC) fonts forest.zip
+apk: $(SRC) fonts forest_720x1280
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 

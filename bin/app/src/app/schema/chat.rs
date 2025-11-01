@@ -231,6 +231,27 @@ pub async fn make(
     let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.link(layer_node.clone());
 
+    // Create a bg mesh on top to fade the bg image
+    let node = create_vector_art("bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+
+    // Setup the pimpl
+    let mut shape = VectorShape::new();
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
+    );
+    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    layer_node.link(node);
+
     // Create the toolbar bg
     let node = create_vector_art("toolbar_bg");
     let prop = node.get_property("rect").unwrap();

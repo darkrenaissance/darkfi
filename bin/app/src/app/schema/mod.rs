@@ -56,8 +56,8 @@ mod ui_consts {
     use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
-    //pub const BG_PATH: &str = "bg.png";
-    pub const VID_PATH: &str = "forest8/forest{frame}.qoi";
+    pub const VID_PATH: &str = "forest_720x1280/{frame}.qoi";
+    pub const VID_ASPECT_RATIO: f32 = 9. / 16.;
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -81,8 +81,8 @@ mod ui_consts {
 mod desktop_paths {
     use std::path::PathBuf;
 
-    //pub const BG_PATH: &str = "assets/bg.png";
-    pub const VID_PATH: &str = "assets/forest8/forest{frame}.qoi";
+    pub const VID_PATH: &str = "assets/forest_1920x1080/{frame}.qoi";
+    pub const VID_ASPECT_RATIO: f32 = 16. / 9.;
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
@@ -245,9 +245,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
         prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
-        // Image aspect ratio
-        let r = 1.78;
-        cc.add_const_f32("R", r);
+        cc.add_const_f32("R", VID_ASPECT_RATIO);
 
         let prop = node.get_property("uv").unwrap();
         #[rustfmt::skip]
@@ -299,29 +297,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         //layer_node.link(node);
         node.set_property_u32(atom, Role::App, "length", 150).unwrap();
         let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
-        layer_node.link(node);
-
-        // Create a bg mesh on top to fade the bg image
-        let node = create_vector_art("bg");
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-
-        //let c = if LIGHTMODE { 1. } else { 0. };
-        let c = 0.;
-        // Setup the pimpl
-        let mut shape = VectorShape::new();
-        shape.add_filled_box(
-            expr::const_f32(0.),
-            expr::const_f32(0.),
-            expr::load_var("w"),
-            expr::load_var("h"),
-            [c, c, c, 0.3],
-        );
-        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
         layer_node.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
