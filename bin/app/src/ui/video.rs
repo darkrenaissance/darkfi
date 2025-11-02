@@ -49,12 +49,17 @@ pub type VideoPtr = Arc<Video>;
 struct StreamedVideoData {
     textures: Vec<Option<ManagedTexturePtr>>,
     anim: ManagedSeqAnimPtr,
+
+    textures_pub: async_broadcast::Sender<(usize, ManagedTexturePtr)>,
+    textures_sub: async_broadcast::Receiver<(usize, ManagedTexturePtr)>,
 }
 
 impl StreamedVideoData {
     fn new(len: usize, render_api: &RenderApi) -> Self {
+        let (textures_pub, textures_sub) = async_broadcast::broadcast(len);
+
         let anim = render_api.new_anim(len, false, gfxtag!("video"));
-        Self { textures: vec![None; len], anim }
+        Self { textures: vec![None; len], anim, textures_pub, textures_sub }
     }
 }
 
@@ -67,8 +72,6 @@ pub struct Video {
     stop_load: Arc<AtomicBool>,
     dc_key: u64,
 
-    textures_pub: async_broadcast::Sender<(usize, ManagedTexturePtr)>,
-    textures_sub: async_broadcast::Receiver<(usize, ManagedTexturePtr)>,
     vid_data: Arc<SyncMutex<Option<StreamedVideoData>>>,
     // Do we need this?
     _load_handles: SyncMutex<[Option<std::thread::JoinHandle<()>>; N_LOADERS]>,
@@ -95,8 +98,6 @@ impl Video {
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
         let vid_len = PropertyUint32::wrap(node_ref, Role::Internal, "length", 0).unwrap();
 
-        let (textures_pub, textures_sub) = async_broadcast::broadcast(1);
-
         let self_ = Arc::new(Self {
             node,
             render_api,
@@ -106,8 +107,6 @@ impl Video {
             stop_load: Arc::new(AtomicBool::new(false)),
             dc_key: OsRng.gen(),
 
-            textures_pub,
-            textures_sub,
             vid_data: Arc::new(SyncMutex::new(None)),
             _load_handles: SyncMutex::new([const { None }; N_LOADERS]),
 
@@ -153,11 +152,13 @@ impl Video {
         //            create draw_call
         //            send to gfx
 
-        {
+        let textures_pub = {
             let mut vid_data = self.vid_data.lock();
-            *vid_data = Some(StreamedVideoData::new(vid_len, &self.render_api));
-            self.textures_pub.clone().set_capacity(vid_len);
-        }
+            let svidat = StreamedVideoData::new(vid_len, &self.render_api);
+            let textures_pub = svidat.textures_pub.clone();
+            *vid_data = Some(svidat);
+            textures_pub
+        };
 
         let mut handles = [const { None }; N_LOADERS];
         for thread_idx in 0..N_LOADERS {
@@ -165,7 +166,7 @@ impl Video {
             let render_api = self.render_api.clone();
             let stop_load = self.stop_load.clone();
             let vid_data = self.vid_data.clone();
-            let textures_pub = self.textures_pub.clone();
+            let textures_pub = textures_pub.clone();
 
             let handle = std::thread::spawn(move || {
                 let now = std::time::Instant::now();
@@ -259,7 +260,7 @@ impl Video {
             // Possibly triggered by race condition.
             // Check it anyway since generally should work.
             assert_eq!(vid_data.textures.len(), self.vid_len.get() as usize);
-            let tsubs = vec![self.textures_sub.clone(); vid_data.textures.len()];
+            let tsubs = vec![vid_data.textures_sub.clone(); vid_data.textures.len()];
             (vid_data, tsubs)
         };
         assert_eq!(vid_data.textures.len(), tsubs.len());
