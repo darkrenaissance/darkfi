@@ -26,6 +26,7 @@ use smol::{
     Executor,
 };
 use tinyjson::JsonValue;
+use tracing::warn;
 use url::Url;
 
 use darkfi::{
@@ -36,6 +37,7 @@ use darkfi::{
         settings::RpcSettings,
     },
     system::{msleep, StoppableTask, StoppableTaskPtr},
+    util::logger::{setup_test_logger, Level},
     Error, Result,
 };
 
@@ -74,21 +76,19 @@ impl RequestHandler<()> for RpcSrv {
 
 /// Initialize the logging mechanism
 fn init_logger() {
-    let mut cfg = simplelog::ConfigBuilder::new();
-
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
-    if simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
+    if setup_test_logger(
+        &[],
+        false,
+        //Level::Info,
+        //Level::Verbose
+        Level::Debug,
+        //Level::Trace,
     )
     .is_err()
     {
-        log::debug!("Logger initialized");
+        warn!("Logger already initialized");
     }
 }
 
