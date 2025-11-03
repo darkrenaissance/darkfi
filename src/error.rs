@@ -478,8 +478,9 @@ pub enum Error {
     #[error("async_channel receiver error: {0}")]
     AsyncChannelRecvError(String),
 
-    #[error("SetLogger (log crate) failed: {0}")]
-    SetLoggerError(String),
+    #[cfg(feature = "util")]
+    #[error("tracing-subscriber init failed: {0}")]
+    LogInitError(String),
 
     #[error("ValueIsNotObject")]
     ValueIsNotObject,
@@ -725,12 +726,6 @@ impl From<smol::channel::RecvError> for Error {
     }
 }
 
-impl From<log::SetLoggerError> for Error {
-    fn from(err: log::SetLoggerError) -> Self {
-        Self::SetLoggerError(err.to_string())
-    }
-}
-
 #[cfg(feature = "halo2_proofs")]
 impl From<halo2_proofs::plonk::Error> for Error {
     fn from(err: halo2_proofs::plonk::Error) -> Self {
@@ -812,5 +807,12 @@ impl From<darkfi_sdk::error::ContractError> for Error {
 impl From<darkfi_sdk::error::DarkTreeError> for Error {
     fn from(err: darkfi_sdk::error::DarkTreeError) -> Self {
         Self::DarkTreeError(err)
+    }
+}
+
+#[cfg(feature = "util")]
+impl From<tracing_subscriber::util::TryInitError> for Error {
+    fn from(err: tracing_subscriber::util::TryInitError) -> Self {
+        Self::LogInitError(err.to_string())
     }
 }

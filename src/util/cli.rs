@@ -17,15 +17,13 @@
  */
 
 use std::{
-    env, fs,
+    fs,
     io::Write,
     path::Path,
     str,
     sync::{Arc, Mutex},
     time::Instant,
 };
-
-use simplelog::ConfigBuilder;
 
 use crate::Result;
 
@@ -71,46 +69,6 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn get_log_level(verbosity_level: u8) -> simplelog::LevelFilter {
-    match verbosity_level {
-        0 => simplelog::LevelFilter::Info,
-        1 => simplelog::LevelFilter::Info,
-        2 => simplelog::LevelFilter::Debug,
-        _ => simplelog::LevelFilter::Trace,
-    }
-}
-
-pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
-    match env::var("LOG_TARGETS") {
-        Ok(x) => {
-            let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
-            let mut cfgbuilder = ConfigBuilder::new();
-            match verbosity_level {
-                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
-                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
-            };
-
-            for i in targets {
-                if i.starts_with('!') {
-                    cfgbuilder.add_filter_ignore(i.trim_start_matches('!').to_string());
-                } else {
-                    cfgbuilder.add_filter_allow(i);
-                }
-            }
-
-            cfgbuilder.build()
-        }
-        Err(_) => {
-            let mut cfgbuilder = ConfigBuilder::new();
-            match verbosity_level {
-                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
-                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
-            };
-            cfgbuilder.build()
-        }
-    }
-}
-
 /// This macro is used for a standard way of daemonizing darkfi binaries
 /// with TOML config file configuration, and argument parsing.
 ///
@@ -123,7 +81,8 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 /// easy-parallel = "3.2.0"
 /// signal-hook-async-std = "0.2.2"
 /// signal-hook = "0.3.15"
-/// simplelog = "0.12.0"
+/// tracing-subscriber = "0.3.19"
+/// tracing-appender = "0.2.3"
 /// smol = "1.2.5"
 ///
 /// # Argument parsing
@@ -205,18 +164,7 @@ macro_rules! async_daemonize {
                 }
             };
 
-            let log_level = darkfi::util::cli::get_log_level(args.verbose);
-            let log_config = darkfi::util::cli::get_log_config(args.verbose);
-
-            // Setup terminal logger
-            let term_logger = simplelog::TermLogger::new(
-                log_level,
-                log_config.clone(),
-                simplelog::TerminalMode::Mixed,
-                simplelog::ColorChoice::Auto,
-            );
-
-            // If a log file has been configured, also create a write logger.
+            // If a log file has been configured, create a terminal and file logger.
             // Otherwise, output to terminal logger only.
             match args.log {
                 Some(ref log_path) => {
@@ -234,15 +182,18 @@ macro_rules! async_daemonize {
                             return Err(e.into())
                         }
                     };
-                    let write_logger = simplelog::WriteLogger::new(log_level, log_config, log_file);
-                    if let Err(e) = simplelog::CombinedLogger::init(vec![term_logger, write_logger])
+
+                    // hold guard until process stops to ensure buffer logs are flushed to file
+                    let (non_blocking, _guard) = tracing_appender::non_blocking(log_file);
+                    if let Err(e) =
+                        darkfi::util::logger::setup_logging(args.verbose, Some(non_blocking))
                     {
                         eprintln!("Unable to init logger with term + logfile combo: {e}");
                         return Err(e.into())
                     }
                 }
                 None => {
-                    if let Err(e) = simplelog::CombinedLogger::init(vec![term_logger]) {
+                    if let Err(e) = darkfi::util::logger::setup_logging(args.verbose, None) {
                         eprintln!("Unable to init term logger: {e}");
                         return Err(e.into())
                     }
