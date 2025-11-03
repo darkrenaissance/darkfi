@@ -25,7 +25,11 @@ use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
     runtime::vm_runtime::Runtime,
     tx::Transaction,
-    util::{pcg::Pcg32, time::Timestamp},
+    util::{
+        logger::{setup_test_logger, Level},
+        pcg::Pcg32,
+        time::Timestamp,
+    },
     validator::{utils::deploy_native_contracts, Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -44,7 +48,7 @@ use darkfi_sdk::{
 use darkfi_serial::Encodable;
 use num_bigint::BigUint;
 use sled_overlay::sled;
-use tracing::debug;
+use tracing::warn;
 
 /// Utility module for caching ZK proof PKs and VKs
 pub mod vks;
@@ -87,23 +91,19 @@ mod dao_exec;
 
 /// Initialize the logging mechanism
 pub fn init_logger() {
-    let mut cfg = simplelog::ConfigBuilder::new();
-    cfg.add_filter_ignore("sled".to_string());
-    //cfg.set_target_level(simplelog::LevelFilter::Error);
-
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
-    if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
+    if setup_test_logger(
+        &["sled"],
+        false,
+        Level::Info,
+        //Level::Verbose,
+        //Level::Debug,
+        //Level::Trace,
     )
     .is_err()
     {
-        debug!(target: "test_harness", "Logger initialized");
+        warn!(target: "test_harness", "Logger already initialized");
     }
 }
 
