@@ -33,6 +33,7 @@ use crate::{
     },
     net::{session::SESSION_DEFAULT, P2p, Settings},
     system::sleep,
+    util::logger::{setup_test_logger, Level},
 };
 
 // Number of nodes to spawn and number of peers each node connects to
@@ -42,31 +43,31 @@ const N_CONNS: usize = 2;
 //const N_CONNS: usize = N_NODES / 3;
 
 fn init_logger() {
-    let mut cfg = simplelog::ConfigBuilder::new();
-    cfg.add_filter_ignore("sled".to_string());
-    cfg.add_filter_ignore("net::protocol_ping".to_string());
-    cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
-    cfg.add_filter_ignore("net::hosts".to_string());
-    cfg.add_filter_ignore("net::session".to_string());
-    cfg.add_filter_ignore("net::message_subscriber".to_string());
-    cfg.add_filter_ignore("net::protocol_address".to_string());
-    cfg.add_filter_ignore("net::protocol_version".to_string());
-    cfg.add_filter_ignore("net::protocol_registry".to_string());
-    cfg.add_filter_ignore("net::channel::send()".to_string());
-    cfg.add_filter_ignore("net::channel::start()".to_string());
-    cfg.add_filter_ignore("net::channel::subscribe_msg()".to_string());
-    cfg.add_filter_ignore("net::channel::main_receive_loop()".to_string());
-    cfg.add_filter_ignore("net::tcp".to_string());
-
+    let ignored_targets = [
+        "sled",
+        "net::protocol_ping",
+        "net::channel::subscribe_stop()",
+        "net::hosts",
+        "net::session",
+        "net::message_subscriber",
+        "net::protocol_address",
+        "net::protocol_version",
+        "net::protocol_registry",
+        "net::channel::send()",
+        "net::channel::start()",
+        "net::channel::subscribe_msg()",
+        "net::channel::main_receive_loop()",
+        "net::tcp",
+    ];
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
-    if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
+    if setup_test_logger(
+        &ignored_targets,
+        false,
+        Level::Info,
+        //Level::Verbose,
+        //Level::Debug,
+        //Level::Tracing,
     )
     .is_err()
     {
