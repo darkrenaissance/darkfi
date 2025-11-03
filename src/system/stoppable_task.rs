@@ -154,23 +154,24 @@ impl Drop for StoppableTask {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::Error, system::sleep_forever};
+    use crate::{
+        error::Error,
+        system::sleep_forever,
+        util::logger::{setup_test_logger, Level},
+    };
     use tracing::warn;
+
     #[test]
     fn stoppit_mom() {
-        let mut cfg = simplelog::ConfigBuilder::new();
-        cfg.add_filter_ignore("async_io".to_string());
-        cfg.add_filter_ignore("polling".to_string());
-
         // We check this error so we can execute same file tests in parallel,
         // otherwise second one fails to init logger here.
-        if simplelog::TermLogger::init(
-            //simplelog::LevelFilter::Info,
-            //simplelog::LevelFilter::Debug,
-            simplelog::LevelFilter::Trace,
-            cfg.build(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
+        if setup_test_logger(
+            &["async_io", "polling"],
+            false,
+            //Level::Info,
+            //Level::Verbose,
+            //Level::Debug
+            Level::Trace,
         )
         .is_err()
         {
