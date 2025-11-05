@@ -163,11 +163,45 @@ pub fn encode(data: &[u8]) -> String {
 /// Tries to decode a base64 string into a byte vector.
 /// Returns `None` if something fails.
 pub fn decode(data: &str) -> Option<Vec<u8>> {
-    if !data.is_ascii() {
+    if !data.is_ascii() || data.is_empty() {
         return None
     }
 
+    let data = match data.len() % 4 {
+        1 => return None, // Invalid input
+        2 => format!("{data}=="),
+        3 => format!("{data}="),
+        _ => data.to_string(), // Full or already padded
+    };
+
     let data = data.as_bytes();
+
+    let mut padding_count = 0;
+    for (i, &byte) in data.iter().enumerate() {
+        let valid = byte.is_ascii_uppercase() ||
+            byte.is_ascii_lowercase() ||
+            byte.is_ascii_digit() ||
+            byte == b'+' ||
+            byte == b'/' ||
+            byte == b'=';
+
+        if !valid {
+            return None
+        }
+
+        if byte == b'=' {
+            padding_count += 1;
+            if i < data.len() - 2 {
+                return None
+            }
+        } else if padding_count > 0 {
+            return None
+        }
+    }
+
+    if padding_count > 2 {
+        return None
+    }
 
     let mut len = data.len();
 
@@ -263,5 +297,23 @@ mod tests {
             let res = decode(answer).unwrap();
             assert_eq!(input, res);
         }
+
+        // Unpadded input checks
+        assert_eq!(b"a".to_vec(), decode("YQ").unwrap());
+        assert_eq!(b"a".to_vec(), decode("YQ=").unwrap());
+        assert_eq!(b"a0".to_vec(), decode("YTA").unwrap());
+        assert_eq!(b"gm world".to_vec(), decode("Z20gd29ybGQ").unwrap());
+
+        // Malformed decode input checks
+        assert!(decode("").is_none());
+        assert!(decode("a").is_none());
+        assert!(decode("a=").is_none());
+        assert!(decode("a==").is_none());
+        assert!(decode("a===").is_none());
+        assert!(decode("=").is_none());
+        assert!(decode("==").is_none());
+        assert!(decode("===").is_none());
+        assert!(decode("====").is_none());
+        assert!(decode("This is a random string.").is_none());
     }
 }
