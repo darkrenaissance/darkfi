@@ -678,27 +678,55 @@ async fn listen_for_line(
             _ = input_future.fuse() => break,
             // Manage filled channel
             _ = channel_future.fuse() => {
-                while !shell_receiver.is_empty() {
-                    match shell_receiver.recv().await {
-                        Ok(msg) => {
-                            // We only print if snooze is inactive,
-                            // but have to consume the message regardless,
-                            // so the queue gets empty.
-                            if *snooze_active {
-                                continue
-                            }
-                            // Hide prompt, print output, show prompt again
-                            let _ = state.hide();
-                            for line in msg {
-                                println!("{}\r", line.replace("\n", "\n\r"));
-                            }
-                            let _ = state.show();
-                        }
-                        Err(e) => {
+                // We only print if snooze is inactive,
+                // but have to consume the message regardless,
+                // so the queue gets empty.
+                if *snooze_active {
+                    while !shell_receiver.is_empty() {
+                        if let Err(e) = shell_receiver.recv().await {
                             eprintln!("Error while reading shell receiver channel: {e}");
                             break
                         }
                     }
+                } else {
+                    // Hide prompt
+                    if let Err(e) = state.hide() {
+                        eprintln!("Error while hiding linenoise state: {e}");
+                        break
+                    };
+
+                    // Restore blocking mode
+                    unsafe {
+                        let flags = fcntl(fd, F_GETFL, 0);
+                        fcntl(fd, F_SETFL, flags & !O_NONBLOCK);
+                    }
+
+                    // Print output
+                    while !shell_receiver.is_empty() {
+                        match shell_receiver.recv().await {
+                            Ok(msg) => {
+                                for line in msg {
+                                    println!("{}\r", line.replace("\n", "\n\r"));
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error while reading shell receiver channel: {e}");
+                                break
+                            }
+                        }
+                    }
+
+                    // Set stdin to non-blocking mode
+                    unsafe {
+                        let flags = fcntl(fd, F_GETFL, 0);
+                        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+                    }
+
+                    // Show prompt again
+                    if let Err(e) = state.show() {
+                        eprintln!("Error while showing linenoise state: {e}");
+                        break
+                    };
                 }
             }
         }
@@ -710,7 +738,9 @@ async fn listen_for_line(
         fcntl(fd, F_SETFL, flags & !O_NONBLOCK);
     }
 
-    let _ = state.edit_stop();
+    if let Err(e) = state.edit_stop() {
+        eprintln!("Error while stopping linenoise state: {e}");
+    };
     line
 }
 
