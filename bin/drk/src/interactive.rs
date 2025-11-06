@@ -557,7 +557,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                 "alias" => handle_alias(drk, &parts, &mut output).await,
                 "token" => handle_token(drk, &parts, &mut output).await,
                 "contract" => handle_contract(drk, &parts, &mut output).await,
-                _ => output.push(format!("Unreconized command: {}", parts[0])),
+                _ => output.push(format!("Unrecognized command: {}", parts[0])),
             }
 
             // Write output to file, if requested
@@ -788,7 +788,7 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str], input: &[String], output: &
         "tree" => handle_wallet_tree(drk, output).await,
         "coins" => handle_wallet_coins(drk, output).await,
         _ => {
-            output.push(format!("Unreconized wallet subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized wallet subcommand: {}", parts[1]));
             output.push(String::from("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)"));
         }
     }
@@ -1224,7 +1224,7 @@ async fn handle_otc(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "inspect" => handle_otc_inspect(drk, parts, input, output).await,
         "sign" => handle_otc_sign(drk, parts, input, output).await,
         _ => {
-            output.push(format!("Unreconized OTC subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized OTC subcommand: {}", parts[1]));
             output.push(String::from("Usage: otc (init|join|inspect|sign)"));
         }
     }
@@ -1397,7 +1397,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "exec" => handle_dao_exec(drk, parts, output).await,
         "spend-hook" => handle_dao_spend_hook(parts, output).await,
         _ => {
-            output.push(format!("Unreconized DAO subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized DAO subcommand: {}", parts[1]));
             output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
         }
     }
@@ -2343,7 +2343,7 @@ async fn handle_subscribe(
     subscription_tasks[1].stop_nowait();
     *subscription_active = true;
 
-    // Start the subcristion task
+    // Start the subscription task
     let drk_ = drk.clone();
     let rpc_task_ = subscription_tasks[1].clone();
     let shell_sender_ = shell_sender.clone();
@@ -2453,7 +2453,7 @@ async fn handle_explorer(drk: &DrkPtr, parts: &[&str], input: &[String], output:
         "clear-reverted" => handle_explorer_clear_reverted(drk, parts, output).await,
         "scanned-blocks" => handle_explorer_scanned_blocks(drk, parts, output).await,
         _ => {
-            output.push(format!("Unreconized explorer subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized explorer subcommand: {}", parts[1]));
             output.push(String::from(
                 "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)",
             ));
@@ -2695,7 +2695,7 @@ async fn handle_alias(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
         "show" => handle_alias_show(drk, parts, output).await,
         "remove" => handle_alias_remove(drk, parts, output).await,
         _ => {
-            output.push(format!("Unreconized alias subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized alias subcommand: {}", parts[1]));
             output.push(String::from("Usage: alias (add|show|remove)"));
         }
     }
@@ -2817,7 +2817,7 @@ async fn handle_token(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
         "mint" => handle_token_mint(drk, parts, output).await,
         "freeze" => handle_token_freeze(drk, parts, output).await,
         _ => {
-            output.push(format!("Unreconized token subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized token subcommand: {}", parts[1]));
             output.push(String::from("Usage: token (import|generate-mint|list|mint|freeze)"));
         }
     }
@@ -3059,7 +3059,7 @@ async fn handle_contract(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
         "deploy" => handle_contract_deploy(drk, parts, output).await,
         "lock" => handle_contract_lock(drk, parts, output).await,
         _ => {
-            output.push(format!("Unreconized contract subcommand: {}", parts[1]));
+            output.push(format!("Unrecognized contract subcommand: {}", parts[1]));
             output.push(String::from(
                 "Usage: contract (generate-deploy|list|export-data|deploy|lock)",
             ));
