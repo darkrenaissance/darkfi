@@ -2868,6 +2868,15 @@ impl Drk {
         let signature_secret = SecretKey::random(&mut OsRng);
         let mut inputs = Vec::with_capacity(gov_owncoins_to_use.len());
         for gov_owncoin in gov_owncoins_to_use {
+            // Skip governance coins that are not part of the snapshot
+            let Ok(merkle_path) = proposal
+                .money_snapshot_tree
+                .as_ref()
+                .unwrap()
+                .witness(gov_owncoin.leaf_position, 0)
+            else {
+                continue
+            };
             let nullifier = poseidon_hash([gov_owncoin.secret.inner(), gov_owncoin.coin.inner()]);
             let vote_nullifier =
                 poseidon_hash([nullifier, gov_owncoin.secret.inner(), proposal_bulla.inner()]);
@@ -2879,15 +2888,16 @@ impl Drk {
                 secret: gov_owncoin.secret,
                 note: gov_owncoin.note.clone(),
                 leaf_position: gov_owncoin.leaf_position,
-                merkle_path: proposal
-                    .money_snapshot_tree
-                    .as_ref()
-                    .unwrap()
-                    .witness(gov_owncoin.leaf_position, 0)
-                    .unwrap(),
+                merkle_path,
                 signature_secret,
             };
             inputs.push(input);
+        }
+        if inputs.is_empty() {
+            return Err(Error::Custom(format!(
+                "[dao_vote] Did not find any governance {} coins in wallet before proposal snapshot",
+                dao.params.dao.gov_token_id
+            )))
         }
 
         // Retrieve next block height and current block time target,
