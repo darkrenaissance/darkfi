@@ -500,7 +500,7 @@ impl DaoParams {
             ## your DAO properly.\n\
             ##\n\
             ## If you want to restrict access to certain actions, the corresponding\n\
-            ## secret key can be ommited. All public keys, along with the DAO configuration\n\
+            ## secret key can be omitted. All public keys, along with the DAO configuration\n\
             ## parameters must be shared.\n\
             ##\n\
             ## If you want to combine access to certain actions, you can use the same\n\
