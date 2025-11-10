@@ -49,9 +49,11 @@ impl Drk {
             let Ok((key, value)) = record else {
                 return Err(WalletDbError::QueryExecutionFailed);
             };
-            let Ok(key) = deserialize(&key) else {
-                return Err(WalletDbError::ParseColumnValueError);
+            let key: [u8; 4] = match key.as_ref().try_into() {
+                Ok(k) => k,
+                Err(_) => return Err(WalletDbError::ParseColumnValueError),
             };
+            let key = u32::from_be_bytes(key);
             let Ok(value) = deserialize(&value) else {
                 return Err(WalletDbError::ParseColumnValueError);
             };
