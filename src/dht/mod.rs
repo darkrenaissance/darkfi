@@ -36,12 +36,13 @@ use tracing::{debug, info, warn};
 use url::Url;
 
 use crate::{
+    dht::event::DhtEvent,
     net::{
         connector::Connector,
         session::{Session, SESSION_REFINE, SESSION_SEED},
         ChannelPtr, Message, P2pPtr,
     },
-    system::{timeout::timeout, ExecutorPtr, PublisherPtr},
+    system::{msleep, ExecutorPtr, Publisher, PublisherPtr, Subscription},
     Error, Result,
 };
 
@@ -52,6 +53,8 @@ pub mod handler;
 pub use handler::DhtHandler;
 
 pub mod tasks;
+
+pub mod event;
 
 pub trait DhtNode: Debug + Clone + Send + Sync + PartialEq + Eq + Hash {
     fn id(&self) -> blake3::Hash;
@@ -128,6 +131,8 @@ pub struct Dht<H: DhtHandler> {
     pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem<H::Node>>>>,
     /// DHT settings
     pub settings: DhtSettings,
+    /// DHT event publisher
+    pub event_publisher: PublisherPtr<DhtEvent<H::Node, H::Value>>,
     /// P2P network pointer
     pub p2p: P2pPtr,
     /// Global multithreaded executor reference
@@ -150,6 +155,8 @@ impl<H: DhtHandler> Dht<H> {
             bootstrapped: Arc::new(RwLock::new(false)),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
 
+            event_publisher: Publisher::new(),
+
             settings: settings.clone(),
 
             p2p: p2p.clone(),
@@ -169,6 +176,10 @@ impl<H: DhtHandler> Dht<H> {
     pub async fn set_bootstrapped(&self, value: bool) {
         let mut bootstrapped = self.bootstrapped.write().await;
         *bootstrapped = value;
+    }
+
+    pub async fn subscribe(&self) -> Subscription<DhtEvent<H::Node, H::Value>> {
+        self.event_publisher.clone().subscribe().await
     }
 
     /// Get the distance between `key_1` and `key_2`
@@ -274,12 +285,11 @@ impl<H: DhtHandler> Dht<H> {
         }
 
         self.handler().await.add_value(key, value).await;
-        let nodes = self.lookup_nodes(key).await?;
-        info!(target: "dht::announce()", "Announcing {} to {} nodes", H::key_to_string(key), nodes.len());
+        let nodes = self.lookup_nodes(key).await;
+        info!(target: "dht::announce()", "[DHT] Announcing {} to {} nodes", H::key_to_string(key), nodes.len());
 
         for node in nodes {
-            let channel_res = self.get_channel(&node, None).await;
-            if let Ok(channel) = channel_res {
+            if let Ok((channel, _)) = self.get_channel(&node).await {
                 let _ = channel.send(message).await;
                 self.cleanup_channel(channel).await;
             }
@@ -288,16 +298,20 @@ impl<H: DhtHandler> Dht<H> {
         Ok(())
     }
 
-    /// Lookup our own node id to bootstrap our DHT
+    /// Lookup our own node id
     pub async fn bootstrap(&self) {
         self.set_bootstrapped(true).await;
 
+        info!(target: "dht::bootstrap()", "[DHT] Bootstrapping");
+        self.event_publisher.notify(DhtEvent::BootstrapStarted).await;
+
         let self_node_id = self.handler().await.node().await.id();
-        debug!(target: "dht::bootstrap()", "DHT bootstrapping {}", H::key_to_string(&self_node_id));
         let nodes = self.lookup_nodes(&self_node_id).await;
 
-        if nodes.is_err() || nodes.map_or(true, |v| v.is_empty()) {
+        if nodes.is_empty() {
             self.set_bootstrapped(false).await;
+        } else {
+            self.event_publisher.notify(DhtEvent::BootstrapCompleted).await;
         }
     }
 
