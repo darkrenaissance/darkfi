@@ -63,6 +63,7 @@ impl RequestHandler<()> for JsonRpcInterface {
             "list_buckets" => self.list_buckets(req.id, req.params).await,
             "list_seeders" => self.list_seeders(req.id, req.params).await,
             "verify" => self.verify(req.id, req.params).await,
+            "lookup" => self.lookup(req.id, req.params).await,
 
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
@@ -367,6 +368,27 @@ impl JsonRpcInterface {
             error!(target: "fud::verify()", "Could not verify resources: {e}");
             return JsonError::new(ErrorCode::InternalError, None, id).into();
         }
+
+        JsonResponse::new(JsonValue::Array(vec![]), id).into()
+    }
+
+    // RPCAPI:
+    // Lookup a resource's seeders.
+    //
+    // --> {"jsonrpc": "2.0", "method": "lookup", "params": ["1211...abfd"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:13337"]]]}}, "id": 1}
+    pub async fn lookup(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+        let mut hash_buf = [0u8; 32];
+        match bs58::decode(params[0].get::<String>().unwrap().as_str()).onto(&mut hash_buf) {
+            Ok(_) => {}
+            Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
+        }
+
+        let _ = self.fud.lookup_tx.send(blake3::Hash::from_bytes(hash_buf)).await;
 
         JsonResponse::new(JsonValue::Array(vec![]), id).into()
     }
