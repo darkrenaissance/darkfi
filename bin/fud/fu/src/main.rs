@@ -855,7 +855,9 @@ impl Fu {
                         continue;
                     }
 
-                    if params.get("event").unwrap().get::<String>().unwrap().as_str() == "seeders_found" {
+                    if params.get("event").unwrap().get::<String>().unwrap().as_str() ==
+                        "seeders_found"
+                    {
                         print_seeders(info);
                         break
                     }
