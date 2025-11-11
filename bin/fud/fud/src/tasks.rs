@@ -225,6 +225,10 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
         sleep(interval).await;
 
         let mut pow = fud.pow.write().await;
+        if !pow.settings.read().await.btc_enabled {
+            continue
+        }
+
         let btc = &mut pow.bitcoin_hash_cache;
 
         if btc.update().await.is_err() {

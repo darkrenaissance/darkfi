@@ -17,6 +17,9 @@ base_dir = "~/.local/share/darkfi/fud"
 ## Equi-X effort value
 #equix_value = 10000
 
+## Toggle BTC block hash in PoW challenge (useful for localnet/debug)
+#btc_enabled = true
+
 ## Number of latest BTC block hashes that are valid for fud's PoW
 #btc_hash_count = 144
 

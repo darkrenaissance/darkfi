@@ -42,6 +42,8 @@ use crate::{
 pub struct PowSettings {
     /// Equi-X effort value
     pub equix_effort: u32,
+    /// Toggle BTC block hash in PoW challenge (useful for localnet/debug)
+    pub btc_enabled: bool,
     /// Number of latest BTC block hashes that are valid for fud's PoW
     pub btc_hash_count: usize,
     /// Electrum nodes timeout in seconds
@@ -54,6 +56,7 @@ impl Default for PowSettings {
     fn default() -> Self {
         Self {
             equix_effort: 10000,
+            btc_enabled: true,
             btc_hash_count: 144,
             btc_timeout: 15,
             btc_electrum_nodes: vec![],
@@ -68,6 +71,10 @@ pub struct PowSettingsOpt {
     /// Equi-X effort value
     #[structopt(long)]
     pub equix_effort: Option<u32>,
+
+    /// Toggle BTC block hash in PoW challenge (useful for localnet/debug)
+    #[structopt(long)]
+    pub btc_enabled: Option<bool>,
 
     /// Number of latest BTC block hashes that are valid for fud's PoW
     #[structopt(long)]
@@ -88,6 +95,7 @@ impl From<PowSettingsOpt> for PowSettings {
 
         Self {
             equix_effort: opt.equix_effort.unwrap_or(def.equix_effort),
+            btc_enabled: opt.btc_enabled.unwrap_or(def.btc_enabled),
             btc_hash_count: opt.btc_hash_count.unwrap_or(def.btc_hash_count),
             btc_timeout: opt.btc_timeout.unwrap_or(def.btc_timeout),
             btc_electrum_nodes: opt.btc_electrum_nodes,
@@ -127,7 +135,9 @@ impl FudPow {
 
         // Get a recent Bitcoin block hash
         let n = 3;
-        let btc_block_hash = {
+        let btc_block_hash = if !self.settings.read().await.btc_enabled {
+            [0; 32]
+        } else {
             let block_hashes = &self.bitcoin_hash_cache.block_hashes;
             if block_hashes.is_empty() {
                 return Err(Error::Custom(
@@ -176,11 +186,14 @@ impl FudPow {
 
     /// Check if the Equi-X solution in a [`VerifiableNodeData`] is valid and has enough effort.
     pub async fn verify_node(&mut self, node_data: &VerifiableNodeData) -> Result<()> {
+        let settings = self.settings.read().await;
         // Update the effort using the value from `self.settings`
-        self.equix_pow.effort = self.settings.read().await.equix_effort;
+        self.equix_pow.effort = settings.equix_effort;
 
         // Verify if the Bitcoin block hash is known
-        if !self.bitcoin_hash_cache.block_hashes.contains(&node_data.btc_block_hash) {
+        if settings.btc_enabled &&
+            !self.bitcoin_hash_cache.block_hashes.contains(&node_data.btc_block_hash)
+        {
             return Err(Error::Custom(
                 "Error verifying node data: the BTC block hash is unknown".into(),
             ))
