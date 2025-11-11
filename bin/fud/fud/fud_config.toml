@@ -15,7 +15,7 @@ base_dir = "~/.local/share/darkfi/fud"
 # PoW settings (to generate a valid node id)
 [pow]
 ## Equi-X effort value
-#equix_value = 10000
+#equix_effort = 10000
 
 ## Toggle BTC block hash in PoW challenge (useful for localnet/debug)
 #btc_enabled = true
