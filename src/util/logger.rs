@@ -433,7 +433,7 @@ pub fn setup_logging(verbosity_level: u8, log_file: Option<NonBlocking>) -> Resu
     let file_layer = log_file.map(|log_file| {
         FmtLayer::new()
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-            .event_format(EventFormatter::new(true, true))
+            .event_format(EventFormatter::new(false, true))
             .fmt_fields(file_field_format)
             .with_writer(log_file)
     });

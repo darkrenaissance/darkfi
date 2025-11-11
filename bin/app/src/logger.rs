@@ -81,7 +81,7 @@ pub fn setup_logging() -> Option<WorkerGuard> {
         ));
 
         let file_layer = tracing_subscriber::fmt::Layer::new()
-            .event_format(EventFormatter::new(true, true))
+            .event_format(EventFormatter::new(false, true))
             .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
                 darkfi::util::logger::file_field_formatter,
             ))
