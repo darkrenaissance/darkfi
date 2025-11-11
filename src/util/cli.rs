@@ -164,10 +164,9 @@ macro_rules! async_daemonize {
                 }
             };
 
-            let mut _file_guard = None;
             // If a log file has been configured, create a terminal and file logger.
             // Otherwise, output to terminal logger only.
-            match args.log {
+            let (non_blocking, file_guard) = match args.log {
                 Some(ref log_path) => {
                     let log_path = match darkfi::util::path::expand_path(log_path) {
                         Ok(v) => v,
@@ -184,22 +183,19 @@ macro_rules! async_daemonize {
                         }
                     };
 
-                    // hold guard until process stops to ensure buffer logs are flushed to file
+                    // Hold guard until process stops to ensure buffer logs are flushed to file
                     let (non_blocking, guard) = tracing_appender::non_blocking(log_file);
-                    _file_guard = Some(guard);
-                    if let Err(e) =
-                        darkfi::util::logger::setup_logging(args.verbose, Some(non_blocking))
-                    {
-                        eprintln!("Unable to init logger with term + logfile combo: {e}");
-                        return Err(e.into())
-                    }
+                    (Some(non_blocking), Some(guard))
                 }
-                None => {
-                    if let Err(e) = darkfi::util::logger::setup_logging(args.verbose, None) {
-                        eprintln!("Unable to init term logger: {e}");
-                        return Err(e.into())
-                    }
+                None => (None, None),
+            };
+            if let Err(e) = darkfi::util::logger::setup_logging(args.verbose, non_blocking) {
+                if args.log.is_some() {
+                    eprintln!("Unable to init logger with term + logfile combo: {e}");
+                } else {
+                    eprintln!("Unable to init term logger: {e}");
                 }
+                return Err(e.into())
             }
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
