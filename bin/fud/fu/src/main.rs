@@ -855,12 +855,9 @@ impl Fu {
                         continue;
                     }
 
-                    match params.get("event").unwrap().get::<String>().unwrap().as_str() {
-                        "seeders_found" => {
-                            print_seeders(info);
-                            break
-                        }
-                        _ => {}
+                    if params.get("event").unwrap().get::<String>().unwrap().as_str() == "seeders_found" {
+                        print_seeders(info);
+                        break
                     }
                 }
 
