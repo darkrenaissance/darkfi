@@ -24,7 +24,7 @@ use darkfi::{
     rpc::util::{json_map, json_str},
 };
 
-use crate::resource::Resource;
+use crate::{dht::FudSeeder, resource::Resource};
 
 #[derive(Clone, Debug)]
 pub struct DownloadStarted {
@@ -86,6 +86,11 @@ pub struct InsertError {
     pub path: PathBuf,
     pub error: String,
 }
+#[derive(Clone, Debug)]
+pub struct SeedersFound {
+    pub hash: blake3::Hash,
+    pub seeders: Vec<FudSeeder>,
+}
 
 #[derive(Clone, Debug)]
 pub enum FudEvent {
@@ -101,6 +106,7 @@ pub enum FudEvent {
     DownloadError(DownloadError),
     InsertCompleted(InsertCompleted),
     InsertError(InsertError),
+    SeedersFound(SeedersFound),
 }
 
 impl From<DownloadStarted> for JsonValue {
@@ -197,6 +203,17 @@ impl From<InsertError> for JsonValue {
         ])
     }
 }
+impl From<SeedersFound> for JsonValue {
+    fn from(info: SeedersFound) -> JsonValue {
+        json_map([
+            ("hash", JsonValue::String(hash_to_string(&info.hash))),
+            (
+                "seeders",
+                JsonValue::Array(info.seeders.iter().map(|seeder| seeder.clone().into()).collect()),
+            ),
+        ])
+    }
+}
 impl From<FudEvent> for JsonValue {
     fn from(event: FudEvent) -> JsonValue {
         match event {
@@ -236,6 +253,9 @@ impl From<FudEvent> for JsonValue {
             }
             FudEvent::InsertError(info) => {
                 json_map([("event", json_str("insert_error")), ("info", info.into())])
+            }
+            FudEvent::SeedersFound(info) => {
+                json_map([("event", json_str("seeders_found")), ("info", info.into())])
             }
         }
     }
