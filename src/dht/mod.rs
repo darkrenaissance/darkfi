@@ -23,26 +23,27 @@ use std::{
     hash::Hash,
     marker::{Send, Sync},
     sync::{Arc, Weak},
-    time::Duration,
 };
 
 use futures::stream::FuturesUnordered;
 use num_bigint::BigUint;
 use smol::{
-    lock::{RwLock, Semaphore},
+    channel,
+    lock::{Mutex, RwLock, Semaphore},
     stream::StreamExt,
 };
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use url::Url;
 
 use crate::{
     dht::event::DhtEvent,
     net::{
         connector::Connector,
-        session::{Session, SESSION_REFINE, SESSION_SEED},
+        session::{SESSION_DIRECT, SESSION_MANUAL},
         ChannelPtr, Message, P2pPtr,
     },
     system::{msleep, ExecutorPtr, Publisher, PublisherPtr, Subscription},
+    util::time::Timestamp,
     Error, Result,
 };
 
@@ -80,9 +81,9 @@ macro_rules! impl_dht_node_defaults {
 }
 pub use impl_dht_node_defaults;
 
-enum DhtLookupType<V> {
-    Nodes(blake3::Hash),
-    Value(blake3::Hash, PublisherPtr<Option<V>>),
+enum DhtLookupType {
+    Nodes,
+    Value,
 }
 
 pub enum DhtLookupReply<N: DhtNode, V> {
@@ -98,22 +99,25 @@ pub struct DhtBucket<N: DhtNode> {
 /// Our local hash table, storing DHT keys and values
 pub type DhtHashTable<V> = Arc<RwLock<HashMap<blake3::Hash, V>>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChannelCacheItem<N: DhtNode> {
     /// The DHT node the channel is connected to.
-    pub node: N,
+    pub node: Option<N>,
+    /// The last time this channel was used by the [`DhtHandler`]. It's used
+    /// to stop inbound connections in [`crate::dht::tasks::disconnect_inbounds_task()`].
+    pub last_used: Timestamp,
+    /// Have we already received a DHT ping from this channel?
+    pub ping_received: bool,
+    /// Have we already sent a DHT ping to this channel?
+    pub ping_sent: bool,
+}
 
-    /// Topic is a hash that you set to remember what the channel is about,
-    /// it's not shared with the peer. If you ask for a channel (with
-    /// `dht.get_channel()`) for a specific topic, it will give you a
-    /// channel that has no topic, has the same topic, or a new
-    /// channel.
-    topic: Option<blake3::Hash>,
-
-    /// Usage count increments when you call `handler.get_channel()` and
-    /// decrements when you call `handler.cleanup_channel()`. A channel's
-    /// topic is cleared on cleanup if its usage count is zero.
-    usage_count: u32,
+#[derive(Clone, Debug)]
+pub struct HostCacheItem {
+    /// The last time we tried to send a DHT ping to this host.
+    pub last_ping: Timestamp,
+    /// The last known node id for this host.
+    pub node_id: blake3::Hash,
 }
 
 pub struct Dht<H: DhtHandler> {
@@ -129,12 +133,20 @@ pub struct Dht<H: DhtHandler> {
     pub n_buckets: usize,
     /// Channel ID -> ChannelCacheItem
     pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem<H::Node>>>>,
+    /// Host address -> ChannelCacheItem
+    pub host_cache: Arc<RwLock<HashMap<Url, HostCacheItem>>>,
+    /// Add node sender
+    pub add_node_tx: channel::Sender<(H::Node, ChannelPtr)>,
+    /// Add node receiver
+    pub add_node_rx: channel::Receiver<(H::Node, ChannelPtr)>,
     /// DHT settings
     pub settings: DhtSettings,
     /// DHT event publisher
     pub event_publisher: PublisherPtr<DhtEvent<H::Node, H::Value>>,
     /// P2P network pointer
     pub p2p: P2pPtr,
+    /// Connector to create manual connections
+    pub connector: Connector,
     /// Global multithreaded executor reference
     pub executor: ExecutorPtr,
 }
@@ -147,6 +159,11 @@ impl<H: DhtHandler> Dht<H> {
             buckets.push(DhtBucket { nodes: vec![] })
         }
 
+        let (add_node_tx, add_node_rx) = smol::channel::unbounded();
+
+        let session_weak = Arc::downgrade(&p2p.session_manual());
+        let connector = Connector::new(p2p.settings(), session_weak);
+
         Self {
             handler: RwLock::new(Weak::new()),
             buckets: Arc::new(RwLock::new(buckets)),
@@ -154,12 +171,16 @@ impl<H: DhtHandler> Dht<H> {
             n_buckets: 256,
             bootstrapped: Arc::new(RwLock::new(false)),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
+            host_cache: Arc::new(RwLock::new(HashMap::new())),
+            add_node_tx,
+            add_node_rx,
 
             event_publisher: Publisher::new(),
 
             settings: settings.clone(),
 
             p2p: p2p.clone(),
+            connector,
             executor: ex,
         }
     }
@@ -208,7 +229,7 @@ impl<H: DhtHandler> Dht<H> {
     /// `key` -> bucket index
     pub async fn get_bucket_index(&self, self_node_id: &blake3::Hash, key: &blake3::Hash) -> usize {
         if key == self_node_id {
-            return 0
+            return 0;
         }
         let distance = self.distance(self_node_id, key);
         let mut leading_zeros = 0;
@@ -252,7 +273,7 @@ impl<H: DhtHandler> Dht<H> {
         let channel_cache_lock = self.channel_cache.clone();
         let channel_cache = channel_cache_lock.read().await;
         if let Some(cached) = channel_cache.get(&channel_id) {
-            return Some(cached.node.clone())
+            return cached.node.clone();
         }
 
         None
@@ -315,135 +336,152 @@ impl<H: DhtHandler> Dht<H> {
         }
     }
 
-    /// Add a node in the correct bucket
-    pub async fn add_node(&self, node: H::Node) {
-        let self_node = self.handler().await.node().await;
+    // TODO: Optimize this
+    async fn on_new_node(&self, node: &H::Node, channel: ChannelPtr) {
+        info!(target: "dht::on_new_node()", "[DHT] Found new node {}", H::key_to_string(&node.id()));
 
-        // Do not add ourselves to the buckets
-        if node.id() == self_node.id() {
-            return;
+        // If this is the first node we know about then bootstrap
+        if !self.is_bootstrapped().await {
+            self.bootstrap().await;
         }
 
-        // Don't add this node if it has any external address that is the same as one of ours
-        let node_addresses = node.addresses();
-        if self_node.addresses().iter().any(|addr| node_addresses.contains(addr)) {
-            return;
-        }
-
-        // Do not add a node to the buckets if it does not have an address
-        if node.addresses().is_empty() {
-            return;
-        }
-
-        let bucket_index =
-            self.get_bucket_index(&self.handler().await.node().await.id(), &node.id()).await;
-        let buckets_lock = self.buckets.clone();
-        let mut buckets = buckets_lock.write().await;
-        let bucket = &mut buckets[bucket_index];
-
-        // Node is already in the bucket
-        if bucket.nodes.iter().any(|n| n.id() == node.id()) {
-            return;
-        }
-
-        // Bucket is full
-        if bucket.nodes.len() >= self.settings.k {
-            // Ping the least recently seen node
-            if let Ok(channel) = self.get_channel(&bucket.nodes[0], None).await {
-                let ping_res = self.handler().await.ping(channel.clone()).await;
-                self.cleanup_channel(channel).await;
-                if ping_res.is_ok() {
-                    // Ping was successful, move the least recently seen node to the tail
-                    let n = bucket.nodes.remove(0);
-                    bucket.nodes.push(n);
-                    return;
-                }
+        // Send keys that are closer to this node than we are
+        let self_id = self.handler().await.node().await.id();
+        for (key, value) in self.hash_table.read().await.iter() {
+            let node_distance = BigUint::from_bytes_be(&self.distance(key, &node.id()));
+            let self_distance = BigUint::from_bytes_be(&self.distance(key, &self_id));
+            if node_distance <= self_distance {
+                let _ = self.handler().await.store(channel.clone(), key, value).await;
             }
-
-            // Ping was not successful, remove the least recently seen node and add the new node
-            bucket.nodes.remove(0);
-            bucket.nodes.push(node);
-            return;
         }
-
-        // Bucket is not full
-        bucket.nodes.push(node);
     }
 
     /// Move a node to the tail in its bucket,
     /// to show that it is the most recently seen in the bucket.
-    /// If the node is not in a bucket it will be added using `add_node`
-    pub async fn update_node(&self, node: &H::Node) {
-        let bucket_index =
-            self.get_bucket_index(&self.handler().await.node().await.id(), &node.id()).await;
-        let buckets_lock = self.buckets.clone();
-        let mut buckets = buckets_lock.write().await;
-        let bucket = &mut buckets[bucket_index];
-
-        let node_index = bucket.nodes.iter().position(|n| n.id() == node.id());
-        if node_index.is_none() {
-            drop(buckets);
-            self.add_node(node.clone()).await;
-            return;
+    /// If the node is not in a bucket it will be added using `add_node`.
+    pub async fn update_node(&self, node: &H::Node, channel: ChannelPtr) {
+        if let Err(e) = self.add_node_tx.send((node.clone(), channel.clone())).await {
+            warn!(target: "dht::update_node()", "[DHT] Cannot add node {}: {e}", H::key_to_string(&node.id()))
         }
-
-        let n = bucket.nodes.remove(node_index.unwrap());
-        bucket.nodes.push(n);
     }
 
-    /// Lookup algorithm for both nodes lookup and value lookup
-    async fn lookup(&self, lookup_type: DhtLookupType<H::Value>) -> Result<Vec<H::Node>> {
-        let (key, value_pub) = match lookup_type {
-            DhtLookupType::Nodes(key) => (key, None),
-            DhtLookupType::Value(key, ref pub_ptr) => (key, Some(pub_ptr)),
-        };
+    /// Remove a node from the buckets.
+    pub async fn remove_node(&self, node_id: &blake3::Hash) {
+        let handler = self.handler().await;
+        let self_node = handler.node().await;
+        let bucket_index = handler.dht().get_bucket_index(&self_node.id(), node_id).await;
+        let buckets_lock = handler.dht().buckets.clone();
+        let mut buckets = buckets_lock.write().await;
+        let bucket = &mut buckets[bucket_index];
+        bucket.nodes.retain(|node| node.id() != *node_id);
+    }
+
+    /// Lookup algorithm for both nodes lookup and value lookup.
+    async fn lookup(
+        &self,
+        key: blake3::Hash,
+        lookup_type: DhtLookupType,
+    ) -> (Vec<H::Node>, Vec<H::Value>) {
+        let net_settings = self.p2p.settings().read_arc().await;
+        let allowed_transports = net_settings.allowed_transports.clone();
+        drop(net_settings);
 
         let (k, a) = (self.settings.k, self.settings.alpha);
         let semaphore = Arc::new(Semaphore::new(self.settings.concurrency));
-
-        let mut unique_nodes = HashSet::new();
+        let queried_addrs = Arc::new(Mutex::new(HashSet::new()));
+        let mut seen_nodes = HashSet::new();
         let mut nodes_to_visit = self.find_neighbors(&key, k).await;
         let mut result = Vec::new();
         let mut futures = FuturesUnordered::new();
+        let mut consecutive_stalls = 0;
+
+        let mut values = Vec::new();
 
         let distance_check = |(furthest, next): (&H::Node, &H::Node)| {
             BigUint::from_bytes_be(&self.distance(&key, &furthest.id())) <
                 BigUint::from_bytes_be(&self.distance(&key, &next.id()))
         };
 
+        // Create a channel if necessary and send a FIND NODES or FIND VALUE
+        // request to `addr`
         let lookup = async |node: H::Node, key| {
             let _permit = semaphore.acquire().await;
-            let n = node.clone();
-            let handler = self.handler().await;
-            match &lookup_type {
-                DhtLookupType::Nodes(_) => {
-                    (n, handler.find_nodes(&node, key).await.map(DhtLookupReply::Nodes))
+
+            // Filter and try all valid addresses for the node
+            let valid_addrs: Vec<Url> = node
+                .addresses()
+                .iter()
+                .filter(|addr| allowed_transports.contains(&addr.scheme().to_string()))
+                .cloned()
+                .collect();
+
+            let mut last_err = None;
+            for addr in valid_addrs {
+                let mut queried_addrs_set = queried_addrs.lock().await;
+                // Skip if this address has already been queried
+                if queried_addrs_set.contains(&addr) {
+                    continue;
                 }
-                DhtLookupType::Value(_, _) => (n, handler.find_value(&node, key).await),
+                queried_addrs_set.insert(addr.clone());
+                drop(queried_addrs_set);
+
+                // Try to create or find an existing channel
+                let channel = self.create_channel(&addr).await.map(|(ch, _)| ch);
+
+                if let Err(e) = channel {
+                    last_err = Some(e);
+                    continue
+                }
+                let channel = channel.unwrap();
+
+                let handler = self.handler().await;
+                let res = match &lookup_type {
+                    DhtLookupType::Nodes => {
+                        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Querying node {} for nodes lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
+                        handler.find_nodes(channel.clone(), key).await.map(DhtLookupReply::Nodes)
+                    }
+                    DhtLookupType::Value => {
+                        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Querying node {} for value lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
+                        handler.find_value(channel.clone(), key).await
+                    }
+                };
+
+                self.cleanup_channel(channel).await;
+                if res.is_ok() {
+                    return (node, res)
+                }
+                last_err = res.err();
             }
+            if let Some(e) = last_err {
+                return (node, Err(e))
+            }
+
+            (node, Err(Error::Custom("All node's addresses failed".to_string())))
         };
 
+        // Spawn up to `alpha` futures for lookup()
         let spawn_futures = async |nodes_to_visit: &mut Vec<H::Node>,
-                                   unique_nodes: &mut HashSet<_>,
                                    futures: &mut FuturesUnordered<_>| {
             for _ in 0..a {
-                if let Some(node) = nodes_to_visit.pop() {
-                    unique_nodes.insert(node.id());
+                if !nodes_to_visit.is_empty() {
+                    let node = nodes_to_visit.remove(0);
                     futures.push(Box::pin(lookup(node, &key)));
                 }
             }
         };
 
-        spawn_futures(&mut nodes_to_visit, &mut unique_nodes, &mut futures).await; // Initial alpha tasks
+        // Initial futures
+        spawn_futures(&mut nodes_to_visit, &mut futures).await;
 
+        // Process lookup responses
         while let Some((queried_node, res)) = futures.next().await {
             if let Err(e) = res {
-                warn!(target: "dht::lookup()", "Error in DHT lookup: {e}");
+                warn!(target: "dht::lookup()", "[DHT] [LOOKUP] Error in lookup: {e}");
 
                 // Spawn next `alpha` futures if there are no more futures but
                 // we still have nodes to visit
                 if futures.is_empty() {
-                    spawn_futures(&mut nodes_to_visit, &mut unique_nodes, &mut futures).await;
+                    spawn_futures(&mut nodes_to_visit, &mut futures).await;
                 }
 
                 continue;
@@ -455,178 +493,213 @@ impl<H: DhtHandler> Dht<H> {
                 DhtLookupReply::NodesAndValue(nodes, value) => (Some(nodes), Some(value)),
             };
 
+            // Send the value we found to the publisher
             if let Some(value) = value {
-                if let Some(publisher) = value_pub {
-                    publisher.notify(Some(value)).await;
-                }
+                info!(target: "dht::lookup()", "[DHT] [LOOKUP] Found value for {} from {}", H::key_to_string(&key), H::key_to_string(&queried_node.id()));
+                values.push(value.clone());
+                self.event_publisher.notify(DhtEvent::ValueFound { key, value }).await;
             }
 
+            // Update nodes_to_visit
             if let Some(mut nodes) = nodes {
-                let self_id = self.handler().await.node().await.id();
-                nodes.retain(|node| node.id() != self_id && unique_nodes.insert(node.id()));
+                if !nodes.is_empty() {
+                    info!(target: "dht::lookup()", "[DHT] [LOOKUP] Found {} nodes from {}", nodes.len(), H::key_to_string(&queried_node.id()));
 
-                nodes_to_visit.extend(nodes.clone());
-                self.sort_by_distance(&mut nodes_to_visit, &key);
+                    self.event_publisher
+                        .notify(DhtEvent::NodesFound { key, nodes: nodes.clone() })
+                        .await;
+
+                    // Remove our own node and duplicates
+                    let self_id = self.handler().await.node().await.id();
+                    nodes.retain(|node: &H::Node| {
+                        node.id() != self_id && seen_nodes.insert(node.id())
+                    });
+
+                    // Add new nodes to the list of nodes to visit
+                    nodes_to_visit.extend(nodes.clone());
+                    self.sort_by_distance(&mut nodes_to_visit, &key);
+                }
             }
 
             result.push(queried_node);
             self.sort_by_distance(&mut result, &key);
 
-            // Early termination logic
+            // Early termination logic:
+            // The closest node to visit must be further than the furthest
+            // queried node, 3 consecutive times
             if result.len() >= k &&
                 result.last().zip(nodes_to_visit.first()).is_some_and(distance_check)
             {
-                break;
+                consecutive_stalls += 1;
+                if consecutive_stalls >= 3 {
+                    break;
+                }
+            } else {
+                consecutive_stalls = 0;
             }
 
             // Spawn next `alpha` futures
-            spawn_futures(&mut nodes_to_visit, &mut unique_nodes, &mut futures).await;
+            spawn_futures(&mut nodes_to_visit, &mut futures).await;
         }
 
-        if let Some(publisher) = value_pub {
-            publisher.notify(None).await;
-        }
+        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Lookup for {} completed", H::key_to_string(&key));
 
-        Ok(result.into_iter().take(k).collect())
+        let nodes: Vec<_> = result.into_iter().take(k).collect();
+        (nodes, values)
     }
 
     /// Find `k` nodes closest to a key
-    pub async fn lookup_nodes(&self, key: &blake3::Hash) -> Result<Vec<H::Node>> {
-        info!(target: "dht::lookup_nodes()", "Starting node lookup for key {}", H::key_to_string(key));
-        self.lookup(DhtLookupType::Nodes(*key)).await
+    pub async fn lookup_nodes(&self, key: &blake3::Hash) -> Vec<H::Node> {
+        info!(target: "dht::lookup_nodes()", "[DHT] [LOOKUP] Starting node lookup for key {}", H::key_to_string(key));
+
+        self.event_publisher.notify(DhtEvent::NodesLookupStarted { key: *key }).await;
+
+        let (nodes, _) = self.lookup(*key, DhtLookupType::Nodes).await;
+
+        self.event_publisher
+            .notify(DhtEvent::NodesLookupCompleted { key: *key, nodes: nodes.clone() })
+            .await;
+
+        nodes
     }
 
     /// Find value for `key`
-    pub async fn lookup_value(
-        &self,
-        key: &blake3::Hash,
-        value_pub: PublisherPtr<Option<H::Value>>,
-    ) -> Result<Vec<H::Node>> {
-        info!(target: "dht::lookup_value()", "Starting value lookup for key {}", H::key_to_string(key));
-        self.lookup(DhtLookupType::Value(*key, value_pub)).await
+    pub async fn lookup_value(&self, key: &blake3::Hash) -> (Vec<H::Node>, Vec<H::Value>) {
+        info!(target: "dht::lookup_value()", "[DHT] [LOOKUP] Starting value lookup for key {}", H::key_to_string(key));
+
+        self.event_publisher.notify(DhtEvent::ValueLookupStarted { key: *key }).await;
+
+        let (nodes, values) = self.lookup(*key, DhtLookupType::Value).await;
+
+        self.event_publisher
+            .notify(DhtEvent::ValueLookupCompleted {
+                key: *key,
+                nodes: nodes.clone(),
+                values: values.clone(),
+            })
+            .await;
+
+        (nodes, values)
     }
 
-    /// Get a channel (existing or create a new one) to `node` about `topic`.
-    /// Don't forget to call `cleanup_channel()` once you are done with it.
-    pub async fn get_channel(
-        &self,
-        node: &H::Node,
-        topic: Option<blake3::Hash>,
-    ) -> Result<ChannelPtr> {
+    /// Update a channel's `last_used` field in the channel cache.
+    pub async fn update_channel(&self, channel_id: u32) {
         let channel_cache_lock = self.channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
 
-        // Get existing channels for this node, regardless of topic
-        let channels: HashMap<u32, ChannelCacheItem<H::Node>> = channel_cache
+        if let Some(cached) = channel_cache.get_mut(&channel_id) {
+            cached.last_used = Timestamp::current_time();
+        }
+    }
+
+    /// Get a channel (existing or create a new one) to `node`.
+    /// Don't forget to call `cleanup_channel()` once you are done with it.
+    pub async fn get_channel(&self, node: &H::Node) -> Result<(ChannelPtr, H::Node)> {
+        let node_id = node.id();
+
+        // Look in the channel cache for a channel connected to this node.
+        // We skip direct session channels, for those we will call
+        // `create_channel()` which increments the sessions's usage counter.
+        let channel_cache = self.channel_cache.read().await.clone();
+        if let Some((channel_id, cached)) = channel_cache
+            .clone()
             .iter()
-            .filter(|&(_, item)| item.node == *node)
-            .map(|(&key, item)| (key, item.clone()))
-            .collect();
-
-        let (channel_id, topic, usage_count) =
-            // If we already have a channel for this node and topic, use it
-            if let Some((cid, cached)) = channels.iter().find(|&(_, c)| c.topic == topic) {
-                (Some(*cid), cached.topic, cached.usage_count)
-            }
-            // If we have a topicless channel for this node, use it
-            else if let Some((cid, cached)) = channels.iter().find(|&(_, c)| c.topic.is_none()) {
-                (Some(*cid), topic, cached.usage_count)
-            }
-            // If we don't need any specific topic, use the first channel we have
-            else if topic.is_none() {
-                match channels.iter().next() {
-                    Some((cid, cached)) => (Some(*cid), cached.topic, cached.usage_count),
-                    _ => (None, topic, 0),
+            .find(|(_, cached)| cached.node.clone().is_some_and(|n| n.id() == node_id))
+        {
+            if let Some(channel) = self.p2p.get_channel(*channel_id) {
+                if channel.session_type_id() & SESSION_DIRECT == 0 {
+                    if channel.is_stopped() {
+                        self.cleanup_channel(channel).await;
+                    } else {
+                        return Ok((channel, cached.node.clone().unwrap()))
+                    }
                 }
-            }
-            // There is no existing channel we can use, we will create one
-            else {
-                (None, topic, 0)
-            };
-
-        // If we found an existing channel we can use, try to use it
-        if let Some(channel_id) = channel_id {
-            if let Some(channel) = self.p2p.get_channel(channel_id) {
-                if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
-                    return Err(Error::Custom(
-                        "Could not get a channel (for DHT) as this is a seed or refine session"
-                            .to_string(),
-                    ));
-                }
-
-                if channel.is_stopped() {
-                    channel.clone().start(self.executor.clone());
-                }
-
-                channel_cache.insert(
-                    channel_id,
-                    ChannelCacheItem { node: node.clone(), topic, usage_count: usage_count + 1 },
-                );
-                return Ok(channel);
             }
         }
 
+        self.create_channel_to_node(node).await
+    }
+
+    /// Create a channel in the direct session, ping the peer, add the
+    /// DHT node to our buckets and the channel to our channel cache.
+    pub async fn create_channel(&self, addr: &Url) -> Result<(ChannelPtr, H::Node)> {
+        let channel = self.p2p.session_direct().get_channel(addr).await?;
+        let channel_cache = self.channel_cache.read().await;
+        if let Some(cached) = channel_cache.get(&channel.info.id) {
+            if let Some(node) = &cached.node {
+                return Ok((channel, node.clone()))
+            }
+        }
         drop(channel_cache);
 
+        let node = self.handler().await.ping(channel.clone()).await;
+        // If ping failed, cleanup the channel and abort
+        if let Err(e) = node {
+            self.cleanup_channel(channel).await;
+            return Err(e);
+        }
+        let node = node.unwrap();
+        self.add_channel_to_cache(channel.info.id, &node).await;
+        Ok((channel, node))
+    }
+
+    pub async fn create_channel_to_node(&self, node: &H::Node) -> Result<(ChannelPtr, H::Node)> {
+        let net_settings = self.p2p.settings().read_arc().await;
+        let allowed_transports = net_settings.allowed_transports.clone();
+        drop(net_settings);
+
         // Create a channel
-        for addr in node.addresses().clone() {
-            let session_out = self.p2p.session_outbound();
-            let session_weak = Arc::downgrade(&self.p2p.session_outbound());
+        let mut addrs = node.addresses().clone();
+        addrs.retain(|addr| allowed_transports.contains(&addr.scheme().to_string()));
+        for addr in addrs {
+            let res = self.create_channel(&addr).await;
 
-            let connector = Connector::new(self.p2p.settings(), session_weak);
-            let dur = Duration::from_secs(self.settings.timeout);
-            let Ok(connect_res) = timeout(dur, connector.connect(&addr)).await else {
-                warn!(target: "dht::get_channel()", "Timeout trying to connect to {addr}");
-                return Err(Error::ConnectTimeout);
-            };
-            if connect_res.is_err() {
-                warn!(target: "dht::get_channel()", "Error while connecting: {}", connect_res.unwrap_err());
-                continue;
-            }
-            let (_, channel) = connect_res.unwrap();
-
-            if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
-                return Err(Error::Custom(
-                    "Could not create a channel (for DHT) as this is a seed or refine session"
-                        .to_string(),
-                ));
-            }
-
-            let register_res =
-                session_out.register_channel(channel.clone(), self.executor.clone()).await;
-            if register_res.is_err() {
-                channel.clone().stop().await;
-                warn!(target: "dht::get_channel()", "Error while registering channel {}: {}", channel.info.id, register_res.unwrap_err());
+            if res.is_err() {
                 continue;
             }
 
-            let mut channel_cache = channel_cache_lock.write().await;
-            channel_cache.insert(
-                channel.info.id,
-                ChannelCacheItem { node: node.clone(), topic, usage_count: 1 },
-            );
-
-            return Ok(channel)
+            let (channel, node) = res.unwrap();
+            return Ok((channel, node));
         }
 
         Err(Error::Custom("Could not create channel".to_string()))
     }
 
-    /// Decrement the channel usage count, if it becomes 0 then set the topic
-    /// to None, so that this channel is available for another task
+    /// Insert a channel to the DHT's channel cache. If the channel is already
+    /// in the cache, `last_used` is updated.
+    pub async fn add_channel_to_cache(&self, channel_id: u32, node: &H::Node) {
+        let mut channel_cache = self.channel_cache.write().await;
+        channel_cache
+            .entry(channel_id)
+            .and_modify(|c| c.last_used = Timestamp::current_time())
+            .or_insert(ChannelCacheItem {
+                node: Some(node.clone()),
+                last_used: Timestamp::current_time(),
+                ping_received: false,
+                ping_sent: false,
+            });
+    }
+
+    pub async fn wait_fully_pinged(&self, channel_id: u32) -> Result<()> {
+        loop {
+            let channel_cache = self.channel_cache.read().await;
+            let cached = channel_cache
+                .get(&channel_id)
+                .ok_or(Error::Custom("Missing channel".to_string()))?;
+            if cached.ping_received && cached.ping_sent {
+                return Ok(())
+            }
+            drop(channel_cache);
+            msleep(100).await; // Wait for completion
+        }
+    }
+
+    /// Call [`crate::net::session::DirectSession::cleanup_channel()`] and cleanup the DHT caches.
     pub async fn cleanup_channel(&self, channel: ChannelPtr) {
         let channel_cache_lock = self.channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
-
-        if let Some(cached) = channel_cache.get_mut(&channel.info.id) {
-            if cached.usage_count > 0 {
-                cached.usage_count -= 1;
-            }
-
-            // If the channel is not used by anything, remove the topic
-            if cached.usage_count == 0 {
-                cached.topic = None;
-            }
+        if self.p2p.session_direct().cleanup_channel(channel.clone()).await {
+            channel_cache.remove(&channel.info.id);
         }
     }
 }

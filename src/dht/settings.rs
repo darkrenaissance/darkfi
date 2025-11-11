@@ -28,11 +28,13 @@ pub struct DhtSettings {
     pub concurrency: usize,
     /// Timeout in seconds
     pub timeout: u64,
+    /// Timeout in seconds for inbound connections
+    pub inbound_timeout: u64,
 }
 
 impl Default for DhtSettings {
     fn default() -> Self {
-        Self { k: 16, alpha: 4, concurrency: 10, timeout: 5 }
+        Self { k: 16, alpha: 4, concurrency: 10, timeout: 5, inbound_timeout: 30 }
     }
 }
 
@@ -55,6 +57,10 @@ pub struct DhtSettingsOpt {
     /// Timeout in seconds
     #[structopt(long)]
     pub dht_timeout: Option<u64>,
+
+    /// Timeout in seconds for inbound connections
+    #[structopt(long)]
+    pub dht_inbound_timeout: Option<u64>,
 }
 
 impl From<DhtSettingsOpt> for DhtSettings {
@@ -66,6 +72,7 @@ impl From<DhtSettingsOpt> for DhtSettings {
             alpha: opt.dht_alpha.unwrap_or(def.alpha),
             concurrency: opt.dht_concurrency.unwrap_or(def.concurrency),
             timeout: opt.dht_timeout.unwrap_or(def.timeout),
+            inbound_timeout: opt.dht_inbound_timeout.unwrap_or(def.inbound_timeout),
         }
     }
 }

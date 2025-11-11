@@ -21,13 +21,36 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use darkfi::{
-    dht::{DhtHandler, DhtNode},
+    dht::{event::DhtEvent, DhtHandler, DhtNode},
     geode::hash_to_string,
     system::{sleep, StoppableTask},
     Error, Result,
 };
 
 use crate::{event, event::notify_event, proto::FudAnnounce, Fud, FudEvent};
+
+/// Handle DHT events in fud.
+pub async fn handle_dht_events(fud: Arc<Fud>) -> Result<()> {
+    let sub = fud.dht().subscribe().await;
+    loop {
+        let event = sub.receive().await;
+
+        match event {
+            DhtEvent::ValueLookupCompleted { key, values, .. } => {
+                let mut seeders: Vec<_> = values.into_iter().flatten().collect();
+                seeders.dedup_by_key(|seeder| seeder.node.id());
+                notify_event!(fud, SeedersFound, {
+                    hash: key,
+                    seeders
+                });
+            }
+            DhtEvent::BootstrapCompleted => {
+                let _ = fud.init().await;
+            }
+            _ => {}
+        }
+    }
+}
 
 /// Triggered when calling the `fud.get()` method.
 /// It creates a new StoppableTask (running `fud.fetch_resource()`) and inserts
@@ -123,7 +146,7 @@ pub async fn put_task(fud: Arc<Fud>) -> Result<()> {
 /// Triggered when you need to lookup seeders for a resource.
 pub async fn lookup_task(fud: Arc<Fud>) -> Result<()> {
     loop {
-        let (key, seeders_pub) = fud.lookup_rx.recv().await.unwrap();
+        let key = fud.lookup_rx.recv().await.unwrap();
 
         let mut lookup_tasks = fud.lookup_tasks.write().await;
         let task = StoppableTask::new();
@@ -134,7 +157,7 @@ pub async fn lookup_task(fud: Arc<Fud>) -> Result<()> {
         let fud_2 = fud.clone();
         task.start(
             async move {
-                fud_1.dht.lookup_value(&key, seeders_pub).await?;
+                fud_1.dht.lookup_value(&key).await;
                 Ok(())
             },
             move |res| async move {

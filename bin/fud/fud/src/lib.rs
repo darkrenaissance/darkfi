@@ -21,25 +21,32 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
+use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
 use smol::{
     channel,
     fs::{self, OpenOptions},
-    lock::RwLock,
+    lock::{Mutex, RwLock},
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use darkfi::{
-    dht::{tasks as dht_tasks, Dht, DhtHandler, DhtSettings},
+    dht::{
+        event::DhtEvent, tasks as dht_tasks, Dht, DhtHandler, DhtNode, DhtSettings, HostCacheItem,
+    },
     geode::{hash_to_string, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
-    net::P2pPtr,
-    system::{ExecutorPtr, Publisher, PublisherPtr, StoppableTask},
+    net::{
+        session::{SESSION_DIRECT, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND},
+        ChannelPtr, P2pPtr,
+    },
+    system::{timeout::timeout, ExecutorPtr, PublisherPtr, StoppableTask},
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
-use darkfi_sdk::crypto::SecretKey;
+use darkfi_sdk::crypto::{schnorr::SchnorrPublic, SecretKey};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 /// P2P protocols
@@ -91,9 +98,17 @@ use download::{fetch_chunks, fetch_metadata};
 pub mod dht;
 use dht::FudSeeder;
 
+use crate::{
+    dht::FudNode,
+    pow::PowSettings,
+    proto::{FudPingReply, FudPingRequest},
+};
+
 const SLED_PATH_TREE: &[u8] = b"_fud_paths";
 const SLED_FILE_SELECTION_TREE: &[u8] = b"_fud_file_selections";
 const SLED_SCRAP_TREE: &[u8] = b"_fud_scraps";
+
+type PingLock = Arc<Mutex<Option<Result<FudNode>>>>;
 
 pub struct Fud {
     /// Our own [`VerifiableNodeData`]
@@ -125,6 +140,8 @@ pub struct Fud {
     /// is not saved to the filesystem in the downloaded files.
     /// "chunk/scrap hash -> chunk content"
     scrap_tree: sled::Tree,
+    /// Locks that prevent pinging the same channel multiple times at once.
+    ping_locks: Arc<Mutex<HashMap<u32, PingLock>>>,
     /// Get requests sender
     get_tx: channel::Sender<(blake3::Hash, PathBuf, FileSelection)>,
     /// Get requests receiver
@@ -134,9 +151,9 @@ pub struct Fud {
     /// Put requests receiver
     put_rx: channel::Receiver<PathBuf>,
     /// Lookup requests sender
-    lookup_tx: channel::Sender<(blake3::Hash, PublisherPtr<Option<Vec<FudSeeder>>>)>,
+    lookup_tx: channel::Sender<blake3::Hash>,
     /// Lookup requests receiver
-    lookup_rx: channel::Receiver<(blake3::Hash, PublisherPtr<Option<Vec<FudSeeder>>>)>,
+    lookup_rx: channel::Receiver<blake3::Hash>,
     /// Currently active downloading tasks (running the `fud.fetch_resource()` method)
     fetch_tasks: Arc<RwLock<HashMap<blake3::Hash, Arc<StoppableTask>>>>,
     /// Currently active put tasks (running the `fud.insert_resource()` method)
@@ -161,6 +178,16 @@ impl Fud {
         event_publisher: PublisherPtr<FudEvent>,
         executor: ExecutorPtr,
     ) -> Result<Arc<Self>> {
+        let dht_settings: DhtSettings = settings.dht.into();
+        let net_settings_lock = p2p.settings();
+        let mut net_settings = net_settings_lock.write().await;
+        // We do not need any outbound slot
+        net_settings.outbound_connections = 0;
+        // Default GetAddrsMessage's `max` is dht's `k`
+        net_settings.getaddrs_max =
+            Some(net_settings.getaddrs_max.unwrap_or(dht_settings.k.min(u32::MAX as usize) as u32));
+        drop(net_settings);
+
         let basedir = expand_path(&settings.base_dir)?;
         let downloads_path = match settings.downloads_path {
             Some(downloads_path) => expand_path(&downloads_path)?,
@@ -168,8 +195,11 @@ impl Fud {
         };
 
         // Run the PoW and generate a `VerifiableNodeData`
-        let mut pow = FudPow::new(settings.pow.into(), executor.clone());
-        pow.bitcoin_hash_cache.update().await?; // Fetch BTC block hashes
+        let pow_settings: PowSettings = settings.pow.into();
+        let mut pow = FudPow::new(pow_settings.clone(), executor.clone());
+        if pow_settings.btc_enabled {
+            pow.bitcoin_hash_cache.update().await?; // Fetch BTC block hashes
+        }
         let (node_data, secret_key) = pow.generate_node().await?;
         info!(target: "fud::new()", "Your node ID: {}", hash_to_string(&node_data.id()));
 
@@ -178,7 +208,6 @@ impl Fud {
         let geode = Geode::new(&basedir).await?;
 
         // DHT
-        let dht_settings: DhtSettings = settings.dht.into();
         let dht: Arc<Dht<Fud>> =
             Arc::new(Dht::<Fud>::new(&dht_settings, p2p.clone(), executor.clone()).await);
 
@@ -197,6 +226,7 @@ impl Fud {
             file_selection_tree: sled_db.open_tree(SLED_FILE_SELECTION_TREE)?,
             scrap_tree: sled_db.open_tree(SLED_SCRAP_TREE)?,
             resources: Arc::new(RwLock::new(HashMap::new())),
+            ping_locks: Arc::new(Mutex::new(HashMap::new())),
             get_tx,
             get_rx,
             put_tx,
@@ -220,19 +250,26 @@ impl Fud {
         let mut tasks = self.tasks.write().await;
         start_task!(self, "get", tasks::get_task, tasks);
         start_task!(self, "put", tasks::put_task, tasks);
+        start_task!(self, "events", tasks::handle_dht_events, tasks);
+        start_task!(self, "DHT events", dht_tasks::events_task::<Fud>, tasks);
         start_task!(self, "DHT channel", dht_tasks::channel_task::<Fud>, tasks);
+        start_task!(self, "DHT cleanup channels", dht_tasks::cleanup_channels_task::<Fud>, tasks);
+        start_task!(self, "DHT add node", dht_tasks::add_node_task::<Fud>, tasks);
+        start_task!(self, "DHT refinery", dht_tasks::dht_refinery_task::<Fud>, tasks);
+        start_task!(
+            self,
+            "DHT disconnect inbounds",
+            dht_tasks::disconnect_inbounds_task::<Fud>,
+            tasks
+        );
         start_task!(self, "lookup", tasks::lookup_task, tasks);
         start_task!(self, "announce", tasks::announce_seed_task, tasks);
         start_task!(self, "node ID", tasks::node_id_task, tasks);
     }
 
-    /// Bootstrap the DHT, verify our resources, add ourselves to
-    /// the seeders (`dht.hash_table`) for the resources we already have,
-    /// announce our files.
+    /// Verify our resources, add ourselves to the seeders (`dht.hash_table`)
+    /// for the resources we already have, announce our resources.
     async fn init(&self) -> Result<()> {
-        info!(target: "fud::init()", "Bootstrapping the DHT...");
-        self.dht.bootstrap().await;
-
         info!(target: "fud::init()", "Finding resources...");
         let mut resources_write = self.resources.write().await;
         for result in self.path_tree.iter() {
@@ -362,6 +399,110 @@ impl Fud {
             node: self.node().await,
             timestamp: Timestamp::current_time().inner(),
         }
+    }
+
+    async fn do_ping(&self, channel: ChannelPtr) -> Result<FudNode> {
+        debug!(target: "fud::DhtHandler::do_ping()", "Sending ping to {}", channel.display_address());
+
+        let dht = self.dht();
+
+        // Setup `FudPingReply` subscriber
+        let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
+
+        // Send `FudPingRequest`
+        let mut rng = OsRng;
+        let request = FudPingRequest { random: rng.gen() };
+        if channel.is_stopped() {
+            return Err(Error::ChannelStopped)
+        }
+        channel.send(&request).await?;
+
+        // Wait for `FudPingReply`
+        let reply = msg_subscriber.receive_with_timeout(dht.settings.timeout).await;
+        msg_subscriber.unsubscribe().await;
+        let reply = reply?;
+        let node = &reply.node;
+
+        // Verify the signature
+        if !node.data.public_key.verify(&request.random.to_be_bytes(), &reply.sig) {
+            warn!(target: "fud::do_ping()", "Received an invalid signature while pinging {}", channel.display_address());
+            self.dht
+                .event_publisher
+                .notify(DhtEvent::PingReceived {
+                    from: channel.clone(),
+                    result: Err(Error::InvalidSignature),
+                })
+                .await;
+            self.dht.cleanup_channel(channel.clone()).await;
+            channel.ban().await;
+            return Err(Error::InvalidSignature)
+        }
+
+        // Verify PoW
+        if let Err(e) = self.pow.write().await.verify_node(&node.data).await {
+            warn!(target: "fud::do_ping()", "Received an invalid PoW while pinging {}: {e}", channel.display_address());
+            self.dht
+                .event_publisher
+                .notify(DhtEvent::PingReceived { from: channel.clone(), result: Err(e.clone()) })
+                .await;
+            self.dht.cleanup_channel(channel.clone()).await;
+            channel.ban().await;
+            return Err(e)
+        }
+        self.dht
+            .event_publisher
+            .notify(DhtEvent::PingReceived { from: channel.clone(), result: Ok(node.id()) })
+            .await;
+
+        if channel.session_type_id() & (SESSION_OUTBOUND | SESSION_DIRECT | SESSION_MANUAL) != 0 {
+            // Wait for the other node to ping us
+            let ping_timeout = Duration::from_secs(10);
+
+            if let Err(e) = timeout(ping_timeout, dht.wait_fully_pinged(channel.info.id)).await {
+                dht.cleanup_channel(channel).await;
+                return Err(e.into())
+            }
+
+            let mut host_cache = dht.host_cache.write().await;
+
+            // If we had another node id for this host in our cache, remove
+            // the old one from the buckets and seeders
+            if let Some(cached) = host_cache.get(channel.address()) {
+                if cached.node_id != node.id() {
+                    dht.remove_node(&cached.node_id).await;
+
+                    for (_, seeders) in dht.hash_table.write().await.iter_mut() {
+                        seeders.retain(|seeder| seeder.node.id() != cached.node_id);
+                    }
+                }
+            }
+
+            // Update host cache
+            host_cache.insert(
+                channel.address().clone(),
+                HostCacheItem { last_ping: Timestamp::current_time(), node_id: node.id() },
+            );
+
+            drop(host_cache);
+
+            // Update our buckets
+            if !node.addresses().is_empty() {
+                dht.update_node(&node.clone(), channel.clone()).await;
+            }
+        } else if channel.session_type_id() & SESSION_INBOUND != 0 {
+            // If it's an inbound connection, verify that we can connect to at
+            // least one of the provided external addresses.
+            // This may try to create a new outbound channel and it will update
+            // our buckets if successful.
+            if let Ok((channel, _)) = dht.create_channel_to_node(node).await {
+                dht.cleanup_channel(channel).await;
+            }
+        }
+
+        // Update the channel cache
+        dht.add_channel_to_cache(channel.info.id, node).await;
+
+        Ok(node.clone())
     }
 
     /// Verify if resources are complete and uncorrupted.
@@ -527,7 +668,6 @@ impl Fud {
         &self,
         hash: &blake3::Hash,
         path: &Path,
-        seeders_pub: PublisherPtr<Option<Vec<FudSeeder>>>,
     ) -> Result<(ChunkedStorage, Option<FudSeeder>)> {
         match self.geode.get(hash, path).await {
             // We already know the metadata
@@ -538,12 +678,10 @@ impl Fud {
             Err(Error::GeodeFileNotFound) => {
                 // Find nodes close to the file hash
                 info!(target: "fud::get_metadata()", "Requested metadata {} not found in Geode, triggering fetch", hash_to_string(hash));
-                let metadata_sub = seeders_pub.clone().subscribe().await;
-                self.lookup_tx.send((*hash, seeders_pub.clone())).await?;
+                self.lookup_tx.send(*hash).await?;
 
                 // Fetch resource metadata
-                let fetch_res = fetch_metadata(self, hash, &metadata_sub, path).await;
-                metadata_sub.unsubscribe().await;
+                let fetch_res = fetch_metadata(self, hash, path).await;
                 let seeder = fetch_res?;
                 Ok((self.geode.get(hash, path).await?, Some(seeder)))
             }
@@ -619,11 +757,8 @@ impl Fud {
         // Send a DownloadStarted event
         notify_event!(self, DownloadStarted, resource);
 
-        let seeders_pub = Publisher::new();
-        let seeders_sub = seeders_pub.clone().subscribe().await;
-
         // Try to get the chunked file or directory from geode
-        let metadata_result = self.get_metadata(hash, path, seeders_pub.clone()).await;
+        let metadata_result = self.get_metadata(hash, path).await;
 
         if let Err(e) = metadata_result {
             // Set resource status to `Incomplete` and send a `MetadataNotFound` event
@@ -747,19 +882,11 @@ impl Fud {
 
         // Start looking up seeders if we did not need to do it for the metadata
         if metadata_seeder.is_none() {
-            self.lookup_tx.send((*hash, seeders_pub)).await?;
+            self.lookup_tx.send(*hash).await?;
         }
 
         // Fetch missing chunks from seeders
-        let _ = fetch_chunks(
-            self,
-            hash,
-            &mut chunked,
-            &seeders_sub,
-            metadata_seeder,
-            &mut missing_chunks,
-        )
-        .await;
+        let _ = fetch_chunks(self, hash, &mut chunked, metadata_seeder, &mut missing_chunks).await;
 
         // Get chunked file from geode
         let mut chunked = self.geode.get(hash, path).await?;

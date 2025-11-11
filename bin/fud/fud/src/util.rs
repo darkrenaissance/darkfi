@@ -23,10 +23,17 @@ use smol::{
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
 };
 
 pub use darkfi::geode::hash_to_string;
-use darkfi::Result;
+use darkfi::{
+    net::{Message, MessageSubscription},
+    Error, Result,
+};
+
+use crate::proto::ResourceMessage;
 
 pub async fn get_all_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     let mut files = Vec::new();
@@ -74,5 +81,28 @@ impl FromIterator<PathBuf> for FileSelection {
     fn from_iter<I: IntoIterator<Item = PathBuf>>(iter: I) -> Self {
         let paths: HashSet<PathBuf> = iter.into_iter().collect();
         FileSelection::Set(paths)
+    }
+}
+
+/// Wait for a [`crate::proto::ResourceMessage`] on `msg_subscriber` with a timeout.
+/// If we receive a message with the wrong resource hash, it's skipped.
+pub async fn receive_resource_msg<M: Message + ResourceMessage + std::fmt::Debug>(
+    msg_subscriber: &MessageSubscription<M>,
+    resource_hash: blake3::Hash,
+    timeout_seconds: u64,
+) -> Result<Arc<M>> {
+    let start = Instant::now();
+    loop {
+        let elapsed = start.elapsed().as_secs();
+        if elapsed >= timeout_seconds {
+            return Err(Error::ConnectTimeout);
+        }
+        let remaining_timeout = timeout_seconds - elapsed;
+
+        let reply = msg_subscriber.receive_with_timeout(remaining_timeout).await?;
+        // Done if it's the right resource hash
+        if reply.resource_hash() == resource_hash {
+            return Ok(reply)
+        }
     }
 }

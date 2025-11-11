@@ -19,8 +19,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use num_bigint::BigUint;
-use rand::{rngs::OsRng, Rng};
+use smol::lock::Mutex;
+use tinyjson::JsonValue;
 use tracing::debug;
 use url::Url;
 
@@ -28,18 +28,16 @@ use darkfi::{
     dht::{impl_dht_node_defaults, Dht, DhtHandler, DhtLookupReply, DhtNode},
     geode::hash_to_string,
     net::ChannelPtr,
+    rpc::util::json_map,
     util::time::Timestamp,
-    Error, Result,
+    Result,
 };
-use darkfi_sdk::crypto::schnorr::SchnorrPublic;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::{
     pow::VerifiableNodeData,
-    proto::{
-        FudAnnounce, FudFindNodesReply, FudFindNodesRequest, FudFindSeedersReply,
-        FudFindSeedersRequest, FudPingReply, FudPingRequest,
-    },
+    proto::{FudAnnounce, FudNodesReply, FudNodesRequest, FudSeedersReply, FudSeedersRequest},
+    util::receive_resource_msg,
     Fud,
 };
 
@@ -59,6 +57,20 @@ impl DhtNode for FudNode {
     }
 }
 
+impl From<FudNode> for JsonValue {
+    fn from(node: FudNode) -> JsonValue {
+        json_map([
+            ("id", JsonValue::String(hash_to_string(&node.id()))),
+            (
+                "addresses",
+                JsonValue::Array(
+                    node.addresses.iter().map(|addr| JsonValue::String(addr.to_string())).collect(),
+                ),
+            ),
+        ])
+    }
+}
+
 /// The values of the DHT are `Vec<FudSeeder>`, mapping resource hashes to lists of [`FudSeeder`]s
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq)]
 pub struct FudSeeder {
@@ -75,6 +87,15 @@ pub struct FudSeeder {
 impl PartialEq for FudSeeder {
     fn eq(&self, other: &Self) -> bool {
         self.key == other.key && self.node.id() == other.node.id()
+    }
+}
+
+impl From<FudSeeder> for JsonValue {
+    fn from(seeder: FudSeeder) -> JsonValue {
+        json_map([
+            ("key", JsonValue::String(hash_to_string(&seeder.key))),
+            ("node", seeder.node.into()),
+        ])
     }
 }
 
@@ -105,98 +126,74 @@ impl DhtHandler for Fud {
     }
 
     async fn ping(&self, channel: ChannelPtr) -> Result<FudNode> {
-        debug!(target: "fud::DhtHandler::ping()", "Sending ping to channel {}", channel.info.id);
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<FudPingReply>().await;
-        let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
+        let lock_map = self.ping_locks.clone();
+        let mut locks = lock_map.lock().await;
 
-        // Send `FudPingRequest`
-        let mut rng = OsRng;
-        let request = FudPingRequest { random: rng.gen() };
-        channel.send(&request).await?;
+        // Get or create the lock
+        let lock = if let Some(lock) = locks.get(&channel.info.id) {
+            lock.clone()
+        } else {
+            let lock = Arc::new(Mutex::new(None));
+            locks.insert(channel.info.id, lock.clone());
+            lock
+        };
+        drop(locks);
 
-        // Wait for `FudPingReply`
-        let reply = msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await;
-        msg_subscriber.unsubscribe().await;
-        let reply = reply?;
+        // Acquire the lock
+        let mut result = lock.lock().await;
 
-        // Verify the signature
-        if !reply.node.data.public_key.verify(&request.random.to_be_bytes(), &reply.sig) {
-            channel.ban().await;
-            return Err(Error::InvalidSignature)
+        if let Some(res) = result.clone() {
+            return res
         }
 
-        // Verify PoW
-        if let Err(e) = self.pow.write().await.verify_node(&reply.node.data).await {
-            channel.ban().await;
-            return Err(e)
-        }
-
-        Ok(reply.node.clone())
+        // Do the actual pinging process
+        let ping_result = self.do_ping(channel.clone()).await;
+        *result = Some(ping_result.clone());
+        ping_result
     }
 
-    // TODO: Optimize this
-    async fn on_new_node(&self, node: &FudNode) -> Result<()> {
-        debug!(target: "fud::DhtHandler::on_new_node()", "New node {}", hash_to_string(&node.id()));
+    async fn store(
+        &self,
+        channel: ChannelPtr,
+        key: &blake3::Hash,
+        value: &Vec<FudSeeder>,
+    ) -> Result<()> {
+        debug!(target: "fud::DhtHandler::store()", "Announcing {} to {}", hash_to_string(key), channel.display_address());
 
-        // If this is the first node we know about, then bootstrap and announce our files
-        if !self.dht.is_bootstrapped().await {
-            let _ = self.init().await;
-        }
-
-        // Send keys that are closer to this node than we are
-        let self_id = self.node_data.read().await.id();
-        let channel = self.dht.get_channel(node, None).await?;
-        for (key, seeders) in self.dht.hash_table.read().await.iter() {
-            let node_distance = BigUint::from_bytes_be(&self.dht().distance(key, &node.id()));
-            let self_distance = BigUint::from_bytes_be(&self.dht().distance(key, &self_id));
-            if node_distance <= self_distance {
-                let _ = channel.send(&FudAnnounce { key: *key, seeders: seeders.clone() }).await;
-            }
-        }
-        self.dht.cleanup_channel(channel).await;
-
-        Ok(())
+        channel.send(&FudAnnounce { key: *key, seeders: value.clone() }).await
     }
 
-    async fn find_nodes(&self, node: &FudNode, key: &blake3::Hash) -> Result<Vec<FudNode>> {
-        debug!(target: "fud::DhtHandler::find_nodes()", "Fetching nodes close to {} from node {}", hash_to_string(key), hash_to_string(&node.id()));
+    async fn find_nodes(&self, channel: ChannelPtr, key: &blake3::Hash) -> Result<Vec<FudNode>> {
+        debug!(target: "fud::DhtHandler::find_nodes()", "Fetching nodes close to {} from node {}", hash_to_string(key), channel.display_address());
 
-        let channel = self.dht.get_channel(node, None).await?;
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<FudFindNodesReply>().await;
-        let msg_subscriber_nodes = channel.subscribe_msg::<FudFindNodesReply>().await.unwrap();
+        let msg_subscriber_nodes = channel.subscribe_msg::<FudNodesReply>().await.unwrap();
 
-        let request = FudFindNodesRequest { key: *key };
+        let request = FudNodesRequest { key: *key };
         channel.send(&request).await?;
 
-        let reply = msg_subscriber_nodes.receive_with_timeout(self.dht().settings.timeout).await;
+        let reply =
+            receive_resource_msg(&msg_subscriber_nodes, *key, self.dht().settings.timeout).await;
 
         msg_subscriber_nodes.unsubscribe().await;
-        self.dht.cleanup_channel(channel).await;
 
         Ok(reply?.nodes.clone())
     }
 
     async fn find_value(
         &self,
-        node: &FudNode,
+        channel: ChannelPtr,
         key: &blake3::Hash,
     ) -> Result<DhtLookupReply<FudNode, Vec<FudSeeder>>> {
-        debug!(target: "fud::DhtHandler::find_value()", "Fetching value {} from node {}", hash_to_string(key), hash_to_string(&node.id()));
+        debug!(target: "fud::DhtHandler::find_value()", "Fetching value {} (or close nodes) from {}", hash_to_string(key), channel.display_address());
 
-        let channel = self.dht.get_channel(node, None).await?;
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<FudFindSeedersReply>().await;
-        let msg_subscriber = channel.subscribe_msg::<FudFindSeedersReply>().await.unwrap();
+        let msg_subscriber = channel.subscribe_msg::<FudSeedersReply>().await.unwrap();
 
-        let request = FudFindSeedersRequest { key: *key };
+        let request = FudSeedersRequest { key: *key };
         channel.send(&request).await?;
 
-        let recv = msg_subscriber.receive_with_timeout(self.dht().settings.timeout).await;
+        let recv = receive_resource_msg(&msg_subscriber, *key, self.dht().settings.timeout).await;
 
         msg_subscriber.unsubscribe().await;
-        self.dht.cleanup_channel(channel).await;
 
         let rep = recv?;
         Ok(DhtLookupReply::NodesAndValue(rep.nodes.clone(), rep.seeders.clone()))

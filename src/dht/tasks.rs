@@ -16,58 +16,282 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-use tracing::warn;
+use std::{sync::Arc, time::UNIX_EPOCH};
+use tracing::{error, info, warn};
 
 use crate::{
-    dht::{ChannelCacheItem, DhtHandler, DhtNode},
-    net::session::{SESSION_REFINE, SESSION_SEED},
+    dht::{event::DhtEvent, ChannelCacheItem, DhtHandler, DhtNode, SESSION_MANUAL},
+    net::{
+        hosts::HostColor,
+        session::{SESSION_INBOUND, SESSION_OUTBOUND},
+    },
+    system::sleep,
+    util::time::Timestamp,
     Result,
 };
+
+/// Handle DHT events.
+pub async fn events_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let dht = handler.dht();
+    let sub = dht.event_publisher.clone().subscribe().await;
+    loop {
+        let event = sub.receive().await;
+
+        match event {
+            // On [`DhtEvent::PingReceived`] set channel_cache.ping_received = true
+            DhtEvent::PingReceived { from, .. } => {
+                let channel_cache_lock = dht.channel_cache.clone();
+                let mut channel_cache = channel_cache_lock.write().await;
+                if let Some(cached) = channel_cache.get_mut(&from.info.id) {
+                    cached.ping_received = true;
+                }
+            }
+            // On [`DhtEvent::PingSent`] set channel_cache.ping_sent = true
+            DhtEvent::PingSent { to, .. } => {
+                let channel_cache_lock = dht.channel_cache.clone();
+                let mut channel_cache = channel_cache_lock.write().await;
+                if let Some(cached) = channel_cache.get_mut(&to.info.id) {
+                    cached.ping_sent = true;
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 /// Send a DHT ping request when there is a new channel, to know the node id of the new peer,
 /// Then fill the channel cache and the buckets
 pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let channel_sub = handler.dht().p2p.hosts().subscribe_channel().await;
     loop {
-        let channel_sub = handler.dht().p2p.hosts().subscribe_channel().await;
         let res = channel_sub.receive().await;
-        channel_sub.unsubscribe().await;
         if res.is_err() {
             continue;
         }
         let channel = res.unwrap();
+
         let channel_cache_lock = handler.dht().channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
 
-        // Skip this channel if it's stopped or not new.
-        if channel.is_stopped() || channel_cache.keys().any(|&k| k == channel.info.id) {
-            continue;
-        }
-        // Skip this channel if it's a seed or refine session.
-        if channel.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+        // Skip this channel if it's not new
+        if channel_cache.keys().any(|&k| k == channel.info.id) {
             continue;
         }
 
-        let ping_res = handler.ping(channel.clone()).await;
-
-        if let Err(e) = ping_res {
-            warn!(target: "dht::channel_task()", "Error while pinging (requesting node id) {}: {e}", channel.display_address());
-            // channel.stop().await;
-            continue;
-        }
-
-        let node = ping_res.unwrap();
-
-        channel_cache.entry(channel.info.id).or_insert_with(|| ChannelCacheItem {
-            node: node.clone(),
-            topic: None,
-            usage_count: 0,
-        });
+        channel_cache.insert(
+            channel.info.id,
+            ChannelCacheItem {
+                node: None,
+                last_used: Timestamp::current_time(),
+                ping_received: false,
+                ping_sent: false,
+            },
+        );
         drop(channel_cache);
 
-        if !node.addresses().is_empty() {
-            handler.dht().add_node(node.clone()).await;
-            let _ = handler.on_new_node(&node.clone()).await;
+        // It's a manual connection
+        if channel.session_type_id() & SESSION_MANUAL != 0 {
+            let ping_res = handler.ping(channel.clone()).await;
+
+            if let Err(e) = ping_res {
+                warn!(target: "dht::channel_task()", "Error while pinging manual connection (requesting node id) {}: {e}", channel.address());
+                continue;
+            }
+        }
+
+        // It's an outbound connection
+        if channel.session_type_id() & SESSION_OUTBOUND != 0 {
+            let node = handler.ping(channel.clone()).await;
+            if node.is_err() {
+                continue;
+            }
+
+            continue;
+        }
+    }
+}
+
+/// Periodically send a DHT ping to known hosts. If the ping is successful, we
+/// move the host to the whitelist (updating the last seen field).
+///
+/// This is necessary to prevent unresponsive nodes staying on the whitelist,
+/// as the DHT does not require any outbound slot.
+pub async fn dht_refinery_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let interval = 60; // TODO: Make a setting
+    let min_ping_interval = 10 * 60; // TODO: Make a setting
+    let dht = handler.dht();
+    let hosts = dht.p2p.hosts();
+
+    loop {
+        let mut hostlist = hosts.container.fetch_all(HostColor::Gold);
+        hostlist.extend(hosts.container.fetch_all(HostColor::White));
+
+        // Include the greylist only if the DHT is not bootstrapped yet
+        if !handler.dht().is_bootstrapped().await {
+            hostlist.extend(hosts.container.fetch_all(HostColor::Grey));
+        }
+
+        for entry in &hostlist {
+            let url = &entry.0;
+            let host_cache = dht.host_cache.read().await;
+            let last_ping = host_cache.get(url).map(|h| h.last_ping.inner());
+            if last_ping.is_some() &&
+                last_ping.unwrap() > Timestamp::current_time().inner() - min_ping_interval
+            {
+                continue
+            }
+            drop(host_cache);
+
+            let res = dht.create_channel(url).await;
+            if res.is_err() {
+                continue
+            }
+            let (channel, _) = res.unwrap();
+            dht.cleanup_channel(channel).await;
+
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            if let Err(e) = hosts.whitelist_host(url, last_seen).await {
+                error!(target: "dht::tasks::whitelist_refinery_task()", "Could not send {url} to the whitelist: {e}");
+            }
+            break
+        }
+
+        match hostlist.is_empty() {
+            true => sleep(5).await,
+            false => sleep(interval).await,
+        }
+    }
+}
+
+/// Add a node to the DHT buckets.
+/// If the bucket is already full, we ping the least recently seen node in the
+/// bucket: if successful it becomes the most recently seen node, if the ping
+/// fails we remove it and add the new node.
+pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let dht = handler.dht();
+    loop {
+        let (node, channel) = dht.add_node_rx.recv().await.unwrap();
+
+        let self_node = handler.node().await;
+
+        let bucket_index = dht.get_bucket_index(&self_node.id(), &node.id()).await;
+        let buckets_lock = dht.buckets.clone();
+        let mut buckets = buckets_lock.write().await;
+        let bucket = &mut buckets[bucket_index];
+
+        // Do not add ourselves to the buckets
+        if node.id() == self_node.id() {
+            continue;
+        }
+
+        // Don't add this node if it has any external address that is the same as one of ours
+        let node_addresses = node.addresses();
+        if self_node.addresses().iter().any(|addr| node_addresses.contains(addr)) {
+            continue;
+        }
+
+        // Do not add a node to the buckets if it does not have an address
+        if node.addresses().is_empty() {
+            continue;
+        }
+
+        // We already have this node, move it to the tail of the bucket
+        if let Some(node_index) = bucket.nodes.iter().position(|n| n.id() == node.id()) {
+            bucket.nodes.remove(node_index);
+            bucket.nodes.push(node);
+            continue;
+        }
+
+        // Bucket is full
+        if bucket.nodes.len() >= handler.dht().settings.k {
+            // Ping the least recently seen node
+            if let Ok((channel, node)) = handler.dht().get_channel(&bucket.nodes[0]).await {
+                // Ping was successful, move the least recently seen node to the tail
+                let n = bucket.nodes.remove(0);
+                bucket.nodes.push(n);
+                drop(buckets);
+                dht.on_new_node(&node.clone(), channel.clone()).await;
+                handler.dht().cleanup_channel(channel).await;
+                continue;
+            }
+
+            // Ping was not successful, remove the least recently seen node and add the new node
+            bucket.nodes.remove(0);
+            bucket.nodes.push(node.clone());
+            drop(buckets);
+            dht.on_new_node(&node.clone(), channel.clone()).await;
+            continue;
+        }
+
+        // Bucket is not full, just add the node
+        bucket.nodes.push(node.clone());
+        drop(buckets);
+        dht.on_new_node(&node.clone(), channel.clone()).await;
+    }
+}
+
+/// Close inbound connections that are unused for too long.
+pub async fn disconnect_inbounds_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let interval = 10; // TODO: Make a setting
+    let dht = handler.dht();
+
+    loop {
+        sleep(interval).await;
+
+        let min_last_used = Timestamp::current_time().inner() - dht.settings.inbound_timeout;
+
+        let channel_cache_lock = dht.channel_cache.clone();
+        let mut channel_cache = channel_cache_lock.write().await;
+
+        for (channel_id, cached) in channel_cache.clone() {
+            // Check that:
+            // The channel timed out,
+            if cached.last_used.inner() >= min_last_used {
+                continue;
+            }
+            // The channel exists,
+            let channel = dht.p2p.get_channel(channel_id);
+            if channel.is_none() {
+                channel_cache.remove(&channel_id);
+                continue;
+            }
+            let channel = channel.unwrap();
+            // And the channel is inbound.
+            if channel.session_type_id() & SESSION_INBOUND == 0 {
+                continue;
+            }
+
+            // Now we can stop it and remove it from the channel cache
+            info!(target: "dht::disconnect_inbounds_task()", "Closing expired inbound channel [{}]", channel.address());
+            channel.stop().await;
+            channel_cache.remove(&channel.info.id);
+        }
+    }
+}
+
+/// Removes entries from [`crate::dht::Dht::channel_cache`] when a channel is
+/// stopped.
+pub async fn cleanup_channels_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
+    let interval = 60; // TODO: Make a setting
+    let dht = handler.dht();
+
+    loop {
+        sleep(interval).await;
+
+        let channel_cache_lock = dht.channel_cache.clone();
+        let mut channel_cache = channel_cache_lock.write().await;
+
+        for (channel_id, _) in channel_cache.clone() {
+            match dht.p2p.get_channel(channel_id) {
+                Some(channel) => {
+                    if channel.is_stopped() {
+                        channel_cache.remove(&channel_id);
+                    }
+                }
+                None => {
+                    channel_cache.remove(&channel_id);
+                }
+            }
         }
     }
 }

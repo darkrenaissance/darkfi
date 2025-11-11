@@ -24,7 +24,10 @@ use tracing::{debug, error, info, warn};
 
 use darkfi::{
     async_daemonize,
-    net::{session::SESSION_DEFAULT, P2p, Settings as NetSettings},
+    net::{
+        session::{SESSION_DIRECT, SESSION_INBOUND, SESSION_MANUAL},
+        P2p, Settings as NetSettings,
+    },
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
@@ -54,6 +57,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let sled_db = sled::open(basedir.join("db"))?;
 
     info!(target: "fud", "Instantiating P2P network");
+    // We will use the peers defined in the settings as direct connections (instead of manual)
+    // let direct_peers = net_settings.peers.clone();
+    // net_settings.peers = vec![];
     let net_settings: NetSettings = args.net.into();
     let p2p = P2p::new(net_settings.clone(), ex.clone()).await?;
 
@@ -133,12 +139,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let registry = p2p.protocol_registry();
     let fud_ = fud.clone();
     registry
-        .register(SESSION_DEFAULT, move |channel, p2p| {
+        .register(SESSION_DIRECT | SESSION_INBOUND | SESSION_MANUAL, move |channel, p2p| {
             let fud_ = fud_.clone();
             async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
         })
         .await;
     p2p.clone().start().await?;
+
+    p2p.session_direct().start_peer_discovery();
 
     let p2p_settings_lock = p2p.settings();
     let p2p_settings = p2p_settings_lock.read().await;

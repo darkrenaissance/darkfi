@@ -30,29 +30,31 @@ use rand::{
 use tracing::{error, info, warn};
 
 use darkfi::{
-    dht::DhtNode,
+    dht::{event::DhtEvent, DhtNode},
     geode::{hash_to_string, ChunkedStorage},
     net::ChannelPtr,
-    system::Subscription,
     Error, Result,
 };
 use darkfi_serial::serialize_async;
 
 use crate::{
     event::{self, notify_event, FudEvent},
-    proto::{FudChunkReply, FudDirectoryReply, FudFileReply, FudFindRequest, FudNotFound},
-    util::create_all_files,
+    proto::{
+        FudChunkNotFound, FudChunkReply, FudChunkRequest, FudDirectoryReply, FudFileReply,
+        FudMetadataNotFound, FudMetadataRequest,
+    },
+    util::{create_all_files, receive_resource_msg},
     Fud, FudSeeder, ResourceStatus, ResourceType, Scrap,
 };
 
-/// Receive seeders from a subscription, and execute an async expression for
-/// each deduplicated seeder once (seeder order is random).
+/// Receive seeders from a DHT events subscription, and execute an async
+/// expression for each deduplicated seeder once (seeder order is random).
 /// It will keep going until the expression returns `Ok(())`, or there are
 /// no more seeders.
 /// It has an optional `favored_seeder` argument that will be tried first if
 /// specified.
 macro_rules! seeders_loop {
-    ($seeders_sub:expr, $favored_seeder:expr, $code:expr) => {
+    ($key:expr, $fud:expr, $favored_seeder:expr, $code:expr) => {
         let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
         let mut is_done = false;
 
@@ -65,13 +67,20 @@ macro_rules! seeders_loop {
             }
         }
 
-        // Try other seeders using the subscription
+        // Try other seeders using the DHT subscription
+        let dht_sub = $fud.dht.subscribe().await;
         while !is_done {
-            let rep = $seeders_sub.receive().await;
-            if rep.is_none() {
-                break; // None means the lookup is done
+            let event = dht_sub.receive().await;
+            if event.key() != Some($key) {
+                continue // Ignore this event if it's not about the right key
             }
-            let seeders = rep.unwrap().clone();
+            if let DhtEvent::ValueLookupCompleted { .. } = event {
+                break // Lookup is done
+            }
+            if !matches!(event, DhtEvent::ValueFound { .. }) {
+                continue // Ignore this event as it's not a ValueFound
+            }
+            let seeders = event.into_value().unwrap();
             let mut shuffled_seeders = {
                 let mut vec: Vec<_> = seeders.iter().cloned().collect();
                 vec.shuffle(&mut OsRng);
@@ -81,21 +90,22 @@ macro_rules! seeders_loop {
             while let Some(seeder) = shuffled_seeders.pop() {
                 // Only use a seeder once
                 if queried_seeders.iter().any(|s| *s == seeder.node.id()) {
-                    continue;
+                    continue
                 }
                 queried_seeders.insert(seeder.node.id());
 
                 if $code(seeder).await.is_err() {
-                    continue;
+                    continue
                 }
 
                 is_done = true;
-                break;
+                break
             }
         }
+        dht_sub.unsubscribe().await;
     };
-    ($seeders_sub:expr, $code:expr) => {
-        seeders_loop!($seeders_sub, None, $code)
+    ($key:expr, $fud:expr, $code:expr) => {
+        seeders_loop!($key, $fud, None, $code)
     };
 }
 
@@ -117,14 +127,13 @@ pub async fn fetch_chunks(
     fud: &Fud,
     hash: &blake3::Hash,
     chunked: &mut ChunkedStorage,
-    seeders_sub: &Subscription<Option<Vec<FudSeeder>>>,
     favored_seeder: Option<FudSeeder>,
     chunks: &mut HashSet<blake3::Hash>,
 ) -> Result<()> {
     let mut ctx = ChunkFetchContext { fud, hash, chunked, chunks };
 
-    seeders_loop!(seeders_sub, favored_seeder, async |seeder: FudSeeder| -> Result<()> {
-        let channel = match fud.dht.get_channel(&seeder.node, Some(*hash)).await {
+    seeders_loop!(hash, fud, favored_seeder, async |seeder: FudSeeder| -> Result<()> {
+        let (channel, _) = match fud.dht.get_channel(&seeder.node).await {
             Ok(channel) => channel,
             Err(e) => {
                 warn!(target: "fud::download::fetch_chunks()", "Could not get a channel for node {}: {e}", hash_to_string(&seeder.node.id()));
@@ -181,20 +190,19 @@ async fn fetch_chunk(
     chunks_to_query.remove(&chunk_hash);
 
     let start_time = Instant::now();
-    let msg_subsystem = channel.message_subsystem();
-    msg_subsystem.add_dispatch::<FudChunkReply>().await;
-    msg_subsystem.add_dispatch::<FudNotFound>().await;
     let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
-    let msg_subscriber_notfound = channel.subscribe_msg::<FudNotFound>().await.unwrap();
+    let msg_subscriber_notfound = channel.subscribe_msg::<FudChunkNotFound>().await.unwrap();
 
-    let send_res = channel.send(&FudFindRequest { info: Some(*ctx.hash), key: chunk_hash }).await;
+    let send_res = channel.send(&FudChunkRequest { resource: *ctx.hash, chunk: chunk_hash }).await;
     if let Err(e) = send_res {
-        warn!(target: "fud::download::fetch_chunk()", "Error while sending FudFindRequest: {e}");
+        warn!(target: "fud::download::fetch_chunk()", "Error while sending FudChunkRequest: {e}");
         return ChunkFetchControl::NextSeeder;
     }
 
-    let chunk_recv = msg_subscriber_chunk.receive_with_timeout(ctx.fud.chunk_timeout).fuse();
-    let notfound_recv = msg_subscriber_notfound.receive_with_timeout(ctx.fud.chunk_timeout).fuse();
+    let chunk_recv =
+        receive_resource_msg(&msg_subscriber_chunk, *ctx.hash, ctx.fud.chunk_timeout).fuse();
+    let notfound_recv =
+        receive_resource_msg(&msg_subscriber_notfound, *ctx.hash, ctx.fud.chunk_timeout).fuse();
 
     pin_mut!(chunk_recv, notfound_recv);
 
@@ -315,29 +323,19 @@ enum MetadataFetchReply {
 /// 1. Wait for seeders from the subscription
 /// 2. Request the metadata from the seeders
 /// 3. Insert metadata to geode using the reply
-pub async fn fetch_metadata(
-    fud: &Fud,
-    hash: &blake3::Hash,
-    seeders_sub: &Subscription<Option<Vec<FudSeeder>>>,
-    path: &Path,
-) -> Result<FudSeeder> {
+pub async fn fetch_metadata(fud: &Fud, hash: &blake3::Hash, path: &Path) -> Result<FudSeeder> {
     let mut result: Option<(FudSeeder, MetadataFetchReply)> = None;
 
-    seeders_loop!(seeders_sub, async |seeder: FudSeeder| -> Result<()> {
-        let channel = fud.dht.get_channel(&seeder.node, Some(*hash)).await?;
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<FudChunkReply>().await;
-        msg_subsystem.add_dispatch::<FudFileReply>().await;
-        msg_subsystem.add_dispatch::<FudDirectoryReply>().await;
-        msg_subsystem.add_dispatch::<FudNotFound>().await;
+    seeders_loop!(hash, fud, async |seeder: FudSeeder| -> Result<()> {
+        let (channel, _) = fud.dht.get_channel(&seeder.node).await?;
         let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
         let msg_subscriber_file = channel.subscribe_msg::<FudFileReply>().await.unwrap();
         let msg_subscriber_dir = channel.subscribe_msg::<FudDirectoryReply>().await.unwrap();
-        let msg_subscriber_notfound = channel.subscribe_msg::<FudNotFound>().await.unwrap();
+        let msg_subscriber_notfound = channel.subscribe_msg::<FudMetadataNotFound>().await.unwrap();
 
-        let send_res = channel.send(&FudFindRequest { info: None, key: *hash }).await;
+        let send_res = channel.send(&FudMetadataRequest { resource: *hash }).await;
         if let Err(e) = send_res {
-            warn!(target: "fud::download::fetch_metadata()", "Error while sending FudFindRequest: {e}");
+            warn!(target: "fud::download::fetch_metadata()", "Error while sending FudMetadataRequest: {e}");
             msg_subscriber_chunk.unsubscribe().await;
             msg_subscriber_file.unsubscribe().await;
             msg_subscriber_dir.unsubscribe().await;
@@ -346,10 +344,12 @@ pub async fn fetch_metadata(
             return Err(e)
         }
 
-        let chunk_recv = msg_subscriber_chunk.receive_with_timeout(fud.chunk_timeout).fuse();
-        let file_recv = msg_subscriber_file.receive_with_timeout(fud.chunk_timeout).fuse();
-        let dir_recv = msg_subscriber_dir.receive_with_timeout(fud.chunk_timeout).fuse();
-        let notfound_recv = msg_subscriber_notfound.receive_with_timeout(fud.chunk_timeout).fuse();
+        let chunk_recv =
+            receive_resource_msg(&msg_subscriber_chunk, *hash, fud.chunk_timeout).fuse();
+        let file_recv = receive_resource_msg(&msg_subscriber_file, *hash, fud.chunk_timeout).fuse();
+        let dir_recv = receive_resource_msg(&msg_subscriber_dir, *hash, fud.chunk_timeout).fuse();
+        let notfound_recv =
+            receive_resource_msg(&msg_subscriber_notfound, *hash, fud.chunk_timeout).fuse();
 
         pin_mut!(chunk_recv, file_recv, dir_recv, notfound_recv);
 
@@ -439,7 +439,7 @@ pub async fn fetch_metadata(
     // At this point the reply content is already verified
     let (seeder, reply) = result.unwrap();
     match reply {
-        MetadataFetchReply::Directory(FudDirectoryReply { files, chunk_hashes }) => {
+        MetadataFetchReply::Directory(FudDirectoryReply { files, chunk_hashes, .. }) => {
             // Convert all file paths from String to PathBuf
             let mut files: Vec<_> =
                 files.into_iter().map(|(path_str, size)| (PathBuf::from(path_str), size)).collect();
@@ -450,14 +450,14 @@ pub async fn fetch_metadata(
                 return Err(e)
             }
         }
-        MetadataFetchReply::File(FudFileReply { chunk_hashes }) => {
+        MetadataFetchReply::File(FudFileReply { chunk_hashes, .. }) => {
             if let Err(e) = fud.geode.insert_metadata(hash, &chunk_hashes, &[]).await {
                 error!(target: "fud::download::fetch_metadata()", "Failed inserting file {} to Geode: {e}", hash_to_string(hash));
                 return Err(e)
             }
         }
         // Looked for a file but got a chunk: the entire file fits in a single chunk
-        MetadataFetchReply::Chunk(FudChunkReply { chunk }) => {
+        MetadataFetchReply::Chunk(FudChunkReply { chunk, .. }) => {
             info!(target: "fud::download::fetch_metadata()", "File fits in a single chunk");
             let chunk_hash = blake3::hash(&chunk);
             if let Err(e) = fud.geode.insert_metadata(hash, &[chunk_hash], &[]).await {
