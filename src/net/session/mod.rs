@@ -32,7 +32,7 @@ use super::{
     p2p::P2pPtr,
     protocol::ProtocolVersion,
 };
-use crate::{system::Subscription, Error, Result};
+use crate::{system::Subscription, util::logger::verbose, Error, Result};
 
 pub mod inbound_session;
 pub use inbound_session::{InboundSession, InboundSessionPtr};
@@ -121,6 +121,11 @@ pub async fn remove_sub_on_stop(
             connect_addr: channel.info.connect_addr.clone(),
             err: "Channel stopped".to_string()
         });
+        verbose!(
+            target: "net::direct_session",
+            "[P2P] Direct outbound disconnected [{}]",
+            channel.display_address()
+        );
     }
 
     if !p2p.is_connected() {
