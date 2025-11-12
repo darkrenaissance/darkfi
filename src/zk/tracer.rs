@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Mutex as SyncMutex};
+use std::sync::{Arc, Mutex};
 
 use darkfi_sdk::{crypto::constants::OrchardFixedBases, pasta::pallas};
 use halo2_gadgets::ecc as ecc_gadget;
@@ -31,14 +31,14 @@ pub enum DebugOpValue {
 
 #[derive(Clone)]
 pub struct ZkTracer {
-    pub opvalues: Arc<SyncMutex<Option<Vec<DebugOpValue>>>>,
+    pub opvalues: Arc<Mutex<Option<Vec<DebugOpValue>>>>,
     init_allowed: bool,
     is_enabled: bool,
 }
 
 impl ZkTracer {
     pub(crate) fn new(init_allowed: bool) -> Self {
-        Self { opvalues: Arc::new(SyncMutex::new(None)), init_allowed, is_enabled: false }
+        Self { opvalues: Arc::new(Mutex::new(None)), init_allowed, is_enabled: false }
     }
 
     pub(crate) fn init(&mut self) {
