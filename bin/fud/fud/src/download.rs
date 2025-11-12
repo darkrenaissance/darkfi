@@ -30,9 +30,10 @@ use rand::{
 use tracing::{error, info, warn};
 
 use darkfi::{
-    dht::{event::DhtEvent, DhtNode},
+    dht::{event::DhtEvent, DhtHandler, DhtNode},
     geode::{hash_to_string, ChunkedStorage},
     net::ChannelPtr,
+    system::Subscription,
     Error, Result,
 };
 use darkfi_serial::serialize_async;
@@ -47,6 +48,8 @@ use crate::{
     Fud, FudSeeder, ResourceStatus, ResourceType, Scrap,
 };
 
+type FudDhtEvent = DhtEvent<<Fud as DhtHandler>::Node, <Fud as DhtHandler>::Value>;
+
 /// Receive seeders from a DHT events subscription, and execute an async
 /// expression for each deduplicated seeder once (seeder order is random).
 /// It will keep going until the expression returns `Ok(())`, or there are
@@ -54,7 +57,7 @@ use crate::{
 /// It has an optional `favored_seeder` argument that will be tried first if
 /// specified.
 macro_rules! seeders_loop {
-    ($key:expr, $fud:expr, $favored_seeder:expr, $code:expr) => {
+    ($key:expr, $fud:expr, $dht_sub:expr, $favored_seeder:expr, $code:expr) => {
         let mut queried_seeders: HashSet<blake3::Hash> = HashSet::new();
         let mut is_done = false;
 
@@ -68,9 +71,8 @@ macro_rules! seeders_loop {
         }
 
         // Try other seeders using the DHT subscription
-        let dht_sub = $fud.dht.subscribe().await;
         while !is_done {
-            let event = dht_sub.receive().await;
+            let event = $dht_sub.receive().await;
             if event.key() != Some($key) {
                 continue // Ignore this event if it's not about the right key
             }
@@ -102,10 +104,9 @@ macro_rules! seeders_loop {
                 break
             }
         }
-        dht_sub.unsubscribe().await;
     };
-    ($key:expr, $fud:expr, $code:expr) => {
-        seeders_loop!($key, $fud, None, $code)
+    ($key:expr, $fud:expr, $dht_sub:expr, $code:expr) => {
+        seeders_loop!($key, $fud, $dht_sub, None, $code)
     };
 }
 
@@ -127,12 +128,13 @@ pub async fn fetch_chunks(
     fud: &Fud,
     hash: &blake3::Hash,
     chunked: &mut ChunkedStorage,
+    dht_sub: &Subscription<FudDhtEvent>,
     favored_seeder: Option<FudSeeder>,
     chunks: &mut HashSet<blake3::Hash>,
 ) -> Result<()> {
     let mut ctx = ChunkFetchContext { fud, hash, chunked, chunks };
 
-    seeders_loop!(hash, fud, favored_seeder, async |seeder: FudSeeder| -> Result<()> {
+    seeders_loop!(hash, fud, dht_sub, favored_seeder, async |seeder: FudSeeder| -> Result<()> {
         let (channel, _) = match fud.dht.get_channel(&seeder.node).await {
             Ok(channel) => channel,
             Err(e) => {
@@ -323,10 +325,15 @@ enum MetadataFetchReply {
 /// 1. Wait for seeders from the subscription
 /// 2. Request the metadata from the seeders
 /// 3. Insert metadata to geode using the reply
-pub async fn fetch_metadata(fud: &Fud, hash: &blake3::Hash, path: &Path) -> Result<FudSeeder> {
+pub async fn fetch_metadata(
+    fud: &Fud,
+    hash: &blake3::Hash,
+    path: &Path,
+    dht_sub: &Subscription<FudDhtEvent>,
+) -> Result<FudSeeder> {
     let mut result: Option<(FudSeeder, MetadataFetchReply)> = None;
 
-    seeders_loop!(hash, fud, async |seeder: FudSeeder| -> Result<()> {
+    seeders_loop!(hash, fud, dht_sub, async |seeder: FudSeeder| -> Result<()> {
         let (channel, _) = fud.dht.get_channel(&seeder.node).await?;
         let msg_subscriber_chunk = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
         let msg_subscriber_file = channel.subscribe_msg::<FudFileReply>().await.unwrap();

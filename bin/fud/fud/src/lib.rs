@@ -688,10 +688,15 @@ impl Fud {
             Err(Error::GeodeFileNotFound) => {
                 // Find nodes close to the file hash
                 info!(target: "fud::get_metadata()", "Requested metadata {} not found in Geode, triggering fetch", hash_to_string(hash));
-                self.lookup_tx.send(*hash).await?;
+                let dht_sub = self.dht.subscribe().await;
+                if let Err(e) = self.lookup_tx.send(*hash).await {
+                    dht_sub.unsubscribe().await;
+                    return Err(e.into())
+                }
 
                 // Fetch resource metadata
-                let fetch_res = fetch_metadata(self, hash, path).await;
+                let fetch_res = fetch_metadata(self, hash, path, &dht_sub).await;
+                dht_sub.unsubscribe().await;
                 let seeder = fetch_res?;
                 Ok((self.geode.get(hash, path).await?, Some(seeder)))
             }
@@ -764,6 +769,9 @@ impl Fud {
         resources_write.insert(*hash, resource.clone());
         drop(resources_write);
 
+        // Subscribe to DHT events early for `fetch_chunks()`
+        let dht_sub = self.dht.subscribe().await;
+
         // Send a DownloadStarted event
         notify_event!(self, DownloadStarted, resource);
 
@@ -774,6 +782,7 @@ impl Fud {
             // Set resource status to `Incomplete` and send a `MetadataNotFound` event
             let resource = update_resource!(hash, { status = ResourceStatus::Incomplete });
             notify_event!(self, MetadataNotFound, resource);
+            dht_sub.unsubscribe().await;
             return Err(e)
         }
         let (mut chunked, metadata_seeder) = metadata_result.unwrap();
@@ -782,13 +791,20 @@ impl Fud {
         let resources_read = self.resources.read().await;
         let resource = match resources_read.get(hash) {
             Some(resource) => resource,
-            None => return Ok(()), // Resource was removed, abort
+            None => {
+                // Resource was removed, abort
+                dht_sub.unsubscribe().await;
+                return Ok(())
+            }
         };
         let files_vec: Vec<PathBuf> = resource.get_selected_files(&chunked);
         drop(resources_read);
 
         // Create all files (and all necessary directories)
-        create_all_files(&files_vec).await?;
+        if let Err(e) = create_all_files(&files_vec).await {
+            dht_sub.unsubscribe().await;
+            return Err(e)
+        }
 
         // Set resource status to `Verifying` and send a `MetadataDownloadCompleted` event
         let resource = update_resource!(hash, {
@@ -806,11 +822,15 @@ impl Fud {
         let chunk_hashes = resource.get_selected_chunks(&chunked);
 
         // Write all scraps to make sure the data on the filesystem is correct
-        self.write_scraps(&mut chunked, &chunk_hashes).await?;
+        if let Err(e) = self.write_scraps(&mut chunked, &chunk_hashes).await {
+            dht_sub.unsubscribe().await;
+            return Err(e)
+        }
 
         // Mark locally available chunks as such
         let verify_res = self.verify_chunks(&resource, &mut chunked).await;
         if let Err(e) = verify_res {
+            dht_sub.unsubscribe().await;
             error!(target: "fud::fetch_resource()", "Error while verifying chunks: {e}");
             return Err(e);
         }
@@ -827,8 +847,12 @@ impl Fud {
         // This fixes two edge-cases: a file that exactly ends at the end of
         // a chunk, and a file with no chunk.
         if !chunked.is_dir() {
-            let fs_metadata = fs::metadata(&path).await?;
-            if fs_metadata.len() > (chunked.len() * MAX_CHUNK_SIZE) as u64 {
+            let fs_metadata = fs::metadata(&path).await;
+            if let Err(e) = fs_metadata {
+                dht_sub.unsubscribe().await;
+                return Err(e.into());
+            }
+            if fs_metadata.unwrap().len() > (chunked.len() * MAX_CHUNK_SIZE) as u64 {
                 if let Ok(file) = OpenOptions::new().write(true).create(true).open(path).await {
                     let _ = file.set_len((chunked.len() * MAX_CHUNK_SIZE) as u64).await;
                 }
@@ -881,6 +905,7 @@ impl Fud {
 
         // If we don't need to download any chunk
         if missing_chunks.is_empty() {
+            dht_sub.unsubscribe().await;
             return download_completed(&chunked).await;
         }
 
@@ -892,11 +917,19 @@ impl Fud {
 
         // Start looking up seeders if we did not need to do it for the metadata
         if metadata_seeder.is_none() {
-            self.lookup_tx.send(*hash).await?;
+            if let Err(e) = self.lookup_tx.send(*hash).await {
+                dht_sub.unsubscribe().await;
+                return Err(e.into())
+            }
         }
 
         // Fetch missing chunks from seeders
-        let _ = fetch_chunks(self, hash, &mut chunked, metadata_seeder, &mut missing_chunks).await;
+        let _ =
+            fetch_chunks(self, hash, &mut chunked, &dht_sub, metadata_seeder, &mut missing_chunks)
+                .await;
+
+        // We don't need the DHT events sub anymore
+        dht_sub.unsubscribe().await;
 
         // Get chunked file from geode
         let mut chunked = self.geode.get(hash, path).await?;
