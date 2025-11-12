@@ -32,7 +32,8 @@ use darkfi::{
     util::time::Timestamp,
     Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_sdk::crypto::schnorr::{SchnorrPublic, Signature};
+use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
 use crate::{
     pow::VerifiableNodeData,
@@ -78,6 +79,8 @@ pub struct FudSeeder {
     pub key: blake3::Hash,
     /// Seeder's node data
     pub node: FudNode,
+    /// Seeder's signature of (key || node)
+    pub sig: Signature,
     /// When this [`FudSeeder`] was added to our hash table.
     /// This is not sent to other nodes.
     #[skip_serialize]
@@ -96,6 +99,15 @@ impl From<FudSeeder> for JsonValue {
             ("key", JsonValue::String(hash_to_string(&seeder.key))),
             ("node", seeder.node.into()),
         ])
+    }
+}
+
+impl FudSeeder {
+    pub async fn verify_signature(&self) -> bool {
+        self.node.data.public_key.verify(
+            &[self.key.as_bytes().to_vec(), serialize_async(&self.node).await].concat(),
+            &self.sig,
+        )
     }
 }
 

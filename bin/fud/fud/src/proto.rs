@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use smol::Executor;
 use std::{path::StripPrefixError, sync::Arc};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use darkfi::{
     dht::{event::DhtEvent, DhtHandler},
@@ -503,6 +503,14 @@ impl ProtocolFud {
 
             for seeder in request.seeders.clone() {
                 if seeder.node.addresses.is_empty() {
+                    continue
+                }
+                if let Err(e) = self.fud.pow.write().await.verify_node(&seeder.node.data).await {
+                    warn!(target: "fud::ProtocolFud::handle_fud_announce()", "Received seeder with invalid PoW: {e}");
+                    continue
+                }
+                if !seeder.verify_signature().await {
+                    warn!(target: "fud::ProtocolFud::handle_fud_announce()", "Received seeder with invalid signature");
                     continue
                 }
 

@@ -46,7 +46,10 @@ use darkfi::{
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
-use darkfi_sdk::crypto::{schnorr::SchnorrPublic, SecretKey};
+use darkfi_sdk::crypto::{
+    schnorr::{SchnorrPublic, SchnorrSecret},
+    SecretKey,
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 /// P2P protocols
@@ -394,9 +397,16 @@ impl Fud {
 
     /// Create a new [`dht::FudSeeder`] for own node
     pub async fn new_seeder(&self, key: &blake3::Hash) -> FudSeeder {
+        let node = self.node().await;
+
         FudSeeder {
             key: *key,
-            node: self.node().await,
+            node: node.clone(),
+            sig: self
+                .secret_key
+                .read()
+                .await
+                .sign(&[key.as_bytes().to_vec(), serialize_async(&node).await].concat()),
             timestamp: Timestamp::current_time().inner(),
         }
     }
