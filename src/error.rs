@@ -828,6 +828,7 @@ impl From<darkfi_sdk::error::DarkTreeError> for Error {
 impl From<tracing_subscriber::util::TryInitError> for Error {
     fn from(err: tracing_subscriber::util::TryInitError) -> Self {
         Self::LogInitError(err.to_string())
+    }
 }
 
 #[cfg(feature = "randomx")]
