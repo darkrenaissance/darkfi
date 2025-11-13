@@ -39,15 +39,15 @@ url = "2.5.4"
 smol = "2.0.2"
 
 # evgrd deps
-async-trait = {version = "0.1.88", optional = true}
+async-trait = {version = "0.1.89", optional = true}
 futures = {version = "0.3.31", optional = true}
-semver = {version = "1.0.26", optional = true}
+semver = {version = "1.0.27", optional = true}
 easy-parallel = {version = "3.3.1", optional = true}
 signal-hook-async-std = {version = "0.3.0", optional = true}
 signal-hook = {version = "0.3.18", optional = true}
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"], optional = true }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"], optional = true }
 tracing-appender = { version = "0.2.3", optional = true }
-serde = {version = "1.0.219", features = ["derive"], optional = true}
+serde = {version = "1.0.228", features = ["derive"], optional = true}
 structopt = {version = "0.3.26", optional = true}
 structopt-toml = {version = "0.5.1", optional = true}
 

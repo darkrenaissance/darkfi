@@ -14,7 +14,7 @@ darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = "0.5.0"
 
 # JSON-RPC
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 tinyjson = "2.5.1"
 url = "2.5.4"
 
@@ -22,12 +22,12 @@ url = "2.5.4"
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
 tracing-appender = "0.2.3"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.219", features = ["derive"]}
+serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
@@ -39,8 +39,8 @@ blake3 = "1.8.2"
 tracing = "0.1.41"
 lazy_static = "1.5.0"
 tar = "0.4.44"
-toml = "0.9.5"
-thiserror = "2.0.12"
+toml = "0.9.8"
+thiserror = "2.0.17"
 
 # Testing
 tempdir = "0.3.7"

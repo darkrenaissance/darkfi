@@ -26,7 +26,7 @@ bs58 = "0.5.1"
 sha2 = "0.10.9"
 
 # Misc
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 blake3 = "1.8.2"
 rand = "0.8.5"
 tracing = "0.1.41"
@@ -39,7 +39,7 @@ easy-parallel = "3.3.1"
 futures = "0.3.31"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
 tracing-appender = "0.2.3"
 smol = "2.0.2"
 
@@ -51,7 +51,7 @@ equix = "0.2.5"
 sled-overlay = "0.1.10"
 
 # Argument parsing
-serde = {version = "1.0.219", features = ["derive"]}
+serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

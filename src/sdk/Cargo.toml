@@ -18,7 +18,7 @@ wasm = []
 
 [dependencies]
 # Error handling
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 
 # Serialization
 darkfi-serial = {version = "0.5.1", features = ["crypto"]}
@@ -43,10 +43,10 @@ rand = "0.8.5"
 # Misc
 lazy_static = "1.5.0"
 subtle = "2.6.1"
-hashbrown = "0.15.5"
+hashbrown = "0.16.0"
 
 # Storage
-sled-overlay = "0.1.9"
+sled-overlay = "0.1.10"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}

@@ -43,7 +43,7 @@ use smol::{
 use tor_cell::relaycell::msg::Connected;
 use tor_error::ErrorReport;
 use tor_hsservice::{HsNickname, RendRequest, RunningOnionService};
-use tor_proto::stream::IncomingStreamRequest;
+use tor_proto::client::stream::IncomingStreamRequest;
 use tor_rtcompat::PreferredRuntime;
 use tracing::{debug, error, warn};
 use url::Url;

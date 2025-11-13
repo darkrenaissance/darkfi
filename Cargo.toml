@@ -52,13 +52,13 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.174"
-thiserror = "2.0.12"
+libc = "0.2.177"
+thiserror = "2.0.17"
 tracing = "0.1.41"
 
 # async-runtime
 async-recursion = {version = "1.1.1", optional = true}
-async-trait = {version = "0.1.88", optional = true}
+async-trait = {version = "0.1.89", optional = true}
 futures = {version = "0.3.31", optional = true}
 smol = {version = "2.0.2", optional = true}
 pin-project-lite = {version = "0.2.16", optional = true}
@@ -67,14 +67,14 @@ pin-project-lite = {version = "0.2.16", optional = true}
 futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"], optional = true}
 
 # Pluggable Transports
-socket2 = {version = "0.6.0", features = ["all"], optional = true}
-arti-client = {version = "0.33.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
-tor-error = {version = "0.33.0", optional = true}
-tor-rtcompat = {version = "0.33.0", features = ["async-std", "rustls"], optional = true}
-tor-hscrypto = {version = "0.33.0", optional = true}
-tor-hsservice = {version = "0.33.0", optional = true}
-tor-proto = {version = "0.33.0", optional = true}
-tor-cell = {version = "0.33.0", optional = true}
+socket2 = {version = "0.6.1", features = ["all"], optional = true}
+arti-client = {version = "0.36.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
+tor-error = {version = "0.36.0", optional = true}
+tor-rtcompat = {version = "0.36.0", features = ["async-std", "rustls"], optional = true}
+tor-hscrypto = {version = "0.36.0", optional = true}
+tor-hsservice = {version = "0.36.0", optional = true}
+tor-proto = {version = "0.36.0", optional = true}
+tor-cell = {version = "0.36.0", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.1.1", optional = true}
@@ -85,14 +85,14 @@ x509-parser = {version = "0.17.0", features = ["validate", "verify"], optional =
 # Encoding
 bs58 = {version = "0.5.1", optional = true}
 hex = {version = "0.4.3", optional = true}
-serde = {version = "1.0.219", features = ["derive"], optional = true}
+serde = {version = "1.0.228", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
 httparse = {version = "1.10.1", optional = true}
-primitive-types = {version = "0.13.1", optional = true}
-semver = {version = "1.0.26", optional = true}
+primitive-types = {version = "0.14.0", optional = true}
+semver = {version = "1.0.27", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.9.5", optional = true}
+toml = {version = "0.9.8", optional = true}
 
 # Utilities
 #darkfi-serial = {path = "src/serial", optional = true}
@@ -101,16 +101,16 @@ darkfi-serial = {version = "0.5.1", optional = true}
 darkfi-derive = {version = "0.5.1", optional = true}
 
 # TODO: check chrono usage and impl our own
-chrono = {version = "0.4.41", optional = true}
+chrono = {version = "0.4.42", optional = true}
 lazy_static = {version = "1.5.0", optional = true}
 num-bigint = {version = "0.4.6", optional = true}
 url = {version = "2.5.4", features = ["serde"], optional = true}
 
 # Misc
-regex = {version = "1.11.1", optional = true}
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"], optional = true }
+regex = {version = "1.12.2", optional = true}
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"], optional = true }
 tracing-appender = {version = "0.2.3", optional = true }
-nu-ansi-term = {version = "0.46.0", optional = true}
+nu-ansi-term = {version = "0.50.3", optional = true}
 
 
 # Crypto
@@ -123,9 +123,9 @@ sha2 = {version = "0.10.9", optional = true}
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
-wasmer = {version = "6.1.0-rc.2", features = ["singlepass"], optional = true}
-wasmer-compiler-singlepass = {version = "6.1.0-rc.2", optional = true}
-wasmer-middlewares = {version = "6.1.0-rc.2", optional = true}
+wasmer = {version = "6.1.0", features = ["singlepass"], optional = true}
+wasmer-compiler-singlepass = {version = "6.1.0", optional = true}
+wasmer-middlewares = {version = "6.1.0", optional = true}
 
 # Blockchain store
 sled-overlay = {version = "0.1.10", optional = true}

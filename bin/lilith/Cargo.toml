@@ -12,24 +12,24 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 darkfi = {path = "../../", features = ["toml", "async-daemonize", "rpc"]}
 
 # Misc
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 futures = "0.3.31"
 tracing = "0.1.41"
-semver = "1.0.26"
+semver = "1.0.27"
 tinyjson = "2.5.1"
-toml = "0.9.5"
+toml = "0.9.8"
 url = "2.5.4"
 
 # Daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
 tracing-appender = "0.2.3"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.219", features = ["derive"]}
+serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
