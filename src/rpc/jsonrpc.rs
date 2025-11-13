@@ -193,7 +193,10 @@ impl TryFrom<&JsonValue> for JsonRequest {
             return Err(RpcError::InvalidJson("JSON is not an Object".to_string()))
         }
 
-        let map: &HashMap<String, JsonValue> = value.get().unwrap();
+        // We have to allocate the value here another time in order to mutate
+        // it if necessary.
+        let mut value = value.clone();
+        let map: &mut HashMap<String, JsonValue> = value.get_mut().unwrap();
 
         if !map.contains_key("jsonrpc") ||
             !map["jsonrpc"].is_string() ||
@@ -204,7 +207,9 @@ impl TryFrom<&JsonValue> for JsonRequest {
             ))
         }
 
-        if !map.contains_key("id") || !map["id"].is_number() {
+        if !map.contains_key("id")
+        /* || !map["id"].is_number() */
+        {
             return Err(RpcError::InvalidJson(
                 "Request does not contain valid \"id\" field".to_string(),
             ))
@@ -217,9 +222,9 @@ impl TryFrom<&JsonValue> for JsonRequest {
         }
 
         if !map.contains_key("params") {
-            return Err(RpcError::InvalidJson(
-                "Request does not contain valid \"params\" field".to_string(),
-            ))
+            // HACK ALERT:
+            // On nonexisting `params`, we'll just make them into something.
+            map.insert("params".to_string(), JsonValue::from(vec![]));
         }
 
         if !map["params"].is_object() && !map["params"].is_array() {
@@ -228,9 +233,29 @@ impl TryFrom<&JsonValue> for JsonRequest {
             ))
         }
 
+        // HACK ALERT:
+        // Some RPC clients send string IDs. We assume they're numeric, so
+        // here we cast the strings to numbers.
+        let id = if map["id"].is_number() {
+            *map["id"].get::<f64>().unwrap() as u16
+        } else if map["id"].is_string() {
+            match map["id"].get::<String>().unwrap().parse::<f64>() {
+                Ok(v) => v as u16,
+                Err(_) => {
+                    return Err(RpcError::InvalidJson(
+                        "Request does not contain valid \"id\" field".to_string(),
+                    ))
+                }
+            }
+        } else {
+            return Err(RpcError::InvalidJson(
+                "Request does not contain valid \"id\" field".to_string(),
+            ))
+        };
+
         Ok(Self {
             jsonrpc: "2.0",
-            id: *map["id"].get::<f64>().unwrap() as u16,
+            id,
             method: map["method"].get::<String>().unwrap().clone(),
             params: map["params"].clone(),
         })
