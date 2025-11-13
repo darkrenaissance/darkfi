@@ -882,11 +882,12 @@ pub async fn make(
         let chatview_node = chatview_node.clone();
         let render_api = render_api.clone();
         async move {
-            let atom = &mut render_api.make_guard(gfxtag!("sendmsg action"));
-
             let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: {channel}");
-            editz_text.set(atom, "");
+            {
+                let atom = &mut render_api.make_guard(gfxtag!("sendmsg clear edit"));
+                editz_text.set(atom, "");
+            }
 
             let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") else {
                 error!(target: "app::chat", "DarkIrc plugin has not been loaded");
@@ -896,7 +897,10 @@ pub async fn make(
             if text.starts_with("/nick") {
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
                 info!(target: "app::chat", "Setting nick to: {nick}");
-                darkirc.set_property_str(atom, Role::App, "nick", nick).unwrap();
+                {
+                    let atom = &mut render_api.make_guard(gfxtag!("sendmsg action"));
+                    darkirc.set_property_str(atom, Role::App, "nick", nick).unwrap();
+                }
 
                 let msg = format!("You are now known as <{nick}>");
                 let id: [u8; 32] = rand::random();
