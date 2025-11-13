@@ -24,8 +24,8 @@ use std::{
     time::Instant,
 };
 
-use log::{debug, warn};
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
+use tracing::{debug, warn};
 
 use crate::{
     system::thread_priority::{set_thread_priority, ThreadPriority},

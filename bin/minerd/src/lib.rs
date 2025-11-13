@@ -193,7 +193,7 @@ fn minerd_programmatic_control() -> Result<()> {
 
     // Generate a dummy mining job
     let target = darkfi::rpc::util::JsonValue::String(
-        num_bigint::BigUint::from_bytes_be(&[0xFF; 32]).to_string(),
+        num_bigint::BigUint::from_bytes_le(&[0xFF; 32]).to_string(),
     );
     let block = darkfi::rpc::util::JsonValue::String(darkfi::util::encoding::base64::encode(
         &darkfi_serial::serialize(&darkfi::blockchain::BlockInfo::default()),
