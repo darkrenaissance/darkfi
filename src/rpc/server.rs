@@ -38,6 +38,7 @@ use super::{
 use crate::{
     net::transport::{Listener, PtListener, PtStream},
     system::{StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -367,7 +368,7 @@ async fn run_accept_loop<'a, T: 'a>(
         match listener.next().await {
             Ok((stream, url)) => {
                 let rh_ = rh.clone();
-                info!(target: "rpc::server", "[RPC] Server accepted conn from {url}");
+                verbose!(target: "rpc::server", "[RPC] Server accepted conn from {url}");
 
                 let (reader, writer) = smol::io::split(stream);
                 let reader = Arc::new(Mutex::new(BufReader::new(reader)));
@@ -387,7 +388,7 @@ async fn run_accept_loop<'a, T: 'a>(
                         ex_,
                     ),
                     |_| async move {
-                        info!(target: "rpc::server", "[RPC] Closed conn from {url}");
+                        verbose!(target: "rpc::server", "[RPC] Closed conn from {url}");
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
                     Error::ChannelStopped,

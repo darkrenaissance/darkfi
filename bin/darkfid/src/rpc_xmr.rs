@@ -151,12 +151,6 @@ impl DarkfiNode {
         };
         let prev_id = monero::Hash::from_slice(&prev_id);
 
-        info!(
-            target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
-            "[RPC-XMR] Got blocktemplate request: address={}, aux_hash={}, height={}, prev_id={}",
-            address, aux_hash, height, prev_id,
-        );
-
         // Method params format is correct. Let's check if we provided this
         // mining job already. If so, we can just return an empty response.
         // We'll also obtain a lock here to avoid getting polled multiple
@@ -166,6 +160,12 @@ impl DarkfiNode {
         if mm_blocktemplates.contains_key(&aux_hash) {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
+
+        info!(
+            target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
+            "[RPC-XMR] Got blocktemplate request: address={}, aux_hash={}, height={}, prev_id={}",
+            address, aux_hash, height, prev_id,
+        );
 
         // If it's a new job, clear the previous one(s).
         mm_blocktemplates.clear();
@@ -233,8 +233,6 @@ impl DarkfiNode {
             ("aux_diff".to_string(), JsonValue::from(difficulty)),
             ("aux_hash".to_string(), JsonValue::from(blockhash.as_string())),
         ]));
-
-        info!("<-- {}", response.stringify().unwrap());
 
         JsonResponse::new(response, id).into()
     }
