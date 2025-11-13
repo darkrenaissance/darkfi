@@ -30,7 +30,7 @@ use crate::blockchain::monero::MoneroPowData;
 mod helpers;
 use helpers::create_blockhashing_blob;
 
-mod merkle_tree_parameters;
+pub mod merkle_tree_parameters;
 
 impl MoneroPowData {
     /// Returns true if the coinbase Merkle proof produces the `merkle_root` hash.

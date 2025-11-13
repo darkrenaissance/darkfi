@@ -19,7 +19,6 @@
 
 use std::{io, iter};
 
-use log::warn;
 use monero::{
     blockdata::transaction::{ExtraField, RawExtraField, SubField},
     consensus::Encodable as XmrEncodable,
@@ -29,6 +28,7 @@ use monero::{
 use primitive_types::U256;
 use sha2::{Digest, Sha256};
 use tiny_keccak::{Hasher, Keccak};
+use tracing::warn;
 
 use super::merkle_tree_parameters::MerkleTreeParameters;
 use crate::{
