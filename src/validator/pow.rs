@@ -302,7 +302,8 @@ impl PoWModule {
 
         // Setup verifier based on block PoW data
         let flags = RandomXFlags::get_recommended_flags();
-        let vm = match &header.pow_data {
+
+        let (out_hash, verification_time) = match &header.pow_data {
             DarkFi => {
                 // Check which VM key should be used.
                 // We only use the next key when the next block is the
@@ -314,21 +315,44 @@ impl PoWModule {
                 } else {
                     &self.darkfi_rx_keys.0[..]
                 };
+
+                debug!(
+                    target: "validator::pow::verify_block",
+                    "[VERIFIER] Creating DarkFi PoW RandomXCache",
+                );
                 let cache = RandomXCache::new(flags, randomx_key)?;
-                self.darkfi_rx_factory.create(randomx_key, Some(cache), None)?
+                let vm = self.darkfi_rx_factory.create(randomx_key, Some(cache), None)?;
+
+                debug!(
+                    target: "validator::pow::verify_block",
+                    "[VERIFIER] DarkFi PoW setup time: {:?}",
+                    verifier_setup.elapsed(),
+                );
+
+                let verification_time = Instant::now();
+                let out_hash = vm.calculate_hash(header.hash().inner())?;
+                (BigUint::from_bytes_le(&out_hash), verification_time)
             }
-            Monero(monero_pow_data) => {
-                let randomx_key = &monero_pow_data.randomx_key[..];
+            Monero(powdata) => {
+                debug!(
+                    target: "validator::pow::verify_block",
+                    "[VERIFIER] Creating Monero PoW RandomXCache",
+                );
+                let randomx_key = &powdata.randomx_key[..];
                 let cache = RandomXCache::new(flags, randomx_key)?;
-                self.monero_rx_factory.create(randomx_key, Some(cache), None)?
+                let vm = self.monero_rx_factory.create(randomx_key, Some(cache), None)?;
+
+                debug!(
+                    target: "validator::pow::verify_block",
+                    "[VERIFIER] Monero PoW setup time: {:?}",
+                    verifier_setup.elapsed(),
+                );
+
+                let verification_time = Instant::now();
+                let out_hash = vm.calculate_hash(&powdata.create_block_hashing_blob())?;
+                (BigUint::from_bytes_le(&out_hash), verification_time)
             }
         };
-        debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
-
-        // Compute the output hash
-        let verification_time = Instant::now();
-        let out_hash = vm.calculate_hash(header.hash().inner())?;
-        let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
         if out_hash > target {
