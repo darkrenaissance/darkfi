@@ -29,9 +29,11 @@ use darkfi::{
         },
         HeaderHash,
     },
+    util::encoding::base64,
     rpc::jsonrpc::{ErrorCode, ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
     validator::consensus::Proposal,
 };
+use darkfi_serial::serialize_async;
 use darkfi_sdk::crypto::PublicKey;
 use hex::FromHex;
 use tinyjson::JsonValue;
@@ -503,6 +505,10 @@ impl DarkfiNode {
             );
             return JsonError::new(ErrorCode::InternalError, None, id).into()
         }
+
+        let proposals_sub = self.subscribers.get("proposals").unwrap();
+        let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
+        proposals_sub.notify(vec![enc_prop].into()).await;
 
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
