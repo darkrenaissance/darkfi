@@ -60,7 +60,7 @@ impl HeaderHash {
     }
 
     pub fn as_string(&self) -> String {
-        blake3::hash(&self.0).to_string()
+        blake3::Hash::from_bytes(self.0).to_string()
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -186,7 +186,7 @@ impl fmt::Display for Header {
             "Transactions Root",
             self.transactions_root,
             "State Root",
-            blake3::hash(&self.state_root),
+            blake3::Hash::from_bytes(self.state_root),
             "Proof of Work data",
             self.pow_data,
         );

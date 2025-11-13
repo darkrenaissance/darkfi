@@ -47,7 +47,7 @@ impl TransactionHash {
     }
 
     pub fn as_string(&self) -> String {
-        blake3::hash(&self.0).to_string()
+        blake3::Hash::from_bytes(self.0).to_string()
     }
 }
 
