@@ -29,7 +29,7 @@ use darkfi_sdk::num_traits::{One, Zero};
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use smol::channel::Receiver;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::{
     blockchain::{
@@ -233,13 +233,13 @@ impl PoWModule {
 
     /// Compute the next mine target.
     pub fn next_mine_target(&self) -> Result<BigUint> {
-        Ok(BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()?)
+        Ok(BigUint::from_bytes_le(&[0xFF; 32]) / &self.next_difficulty()?)
     }
 
     /// Compute the next mine target and difficulty.
     pub fn next_mine_target_and_difficulty(&self) -> Result<(BigUint, BigUint)> {
         let difficulty = self.next_difficulty()?;
-        let mine_target = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
+        let mine_target = BigUint::from_bytes_le(&[0xFF; 32]) / &difficulty;
         Ok((mine_target, difficulty))
     }
 
@@ -490,7 +490,7 @@ pub fn mine_block(
                 }
 
                 let out_hash = vm.calculate_hash(header.hash().inner()).unwrap();
-                let out_hash = BigUint::from_bytes_be(&out_hash);
+                let out_hash = BigUint::from_bytes_le(&out_hash);
                 if out_hash <= target {
                     found_header.store(true, Ordering::SeqCst);
                     found_nonce.store(miner_nonce, Ordering::SeqCst);
