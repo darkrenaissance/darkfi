@@ -32,7 +32,7 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{emoji_picker, Layer, Shortcut, VectorArt, VectorShape, Video},
-    util::i18n::I18nBabelFish,
+    util::{i18n::I18nBabelFish, spawn_thread},
 };
 
 mod chat;
@@ -489,7 +489,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     );
 
     let emoji_meshes2 = emoji_meshes.clone();
-    std::thread::spawn(move || {
+    spawn_thread("load-emojis", move || {
         for i in (0..500).step_by(20) {
             let mut emoji = emoji_meshes2.lock();
             for j in i..(i + 20) {

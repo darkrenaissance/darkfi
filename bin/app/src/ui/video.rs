@@ -32,7 +32,7 @@ use crate::{
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
-    util::unixtime,
+    util::{spawn_thread, unixtime},
     ExecutorPtr,
 };
 
@@ -168,7 +168,8 @@ impl Video {
             let vid_data = self.vid_data.clone();
             let textures_pub = textures_pub.clone();
 
-            let handle = std::thread::spawn(move || {
+            let name = format!("video-load-{}", thread_idx);
+            let handle = spawn_thread(name, move || {
                 let now = std::time::Instant::now();
                 let mut frame_idx = thread_idx;
                 while frame_idx < vid_len {

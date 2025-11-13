@@ -31,6 +31,15 @@ pub fn unixtime() -> u64 {
     timest as u64
 }
 
+pub fn spawn_thread<F, T, S>(name: S, f: F) -> std::thread::JoinHandle<T>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+    S: Into<String>,
+{
+    std::thread::Builder::new().name(name.into()).spawn(f).unwrap()
+}
+
 #[allow(dead_code)]
 pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
     let mut out = String::new();

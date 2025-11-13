@@ -22,7 +22,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::mesh::Color;
+use crate::{mesh::Color, util::spawn_thread};
 
 pub mod atlas;
 mod editor;
@@ -56,7 +56,7 @@ impl<T> AsyncGlobal<T> {
 pub static TEXT_CTX: AsyncGlobal<TextContext> = AsyncGlobal::new();
 
 pub fn init_txt_ctx() {
-    std::thread::spawn(|| {
+    spawn_thread("init_txt_ctx", || {
         // This is quite slow. It takes 300ms
         let txt_ctx = TextContext::new();
         TEXT_CTX.set(txt_ctx);

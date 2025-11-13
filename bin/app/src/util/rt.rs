@@ -21,6 +21,8 @@ use parking_lot::Mutex as SyncMutex;
 use smol::Task;
 use std::{sync::Arc, thread};
 
+use crate::util::spawn_thread;
+
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "rt", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "rt", $($arg)*); } }
 
@@ -57,11 +59,12 @@ impl AsyncRuntime {
     pub fn start_with_count(&self, n_threads: usize) {
         let mut exec_threadpool = Vec::with_capacity(n_threads);
         // N executor threads
-        for _ in 0..n_threads {
+        for i in 0..n_threads {
             let shutdown = self.shutdown.clone();
             let ex = self.ex.clone();
 
-            let handle = thread::spawn(move || {
+            let name = format!("{}-{}", self.name, i);
+            let handle = spawn_thread(name, move || {
                 let _ = smol::future::block_on(ex.run(shutdown.recv()));
             });
             exec_threadpool.push(handle);
