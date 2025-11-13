@@ -13,7 +13,7 @@ blake3 = "1.8.2"
 bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 darkfi-serial = { version = "0.5.0", features = ["derive", "crypto"] }
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
