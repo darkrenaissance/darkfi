@@ -45,7 +45,7 @@ pub enum PowData {
     Monero(MoneroPowData),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can restrict API access.
 pub struct HeaderHash(pub [u8; 32]);
 
