@@ -49,7 +49,7 @@ use tracing::{debug, error, warn};
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::util::{logger::verbose, encoding::base32, path::expand_path};
+use crate::util::{encoding::base32, logger::verbose, path::expand_path};
 
 /// A static for `TorClient` reusability
 static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
@@ -244,7 +244,7 @@ impl TorListener {
             "[P2P] Established Tor listener on tor://{}:{port}", onion_id,
         );
 
-        let endpoint = Url::parse(&format!("tor://{}:{port}", onion_id)).unwrap();
+        let endpoint = Url::parse(&format!("tor://{onion_id}:{port}")).unwrap();
         self.endpoint.set(endpoint).await.expect("fatal endpoint already set for TorListener");
 
         Ok(TorListenerIntern {
