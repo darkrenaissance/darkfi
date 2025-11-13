@@ -26,6 +26,7 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 use darkfi::{
+    blockchain::{BlockInfo, HeaderHash},
     net::settings::Settings,
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -33,9 +34,15 @@ use darkfi::{
         settings::RpcSettings,
     },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::{
+        consensus::Fork, utils::best_fork_index, Validator, ValidatorConfig, ValidatorPtr,
+    },
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zkas::ZkBinary,
     Error, Result,
 };
+use darkfi_money_contract::MONEY_CONTRACT_ZKAS_MINT_NS_V1;
+use darkfi_sdk::crypto::{keypair::SecretKey, MONEY_CONTRACT_ID};
 
 #[cfg(test)]
 mod tests;
@@ -77,6 +84,10 @@ pub struct DarkfiNode {
     rpc_client: Option<Mutex<MinerRpcClient>>,
     /// HTTP JSON-RPC connection tracker
     mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// Merge mining block templates
+    mm_blocktemplates: Mutex<HashMap<HeaderHash, (BlockInfo, SecretKey)>>,
+    /// PowRewardV1 ZK data
+    powrewardv1_zk: PowRewardV1Zk,
 }
 
 impl DarkfiNode {
@@ -86,8 +97,10 @@ impl DarkfiNode {
         txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
         rpc_client: Option<Mutex<MinerRpcClient>>,
-    ) -> DarkfiNodePtr {
-        Arc::new(Self {
+    ) -> Result<DarkfiNodePtr> {
+        let powrewardv1_zk = PowRewardV1Zk::new(validator.clone())?;
+
+        Ok(Arc::new(Self {
             p2p_handler,
             validator,
             txs_batch_size,
@@ -95,7 +108,42 @@ impl DarkfiNode {
             rpc_connections: Mutex::new(HashSet::new()),
             rpc_client,
             mm_rpc_connections: Mutex::new(HashSet::new()),
-        })
+            mm_blocktemplates: Mutex::new(HashMap::new()),
+            powrewardv1_zk,
+        }))
+    }
+
+    /// Grab best current fork
+    pub async fn best_current_fork(&self) -> Result<Fork> {
+        let forks = self.validator.consensus.forks.read().await;
+        let index = best_fork_index(&forks)?;
+        forks[index].full_clone()
+    }
+}
+
+/// ZK data used to generate the "coinbase" transaction in a block
+pub(crate) struct PowRewardV1Zk {
+    pub zkbin: ZkBinary,
+    pub provingkey: ProvingKey,
+}
+
+impl PowRewardV1Zk {
+    pub fn new(validator: ValidatorPtr) -> Result<Self> {
+        info!(
+            target: "darkfid::PowRewardV1Zk::new",
+            "Generating PowRewardV1 ZkCircuit and ProvingKey...",
+        );
+
+        let (zkbin, _) = validator.blockchain.contracts.get_zkas(
+            &validator.blockchain.sled_db,
+            &MONEY_CONTRACT_ID,
+            MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+        )?;
+
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+        let provingkey = ProvingKey::build(zkbin.k, &circuit);
+
+        Ok(Self { zkbin, provingkey })
     }
 }
 
@@ -164,8 +212,8 @@ impl Darkfid {
         };
 
         // Initialize node
-        let node =
-            DarkfiNode::new(p2p_handler, validator, txs_batch_size, subscribers, rpc_client).await;
+        let node = DarkfiNode::new(p2p_handler, validator, txs_batch_size, subscribers, rpc_client)
+            .await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();

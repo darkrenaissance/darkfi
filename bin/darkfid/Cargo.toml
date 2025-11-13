@@ -30,6 +30,10 @@ async-trait = "0.1.88"
 tinyjson = "2.5.1"
 url = "2.5.4"
 
+# Monero
+monero = "0.21.0"
+hex = "0.4.3"
+
 # Daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"

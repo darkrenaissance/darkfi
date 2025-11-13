@@ -28,15 +28,13 @@ use darkfi::{
         utils::best_fork_index,
         verification::apply_producer_transaction,
     },
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zk::ProvingKey,
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_money_contract::{
-    client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-};
+use darkfi_money_contract::{client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{poseidon_hash, FuncId, MerkleTree, PublicKey, SecretKey, MONEY_CONTRACT_ID},
+    crypto::{FuncId, MerkleTree, PublicKey, SecretKey, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -74,16 +72,6 @@ pub async fn miner_task(
 ) -> Result<()> {
     // Initialize miner configuration
     info!(target: "darkfid::task::miner_task", "Starting miner task...");
-
-    // Grab zkas proving keys and bin for PoWReward transaction
-    info!(target: "darkfid::task::miner_task", "Generating zkas bin and proving keys...");
-    let (zkbin, _) = node.validator.blockchain.contracts.get_zkas(
-        &node.validator.blockchain.sled_db,
-        &MONEY_CONTRACT_ID,
-        MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-    )?;
-    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
-    let pk = ProvingKey::build(zkbin.k, &circuit);
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
@@ -132,36 +120,28 @@ pub async fn miner_task(
     // Start miner loop
     loop {
         // Grab best current fork
-        let forks = node.validator.consensus.forks.read().await;
-        let index = match best_fork_index(&forks) {
-            Ok(i) => i,
-            Err(e) => {
-                error!(
-                    target: "darkfid::task::miner_task",
-                    "Finding best fork index failed: {e}"
-                );
-                continue
-            }
-        };
-        let extended_fork = match forks[index].full_clone() {
+        let extended_fork = match node.best_current_fork().await {
             Ok(f) => f,
             Err(e) => {
                 error!(
                     target: "darkfid::task::miner_task",
-                    "Fork full clone creation failed: {e}"
+                    "Finding best fork index failed: {e}",
                 );
                 continue
             }
         };
-        drop(forks);
 
         // Grab extended fork last proposal hash
         let last_proposal_hash = extended_fork.last_proposal()?.hash;
 
+        // Grab zkas proving keys and bin for PoWReward transaction
+        let zkbin = &node.powrewardv1_zk.zkbin;
+        let pk = &node.powrewardv1_zk.provingkey;
+
         // Start listenning for network proposals and mining next block for best fork.
         match smol::future::or(
             listen_to_network(node, last_proposal_hash, &subscription, &sender),
-            mine(node, extended_fork, recipient_config, &zkbin, &pk, &stop_signal, skip_sync),
+            mine(node, extended_fork, recipient_config, zkbin, pk, &stop_signal, skip_sync),
         )
         .await
         {
@@ -351,7 +331,7 @@ async fn mine_next_block(
 }
 
 /// Auxiliary function to generate next block in an atomic manner.
-async fn generate_next_block(
+pub async fn generate_next_block(
     extended_fork: &mut Fork,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
