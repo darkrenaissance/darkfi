@@ -290,7 +290,7 @@ pub async fn generate_node(
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
     let node =
         DarkfiNode::new(p2p_handler.clone(), validator.clone(), 50, subscribers.clone(), None)
-            .await;
+            .await?;
 
     p2p_handler.clone().start(ex, &validator, &subscribers).await?;
 

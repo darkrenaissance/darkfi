@@ -1833,7 +1833,6 @@ dependencies = [
  "semver",
  "serde",
  "sha2",
- "simplelog",
  "sled-overlay",
  "smol",
  "socket2",
@@ -2030,6 +2029,8 @@ dependencies = [
  "darkfi-serial",
  "darkfi_money_contract",
  "easy-parallel",
+ "hex",
+ "monero",
  "num-bigint",
  "rand 0.8.5",
  "serde",
@@ -4633,15 +4634,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
-]
-
-[[package]]
-name = "num_threads"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
-dependencies = [
- "libc",
 ]
 
 [[package]]

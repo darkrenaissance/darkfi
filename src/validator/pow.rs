@@ -29,7 +29,7 @@ use darkfi_sdk::num_traits::{One, Zero};
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use smol::channel::Receiver;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
     blockchain::{
@@ -338,7 +338,7 @@ impl PoWModule {
                     target: "validator::pow::verify_block",
                     "[VERIFIER] Creating Monero PoW RandomXCache",
                 );
-                let randomx_key = &powdata.randomx_key[..];
+                let randomx_key = powdata.randomx_key();
                 let cache = RandomXCache::new(flags, randomx_key)?;
                 let vm = self.monero_rx_factory.create(randomx_key, Some(cache), None)?;
 
@@ -349,7 +349,7 @@ impl PoWModule {
                 );
 
                 let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(&powdata.create_block_hashing_blob())?;
+                let out_hash = vm.calculate_hash(&powdata.to_blockhashing_blob())?;
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
         };

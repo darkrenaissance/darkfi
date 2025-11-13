@@ -47,9 +47,6 @@ use pow::PoWModule;
 pub mod randomx_factory;
 pub use randomx_factory::RandomXFactory;
 
-/// Monero infrastructure
-pub mod xmr;
-
 /// Verification functions
 pub mod verification;
 use verification::{

@@ -139,6 +139,8 @@ impl RequestHandler<MmRpcHandler> for DarkfiNode {
             // P2Pool methods requested for Monero Merge Mining
             // ================================================
             "merge_mining_get_chain_id" => self.xmr_merge_mining_get_chain_id(req.id, req.params).await,
+            "merge_mining_get_aux_block" => self.xmr_merge_mining_get_aux_block(req.id, req.params).await,
+            "merge_mining_submit_solution" => self.xmr_merge_mining_submit_solution(req.id, req.params).await,
 
             // ==============
             // Invalid method
