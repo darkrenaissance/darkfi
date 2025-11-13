@@ -91,7 +91,7 @@ impl From<&BlockInfo> for BlockRecord {
             timestamp: block.header.timestamp,
             nonce: block.header.nonce,
             transactions_root: block.header.transactions_root.to_string(),
-            state_root: blake3::hash(&block.header.state_root).to_string(),
+            state_root: blake3::Hash::from_bytes(block.header.state_root).to_string(),
             pow_data: format!("{:?}", block.header.pow_data),
             signature: block.signature,
         }
