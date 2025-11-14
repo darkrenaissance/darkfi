@@ -207,11 +207,19 @@ where
 
             // Displays the full span tree
             for span in scope.from_root() {
-                // Crop span_id to 6 chars
-                let span_id = span.id().into_u64().to_string();
-                let span_id = &span_id[..span_id.len().min(6)];
+                let span_name = bold.paint(span.metadata().name());
 
-                write!(writer, "{}({})", bold.paint(span.metadata().name()), span_id)?;
+                // Only need to show the span ID once for the root span
+                // since its the same for all child spans too.
+                if !seen {
+                    // Crop span_id to 6 chars
+                    let span_id = span.id().into_u64().to_string();
+                    let span_id = &span_id[..span_id.len().min(6)];
+
+                    write!(writer, "{}({})", span_name, span_id)?;
+                } else {
+                    write!(writer, "{}", span_name)?;
+                }
                 seen = true;
 
                 let ext = span.extensions();
