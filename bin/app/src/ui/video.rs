@@ -23,6 +23,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use tracing::instrument;
 
 use crate::{
     gfx::{
@@ -242,6 +243,7 @@ impl Video {
         mesh.alloc(&self.render_api)
     }
 
+    #[instrument(skip_all)]
     async fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
@@ -269,6 +271,9 @@ impl Video {
         // Only used in this function so fine to hold the entire time
         let mut load_tasks = self.load_tasks.lock();
         load_tasks.clear();
+
+        let mut loaded_n_frames = 0;
+        let total_frames = vid_data.textures.len();
 
         for (texture_idx, (mut texture, mut tsub)) in
             vid_data.textures.into_iter().zip(tsubs.into_iter()).enumerate()
@@ -319,7 +324,10 @@ impl Video {
                 debug_str: "video",
             };
             vid_data.anim.update(texture_idx, Frame::new(40, dc));
+            loaded_n_frames += 1;
         }
+
+        debug!(target: "ui::video", "Loaded {loaded_n_frames} / {total_frames} frames");
 
         Some(DrawUpdate {
             key: self.dc_key,

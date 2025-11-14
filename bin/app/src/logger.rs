@@ -27,7 +27,10 @@ use {
 use tracing_subscriber::filter::{LevelFilter, Targets};
 
 #[cfg(any(not(target_os = "android"), feature = "enable-filelog"))]
-use darkfi::util::logger::{EventFormatter, Level, TargetFilter};
+use {
+    darkfi::util::logger::{EventFormatter, Level, TargetFilter},
+    tracing_subscriber::fmt::format::FmtSpan,
+};
 
 // Measured in bytes
 #[cfg(feature = "enable-filelog")]
@@ -111,7 +114,8 @@ pub fn setup_logging() -> Option<WorkerGuard> {
 
     #[cfg(not(target_os = "android"))]
     {
-        let terminal_layer = tracing_subscriber::fmt::Layer::new()
+        let mut terminal_layer = tracing_subscriber::fmt::Layer::new()
+            .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
             .event_format(EventFormatter::new(true, true))
             .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
                 darkfi::util::logger::terminal_field_formatter,

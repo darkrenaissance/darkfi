@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
+use tracing::instrument;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi},
@@ -120,6 +121,7 @@ impl VectorArt {
         vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
     }
 
+    #[instrument(skip_all)]
     async fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,

@@ -19,6 +19,7 @@
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use std::sync::{Arc, Weak};
+use tracing::instrument;
 
 use crate::{
     app::locale::read_locale_ftl,
@@ -440,6 +441,7 @@ impl Window {
         }
     }
 
+    #[instrument(skip_all)]
     pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
         let trace_id = rand::random();
         let timest = unixtime();
