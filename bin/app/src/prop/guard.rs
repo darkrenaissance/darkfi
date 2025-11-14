@@ -87,7 +87,7 @@ impl Drop for PropertyAtomicGuard {
 
 impl std::fmt::Debug for PropertyAtomicGuard {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("PropertyAtomicGuard").field("batch_id", &self.batch_id).finish()
+        write!(f, "@{:?}", self.batch_id)
     }
 }
 

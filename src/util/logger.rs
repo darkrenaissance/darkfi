@@ -226,7 +226,7 @@ where
                 seen = true;
 
                 // Only show the fields of the last span
-                if span_idx == last_span_idx {
+                if meta.is_span() && span_idx == last_span_idx {
                     let ext = span.extensions();
                     if let Some(fields) = &ext.get::<FormattedFields<N>>() {
                         if !fields.is_empty() {
