@@ -205,8 +205,13 @@ where
 
             let mut seen = false;
 
+            // Displays the full span tree
             for span in scope.from_root() {
-                write!(writer, "{}", bold.paint(span.metadata().name()))?;
+                // Crop span_id to 6 chars
+                let span_id = span.id().into_u64().to_string();
+                let span_id = &span_id[..span_id.len().min(6)];
+
+                write!(writer, "{}({})", bold.paint(span.metadata().name()), span_id)?;
                 seen = true;
 
                 let ext = span.extensions();
