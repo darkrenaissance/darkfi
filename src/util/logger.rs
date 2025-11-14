@@ -205,8 +205,11 @@ where
 
             let mut seen = false;
 
+            let spans: Vec<_> = scope.from_root().collect();
+            let last_span_idx = spans.len() - 1;
+
             // Displays the full span tree
-            for span in scope.from_root() {
+            for (span_idx, span) in spans.into_iter().enumerate() {
                 let span_name = bold.paint(span.metadata().name());
 
                 // Only need to show the span ID once for the root span
@@ -222,10 +225,13 @@ where
                 }
                 seen = true;
 
-                let ext = span.extensions();
-                if let Some(fields) = &ext.get::<FormattedFields<N>>() {
-                    if !fields.is_empty() {
-                        write!(writer, "{}{}{}", bold.paint("{"), fields, bold.paint("}"))?;
+                // Only show the fields of the last span
+                if span_idx == last_span_idx {
+                    let ext = span.extensions();
+                    if let Some(fields) = &ext.get::<FormattedFields<N>>() {
+                        if !fields.is_empty() {
+                            write!(writer, "{}{} {}", bold.paint("{"), fields, bold.paint("}"))?;
+                        }
                     }
                 }
                 write!(writer, "{}", dimmed.paint(":"))?;
