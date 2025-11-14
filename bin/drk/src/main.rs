@@ -24,9 +24,10 @@ use std::{
 
 use prettytable::{format, row, Table};
 use rand::rngs::OsRng;
-use smol::{fs::read_to_string, stream::StreamExt};
+use smol::{channel::unbounded, fs::read_to_string, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tracing::info;
+use tracing_appender::non_blocking;
 use url::Url;
 
 use darkfi::{
@@ -34,6 +35,7 @@ use darkfi::{
     system::ExecutorPtr,
     util::{
         encoding::base64,
+        logger::{set_terminal_writer, ChannelWriter},
         parse::{decode_base10, encode_base10},
         path::{expand_path, get_config_path},
     },
@@ -655,6 +657,16 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
     match args.command {
         Subcmd::Interactive => {
+            // Create an unbounded smol channel, so we can have a
+            // printing queue the background logger and tasks can
+            // submit messages to so the shell prints them.
+            let (shell_sender, shell_receiver) = unbounded();
+
+            // Set the logging writer
+            let (non_blocking, _guard) =
+                non_blocking(ChannelWriter { sender: shell_sender.clone() });
+            set_terminal_writer(args.verbose, non_blocking)?;
+
             let drk = new_wallet(
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
@@ -665,8 +677,15 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await
             .into_ptr();
-            interactive(&drk, &blockchain_config.endpoint, &blockchain_config.history_path, &ex)
-                .await;
+            interactive(
+                &drk,
+                &blockchain_config.endpoint,
+                &blockchain_config.history_path,
+                &shell_sender,
+                &shell_receiver,
+                &ex,
+            )
+            .await;
             drk.read().await.stop_rpc_client().await?;
             Ok(())
         }

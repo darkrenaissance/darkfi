@@ -16,23 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{env, fmt, time::UNIX_EPOCH};
+use std::{
+    env, fmt,
+    io::{Result as IOResult, Write},
+    marker::{Send, Sync},
+    sync::OnceLock,
+    time::UNIX_EPOCH,
+};
 
 use nu_ansi_term::{Color, Style};
+use smol::channel::Sender;
 use tracing::{field::Field, Event, Level as TracingLevel, Metadata, Subscriber};
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_subscriber::{
     fmt::{
         format, format::FmtSpan, time::FormatTime, FmtContext, FormatEvent, FormatFields,
-        FormattedFields, Layer as FmtLayer,
+        FormattedFields, Layer as FmtLayer, MakeWriter,
     },
     layer::{Context, Filter, SubscriberExt},
     registry::LookupSpan,
+    reload::{Handle, Layer as ReloadLayer},
     util::SubscriberInitExt,
     Layer, Registry,
 };
 
-use crate::{util::time::DateTime, Result};
+use crate::{util::time::DateTime, Error, Result};
 
 // Creates a `verbose` log level by wrapping an info! macro and
 // adding a `verbose` field.
@@ -433,6 +441,58 @@ impl<S: Subscriber> Layer<S> for TargetFilter {
     }
 }
 
+/// Global singleton holding the tracing terminal layer handle.
+static TERMINAL_LAYER_HANDLE: OnceLock<Handle<Box<dyn Layer<Registry> + Send + Sync>, Registry>> =
+    OnceLock::new();
+
+/// Wrapper structure over a smol channel sender to use as a logs
+/// writer for the interactive shell.
+pub struct ChannelWriter {
+    pub sender: Sender<Vec<String>>,
+}
+
+impl Write for ChannelWriter {
+    fn write(&mut self, buf: &[u8]) -> IOResult<usize> {
+        let string = String::from_utf8_lossy(buf).to_string();
+        let mut message = vec![];
+        for line in string.lines() {
+            message.push(line.to_string());
+        }
+        let _ = self.sender.send_blocking(message);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> IOResult<()> {
+        Ok(())
+    }
+}
+
+/// Trait definitions for cleaner code.
+pub trait TerminalWriter: for<'writer> MakeWriter<'writer> + 'static + Sized + Send + Sync {}
+impl<W: for<'writer> MakeWriter<'writer> + 'static + Sized + Send + Sync> TerminalWriter for W {}
+
+/// Auxiliary function to set the tracing terminal layer writer.
+pub fn set_terminal_writer(verbosity_level: u8, writer: impl TerminalWriter) -> Result<()> {
+    // Grab the singleton
+    let Some(reload_handle) = TERMINAL_LAYER_HANDLE.get() else {
+        return Err(Error::Custom(String::from("Tracing terminal layer reload handle is not set")))
+    };
+
+    // Generate the terminal layer again using provided writer
+    let terminal_layer = FmtLayer::new()
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .event_format(EventFormatter::new(true, verbosity_level != 0))
+        .fmt_fields(format::debug_fn(terminal_field_formatter))
+        .with_writer(writer)
+        .boxed();
+
+    // Reload the layer in the handler
+    if let Err(e) = reload_handle.reload(terminal_layer) {
+        return Err(Error::Custom(format!("Unable to reload terminal layer: {e}")))
+    }
+    Ok(())
+}
+
 /// Helper for setting up logging for bins.
 pub fn setup_logging(verbosity_level: u8, log_file: Option<NonBlocking>) -> Result<()> {
     let terminal_field_format = format::debug_fn(terminal_field_formatter);
@@ -442,7 +502,14 @@ pub fn setup_logging(verbosity_level: u8, log_file: Option<NonBlocking>) -> Resu
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .event_format(EventFormatter::new(true, verbosity_level != 0))
         .fmt_fields(terminal_field_format)
-        .with_writer(std::io::stdout);
+        .with_writer(std::io::stdout)
+        .boxed();
+    let (terminal_layer, reload_handle) = ReloadLayer::new(terminal_layer);
+    if TERMINAL_LAYER_HANDLE.set(reload_handle).is_err() {
+        return Err(Error::Custom(String::from(
+            "Could not set tracing terminal layer reload handle",
+        )))
+    }
 
     let mut target_filter = TargetFilter::default().with_verbosity(verbosity_level);
     if let Ok(log_targets) = env::var("LOG_TARGETS") {

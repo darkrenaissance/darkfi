@@ -30,7 +30,7 @@ use linenoise_rs::{
 };
 use prettytable::{format, row, Table};
 use rand::rngs::OsRng;
-use smol::channel::{unbounded, Receiver, Sender};
+use smol::channel::{Receiver, Sender};
 use url::Url;
 
 use darkfi::{
@@ -376,7 +376,14 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
 
 /// Auxiliary function to start provided Drk as an interactive shell.
 /// Only sane/linenoise terminals are suported.
-pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &ExecutorPtr) {
+pub async fn interactive(
+    drk: &DrkPtr,
+    endpoint: &Url,
+    history_path: &str,
+    shell_sender: &Sender<Vec<String>>,
+    shell_receiver: &Receiver<Vec<String>>,
+    ex: &ExecutorPtr,
+) {
     // Expand the history file path
     let history_path = match expand_path(history_path) {
         Ok(p) => p,
@@ -404,14 +411,10 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
     let mut snooze_active = false;
     let subscription_tasks = [StoppableTask::new(), StoppableTask::new()];
 
-    // Create an unbounded smol channel, so we can have a printing
-    // queue the background task can submit messages to the shell.
-    let (shell_sender, shell_receiver) = unbounded();
-
     // Start the interactive shell
     loop {
         // Wait for next line to process
-        let line = listen_for_line(&snooze_active, &shell_receiver).await;
+        let line = listen_for_line(&snooze_active, shell_receiver).await;
 
         // Grab input or end if Ctrl-D or Ctrl-C was pressed
         let Some(line) = line else { break };
@@ -533,7 +536,7 @@ pub async fn interactive(drk: &DrkPtr, endpoint: &Url, history_path: &str, ex: &
                         endpoint,
                         &mut subscription_active,
                         &subscription_tasks,
-                        &shell_sender,
+                        shell_sender,
                         ex,
                     )
                     .await
@@ -2351,12 +2354,7 @@ async fn handle_subscribe(
     let ex_ = ex.clone();
     subscription_tasks[0].clone().start(
         async move { subscribe_blocks(&drk_, rpc_task_, shell_sender_, endpoint_, &ex_).await },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => println!("Failed starting subscription task: {e}"),
-            }
-        },
+        |_| async { /* Do nothing */ },
         Error::DetachedTaskStopped,
         ex.clone(),
     );
