@@ -30,12 +30,12 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 pub mod shape;
 use shape::VectorShape;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::vector_art", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:vector_art", $($arg)*); } }
 
 pub type VectorArtPtr = Arc<VectorArt>;
 
@@ -84,19 +84,14 @@ impl VectorArt {
         Pimpl::VectorArt(self_)
     }
 
-    fn node_path(&self) -> String {
-        format!("{:?}", self.node.upgrade().unwrap())
-    }
-
+    #[instrument(target = "ui::vector_art")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let trace = rand::random();
         let timest = unixtime();
-        trace!(target: "ui::vector_art", "VectorArt::redraw({}) [trace={trace}]", self.node_path());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect, trace).await else {
-            error!(target: "ui::vector_art", "Mesh failed to draw [trace={trace}]");
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
+            error!(target: "ui:vector_art", "Mesh failed to draw");
             return
         };
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
@@ -104,7 +99,7 @@ impl VectorArt {
 
     fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
         if !self.is_visible.get() {
-            t!("Skipping draw for invisible {}", self.node_path());
+            t!("Skipping draw for invisible node");
             return vec![]
         }
 
@@ -121,15 +116,13 @@ impl VectorArt {
         vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
     }
 
-    #[instrument(skip_all)]
     async fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
-        trace: DrawTrace,
     ) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
-            warn!(target: "ui::vector_art", "Rect eval failure: {e} [trace={trace}]");
+            warn!(target: "ui::vector_art", "Rect eval failure: {e}");
             return None
         }
         let instrs = self.get_draw_instrs();
@@ -165,15 +158,14 @@ impl UIObject for VectorArt {
         *self.parent_rect.lock() = None;
     }
 
+    #[instrument(target = "ui::vector_art")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace: DrawTrace,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("VectorArt::draw({}) [trace={trace}]", self.node_path());
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect, trace).await
+        self.get_draw_calls(atom, parent_rect).await
     }
 }
 
@@ -185,5 +177,11 @@ impl Drop for VectorArt {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for VectorArt {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

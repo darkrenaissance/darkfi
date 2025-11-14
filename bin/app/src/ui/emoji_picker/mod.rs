@@ -184,24 +184,21 @@ impl EmojiPicker {
         }
     }
 
+    #[instrument(target = "ui::emoji_picker")]
     fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let trace_id = rand::random();
         let timest = unixtime();
-        t!("redraw({:?}) [timest={timest}, trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom) else {
-            error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
+        let Some(draw_update) = self.get_draw_calls(parent_rect, atom) else {
+            error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
             return
         };
         self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
-        t!("redraw DONE [trace_id={trace_id}]");
     }
 
     fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
-        _trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
@@ -279,15 +276,14 @@ impl UIObject for EmojiPicker {
         self.emoji_meshes.lock().clear();
     }
 
+    #[instrument(target = "ui::emoji_picker")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("EmojiPicker::draw({parent_rect:?}, {trace_id})");
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, trace_id, atom)
+        self.get_draw_calls(parent_rect, atom)
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
@@ -398,5 +394,11 @@ impl Drop for EmojiPicker {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for EmojiPicker {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

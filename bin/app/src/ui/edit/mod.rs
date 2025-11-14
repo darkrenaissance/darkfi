@@ -34,6 +34,7 @@ use std::{
         Arc, Weak,
     },
 };
+use tracing::instrument;
 
 #[cfg(target_os = "android")]
 use crate::AndroidSuggestEvent;
@@ -407,6 +408,7 @@ impl BaseEdit {
         Pimpl::Edit(self_)
     }
 
+    #[inline]
     fn node(&self) -> SceneNodePtr {
         self.node.upgrade().unwrap()
     }
@@ -1009,10 +1011,10 @@ impl BaseEdit {
         self.cursor_is_visible.store(true, Ordering::Relaxed);
     }
 
+    #[instrument(target = "ui::edit")]
     async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let trace_id = rand::random();
         let timest = unixtime();
-        let draw_update = self.make_draw_calls(trace_id).await;
+        let draw_update = self.make_draw_calls().await;
         self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
     }
 
@@ -1161,7 +1163,7 @@ impl BaseEdit {
         self.behave.eval_rect(atom).await;
     }
 
-    async fn make_draw_calls(&self, _trace_id: u32) -> DrawUpdate {
+    async fn make_draw_calls(&self) -> DrawUpdate {
         let rect = self.rect.get();
 
         let cursor_instrs = self.get_cursor_instrs().await;
@@ -1559,16 +1561,15 @@ impl UIObject for BaseEdit {
         *self.editor.lock_blocking() = None;
     }
 
+    #[instrument(target = "ui::edit")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
         _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("BaseEdit::draw({:?}, {trace_id})", self.node());
         *self.parent_rect.lock() = Some(parent_rect);
         self.eval_rect().await;
-        Some(self.make_draw_calls(trace_id).await)
+        Some(self.make_draw_calls().await)
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
@@ -1779,5 +1780,13 @@ impl UIObject for BaseEdit {
             TouchPhase::Ended => self.handle_touch_end(atom, touch_pos).await,
             TouchPhase::Cancelled => false,
         }
+    }
+}
+
+// TODO: impl Drop
+
+impl std::fmt::Debug for BaseEdit {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

@@ -37,12 +37,12 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 pub const N_LOADERS: usize = 6;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::video", $($arg)*); } }
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::video", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:video", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video", $($arg)*); } }
 
 pub type VideoPtr = Arc<Video>;
 
@@ -218,19 +218,17 @@ impl Video {
         render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }
 
+    #[instrument(target = "ui::video")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let trace: DrawTrace = rand::random();
         let timest = unixtime();
-        t!("redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
-            error!(target: "ui::video", "Video failed to draw");
+            error!(target: "ui:video", "Video failed to draw");
             return
         };
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
-        t!("redraw() DONE [trace={trace}]");
     }
 
     /// Called whenever any property changes.
@@ -243,7 +241,6 @@ impl Video {
         mesh.alloc(&self.render_api)
     }
 
-    #[instrument(skip_all)]
     async fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
@@ -375,13 +372,12 @@ impl UIObject for Video {
         *self.vid_data.lock() = None;
     }
 
+    #[instrument(target = "ui::video")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace: DrawTrace,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Video::draw() [trace={trace}]");
         *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(atom, parent_rect).await
     }
@@ -395,5 +391,11 @@ impl Drop for Video {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for Video {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

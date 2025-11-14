@@ -33,6 +33,7 @@ use std::{
         Arc, Weak,
     },
 };
+use tracing::instrument;
 
 mod page;
 use page::MessageBuffer;
@@ -81,7 +82,7 @@ pub struct ChatMsg {
 
 pub type Timestamp = u64;
 
-#[derive(Clone, SerialEncodable, SerialDecodable, PartialEq)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct MessageId(pub [u8; 32]);
 
 impl std::fmt::Display for MessageId {
@@ -340,9 +341,8 @@ impl ChatView {
     }
 
     /// Mark line as selected
+    #[instrument(target = "ui::chatview")]
     async fn select_line(&self, batch_id: BatchGuardId, mut y: f32) {
-        let trace_id = rand::random();
-        t!("select_line({y}) [trace_id={trace_id}]");
         // The cursor is inside the rect. We just have to find which line it clicked.
         let rect = self.rect.get();
 
@@ -356,7 +356,7 @@ impl ChatView {
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.select_line(y).await;
 
-        self.redraw_cached(batch_id, &mut msgbuf, trace_id).await;
+        self.redraw_cached(batch_id, &mut msgbuf).await;
     }
 
     fn end_touch_phase(&self, touch_y: f32) {
@@ -420,6 +420,7 @@ impl ChatView {
         let _ = self.tree.flush_async().await;
         true
     }
+    #[instrument(target = "ui::chatview")]
     pub async fn handle_insert_line(
         &self,
         timest: Timestamp,
@@ -427,9 +428,6 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        let trace_id = rand::random();
-        t!("handle_insert_line({timest}, {msg_id}, {nick}, {text}) [trace_id={trace_id}]");
-
         // Lock message buffer so background loader doesn't load the message as soon as it's
         // inserted into the DB.
         let mut msgbuf = self.msgbuf.lock().await;
@@ -455,9 +453,10 @@ impl ChatView {
         }
 
         let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_insert_line"));
-        self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
+        self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         self.bgload_cv.notify();
     }
+    #[instrument(target = "ui::chatview")]
     async fn handle_insert_unconf_line(
         &self,
         timest: Timestamp,
@@ -465,9 +464,6 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        let trace_id = rand::random();
-        t!("handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text}) [trace_id={trace_id}]");
-
         // We don't add unconfirmed lines to the db. Maybe we should?
 
         // Add message to page
@@ -475,7 +471,7 @@ impl ChatView {
         let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text) else { return };
         privmsg.confirmed = false;
         let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_insert_unconf_line"));
-        self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
+        self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         self.bgload_cv.notify();
     }
 
@@ -525,8 +521,6 @@ impl ChatView {
     }
 
     async fn handle_bgload(&self) {
-        let trace_id = rand::random();
-        //t!("ChatView::handle_bgload() [trace_id={trace_id}]");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let rect = self.rect.get();
@@ -592,13 +586,11 @@ impl ChatView {
         //t!("do_redraw = {do_redraw} [trace_id={trace_id}]");
         if do_redraw {
             let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_bgload"));
-            self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
+            self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         }
     }
 
     async fn scrollview(&self, mut scroll: f32, atom: &mut PropertyAtomicGuard) -> f32 {
-        let trace_id = rand::random();
-        //t!("scrollview({scroll}) [trace_id={trace_id}]");
         let old_scroll = self.scroll.get();
 
         let rect = self.rect.get();
@@ -611,7 +603,7 @@ impl ChatView {
         }
 
         // 2/3 of time spent here  ~3.3ms
-        self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
+        self.redraw_cached(atom.batch_id, &mut msgbuf).await;
 
         self.scroll.set(atom, scroll);
         self.bgload_cv.notify();
@@ -683,13 +675,8 @@ impl ChatView {
         instrs
     }
 
-    async fn redraw_cached(
-        &self,
-        batch_id: BatchGuardId,
-        msgbuf: &mut MessageBuffer,
-        _trace_id: u32,
-    ) {
-        //t!("ChatView::redraw_cached() [trace_id={trace_id}]");
+    #[instrument(skip(msgbuf), target = "ui::chatview")]
+    async fn redraw_cached(&self, batch_id: BatchGuardId, msgbuf: &mut MessageBuffer) {
         let timest = unixtime();
         let rect = self.rect.get();
 
@@ -702,21 +689,18 @@ impl ChatView {
             vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
         self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
-        //t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
     }
 
     /// Invalidates cache and redraws everything
+    #[instrument(target = "ui::chatview")]
     async fn redraw_all(&self, atom: &mut PropertyAtomicGuard) {
-        let trace_id = rand::random();
-        t!("ChatView::redraw_all() [trace_id={trace_id}]");
         let parent_rect = self.parent_rect.lock().unwrap().clone();
         self.rect.eval(atom, &parent_rect).expect("unable to eval rect");
 
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.adjust_params();
         msgbuf.clear_meshes();
-        self.redraw_cached(atom.batch_id, &mut msgbuf, trace_id).await;
-        t!("ChatView::redraw_all() DONE [trace_id={trace_id}]");
+        self.redraw_cached(atom.batch_id, &mut msgbuf).await;
     }
 }
 
@@ -815,14 +799,12 @@ impl UIObject for ChatView {
         self.msgbuf.lock_blocking().clear();
     }
 
+    #[instrument(target = "ui::chatview")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("ChatView::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
-
         *self.parent_rect.lock() = Some(parent_rect.clone());
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
@@ -1054,5 +1036,11 @@ impl Drop for ChatView {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for ChatView {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

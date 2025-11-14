@@ -441,22 +441,19 @@ impl Window {
         }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(target = "ui::win")]
     pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
-        let trace_id = rand::random();
         let timest = unixtime();
-
         let virt_size = self.screen_size.get() / self.scale.get();
         let rect = Rectangle::from([0., 0., virt_size.w, virt_size.h]);
-        t!("Window::draw({rect:?}) [timest={timest}, trace_id={trace_id}]");
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
 
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            let Some(mut draw_update) = obj.draw(rect, trace_id, atom).await else {
-                t!("{child:?} draw returned none [trace_id={trace_id}]");
+            let Some(mut draw_update) = obj.draw(rect, atom).await else {
+                t!("{child:?} draw returned none");
                 continue
             };
 
@@ -470,8 +467,6 @@ impl Window {
         //t!("  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(atom.batch_id, timest, draw_calls);
-
-        t!("Window::draw() - replaced draw call [timest={timest}, trace_id={trace_id}]");
     }
 
     async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {
@@ -496,5 +491,11 @@ impl Window {
         }
         // Just redraw everything lol
         self.draw(atom).await;
+    }
+}
+
+impl std::fmt::Debug for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

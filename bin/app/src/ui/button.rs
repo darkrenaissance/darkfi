@@ -22,6 +22,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use tracing::instrument;
 
 use crate::{
     gfx::{Point, Rectangle},
@@ -31,8 +32,8 @@ use crate::{
 
 use super::{DrawUpdate, UIObject};
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::button", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::button", $($arg)*); } }
 
 pub type ButtonPtr = Arc<Button>;
 
@@ -73,10 +74,10 @@ impl UIObject for Button {
         self.priority.get()
     }
 
+    #[instrument(target = "ui::button")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        _trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         let _ = self.rect.eval(atom, &parent_rect);
@@ -154,5 +155,11 @@ impl UIObject for Button {
             TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
             TouchPhase::Cancelled => false,
         }
+    }
+}
+
+impl std::fmt::Debug for Button {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

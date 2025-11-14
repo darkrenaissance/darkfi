@@ -21,6 +21,7 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
+use tracing::instrument;
 
 use crate::{
     gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
@@ -34,7 +35,7 @@ use super::{
     get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, UIObject,
 };
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::layer", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:layer", $($arg)*); } }
 
 pub type LayerPtr = Arc<Layer>;
 
@@ -83,33 +84,26 @@ impl Layer {
         get_children_ordered(&node)
     }
 
+    #[instrument(target = "ui::layer")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let trace_id = rand::random();
         let timest = unixtime();
-        t!("Layer::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom).await else {
-            error!(target: "ui::layer", "Layer failed to draw [trace_id={trace_id}]");
+        let Some(draw_update) = self.get_draw_calls(parent_rect, atom).await else {
+            error!(target: "ui:layer", "Layer failed to draw");
             return
         };
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
-        t!(
-            "Layer::redraw({:?}) DONE [timest={timest}, trace_id={trace_id}]",
-            self.node.upgrade().unwrap()
-        );
     }
 
     async fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
-        t!("Layer::get_draw_calls() [rect={rect:?}, dc={}, trace_id={trace_id}]", self.dc_key);
 
         // Apply viewport
 
@@ -121,8 +115,8 @@ impl Layer {
         if self.is_visible.get() {
             for child in self.get_children() {
                 let obj = get_ui_object3(&child);
-                let Some(mut draw_update) = obj.draw(rect, trace_id, atom).await else {
-                    t!("{child:?} draw returned none [trace_id={trace_id}]");
+                let Some(mut draw_update) = obj.draw(rect, atom).await else {
+                    t!("{child:?} draw returned none");
                     continue
                 };
 
@@ -180,13 +174,12 @@ impl UIObject for Layer {
         }
     }
 
+    #[instrument(target = "ui::layer")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace_id: u32,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Layer::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
 
         /*
@@ -200,9 +193,7 @@ impl UIObject for Layer {
         }
         */
 
-        let update = self.get_draw_calls(parent_rect, trace_id, atom).await;
-        t!("Layer::draw({:?}) DONE [trace_id={trace_id}]", self.node.upgrade().unwrap());
-        update
+        self.get_draw_calls(parent_rect, atom).await
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
@@ -320,5 +311,13 @@ impl UIObject for Layer {
             let obj = get_ui_object3(&child);
             obj.set_i18n(i18n_fish);
         }
+    }
+}
+
+// TODO: Drop
+
+impl std::fmt::Debug for Layer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
+use tracing::instrument;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi},
@@ -33,7 +34,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::text", $($arg)*); } }
 
@@ -136,19 +137,17 @@ impl Text {
         text2::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
     }
 
+    #[instrument(target = "ui::text")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let trace: DrawTrace = rand::random();
         let timest = unixtime();
-        t!("Text::redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
-            error!(target: "ui::text", "Text failed to draw [trace={trace}]");
+            error!(target: "ui::text", "Text failed to draw");
             return
         };
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
-        t!("Text::redraw() DONE [trace={trace}]");
     }
 
     async fn get_draw_calls(
@@ -197,13 +196,12 @@ impl UIObject for Text {
         *self.parent_rect.lock() = None;
     }
 
+    #[instrument(target = "ui::text")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace: DrawTrace,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Text::draw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(atom, parent_rect).await
     }
@@ -221,5 +219,11 @@ impl Drop for Text {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

@@ -21,6 +21,7 @@ use image::ImageReader;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{io::Cursor, sync::Arc};
+use tracing::instrument;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi},
@@ -31,7 +32,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawTrace, DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::image", $($arg)*); } }
 
@@ -119,10 +120,9 @@ impl Image {
         self.render_api.new_texture(width, height, bmp, gfxtag!("img"))
     }
 
+    #[instrument(target = "ui::button")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let trace: DrawTrace = rand::random();
         let timest = unixtime();
-        t!("redraw({:?}) [trace={trace}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -131,7 +131,6 @@ impl Image {
             return
         };
         self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
-        t!("redraw() DONE [trace={trace}]");
     }
 
     /// Called whenever any property changes.
@@ -206,13 +205,12 @@ impl UIObject for Image {
         *self.texture.lock() = None;
     }
 
+    #[instrument(target = "ui::button")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        trace: DrawTrace,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        t!("Image::draw() [trace={trace}]");
         *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(atom, parent_rect).await
     }
@@ -226,5 +224,11 @@ impl Drop for Image {
             unixtime(),
             vec![(self.dc_key, Default::default())],
         );
+    }
+}
+
+impl std::fmt::Debug for Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.node.upgrade().unwrap())
     }
 }

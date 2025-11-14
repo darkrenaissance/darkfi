@@ -61,8 +61,6 @@ pub use win::{Window, WindowPtr};
 macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
 
-type DrawTrace = u32;
-
 #[async_trait]
 pub trait UIObject: Sync {
     fn priority(&self) -> u32;
@@ -77,7 +75,6 @@ pub trait UIObject: Sync {
     async fn draw(
         &self,
         _parent_rect: Rectangle,
-        _trace: DrawTrace,
         _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         None

@@ -85,6 +85,12 @@ impl Drop for PropertyAtomicGuard {
     }
 }
 
+impl std::fmt::Debug for PropertyAtomicGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("PropertyAtomicGuard").field("batch_id", &self.batch_id).finish()
+    }
+}
+
 pub type BatchGuardId = u32;
 type BatchGuardCb = Box<dyn FnOnce(BatchGuardId) + Send + Sync>;
 pub type BatchGuardPtr = Arc<BatchGuard>;
@@ -110,5 +116,11 @@ impl Drop for BatchGuard {
     fn drop(&mut self) {
         let end_batch = self.end_batch.take().unwrap();
         end_batch(self.id);
+    }
+}
+
+impl std::fmt::Debug for BatchGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("BatchGuard").field("id", &self.id).finish()
     }
 }
