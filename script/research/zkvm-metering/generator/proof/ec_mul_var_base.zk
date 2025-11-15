@@ -1,0 +1,16 @@
+k = 11;
+field = "pallas";
+
+constant "EcMulVarBase" {
+}
+
+witness "EcMulVarBase" {
+    Base ephem_secret,
+	EcNiPoint pubkey,
+}
+
+circuit "EcMulVarBase" {
+    ephem_public = ec_mul_var_base(ephem_secret, pubkey);
+    constrain_instance(ec_get_x(ephem_public));
+    constrain_instance(ec_get_y(ephem_public));
+}

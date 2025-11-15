@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "ConstrainEqualBase" {}
+
+witness "ConstrainEqualBase" {
+    Base a,
+    Base b,
+}
+
+circuit "ConstrainEqualBase" {
+    constrain_equal_base(a, b);
+}

@@ -1,0 +1,12 @@
+k = 11;
+field = "pallas";
+
+constant "WitnessBase" {}
+
+witness "WitnessBase" {
+}
+
+circuit "WitnessBase" {
+    two = witness_base(2);
+    #constrain_instance(two);
+}

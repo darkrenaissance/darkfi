@@ -1,0 +1,15 @@
+k = 11;
+field = "pallas";
+
+constant "EcAdd" {}
+
+witness "EcAdd" {
+    EcPoint a,
+    EcPoint b,
+}
+
+circuit "EcAdd" {
+    sum = ec_add(a, b);
+    #constrain_instance(ec_get_x(sum));
+    #constrain_instance(ec_get_y(sum));
+}

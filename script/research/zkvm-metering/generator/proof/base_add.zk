@@ -1,0 +1,14 @@
+k = 11;
+field = "pallas";
+
+constant "BaseAdd" {}
+
+witness "BaseAdd" {
+    Base a,
+    Base b,
+}
+
+circuit "BaseAdd" {
+    sum = base_add(a, b);
+    # constrain_instance(sum)
+}

@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "EcGetY" {}
+
+witness "EcGetY" {
+    EcPoint a,
+}
+
+circuit "EcGetY" {
+    a_y = ec_get_y(a);
+    #constrain_instance(a_y);
+}

@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "LessThanLoose" {}
+
+witness "LessThanLoose" {
+    Base a,
+    Base b,
+}
+
+circuit "LessThanLoose" {
+    less_than_loose(a, b);
+}

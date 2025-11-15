@@ -1,0 +1,14 @@
+k = 11;
+field = "pallas";
+
+constant "BaseSub" {}
+
+witness "BaseSub" {
+    Base a,
+    Base b,
+}
+
+circuit "BaseSub" {
+    difference = base_sub(a, b);
+    # constrain_instance(difference)
+}

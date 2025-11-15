@@ -1,0 +1,12 @@
+k = 11;
+field = "pallas";
+
+constant "RangeCheck" {}
+
+witness "RangeCheck" {
+    Base a,
+}
+
+circuit "RangeCheck" {
+    range_check(64, a);
+}

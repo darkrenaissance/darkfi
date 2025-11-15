@@ -1,0 +1,16 @@
+k = 11;
+field = "pallas";
+
+constant "EcMul" {
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+}
+
+witness "EcMul" {
+    Scalar value_blind,
+}
+
+circuit "EcMul" {
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    #constrain_instance(ec_get_x(vcr));
+    #constrain_instance(ec_get_y(vcr));
+}

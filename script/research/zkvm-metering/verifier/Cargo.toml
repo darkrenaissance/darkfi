@@ -1,0 +1,22 @@
+[package]
+name = "verifier"
+version = "0.1.0"
+description = "CLI-utility to verify zk proofs for analysis"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+darkfi-sdk = {path = "../../../../src/sdk"}
+darkfi = {path = "../../../../", features = ["zk"]}
+darkfi-serial = "0.5.0"
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}
+
+[profile.release]
+debug = true

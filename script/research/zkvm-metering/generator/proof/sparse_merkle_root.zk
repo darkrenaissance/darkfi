@@ -1,0 +1,16 @@
+k = 14;
+field = "pallas";
+
+constant "SparseMerkleRoot" {
+}
+
+witness "SparseMerkleRoot" {
+    SparseMerklePath path,
+    Base leaf,
+}
+
+circuit "SparseMerkleRoot" {
+    root = sparse_merkle_root(leaf, path, leaf);
+    # constrain_instance(root)
+}
+

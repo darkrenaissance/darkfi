@@ -1,0 +1,15 @@
+k = 11;
+field = "pallas";
+
+constant "CondSelect" {}
+
+witness "CondSelect" {
+    Base a,
+    Base b,
+    Base cond,
+}
+
+circuit "CondSelect" {
+    out = cond_select(cond, a, b);
+    #constrain_instance(out);
+}

@@ -1,0 +1,16 @@
+k = 11;
+field = "pallas";
+
+constant "EcMulShort" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+}
+
+witness "EcMulShort" {
+    Base value,
+}
+
+circuit "EcMulShort" {
+    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+    #constrain_instance(ec_get_x(vcv));
+    #constrain_instance(ec_get_y(vcv));
+}

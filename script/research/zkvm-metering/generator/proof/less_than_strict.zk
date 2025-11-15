@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "LessThanStrict" {}
+
+witness "LessThanStrict" {
+    Base a,
+    Base b,
+}
+
+circuit "LessThanStrict" {
+    less_than_strict(a, b);
+}

@@ -1,0 +1,14 @@
+k = 11;
+field = "pallas";
+
+constant "PoseidonHash" {}
+
+witness "PoseidonHash" {
+    Base a,
+    Base b,
+}
+
+circuit "PoseidonHash" {
+    hash = poseidon_hash(a, b);
+    #constrain_instance(hash);
+}

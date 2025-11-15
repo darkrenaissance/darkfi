@@ -1,0 +1,12 @@
+k = 11;
+field = "pallas";
+
+constant "BoolCheck" {}
+
+witness "BoolCheck" {
+    Base a,
+}
+
+circuit "BoolCheck" {
+    bool_check(a);
+}

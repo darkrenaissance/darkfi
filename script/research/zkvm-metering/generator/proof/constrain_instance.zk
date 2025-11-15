@@ -1,0 +1,12 @@
+k = 11;
+field = "pallas";
+
+constant "ConstrainInstance" {}
+
+witness "ConstrainInstance" {
+    Base a,
+}
+
+circuit "ConstrainInstance" {
+    constrain_instance(a);
+}

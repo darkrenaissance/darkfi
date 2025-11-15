@@ -1,0 +1,14 @@
+k = 11;
+field = "pallas";
+
+constant "ZeroCond" {}
+
+witness "ZeroCond" {
+    Base a,
+    Base b,
+}
+
+circuit "ZeroCond" {
+    out = zero_cond(a, b);
+    #constrain_instance(out);
+}

@@ -1,0 +1,12 @@
+k = 11;
+field = "pallas";
+
+constant "Debug" {}
+
+witness "Debug" {
+    Base a,
+}
+
+circuit "Debug" {
+    debug(a);
+}

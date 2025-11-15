@@ -1,0 +1,17 @@
+k = 13;
+field = "pallas";
+
+constant "MerkleRoot" {
+}
+
+witness "MerkleRoot" {
+	Base leaf,
+	Uint32 leaf_pos,
+	MerklePath path,
+}
+
+circuit "MerkleRoot" {
+	root = merkle_root(leaf_pos, path, leaf);
+	# constrain_instance(root)
+}
+

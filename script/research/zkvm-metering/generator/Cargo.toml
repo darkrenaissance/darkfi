@@ -1,0 +1,26 @@
+[package]
+name = "generator"
+version = "0.1.0"
+description = "CLI-utility to generate zk proofs for analyzing zkvm opcodes resource usage"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+darkfi-sdk = {path = "../../../../src/sdk"}
+darkfi = {path = "../../../../", features = ["zk"]}
+halo2_proofs = {version = "0.3.1", features = ["circuit-params"]}
+halo2_gadgets = {version = "0.3.1", features = ["circuit-params"]}
+rand = "0.8.5"
+darkfi-serial = "0.5.0"
+
+[dev-dependencies]
+halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}
+halo2_gadgets = "0.3.1"
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}

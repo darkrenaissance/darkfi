@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "ConstrainEqualPoint" {}
+
+witness "ConstrainEqualPoint" {
+    EcPoint a,
+    EcPoint b,
+}
+
+circuit "ConstrainEqualPoint" {
+    constrain_equal_point(a, b);
+}

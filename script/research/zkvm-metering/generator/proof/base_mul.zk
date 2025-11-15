@@ -1,0 +1,14 @@
+k = 11;
+field = "pallas";
+
+constant "BaseMul" {}
+
+witness "BaseMul" {
+    Base a,
+    Base b,
+}
+
+circuit "BaseMul" {
+    product = base_mul(a, b);
+    # constrain_instance(product)
+}
