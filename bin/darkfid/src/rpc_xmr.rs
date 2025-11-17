@@ -29,12 +29,12 @@ use darkfi::{
         },
         HeaderHash,
     },
-    util::encoding::base64,
     rpc::jsonrpc::{ErrorCode, ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    util::encoding::base64,
     validator::consensus::Proposal,
 };
-use darkfi_serial::serialize_async;
 use darkfi_sdk::crypto::PublicKey;
+use darkfi_serial::serialize_async;
 use hex::FromHex;
 use tinyjson::JsonValue;
 use tracing::{error, info};

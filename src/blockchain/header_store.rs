@@ -33,7 +33,10 @@ use sled_overlay::{
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{monero::{extract_aux_merkle_root, MoneroPowData}, SledDbOverlayPtr};
+use super::{
+    monero::{extract_aux_merkle_root, MoneroPowData},
+    SledDbOverlayPtr,
+};
 
 /// Struct representing the Proof of Work used in a block.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -155,32 +158,25 @@ impl Header {
 
     /// Validate PowData from the header.
     pub fn validate_powdata(&self) -> bool {
-		match &self.pow_data {
-			// For native DarkFi PoW, this is handled so we just return `true`.
-			PowData::DarkFi => true,
-			// For Monero PoW, we have to check a few things.
-			PowData::Monero(powdata) => {
-				if !powdata.is_coinbase_valid_merkle_root() {
-					return false
-				}
+        match &self.pow_data {
+            // For native DarkFi PoW, this is handled so we just return `true`.
+            PowData::DarkFi => true,
+            // For Monero PoW, we have to check a few things.
+            PowData::Monero(powdata) => {
+                if !powdata.is_coinbase_valid_merkle_root() {
+                    return false
+                }
 
-				// Verify that MoneroPowData correctly corresponds to this header.
-				let aux_hash = monero::Hash::from(self.template_hash().inner());
-				let Ok(merkle_root) = extract_aux_merkle_root(&powdata.coinbase_tx_extra) else {
-					return false
-				};
+                // Verify that MoneroPowData correctly corresponds to this header.
+                let Ok(Some(merkle_root)) = extract_aux_merkle_root(&powdata.coinbase_tx_extra)
+                else {
+                    return false
+                };
 
-				let Some(merkle_root) = merkle_root else {
-					return false
-				};
-
-				if powdata.aux_chain_merkle_proof.calculate_root(&aux_hash) != merkle_root {
-					return false
-				}
-
-				true
-			}
-		}
+                let aux_hash = monero::Hash::from(self.template_hash().inner());
+                powdata.aux_chain_merkle_proof.calculate_root(&aux_hash) == merkle_root
+            }
+        }
     }
 }
 
