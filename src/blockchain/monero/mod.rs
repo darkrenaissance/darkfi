@@ -433,17 +433,15 @@ fn parse_extra_field_truncate_on_error(raw_extra_field: &RawExtraField) -> Extra
     }
 }
 
-
 /// Extract the Monero block hash from the coinbase transaction's extra field
 pub fn extract_aux_merkle_root_from_block(monero: &monero::Block) -> Result<Option<monero::Hash>> {
     extract_aux_merkle_root(&monero.miner_tx.prefix.extra)
 }
 
-
 /// Extract the Monero block hash from the coinbase transaction's extra field
 pub fn extract_aux_merkle_root(extra_field: &RawExtraField) -> Result<Option<monero::Hash>> {
     let extra_field = parse_extra_field_truncate_on_error(extra_field);
-	// Only one merge mining tag is allowed
+    // Only one merge mining tag is allowed
     let merge_mining_hashes: Vec<monero::Hash> = extra_field
         .0
         .iter()
