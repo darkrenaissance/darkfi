@@ -22,9 +22,7 @@ use darkfi::{
     blockchain::{
         header_store::PowData,
         monero::{
-            extract_aux_merkle_root_from_block,
             fixed_array::{FixedByteArray, MaxSizeVec},
-            merkle_proof::MerkleProof,
             monero_block_deserialize, MoneroPowData,
         },
         HeaderHash,
@@ -103,7 +101,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Validate address
+        // Parse address
         let Some(address) = params.get("address") else {
             return JsonError::new(InvalidParams, Some("missing address".to_string()), id).into()
         };
@@ -116,7 +114,7 @@ impl DarkfiNode {
                 .into()
         };
 
-        // Validate aux_hash
+        // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
             return JsonError::new(InvalidParams, Some("missing aux_hash".to_string()), id).into()
         };
@@ -129,7 +127,7 @@ impl DarkfiNode {
                 .into()
         };
 
-        // Validate height
+        // Parse height
         let Some(height) = params.get("height") else {
             return JsonError::new(InvalidParams, Some("missing height".to_string()), id).into()
         };
@@ -139,7 +137,7 @@ impl DarkfiNode {
         };
         let height = *height as u64;
 
-        // Validate prev_id
+        // Parse prev_id
         let Some(prev_id) = params.get("prev_id") else {
             return JsonError::new(InvalidParams, Some("missing prev_id".to_string()), id).into()
         };
@@ -165,8 +163,7 @@ impl DarkfiNode {
 
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
-            "[RPC-XMR] Got blocktemplate request: address={}, aux_hash={}, height={}, prev_id={}",
-            address, aux_hash, height, prev_id,
+            "[RPC-XMR] Got blocktemplate request: address={address}, aux_hash={aux_hash}, height={height}, prev_id={prev_id}"
         );
 
         // If it's a new job, clear the previous one(s).
@@ -266,7 +263,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Validate aux_blob
+        // Parse aux_blob
         let Some(aux_blob) = params.get("aux_blob") else {
             return JsonError::new(InvalidParams, Some("missing aux_blob".to_string()), id).into()
         };
@@ -279,7 +276,7 @@ impl DarkfiNode {
                 .into()
         };
 
-        // Validate aux_hash
+        // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
             return JsonError::new(InvalidParams, Some("missing aux_hash".to_string()), id).into()
         };
@@ -298,7 +295,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, Some("unknown aux_hash".to_string()), id).into()
         }
 
-        // Validate blob
+        // Parse blob
         let Some(blob) = params.get("blob") else {
             return JsonError::new(InvalidParams, Some("missing blob".to_string()), id).into()
         };
@@ -309,7 +306,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, Some("invalid blob format".to_string()), id).into()
         };
 
-        // Validate merkle_proof
+        // Parse merkle_proof
         let Some(merkle_proof_j) = params.get("merkle_proof") else {
             return JsonError::new(InvalidParams, Some("missing merkle_proof".to_string()), id)
                 .into()
@@ -348,16 +345,16 @@ impl DarkfiNode {
             }
         }
 
-        // Validate path
+        // Parse path
         let Some(path) = params.get("path") else {
             return JsonError::new(InvalidParams, Some("missing path".to_string()), id).into()
         };
         let Some(path) = path.get::<f64>() else {
             return JsonError::new(InvalidParams, Some("invalid path format".to_string()), id).into()
         };
-        let path = *path as u32;
+        let _path = *path as u32;
 
-        // Validate seed_hash
+        // Parse seed_hash
         let Some(seed_hash) = params.get("seed_hash") else {
             return JsonError::new(InvalidParams, Some("missing seed_hash".to_string()), id).into()
         };
@@ -379,52 +376,7 @@ impl DarkfiNode {
             "[RPC-XMR] Got solution submission: aux_hash={aux_hash}",
         );
 
-        // =======================================
-        // Now we will validate the block contents
-        // =======================================
-
-        let Ok(merkle_root) = extract_aux_merkle_root_from_block(&block) else {
-            error!(
-                target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                "[RPC-XMR] Extracting aux_merkle_root from XMR block failed",
-            );
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-
-        let Some(merkle_root) = merkle_root else {
-            error!(
-                target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                "[RPC-XMR] Did not find merge mining hash in block",
-            );
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-
-        // Verify the merge mining hash
-        let Some(aux_hash_merkle_proof) = MerkleProof::try_construct(merkle_proof, path) else {
-            return JsonError::new(
-                InvalidParams,
-                Some("invalid aux_hash merkle proof".to_string()),
-                id,
-            )
-            .into()
-        };
-
-        if aux_hash_merkle_proof.calculate_root(&monero::Hash::from(aux_hash.inner())) !=
-            merkle_root
-        {
-            error!(
-                target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                "[RPC-XMR] Could not validate aux_hash Merkle root",
-            );
-            return JsonError::new(
-                InvalidParams,
-                Some("invalid aux_hash merkle proof".to_string()),
-                id,
-            )
-            .into()
-        }
-
-        // Construct MoneroPowData
+        // Construct the MoneroPowData
         let aux_chain_hashes =
             MaxSizeVec::from_items_truncate(vec![monero::Hash::from(aux_hash.inner())]);
         let monero_pow_data =
@@ -444,55 +396,18 @@ impl DarkfiNode {
                 }
             };
 
-        if !monero_pow_data.is_coinbase_valid_merkle_root() {
-            error!(
-                target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                "[RPC-XMR] MoneroPowData invalid coinbase Merkle proof",
-            );
-            return JsonError::new(
-                InvalidParams,
-                Some("invalid coinbase merkle proof".to_string()),
-                id,
-            )
-            .into()
-        }
-
-        // Append MoneroPowData to the DarkFi block and verify it.
-        let extended_fork = match self.best_current_fork().await {
-            Ok(f) => f,
-            Err(e) => {
-                error!(
-                    target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                    "[RPC-XMR] Finding best fork index failed: {e}",
-                );
-                return JsonError::new(ErrorCode::InternalError, None, id).into()
-            }
-        };
-
+        // Append MoneroPowData to the DarkFi block and sign it
         let (block, secret) = &mm_blocktemplates.get(&aux_hash).unwrap();
         let mut block = block.clone();
         block.header.pow_data = PowData::Monero(monero_pow_data);
         block.sign(secret);
-
-        if let Err(e) = extended_fork.module.verify_current_block(&block.header) {
-            error!(
-                target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                "[RPC-XMR] Failed verifying merge mined block: {e}",
-            );
-            return JsonError::new(ErrorCode::InternalError, None, id).into()
-        }
-
-        info!(
-            target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-            "[RPC-XMR] Success verifying merge mined block!",
-        );
 
         // At this point we should be able to clear the working job.
         // We still won't release the lock in hope of proposing the block
         // first.
         mm_blocktemplates.clear();
 
-        // Propose the new block.
+        // Propose the new block
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
             "[RPC-XMR] Proposing new block to network",
