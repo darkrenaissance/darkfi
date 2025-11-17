@@ -144,10 +144,11 @@ pub async fn verify_genesis_block(
 ///
 /// A block is considered valid when the following rules apply:
 ///     1. Block version is correct for its height
-///     2. Parent hash is equal to the hash of the previous block
+///     2. Previous hash is equal to the hash of the provided previous block
 ///     3. Block height increments previous block height by 1
 ///     4. Timestamp is valid based on PoWModule validation
-///     5. Block hash is valid based on PoWModule validation
+///     5. Block header Proof of Work data are valid
+///     6. Block hash is valid based on PoWModule validation
 /// Additional validity rules can be applied.
 pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
     // Check block version (1)
@@ -170,7 +171,12 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModul
         return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
-    // Check block hash corresponds to next one (5)
+    // Check PoW data validty (5)
+    if !block.header.validate_powdata() {
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
+    }
+
+    // Check block hash corresponds to next  mine target (6)
     module.verify_block_hash(&block.header)?;
 
     Ok(())
