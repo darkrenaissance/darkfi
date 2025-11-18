@@ -33,7 +33,6 @@ use darkfi::{
     util::encoding::base64,
     validator::pow::mine_block,
 };
-use darkfi_sdk::num_traits::Num;
 use darkfi_serial::{async_trait, deserialize_async};
 
 use crate::{
@@ -95,10 +94,11 @@ impl MinerNode {
         }
 
         // Parse parameters
-        let Ok(target) = BigUint::from_str_radix(params[0].get::<String>().unwrap(), 10) else {
-            error!(target: "minerd::rpc", "Failed to parse target");
+        let Some(target_bytes) = base64::decode(params[0].get::<String>().unwrap()) else {
+            error!(target: "minerd::rpc", "Failed to parse target bytes");
             return server_error(RpcError::TargetParseError, id, None)
         };
+        let target = BigUint::from_bytes_le(&target_bytes);
         let Some(randomx_key_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
             error!(target: "minerd::rpc", "Failed to parse RandomX key bytes");
             return server_error(RpcError::BlockParseError, id, None)
