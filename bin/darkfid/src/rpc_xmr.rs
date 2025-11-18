@@ -183,32 +183,16 @@ impl DarkfiNode {
         };
         let prev_id = monero::Hash::from_slice(&prev_id);
 
-        // Method params format is correct. Let's check if we provided this
-        // mining job already. If so, we can just return an empty response.
-        // We'll also obtain a lock here to avoid getting polled multiple
-        // times and potentially missing a job. The lock is released when
-        // this function exits.
+        // Now that method params format is correct, we can check if we
+        // already have this mining job. If we already have it, we
+        // check if the fork it extends is still the best one. If both
+        // checks pass, we can just return an empty response. In case
+        // the best fork has changed, we drop this job and generate a
+        // new one. We'll also obtain a lock here to avoid getting
+        // polled multiple times and potentially missing a job. The
+        // lock is released when this function exits.
         let template_key = BlockTemplateHash::new(&address, &aux_hash);
         let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
-        if mm_blocktemplates.contains_key(&template_key) {
-            return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
-        }
-
-        info!(
-            target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
-            "[RPC-XMR] Got blocktemplate request: address={address}, aux_hash={aux_hash}, height={height}, prev_id={prev_id}"
-        );
-
-        // If it's a new job, clear the previous one(s).
-        mm_blocktemplates.clear();
-
-        // At this point, we should query the Validator for a new blocktemplate.
-        // We first need to construct `MinerRewardsRecipientConfig` from the
-        // address provided to us through the RPC.
-        let recipient_config =
-            MinerRewardsRecipientConfig { recipient: address, spend_hook: None, user_data: None };
-
-        // Now let's try to construct the blocktemplate.
         let mut extended_fork = match self.best_current_fork().await {
             Ok(f) => f,
             Err(e) => {
@@ -219,7 +203,35 @@ impl DarkfiNode {
                 return JsonError::new(ErrorCode::InternalError, None, id).into()
             }
         };
+        if let Some((block, _)) = mm_blocktemplates.get(&template_key) {
+            let last_proposal = match extended_fork.last_proposal() {
+                Ok(p) => p,
+                Err(e) => {
+                    error!(
+                        target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
+                        "[RPC-XMR] Retrieving best fork last proposal failed: {e}",
+                    );
+                    return JsonError::new(ErrorCode::InternalError, None, id).into()
+                }
+            };
+            if last_proposal.hash == block.header.previous {
+                return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
+            }
+            mm_blocktemplates.remove(&template_key);
+        }
 
+        info!(
+            target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
+            "[RPC-XMR] Got blocktemplate request: address={address}, aux_hash={aux_hash}, height={height}, prev_id={prev_id}"
+        );
+
+        // At this point, we should query the Validator for a new blocktemplate.
+        // We first need to construct `MinerRewardsRecipientConfig` from the
+        // address provided to us through the RPC.
+        let recipient_config =
+            MinerRewardsRecipientConfig { recipient: address, spend_hook: None, user_data: None };
+
+        // Now let's try to construct the blocktemplate.
         // Find the difficulty. Note we cast it to f64 here.
         let difficulty: f64 = match extended_fork.module.next_difficulty() {
             Ok(v) => {
