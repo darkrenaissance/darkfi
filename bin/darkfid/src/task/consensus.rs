@@ -225,6 +225,10 @@ async fn consensus_task(
             continue
         }
 
+        if let Err(e) = clean_mm_blocktemplates(node).await {
+            error!(target: "darkfid", "Failed cleaning merge mining block templates: {e}")
+        }
+
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
@@ -247,4 +251,52 @@ async fn consensus_task(
             ex.clone(),
         );
     }
+}
+
+/// Auxiliary function to drop merge mining block templates not
+/// referencing active forks or last confirmed block.
+pub async fn clean_mm_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
+    // Grab a lock over node merge mining templates
+    let mut mm_blocktemplates = node.mm_blocktemplates.lock().await;
+
+    // Early return if no merge mining block templates exist
+    if mm_blocktemplates.is_empty() {
+        return Ok(())
+    }
+
+    // Grab a lock over node forks
+    let forks = node.validator.consensus.forks.read().await;
+
+    // Grab last confirmed block for checks
+    let (_, last_confirmed) = node.validator.blockchain.last()?;
+
+    // Loop through templates to find which can be dropped
+    let mut dropped_templates = vec![];
+    'outer: for (key, (block, _)) in mm_blocktemplates.iter() {
+        // Loop through all the forks
+        for fork in forks.iter() {
+            // Traverse fork proposals sequence in reverse
+            for p_hash in fork.proposals.iter().rev() {
+                // Check if job extends this fork
+                if &block.header.previous == p_hash {
+                    continue 'outer
+                }
+            }
+        }
+
+        // Check if it extends last confirmed block
+        if block.header.previous == last_confirmed {
+            continue
+        }
+
+        // This job doesn't reference something so we drop it
+        dropped_templates.push(*key);
+    }
+
+    // Drop jobs not referencing active forks or last confirmed block
+    for key in dropped_templates {
+        mm_blocktemplates.remove(&key);
+    }
+
+    Ok(())
 }
