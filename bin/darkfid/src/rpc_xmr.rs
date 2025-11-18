@@ -464,10 +464,10 @@ impl DarkfiNode {
         block.header.pow_data = PowData::Monero(monero_pow_data);
         block.sign(secret);
 
-        // At this point we should be able to clear the working job.
+        // At this point we should be able to remove the submitted job.
         // We still won't release the lock in hope of proposing the block
         // first.
-        mm_blocktemplates.clear();
+        mm_blocktemplates.remove(&template_key);
 
         // Propose the new block
         info!(
