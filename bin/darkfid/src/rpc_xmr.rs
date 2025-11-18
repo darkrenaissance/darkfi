@@ -22,8 +22,8 @@ use darkfi::{
     blockchain::{
         header_store::PowData,
         monero::{
-            fixed_array::{FixedByteArray, MaxSizeVec},
-            monero_block_deserialize, MoneroPowData,
+            fixed_array::FixedByteArray, merkle_proof::MerkleProof, monero_block_deserialize,
+            MoneroPowData,
         },
         HeaderHash,
     },
@@ -352,7 +352,7 @@ impl DarkfiNode {
         let Some(path) = path.get::<f64>() else {
             return JsonError::new(InvalidParams, Some("invalid path format".to_string()), id).into()
         };
-        let _path = *path as u32;
+        let path = *path as u32;
 
         // Parse seed_hash
         let Some(seed_hash) = params.get("seed_hash") else {
@@ -377,24 +377,29 @@ impl DarkfiNode {
         );
 
         // Construct the MoneroPowData
-        let aux_chain_hashes =
-            MaxSizeVec::from_items_truncate(vec![monero::Hash::from(aux_hash.inner())]);
-        let monero_pow_data =
-            match MoneroPowData::new(block, seed_hash, aux_chain_hashes, *aux_hash.inner()) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-                        "[RPC-XMR] Failed constructing MoneroPowData: {e}",
-                    );
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("failed constructing moneropowdata".to_string()),
-                        id,
-                    )
-                    .into()
-                }
-            };
+        let Some(merkle_proof) = MerkleProof::try_construct(merkle_proof, path) else {
+            return JsonError::new(
+                InvalidParams,
+                Some("could not construct aux chain merkle proof".to_string()),
+                id,
+            )
+            .into()
+        };
+        let monero_pow_data = match MoneroPowData::new(block, seed_hash, merkle_proof) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
+                    "[RPC-XMR] Failed constructing MoneroPowData: {e}",
+                );
+                return JsonError::new(
+                    InvalidParams,
+                    Some("failed constructing moneropowdata".to_string()),
+                    id,
+                )
+                .into()
+            }
+        };
 
         // Append MoneroPowData to the DarkFi block and sign it
         let (block, secret) = &mm_blocktemplates.get(&aux_hash).unwrap();
