@@ -84,29 +84,6 @@ pub async fn miner_task(
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let subscription = proposals_sub.publisher.clone().subscribe().await;
 
-    // Listen for blocks until next confirmation, for optimal conditions
-    if !skip_sync {
-        info!(target: "darkfid::task::miner_task", "Waiting for next confirmation...");
-        loop {
-            subscription.receive().await;
-
-            // Check if we can confirmation anything and broadcast them
-            let confirmed = node.validator.confirmation().await?;
-
-            if confirmed.is_empty() {
-                continue
-            }
-
-            let mut notif_blocks = Vec::with_capacity(confirmed.len());
-            for block in confirmed {
-                notif_blocks
-                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
-            }
-            block_sub.notify(JsonValue::Array(notif_blocks)).await;
-            break;
-        }
-    }
-
     // Create channels so threads can signal each other
     let (sender, stop_signal) = smol::channel::bounded(1);
 
