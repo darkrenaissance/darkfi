@@ -83,8 +83,7 @@ impl MoneroPowData {
     pub fn new(
         block: monero::Block,
         seed: FixedByteArray,
-        ordered_aux_chain_hashes: AuxChainHashes,
-        darkfi_hash: [u8; 32],
+        aux_chain_merkle_proof: MerkleProof,
     ) -> Result<Self> {
         let hashes = create_ordered_tx_hashes_from_block(&block);
         let root = tree_hash(&hashes)?;
@@ -106,11 +105,6 @@ impl MoneroPowData {
         coinbase.prefix.inputs.consensus_encode(&mut encoder_prefix)?;
         coinbase.prefix.outputs.consensus_encode(&mut encoder_prefix)?;
         keccak.update(&encoder_prefix);
-
-        let d_hash = monero::Hash::from_slice(darkfi_hash.as_slice());
-        let aux_chain_merkle_proof = create_merkle_proof(&ordered_aux_chain_hashes, &d_hash).ok_or_else(|| {
-		MoneroMergeMineError("create_merkle_proof returned none, could not find darkfi hash in aux chain hashes".to_string())
-		})?;
 
         Ok(Self {
             header: block.header,
