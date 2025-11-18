@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, fmt, str::FromStr};
 
 use darkfi::{
     blockchain::{
@@ -32,7 +32,7 @@ use darkfi::{
     validator::consensus::Proposal,
 };
 use darkfi_sdk::crypto::PublicKey;
-use darkfi_serial::serialize_async;
+use darkfi_serial::{async_trait, serialize_async, SerialDecodable, SerialEncodable};
 use hex::FromHex;
 use tinyjson::JsonValue;
 use tracing::{error, info};
@@ -40,10 +40,42 @@ use tracing::{error, info};
 use crate::{
     proto::ProposalMessage,
     task::miner::{generate_next_block, MinerRewardsRecipientConfig},
-    DarkfiNode,
+    DarkfiNode, Error, Result,
 };
 
 // https://github.com/SChernykh/p2pool/blob/master/docs/MERGE_MINING.MD
+
+/// Wrapper structure representing the combination `blake3::Hash` of a
+/// wallet address and merge mining job.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, SerialEncodable, SerialDecodable)]
+pub struct BlockTemplateHash(pub [u8; 32]);
+
+impl BlockTemplateHash {
+    pub fn new(address: &PublicKey, aux_hash: &HeaderHash) -> Self {
+        let mut buf = [0u8; 64];
+        buf[..32].copy_from_slice(&address.to_bytes());
+        buf[32..].copy_from_slice(aux_hash.inner());
+        Self(*blake3::hash(&buf).as_bytes())
+    }
+
+    pub fn as_string(&self) -> String {
+        blake3::Hash::from_bytes(self.0).to_string()
+    }
+}
+
+impl FromStr for BlockTemplateHash {
+    type Err = Error;
+
+    fn from_str(header_hash_str: &str) -> Result<Self> {
+        Ok(Self(*blake3::Hash::from_str(header_hash_str)?.as_bytes()))
+    }
+}
+
+impl fmt::Display for BlockTemplateHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
 
 impl DarkfiNode {
     // RPCAPI:
@@ -156,8 +188,9 @@ impl DarkfiNode {
         // We'll also obtain a lock here to avoid getting polled multiple
         // times and potentially missing a job. The lock is released when
         // this function exits.
+        let template_key = BlockTemplateHash::new(&address, &aux_hash);
         let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
-        if mm_blocktemplates.contains_key(&aux_hash) {
+        if mm_blocktemplates.contains_key(&template_key) {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
@@ -225,10 +258,15 @@ impl DarkfiNode {
         // Now we have the blocktemplate. We'll mark it down in memory,
         // and then ship it to RPC.
         let blockhash = blocktemplate.header.template_hash();
-        mm_blocktemplates.insert(blockhash, (blocktemplate, block_signing_secret));
+        let template_key = BlockTemplateHash::new(&address, &blockhash);
+        mm_blocktemplates.insert(template_key, (blocktemplate, block_signing_secret));
+        info!(
+            target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
+            "[RPC-XMR] Created blocktemplate with key: {template_key}"
+        );
 
         let response = JsonValue::from(HashMap::from([
-            ("aux_blob".to_string(), JsonValue::from(blockhash.as_string())),
+            ("aux_blob".to_string(), JsonValue::from(hex::encode(address.to_bytes()))),
             ("aux_diff".to_string(), JsonValue::from(difficulty)),
             ("aux_hash".to_string(), JsonValue::from(blockhash.as_string())),
         ]));
@@ -263,7 +301,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Parse aux_blob
+        // Parse address from aux_blob
         let Some(aux_blob) = params.get("aux_blob") else {
             return JsonError::new(InvalidParams, Some("missing aux_blob".to_string()), id).into()
         };
@@ -271,7 +309,12 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
                 .into()
         };
-        let Ok(_aux_blob) = HeaderHash::from_str(aux_blob) else {
+        let mut address_bytes = [0u8; 32];
+        if hex::decode_to_slice(aux_blob, &mut address_bytes).is_err() {
+            return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
+                .into()
+        };
+        let Ok(address) = PublicKey::from_bytes(address_bytes) else {
             return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
                 .into()
         };
@@ -289,10 +332,12 @@ impl DarkfiNode {
                 .into()
         };
 
-        // If we don't know about this `aux_hash`, we can just abort here.
+        // If we don't know about this job, we can just abort here.
+        let template_key = BlockTemplateHash::new(&address, &aux_hash);
         let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
-        if !mm_blocktemplates.contains_key(&aux_hash) {
-            return JsonError::new(InvalidParams, Some("unknown aux_hash".to_string()), id).into()
+        if !mm_blocktemplates.contains_key(&template_key) {
+            return JsonError::new(InvalidParams, Some("unknown template key".to_string()), id)
+                .into()
         }
 
         // Parse blob
@@ -373,7 +418,7 @@ impl DarkfiNode {
 
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
-            "[RPC-XMR] Got solution submission: aux_hash={aux_hash}",
+            "[RPC-XMR] Got solution submission: key={template_key}, aux_hash={aux_hash}",
         );
 
         // Construct the MoneroPowData
@@ -402,7 +447,7 @@ impl DarkfiNode {
         };
 
         // Append MoneroPowData to the DarkFi block and sign it
-        let (block, secret) = &mm_blocktemplates.get(&aux_hash).unwrap();
+        let (block, secret) = &mm_blocktemplates.get(&template_key).unwrap();
         let mut block = block.clone();
         block.header.pow_data = PowData::Monero(monero_pow_data);
         block.sign(secret);
