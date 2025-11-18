@@ -44,7 +44,11 @@ use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
 use tracing::{error, info};
 
-use crate::{proto::ProposalMessage, task::garbage_collect_task, DarkfiNodePtr};
+use crate::{
+    proto::ProposalMessage,
+    task::{consensus::clean_mm_blocktemplates, garbage_collect_task},
+    DarkfiNodePtr,
+};
 
 /// Auxiliary structure representing node miner rewards recipient configuration
 pub struct MinerRewardsRecipientConfig {
@@ -174,6 +178,10 @@ pub async fn miner_task(
 
         if confirmed.is_empty() {
             continue
+        }
+
+        if let Err(e) = clean_mm_blocktemplates(node).await {
+            error!(target: "darkfid", "Failed cleaning merge mining block templates: {e}")
         }
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
