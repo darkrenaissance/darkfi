@@ -273,7 +273,7 @@ async fn mine_next_block(
     .await?;
 
     // Execute request to minerd and parse response
-    let target = JsonValue::String(next_target.to_string());
+    let target = JsonValue::String(base64::encode(&next_target.to_bytes_le()));
     // Grab the RandomX key to use.
     // We only use the next key when the next block is the
     // height changing one.
