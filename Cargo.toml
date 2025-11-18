@@ -269,11 +269,11 @@ tx = [
 ]
 
 util = [
+    "tinyjson",
     "tracing-subscriber",
     "tracing-appender",
     "nu-ansi-term",
-
-    "tinyjson",
+    "smol",
 
     "darkfi-serial",
 ]

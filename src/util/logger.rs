@@ -227,9 +227,9 @@ where
                     let span_id = span.id().into_u64().to_string();
                     let span_id = &span_id[..span_id.len().min(6)];
 
-                    write!(writer, "{}({})", span_name, span_id)?;
+                    write!(writer, "{span_name}({span_id})")?;
                 } else {
-                    write!(writer, "{}", span_name)?;
+                    write!(writer, "{span_name}")?;
                 }
                 seen = true;
 
