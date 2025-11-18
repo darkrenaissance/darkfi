@@ -272,7 +272,7 @@ pub async fn clean_mm_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
 
     // Loop through templates to find which can be dropped
     let mut dropped_templates = vec![];
-    'outer: for (key, (block, _)) in mm_blocktemplates.iter() {
+    'outer: for (key, (block, _, _)) in mm_blocktemplates.iter() {
         // Loop through all the forks
         for fork in forks.iter() {
             // Traverse fork proposals sequence in reverse
