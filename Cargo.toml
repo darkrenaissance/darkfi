@@ -161,6 +161,8 @@ blockchain = [
     "sled-overlay/serial",
     "monero",
     "num-bigint",
+    "primitive-types",
+    "sha2",
     "tiny-keccak",
 
     "darkfi-serial/num-bigint",
@@ -174,10 +176,8 @@ validator = [
     "hex",
     "lazy_static",
     "monero",
-    "primitive-types",
     "randomx",
     "smol",
-    "sha2",
 
     "blockchain",
     "system",
