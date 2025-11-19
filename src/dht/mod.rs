@@ -431,7 +431,7 @@ impl<H: DhtHandler> Dht<H> {
         lookup_type: DhtLookupType,
     ) -> (Vec<H::Node>, Vec<H::Value>) {
         let net_settings = self.p2p.settings().read_arc().await;
-        let allowed_transports = net_settings.allowed_transports.clone();
+        let active_profiles = net_settings.active_profiles.clone();
         drop(net_settings);
         let external_addrs = self.p2p.hosts().external_addrs().await;
 
@@ -511,7 +511,7 @@ impl<H: DhtHandler> Dht<H> {
                         .addresses()
                         .iter()
                         .filter(|addr| {
-                            allowed_transports.contains(&addr.scheme().to_string()) &&
+                            active_profiles.contains(&addr.scheme().to_string()) &&
                                 !external_addrs.contains(addr)
                         })
                         .cloned()
@@ -707,12 +707,12 @@ impl<H: DhtHandler> Dht<H> {
 
     pub async fn create_channel_to_node(&self, node: &H::Node) -> Result<(ChannelPtr, H::Node)> {
         let net_settings = self.p2p.settings().read_arc().await;
-        let allowed_transports = net_settings.allowed_transports.clone();
+        let active_profiles = net_settings.active_profiles.clone();
         drop(net_settings);
 
         // Create a channel
         let mut addrs = node.addresses().clone();
-        addrs.retain(|addr| allowed_transports.contains(&addr.scheme().to_string()));
+        addrs.retain(|addr| active_profiles.contains(&addr.scheme().to_string()));
         for addr in addrs {
             let res = self.create_channel(&addr).await;
 
