@@ -23,7 +23,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::expected_reward,
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::serialize;
@@ -61,8 +61,8 @@ impl PoWRewardRevealed {
 
 /// Struct holding necessary information to build a `Money::PoWRewardV1` contract call.
 pub struct PoWRewardCallBuilder {
-    /// Caller's public key, corresponding to the one used in the signature
-    pub signature_public: PublicKey,
+    /// Caller's keypair, corresponding to the one used in the signature
+    pub signature_keypair: Keypair,
     /// Rewarded block height
     pub block_height: u32,
     /// Rewarded block transactions paid fees
@@ -80,7 +80,7 @@ pub struct PoWRewardCallBuilder {
 }
 
 impl PoWRewardCallBuilder {
-    fn _build(&self, value: u64, block_signing_secret: &SecretKey) -> Result<PoWRewardCallDebris> {
+    fn _build(&self, value: u64) -> Result<PoWRewardCallDebris> {
         debug!(target: "contract::money::client::pow_reward", "Building Money::PoWRewardV1 contract call");
 
         // In this call, we will build one clear input and one anonymous output.
@@ -96,7 +96,7 @@ impl PoWRewardCallBuilder {
             token_id,
             value_blind,
             token_blind,
-            signature_public: self.signature_public,
+            signature_public: self.signature_keypair.public,
         };
 
         // Grab the spend hook and user data to use in the output
@@ -105,7 +105,7 @@ impl PoWRewardCallBuilder {
 
         // Building the anonymous output
         let output = TransferCallOutput {
-            public_key: self.recipient.unwrap_or(self.signature_public),
+            public_key: self.recipient.unwrap_or(self.signature_keypair.public),
             value,
             token_id,
             spend_hook,
@@ -133,7 +133,7 @@ impl PoWRewardCallBuilder {
             coin_blind,
             value_blind,
             token_blind,
-            memo: serialize(block_signing_secret),
+            memo: serialize(&self.signature_keypair.secret),
         };
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
@@ -150,17 +150,13 @@ impl PoWRewardCallBuilder {
         Ok(debris)
     }
 
-    pub fn build(&self, block_signing_key: &SecretKey) -> Result<PoWRewardCallDebris> {
+    pub fn build(&self) -> Result<PoWRewardCallDebris> {
         let reward = expected_reward(self.block_height) + self.fees;
-        self._build(reward, block_signing_key)
+        self._build(reward)
     }
 
     /// This function should only be used for testing, as PoW reward values are predefined
-    pub fn build_with_custom_reward(
-        &self,
-        reward: u64,
-        block_signing_key: &SecretKey,
-    ) -> Result<PoWRewardCallDebris> {
-        self._build(reward + self.fees, block_signing_key)
+    pub fn build_with_custom_reward(&self, reward: u64) -> Result<PoWRewardCallDebris> {
+        self._build(reward + self.fees)
     }
 }

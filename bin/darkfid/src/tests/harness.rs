@@ -202,7 +202,7 @@ impl Harness {
 
         // Build the transaction debris
         let debris = PoWRewardCallBuilder {
-            signature_public: keypair.public,
+            signature_keypair: keypair,
             block_height,
             fees: 0,
             recipient: None,
@@ -211,7 +211,7 @@ impl Harness {
             mint_zkbin: zkbin.clone(),
             mint_pk: pk.clone(),
         }
-        .build(&keypair.secret)?;
+        .build()?;
 
         // Generate and sign the actual transaction
         let mut data = vec![MoneyFunction::PoWRewardV1 as u8];

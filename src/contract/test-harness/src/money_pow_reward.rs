@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rand::rngs::OsRng;
-
 use darkfi::{
     blockchain::{BlockInfo, BlockchainOverlay, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
@@ -30,7 +28,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode, MerkleTree, SecretKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode, MerkleTree},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -67,12 +65,9 @@ impl TestHarness {
         // If there's fees paid, use them, otherwise set to zero
         let fees = fees.unwrap_or_default();
 
-        // Generate a random block signing key
-        let block_signing_key = SecretKey::random(&mut OsRng);
-
         // Build the transaction
         let builder = PoWRewardCallBuilder {
-            signature_public: wallet.keypair.public,
+            signature_keypair: wallet.keypair,
             block_height: last_block.header.height + 1,
             fees,
             recipient,
@@ -83,8 +78,8 @@ impl TestHarness {
         };
 
         let debris = match reward {
-            Some(value) => builder.build_with_custom_reward(value, &block_signing_key)?,
-            None => builder.build(&block_signing_key)?,
+            Some(value) => builder.build_with_custom_reward(value)?,
+            None => builder.build()?,
         };
 
         // Encode the transaction
