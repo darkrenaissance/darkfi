@@ -34,7 +34,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{FuncId, MerkleTree, PublicKey, SecretKey, MONEY_CONTRACT_ID},
+    crypto::{FuncId, Keypair, MerkleTree, PublicKey, SecretKey, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -335,16 +335,17 @@ pub async fn generate_next_block(
         .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
         .await?;
 
-    // Create an ephemeral block signing key. It will be stored in the PowReward
-    // transaction's encrypted note for later retrieval. It is encrypted towards
-    // the recipient's public key.
-    let block_signing_secret = SecretKey::random(&mut OsRng);
+    // Create an ephemeral block signing keypair. Its secret key will
+    // be stored in the PowReward transaction's encrypted note for
+    // later retrieval. It is encrypted towards the recipient's public
+    // key.
+    let block_signing_keypair = Keypair::random(&mut OsRng);
 
     // Generate reward transaction
     let tx = generate_transaction(
         next_block_height,
         fees,
-        &block_signing_secret,
+        &block_signing_keypair,
         recipient_config,
         zkbin,
         pk,
@@ -384,21 +385,21 @@ pub async fn generate_next_block(
     // Grab the next mine target
     let target = extended_fork.module.next_mine_target()?;
 
-    Ok((target, next_block, block_signing_secret))
+    Ok((target, next_block, block_signing_keypair.secret))
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction.
 fn generate_transaction(
     block_height: u32,
     fees: u64,
-    block_signing_secret: &SecretKey,
+    block_signing_keypair: &Keypair,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<Transaction> {
     // Build the transaction debris
     let debris = PoWRewardCallBuilder {
-        signature_public: PublicKey::from_secret(*block_signing_secret),
+        signature_keypair: *block_signing_keypair,
         block_height,
         fees,
         recipient: Some(recipient_config.recipient),
@@ -407,7 +408,7 @@ fn generate_transaction(
         mint_zkbin: zkbin.clone(),
         mint_pk: pk.clone(),
     }
-    .build(block_signing_secret)?;
+    .build()?;
 
     // Generate and sign the actual transaction
     let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
@@ -416,7 +417,7 @@ fn generate_transaction(
     let mut tx_builder =
         TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
     let mut tx = tx_builder.build()?;
-    let sigs = tx.create_sigs(&[*block_signing_secret])?;
+    let sigs = tx.create_sigs(&[block_signing_keypair.secret])?;
     tx.signatures = vec![sigs];
 
     Ok(tx)
