@@ -245,7 +245,7 @@ impl ProtocolFud {
                 Err(Error::ChannelStopped) => continue,
                 Err(_) => continue,
             };
-            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING REQUEST from {}", self.channel.address());
+            info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING REQUEST from {}", self.channel.display_address());
             self.fud.dht.update_channel(self.channel.info.id).await;
 
             let reply = FudPingReply {
