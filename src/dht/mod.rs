@@ -99,6 +99,8 @@ pub struct DhtBucket<N: DhtNode> {
 /// Our local hash table, storing DHT keys and values
 pub type DhtHashTable<V> = Arc<RwLock<HashMap<blake3::Hash, V>>>;
 
+type PingLock<N> = Arc<Mutex<Option<Result<N>>>>;
+
 #[derive(Clone, Debug)]
 pub struct ChannelCacheItem<N: DhtNode> {
     /// The DHT node the channel is connected to.
@@ -135,6 +137,8 @@ pub struct Dht<H: DhtHandler> {
     pub channel_cache: Arc<RwLock<HashMap<u32, ChannelCacheItem<H::Node>>>>,
     /// Host address -> ChannelCacheItem
     pub host_cache: Arc<RwLock<HashMap<Url, HostCacheItem>>>,
+    /// Locks that prevent pinging the same channel multiple times at once.
+    ping_locks: Arc<Mutex<HashMap<u32, PingLock<H::Node>>>>,
     /// Add node sender
     pub add_node_tx: channel::Sender<(H::Node, ChannelPtr)>,
     /// Add node receiver
@@ -172,6 +176,7 @@ impl<H: DhtHandler> Dht<H> {
             bootstrapped: Arc::new(RwLock::new(false)),
             channel_cache: Arc::new(RwLock::new(HashMap::new())),
             host_cache: Arc::new(RwLock::new(HashMap::new())),
+            ping_locks: Arc::new(Mutex::new(HashMap::new())),
             add_node_tx,
             add_node_rx,
 
@@ -374,6 +379,35 @@ impl<H: DhtHandler> Dht<H> {
         let mut buckets = buckets_lock.write().await;
         let bucket = &mut buckets[bucket_index];
         bucket.nodes.retain(|node| node.id() != *node_id);
+    }
+
+    /// Send a DHT ping to `channel` using the handler's ping method.
+    /// Prevents sending multiple pings at once to the same channel.
+    pub async fn ping(&self, channel: ChannelPtr) -> Result<H::Node> {
+        let lock_map = self.ping_locks.clone();
+        let mut locks = lock_map.lock().await;
+
+        // Get or create the lock
+        let lock = if let Some(lock) = locks.get(&channel.info.id) {
+            lock.clone()
+        } else {
+            let lock = Arc::new(Mutex::new(None));
+            locks.insert(channel.info.id, lock.clone());
+            lock
+        };
+        drop(locks);
+
+        // Acquire the lock
+        let mut result = lock.lock().await;
+
+        if let Some(res) = result.clone() {
+            return res
+        }
+
+        // Do the actual pinging process as defined by the handler
+        let ping_result = self.handler().await.ping(channel.clone()).await;
+        *result = Some(ping_result.clone());
+        ping_result
     }
 
     /// Lookup algorithm for both nodes lookup and value lookup.
@@ -632,7 +666,7 @@ impl<H: DhtHandler> Dht<H> {
         }
         drop(channel_cache);
 
-        let node = self.handler().await.ping(channel.clone()).await;
+        let node = self.ping(channel.clone()).await;
         // If ping failed, cleanup the channel and abort
         if let Err(e) = node {
             self.cleanup_channel(channel).await;
@@ -698,8 +732,10 @@ impl<H: DhtHandler> Dht<H> {
     pub async fn cleanup_channel(&self, channel: ChannelPtr) {
         let channel_cache_lock = self.channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
+        let mut ping_locks = self.ping_locks.lock().await;
         if self.p2p.session_direct().cleanup_channel(channel.clone()).await {
             channel_cache.remove(&channel.info.id);
+            ping_locks.remove(&channel.info.id);
         }
     }
 }

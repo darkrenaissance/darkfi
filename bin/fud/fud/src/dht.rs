@@ -16,28 +16,38 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use smol::lock::Mutex;
+use rand::{rngs::OsRng, Rng};
 use tinyjson::JsonValue;
-use tracing::debug;
+use tracing::{debug, warn};
 use url::Url;
 
 use darkfi::{
-    dht::{impl_dht_node_defaults, Dht, DhtHandler, DhtLookupReply, DhtNode},
+    dht::{
+        event::DhtEvent, impl_dht_node_defaults, Dht, DhtHandler, DhtLookupReply, DhtNode,
+        HostCacheItem,
+    },
     geode::hash_to_string,
-    net::ChannelPtr,
+    net::{
+        session::{SESSION_DIRECT, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND},
+        ChannelPtr,
+    },
     rpc::util::json_map,
+    system::timeout::timeout,
     util::time::Timestamp,
-    Result,
+    Error, Result,
 };
 use darkfi_sdk::crypto::schnorr::{SchnorrPublic, Signature};
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
 use crate::{
     pow::VerifiableNodeData,
-    proto::{FudAnnounce, FudNodesReply, FudNodesRequest, FudSeedersReply, FudSeedersRequest},
+    proto::{
+        FudAnnounce, FudNodesReply, FudNodesRequest, FudPingReply, FudPingRequest, FudSeedersReply,
+        FudSeedersRequest,
+    },
     util::receive_resource_msg,
     Fud,
 };
@@ -138,30 +148,104 @@ impl DhtHandler for Fud {
     }
 
     async fn ping(&self, channel: ChannelPtr) -> Result<FudNode> {
-        let lock_map = self.ping_locks.clone();
-        let mut locks = lock_map.lock().await;
+        debug!(target: "fud::DhtHandler::ping()", "Sending ping to {}", channel.display_address());
 
-        // Get or create the lock
-        let lock = if let Some(lock) = locks.get(&channel.info.id) {
-            lock.clone()
-        } else {
-            let lock = Arc::new(Mutex::new(None));
-            locks.insert(channel.info.id, lock.clone());
-            lock
-        };
-        drop(locks);
+        // Setup `FudPingReply` subscriber
+        let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
 
-        // Acquire the lock
-        let mut result = lock.lock().await;
+        // Send `FudPingRequest`
+        let mut rng = OsRng;
+        let request = FudPingRequest { random: rng.gen() };
+        if channel.is_stopped() {
+            return Err(Error::ChannelStopped)
+        }
+        channel.send(&request).await?;
 
-        if let Some(res) = result.clone() {
-            return res
+        // Wait for `FudPingReply`
+        let reply = msg_subscriber.receive_with_timeout(self.dht.settings.timeout).await;
+        msg_subscriber.unsubscribe().await;
+        let reply = reply?;
+        let node = &reply.node;
+
+        // Verify the signature
+        if !node.data.public_key.verify(&request.random.to_be_bytes(), &reply.sig) {
+            warn!(target: "fud::DhtHandler::ping()", "Received an invalid signature while pinging {}", channel.display_address());
+            self.dht
+                .event_publisher
+                .notify(DhtEvent::PingReceived {
+                    from: channel.clone(),
+                    result: Err(Error::InvalidSignature),
+                })
+                .await;
+            self.dht.cleanup_channel(channel.clone()).await;
+            channel.ban().await;
+            return Err(Error::InvalidSignature)
         }
 
-        // Do the actual pinging process
-        let ping_result = self.do_ping(channel.clone()).await;
-        *result = Some(ping_result.clone());
-        ping_result
+        // Verify PoW
+        if let Err(e) = self.pow.write().await.verify_node(&node.data).await {
+            warn!(target: "fud::DhtHandler::ping()", "Received an invalid PoW while pinging {}: {e}", channel.display_address());
+            self.dht
+                .event_publisher
+                .notify(DhtEvent::PingReceived { from: channel.clone(), result: Err(e.clone()) })
+                .await;
+            self.dht.cleanup_channel(channel.clone()).await;
+            channel.ban().await;
+            return Err(e)
+        }
+        self.dht
+            .event_publisher
+            .notify(DhtEvent::PingReceived { from: channel.clone(), result: Ok(node.id()) })
+            .await;
+
+        if channel.session_type_id() & (SESSION_OUTBOUND | SESSION_DIRECT | SESSION_MANUAL) != 0 {
+            // Wait for the other node to ping us
+            let ping_timeout = Duration::from_secs(10);
+
+            if let Err(e) = timeout(ping_timeout, self.dht.wait_fully_pinged(channel.info.id)).await
+            {
+                self.dht.cleanup_channel(channel).await;
+                return Err(e.into())
+            }
+
+            let mut host_cache = self.dht.host_cache.write().await;
+
+            // If we had another node id for this host in our cache, remove
+            // the old one from the buckets and seeders
+            if let Some(cached) = host_cache.get(channel.address()) {
+                if cached.node_id != node.id() {
+                    self.dht.remove_node(&cached.node_id).await;
+
+                    for (_, seeders) in self.dht.hash_table.write().await.iter_mut() {
+                        seeders.retain(|seeder| seeder.node.id() != cached.node_id);
+                    }
+                }
+            }
+
+            // Update host cache
+            host_cache.insert(
+                channel.address().clone(),
+                HostCacheItem { last_ping: Timestamp::current_time(), node_id: node.id() },
+            );
+
+            drop(host_cache);
+
+            // Update our buckets
+            if !node.addresses().is_empty() {
+                self.dht.update_node(&node.clone(), channel.clone()).await;
+            }
+        } else if channel.session_type_id() & SESSION_INBOUND != 0 {
+            // If it's an inbound connection, verify that we can connect to at
+            // least one of the provided external addresses.
+            // This may try to create a new outbound channel and it will update
+            // our buckets if successful.
+            let _ = self.verify_node_tx.send(node.clone()).await;
+        }
+
+        // Update the channel cache
+        self.dht.add_channel_to_cache(channel.info.id, node).await;
+
+        Ok(node.clone())
     }
 
     async fn store(

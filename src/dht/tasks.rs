@@ -62,7 +62,9 @@ pub async fn events_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 /// Send a DHT ping request when there is a new channel, to know the node id of the new peer,
 /// Then fill the channel cache and the buckets
 pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
-    let channel_sub = handler.dht().p2p.hosts().subscribe_channel().await;
+    let dht = handler.dht();
+    let p2p = dht.p2p.clone();
+    let channel_sub = p2p.hosts().subscribe_channel().await;
     loop {
         let res = channel_sub.receive().await;
         if res.is_err() {
@@ -70,7 +72,7 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         }
         let channel = res.unwrap();
 
-        let channel_cache_lock = handler.dht().channel_cache.clone();
+        let channel_cache_lock = dht.channel_cache.clone();
         let mut channel_cache = channel_cache_lock.write().await;
 
         // Skip this channel if it's not new
@@ -91,7 +93,7 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 
         // It's a manual connection
         if channel.session_type_id() & SESSION_MANUAL != 0 {
-            let ping_res = handler.ping(channel.clone()).await;
+            let ping_res = dht.ping(channel.clone()).await;
 
             if let Err(e) = ping_res {
                 warn!(target: "dht::channel_task()", "Error while pinging manual connection (requesting node id) {}: {e}", channel.display_address());
@@ -101,10 +103,7 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 
         // It's an outbound connection
         if channel.session_type_id() & SESSION_OUTBOUND != 0 {
-            let node = handler.ping(channel.clone()).await;
-            if node.is_err() {
-                continue;
-            }
+            let _ = dht.ping(channel.clone()).await;
 
             continue;
         }

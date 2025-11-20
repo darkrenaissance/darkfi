@@ -21,35 +21,25 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
-use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
 use smol::{
     channel,
     fs::{self, OpenOptions},
-    lock::{Mutex, RwLock},
+    lock::RwLock,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use darkfi::{
-    dht::{
-        event::DhtEvent, tasks as dht_tasks, Dht, DhtHandler, DhtNode, DhtSettings, HostCacheItem,
-    },
+    dht::{tasks as dht_tasks, Dht, DhtHandler, DhtSettings},
     geode::{hash_to_string, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
-    net::{
-        session::{SESSION_DIRECT, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND},
-        ChannelPtr, P2pPtr,
-    },
-    system::{timeout::timeout, ExecutorPtr, PublisherPtr, StoppableTask},
+    net::P2pPtr,
+    system::{ExecutorPtr, PublisherPtr, StoppableTask},
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
-use darkfi_sdk::crypto::{
-    schnorr::{SchnorrPublic, SchnorrSecret},
-    SecretKey,
-};
+use darkfi_sdk::crypto::{schnorr::SchnorrSecret, SecretKey};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 /// P2P protocols
@@ -101,17 +91,11 @@ use download::{fetch_chunks, fetch_metadata};
 pub mod dht;
 use dht::FudSeeder;
 
-use crate::{
-    dht::FudNode,
-    pow::PowSettings,
-    proto::{FudPingReply, FudPingRequest},
-};
+use crate::{dht::FudNode, pow::PowSettings};
 
 const SLED_PATH_TREE: &[u8] = b"_fud_paths";
 const SLED_FILE_SELECTION_TREE: &[u8] = b"_fud_file_selections";
 const SLED_SCRAP_TREE: &[u8] = b"_fud_scraps";
-
-type PingLock = Arc<Mutex<Option<Result<FudNode>>>>;
 
 pub struct Fud {
     /// Our own [`VerifiableNodeData`]
@@ -143,8 +127,6 @@ pub struct Fud {
     /// is not saved to the filesystem in the downloaded files.
     /// "chunk/scrap hash -> chunk content"
     scrap_tree: sled::Tree,
-    /// Locks that prevent pinging the same channel multiple times at once.
-    ping_locks: Arc<Mutex<HashMap<u32, PingLock>>>,
     /// Get requests sender
     get_tx: channel::Sender<(blake3::Hash, PathBuf, FileSelection)>,
     /// Get requests receiver
@@ -234,7 +216,6 @@ impl Fud {
             file_selection_tree: sled_db.open_tree(SLED_FILE_SELECTION_TREE)?,
             scrap_tree: sled_db.open_tree(SLED_SCRAP_TREE)?,
             resources: Arc::new(RwLock::new(HashMap::new())),
-            ping_locks: Arc::new(Mutex::new(HashMap::new())),
             get_tx,
             get_rx,
             put_tx,
@@ -417,110 +398,6 @@ impl Fud {
                 .sign(&[key.as_bytes().to_vec(), serialize_async(&node).await].concat()),
             timestamp: Timestamp::current_time().inner(),
         }
-    }
-
-    async fn do_ping(&self, channel: ChannelPtr) -> Result<FudNode> {
-        debug!(target: "fud::DhtHandler::do_ping()", "Sending ping to {}", channel.display_address());
-
-        let dht = self.dht();
-
-        // Setup `FudPingReply` subscriber
-        let msg_subscriber = channel.subscribe_msg::<FudPingReply>().await.unwrap();
-
-        // Send `FudPingRequest`
-        let mut rng = OsRng;
-        let request = FudPingRequest { random: rng.gen() };
-        if channel.is_stopped() {
-            return Err(Error::ChannelStopped)
-        }
-        channel.send(&request).await?;
-
-        // Wait for `FudPingReply`
-        let reply = msg_subscriber.receive_with_timeout(dht.settings.timeout).await;
-        msg_subscriber.unsubscribe().await;
-        let reply = reply?;
-        let node = &reply.node;
-
-        // Verify the signature
-        if !node.data.public_key.verify(&request.random.to_be_bytes(), &reply.sig) {
-            warn!(target: "fud::do_ping()", "Received an invalid signature while pinging {}", channel.display_address());
-            self.dht
-                .event_publisher
-                .notify(DhtEvent::PingReceived {
-                    from: channel.clone(),
-                    result: Err(Error::InvalidSignature),
-                })
-                .await;
-            self.dht.cleanup_channel(channel.clone()).await;
-            channel.ban().await;
-            return Err(Error::InvalidSignature)
-        }
-
-        // Verify PoW
-        if let Err(e) = self.pow.write().await.verify_node(&node.data).await {
-            warn!(target: "fud::do_ping()", "Received an invalid PoW while pinging {}: {e}", channel.display_address());
-            self.dht
-                .event_publisher
-                .notify(DhtEvent::PingReceived { from: channel.clone(), result: Err(e.clone()) })
-                .await;
-            self.dht.cleanup_channel(channel.clone()).await;
-            channel.ban().await;
-            return Err(e)
-        }
-        self.dht
-            .event_publisher
-            .notify(DhtEvent::PingReceived { from: channel.clone(), result: Ok(node.id()) })
-            .await;
-
-        if channel.session_type_id() & (SESSION_OUTBOUND | SESSION_DIRECT | SESSION_MANUAL) != 0 {
-            // Wait for the other node to ping us
-            let ping_timeout = Duration::from_secs(10);
-
-            if let Err(e) = timeout(ping_timeout, dht.wait_fully_pinged(channel.info.id)).await {
-                dht.cleanup_channel(channel).await;
-                return Err(e.into())
-            }
-
-            let mut host_cache = dht.host_cache.write().await;
-
-            // If we had another node id for this host in our cache, remove
-            // the old one from the buckets and seeders
-            if let Some(cached) = host_cache.get(channel.address()) {
-                if cached.node_id != node.id() {
-                    dht.remove_node(&cached.node_id).await;
-
-                    for (_, seeders) in dht.hash_table.write().await.iter_mut() {
-                        seeders.retain(|seeder| seeder.node.id() != cached.node_id);
-                    }
-                }
-            }
-
-            // Update host cache
-            host_cache.insert(
-                channel.address().clone(),
-                HostCacheItem { last_ping: Timestamp::current_time(), node_id: node.id() },
-            );
-
-            drop(host_cache);
-
-            // Update our buckets
-            if !node.addresses().is_empty() {
-                dht.update_node(&node.clone(), channel.clone()).await;
-            }
-        } else if channel.session_type_id() & SESSION_INBOUND != 0 {
-            // If it's an inbound connection, verify that we can connect to at
-            // least one of the provided external addresses.
-            // This may try to create a new outbound channel and it will update
-            // our buckets if successful.
-            if let Ok((channel, _)) = dht.create_channel_to_node(node).await {
-                dht.cleanup_channel(channel).await;
-            }
-        }
-
-        // Update the channel cache
-        dht.add_channel_to_cache(channel.info.id, node).await;
-
-        Ok(node.clone())
     }
 
     /// Verify if resources are complete and uncorrupted.
