@@ -137,14 +137,25 @@ impl DirectSession {
 
         // Check if task is already running for this addr
         if let Some(task) = tasks.get(addr) {
-            let task = task.upgrade().unwrap();
-            drop(tasks);
-
-            // Wait for the existing task to complete
-            while task.output.lock().await.is_none() {
-                msleep(100).await; // Wait for completion
+            if let Some(task) = task.upgrade() {
+                drop(tasks);
+                // Wait for the existing task to complete
+                while task.output.lock().await.is_none() {
+                    msleep(100).await;
+                }
+                return task.output.lock().await.clone().unwrap();
+            } else {
+                drop(tasks);
+                // Wait for the existing task to be fully removed
+                loop {
+                    tasks = self.tasks.lock().await;
+                    if !tasks.contains_key(addr) {
+                        break
+                    }
+                    drop(tasks);
+                    msleep(100).await;
+                }
             }
-            return task.output.lock().await.clone().unwrap();
         }
 
         // If no task running, create one
