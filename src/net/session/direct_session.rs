@@ -192,7 +192,11 @@ impl DirectSession {
     }
 
     /// Increment channel usage
-    async fn inc_channel_usage(&self, channel: &ChannelPtr, n: u32) {
+    pub async fn inc_channel_usage(&self, channel: &ChannelPtr, n: u32) {
+        if channel.session_type_id() & SESSION_DIRECT == 0 {
+            // Do nothing if this is not a channel created by the direct session
+            return
+        }
         let mut channels_usage = self.channels_usage.lock().await;
         channels_usage.entry(channel.info.id).and_modify(|count| *count += n).or_insert(n);
     }
