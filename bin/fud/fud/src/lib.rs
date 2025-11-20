@@ -157,6 +157,10 @@ pub struct Fud {
     lookup_tx: channel::Sender<blake3::Hash>,
     /// Lookup requests receiver
     lookup_rx: channel::Receiver<blake3::Hash>,
+    /// Verify node requests sender
+    verify_node_tx: channel::Sender<FudNode>,
+    /// Verify node requests receiver
+    verify_node_rx: channel::Receiver<FudNode>,
     /// Currently active downloading tasks (running the `fud.fetch_resource()` method)
     fetch_tasks: Arc<RwLock<HashMap<blake3::Hash, Arc<StoppableTask>>>>,
     /// Currently active put tasks (running the `fud.insert_resource()` method)
@@ -217,6 +221,7 @@ impl Fud {
         let (get_tx, get_rx) = smol::channel::unbounded();
         let (put_tx, put_rx) = smol::channel::unbounded();
         let (lookup_tx, lookup_rx) = smol::channel::unbounded();
+        let (verify_node_tx, verify_node_rx) = smol::channel::unbounded();
         let fud = Arc::new(Self {
             node_data: Arc::new(RwLock::new(node_data)),
             secret_key: Arc::new(RwLock::new(secret_key)),
@@ -236,6 +241,8 @@ impl Fud {
             put_rx,
             lookup_tx,
             lookup_rx,
+            verify_node_tx,
+            verify_node_rx,
             fetch_tasks: Arc::new(RwLock::new(HashMap::new())),
             put_tasks: Arc::new(RwLock::new(HashMap::new())),
             lookup_tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -266,6 +273,7 @@ impl Fud {
             tasks
         );
         start_task!(self, "lookup", tasks::lookup_task, tasks);
+        start_task!(self, "verify node", tasks::verify_node_task, tasks);
         start_task!(self, "announce", tasks::announce_seed_task, tasks);
         start_task!(self, "node ID", tasks::node_id_task, tasks);
     }

@@ -178,6 +178,18 @@ pub async fn lookup_task(fud: Arc<Fud>) -> Result<()> {
     }
 }
 
+/// After pinging an inbound connection, this task is triggered to make sure
+/// that you are able to reach at least one of the node's external address.
+/// [`Fud::ping()`] will take care of adding the node to our buckets.
+pub async fn verify_node_task(fud: Arc<Fud>) -> Result<()> {
+    loop {
+        let node = fud.verify_node_rx.recv().await.unwrap();
+        if let Ok((channel, _)) = fud.dht.create_channel_to_node(&node).await {
+            fud.dht.cleanup_channel(channel).await;
+        }
+    }
+}
+
 /// Background task that announces our files once every hour.
 /// Also removes seeders that did not announce for too long.
 pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
