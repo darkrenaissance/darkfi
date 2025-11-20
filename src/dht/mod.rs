@@ -420,6 +420,7 @@ impl<H: DhtHandler> Dht<H> {
         let net_settings = self.p2p.settings().read_arc().await;
         let allowed_transports = net_settings.allowed_transports.clone();
         drop(net_settings);
+        let external_addrs = self.p2p.hosts().external_addrs().await;
 
         let (k, a) = (self.settings.k, self.settings.alpha);
         let semaphore = Arc::new(Semaphore::new(self.settings.concurrency));
@@ -439,19 +440,12 @@ impl<H: DhtHandler> Dht<H> {
 
         // Create a channel if necessary and send a FIND NODES or FIND VALUE
         // request to `addr`
-        let lookup = async |node: H::Node, key| {
+        let lookup = async |node: H::Node, key, addrs: Vec<Url>| {
             let _permit = semaphore.acquire().await;
 
-            // Filter and try all valid addresses for the node
-            let valid_addrs: Vec<Url> = node
-                .addresses()
-                .iter()
-                .filter(|addr| allowed_transports.contains(&addr.scheme().to_string()))
-                .cloned()
-                .collect();
-
+            // Try all valid addresses for the node
             let mut last_err = None;
-            for addr in valid_addrs {
+            for addr in addrs {
                 let mut queried_addrs_set = queried_addrs.lock().await;
                 // Skip if this address has already been queried
                 if queried_addrs_set.contains(&addr) {
@@ -500,7 +494,18 @@ impl<H: DhtHandler> Dht<H> {
             for _ in 0..a {
                 if !nodes_to_visit.is_empty() {
                     let node = nodes_to_visit.remove(0);
-                    futures.push(Box::pin(lookup(node, &key)));
+                    let valid_addrs: Vec<Url> = node
+                        .addresses()
+                        .iter()
+                        .filter(|addr| {
+                            allowed_transports.contains(&addr.scheme().to_string()) &&
+                                !external_addrs.contains(addr)
+                        })
+                        .cloned()
+                        .collect();
+                    if !valid_addrs.is_empty() {
+                        futures.push(Box::pin(lookup(node, &key, valid_addrs)));
+                    }
                 }
             }
         };
@@ -658,6 +663,13 @@ impl<H: DhtHandler> Dht<H> {
     /// Create a channel in the direct session, ping the peer, add the
     /// DHT node to our buckets and the channel to our channel cache.
     pub async fn create_channel(&self, addr: &Url) -> Result<(ChannelPtr, H::Node)> {
+        let external_addrs = self.p2p.hosts().external_addrs().await;
+        if external_addrs.contains(addr) {
+            return Err(Error::Custom(
+                "Can't create a channel to our own external address".to_string(),
+            ))
+        }
+
         let channel = self.p2p.session_direct().get_channel(addr).await?;
         let channel_cache = self.channel_cache.read().await;
         if let Some(cached) = channel_cache.get(&channel.info.id) {
@@ -715,6 +727,7 @@ impl<H: DhtHandler> Dht<H> {
             });
     }
 
+    /// Wait until we received a DHT ping and sent a DHT ping on a channel.
     pub async fn wait_fully_pinged(&self, channel_id: u32) -> Result<()> {
         loop {
             let channel_cache = self.channel_cache.read().await;
@@ -725,7 +738,7 @@ impl<H: DhtHandler> Dht<H> {
                 return Ok(())
             }
             drop(channel_cache);
-            msleep(100).await; // Wait for completion
+            msleep(100).await;
         }
     }
 
