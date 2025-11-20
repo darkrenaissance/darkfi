@@ -23,7 +23,7 @@ use crate::{
     dht::{event::DhtEvent, ChannelCacheItem, DhtHandler, DhtNode, SESSION_MANUAL},
     net::{
         hosts::HostColor,
-        session::{SESSION_INBOUND, SESSION_OUTBOUND},
+        session::{SESSION_DIRECT, SESSION_INBOUND, SESSION_OUTBOUND},
     },
     system::sleep,
     util::time::Timestamp,
@@ -104,7 +104,14 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         // It's an outbound connection
         if channel.session_type_id() & SESSION_OUTBOUND != 0 {
             let _ = dht.ping(channel.clone()).await;
+            continue;
+        }
 
+        // It's a direct connection
+        if channel.session_type_id() & SESSION_DIRECT != 0 {
+            p2p.session_direct().inc_channel_usage(&channel, 1).await;
+            let _ = dht.ping(channel.clone()).await;
+            dht.cleanup_channel(channel).await;
             continue;
         }
     }
