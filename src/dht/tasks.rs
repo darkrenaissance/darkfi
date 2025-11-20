@@ -173,6 +173,9 @@ pub async fn dht_refinery_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 /// If the bucket is already full, we ping the least recently seen node in the
 /// bucket: if successful it becomes the most recently seen node, if the ping
 /// fails we remove it and add the new node.
+/// [`Dht::update_node()`] increments a channel's usage count (in the direct
+/// session) and triggers this task. This task decrements the usage count
+/// using [`Dht::cleanup_channel()`].
 pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
     let dht = handler.dht();
     loop {
@@ -187,17 +190,20 @@ pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 
         // Do not add ourselves to the buckets
         if node.id() == self_node.id() {
+            dht.cleanup_channel(channel).await;
             continue;
         }
 
         // Don't add this node if it has any external address that is the same as one of ours
         let node_addresses = node.addresses();
         if self_node.addresses().iter().any(|addr| node_addresses.contains(addr)) {
+            dht.cleanup_channel(channel).await;
             continue;
         }
 
         // Do not add a node to the buckets if it does not have an address
         if node.addresses().is_empty() {
+            dht.cleanup_channel(channel).await;
             continue;
         }
 
@@ -205,19 +211,21 @@ pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         if let Some(node_index) = bucket.nodes.iter().position(|n| n.id() == node.id()) {
             bucket.nodes.remove(node_index);
             bucket.nodes.push(node);
+            dht.cleanup_channel(channel).await;
             continue;
         }
 
         // Bucket is full
-        if bucket.nodes.len() >= handler.dht().settings.k {
+        if bucket.nodes.len() >= dht.settings.k {
             // Ping the least recently seen node
-            if let Ok((channel, node)) = handler.dht().get_channel(&bucket.nodes[0]).await {
+            if let Ok((channel2, node)) = dht.get_channel(&bucket.nodes[0]).await {
                 // Ping was successful, move the least recently seen node to the tail
                 let n = bucket.nodes.remove(0);
                 bucket.nodes.push(n);
                 drop(buckets);
-                dht.on_new_node(&node.clone(), channel.clone()).await;
-                handler.dht().cleanup_channel(channel).await;
+                dht.on_new_node(&node.clone(), channel2.clone()).await;
+                dht.cleanup_channel(channel2).await;
+                dht.cleanup_channel(channel).await;
                 continue;
             }
 
@@ -226,6 +234,7 @@ pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
             bucket.nodes.push(node.clone());
             drop(buckets);
             dht.on_new_node(&node.clone(), channel.clone()).await;
+            dht.cleanup_channel(channel).await;
             continue;
         }
 
@@ -233,6 +242,7 @@ pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         bucket.nodes.push(node.clone());
         drop(buckets);
         dht.on_new_node(&node.clone(), channel.clone()).await;
+        dht.cleanup_channel(channel).await;
     }
 }
 

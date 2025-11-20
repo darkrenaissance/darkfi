@@ -365,6 +365,7 @@ impl<H: DhtHandler> Dht<H> {
     /// to show that it is the most recently seen in the bucket.
     /// If the node is not in a bucket it will be added using `add_node`.
     pub async fn update_node(&self, node: &H::Node, channel: ChannelPtr) {
+        self.p2p.session_direct().inc_channel_usage(&channel, 1).await;
         if let Err(e) = self.add_node_tx.send((node.clone(), channel.clone())).await {
             warn!(target: "dht::update_node()", "[DHT] Cannot add node {}: {e}", H::key_to_string(&node.id()))
         }
