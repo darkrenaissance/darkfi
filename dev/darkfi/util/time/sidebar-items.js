@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DAYS_IN_MONTHS","MIN_IN_HOUR","SECS_IN_DAY","SECS_IN_HOUR"],"enum":["DateFormat"],"fn":["fmt_duration","timestamp_to_date"],"struct":["Date","DateTime","NanoTimestamp","Timestamp"]};

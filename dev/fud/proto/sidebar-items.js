@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["impl_resource_msg"],"struct":["FudAnnounce","FudChunkNotFound","FudChunkReply","FudChunkRequest","FudDirectoryReply","FudFileReply","FudMetadataNotFound","FudMetadataRequest","FudNodesReply","FudNodesRequest","FudPingReply","FudPingRequest","FudSeedersReply","FudSeedersRequest","ProtocolFud"],"trait":["ResourceMessage"]};
