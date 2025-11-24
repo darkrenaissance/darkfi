@@ -27,22 +27,7 @@ use std::{
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use tracing::{debug, warn};
 
-use crate::{
-    system::thread_priority::{set_thread_priority, ThreadPriority},
-    Result,
-};
-
-/// Wrapper for creating a [`RandomXDataset`]
-pub fn init_dataset_wrapper(
-    flags: RandomXFlags,
-    cache: RandomXCache,
-    start_item: u32,
-    item_count: u32,
-    priority: ThreadPriority,
-) -> Result<RandomXDataset> {
-    set_thread_priority(priority);
-    Ok(RandomXDataset::new(flags, cache, start_item, item_count)?)
-}
+use crate::Result;
 
 /// The RandomX virtual machine instance used to verify mining.
 #[derive(Clone)]
