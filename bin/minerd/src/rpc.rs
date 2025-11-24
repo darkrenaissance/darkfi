@@ -103,7 +103,7 @@ impl MinerNode {
             error!(target: "minerd::rpc", "Failed to parse RandomX key bytes");
             return server_error(RpcError::BlockParseError, id, None)
         };
-        let Ok(randomx_key) = deserialize_async::<[u8; 32]>(&randomx_key_bytes).await else {
+        let Ok(randomx_key) = deserialize_async::<HeaderHash>(&randomx_key_bytes).await else {
             error!(target: "minerd::rpc", "Failed to parse RandomX key");
             return server_error(RpcError::BlockParseError, id, None)
         };
@@ -116,8 +116,7 @@ impl MinerNode {
             return server_error(RpcError::BlockParseError, id, None)
         };
         let header_hash = header.hash();
-        let randomx_key_hash = HeaderHash::new(randomx_key);
-        info!(target: "minerd::rpc", "Received request to mine block header {header_hash} with key {randomx_key_hash} for target: {target}");
+        info!(target: "minerd::rpc", "Received request to mine block header {header_hash} with key {randomx_key} for target: {target}");
 
         // If we have a requested mining height, we'll keep dropping here.
         if self.stop_at_height > 0 && header.height >= self.stop_at_height {
@@ -131,7 +130,7 @@ impl MinerNode {
         };
 
         // Mine provided block header
-        info!(target: "minerd::rpc", "Mining block header {header_hash} with key {randomx_key_hash} for target: {target}");
+        info!(target: "minerd::rpc", "Mining block header {header_hash} with key {randomx_key} for target: {target}");
         if let Err(e) =
             mine_block(&target, &randomx_key, &mut header, self.threads, &self.stop_signal.clone())
         {

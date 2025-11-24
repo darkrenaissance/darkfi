@@ -443,7 +443,7 @@ impl Blockchain {
         key_change_height: &u32,
         key_change_delay: &u32,
         height: Option<u32>,
-    ) -> Result<([u8; 32], [u8; 32])> {
+    ) -> Result<(HeaderHash, HeaderHash)> {
         // Grab last known block header
         let last = match height {
             Some(h) => &self.get_headers_by_heights(&[if h != 0 { h - 1 } else { 0 }])?[0],
@@ -453,11 +453,10 @@ impl Blockchain {
         // Check if we passed the first key change height
         if &last.height <= key_change_height {
             // Genesis is our current
-            let current = *self.genesis()?.1.inner();
+            let current = self.genesis()?.1;
 
             // Check if last known block header is the next key
-            let next =
-                if &last.height == key_change_height { *last.hash().inner() } else { current };
+            let next = if &last.height == key_change_height { last.hash() } else { current };
 
             return Ok((current, next))
         }
@@ -471,8 +470,8 @@ impl Blockchain {
         // last known block header is the next key.
         if distance == 0 {
             return Ok((
-                *self.get_headers_by_heights(&[last.height - key_change_height])?[0].hash().inner(),
-                *last.hash().inner(),
+                self.get_headers_by_heights(&[last.height - key_change_height])?[0].hash(),
+                last.hash(),
             ))
         }
 
@@ -482,17 +481,16 @@ impl Blockchain {
         // height is the next key.
         if &distance < key_change_delay {
             return Ok((
-                *self.get_headers_by_heights(&[last.height - (distance + key_change_height)])?[0]
-                    .hash()
-                    .inner(),
-                *self.get_headers_by_heights(&[last.height - distance])?[0].hash().inner(),
+                self.get_headers_by_heights(&[last.height - (distance + key_change_height)])?[0]
+                    .hash(),
+                self.get_headers_by_heights(&[last.height - distance])?[0].hash(),
             ))
         }
 
         // When distance is greater or equal to key change delay,
         // current key is the block header located at last_height - distance
         // height and we don't know the next key.
-        let current = *self.get_headers_by_heights(&[last.height - distance])?[0].hash().inner();
+        let current = self.get_headers_by_heights(&[last.height - distance])?[0].hash();
         Ok((current, current))
     }
 }

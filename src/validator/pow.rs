@@ -35,7 +35,7 @@ use crate::{
     blockchain::{
         block_store::BlockDifficulty,
         header_store::{
-            Header,
+            Header, HeaderHash,
             PowData::{DarkFi, Monero},
         },
         Blockchain, BlockchainOverlayPtr,
@@ -99,7 +99,7 @@ pub struct PoWModule {
     /// difficulties buffer last.
     pub cumulative_difficulty: BigUint,
     /// Native PoW RandomX VMs current and next keys pair
-    pub darkfi_rx_keys: ([u8; 32], [u8; 32]),
+    pub darkfi_rx_keys: (HeaderHash, HeaderHash),
     /// RandomXFactory for native PoW (Arc from parent)
     pub darkfi_rx_factory: RandomXFactory,
     /// RandomXFactory for Monero PoW (Arc from parent)
@@ -311,17 +311,18 @@ impl PoWModule {
                 let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
                     header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
                 {
-                    &self.darkfi_rx_keys.1[..]
+                    &self.darkfi_rx_keys.1
                 } else {
-                    &self.darkfi_rx_keys.0[..]
+                    &self.darkfi_rx_keys.0
                 };
 
                 debug!(
                     target: "validator::pow::verify_block",
                     "[VERIFIER] Creating DarkFi PoW RandomXCache",
                 );
-                let cache = RandomXCache::new(flags, randomx_key)?;
-                let vm = self.darkfi_rx_factory.create(randomx_key, Some(cache), None)?;
+                let cache = RandomXCache::new(flags, &randomx_key.inner()[..])?;
+                let vm =
+                    self.darkfi_rx_factory.create(&randomx_key.inner()[..], Some(cache), None)?;
 
                 debug!(
                     target: "validator::pow::verify_block",
@@ -377,10 +378,10 @@ impl PoWModule {
 
         // Check if need to set the new key
         if header.height % RANDOMX_KEY_CHANGING_HEIGHT == 0 {
-            let next_key = *header.hash().inner();
+            let next_key = header.hash();
             let flags = RandomXFlags::get_recommended_flags();
-            let cache = RandomXCache::new(flags, &next_key[..])?;
-            let _ = self.darkfi_rx_factory.create(&next_key[..], Some(cache), None)?;
+            let cache = RandomXCache::new(flags, &next_key.inner()[..])?;
+            let _ = self.darkfi_rx_factory.create(&next_key.inner()[..], Some(cache), None)?;
             self.darkfi_rx_keys.1 = next_key;
             return Ok(())
         }
@@ -443,7 +444,7 @@ impl std::fmt::Display for PoWModule {
 /// Mine provided block, based on provided PoW module next mine target.
 pub fn mine_block(
     target: &BigUint,
-    input: &[u8; 32],
+    input: &HeaderHash,
     miner_header: &mut Header,
     threads: usize,
     stop_signal: &Receiver<()>,
@@ -451,7 +452,7 @@ pub fn mine_block(
     let miner_setup = Instant::now();
 
     debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", blake3::hash(input));
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {input}");
 
     let mut flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -462,7 +463,7 @@ pub fn mine_block(
     }
 
     debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX cache...");
-    let cache = RandomXCache::new(flags, &input[..])?;
+    let cache = RandomXCache::new(flags, &input.inner()[..])?;
 
     debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 

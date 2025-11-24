@@ -280,9 +280,13 @@ async fn mine_next_block(
     let randomx_key = if next_block.header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
         next_block.header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
     {
-        JsonValue::String(base64::encode(&extended_fork.module.darkfi_rx_keys.1))
+        JsonValue::String(base64::encode(
+            &serialize_async(&extended_fork.module.darkfi_rx_keys.1).await,
+        ))
     } else {
-        JsonValue::String(base64::encode(&extended_fork.module.darkfi_rx_keys.0))
+        JsonValue::String(base64::encode(
+            &serialize_async(&extended_fork.module.darkfi_rx_keys.0).await,
+        ))
     };
     let header = JsonValue::String(base64::encode(&serialize_async(&next_block.header).await));
     let response = node
