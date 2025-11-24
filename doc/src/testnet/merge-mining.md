@@ -166,7 +166,7 @@ jobs and actually mine the proposed blocks.
 We can start `p2pool` with the following command:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd
 ```
 
 Once started, it should connect to `monerod` and retrieve the latest
@@ -211,7 +211,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet 9zMUzh73iWm5pXha95quaQjW1BnL5w2kBA8np1RqNsaSKoK7nA3ZPg1VPmtpHjhDV1WHd6sVyuePPGdaWiQqyQTcN6RuQA4 --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 GCP5e1aGWPTy347WzAbn4uA5yT8mzQ25GV3gpp3MBihS
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DARKFI_WALLET_ADDRESS_HERE}
 ```
 
 Now `p2pool` should communicate with both `monerod` and `darkfid` in
