@@ -17,6 +17,7 @@
 - [Atomic Swap](testnet/atomic-swap.md)
 - [DAO](testnet/dao.md)
 - [Contracts](testnet/contract.md)
+- [Merge Mining](testnet/merge-mining.md)
 - [DarkIRC](misc/darkirc/darkirc.md)
 	- [Private Message](misc/darkirc/private_message.md)
 - [Node Configurations](misc/nodes/node-configurations.md)
@@ -25,7 +26,6 @@
     - [I2p Nodes](misc/nodes/i2p-guide.md)
     - [Nym Nodes](misc/nodes/nym-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
-- [Merge Mining](testnet/merge-mining.md)
 
 # Developer Doc
 

@@ -1,6 +1,9 @@
 Compiling and Running a Node
 =========================
 
+**DISCLAIMER: This is a work in progress and functionalities may not be
+available on the current deployed testnet as of 22-May-2025.**
+
 Please read the whole document first before executing commands, to
 understand all the steps required and how each component operates.
 Unless instructed otherwise, each daemon runs on its own shell, so don't
