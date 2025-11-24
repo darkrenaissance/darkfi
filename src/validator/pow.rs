@@ -689,7 +689,7 @@ mod tests {
 
         let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
 
-        let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
+        let output = Command::new("./script/monero_gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
 
         let mut previous = genesis_block.header;
