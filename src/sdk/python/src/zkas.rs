@@ -354,7 +354,7 @@ impl MockProver {
     }
 }
 
-pub fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
+pub fn create_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let submod = PyModule::new(py, "zkas")?;
 
     submod.add_class::<ZkBinary>()?;

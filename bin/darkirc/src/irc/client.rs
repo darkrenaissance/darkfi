@@ -19,6 +19,7 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     io::Cursor,
+    slice,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -196,7 +197,7 @@ impl Client {
                                 *self.last_sent.write().await = event_id;
 
                                 // If it fails for some reason, for now, we just note it and pass.
-                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(&[event.clone()]).await {
+                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event)).await {
                                     error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
                                 } else {
                                     // We sent this, so it should be considered seen.

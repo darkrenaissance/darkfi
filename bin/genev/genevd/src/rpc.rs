@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
+use std::{collections::HashSet, slice};
 
 use async_trait::async_trait;
 use smol::lock::{Mutex, MutexGuard};
@@ -208,7 +208,7 @@ impl JsonRpcInterface {
         // Build a DAG event and return it.
         let event = Event::new(serialize_async(&genevent).await, &self.event_graph).await;
 
-        if let Err(e) = self.event_graph.dag_insert(&[event.clone()]).await {
+        if let Err(e) = self.event_graph.dag_insert(slice::from_ref(&event)).await {
             error!("Failed inserting new event to DAG: {e}");
         } else {
             // Otherwise, broadcast it

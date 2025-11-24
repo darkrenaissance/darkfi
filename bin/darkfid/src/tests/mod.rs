@@ -68,7 +68,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let block4 = th.generate_next_block(&mut fork).await?;
 
     // Add them to nodes
-    th.add_blocks(&vec![block1, block2.clone(), block3.clone(), block4]).await?;
+    th.add_blocks(&[block1, block2.clone(), block3.clone(), block4]).await?;
 
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
@@ -93,7 +93,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     .await?;
     let block6 = th.generate_next_block(&mut fork).await?;
     // Add them to nodes
-    th.add_blocks(&vec![block5, block6]).await?;
+    th.add_blocks(&[block5, block6]).await?;
 
     // Grab current best fork index
     let forks = th.alice.validator.consensus.forks.read().await;
@@ -140,7 +140,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     drop(charlie_forks);
 
     // Extend the small fork sequence and add it to nodes
-    th.add_blocks(&vec![th.generate_next_block(&mut fork).await?]).await?;
+    th.add_blocks(&[th.generate_next_block(&mut fork).await?]).await?;
 
     // Nodes must have two forks with 2 blocks each
     th.validate_fork_chains(2, vec![2, 2]).await;
@@ -167,7 +167,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // we extend it until it becomes best and a confirmation
     // occurred.
     loop {
-        th.add_blocks(&vec![th.generate_next_block(&mut fork).await?]).await?;
+        th.add_blocks(&[th.generate_next_block(&mut fork).await?]).await?;
         // Check if confirmation occured
         if th.alice.validator.blockchain.len() > 4 {
             break

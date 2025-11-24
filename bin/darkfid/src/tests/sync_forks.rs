@@ -48,7 +48,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let mut fork2 = fork1.full_clone()?;
 
     // Extend first fork with 3 blocks
-    th.add_blocks(&vec![
+    th.add_blocks(&[
         th.generate_next_block(&mut fork0).await?,
         th.generate_next_block(&mut fork0).await?,
         th.generate_next_block(&mut fork0).await?,
@@ -56,10 +56,10 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     .await?;
 
     // Extend second fork with 1 block
-    th.add_blocks(&vec![th.generate_next_block(&mut fork1).await?]).await?;
+    th.add_blocks(&[th.generate_next_block(&mut fork1).await?]).await?;
 
     // Extend third fork with 1 block
-    th.add_blocks(&vec![th.generate_next_block(&mut fork2).await?]).await?;
+    th.add_blocks(&[th.generate_next_block(&mut fork2).await?]).await?;
 
     // Check nodes have all the forks
     th.validate_fork_chains(3, vec![3, 1, 1]).await;
@@ -84,8 +84,8 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     drop(charlie_forks);
 
     // Extend the small fork sequences and add it to nodes
-    th.add_blocks(&vec![th.generate_next_block(&mut fork1).await?]).await?;
-    th.add_blocks(&vec![th.generate_next_block(&mut fork2).await?]).await?;
+    th.add_blocks(&[th.generate_next_block(&mut fork1).await?]).await?;
+    th.add_blocks(&[th.generate_next_block(&mut fork2).await?]).await?;
 
     // Check charlie has the correct forks
     let charlie_forks = charlie.validator.consensus.forks.read().await;

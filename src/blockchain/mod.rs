@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Mutex};
+use std::{
+    slice,
+    sync::{Arc, Mutex},
+};
 
 use darkfi_sdk::{
     monotree::{self, Monotree},
@@ -93,7 +96,7 @@ impl Blockchain {
         let mut batches = vec![];
 
         // Store header
-        let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()]);
+        let (headers_batch, _) = self.headers.insert_batch(slice::from_ref(&block.header));
         trees.push(self.headers.main.clone());
         batches.push(headers_batch);
 
@@ -582,7 +585,7 @@ impl BlockchainOverlay {
     /// the writes atomically.
     pub fn add_block(&self, block: &BlockInfo) -> Result<HeaderHash> {
         // Store header
-        self.headers.insert(&[block.header.clone()])?;
+        self.headers.insert(slice::from_ref(&block.header))?;
 
         // Store block
         let blk: Block = Block::from_block_info(block);

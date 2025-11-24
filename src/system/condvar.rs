@@ -70,7 +70,7 @@ impl CondVar {
     }
 
     /// Reset the condition variable and wait for a notification
-    pub fn wait(&self) -> CondVarWait {
+    pub fn wait(&self) -> CondVarWait<'_> {
         CondVarWait { state: &self.state }
     }
 

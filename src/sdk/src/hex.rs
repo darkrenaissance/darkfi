@@ -29,7 +29,7 @@ pub fn hex_from_iter<I: Iterator<Item = u8>>(iter: I) -> String {
 }
 
 /// Decode hex string into bytes
-pub fn decode_hex(hex: &str) -> HexDecodeIter {
+pub fn decode_hex<'a>(hex: &'a str) -> HexDecodeIter<'a> {
     HexDecodeIter { hex, curr: 0 }
 }
 

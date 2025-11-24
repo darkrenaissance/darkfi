@@ -22,6 +22,7 @@ use std::{
     ffi::CString,
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
+    slice,
     str::FromStr,
     sync::{Arc, OnceLock},
 };
@@ -321,7 +322,7 @@ async fn start_sync_loop(
 
                     // If it fails for some reason, for now, we just note it
                     // and pass.
-                    if let Err(e) = event_graph.dag_insert(&[event.clone()]).await {
+                    if let Err(e) = event_graph.dag_insert(slice::from_ref(&event)).await {
                         error!(target: "taud", "Failed inserting new event to DAG: {e}");
                     } else {
                         // Otherwise, broadcast it

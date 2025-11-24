@@ -18,6 +18,7 @@
 
 use std::{
     io::{stdin, Cursor, Read},
+    slice,
     str::FromStr,
 };
 
@@ -200,15 +201,14 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .long("half-split")
         .help("Split the output coin into two equal halves");
 
-    let transfer =
-        SubCommand::with_name("transfer").about("Create a payment transaction").args(&vec![
-            amount.clone(),
-            token.clone(),
-            recipient.clone(),
-            spend_hook.clone(),
-            user_data.clone(),
-            half_split,
-        ]);
+    let transfer = SubCommand::with_name("transfer").about("Create a payment transaction").args(&[
+        amount.clone(),
+        token.clone(),
+        recipient.clone(),
+        spend_hook.clone(),
+        user_data.clone(),
+        half_split,
+    ]);
 
     // Otc
     let value_pair = Arg::with_name("value-pair")
@@ -225,7 +225,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let init = SubCommand::with_name("init")
         .about("Initialize the first half of the atomic swap")
-        .args(&vec![value_pair, token_pair]);
+        .args(&[value_pair, token_pair]);
 
     let join =
         SubCommand::with_name("join").about("Build entire swap tx given the first half from stdin");
@@ -254,7 +254,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let gov_token_id = Arg::with_name("gov-token-id").help("DAO's governance token ID");
 
-    let create = SubCommand::with_name("create").about("Create DAO parameters").args(&vec![
+    let create = SubCommand::with_name("create").about("Create DAO parameters").args(&[
         proposer_limit,
         quorum,
         early_exec_quorum,
@@ -268,27 +268,27 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let import = SubCommand::with_name("import")
         .about("Import DAO data from stdin")
-        .args(&vec![name.clone()]);
+        .args(slice::from_ref(&name));
 
     let opt_name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
 
     let list = SubCommand::with_name("list")
         .about("List imported DAOs (or info about a specific one)")
-        .args(&vec![opt_name]);
+        .args(&[opt_name]);
 
     let balance = SubCommand::with_name("balance")
         .about("Show the balance of a DAO")
-        .args(&vec![name.clone()]);
+        .args(slice::from_ref(&name));
 
     let mint = SubCommand::with_name("mint")
         .about("Mint an imported DAO on-chain")
-        .args(&vec![name.clone()]);
+        .args(slice::from_ref(&name));
 
     let duration = Arg::with_name("duration").help("Duration of the proposal, in block windows");
 
     let propose_transfer = SubCommand::with_name("propose-transfer")
         .about("Create a transfer proposal for a DAO")
-        .args(&vec![
+        .args(&[
             name.clone(),
             duration.clone(),
             amount,
@@ -300,10 +300,9 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let propose_generic = SubCommand::with_name("propose-generic")
         .about("Create a generic proposal for a DAO")
-        .args(&vec![name.clone(), duration, user_data.clone()]);
+        .args(&[name.clone(), duration, user_data.clone()]);
 
-    let proposals =
-        SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name]);
+    let proposals = SubCommand::with_name("proposals").about("List DAO proposals").args(&[name]);
 
     let bulla = Arg::with_name("bulla").help("Bulla identifier for the proposal");
 
@@ -311,7 +310,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let mint_proposal = Arg::with_name("mint-proposal").help("Create the proposal transaction");
 
-    let proposal = SubCommand::with_name("proposal").about("View a DAO proposal data").args(&vec![
+    let proposal = SubCommand::with_name("proposal").about("View a DAO proposal data").args(&[
         bulla.clone(),
         export,
         mint_proposal,
@@ -325,7 +324,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let vote_weight =
         Arg::with_name("vote-weight").help("Optional vote weight (amount of governance tokens)");
 
-    let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&vec![
+    let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&[
         bulla.clone(),
         vote,
         vote_weight,
@@ -333,8 +332,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let early = Arg::with_name("early").long("early").help("Execute the proposal early");
 
-    let exec =
-        SubCommand::with_name("exec").about("Execute a DAO proposal").args(&vec![bulla, early]);
+    let exec = SubCommand::with_name("exec").about("Execute a DAO proposal").args(&[bulla, early]);
 
     let spend_hook_cmd = SubCommand::with_name("spend-hook")
         .about("Print the DAO contract base64-encoded spend hook");
@@ -374,7 +372,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let scan = SubCommand::with_name("scan")
         .about("Scan the blockchain and parse relevant transactions")
-        .args(&vec![reset]);
+        .args(&[reset]);
 
     // Explorer
     let tx_hash = Arg::with_name("tx-hash").help("Transaction hash");
@@ -383,7 +381,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let fetch_tx = SubCommand::with_name("fetch-tx")
         .about("Fetch a blockchain transaction by hash")
-        .args(&vec![tx_hash, encode]);
+        .args(&[tx_hash, encode]);
 
     let simulate_tx =
         SubCommand::with_name("simulate-tx").about("Read a transaction from stdin and simulate it");
@@ -396,7 +394,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let txs_history = SubCommand::with_name("txs-history")
         .about("Fetch broadcasted transactions history")
-        .args(&vec![tx_hash, encode]);
+        .args(&[tx_hash, encode]);
 
     let clear_reverted =
         SubCommand::with_name("clear-reverted").about("Remove reverted transactions from history");
@@ -405,7 +403,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let scanned_blocks = SubCommand::with_name("scanned-blocks")
         .about("Fetch scanned blocks records")
-        .args(&vec![height]);
+        .args(&[height]);
 
     let explorer = SubCommand::with_name("explorer")
         .about("Explorer related subcommands")
@@ -416,7 +414,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let token = Arg::with_name("token").help("Token to create alias for");
 
-    let add = SubCommand::with_name("add").about("Create a Token alias").args(&vec![alias, token]);
+    let add = SubCommand::with_name("add").about("Create a Token alias").args(&[alias, token]);
 
     let alias = Arg::with_name("alias")
         .short("a")
@@ -435,7 +433,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
             "Print alias info of optional arguments. \
                     If no argument is provided, list all the aliases in the wallet.",
         )
-        .args(&vec![alias, token]);
+        .args(&[alias, token]);
 
     let alias = Arg::with_name("alias").help("Token alias to remove");
 
@@ -452,7 +450,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let import = SubCommand::with_name("import")
         .about("Import a mint authority")
-        .args(&vec![secret_key, token_blind]);
+        .args(&[secret_key, token_blind]);
 
     let generate_mint =
         SubCommand::with_name("generate-mint").about("Generate a new mint authority");
@@ -468,7 +466,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let mint = SubCommand::with_name("mint")
         .about("Mint tokens")
-        .args(&vec![token, amount, recipient, spend_hook, user_data]);
+        .args(&[token, amount, recipient, spend_hook, user_data]);
 
     let token = Arg::with_name("token").help("Token ID to freeze");
 
@@ -490,13 +488,13 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let list = SubCommand::with_name("list")
         .about("List deploy authorities in the wallet (or a specific one)")
-        .args(&vec![contract_id]);
+        .args(&[contract_id]);
 
     let tx_hash = Arg::with_name("tx-hash").help("Record transaction hash");
 
     let export_data = SubCommand::with_name("export-data")
         .about("Export a contract history record wasm bincode and deployment instruction, encoded to base64")
-        .args(&vec![tx_hash]);
+        .args(&[tx_hash]);
 
     let deploy_auth = Arg::with_name("deploy-auth").help("Contract ID (deploy authority)");
 
@@ -505,14 +503,13 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let deploy_ix =
         Arg::with_name("deploy-ix").help("Optional path to serialized deploy instruction");
 
-    let deploy = SubCommand::with_name("deploy").about("Deploy a smart contract").args(&vec![
+    let deploy = SubCommand::with_name("deploy").about("Deploy a smart contract").args(&[
         deploy_auth.clone(),
         wasm_path,
         deploy_ix,
     ]);
 
-    let lock =
-        SubCommand::with_name("lock").about("Lock a smart contract").args(&vec![deploy_auth]);
+    let lock = SubCommand::with_name("lock").about("Lock a smart contract").args(&[deploy_auth]);
 
     let contract = SubCommand::with_name("contract")
         .about("Contract functionalities")
@@ -569,7 +566,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let mut app = App::new("drk")
         .about(cli_desc!())
-        .args(&vec![config, network, fun, log, verbose])
+        .args(&[config, network, fun, log, verbose])
         .subcommands(command);
 
     let shell = match Shell::from_str(shell) {

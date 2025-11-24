@@ -516,7 +516,7 @@ impl Parser {
                     self.error.warn(&format!("{section} section is empty."), 0, 0);
                 }
 
-                if tokens[2..tokens.len() - 1].len() % 3 != 0 {
+                if !tokens[2..tokens.len() - 1].len().is_multiple_of(3) {
                     return Err(self.error.abort(
                         &format!("Invalid number of elements in '{section}' section. Must be pairs of '<Type> <name>' separated with a comma ','."),
                         tokens[0].line,

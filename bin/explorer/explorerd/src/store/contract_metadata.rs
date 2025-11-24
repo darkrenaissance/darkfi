@@ -298,7 +298,7 @@ impl ContractMetadataStoreOverlay {
 
     /// Acquires a lock on the database, opening a specified tree for write operations, returning a
     /// [`MutexGuard<SledDbOverlay>`] representing the locked state.
-    pub fn lock(&self, tree_name: &[u8]) -> Result<MutexGuard<SledDbOverlay>> {
+    pub fn lock(&self, tree_name: &[u8]) -> Result<MutexGuard<'_, SledDbOverlay>> {
         // Lock the database, open tree, and return lock
         let mut lock = self.overlay.lock().unwrap();
         lock.open_tree(tree_name, true)?;
@@ -309,6 +309,8 @@ impl ContractMetadataStoreOverlay {
 #[cfg(test)]
 ///  This test module verifies the correct insertion and retrieval of contract metadata and source code.
 mod tests {
+    use std::slice;
+
     use darkfi::util::logger::{setup_test_logger, Level};
     use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
     use sled_overlay::sled::Config;
@@ -395,7 +397,7 @@ mod tests {
         );
 
         // Add metadata for the source code to the test
-        store.insert_metadata(&[contract_id], &[expected_metadata.clone()])?;
+        store.insert_metadata(&[contract_id], slice::from_ref(&expected_metadata))?;
 
         // Get the metadata content from the store
         let actual_metadata = store.get(&contract_id)?;

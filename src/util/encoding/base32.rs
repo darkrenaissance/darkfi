@@ -47,7 +47,7 @@ pub fn encode(padding: bool, data: &[u8]) -> String {
         ret.push(ENCODE_STD[(buf[4] & 0x1f) as usize]);
     }
 
-    if data.len() % 5 != 0 {
+    if !data.len().is_multiple_of(5) {
         let len = ret.len();
         let num_extra = 8 - (data.len() % 5 * 8).div_ceil(5);
         if padding {

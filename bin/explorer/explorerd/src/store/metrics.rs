@@ -17,7 +17,7 @@
  */
 
 use std::{
-    fmt,
+    fmt, slice,
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -474,7 +474,7 @@ impl MetricsStoreOverlay {
         metrics.timestamp = GasMetricsKey::normalize_timestamp(block_timestamp)?;
 
         // Insert the gas metrics using metrics key
-        self.insert(&[metrics_key.clone()], &[metrics], &mut lock)?;
+        self.insert(slice::from_ref(&metrics_key), &[metrics], &mut lock)?;
 
         // Insert the transaction gas data for each transaction in the block
         self.insert_tx_gas_data(tx_hashes, tx_gas_data, &mut lock)?;
@@ -1270,7 +1270,7 @@ mod tests {
             // Simulate genesis block, metrics are stored after height 0
             if height > 0 {
                 let tx_gas_data = random_gas_data(height as u64 + start_time);
-                accumulated_metrics.add(&[tx_gas_data.clone()]);
+                accumulated_metrics.add(slice::from_ref(&tx_gas_data));
                 metrics_store.insert_gas_metrics(
                     height,
                     &block_timestamp,
@@ -1311,14 +1311,14 @@ mod tests {
 
         // Generate random gas data for the given height
         let gas_data = random_gas_data(height as u64);
-        accumulated_metrics.add(&[gas_data.clone()]);
+        accumulated_metrics.add(slice::from_ref(&gas_data));
 
         // Insert the gas metrics into the metrics store
         metrics_store.insert_gas_metrics(
             height,
             &block_timestamp,
             &[*TX_HASH],
-            &[gas_data.clone()],
+            slice::from_ref(&gas_data),
         )?;
         metrics_vec.push((accumulated_metrics, gas_data));
 

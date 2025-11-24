@@ -316,7 +316,7 @@ pub fn untar_source(tar_bytes: &[u8]) -> Result<Vec<ContractSourceFile>> {
 /// the `ExplorerService` when handling contract-related operations.
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Read, path::Path, sync::Arc};
+    use std::{fs::File, io::Read, path::Path, slice, sync::Arc};
 
     use darkfi::{
         util::logger::{setup_test_logger, Level},
@@ -347,7 +347,7 @@ mod tests {
         );
 
         // Add the metadata
-        service.add_contract_metadata(&[contract_id], &[expected_metadata.clone()])?;
+        service.add_contract_metadata(&[contract_id], slice::from_ref(&expected_metadata))?;
 
         // Get the metadata that was loaded as actual results
         let actual_metadata = service.get_contract_metadata(&contract_id)?;
@@ -436,7 +436,7 @@ mod tests {
         );
 
         // Load contract metadata used for test
-        service.add_contract_metadata(&[contract_id], &[expected_metadata.clone()])?;
+        service.add_contract_metadata(&[contract_id], slice::from_ref(&expected_metadata))?;
 
         // Transform Contract ID to a `ContractRecord`
         let contract_record = service.to_contract_record(&contract_id)?;

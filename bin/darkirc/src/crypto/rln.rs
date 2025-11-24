@@ -74,7 +74,7 @@ pub struct RlnIdentity {
 }
 
 impl RlnIdentity {
-    pub fn new(mut rng: (impl CryptoRng + RngCore)) -> Self {
+    pub fn new(mut rng: impl CryptoRng + RngCore) -> Self {
         Self {
             nullifier: poseidon_hash([
                 RLN_NULLIFIER_DERIVATION_PATH,

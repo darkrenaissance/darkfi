@@ -194,7 +194,7 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     let n = v.len() / 2;
     v.sort_unstable();
 
-    if v.len() % 2 == 0 {
+    if v.len().is_multiple_of(2) {
         v[n]
     } else {
         get_mid(v[n - 1], v[n])

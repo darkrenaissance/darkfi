@@ -18,6 +18,7 @@
 
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
+    slice,
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -429,7 +430,7 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            if self.event_graph.dag_insert(&[event.clone()]).await.is_err() {
+            if self.event_graph.dag_insert(slice::from_ref(&event)).await.is_err() {
                 self.clone().increase_malicious_count().await?;
                 continue
             }

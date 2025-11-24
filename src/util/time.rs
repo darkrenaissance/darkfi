@@ -267,9 +267,9 @@ impl DateTime {
     /// for the given month and year, accounting for leap years. It returns `true` if the day
     /// is valid.
     fn is_valid_day(year: u32, month: u32, day: u32) -> bool {
-        let days_in_month = DAYS_IN_MONTHS
-            [(year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) as usize]
-            [(month - 1) as usize];
+        let days_in_month = DAYS_IN_MONTHS[(year.is_multiple_of(4) &&
+            (!year.is_multiple_of(100) || year.is_multiple_of(400)))
+            as usize][(month - 1) as usize];
         day > 0 && day <= days_in_month as u32
     }
 }

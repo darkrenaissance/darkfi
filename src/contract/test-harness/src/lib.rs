@@ -19,6 +19,7 @@
 use std::{
     collections::HashMap,
     io::{Cursor, Write},
+    slice,
 };
 
 use darkfi::{
@@ -215,7 +216,7 @@ impl Wallet {
 
         self.validator
             .add_test_transactions(
-                &[tx.clone()],
+                slice::from_ref(&tx),
                 block_height,
                 self.validator.consensus.module.read().await.target,
                 true,
@@ -227,7 +228,7 @@ impl Wallet {
         {
             let blockchain = &self.validator.blockchain;
             let txs = &blockchain.transactions;
-            txs.insert(&[tx.clone()]).expect("insert tx");
+            txs.insert(slice::from_ref(&tx)).expect("insert tx");
             txs.insert_location(&[tx.hash()], block_height).expect("insert loc");
         }
 

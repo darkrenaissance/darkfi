@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::slice;
+
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     zk::halo2::Field,
@@ -147,7 +149,7 @@ impl TestHarness {
             tx.signatures[0].insert(0, sigs[0]);
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
-                self.append_fee_call(holder0, tx, block_height, &[owncoin0.clone()]).await?;
+                self.append_fee_call(holder0, tx, block_height, slice::from_ref(owncoin0)).await?;
 
             // Append the fee call to the transaction
             tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;

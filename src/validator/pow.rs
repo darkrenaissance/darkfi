@@ -377,7 +377,7 @@ impl PoWModule {
         }
 
         // Check if need to set the new key
-        if header.height % RANDOMX_KEY_CHANGING_HEIGHT == 0 {
+        if header.height.is_multiple_of(RANDOMX_KEY_CHANGING_HEIGHT) {
             let next_key = header.hash();
             let flags = RandomXFlags::get_recommended_flags();
             let cache = RandomXCache::new(flags, &next_key.inner()[..])?;
