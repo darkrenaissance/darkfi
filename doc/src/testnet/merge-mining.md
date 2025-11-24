@@ -1,5 +1,5 @@
-DarkFi x Monero Merge Mining using `p2pool` and `xmrig`
-=======================================================
+DarkFi x Monero Merge Mining using p2pool and xmrig
+===================================================
 
 This document provides a way to set up a Monero testnet that is
 able to merge-mine DarkFi using `p2pool` and `xmrig`.
@@ -152,7 +152,7 @@ Your wallet has been generated!
 Now we have our Monero address that we can use with p2pool to receive
 mining rewards.
 
-## p2pool setup (without merge-mining)
+## p2pool setup without merge-mining
 
 First we'll start `p2pool` without merge-mining to make sure everything
 works in order. After we get `xmrig` set up, we'll restart `p2pool`
@@ -189,7 +189,7 @@ Now we should see blocks being mined in p2pool and submitted to our
 Monero testnet. To stop mining you can `^C` xmrig anytime to quit it
 or press `p` to pause mining.
 
-## p2pool setup (with merge-mining)
+## p2pool setup with merge-mining
 
 Now that everything is in order, we can use `p2pool` with merge-mining
 enabled in order to merge mine DarkFi. For receiving mining rewards
