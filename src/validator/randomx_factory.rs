@@ -24,58 +24,41 @@ use std::{
     time::Instant,
 };
 
-use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
+use randomx::{RandomXCache, RandomXFlags, RandomXVM};
 use tracing::{debug, warn};
 
 use crate::Result;
 
-/// The RandomX virtual machine instance used to verify mining.
+/// The RandomX light mode virtual machine instance used to verify
+/// mining.
 #[derive(Clone)]
 pub struct RandomXVMInstance {
-    // Note: If a cache and dataset (if assigned) allocated to the VM drops,
-    // the VM will crash. The cache and dataset for the VM need to be stored
-    // together with it since they are not mix and match.
     instance: Arc<RwLock<RandomXVM>>,
 }
 
 impl RandomXVMInstance {
-    fn create(
-        key: &[u8],
-        flags: RandomXFlags,
-        cache: Option<RandomXCache>,
-        dataset: Option<RandomXDataset>,
-    ) -> Result<Self> {
-        // Note: Memory required per VM in light mode is 256MB
-        // RandomXFlags::FULLMEM and RandomXFlags::LARGEPAGES are incompatible
-        // with light mode. These are not set by RandomX automatically even in
-        // fast mode.
-        let (flags, cache) = match cache {
-            Some(c) => (flags, c),
-            None => match RandomXCache::new(flags, key) {
-                Ok(cache) => (flags, cache),
-                Err(err) => {
-                    warn!(
-                        target: "validator::randomx",
-                        "[VALIDATOR] Error initializing RandomX cache with flags {:?}: {}",
-                        flags, err,
-                    );
-                    warn!(
-                        target: "validator::randomx",
-                        "[VALIDATOR] Falling back to default flags",
-                    );
-                    let flags = RandomXFlags::DEFAULT;
-                    let cache = RandomXCache::new(flags, key)?;
-                    (flags, cache)
-                }
-            },
+    /// Generate a new RandomX virtual machine instance operating in
+    /// light mode. Memory required per VM in light mode is 256MB.
+    fn create(key: &[u8]) -> Result<Self> {
+        let flags = RandomXFlags::get_recommended_flags();
+        let (flags, cache) = match RandomXCache::new(flags, key) {
+            Ok(cache) => (flags, cache),
+            Err(err) => {
+                warn!(target: "validator::randomx", "[VALIDATOR] Error initializing RandomX cache with flags {flags:?}: {err}");
+                warn!(target: "validator::randomx", "[VALIDATOR] Falling back to default flags");
+                let flags = RandomXFlags::DEFAULT;
+                let cache = RandomXCache::new(flags, key)?;
+                (flags, cache)
+            }
         };
 
-        let vm = RandomXVM::new(flags, Some(cache), dataset)?;
+        let vm = RandomXVM::new(flags, Some(cache), None)?;
+        debug!(target: "validator::randomx", "[VALIDATOR] RandomX VM started with flags = {flags:?}");
 
         Ok(Self { instance: Arc::new(RwLock::new(vm)) })
     }
 
-    /// Calculate the RandomX mining hash
+    /// Calculate the RandomX mining hash.
     pub fn calculate_hash(&self, input: &[u8]) -> Result<Vec<u8>> {
         let lock = self.instance.write().unwrap();
         Ok(lock.calculate_hash(input)?)
@@ -99,81 +82,43 @@ impl Default for RandomXFactory {
 }
 
 impl RandomXFactory {
-    /// Create a new RandomXFactory with the specified maximum number of VMs
+    /// Create a new RandomXFactory with the specified maximum number of VMs.
     pub fn new(max_vms: usize) -> Self {
         Self { inner: Arc::new(RwLock::new(RandomXFactoryInner::new(max_vms))) }
     }
 
-    /// Create a new RandomXFactory with the specified maximum number of VMs
-    /// and given RandomXFlags
-    pub fn new_with_flags(max_vms: usize, flags: RandomXFlags) -> Self {
-        Self { inner: Arc::new(RwLock::new(RandomXFactoryInner::new_with_flags(max_vms, flags))) }
-    }
-
-    /// Create a new RandomX VM instance with the specified key
-    pub fn create(
-        &self,
-        key: &[u8],
-        cache: Option<RandomXCache>,
-        dataset: Option<RandomXDataset>,
-    ) -> Result<RandomXVMInstance> {
+    /// Create a new RandomX VM instance with the specified key.
+    pub fn create(&self, key: &[u8]) -> Result<RandomXVMInstance> {
         let res;
         {
             let mut inner = self.inner.write().unwrap();
-            res = inner.create(key, cache, dataset)?;
+            res = inner.create(key)?;
         }
         Ok(res)
     }
 
-    /// Get the number of VMs currently allocated
+    /// Auxiliary function to get the number of VMs currently
+    /// allocated.
     pub fn get_count(&self) -> Result<usize> {
         let inner = self.inner.read().unwrap();
         Ok(inner.get_count())
     }
-
-    /// Get the flags used to create the VMs
-    pub fn get_flags(&self) -> Result<RandomXFlags> {
-        let inner = self.inner.read().unwrap();
-        Ok(inner.get_flags())
-    }
 }
 
 struct RandomXFactoryInner {
-    flags: RandomXFlags,
     vms: HashMap<Vec<u8>, (Instant, RandomXVMInstance)>,
     max_vms: usize,
 }
 
 impl RandomXFactoryInner {
-    /// Create a new RandomXFactoryInner
+    /// Create a new RandomXFactoryInner.
     pub(crate) fn new(max_vms: usize) -> Self {
-        let flags = RandomXFlags::get_recommended_flags();
-        debug!(
-            target: "validator::randomx",
-            "RandomXFactory started with {} max VMs and recommended flags = {:?}",
-            max_vms, flags,
-        );
-
-        Self { flags, vms: Default::default(), max_vms }
+        debug!(target: "validator::randomx", "[VALIDATOR] RandomXFactory started with {max_vms} max VMs");
+        Self { vms: Default::default(), max_vms }
     }
 
-    pub(crate) fn new_with_flags(max_vms: usize, flags: RandomXFlags) -> Self {
-        debug!(
-            target: "validator::randomx",
-            "RandomX Factory started with {} max VMs and flags = {:?}",
-            max_vms, flags,
-        );
-
-        Self { flags, vms: Default::default(), max_vms }
-    }
-
-    /// Create a new RandomXVMInstance
-    pub(crate) fn create(
-        &mut self,
-        key: &[u8],
-        cache: Option<RandomXCache>,
-        dataset: Option<RandomXDataset>,
-    ) -> Result<RandomXVMInstance> {
+    /// Create a new RandomXVMInstance.
+    pub(crate) fn create(&mut self, key: &[u8]) -> Result<RandomXVMInstance> {
         if let Some(entry) = self.vms.get_mut(key) {
             let vm = entry.1.clone();
             entry.0 = Instant::now();
@@ -188,7 +133,7 @@ impl RandomXFactoryInner {
             }
         }
 
-        let vm = RandomXVMInstance::create(key, self.flags, cache, dataset)?;
+        let vm = RandomXVMInstance::create(key)?;
         self.vms.insert(Vec::from(key), (Instant::now(), vm.clone()));
         Ok(vm)
     }
@@ -197,18 +142,10 @@ impl RandomXFactoryInner {
     pub(crate) fn get_count(&self) -> usize {
         self.vms.len()
     }
-
-    /// Get the flags used to create the VMs
-    pub(crate) fn get_flags(&self) -> RandomXFlags {
-        self.flags
-    }
 }
 
 impl fmt::Debug for RandomXFactoryInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RandomXFactory")
-            .field("flags", &self.flags)
-            .field("max_vms", &self.max_vms)
-            .finish()
+        f.debug_struct("RandomXFactory").field("max_vms", &self.max_vms).finish()
     }
 }

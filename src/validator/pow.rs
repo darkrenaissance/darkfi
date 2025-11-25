@@ -300,9 +300,6 @@ impl PoWModule {
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
-        // Setup verifier based on block PoW data
-        let flags = RandomXFlags::get_recommended_flags();
-
         let (out_hash, verification_time) = match &header.pow_data {
             DarkFi => {
                 // Check which VM key should be used.
@@ -316,13 +313,7 @@ impl PoWModule {
                     &self.darkfi_rx_keys.0
                 };
 
-                debug!(
-                    target: "validator::pow::verify_block",
-                    "[VERIFIER] Creating DarkFi PoW RandomXCache",
-                );
-                let cache = RandomXCache::new(flags, &randomx_key.inner()[..])?;
-                let vm =
-                    self.darkfi_rx_factory.create(&randomx_key.inner()[..], Some(cache), None)?;
+                let vm = self.darkfi_rx_factory.create(&randomx_key.inner()[..])?;
 
                 debug!(
                     target: "validator::pow::verify_block",
@@ -335,13 +326,7 @@ impl PoWModule {
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
             Monero(powdata) => {
-                debug!(
-                    target: "validator::pow::verify_block",
-                    "[VERIFIER] Creating Monero PoW RandomXCache",
-                );
-                let randomx_key = powdata.randomx_key();
-                let cache = RandomXCache::new(flags, randomx_key)?;
-                let vm = self.monero_rx_factory.create(randomx_key, Some(cache), None)?;
+                let vm = self.monero_rx_factory.create(powdata.randomx_key())?;
 
                 debug!(
                     target: "validator::pow::verify_block",
@@ -379,9 +364,7 @@ impl PoWModule {
         // Check if need to set the new key
         if header.height.is_multiple_of(RANDOMX_KEY_CHANGING_HEIGHT) {
             let next_key = header.hash();
-            let flags = RandomXFlags::get_recommended_flags();
-            let cache = RandomXCache::new(flags, &next_key.inner()[..])?;
-            let _ = self.darkfi_rx_factory.create(&next_key.inner()[..], Some(cache), None)?;
+            let _ = self.darkfi_rx_factory.create(&next_key.inner()[..])?;
             self.darkfi_rx_keys.1 = next_key;
             return Ok(())
         }
