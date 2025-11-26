@@ -83,10 +83,11 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Broadcast a given transaction to the P2P network.
-    // The function will first simulate the state transition in order to see
-    // if the transaction is actually valid, and in turn it will return an
-    // error if this is the case. Otherwise, a transaction ID will be returned.
+    // Append a given transaction to the mempool and broadcast it to
+    // the P2P network. The function will first simulate the state
+    // transition in order to see if the transaction is actually valid,
+    // and in turn it will return an error if this is the case.
+    // Otherwise, a transaction ID will be returned.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base64encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
@@ -119,17 +120,9 @@ impl DarkfiNode {
             }
         };
 
-        // Block production participants can directly perform
-        // the state transition check and append to their
-        // pending transactions store.
-        let error_message = if self.rpc_client.is_some() {
-            "Failed to append transaction to mempool"
-        } else {
-            "Failed to validate state transition"
-        };
         // We'll perform the state transition check here.
-        if let Err(e) = self.validator.append_tx(&tx, self.rpc_client.is_some()).await {
-            error!(target: "darkfid::rpc::tx_broadcast", "{error_message}: {e}");
+        if let Err(e) = self.validator.append_tx(&tx, true).await {
+            error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
