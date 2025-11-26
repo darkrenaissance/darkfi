@@ -150,7 +150,8 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "wallet secrets");
         lc.push(prefix.clone() + "wallet import-secrets");
         lc.push(prefix.clone() + "wallet tree");
-        lc.push(prefix + "wallet coins");
+        lc.push(prefix.clone() + "wallet coins");
+        lc.push(prefix + "wallet mining-config");
         return
     }
 
@@ -193,7 +194,8 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "dao proposal-import");
         lc.push(prefix.clone() + "dao vote");
         lc.push(prefix.clone() + "dao exec");
-        lc.push(prefix + "dao spend-hook");
+        lc.push(prefix.clone() + "dao spend-hook");
+        lc.push(prefix + "dao mining-config");
         return
     }
 
@@ -333,13 +335,14 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
     let bold = false;
     match last {
         "completions " => Some(("<shell>".to_string(), color, bold)),
-        "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)".to_string(), color, bold)),
+        "wallet " => Some(("(initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins|mining-config)".to_string(), color, bold)),
         "wallet default-address " => Some(("<index>".to_string(), color, bold)),
+        "wallet mining-config " => Some(("<index> [spend_hook] [user_data]".to_string(), color, bold)),
         "unspend " => Some(("<coin>".to_string(), color, bold)),
         "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), color, bold)),
         "otc " => Some(("(init|join|inspect|sign)".to_string(), color, bold)),
         "otc init " => Some(("<value_pair> <token_pair>".to_string(), color, bold)),
-        "dao " => Some(("(create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)".to_string(), color, bold)),
+        "dao " => Some(("(create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)".to_string(), color, bold)),
         "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), color, bold)),
         "dao import " => Some(("<name>".to_string(), color, bold)),
         "dao list " => Some(("[name]".to_string(), color, bold)),
@@ -351,6 +354,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "dao proposal " => Some(("[--(export|mint-proposal)] <bulla>".to_string(), color, bold)),
         "dao vote " => Some(("<bulla> <vote> [vote-weight]".to_string(), color, bold)),
         "dao exec " => Some(("[--early] <bulla>".to_string(), color, bold)),
+        "dao mining-config " => Some(("<name>".to_string(), color, bold)),
         "scan " => Some(("[--reset]".to_string(), color, bold)),
         "scan --reset " => Some(("<height>".to_string(), color, bold)),
         "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)".to_string(), color, bold)),
@@ -774,7 +778,7 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str], input: &[String], output: &
     // Check correct command structure
     if parts.len() < 2 {
         output.push(String::from("Malformed `wallet` command"));
-        output.push(String::from("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)"));
+        output.push(String::from("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins|mining-config)"));
         return
     }
 
@@ -790,9 +794,10 @@ async fn handle_wallet(drk: &DrkPtr, parts: &[&str], input: &[String], output: &
         "import-secrets" => handle_wallet_import_secrets(drk, input, output).await,
         "tree" => handle_wallet_tree(drk, output).await,
         "coins" => handle_wallet_coins(drk, output).await,
+        "mining-config" => handle_wallet_mining_config(drk, parts, output).await,
         _ => {
             output.push(format!("Unrecognized wallet subcommand: {}", parts[1]));
-            output.push(String::from("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins)"));
+            output.push(String::from("Usage: wallet (initialize|keygen|balance|address|addresses|default-address|secrets|import-secrets|tree|coins|mining-config)"));
         }
     }
 }
@@ -1062,6 +1067,76 @@ async fn handle_wallet_coins(drk: &DrkPtr, output: &mut Vec<String>) {
     }
 
     output.push(format!("{table}"));
+}
+
+/// Auxiliary function to define the wallet mining config subcommand handling.
+async fn handle_wallet_mining_config(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct command structure
+    if parts.len() < 3 || parts.len() > 5 {
+        output.push(String::from("Malformed `wallet mining-address` subcommand"));
+        output.push(String::from("Usage: wallet mining-config <index> [spend_hook] [user_data]"));
+        return
+    }
+
+    // Parse command
+    let mut index = 2;
+    let wallet_index = match usize::from_str(parts[index]) {
+        Ok(i) => i,
+        Err(e) => {
+            output.push(format!("Invalid address id: {e}"));
+            return
+        }
+    };
+    index += 1;
+
+    let spend_hook = if index < parts.len() {
+        match FuncId::from_str(parts[index]) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                output.push(format!("Invalid spend hook: {e}"));
+                return
+            }
+        }
+    } else {
+        None
+    };
+    index += 1;
+
+    let user_data = if index < parts.len() {
+        let bytes = match bs58::decode(&parts[index]).into_vec() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e}"));
+                return
+            }
+        };
+
+        let bytes: [u8; 32] = match bytes.try_into() {
+            Ok(b) => b,
+            Err(e) => {
+                output.push(format!("Invalid user data: {e:?}"));
+                return
+            }
+        };
+
+        let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+            Some(v) => v,
+            None => {
+                output.push(String::from("Invalid user data"));
+                return
+            }
+        };
+
+        Some(elem)
+    } else {
+        None
+    };
+
+    if let Err(e) =
+        drk.read().await.mining_config(wallet_index, spend_hook, user_data, output).await
+    {
+        output.push(format!("Failed to generate wallet mining configuration: {e}"));
+    }
 }
 
 /// Auxiliary function to define the spend command handling.
@@ -1379,7 +1454,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
     // Check correct command structure
     if parts.len() < 2 {
         output.push(String::from("Malformed `dao` command"));
-        output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+        output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
         return
     }
 
@@ -1399,9 +1474,10 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "vote" => handle_dao_vote(drk, parts, output).await,
         "exec" => handle_dao_exec(drk, parts, output).await,
         "spend-hook" => handle_dao_spend_hook(parts, output).await,
+        "mining-config" => handle_dao_mining_config(drk, parts, output).await,
         _ => {
             output.push(format!("Unrecognized DAO subcommand: {}", parts[1]));
-            output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook)"));
+            output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
         }
     }
 }
@@ -2279,6 +2355,20 @@ async fn handle_dao_spend_hook(parts: &[&str], output: &mut Vec<String>) {
     let spend_hook =
         FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }.to_func_id();
     output.push(format!("{spend_hook}"));
+}
+
+/// Auxiliary function to define the dao mining config subcommand handling.
+async fn handle_dao_mining_config(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao mining-config` subcommand"));
+        output.push(String::from("Usage: dao mining-config <name>"));
+        return
+    }
+
+    if let Err(e) = drk.read().await.dao_mining_config(parts[2], output).await {
+        output.push(format!("Failed to generate DAO mining configuration: {e}"));
+    }
 }
 
 /// Auxiliary function to define the attach fee command handling.

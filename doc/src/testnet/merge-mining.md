@@ -195,7 +195,19 @@ Now that everything is in order, we can use `p2pool` with merge-mining
 enabled in order to merge mine DarkFi. For receiving mining rewards
 on DarkFi, we'll need a DarkFi wallet address so make sure you have
 [initialized](node.md#wallet-initialization) your wallet and grab your
-address.
+first address configuration:
+
+```shell
+drk> wallet mining-configuration 1
+
+DarkFi TOML configuration:
+recipient = "{YOUR_DARKFI_WALLET_ADDRESS}"
+#spend_hook = ""
+#user_data = ""
+
+P2Pool wallet address to use:
+{YOUR_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+```
 
 We will also need `darkfid` running. Make sure you enable the RPC
 endpoint that will be used by p2pool in darkfid's config:
@@ -211,7 +223,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DARKFI_WALLET_ADDRESS_HERE}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_P2POOL_WALLET_ADDRESS_CONFIGURATION_HERE}
 ```
 
 Now `p2pool` should communicate with both `monerod` and `darkfid` in
@@ -223,6 +235,40 @@ found, they will be submitted to both `monerod` and `darkfid` and
 provided to `p2pool` merge-mine parameters.
 
 Happy mining!
+
+## Merge mining for a DAO
+
+To retrieve a DAO merge mining configuration, execute:
+
+```shell
+drk> dao mining-config {YOUR_DAO}
+
+DarkFi TOML configuration:
+recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
+spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
+user_data = "{YOUR_DAO_BULLA}"
+
+P2Pool wallet address to use:
+{YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+```
+
+Stop `p2pool` if it's running, and re-run it with the merge-mining
+parameters appended:
+
+```shell
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_DAO_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+```
+
+After your miners have successfully mined confirmed blocks, you will
+see the DAO `DRK` balance increasing:
+
+```shell
+drk> dao balance {YOUR_DAO}
+
+ Token ID                                     | Aliases | Balance
+----------------------------------------------+---------+---------
+ 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 80
+```
 
 [1]: https://github.com/monero-project/monero?tab=readme-ov-file#dependencies
 [2]: https://github.com/SChernykh/p2pool?tab=readme-ov-file#prerequisites

@@ -25,7 +25,10 @@ use rusqlite::types::Value;
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    util::parse::{decode_base10, encode_base10},
+    util::{
+        encoding::base64,
+        parse::{decode_base10, encode_base10},
+    },
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -55,6 +58,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
+        pasta_prelude::PrimeField,
         poseidon_hash,
         smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
         util::{fp_mod_fv, fp_to_u64},
@@ -1905,6 +1909,28 @@ impl Drk {
         }
 
         Ok(balmap)
+    }
+
+    /// Fetch known unspent balances from the wallet for the given DAO name.
+    pub async fn dao_mining_config(&self, name: &str, output: &mut Vec<String>) -> Result<()> {
+        let dao = self.get_dao_by_name(name).await?;
+        let recipient = dao.params.dao.notes_public_key;
+        let spend_hook = format!(
+            "{}",
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id()
+        );
+        let user_data = bs58::encode(dao.bulla().inner().to_repr()).into_string();
+        output.push(String::from("DarkFi TOML configuration:"));
+        output.push(format!("recipient = \"{recipient}\""));
+        output.push(format!("spend_hook = \"{spend_hook}\""));
+        output.push(format!("user_data = \"{user_data}\""));
+        output.push(String::from("\nP2Pool wallet address to use:"));
+        output.push(
+            base64::encode(&serialize(&(recipient, Some(spend_hook), Some(user_data)))).to_string(),
+        );
+
+        Ok(())
     }
 
     /// Fetch all known DAO proposalss from the wallet.

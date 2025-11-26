@@ -242,7 +242,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_token_mint_authority] Token mint autority retrieval failed: {e}"
+                    "[get_token_mint_authority] Token mint authority retrieval failed: {e}"
                 )))
             }
         };

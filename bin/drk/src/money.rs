@@ -27,6 +27,7 @@ use rusqlite::types::Value;
 
 use darkfi::{
     tx::Transaction,
+    util::encoding::base64,
     validator::fees::compute_fee,
     zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses, Proof},
     zkas::ZkBinary,
@@ -48,8 +49,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree::Position,
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
-        ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, pasta_prelude::PrimeField, BaseBlind, FuncId, Keypair, MerkleNode,
+        MerkleTree, PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -264,6 +265,54 @@ impl Drk {
         }
 
         Ok(vec)
+    }
+
+    /// Fetch provided index address from the wallet and generate its
+    /// mining configuration.
+    pub async fn mining_config(
+        &self,
+        idx: usize,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
+        output: &mut Vec<String>,
+    ) -> Result<()> {
+        let row = match self.wallet.query_single(
+            &MONEY_KEYS_TABLE,
+            &[MONEY_KEYS_COL_PUBLIC],
+            convert_named_params! {(MONEY_KEYS_COL_KEY_ID, idx)},
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                    "[mining_address] Address retrieval failed: {e}"
+                )))
+            }
+        };
+
+        let Value::Blob(ref key_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[mining_address] Key bytes parsing failed"))
+        };
+        let public_key: PublicKey = deserialize_async(key_bytes).await?;
+
+        let spend_hook = spend_hook.as_ref().map(|spend_hook| spend_hook.to_string());
+
+        let user_data =
+            user_data.as_ref().map(|user_data| bs58::encode(user_data.to_repr()).into_string());
+
+        output.push(String::from("DarkFi TOML configuration:"));
+        output.push(format!("recipient = \"{public_key}\""));
+        match spend_hook {
+            Some(ref spend_hook) => output.push(format!("spend_hook = \"{spend_hook}\"")),
+            None => output.push(String::from("#spend_hook = \"\"")),
+        }
+        match user_data {
+            Some(ref user_data) => output.push(format!("user_data = \"{user_data}\"")),
+            None => output.push(String::from("#user_data = \"\"")),
+        }
+        output.push(String::from("\nP2Pool wallet address to use:"));
+        output.push(base64::encode(&serialize(&(public_key, spend_hook, user_data))).to_string());
+
+        Ok(())
     }
 
     /// Fetch all secret keys from the wallet.

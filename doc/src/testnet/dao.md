@@ -714,19 +714,34 @@ drk> dao balance DawnDAO
 ## Mining for a DAO
 
 A DAO can deploy its own mining nodes and/or other miners can choose to
-directly give their rewards towards one. To configure a `darkfid`
-instance to mine for a DAO, set the corresponding fields(uncomment if
-needed) as per example:
+directly give their rewards towards one. To retrieve a DAO mining
+configuration, execute:
+
+```shell
+drk> dao mining-config {YOUR_DAO}
+
+DarkFi TOML configuration:
+recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
+spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
+user_data = "{YOUR_DAO_BULLA}"
+
+P2Pool wallet address to use:
+{YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+```
+
+Then configure a `darkfid` instance to mine for a DAO, by setting the
+corresponding fields(uncomment if needed) as per retrieved
+configuration:
 
 ```toml
 # Put your DAO notes public key here
-recipient = "YOUR_DAO_NOTES_PUBLIC_KEY_HERE"
+recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
 
-# Put the DAO contract spend hook from `drk dao spend-hook` here
-spend_hook = "6iW9nywZYvyhcM7P1iLwYkh92rvYtREDsC8hgqf2GLuT"
+# Put the DAO contract spend hook here
+spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
 
 # Put your DAO bulla here
-user_data = "YOUR_DAO_BULLA_HERE"
+user_data = "{YOUR_DAO_BULLA}"
 ```
 
 After your miners have successfully mined confirmed blocks, you will

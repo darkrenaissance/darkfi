@@ -251,6 +251,18 @@ enum WalletSubcmd {
 
     /// Print all the coins in the wallet
     Coins,
+
+    /// Print a wallet address mining configuration
+    MiningConfig {
+        /// Identifier of the address
+        index: usize,
+
+        /// Optional contract spend hook to use
+        spend_hook: Option<String>,
+
+        /// Optional user data to use
+        user_data: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -404,6 +416,12 @@ enum DaoSubcmd {
 
     /// Print the DAO contract base64-encoded spend hook
     SpendHook,
+
+    /// Print a DAO mining configuration
+    MiningConfig {
+        /// Name identifier for the DAO
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -944,6 +962,50 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     }
 
                     println!("{table}");
+                }
+
+                WalletSubcmd::MiningConfig { index, spend_hook, user_data } => {
+                    let spend_hook = match spend_hook {
+                        Some(s) => match FuncId::from_str(&s) {
+                            Ok(s) => Some(s),
+                            Err(e) => {
+                                eprintln!("Invalid spend hook: {e}");
+                                exit(2);
+                            }
+                        },
+                        None => None,
+                    };
+
+                    let user_data = match user_data {
+                        Some(u) => {
+                            let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                                Ok(b) => b,
+                                Err(e) => {
+                                    eprintln!("Invalid user data: {e:?}");
+                                    exit(2);
+                                }
+                            };
+
+                            match pallas::Base::from_repr(bytes).into() {
+                                Some(v) => Some(v),
+                                None => {
+                                    eprintln!("Invalid user data");
+                                    exit(2);
+                                }
+                            }
+                        }
+                        None => None,
+                    };
+
+                    let mut output = vec![];
+                    if let Err(e) =
+                        drk.mining_config(index, spend_hook, user_data, &mut output).await
+                    {
+                        print_output(&output);
+                        eprintln!("Failed to generate wallet mining configuration: {e}");
+                        exit(2);
+                    }
+                    print_output(&output);
                 }
             }
 
@@ -1931,6 +1993,27 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         .to_func_id();
 
                 println!("{spend_hook}");
+
+                Ok(())
+            }
+
+            DaoSubcmd::MiningConfig { name } => {
+                let drk = new_wallet(
+                    blockchain_config.cache_path,
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    &ex,
+                    args.fun,
+                )
+                .await;
+                let mut output = vec![];
+                if let Err(e) = drk.dao_mining_config(&name, &mut output).await {
+                    print_output(&output);
+                    eprintln!("Failed to generate DAO mining configuration: {e}");
+                    exit(2);
+                }
+                print_output(&output);
 
                 Ok(())
             }

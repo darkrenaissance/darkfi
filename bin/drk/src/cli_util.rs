@@ -152,7 +152,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
 
     let default_address = SubCommand::with_name("default-address")
         .about("Set the default address in the wallet")
-        .arg(index);
+        .arg(index.clone());
 
     let secrets =
         SubCommand::with_name("secrets").about("Print all the secret keys from the wallet");
@@ -163,6 +163,14 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let tree = SubCommand::with_name("tree").about("Print the Merkle tree in the wallet");
 
     let coins = SubCommand::with_name("coins").about("Print all the coins in the wallet");
+
+    let spend_hook = Arg::with_name("spend-hook").help("Optional contract spend hook to use");
+
+    let user_data = Arg::with_name("user-data").help("Optional user data to use");
+
+    let mining_config = SubCommand::with_name("mining-config")
+        .about("Print a wallet address mining configuration")
+        .args(&[index, spend_hook.clone(), user_data.clone()]);
 
     let wallet = SubCommand::with_name("wallet").about("Wallet operations").subcommands(vec![
         initialize,
@@ -175,6 +183,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         import_secrets,
         tree,
         coins,
+        mining_config,
     ]);
 
     // Spend
@@ -192,10 +201,6 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let token = Arg::with_name("token").help("Token ID to send");
 
     let recipient = Arg::with_name("recipient").help("Recipient address");
-
-    let spend_hook = Arg::with_name("spend-hook").help("Optional contract spend hook to use");
-
-    let user_data = Arg::with_name("user-data").help("Optional user data to use");
 
     let half_split = Arg::with_name("half-split")
         .long("half-split")
@@ -302,7 +307,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("Create a generic proposal for a DAO")
         .args(&[name.clone(), duration, user_data.clone()]);
 
-    let proposals = SubCommand::with_name("proposals").about("List DAO proposals").args(&[name]);
+    let proposals = SubCommand::with_name("proposals").about("List DAO proposals").arg(&name);
 
     let bulla = Arg::with_name("bulla").help("Bulla identifier for the proposal");
 
@@ -337,6 +342,9 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let spend_hook_cmd = SubCommand::with_name("spend-hook")
         .about("Print the DAO contract base64-encoded spend hook");
 
+    let mining_config =
+        SubCommand::with_name("mining-config").about("Print a DAO mining configuration").arg(name);
+
     let dao = SubCommand::with_name("dao").about("DAO functionalities").subcommands(vec![
         create,
         view,
@@ -352,6 +360,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         vote,
         exec,
         spend_hook_cmd,
+        mining_config,
     ]);
 
     // AttachFee

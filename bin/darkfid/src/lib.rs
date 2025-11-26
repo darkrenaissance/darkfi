@@ -85,7 +85,7 @@ pub struct DarkfiNode {
     /// HTTP JSON-RPC connection tracker
     mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// Merge mining block templates
-    mm_blocktemplates: Mutex<HashMap<[u8; 32], (BlockInfo, f64, SecretKey)>>,
+    mm_blocktemplates: Mutex<HashMap<Vec<u8>, (BlockInfo, f64, SecretKey)>>,
     /// PowRewardV1 ZK data
     powrewardv1_zk: PowRewardV1Zk,
 }

@@ -290,7 +290,7 @@ pub async fn clean_mm_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
         }
 
         // This job doesn't reference something so we drop it
-        dropped_templates.push(*key);
+        dropped_templates.push(key.clone());
     }
 
     // Drop jobs not referencing active forks or last confirmed block

@@ -31,8 +31,11 @@ use darkfi::{
     util::encoding::base64,
     validator::consensus::Proposal,
 };
-use darkfi_sdk::crypto::PublicKey;
-use darkfi_serial::serialize_async;
+use darkfi_sdk::{
+    crypto::{pasta_prelude::PrimeField, FuncId, PublicKey},
+    pasta::pallas,
+};
+use darkfi_serial::{deserialize_async, serialize_async};
 use hex::FromHex;
 use tinyjson::JsonValue;
 use tracing::{error, info};
@@ -89,13 +92,13 @@ impl DarkfiNode {
     // merge mining.
     //
     // **Request:**
-    // * `address` : A wallet address on the merge mined chain
+    // * `address` : A base-64 encoded wallet address mining configuration on the merge mined chain
     // * `aux_hash`: Merge mining job that is currently being polled
     // * `height`  : Monero height
     // * `prev_id` : Hash of the previous Monero block
     //
     // **Response:**
-    // * `aux_blob`: The hex-encoded wallet address blob
+    // * `aux_blob`: The hex-encoded wallet address mining configuration blob
     // * `aux_diff`: Mining difficulty (decimal number)
     // * `aux_hash`: A 32-byte hex-encoded hash of merge mined block
     //
@@ -112,7 +115,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Parse address
+        // Parse address mining configuration
         let Some(address) = params.get("address") else {
             return JsonError::new(InvalidParams, Some("missing address".to_string()), id).into()
         };
@@ -120,9 +123,64 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
                 .into()
         };
-        let Ok(address) = PublicKey::from_str(address) else {
+        let Some(address_bytes) = base64::decode(address) else {
             return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
                 .into()
+        };
+        let Ok((recipient, spend_hook, user_data)) =
+            deserialize_async::<(PublicKey, Option<String>, Option<String>)>(&address_bytes).await
+        else {
+            return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
+                .into()
+        };
+        let spend_hook = match spend_hook {
+            Some(s) => match FuncId::from_str(&s) {
+                Ok(s) => Some(s),
+                Err(_) => {
+                    return JsonError::new(
+                        InvalidParams,
+                        Some("invalid address format".to_string()),
+                        id,
+                    )
+                    .into()
+                }
+            },
+            None => None,
+        };
+        let user_data: Option<pallas::Base> = match user_data {
+            Some(u) => {
+                let Ok(bytes) = bs58::decode(&u).into_vec() else {
+                    return JsonError::new(
+                        InvalidParams,
+                        Some("invalid address format".to_string()),
+                        id,
+                    )
+                    .into()
+                };
+                let bytes: [u8; 32] = match bytes.try_into() {
+                    Ok(b) => b,
+                    Err(_) => {
+                        return JsonError::new(
+                            InvalidParams,
+                            Some("invalid address format".to_string()),
+                            id,
+                        )
+                        .into()
+                    }
+                };
+                match pallas::Base::from_repr(bytes).into() {
+                    Some(v) => Some(v),
+                    None => {
+                        return JsonError::new(
+                            InvalidParams,
+                            Some("invalid address format".to_string()),
+                            id,
+                        )
+                        .into()
+                    }
+                }
+            }
+            None => None,
         };
 
         // Parse aux_hash
@@ -184,7 +242,6 @@ impl DarkfiNode {
                 return JsonError::new(ErrorCode::InternalError, None, id).into()
             }
         };
-        let address_bytes = address.to_bytes();
         if let Some((block, difficulty, _)) = mm_blocktemplates.get(&address_bytes) {
             let last_proposal = match extended_fork.last_proposal() {
                 Ok(p) => p,
@@ -217,9 +274,17 @@ impl DarkfiNode {
 
         // At this point, we should query the Validator for a new blocktemplate.
         // We first need to construct `MinerRewardsRecipientConfig` from the
-        // address provided to us through the RPC.
-        let recipient_config =
-            MinerRewardsRecipientConfig { recipient: address, spend_hook: None, user_data: None };
+        // address configuration provided to us through the RPC.
+        let recipient_str = format!("{recipient}");
+        let spend_hook_str = match spend_hook {
+            Some(spend_hook) => format!("{spend_hook}"),
+            None => String::from("-"),
+        };
+        let user_data_str = match user_data {
+            Some(user_data) => bs58::encode(user_data.to_repr()).into_string(),
+            None => String::from("-"),
+        };
+        let recipient_config = MinerRewardsRecipientConfig { recipient, spend_hook, user_data };
 
         // Now let's try to construct the blocktemplate.
         // Find the difficulty. Note we cast it to f64 here.
@@ -260,10 +325,11 @@ impl DarkfiNode {
         // Now we have the blocktemplate. We'll mark it down in memory,
         // and then ship it to RPC.
         let blockhash = blocktemplate.header.template_hash();
-        mm_blocktemplates.insert(address_bytes, (blocktemplate, difficulty, block_signing_secret));
+        mm_blocktemplates
+            .insert(address_bytes.clone(), (blocktemplate, difficulty, block_signing_secret));
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
-            "[RPC-XMR] Created new blocktemplate: address={address}, aux_hash={blockhash}, height={height}, prev_id={prev_id}"
+            "[RPC-XMR] Created new blocktemplate: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}, aux_hash={blockhash}, height={height}, prev_id={prev_id}"
         );
 
         let response = JsonValue::from(HashMap::from([
@@ -308,7 +374,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Parse address from aux_blob
+        // Parse address mining configuration from aux_blob
         let Some(aux_blob) = params.get("aux_blob") else {
             return JsonError::new(InvalidParams, Some("missing aux_blob".to_string()), id).into()
         };
@@ -316,14 +382,53 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
                 .into()
         };
-        let mut address_bytes = [0u8; 32];
-        if hex::decode_to_slice(aux_blob, &mut address_bytes).is_err() {
+        let Ok(address_bytes) = hex::decode(aux_blob) else {
             return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
                 .into()
         };
-        if PublicKey::from_bytes(address_bytes).is_err() {
+        let Ok((_, spend_hook, user_data)) =
+            deserialize_async::<(PublicKey, Option<String>, Option<String>)>(&address_bytes).await
+        else {
             return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
                 .into()
+        };
+        if let Some(spend_hook) = spend_hook {
+            if FuncId::from_str(&spend_hook).is_err() {
+                return JsonError::new(
+                    InvalidParams,
+                    Some("invalid aux_blob format".to_string()),
+                    id,
+                )
+                .into()
+            }
+        };
+        if let Some(user_data) = user_data {
+            let Ok(bytes) = bs58::decode(&user_data).into_vec() else {
+                return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
+                    .into()
+            };
+            let bytes: [u8; 32] = match bytes.try_into() {
+                Ok(b) => b,
+                Err(_) => {
+                    return JsonError::new(
+                        InvalidParams,
+                        Some("invalid aux_blob format".to_string()),
+                        id,
+                    )
+                    .into()
+                }
+            };
+            let _: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+                Some(v) => v,
+                None => {
+                    return JsonError::new(
+                        InvalidParams,
+                        Some("invalid aux_blob format".to_string()),
+                        id,
+                    )
+                    .into()
+                }
+            };
         };
 
         // Parse aux_hash
