@@ -425,15 +425,12 @@ impl std::fmt::Display for PoWModule {
 }
 
 /// Auxiliary function to define `RandomXFlags` used in mining.
+///
+/// Note: RandomX recommended flags will include `SSSE3` and `AVX2`
+/// extensions if CPU supports them.
 fn get_mining_flags() -> RandomXFlags {
     // TODO: Try adding `| RandomXFlags::LARGEPAGES`.
-    let mut flags = RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM;
-    if is_x86_feature_detected!("avx2") {
-        flags |= RandomXFlags::ARGON2_AVX2;
-    } else if is_x86_feature_detected!("ssse3") {
-        flags |= RandomXFlags::ARGON2_SSSE3;
-    }
-    flags
+    RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM
 }
 
 /// Auxiliary function to mine provided header using a single thread.
