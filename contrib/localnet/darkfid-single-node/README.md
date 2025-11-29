@@ -14,7 +14,7 @@ and set its address as the `recipient` field in
 % ./init-wallet.sh
 ```
 
-Then start the daemones and wait until `darkfid` is initialized:
+Then start the daemons and wait until `darkfid` is initialized:
 ```
 % ./tmux_sessions.sh
 ```

@@ -422,7 +422,7 @@ $ cd contrib/localnet/darkfid-single-node/
 $ ./init-wallet.sh
 ```
 
-Then start the daemones and wait until `darkfid` is initialized:
+Then start the daemons and wait until `darkfid` is initialized:
 
 ```shell
 $ ./tmux_sessions.sh
