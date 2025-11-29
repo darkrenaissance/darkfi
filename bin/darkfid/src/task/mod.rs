@@ -19,9 +19,6 @@
 pub mod consensus;
 pub use consensus::consensus_init_task;
 
-pub mod miner;
-pub use miner::{generate_next_block, miner_task};
-
 pub mod sync;
 pub use sync::sync_task;
 

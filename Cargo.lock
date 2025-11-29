@@ -4312,6 +4312,7 @@ dependencies = [
 name = "minerd"
 version = "0.5.0"
 dependencies = [
+ "bs58",
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
@@ -4324,6 +4325,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "tinyjson",
+ "toml 0.9.8",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

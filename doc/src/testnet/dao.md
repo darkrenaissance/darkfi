@@ -729,7 +729,7 @@ P2Pool wallet address to use:
 {YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
 ```
 
-Then configure a `darkfid` instance to mine for a DAO, by setting the
+Then configure a `minerd` instance to mine for a DAO, by setting the
 corresponding fields(uncomment if needed) as per retrieved
 configuration:
 

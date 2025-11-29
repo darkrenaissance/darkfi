@@ -42,9 +42,8 @@ use tracing::{error, info};
 
 use crate::{
     proto::ProposalMessage,
-    server_error,
-    task::miner::{generate_next_block, MinerRewardsRecipientConfig},
-    DarkfiNode, RpcError,
+    rpc_miner::{generate_next_block, MinerRewardsRecipientConfig},
+    server_error, DarkfiNode, RpcError,
 };
 
 // https://github.com/SChernykh/p2pool/blob/master/docs/MERGE_MINING.MD

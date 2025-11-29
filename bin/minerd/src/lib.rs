@@ -16,60 +16,116 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use smol::{
     channel::{Receiver, Sender},
-    lock::Mutex,
+    lock::RwLock,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
+use url::Url;
 
 use darkfi::{
-    rpc::{
-        server::{listen_and_serve, RequestHandler},
-        settings::RpcSettings,
-    },
+    rpc::util::JsonValue,
     system::{sleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    Error, Result,
+    Error,
 };
+use darkfi_sdk::crypto::Keypair;
 
-/// Daemon error codes
-mod error;
-
-/// JSON-RPC server methods
+/// darkfid JSON-RPC related methods
 mod rpc;
+use rpc::{polling_task, DarkfidRpcClient};
+
+/// Auxiliary structure representing miner node configuration.
+pub struct MinerNodeConfig {
+    /// PoW miner number of threads to use
+    threads: usize,
+    /// Polling rate to ask darkfid for mining jobs
+    polling_rate: u64,
+    /// Stop mining at this height (0 mines forever)
+    stop_at_height: u32,
+    /// Wallet mining configuration to receive mining rewards
+    wallet_config: HashMap<String, JsonValue>,
+}
+
+impl Default for MinerNodeConfig {
+    fn default() -> Self {
+        Self::new(
+            1,
+            5,
+            0,
+            HashMap::from([(
+                String::from("recipient"),
+                JsonValue::String(Keypair::default().public.to_string()),
+            )]),
+        )
+    }
+}
+
+impl MinerNodeConfig {
+    pub fn new(
+        threads: usize,
+        polling_rate: u64,
+        stop_at_height: u32,
+        wallet_config: HashMap<String, JsonValue>,
+    ) -> Self {
+        Self { threads, polling_rate, stop_at_height, wallet_config }
+    }
+}
 
 /// Atomic pointer to the DarkFi mining node
 pub type MinerNodePtr = Arc<MinerNode>;
 
 /// Structure representing a DarkFi mining node
 pub struct MinerNode {
-    /// PoW miner number of threads to use
-    threads: usize,
-    /// Stop mining at this height
-    stop_at_height: u32,
+    /// Node configuration
+    config: MinerNodeConfig,
     /// Sender to stop miner threads
     sender: Sender<()>,
     /// Receiver to stop miner threads
     stop_signal: Receiver<()>,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// JSON-RPC client to execute requests to darkfid daemon
+    rpc_client: RwLock<DarkfidRpcClient>,
 }
 
 impl MinerNode {
-    pub fn new(
-        threads: usize,
-        stop_at_height: u32,
-        sender: Sender<()>,
-        stop_signal: Receiver<()>,
-    ) -> MinerNodePtr {
-        Arc::new(Self {
-            threads,
-            stop_at_height,
-            sender,
-            stop_signal,
-            rpc_connections: Mutex::new(HashSet::new()),
-        })
+    pub async fn new(config: MinerNodeConfig, endpoint: Url, ex: &ExecutorPtr) -> MinerNodePtr {
+        // Initialize the smol channels to send signal between the threads
+        let (sender, stop_signal) = smol::channel::bounded(1);
+
+        // Initialize JSON-RPC client
+        let rpc_client = RwLock::new(DarkfidRpcClient::new(endpoint, ex.clone()).await);
+
+        Arc::new(Self { config, sender, stop_signal, rpc_client })
+    }
+
+    /// Auxiliary function to abort pending job.
+    pub async fn abort_pending(&self) {
+        // Check if a pending request is being processed
+        debug!(target: "minerd::abort_pending", "Checking if a pending job is being processed...");
+        if self.stop_signal.receiver_count() <= 1 {
+            debug!(target: "minerd::rpc", "No pending job!");
+            return
+        }
+
+        info!(target: "minerd::abort_pending", "Pending job is in progress, sending stop signal...");
+        // Send stop signal to worker
+        if let Err(e) = self.sender.try_send(()) {
+            error!(target: "minerd::abort_pending", "Failed to stop pending job: {e}");
+            return
+        }
+
+        // Wait for worker to terminate
+        info!(target: "minerd::abort_pending", "Waiting for job to terminate...");
+        while self.stop_signal.receiver_count() > 1 {
+            sleep(1).await;
+        }
+        info!(target: "minerd::abort_pending", "Pending job terminated!");
+
+        // Consume channel item so its empty again
+        if let Err(e) = self.stop_signal.try_recv() {
+            error!(target: "minerd::abort_pending", "Failed to cleanup stop signal channel: {e}");
+        }
     }
 }
 
@@ -80,77 +136,68 @@ pub type MinerdPtr = Arc<Minerd>;
 pub struct Minerd {
     /// Miner node instance conducting the mining operations
     node: MinerNodePtr,
-    /// JSON-RPC background task
-    rpc_task: StoppableTaskPtr,
+    /// Miner darkfid polling background task
+    polling_task: StoppableTaskPtr,
 }
 
 impl Minerd {
     /// Initialize a DarkFi mining daemon.
     ///
-    /// Corresponding communication channels are setup to generate a new `MinerNode`,
-    /// and a new task is generated to handle the JSON-RPC API.
-    pub fn init(threads: usize, stop_at_height: u32) -> MinerdPtr {
+    /// Generate a new `MinerNode` and a new task to handle the darkfid
+    /// polling.
+    pub async fn init(config: MinerNodeConfig, endpoint: Url, ex: &ExecutorPtr) -> MinerdPtr {
         info!(target: "minerd::Minerd::init", "Initializing a new mining daemon...");
 
-        // Initialize the smol channels to send signal between the threads
-        let (sender, stop_signal) = smol::channel::bounded(1);
-
         // Generate the node
-        let node = MinerNode::new(threads, stop_at_height, sender, stop_signal);
+        let node = MinerNode::new(config, endpoint, ex).await;
 
-        // Generate the JSON-RPC task
-        let rpc_task = StoppableTask::new();
+        // Generate the polling task
+        let polling_task = StoppableTask::new();
 
         info!(target: "minerd::Minerd::init", "Mining daemon initialized successfully!");
 
-        Arc::new(Self { node, rpc_task })
+        Arc::new(Self { node, polling_task })
     }
 
-    /// Start the DarkFi mining daemon in the given executor, using the provided JSON-RPC listen url.
-    pub fn start(&self, executor: &ExecutorPtr, rpc_settings: &RpcSettings) {
+    /// Start the DarkFi mining daemon in the given executor.
+    pub fn start(&self, ex: &ExecutorPtr) {
         info!(target: "minerd::Minerd::start", "Starting mining daemon...");
 
-        // Start the JSON-RPC task
-        let node_ = self.node.clone();
-        self.rpc_task.clone().start(
-            listen_and_serve(rpc_settings.clone(), self.node.clone(), None, executor.clone()),
-            |res| async move {
+        // Start the polling task
+        self.polling_task.clone().start(
+            polling_task(self.node.clone(), ex.clone()),
+            |res| async {
                 match res {
-                    Ok(()) | Err(Error::RpcServerStopped) => node_.stop_connections().await,
-                    Err(e) => error!(target: "minerd::Minerd::start", "Failed starting JSON-RPC server: {e}"),
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "minerd::Minerd::start", "Failed starting polling task: {e}")
+                    }
                 }
             },
-            Error::RpcServerStopped,
-            executor.clone(),
+            Error::DetachedTaskStopped,
+            ex.clone(),
         );
 
         info!(target: "minerd::Minerd::start", "Mining daemon started successfully!");
     }
 
     /// Stop the DarkFi mining daemon.
-    pub async fn stop(&self) -> Result<()> {
+    pub async fn stop(&self) {
         info!(target: "minerd::Minerd::stop", "Terminating mining daemon...");
+
+        // Stop the polling task
+        info!(target: "minerd::Minerd::stop", "Stopping polling task...");
+        self.polling_task.stop().await;
 
         // Stop the mining node
         info!(target: "minerd::Minerd::stop", "Stopping miner threads...");
-        if self.node.stop_signal.is_empty() {
-            self.node.sender.send(()).await?;
-        }
-        while self.node.stop_signal.receiver_count() > 1 {
-            sleep(1).await;
-        }
+        self.node.abort_pending().await;
 
-        // Stop the JSON-RPC task
-        info!(target: "minerd::Minerd::stop", "Stopping JSON-RPC server...");
-        self.rpc_task.stop().await;
-
-        // Consume channel item so its empty again
-        if self.node.stop_signal.is_full() {
-            self.node.stop_signal.recv().await?;
-        }
+        // Close the JSON-RPC client
+        info!(target: "minerd::Minerd::stop", "Stopping JSON-RPC client...");
+        self.node.stop_rpc_client().await;
 
         info!(target: "minerd::Minerd::stop", "Mining daemon terminated successfully!");
-        Ok(())
     }
 }
 
@@ -158,7 +205,6 @@ impl Minerd {
 use {
     darkfi::util::logger::{setup_test_logger, Level},
     tracing::warn,
-    url::Url,
 };
 
 #[test]
@@ -166,7 +212,7 @@ use {
 ///
 /// First we initialize a daemon, start it and then perform
 /// couple of restarts to verify everything works as expected.
-fn minerd_programmatic_control() -> Result<()> {
+fn minerd_programmatic_control() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if setup_test_logger(
@@ -182,74 +228,36 @@ fn minerd_programmatic_control() -> Result<()> {
         warn!(target: "minerd_programmatic_control", "Logger already initialized");
     }
 
-    // Daemon configuration
-    let threads = 4;
-    let rpc_settings =
-        RpcSettings { listen: Url::parse("tcp://127.0.0.1:28467")?, ..RpcSettings::default() };
-
     // Create an executor and communication signals
     let ex = Arc::new(smol::Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
-    // Generate a dummy mining job
-    let target = darkfi::rpc::util::JsonValue::String(
-        num_bigint::BigUint::from_bytes_le(&[0xFF; 32]).to_string(),
-    );
-    let block = darkfi::rpc::util::JsonValue::String(darkfi::util::encoding::base64::encode(
-        &darkfi_serial::serialize(&darkfi::blockchain::BlockInfo::default()),
-    ));
-    let mining_job = darkfi::rpc::jsonrpc::JsonRequest::new(
-        "mine",
-        darkfi::rpc::util::JsonValue::Array(vec![target, block]),
-    );
-
-    easy_parallel::Parallel::new()
-        .each(0..threads, |_| smol::block_on(ex.run(shutdown.recv())))
-        .finish(|| {
+    easy_parallel::Parallel::new().each(0..1, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
+        || {
             smol::block_on(async {
                 // Initialize a daemon
-                let daemon = Minerd::init(threads, 0);
-
-                // Start it
-                daemon.start(&ex, &rpc_settings);
-
-                // Generate a JSON-RPC client to send mining jobs
-                let mut rpc_client =
-                    darkfi::rpc::client::RpcClient::new(rpc_settings.listen.clone(), ex.clone())
-                        .await;
-                while rpc_client.is_err() {
-                    rpc_client = darkfi::rpc::client::RpcClient::new(
-                        rpc_settings.listen.clone(),
-                        ex.clone(),
-                    )
-                    .await;
-                }
-                let rpc_client = rpc_client.unwrap();
-
-                // Send a mining job but stop the daemon after it starts mining
-                smol::future::or(
-                    async {
-                        let _ = rpc_client.request(mining_job).await;
-                    },
-                    async {
-                        // Wait node to start mining
-                        darkfi::system::sleep(2).await;
-                        daemon.stop().await.unwrap();
-                    },
+                let daemon = Minerd::init(
+                    MinerNodeConfig::default(),
+                    Url::parse("tcp://127.0.0.1:12345").unwrap(),
+                    &ex,
                 )
                 .await;
-                rpc_client.stop().await;
 
-                // Start it again
-                daemon.start(&ex, &rpc_settings);
+                // Start it
+                daemon.start(&ex);
 
                 // Stop it
-                daemon.stop().await.unwrap();
+                daemon.stop().await;
+
+                // Start it again
+                daemon.start(&ex);
+
+                // Stop it
+                daemon.stop().await;
 
                 // Shutdown entirely
                 drop(signal);
             })
-        });
-
-    Ok(())
+        },
+    );
 }

@@ -9,10 +9,30 @@
 # PoW miner number of threads to use
 #threads = 4
 
-# JSON-RPC settings
-[rpc]
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:48467"
+# Polling rate to ask darkfid for mining jobs
+#polling_rate = 2
 
-# Disabled RPC methods
-#rpc_disabled_methods = []
+# Stop mining at given height (0 mines forever)
+#stop_at_height = 0
+
+# Blockchain network to use
+network = "localnet"
+
+# Localnet blockchain network configuration
+[network_config."localnet"]
+# Wallet mining address to receive mining rewards.
+# This is a dummy one so the miner can start,
+# replace with your own one.
+recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
+
+# Optional contract spend hook to use in the mining reward.
+# This is the DAO spend hook set for convinience,
+# replace with your own one.
+#spend_hook = "6iW9nywZYvyhcM7P1iLwYkh92rvYtREDsC8hgqf2GLuT"
+
+# Optional contract user data to use in the mining reward.
+# This is not arbitrary data.
+#user_data = "YOUR_USER_DATA_HERE"
+
+# darkfid JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:48240"

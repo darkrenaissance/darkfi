@@ -37,8 +37,16 @@ pub enum RpcError {
     ContractStateNotFound = -32201,
     ContractStateKeyNotFound = -32202,
 
-    // Misc errors
-    PingFailed = -32300,
+    // Miner errors
+    MinerMissingHeader = -32300,
+    MinerInvalidHeader = -32301,
+    MinerMissingRecipient = -32302,
+    MinerInvalidRecipient = -32303,
+    MinerInvalidSpendHook = -32304,
+    MinerInvalidUserData = -32305,
+    MinerMissingNonce = -32306,
+    MinerInvalidNonce = -32307,
+    MinerUnknownJob = -32308,
 }
 
 fn to_tuple(e: RpcError) -> (i32, String) {
@@ -55,8 +63,16 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
         RpcError::ContractStateNotFound => "Records not found for given contract state",
         RpcError::ContractStateKeyNotFound => "Value not found for given contract state key",
-        // Misc errors
-        RpcError::PingFailed => "Miner daemon ping error",
+        // Miner errors
+        RpcError::MinerMissingHeader => "Request is missing the Header hash",
+        RpcError::MinerInvalidHeader => "Request Header hash is invalid",
+        RpcError::MinerMissingRecipient => "Request is missing the recipient wallet address",
+        RpcError::MinerInvalidRecipient => "Request recipient wallet address is invalid",
+        RpcError::MinerInvalidSpendHook => "Request spend hook is invalid",
+        RpcError::MinerInvalidUserData => "Request user data is invalid",
+        RpcError::MinerMissingNonce => "Request is missing the Header nonce",
+        RpcError::MinerInvalidNonce => "Request Header nonce is invalid",
+        RpcError::MinerUnknownJob => "Request job is unknown",
     };
 
     (e as i32, msg.to_string())

@@ -396,9 +396,6 @@ impl PoWModule {
         threads: usize,
         stop_signal: &Receiver<()>,
     ) -> Result<()> {
-        // Grab the next mine target
-        let target = self.next_mine_target()?;
-
         // Grab the RandomX key to use.
         // We only use the next key when the next block is the
         // height changing one.
@@ -410,7 +407,10 @@ impl PoWModule {
             &self.darkfi_rx_keys.0
         };
 
-        mine_block(&target, randomx_key, header, threads, stop_signal)
+        // Grab the next mine target
+        let target = self.next_mine_target()?;
+
+        mine_block(randomx_key, &target, header, threads, stop_signal)
     }
 }
 
@@ -435,8 +435,8 @@ fn get_mining_flags() -> RandomXFlags {
 
 /// Auxiliary function to mine provided header using a single thread.
 fn single_thread_mine(
-    target: &BigUint,
     input: &HeaderHash,
+    target: &BigUint,
     header: &mut Header,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
@@ -486,8 +486,8 @@ fn single_thread_mine(
 
 /// Auxiliary function to mine provided header using a multiple threads.
 fn multi_thread_mine(
-    target: &BigUint,
     input: &HeaderHash,
+    target: &BigUint,
     header: &mut Header,
     threads: usize,
     stop_signal: &Receiver<()>,
@@ -614,8 +614,8 @@ fn multi_thread_mine(
 
 /// Mine provided header, based on provided PoW module next mine target.
 pub fn mine_block(
-    target: &BigUint,
     input: &HeaderHash,
+    target: &BigUint,
     header: &mut Header,
     threads: usize,
     stop_signal: &Receiver<()>,
@@ -634,8 +634,8 @@ pub fn mine_block(
             error!(target: "validator::pow::mine_block", "[MINER] Can't use 0 threads!");
             Err(Error::MinerTaskStopped)
         }
-        1 => single_thread_mine(target, input, header, stop_signal),
-        _ => multi_thread_mine(target, input, header, threads, stop_signal),
+        1 => single_thread_mine(input, target, header, stop_signal),
+        _ => multi_thread_mine(input, target, header, threads, stop_signal),
     }
 }
 

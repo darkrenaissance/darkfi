@@ -21,7 +21,6 @@ use std::sync::Arc;
 use smol::{fs::read_to_string, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tracing::{debug, error, info};
-use url::Url;
 
 use darkfi::{
     async_daemonize,
@@ -99,14 +98,6 @@ pub struct BlockchainNetwork {
     /// Confirmation threshold, denominated by number of blocks
     threshold: usize,
 
-    #[structopt(long)]
-    /// minerd JSON-RPC endpoint
-    minerd_endpoint: Option<Url>,
-
-    #[structopt(skip)]
-    /// Optional JSON-RPC settings for p2pool merge mining requests
-    mm_rpc: Option<RpcSettingsOpt>,
-
     #[structopt(long, default_value = "120")]
     /// PoW block production target, in seconds
     pow_target: u32,
@@ -114,19 +105,6 @@ pub struct BlockchainNetwork {
     #[structopt(long)]
     /// Optional fixed PoW difficulty, used for testing
     pow_fixed_difficulty: Option<usize>,
-
-    #[structopt(long)]
-    /// Wallet address to receive mining rewards
-    recipient: Option<String>,
-
-    #[structopt(long)]
-    /// Optional contract spend hook to use in the mining reward
-    spend_hook: Option<String>,
-
-    #[structopt(long)]
-    /// Optional contract user data to use in the mining reward.
-    /// This is not arbitrary data.
-    user_data: Option<String>,
 
     #[structopt(long)]
     /// Skip syncing process and start node right away
@@ -159,6 +137,10 @@ pub struct BlockchainNetwork {
     #[structopt(flatten)]
     /// JSON-RPC settings
     rpc: RpcSettingsOpt,
+
+    #[structopt(skip)]
+    /// Optional JSON-RPC settings for p2pool merge mining requests
+    mm_rpc: Option<RpcSettingsOpt>,
 }
 
 async_daemonize!(realmain);
@@ -255,7 +237,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         &sled_db,
         &config,
         &blockchain_config.net.into(),
-        &blockchain_config.minerd_endpoint,
         &blockchain_config.txs_batch_size,
         &ex,
     )
@@ -266,10 +247,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         skip_sync: blockchain_config.skip_sync,
         checkpoint_height: blockchain_config.checkpoint_height,
         checkpoint: blockchain_config.checkpoint,
-        miner: blockchain_config.minerd_endpoint.is_some(),
-        recipient: blockchain_config.recipient,
-        spend_hook: blockchain_config.spend_hook,
-        user_data: blockchain_config.user_data,
         bootstrap,
     };
     daemon

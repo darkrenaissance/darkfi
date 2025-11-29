@@ -22,8 +22,7 @@ use std::{
 };
 
 use smol::lock::Mutex;
-use tracing::{debug, error, info, warn};
-use url::Url;
+use tracing::{debug, error, info};
 
 use darkfi::{
     blockchain::BlockInfo,
@@ -52,9 +51,11 @@ use error::{server_error, RpcError};
 
 /// JSON-RPC requests handler and methods
 mod rpc;
-use rpc::{DefaultRpcHandler, MinerRpcClient, MmRpcHandler};
+use rpc::{DefaultRpcHandler, MmRpcHandler};
 mod rpc_blockchain;
+mod rpc_miner;
 mod rpc_tx;
+use rpc_miner::BlockTemplate;
 mod rpc_xmr;
 
 /// Validator async tasks
@@ -78,14 +79,14 @@ pub struct DarkfiNode {
     txs_batch_size: usize,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// JSON-RPC client to execute requests to the miner daemon
-    rpc_client: Option<Mutex<MinerRpcClient>>,
-    /// HTTP JSON-RPC connection tracker
-    mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// Native mining block templates
+    blocktemplates: Mutex<HashMap<Vec<u8>, BlockTemplate>>,
     /// Merge mining block templates
     mm_blocktemplates: Mutex<HashMap<Vec<u8>, (BlockInfo, f64, SecretKey)>>,
+    /// JSON-RPC connection tracker
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// HTTP JSON-RPC connection tracker
+    mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// PowRewardV1 ZK data
     powrewardv1_zk: PowRewardV1Zk,
 }
@@ -96,7 +97,6 @@ impl DarkfiNode {
         validator: ValidatorPtr,
         txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
-        rpc_client: Option<Mutex<MinerRpcClient>>,
     ) -> Result<DarkfiNodePtr> {
         let powrewardv1_zk = PowRewardV1Zk::new(validator.clone())?;
 
@@ -105,15 +105,15 @@ impl DarkfiNode {
             validator,
             txs_batch_size,
             subscribers,
-            rpc_connections: Mutex::new(HashSet::new()),
-            rpc_client,
-            mm_rpc_connections: Mutex::new(HashSet::new()),
+            blocktemplates: Mutex::new(HashMap::new()),
             mm_blocktemplates: Mutex::new(HashMap::new()),
+            rpc_connections: Mutex::new(HashSet::new()),
+            mm_rpc_connections: Mutex::new(HashSet::new()),
             powrewardv1_zk,
         }))
     }
 
-    /// Grab best current fork
+    /// Auxiliary function to grab best current fork.
     pub async fn best_current_fork(&self) -> Result<Fork> {
         let forks = self.validator.consensus.forks.read().await;
         let index = best_fork_index(&forks)?;
@@ -173,7 +173,6 @@ impl Darkfid {
         sled_db: &sled_overlay::sled::Db,
         config: &ValidatorConfig,
         net_settings: &Settings,
-        minerd_endpoint: &Option<Url>,
         txs_batch_size: &Option<usize>,
         ex: &ExecutorPtr,
     ) -> Result<DarkfidPtr> {
@@ -203,17 +202,8 @@ impl Darkfid {
         subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
         subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
-        // Initialize JSON-RPC client to perform requests to minerd
-        let rpc_client = match minerd_endpoint {
-            Some(endpoint) => {
-                Some(Mutex::new(MinerRpcClient::new(endpoint.clone(), ex.clone()).await))
-            }
-            None => None,
-        };
-
         // Initialize node
-        let node = DarkfiNode::new(p2p_handler, validator, txs_batch_size, subscribers, rpc_client)
-            .await?;
+        let node = DarkfiNode::new(p2p_handler, validator, txs_batch_size, subscribers).await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
@@ -236,13 +226,6 @@ impl Darkfid {
         config: &ConsensusInitTaskConfig,
     ) -> Result<()> {
         info!(target: "darkfid::Darkfid::start", "Starting Darkfi daemon...");
-
-        // Pinging minerd daemon to verify it listens
-        if self.node.rpc_client.is_some() {
-            if let Err(e) = self.node.ping_miner_daemon().await {
-                warn!(target: "darkfid::Darkfid::start", "Failed to ping miner daemon: {e}");
-            }
-        }
 
         // Start the `dnet` task
         info!(target: "darkfid::Darkfid::start", "Starting dnet subs task");
@@ -365,12 +348,6 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::stop", "Flushing sled database...");
         let flushed_bytes = self.node.validator.blockchain.sled_db.flush_async().await?;
         info!(target: "darkfid::Darkfid::stop", "Flushed {flushed_bytes} bytes");
-
-        // Close the JSON-RPC client, if it was initialized
-        if let Some(ref rpc_client) = self.node.rpc_client {
-            info!(target: "darkfid::Darkfid::stop", "Stopping JSON-RPC client...");
-            rpc_client.lock().await.stop().await;
-        };
 
         info!(target: "darkfid::Darkfid::stop", "Darkfi daemon terminated successfully!");
         Ok(())

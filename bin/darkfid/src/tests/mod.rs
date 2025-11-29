@@ -279,10 +279,6 @@ fn darkfid_programmatic_control() -> Result<()> {
                     skip_sync: true,
                     checkpoint_height: None,
                     checkpoint: None,
-                    miner: false,
-                    recipient: None,
-                    spend_hook: None,
-                    user_data: None,
                     bootstrap,
                 };
                 let rpc_settings = RpcSettings {
@@ -295,7 +291,6 @@ fn darkfid_programmatic_control() -> Result<()> {
                     &sled_db,
                     &config,
                     &darkfi::net::Settings::default(),
-                    &None,
                     &None,
                     &ex,
                 )

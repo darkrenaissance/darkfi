@@ -17,23 +17,11 @@ database = "darkfid3"
 # Confirmation threshold, denominated by number of blocks
 threshold = 6
 
-# minerd JSON-RPC endpoint
-minerd_endpoint = "tcp://127.0.0.1:48767"
-
 # PoW block production target, in seconds
 pow_target = 60
 
-# Wallet address to receive mining rewards.
-# This is a dummy one so the miner can start,
-# replace with your own one.
-recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
-
-# Optional contract spend hook to use in the mining reward
-#spend_hook = "YOUR_SPEND_HOOK_HERE"
-
-# Optional contract user data to use in the mining reward.
-# This is not arbitrary data.
-#user_data = "YOUR_USER_DATA_HERE"
+# Optional fixed PoW difficulty, used for testing
+#pow_fixed_difficulty = 1
 
 # Skip syncing process and start node right away
 skip_sync = false

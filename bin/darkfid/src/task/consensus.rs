@@ -25,28 +25,24 @@ use darkfi::{
     util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
-use darkfi_sdk::{
-    crypto::{FuncId, PublicKey},
-    pasta::{group::ff::PrimeField, pallas},
-};
 use darkfi_serial::serialize_async;
 use tracing::{error, info};
 
 use crate::{
-    task::{garbage_collect_task, miner::MinerRewardsRecipientConfig, miner_task, sync_task},
+    task::{garbage_collect_task, sync_task},
     DarkfiNodePtr,
 };
 
-/// Auxiliary structure representing node consensus init task configuration
+/// Auxiliary structure representing node consensus init task configuration.
 #[derive(Clone)]
 pub struct ConsensusInitTaskConfig {
+    /// Skip syncing process and start node right away
     pub skip_sync: bool,
+    /// Optional sync checkpoint height
     pub checkpoint_height: Option<u32>,
+    /// Optional sync checkpoint hash
     pub checkpoint: Option<String>,
-    pub miner: bool,
-    pub recipient: Option<String>,
-    pub spend_hook: Option<String>,
-    pub user_data: Option<String>,
+    /// Optional bootstrap timestamp
     pub bootstrap: u64,
 }
 
@@ -95,54 +91,9 @@ pub async fn consensus_init_task(
         None
     };
 
-    // Grab rewards recipient public key(address) if node is a miner,
-    // along with configured spend hook and user data.
-    let recipient_config = if config.miner {
-        if config.recipient.is_none() {
-            return Err(Error::ParseFailed("Recipient address missing"))
-        }
-        let recipient = match PublicKey::from_str(config.recipient.as_ref().unwrap()) {
-            Ok(address) => address,
-            Err(_) => return Err(Error::InvalidAddress),
-        };
-
-        let spend_hook = match &config.spend_hook {
-            Some(s) => match FuncId::from_str(s) {
-                Ok(s) => Some(s),
-                Err(_) => return Err(Error::ParseFailed("Invalid spend hook")),
-            },
-            None => None,
-        };
-
-        let user_data = match &config.user_data {
-            Some(u) => {
-                let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
-                    Ok(b) => b,
-                    Err(_) => return Err(Error::ParseFailed("Invalid user data")),
-                };
-
-                match pallas::Base::from_repr(bytes).into() {
-                    Some(v) => Some(v),
-                    None => return Err(Error::ParseFailed("Invalid user data")),
-                }
-            }
-            None => None,
-        };
-
-        Some(MinerRewardsRecipientConfig { recipient, spend_hook, user_data })
-    } else {
-        None
-    };
-
     // Gracefully handle network disconnections
     loop {
-        let result = if config.miner {
-            miner_task(&node, recipient_config.as_ref().unwrap(), config.skip_sync, &ex).await
-        } else {
-            replicator_task(&node, &ex).await
-        };
-
-        match result {
+        match listen_to_network(&node, &ex).await {
             Ok(_) => return Ok(()),
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
@@ -160,7 +111,7 @@ pub async fn consensus_init_task(
 }
 
 /// Async task to start the consensus task, while monitoring for a network disconnections.
-async fn replicator_task(node: &DarkfiNodePtr, ex: &ExecutorPtr) -> Result<()> {
+async fn listen_to_network(node: &DarkfiNodePtr, ex: &ExecutorPtr) -> Result<()> {
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let prop_subscription = proposals_sub.publisher.clone().subscribe().await;
@@ -225,8 +176,8 @@ async fn consensus_task(
             continue
         }
 
-        if let Err(e) = clean_mm_blocktemplates(node).await {
-            error!(target: "darkfid", "Failed cleaning merge mining block templates: {e}")
+        if let Err(e) = clean_blocktemplates(node).await {
+            error!(target: "darkfid", "Failed cleaning mining block templates: {e}")
         }
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
@@ -253,14 +204,15 @@ async fn consensus_task(
     }
 }
 
-/// Auxiliary function to drop merge mining block templates not
-/// referencing active forks or last confirmed block.
-pub async fn clean_mm_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
-    // Grab a lock over node merge mining templates
+/// Auxiliary function to drop mining block templates not referencing
+/// active forks or last confirmed block.
+async fn clean_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
+    // Grab a lock over node mining templates
+    let mut blocktemplates = node.blocktemplates.lock().await;
     let mut mm_blocktemplates = node.mm_blocktemplates.lock().await;
 
-    // Early return if no merge mining block templates exist
-    if mm_blocktemplates.is_empty() {
+    // Early return if no mining block templates exist
+    if blocktemplates.is_empty() && mm_blocktemplates.is_empty() {
         return Ok(())
     }
 
@@ -271,6 +223,34 @@ pub async fn clean_mm_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
     let (_, last_confirmed) = node.validator.blockchain.last()?;
 
     // Loop through templates to find which can be dropped
+    let mut dropped_templates = vec![];
+    'outer: for (key, blocktemplate) in blocktemplates.iter() {
+        // Loop through all the forks
+        for fork in forks.iter() {
+            // Traverse fork proposals sequence in reverse
+            for p_hash in fork.proposals.iter().rev() {
+                // Check if job extends this fork
+                if &blocktemplate.block.header.previous == p_hash {
+                    continue 'outer
+                }
+            }
+        }
+
+        // Check if it extends last confirmed block
+        if blocktemplate.block.header.previous == last_confirmed {
+            continue
+        }
+
+        // This job doesn't reference something so we drop it
+        dropped_templates.push(key.clone());
+    }
+
+    // Drop jobs not referencing active forks or last confirmed block
+    for key in dropped_templates {
+        blocktemplates.remove(&key);
+    }
+
+    // Loop through merge mining templates to find which can be dropped
     let mut dropped_templates = vec![];
     'outer: for (key, (block, _, _)) in mm_blocktemplates.iter() {
         // Loop through all the forks

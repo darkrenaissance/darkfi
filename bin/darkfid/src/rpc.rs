@@ -16,64 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, time::Instant};
+use std::collections::HashSet;
 
 use async_trait::async_trait;
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
-use tracing::{debug, error, info, warn};
-use url::Url;
+use tracing::debug;
 
 use darkfi::{
     net::P2pPtr,
     rpc::{
-        client::RpcChadClient,
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         p2p_method::HandlerP2p,
         server::RequestHandler,
     },
-    system::{sleep, ExecutorPtr, StoppableTaskPtr},
+    system::StoppableTaskPtr,
     util::time::Timestamp,
-    Error, Result,
 };
 
-use crate::{
-    error::{server_error, RpcError},
-    DarkfiNode,
-};
+use crate::DarkfiNode;
 
 /// Default JSON-RPC `RequestHandler` type
 pub struct DefaultRpcHandler;
 /// HTTP JSON-RPC `RequestHandler` type for p2pool
 pub struct MmRpcHandler;
-
-/// Structure to hold a JSON-RPC client and its config,
-/// so we can recreate it in case of an error.
-pub struct MinerRpcClient {
-    endpoint: Url,
-    ex: ExecutorPtr,
-    client: Option<RpcChadClient>,
-}
-
-impl MinerRpcClient {
-    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Self {
-        let client = match RpcChadClient::new(endpoint.clone(), ex.clone()).await {
-            Ok(c) => Some(c),
-            Err(_) => {
-                warn!(target: "darkfid::Darkfid::init", "Failed to initialize miner daemon rpc client, will try later");
-                None
-            }
-        };
-        Self { endpoint, ex, client }
-    }
-
-    /// Stop the client.
-    pub async fn stop(&self) {
-        if let Some(ref client) = self.client {
-            client.stop().await
-        }
-    }
-}
 
 #[async_trait]
 #[rustfmt::skip]
@@ -87,7 +53,6 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             // =====================
             "ping" => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::pong(self, req.id, req.params).await,
             "clock" => self.clock(req.id, req.params).await,
-            "ping_miner" => self.ping_miner(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
             "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
@@ -115,6 +80,12 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "tx.pending" => self.tx_pending(req.id, req.params).await,
             "tx.clean_pending" => self.tx_clean_pending(req.id, req.params).await,
             "tx.calculate_fee" => self.tx_calculate_fee(req.id, req.params).await,
+
+            // =============
+            // Miner methods
+            // =============
+            "miner.get_header" => self.miner_get_header(req.id, req.params).await,
+            "miner.submit_solution" => self.miner_submit_solution(req.id, req.params).await,
 
             // ==============
             // Invalid method
@@ -203,83 +174,6 @@ impl DarkfiNode {
         }
 
         self.subscribers.get("dnet").unwrap().clone().into()
-    }
-
-    // RPCAPI:
-    // Pings configured miner daemon for liveness.
-    // Returns `true` on success.
-    //
-    // --> {"jsonrpc": "2.0", "method": "ping_miner", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
-    async fn ping_miner(&self, id: u16, _params: JsonValue) -> JsonResult {
-        if let Err(e) = self.ping_miner_daemon().await {
-            error!(target: "darkfid::rpc::ping_miner", "Failed to ping miner daemon: {e}");
-            return server_error(RpcError::PingFailed, id, None)
-        }
-        JsonResponse::new(JsonValue::Boolean(true), id).into()
-    }
-
-    /// Ping configured miner daemon JSON-RPC endpoint.
-    pub async fn ping_miner_daemon(&self) -> Result<()> {
-        debug!(target: "darkfid::ping_miner_daemon", "Pinging miner daemon...");
-        self.miner_daemon_request("ping", &JsonValue::Array(vec![])).await?;
-        Ok(())
-    }
-
-    /// Auxiliary function to execute a request towards the configured miner daemon JSON-RPC endpoint.
-    pub async fn miner_daemon_request(
-        &self,
-        method: &str,
-        params: &JsonValue,
-    ) -> Result<JsonValue> {
-        let Some(ref rpc_client) = self.rpc_client else { return Err(Error::RpcClientStopped) };
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Executing request {method} with params: {params:?}");
-        let latency = Instant::now();
-        let req = JsonRequest::new(method, params.clone());
-        let lock = rpc_client.lock().await;
-        let Some(ref client) = lock.client else { return Err(Error::RpcClientStopped) };
-        let rep = client.request(req).await?;
-        drop(lock);
-        let latency = latency.elapsed();
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {rep:?}");
-        debug!(target: "darkfid::rpc::miner_daemon_request", "Latency: {latency:?}");
-        Ok(rep)
-    }
-
-    /// Auxiliary function to execute a request towards the configured miner daemon JSON-RPC endpoint,
-    /// but in case of failure, sleep and retry until connection is re-established.
-    pub async fn miner_daemon_request_with_retry(
-        &self,
-        method: &str,
-        params: &JsonValue,
-    ) -> JsonValue {
-        loop {
-            // Try to execute the request using current client
-            match self.miner_daemon_request(method, params).await {
-                Ok(v) => return v,
-                Err(e) => {
-                    error!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Failed to execute miner daemon request: {e}");
-                }
-            }
-            loop {
-                // Sleep a bit before retrying
-                info!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Sleeping so we can retry later");
-                sleep(10).await;
-                // Create a new client
-                let mut rpc_client = self.rpc_client.as_ref().unwrap().lock().await;
-                let Ok(client) =
-                    RpcChadClient::new(rpc_client.endpoint.clone(), rpc_client.ex.clone()).await
-                else {
-                    error!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Failed to initialize miner daemon rpc client, check if minerd is running");
-                    drop(rpc_client);
-                    continue
-                };
-                info!(target: "darkfid::rpc::miner_daemon_request_with_retry", "Connection re-established!");
-                // Set the new client as the daemon one
-                rpc_client.client = Some(client);
-                break;
-            }
-        }
     }
 }
 

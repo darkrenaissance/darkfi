@@ -9,12 +9,12 @@ a testing wallet and pass its address to the `darkfid`
 config, so the wallet gets the block rewards the node
 produces. We generate a wallet, set it as the default
 and set its address as the `recipient` field in
-`darkfid.toml`, using the porvided automated script:
+`minerd.toml`, using the porvided automated script:
 ```
 % ./init-wallet.sh
 ```
 
-Then start `darkfid` and wait until its initialized:
+Then start the daemones and wait until `darkfid` is initialized:
 ```
 % ./tmux_sessions.sh
 ```

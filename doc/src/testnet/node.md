@@ -28,27 +28,27 @@ and stays connected to the p2p network.
 * `drk` is a CLI wallet. It provides an interface to smart contracts such
 as Money and DAO, manages our keys and coins, and scans the blockchain
 to update our balances.
-* `minerd` is the DarkFi mining daemon. `darkfid` connects to it over
-RPC, and triggers commands to mine blocks.
+* `minerd` is the DarkFi mining daemon. Connects to `darkfid` over RPC,
+and requests new block headers to mine.
 
-The config files for `darkfid` and `drk` are sectioned into three parts,
+The config files for all three daemons are sectioned into three parts,
 each marked `[network_config]`. The sections look like this:
 
 * `[network_config."testnet"]`
 * `[network_config."mainnet"]`
 * `[network_config."localnet"]`
 
-At the top of the `darkfid` and `drk` config file, we can modify the
-network being used by changing the following line:
+At the top of each daemon config file, we can modify the network being
+used by changing the following line:
 
 ```toml
 # Blockchain network to use
 network = "testnet"
 ```
 
-This enables us to configure `darkfid` and `drk` for different contexts,
-namely mainnet, testnet and localnet. Mainnet is not active yet. Localnet
-can be setup by following the instructions [here](#local-deployment). The
+This enables us to configure the daemons for different contexts, namely
+mainnet, testnet and localnet. Mainnet is not active yet. Localnet can
+be setup by following the instructions [here](#local-deployment). The
 rest of this tutorial assumes we are setting up a testnet node.
 
 ## Compiling
@@ -191,10 +191,8 @@ rest of the tutorial (`darkfid` and `drk` handle this), but if you want
 to help secure the network, you can participate in the mining process
 by running the native `minerd` mining daemon.
 
-To mine on DarkFI we need to expose the `minerd` RPC to the `darkfid`
-full node, which will initiate the mining process. We'll also need to
-add a recipient to `darkfid` that specifies where the mining rewards
-will be minted to. 
+To mine on DarkFI we need to add a recipient to `minerd` that specifies
+where the mining rewards will be minted to.
 
 First, compile it:
 
@@ -229,8 +227,32 @@ $ ./minerd
 Config file created in "~/.config/darkfi/minerd_config.toml". Please review it and try again.
 ```
 
+You now have to configure  `minerd` to use your wallet address as the
+rewards recipient, when it retrieves blocks from `darkfid` to mine.
+
+Open your `minerd` config file with a text editor (the default path
+is `~/.config/darkfi/minerd_config.toml`) and replace the
+`YOUR_WALLET_ADDRESS_HERE` string with your `drk` wallet address:
+
+```toml
+# Put the address from `./drk wallet address` here
+recipient = "YOUR_WALLET_ADDRESS_HERE"
+```
+
+You can retrieve your `drk` wallet address as follows:
+
+```shell
+$ ./drk wallet address
+
+CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+```
+
+Note: when modifying the `minerd` config file to use with the
+testnet, be sure to change the values under the section marked
+`[network_config."testnet"]` (not localnet or mainnet!).
+
 Once that's in place, you can run it again and `minerd` will start,
-waiting for requests to mine blocks.
+polling `darkfid` for new block headers to mine.
 
 ```shell
 $ ./minerd
@@ -240,40 +262,14 @@ $ ./minerd
 14:20:06 [INFO] Mining daemon initialized successfully!
 14:20:06 [INFO] Starting mining daemon...
 14:20:06 [INFO] Mining daemon started successfully!
+14:20:06 [INFO] Received new job to mine block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+14:20:06 [INFO] Mining block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+14:20:06 [INFO] Mined block header beb0...42aa with nonce: 1
+14:20:06 [INFO] Mined block header hash: 36fe...753c
+14:20:06 [INFO] Submitting solution to darkfid...
+14:20:06 [INFO] Submition result: accepted
+...
 ```
-
-You now have to expose `minerd` RPC to `darkfid`, and configure it
-to use your wallet address as the rewards recipient, when submitting
-blocks to `minerd` to mine.
-
-Open your `darkfid` config file with a text editor (the default path
-is `~/.config/darkfi/darkfid_config.toml`). Find the `recipient` and
-`minerd_endpoint` options under `[network_config."testnet"]`, and
-uncomment them by removing the `#` character at the start of line,
-like this:
-
-```toml
-# Put your `minerd` endpoint here (default for testnet is in this example)
-minerd_endpoint = "tcp://127.0.0.1:28467"
-# Put the address from `drk wallet address` here
-recipient = "YOUR_WALLET_ADDRESS_HERE"
-```
-
-Now ensure that `minerd_endpoint` is set to the same value as the
-`rpc_listen` address in your `minerd` config (the default path
-is `~/.config/darkfi/minerd_config.toml`). Finally, replace the
-`YOUR_WALLET_ADDRESS_HERE` string with your `drk` wallet address that
-you can retrieve as follows:
-
-```shell
-$ ./drk wallet address
-
-CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
-```
-
-Note: when modifying the `darkfid` config file to use with the
-testnet, be sure to change the values under the section marked
-`[network_config."testnet"]` (not localnet or mainnet!).
 
 ### Darkfid
 
@@ -307,8 +303,7 @@ As its syncing, you'll see periodic messages like this:
 This will give you an indication of the current progress. Keep it running,
 and you should see a `Blockchain synced!` message after some time.
 
-If you're running `minerd`, you should see a notification from the
-`minerd` terminal like this:
+If you're running `minerd`, you should see a notification like this:
 
 ```shell
 ...
@@ -321,36 +316,33 @@ This means that `darkfid` and `minerd` are connected over RPC and
 
 ```shell
 ...
-14:23:56 [INFO] Mining block 4abc760a1f1c7198837e91c24d8e045e9fc9cb9fdf3a5fd45e184c25b03b0b51 for target:
-115792089237316195423570985008687907853269984665640564039457584007913129639935
-14:24:04 [INFO] Mined block 4abc760a1f1c7198837e91c24d8e045e9fc9cb9fdf3a5fd45e184c25b03b0b51 with nonce: 2
-14:24:06 [INFO] Received request to mine block 17e7428ecb3d911477f8452170d0822c831c6912027abb120e4b4c4cf01d6020 for target:
-115792089237316195423570985008687907853269984665640564039457584007913129639935
-14:24:06 [INFO] Checking if a pending request is being processed...
+14:23:56 [INFO] [RPC] Created new blocktemplate: address=9vw6...fG1U, spend_hook=-, user_data=-, hash=beb0...42aa
+14:24:04 [INFO] [RPC] Got solution submission for block template: beb0...42aa
+14:24:06 [INFO] [RPC] Mined block header hash: 36fe...753c
+14:24:06 [INFO] [RPC] Proposing new block to network
 ...
 ```
 
 When `darkfid` and `minerd` are correctly connected and you get an
-error like this:
+error on `minerd` like this:
 
 ```shell
 ...
-[ERROR] minerd::rpc: Failed mining block f6b4a0f0c8f90905da271ec0add2e856939ef3b0d6cd5b28964d9c2b6d0a0fa9 with error:
-Miner task stopped
+[ERROR] Failed mining block header b757...5fb1 with error: Miner task stopped
 ...
 ```
 
 That's expected behavior. It means your setup is correct and you are
-mining blocks. `Failed mining block` happens when a new block was
-received by `darkfid`, extending the current best fork, so it sends an
-interuption message to `minerd` to stop mining the current block and
-start mining the next height one.
+mining blocks. `Failed mining block header` happens when a new block
+was received by `darkfid`, extending the current best fork, so when
+`minerd` polls it again it retrieves the new block header to mine,
+interupting current mining workers to start mining the new one.
 
 Otherwise, you'll see a notification like this:
 
 ```shell
 ...
-[INFO] Mined block b6c7bd3545daa81d0e2e56ee780363beef6eb5b54579f54dca0cdd2a59989b76 with nonce: 266292
+[INFO] Mined block header 36fe...753c with nonce: 266292
 ...
 ```
 
@@ -430,7 +422,7 @@ $ cd contrib/localnet/darkfid-single-node/
 $ ./init-wallet.sh
 ```
 
-Then start `darkfid` and wait until its initialized:
+Then start the daemones and wait until `darkfid` is initialized:
 
 ```shell
 $ ./tmux_sessions.sh

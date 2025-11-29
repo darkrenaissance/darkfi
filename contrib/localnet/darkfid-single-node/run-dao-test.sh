@@ -52,30 +52,30 @@ wait_token() {
 }
 
 mint_dao() {
-    $DRK dao create 20 10 10 0.67 MLDY > $OUTPUT_FOLDER/dao.toml
-    $DRK dao import MiladyMakerDAO < $OUTPUT_FOLDER/dao.toml
+    $DRK dao create 20 10 10 0.67 ANON > $OUTPUT_FOLDER/dao.toml
+    $DRK dao import AnonDAO < $OUTPUT_FOLDER/dao.toml
     $DRK dao list
-    $DRK dao list MiladyMakerDAO
+    $DRK dao list AnonDAO
 
-    $DRK dao mint MiladyMakerDAO | tee $OUTPUT_FOLDER/dao-mint.tx | $DRK broadcast
+    $DRK dao mint AnonDAO | tee $OUTPUT_FOLDER/dao-mint.tx | $DRK broadcast
 }
 
 wait_dao_mint() {
-    while [ "$($DRK dao list MiladyMakerDAO | grep '^Transaction hash: ' | awk '{print $3}')" = None ]; do
+    while [ "$($DRK dao list AnonDAO | grep '^Transaction hash: ' | awk '{print $3}')" = None ]; do
         sleep $SLEEP_TIME
         sh ./sync-wallet.sh > /dev/null
     done
 }
 
 fill_treasury() {
-    PUBKEY="$($DRK dao list MiladyMakerDAO | grep '^Notes Public key: ' | cut -d ' ' -f4)"
+    PUBKEY="$($DRK dao list AnonDAO | grep '^Notes Public key: ' | cut -d ' ' -f4)"
     SPEND_HOOK="$($DRK dao spend-hook)"
-    BULLA="$($DRK dao list MiladyMakerDAO | grep '^Bulla: ' | cut -d' ' -f2)"
-    $DRK transfer 20 WCKD "$PUBKEY" "$SPEND_HOOK" "$BULLA" | tee $OUTPUT_FOLDER/xfer.tx | $DRK broadcast
+    BULLA="$($DRK dao list AnonDAO | grep '^Bulla: ' | cut -d' ' -f2)"
+    $DRK transfer 20 DAWN "$PUBKEY" "$SPEND_HOOK" "$BULLA" | tee $OUTPUT_FOLDER/xfer.tx | $DRK broadcast
 }
 
 dao_balance() {
-    BALANCE=$($DRK dao balance MiladyMakerDAO 2>/dev/null)
+    BALANCE=$($DRK dao balance AnonDAO 2>/dev/null)
     # No tokens received at all yet
     if echo "$BALANCE" | grep -q "No unspent balances found"; then
         echo 0
@@ -94,7 +94,7 @@ dao_balance() {
 }
 
 wait_dao_treasury() {
-    while [ "$(dao_balance WCKD)" = 0 ]; do
+    while [ "$(dao_balance DAWN)" = 0 ]; do
         sleep $SLEEP_TIME
         sh ./sync-wallet.sh > /dev/null
     done
@@ -102,12 +102,12 @@ wait_dao_treasury() {
 
 propose() {
     MY_ADDR=$($DRK wallet address)
-    PROPOSAL="$($DRK dao propose-transfer MiladyMakerDAO 1 5 WCKD "$MY_ADDR" | cut -d' ' -f3)"
+    PROPOSAL="$($DRK dao propose-transfer AnonDAO 1 5 DAWN "$MY_ADDR" | cut -d' ' -f3)"
     $DRK dao proposal "$PROPOSAL" --mint-proposal | tee $OUTPUT_FOLDER/propose.tx | $DRK broadcast
 }
 
 wait_proposal() {
-    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    PROPOSAL="$($DRK dao proposals AnonDAO | cut -d' ' -f2)"
     while [ "$($DRK dao proposal $PROPOSAL | grep '^Proposal transaction hash: ' | awk '{print $4}')" = None ]; do
         sleep $SLEEP_TIME
         sh ./sync-wallet.sh > /dev/null
@@ -115,12 +115,12 @@ wait_proposal() {
 }
 
 vote() {
-    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    PROPOSAL="$($DRK dao proposals AnonDAO | cut -d' ' -f2)"
     $DRK dao vote "$PROPOSAL" 1 | tee $OUTPUT_FOLDER/dao-vote.tx | $DRK broadcast
 }
 
 wait_vote() {
-    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    PROPOSAL="$($DRK dao proposals AnonDAO | cut -d' ' -f2)"
     while [ "$($DRK dao proposal $PROPOSAL | grep '^Current proposal outcome: ' | awk '{print $4}')" != "Approved" ]; do
         sleep $SLEEP_TIME
         sh ./sync-wallet.sh > /dev/null
@@ -128,12 +128,12 @@ wait_vote() {
 }
 
 do_exec() {
-    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    PROPOSAL="$($DRK dao proposals AnonDAO | cut -d' ' -f2)"
     $DRK dao exec --early $PROPOSAL | tee $OUTPUT_FOLDER/dao-exec.tx | $DRK broadcast
 }
 
 wait_exec() {
-    PROPOSAL="$($DRK dao proposals MiladyMakerDAO | cut -d' ' -f2)"
+    PROPOSAL="$($DRK dao proposals AnonDAO | cut -d' ' -f2)"
     while [ -z "$($DRK dao proposal $PROPOSAL | grep '^Proposal was executed on transaction: ')" ]; do
         sleep $SLEEP_TIME
         sh ./sync-wallet.sh > /dev/null
@@ -141,10 +141,10 @@ wait_exec() {
 }
 
 wait_token DRK
-mint_token WCKD 42
-wait_token WCKD
-mint_token MLDY 20
-wait_token MLDY
+mint_token ANON 42
+wait_token ANON
+mint_token DAWN 20
+wait_token DAWN
 mint_dao
 wait_dao_mint
 fill_treasury
