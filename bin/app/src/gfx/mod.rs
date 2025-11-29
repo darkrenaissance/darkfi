@@ -925,7 +925,7 @@ struct Stage {
     event_pub: GraphicsEventPublisherPtr,
 
     pruner: PruneMethodHeap,
-    screen_was_off: bool,
+    screen_state: ScreenState,
     #[cfg(target_os = "android")]
     ex: ExecutorPtr,
     #[cfg(target_os = "android")]
@@ -1030,15 +1030,19 @@ impl Stage {
             event_pub,
 
             pruner: PruneMethodHeap::new(epoch),
-            screen_was_off: false,
+            screen_state: ScreenState::On,
             #[cfg(target_os = "android")]
-            ex,
+            ex: ex.clone(),
             #[cfg(target_os = "android")]
             refresh_task: None,
         };
+
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
         self_.pruner.dropped_batches = &mut *self_.dropped_batches as *mut _;
+
+        self_.start_refresh_task();
+
         self_
     }
 
@@ -1318,6 +1322,107 @@ impl Stage {
         #[cfg(not(target_os = "android"))]
         false
     }
+
+    fn process_methods(&mut self) {
+        let span = span!(Level::TRACE, "process");
+        let _enter = span.enter();
+
+        // Process as many methods as we can
+        let methods = std::mem::take(&mut *self.method_queue.lock());
+        for (epoch, method) in methods {
+            if DEBUG_TRAX {
+                self.trax_method(epoch, &method);
+            }
+            if epoch < self.epoch {
+                if DEBUG_TRAX {
+                    let mut trax = get_trax().lock();
+                    trax.put_stat(1);
+                    trax.flush();
+                }
+                // Discard old rubbish
+                trace!(target: "gfx", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
+                continue
+            }
+            assert_eq!(epoch, self.epoch);
+            self.process_method(method);
+            if DEBUG_TRAX {
+                get_trax().lock().flush();
+            }
+        }
+    }
+
+    fn prime_screen(&mut self) {
+        let span = span!(Level::TRACE, "pruner");
+        let _enter = span.enter();
+
+        let methods = self.pruner.recv_all();
+        assert!(self.pending_batches.is_empty());
+        // Process all cached methods by the pruner from while the screen was off.
+        for method in methods {
+            // Stale methods will be dropped by pruner, so they will not be caught by trax
+            // while the screen is off.
+            if DEBUG_TRAX {
+                self.trax_method(self.epoch, &method);
+            }
+            // We discard batches here but process_method uses them so implement this
+            // workaround.
+            match method {
+                GraphicsMethod::NewTexture(_) |
+                GraphicsMethod::DeleteTexture(_) |
+                GraphicsMethod::NewVertexBuffer(_) |
+                GraphicsMethod::NewIndexBuffer(_) |
+                GraphicsMethod::DeleteBuffer(_) => self.process_method(method),
+
+                GraphicsMethod::ReplaceGfxDrawCalls { .. } |
+                GraphicsMethod::NewSeqAnim { .. } |
+                GraphicsMethod::UpdateSeqAnim { .. } |
+                GraphicsMethod::DeleteSeqAnim(_) |
+                GraphicsMethod::StartBatch { .. } |
+                GraphicsMethod::EndBatch { .. } => {
+                    panic!("unsupported pruned methods should be dropped!")
+                }
+
+                GraphicsMethod::Noop => panic!("noop"),
+            }
+            if DEBUG_TRAX {
+                get_trax().lock().flush();
+            }
+        }
+
+        // Trigger a full screen redraw by sending a resize event
+        let (width, height) = miniquad::window::screen_size();
+        self.event_pub.notify_resize(Dimension::from([width, height]));
+    }
+
+    fn close_pending_batches(&mut self) {
+        // Immediately apply any pending batches when the screen is switched off
+        let batch_ids: Vec<_> = self.pending_batches.keys().cloned().collect();
+        if !batch_ids.is_empty() {
+            t!("Force closing pending batches: {batch_ids:?}");
+        }
+
+        for batch_id in batch_ids {
+            self.process_method(GraphicsMethod::EndBatch { batch_id, timest: unixtime() });
+            if !self.dropped_batches.insert(batch_id) {
+                panic!("dropped batch {batch_id} already exits!");
+            }
+        }
+        assert!(self.pending_batches.is_empty());
+    }
+
+    fn start_refresh_task(&mut self) {
+        #[cfg(target_os = "android")]
+        {
+            assert!(self.refresh_task.is_none());
+            // For animations do periodic refresh every 40 ms
+            self.refresh_task = Some(self.ex.spawn(async move {
+                loop {
+                    darkfi::system::msleep(40).await;
+                    miniquad::window::schedule_update();
+                }
+            }));
+        }
+    }
 }
 
 /// This is used to process the method queue while the screen is off to avoid the queue
@@ -1354,12 +1459,16 @@ impl PruneMethodHeap {
         }
     }
 
+    #[instrument(skip_all, target = "gfx::pruner")]
     fn drain(&mut self, methods: Vec<(EpochIndex, GraphicsMethod)>) {
         // Process as many methods as we can
         for (epoch, method) in methods {
             if epoch < self.epoch {
                 // Discard old rubbish
-                trace!(target: "gfx::pruner", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
+                t!(
+                    "Discard method with old epoch: {epoch} curr: {} [method={method:?}]",
+                    self.epoch
+                );
                 continue
             }
             assert_eq!(epoch, self.epoch);
@@ -1472,7 +1581,7 @@ impl PruneMethodHeap {
                     if old_val.1 < timest {
                         *old_val = (batch_id, timest, val);
                     } else {
-                        trace!(target: "gfx::pruner", "Rejected stale draw_call {key}: {val:?}");
+                        t!("Rejected stale draw_call {key}: {val:?}");
                     }
                 }
                 None => {
@@ -1504,124 +1613,117 @@ impl PruneMethodHeap {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum ScreenState {
+    // Screen is on as normal
+    On,
+    // First update since screen has gone off
+    SwitchOff,
+    // Subsequent updates after SwitchOff state
+    Off,
+    // First update when screen is on but before draw has been called
+    ReadyOn,
+    // First update and draw has been called
+    PrimedOn,
+    // Second update ready to process pruned buffered allocs
+    SwitchOn,
+    // Invalid state
+    Noop,
+}
+
+impl ScreenState {
+    fn update(&mut self, egl_is_disabled: bool) {
+        use ScreenState::*;
+        *self = if egl_is_disabled {
+            match self {
+                On | ReadyOn | PrimedOn | SwitchOn => SwitchOff,
+                SwitchOff => Off,
+                Off => Off,
+                Noop => panic!("noop"),
+            }
+        } else {
+            match self {
+                SwitchOff | Off => ReadyOn,
+                ReadyOn => PrimedOn,
+                PrimedOn => SwitchOn,
+                SwitchOn => On,
+                On => On,
+                Noop => panic!("noop"),
+            }
+        };
+    }
+}
+
 impl EventHandler for Stage {
     fn update(&mut self) {
         // todo: trax is all messed up in this func
 
-        if self.egl_ctx_is_disabled() {
-            #[cfg(target_os = "android")]
-            {
-                self.refresh_task = None;
-            }
-            if !self.screen_was_off {
-                d!("Screen is switched off");
-            }
-
-            // Immediately apply any pending batches when the screen is switched off
-            let batch_ids: Vec<_> = self.pending_batches.keys().cloned().collect();
-            if !batch_ids.is_empty() {
-                t!("Force closing pending batches: {batch_ids:?}");
-            }
-            for batch_id in batch_ids {
-                self.process_method(GraphicsMethod::EndBatch { batch_id, timest: unixtime() });
-                if !self.dropped_batches.insert(batch_id) {
-                    panic!("dropped batch {batch_id} already exits!");
-                }
-            }
-            assert!(self.pending_batches.is_empty());
-
-            // Screen is off so collect all methods into the pruner
-            let methods = std::mem::take(&mut *self.method_queue.lock());
-            self.pruner.drain(methods);
-            self.screen_was_off = true;
-            return
+        let old_screen_state = self.screen_state;
+        self.screen_state.update(self.egl_ctx_is_disabled());
+        if self.screen_state != old_screen_state {
+            d!("Switching screen state {old_screen_state:?} => {:?}", self.screen_state);
         }
 
-        #[cfg(target_os = "android")]
-        if self.refresh_task.is_none() {
-            // For animations do periodic refresh every 40 ms
-            self.refresh_task = Some(self.ex.spawn(async move {
-                loop {
-                    darkfi::system::msleep(40).await;
-                    miniquad::window::schedule_update();
+        match self.screen_state {
+            ScreenState::SwitchOff => {
+                #[cfg(target_os = "android")]
+                {
+                    self.refresh_task = None;
                 }
-            }));
-        }
 
-        // We actually want to skip draining the prune queue the first time so
-        // miniquad draw() actually gets a chance to be called first.
-        // Otherwise we will see a black screen for a sec or so while update() is running.
-        if self.screen_was_off {
-            self.screen_was_off = false;
-            d!("Screen is switched on");
-            return
-        } else {
-            let span = span!(Level::TRACE, "pruner");
-            let _enter = span.enter();
+                self.close_pending_batches();
 
-            let methods = self.pruner.recv_all();
-            assert!(methods.is_empty() || self.pending_batches.is_empty());
-            // Process all cached methods by the pruner from while the screen was off.
-            for method in methods {
-                // Stale methods will be dropped by pruner, so they will not be caught by trax
-                // while the screen is off.
-                if DEBUG_TRAX {
-                    self.trax_method(self.epoch, &method);
-                }
-                // We discard batches here but process_method uses them so implement this
-                // workaround.
-                match method {
-                    GraphicsMethod::NewTexture(_) |
-                    GraphicsMethod::DeleteTexture(_) |
-                    GraphicsMethod::NewVertexBuffer(_) |
-                    GraphicsMethod::NewIndexBuffer(_) |
-                    GraphicsMethod::DeleteBuffer(_) => self.process_method(method),
-
-                    GraphicsMethod::ReplaceGfxDrawCalls { .. } |
-                    GraphicsMethod::NewSeqAnim { .. } |
-                    GraphicsMethod::UpdateSeqAnim { .. } |
-                    GraphicsMethod::DeleteSeqAnim(_) |
-                    GraphicsMethod::StartBatch { .. } |
-                    GraphicsMethod::EndBatch { .. } => {
-                        panic!("unsupported pruned methods should be dropped!")
-                    }
-
-                    GraphicsMethod::Noop => panic!("noop"),
-                }
-                if DEBUG_TRAX {
-                    get_trax().lock().flush();
-                }
+                // Screen is off so collect all methods into the pruner
+                let methods = std::mem::take(&mut *self.method_queue.lock());
+                self.pruner.drain(methods);
             }
-
-            // Trigger a full screen redraw by sending a resize event
-            let (width, height) = miniquad::window::screen_size();
-            self.event_pub.notify_resize(Dimension::from([width, height]));
-        }
-
-        let span = span!(Level::TRACE, "process");
-        let _enter = span.enter();
-
-        // Process as many methods as we can
-        let methods = std::mem::take(&mut *self.method_queue.lock());
-        for (epoch, method) in methods {
-            if DEBUG_TRAX {
-                self.trax_method(epoch, &method);
-            }
-            if epoch < self.epoch {
-                if DEBUG_TRAX {
-                    let mut trax = get_trax().lock();
-                    trax.put_stat(1);
-                    trax.flush();
+            ScreenState::Off => {
+                #[cfg(target_os = "android")]
+                {
+                    assert!(self.refresh_task.is_none());
                 }
-                // Discard old rubbish
-                trace!(target: "gfx", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
-                continue
+
+                assert!(self.pending_batches.is_empty());
+
+                // Screen is off so collect all methods into the pruner
+                let methods = std::mem::take(&mut *self.method_queue.lock());
+                self.pruner.drain(methods);
             }
-            assert_eq!(epoch, self.epoch);
-            self.process_method(method);
-            if DEBUG_TRAX {
-                get_trax().lock().flush();
+            ScreenState::ReadyOn => {
+                self.start_refresh_task();
+                // We actually want to skip draining the prune queue the first time so
+                // miniquad draw() actually gets a chance to be called first.
+                // Otherwise we will see a black screen for a sec or so while update() is running.
             }
+            ScreenState::PrimedOn => {
+                #[cfg(target_os = "android")]
+                {
+                    assert!(self.refresh_task.is_some());
+                }
+
+                self.prime_screen();
+            }
+            ScreenState::SwitchOn => {
+                #[cfg(target_os = "android")]
+                {
+                    assert!(self.refresh_task.is_some());
+                }
+
+                // This should have been cleared in previous PrimedOn state
+                let methods = self.pruner.recv_all();
+                assert!(methods.is_empty());
+
+                self.process_methods();
+            }
+            ScreenState::On => {
+                #[cfg(target_os = "android")]
+                {
+                    assert!(self.refresh_task.is_some());
+                }
+
+                self.process_methods();
+            }
+            ScreenState::Noop => panic!("noop screen state"),
         }
     }
 
