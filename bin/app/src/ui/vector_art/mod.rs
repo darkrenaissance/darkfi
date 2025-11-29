@@ -99,7 +99,7 @@ impl VectorArt {
 
     fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
         if !self.is_visible.get() {
-            t!("Skipping draw for invisible node");
+            //t!("Skipping draw for invisible node");
             return vec![]
         }
 

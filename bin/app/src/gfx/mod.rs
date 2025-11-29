@@ -30,7 +30,7 @@ use miniquad::{
 };
 use parking_lot::Mutex as SyncMutex;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::File,
     io::Write,
     path::PathBuf,
@@ -39,7 +39,7 @@ use std::{
         Arc,
     },
 };
-use tracing::debug;
+use tracing::{debug, span, Level};
 
 pub mod anim;
 use anim::{Frame as AnimFrame, GfxSeqAnim};
@@ -53,6 +53,7 @@ use trax::get_trax;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardId, PropertyAtomicGuard},
+    util::unixtime,
     ExecutorPtr, GOD,
 };
 
@@ -71,6 +72,7 @@ pub use crate::gfxtag;
 
 pub type DebugTag = Option<&'static str>;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "gfx", $($arg)*); } }
 
@@ -333,12 +335,13 @@ impl RenderApi {
         self.send(method);
     }
 
-    fn start_batch(&self, batch_id: BatchGuardId, debug_str: Option<&'static str>) {
-        let method = GraphicsMethod::StartBatch((batch_id, debug_str));
+    fn start_batch(&self, batch_id: BatchGuardId, tag: DebugTag) {
+        let method = GraphicsMethod::StartBatch { batch_id, tag };
         self.send(method);
     }
     fn end_batch(&self, batch_id: BatchGuardId) {
-        let method = GraphicsMethod::EndBatch(batch_id);
+        let timest = unixtime();
+        let method = GraphicsMethod::EndBatch { batch_id, timest };
         self.send(method);
     }
 
@@ -390,13 +393,7 @@ impl DrawMesh {
         let gfx_texture_id = gfx_texture.id;
 
         let Some(_mq_texture_id) = textures.get(&gfx_texture_id) else {
-            error!(target: "gfx", "Serious error: missing texture ID={gfx_texture_id}, debug={debug_str}");
-            error!(target: "gfx", "Dumping textures:");
-            for (gfx_texture_id, texture_id) in textures {
-                error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
-            }
-
-            panic!("Missing texture ID={gfx_texture_id}")
+            panic!("Missing texture ID={gfx_texture_id} debug={debug_str}")
         };
 
         Some((gfx_texture, textures[&gfx_texture_id]))
@@ -408,13 +405,7 @@ impl DrawMesh {
         debug_str: &'static str,
     ) -> Option<miniquad::BufferId> {
         let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
-            error!(target: "gfx", "Serious error: missing buffer ID={gfx_buffer_id}, debug={debug_str}");
-            error!(target: "gfx", "Dumping buffers:");
-            for (gfx_buffer_id, buffer_id) in buffers {
-                error!(target: "gfx", "{gfx_buffer_id} => {buffer_id:?}");
-            }
-
-            panic!("Missing buffer ID={gfx_buffer_id}")
+            panic!("Missing buffer ID={gfx_buffer_id} debug={debug_str}")
         };
         Some(*mq_buffer_id)
     }
@@ -758,8 +749,9 @@ pub enum GraphicsMethod {
     UpdateSeqAnim { id: AnimId, frame_idx: usize, frame: AnimFrame, tag: DebugTag },
     DeleteSeqAnim((AnimId, DebugTag)),
     ReplaceGfxDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, DrawCall)> },
-    StartBatch((BatchGuardId, Option<&'static str>)),
-    EndBatch(BatchGuardId),
+    StartBatch { batch_id: BatchGuardId, tag: DebugTag },
+    EndBatch { batch_id: BatchGuardId, timest: Timestamp },
+    Noop,
 }
 
 impl std::fmt::Debug for GraphicsMethod {
@@ -776,9 +768,16 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::ReplaceGfxDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
                 write!(f, "ReplaceGfxDrawCalls({bid})")
             }
-            Self::StartBatch((bid, debug_str)) => write!(f, "StartBatch({bid}, {debug_str:?})"),
-            Self::EndBatch(bid) => write!(f, "EndBatch({bid})"),
+            Self::StartBatch { batch_id, tag } => write!(f, "StartBatch({batch_id}, {tag:?})"),
+            Self::EndBatch { batch_id, timest } => write!(f, "EndBatch({batch_id}, {timest})"),
+            Self::Noop => write!(f, "Noop"),
         }
+    }
+}
+
+impl Default for GraphicsMethod {
+    fn default() -> Self {
+        GraphicsMethod::Noop
     }
 }
 
@@ -912,10 +911,13 @@ struct Stage {
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
     draw_calls: HashMap<DcId, GfxDrawCall>,
-    batches: HashMap<BatchGuardId, Vec<GraphicsMethod>>,
+    pending_batches: HashMap<BatchGuardId, Vec<GraphicsMethod>>,
+    /// When dropping batches, we add to this set so that we keep track
+    /// of the internal state's correctness.
+    dropped_batches: Box<HashSet<BatchGuardId>>,
 
-    textures: HashMap<TextureId, miniquad::TextureId>,
-    buffers: HashMap<BufferId, miniquad::BufferId>,
+    textures: Box<HashMap<TextureId, miniquad::TextureId>>,
+    buffers: Box<HashMap<BufferId, miniquad::BufferId>>,
     anims: HashMap<AnimId, GfxSeqAnim>,
 
     epoch: EpochIndex,
@@ -1006,7 +1008,7 @@ impl Stage {
         #[cfg(target_os = "android")]
         let libegl = egl::LibEgl::try_load().expect("Cant load LibEGL");
 
-        Stage {
+        let mut self_ = Stage {
             ctx,
             #[cfg(target_os = "android")]
             libegl,
@@ -1016,10 +1018,11 @@ impl Stage {
                 0,
                 GfxDrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
             )]),
-            batches: HashMap::new(),
+            pending_batches: HashMap::new(),
+            dropped_batches: Box::new(HashSet::new()),
 
-            textures: HashMap::new(),
-            buffers: HashMap::new(),
+            textures: Box::new(HashMap::new()),
+            buffers: Box::new(HashMap::new()),
             anims: HashMap::new(),
 
             epoch,
@@ -1032,12 +1035,16 @@ impl Stage {
             ex,
             #[cfg(target_os = "android")]
             refresh_task: None,
-        }
+        };
+        self_.pruner.textures = &*self_.textures as *const _;
+        self_.pruner.buffers = &*self_.buffers as *const _;
+        self_.pruner.dropped_batches = &mut *self_.dropped_batches as *mut _;
+        self_
     }
 
     fn process_method(&mut self, mut method: GraphicsMethod) {
-        //debug!(target: "gfx", "Received method: {:?}", method);
-        let res = match &mut method {
+        //d!("Received method: {method:?}");
+        match &mut method {
             GraphicsMethod::NewTexture((width, height, data, gtex_id, _)) => {
                 self.method_new_texture(*width, *height, data, *gtex_id)
             }
@@ -1056,53 +1063,51 @@ impl Stage {
                 self.method_update_anim(*id, *frame_idx, frame.clone())
             }
             GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => self.method_delete_anim(*ganim_id),
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, .. } => {
                 //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
                 //t!("Commit dc to {batch_id}: {debug_strs:?}");
-                let batch = self.batches.get_mut(batch_id).unwrap();
-                let dcs = std::mem::take(dcs);
-                batch.push(GraphicsMethod::ReplaceGfxDrawCalls {
-                    batch_id: *batch_id,
-                    timest: *timest,
-                    dcs,
-                });
+                if self.dropped_batches.contains(batch_id) {
+                    t!("Discarding ReplaceGfxDrawCalls from dropped {batch_id}");
+                    return
+                }
+                let Some(batch) = self.pending_batches.get_mut(batch_id) else {
+                    panic!("unknown batch {batch_id}")
+                };
+                let method = std::mem::take(&mut method);
+                batch.push(method);
                 if DEBUG_TRAX {
                     get_trax().lock().put_stat(0);
                 }
-                Ok(())
             }
-            GraphicsMethod::StartBatch((batch_id, _debug_str)) => {
-                //t!("Start batch {batch_id}: {debug_str:?}");
-                if !self.batches.insert(*batch_id, vec![]).is_none() {
-                    panic!("Batch {batch_id} already open!")
+            GraphicsMethod::StartBatch { batch_id, tag } => {
+                t!("Start batch {batch_id}: {tag:?}");
+                if !self.pending_batches.insert(*batch_id, vec![]).is_none() {
+                    panic!("batch {batch_id} already open!")
                 }
                 if DEBUG_TRAX {
                     get_trax().lock().put_stat(0);
                 }
-                Ok(())
             }
-            GraphicsMethod::EndBatch(batch_id) => {
-                //t!("End batch {batch_id}");
-                let batch = self.batches.remove(batch_id).unwrap();
+            GraphicsMethod::EndBatch { batch_id, timest } => {
+                if self.dropped_batches.remove(batch_id) {
+                    t!("End batch {batch_id} was dropped");
+                    return
+                }
+                t!("End batch {batch_id}");
+                let Some(batch) = self.pending_batches.remove(batch_id) else {
+                    panic!("unknown batch {batch_id}")
+                };
                 for mut method in batch {
-                    let res = match &mut method {
-                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest, dcs } => {
+                    match &mut method {
+                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest: _, dcs } => {
                             let dcs = std::mem::take(dcs);
                             self.method_replace_draw_calls(*timest, dcs)
                         }
                         _ => panic!("unexpected method in batch!"),
-                    };
-                    if let Err(err) = res {
-                        e!("process_method(method={method:?}) failed with err: {err:?}");
-                        panic!("process_method failed!")
                     }
                 }
-                Ok(())
             }
-        };
-        if let Err(err) = res {
-            e!("process_method(method={method:?}) failed with err: {err:?}");
-            panic!("process_method failed!")
+            GraphicsMethod::Noop => panic!("noop"),
         }
     }
 
@@ -1112,12 +1117,11 @@ impl Stage {
         height: u16,
         data: &Vec<u8>,
         gfx_texture_id: TextureId,
-    ) -> Result<()> {
+    ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, data);
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: new_texture({}, {}, ..., {}) -> {:?}",
-                   width, height, gfx_texture_id, texture);
-            //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ..., {}) -> {:?}\n{}",
+            d!("Invoked method: new_texture({width}, {height}, ..., {gfx_texture_id}) -> {texture:?}");
+            //d!("Invoked method: new_texture({}, {}, ..., {}) -> {:?}\n{}",
             //       width, height, gfx_texture_id, texture,
             //       ansi_texture(width as usize, height as usize, &data));
         }
@@ -1125,45 +1129,35 @@ impl Stage {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
             }
-            //panic!("Duplicate texture ID={gfx_texture_id} detected!");
-            return Err(Error::GfxDuplicateTextureID)
+            panic!("Duplicate texture ID={gfx_texture_id} detected!");
         }
         if DEBUG_TRAX {
             get_trax().lock().put_stat(0);
         }
-        Ok(())
     }
-    fn method_delete_texture(&mut self, gfx_texture_id: TextureId) -> Result<()> {
+    fn method_delete_texture(&mut self, gfx_texture_id: TextureId) {
         let Some(texture) = self.textures.remove(&gfx_texture_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
             }
-            //.expect("couldn't find gfx_texture_id");
-            return Err(Error::GfxUnknownTextureID)
+            panic!("unknown texture {gfx_texture_id}")
         };
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: delete_texture({} => {:?})",
-                   gfx_texture_id, texture);
+            d!("Invoked method: delete_texture({gfx_texture_id} => {texture:?})");
         }
         self.ctx.delete_texture(texture);
         if DEBUG_TRAX {
             get_trax().lock().put_stat(0);
         }
-        Ok(())
     }
-    fn method_new_vertex_buffer(
-        &mut self,
-        verts: &[Vertex],
-        gfx_buffer_id: BufferId,
-    ) -> Result<()> {
+    fn method_new_vertex_buffer(&mut self, verts: &[Vertex], gfx_buffer_id: BufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
             BufferSource::slice(verts),
         );
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: new_vertex_buffer(..., {}) -> {:?}",
-                   gfx_buffer_id, buffer);
+            d!("Invoked method: new_vertex_buffer(..., {gfx_buffer_id}) -> {buffer:?}");
             //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}, {}) -> {:?}",
             //       verts, gfx_buffer_id, buffer);
         }
@@ -1171,23 +1165,20 @@ impl Stage {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
             }
-            //panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!");
-            return Err(Error::GfxDuplicateBufferID)
+            panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!")
         }
         if DEBUG_TRAX {
             get_trax().lock().put_stat(0);
         }
-        Ok(())
     }
-    fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) -> Result<()> {
+    fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: new_index_buffer({}) -> {:?}",
-                   gfx_buffer_id, buffer);
+            d!("Invoked method: new_index_buffer({gfx_buffer_id}) -> {buffer:?}");
             //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}, {}) -> {:?}",
             //       indices, gfx_buffer_id, buffer);
         }
@@ -1195,88 +1186,62 @@ impl Stage {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
             }
-            //panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
-            return Err(Error::GfxDuplicateBufferID)
+            panic!("Duplicate index buffer ID={gfx_buffer_id} detected!")
         }
         if DEBUG_TRAX {
             get_trax().lock().put_stat(0);
         }
-        Ok(())
     }
-    fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) -> Result<()> {
+    fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) {
         let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
             }
-            //.expect("couldn't find gfx_buffer_id");
-            return Err(Error::GfxUnknownBufferID)
+            panic!("unknown buffer {gfx_buffer_id}");
         };
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: delete_buffer({} => {:?})",
-                   gfx_buffer_id, buffer);
+            d!("Invoked method: delete_buffer({gfx_buffer_id} => {buffer:?})");
         }
         self.ctx.delete_buffer(buffer);
         if DEBUG_TRAX {
             get_trax().lock().put_stat(0);
         }
-        Ok(())
     }
-    fn method_new_anim(
-        &mut self,
-        gfx_anim_id: AnimId,
-        frames_len: usize,
-        oneshot: bool,
-    ) -> Result<()> {
+    fn method_new_anim(&mut self, gfx_anim_id: AnimId, frames_len: usize, oneshot: bool) {
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: new_anim({gfx_anim_id}, {frames_len}, {oneshot})");
+            d!("Invoked method: new_anim({gfx_anim_id}, {frames_len}, {oneshot})");
         }
         if let Some(_) = self.anims.insert(gfx_anim_id, GfxSeqAnim::new(frames_len, oneshot)) {
-            //panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
-            return Err(Error::GfxDuplicateAnimID)
+            panic!("Duplicate anim ID={gfx_anim_id} detected!");
         }
-        Ok(())
     }
-    fn method_update_anim(
-        &mut self,
-        gfx_anim_id: AnimId,
-        frame_idx: usize,
-        frame: AnimFrame,
-    ) -> Result<()> {
+    fn method_update_anim(&mut self, gfx_anim_id: AnimId, frame_idx: usize, frame: AnimFrame) {
         let Some(anim) = self.anims.get_mut(&gfx_anim_id) else {
-            //.expect("couldn't find gfx_anim_id");
-            return Err(Error::GfxUnknownAnimID)
+            panic!("couldn't find anim {gfx_anim_id}");
         };
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: update_anim({gfx_anim_id}[{frame_idx}] => {frame:?})");
+            d!("Invoked method: update_anim({gfx_anim_id}[{frame_idx}] => {frame:?})");
         }
         anim.set(frame_idx, frame, &self.textures, &self.buffers);
-        Ok(())
     }
-    fn method_delete_anim(&mut self, gfx_anim_id: AnimId) -> Result<()> {
+    fn method_delete_anim(&mut self, gfx_anim_id: AnimId) {
         let Some(anim) = self.anims.remove(&gfx_anim_id) else {
-            //.expect("couldn't find gfx_anim_id");
-            return Err(Error::GfxUnknownAnimID)
+            panic!("couldn't find anim {gfx_anim_id}");
         };
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
+            d!("Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
         }
-        Ok(())
     }
-    fn method_replace_draw_calls(
-        &mut self,
-        timest: Timestamp,
-        dcs: Vec<(DcId, DrawCall)>,
-    ) -> Result<()> {
+    fn method_replace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
         if DEBUG_GFXAPI {
-            debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
+            d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
         for (key, val) in dcs {
             let Some(val) = val.compile(&self.textures, &self.buffers, timest) else {
                 if DEBUG_TRAX {
                     get_trax().lock().put_stat(3);
                 }
-                error!(target: "gfx", "fatal: replace_draw_calls({timest}, ...) failed with item ID={key}");
-                continue
+                panic!("fatal: replace_draw_calls({timest}, ...) failed with item ID={key}")
             };
             //self.draw_calls.insert(key, val);
             match self.draw_calls.get_mut(&key) {
@@ -1288,7 +1253,7 @@ impl Stage {
                         }
                         *old_val = val;
                     } else {
-                        trace!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
+                        t!("Rejected stale draw_call {key}: {val:?}");
                         if DEBUG_TRAX {
                             get_trax().lock().put_stat(2);
                         }
@@ -1302,7 +1267,6 @@ impl Stage {
                 }
             }
         }
-        Ok(())
     }
 
     fn trax_method(&self, epoch: EpochIndex, method: &GraphicsMethod) {
@@ -1335,12 +1299,13 @@ impl Stage {
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
                 trax.put_dcs(epoch, *batch_id, *timest, dcs);
             }
-            GraphicsMethod::StartBatch((batch_id, debug_str)) => {
-                trax.put_start_batch(epoch, *batch_id, *debug_str);
+            GraphicsMethod::StartBatch { batch_id, tag } => {
+                trax.put_start_batch(epoch, *batch_id, *tag);
             }
-            GraphicsMethod::EndBatch(batch_id) => {
+            GraphicsMethod::EndBatch { batch_id, timest: _ } => {
                 trax.put_end_batch(epoch, *batch_id);
             }
+            GraphicsMethod::Noop => panic!("noop"),
         };
     }
 
@@ -1369,6 +1334,10 @@ struct PruneMethodHeap {
     dcs: HashMap<DcId, (BatchGuardId, Timestamp, DrawCall)>,
 
     epoch: EpochIndex,
+
+    textures: *const HashMap<TextureId, miniquad::TextureId>,
+    buffers: *const HashMap<BufferId, miniquad::BufferId>,
+    dropped_batches: *mut HashSet<BatchGuardId>,
 }
 
 impl PruneMethodHeap {
@@ -1379,6 +1348,9 @@ impl PruneMethodHeap {
             del: vec![],
             dcs: HashMap::new(),
             epoch,
+            textures: std::ptr::null(),
+            buffers: std::ptr::null(),
+            dropped_batches: std::ptr::null_mut(),
         }
     }
 
@@ -1395,25 +1367,52 @@ impl PruneMethodHeap {
         }
     }
 
-    fn process_method(&mut self, method: GraphicsMethod) {
-        match method.clone() {
+    fn process_method(&mut self, mut method: GraphicsMethod) {
+        match &method {
             GraphicsMethod::NewTexture((_, _, _, gtex_id, _)) => {
-                self.new_tex.insert(gtex_id, method);
+                if DEBUG_GFXAPI {
+                    t!("Prune method: new_texture(..., {gtex_id})");
+                }
+                self.new_tex.insert(*gtex_id, std::mem::take(&mut method));
             }
             GraphicsMethod::DeleteTexture((gtex_id, _)) => {
+                if DEBUG_GFXAPI {
+                    t!("Prune method: delete_texture(..., {gtex_id})");
+                }
                 if self.new_tex.remove(&gtex_id).is_none() {
+                    if !self.textures().contains_key(&gtex_id) {
+                        panic!("delete_texture missing ID {gtex_id} in pruner")
+                    }
+                    let method = std::mem::take(&mut method);
                     self.del.push(method);
+                } else if DEBUG_GFXAPI {
+                    t!("Discard ellided texture {gtex_id}");
                 }
             }
             GraphicsMethod::NewVertexBuffer((_, gbuff_id, _)) => {
-                self.new_buf.insert(gbuff_id, method);
+                if DEBUG_GFXAPI {
+                    t!("Prune method: new_vertex_buffer(..., {gbuff_id})");
+                }
+                self.new_buf.insert(*gbuff_id, std::mem::take(&mut method));
             }
             GraphicsMethod::NewIndexBuffer((_, gbuff_id, _)) => {
-                self.new_buf.insert(gbuff_id, method);
+                if DEBUG_GFXAPI {
+                    t!("Prune method: new_index_buffer(..., {gbuff_id})");
+                }
+                self.new_buf.insert(*gbuff_id, std::mem::take(&mut method));
             }
             GraphicsMethod::DeleteBuffer((gbuff_id, _, _)) => {
+                if DEBUG_GFXAPI {
+                    t!("Prune method: delete_buffer(..., {gbuff_id})");
+                }
                 if self.new_buf.remove(&gbuff_id).is_none() {
+                    if !self.buffers().contains_key(&gbuff_id) {
+                        panic!("delete_buffer missing ID {gbuff_id} in pruner")
+                    }
+                    let method = std::mem::take(&mut method);
                     self.del.push(method);
+                } else if DEBUG_GFXAPI {
+                    t!("Discard ellided buffer {gbuff_id}");
                 }
             }
             GraphicsMethod::NewSeqAnim { .. } => {
@@ -1428,13 +1427,36 @@ impl PruneMethodHeap {
                 //}
             }
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
-                self.method_replace_draw_calls(batch_id, timest, dcs)
+                //self.method_replace_draw_calls(batch_id, timest, dcs)
             }
             // Discard batches since we will apply everything all at once anyway
             // once the screen is switched on.
-            GraphicsMethod::StartBatch(_) => {}
-            GraphicsMethod::EndBatch(_) => {}
+            GraphicsMethod::StartBatch { batch_id, tag } => {
+                t!("Pruner drop start batch {batch_id}");
+                if !self.dropped_batches().insert(*batch_id) {
+                    panic!("dropped batch {batch_id} already exits!");
+                }
+            }
+            GraphicsMethod::EndBatch { batch_id, timest: _ } => {
+                t!("Pruner drop end batch {batch_id}");
+                // Should have already been dropped previously
+                assert!(self.dropped_batches().contains(batch_id));
+            }
+            GraphicsMethod::Noop => panic!("noop"),
         }
+    }
+
+    fn textures(&self) -> &HashMap<TextureId, miniquad::TextureId> {
+        assert!(!self.textures.is_null());
+        unsafe { &*self.textures }
+    }
+    fn buffers(&self) -> &HashMap<BufferId, miniquad::BufferId> {
+        assert!(!self.buffers.is_null());
+        unsafe { &*self.buffers }
+    }
+    fn dropped_batches(&mut self) -> &mut HashSet<BatchGuardId> {
+        assert!(!self.dropped_batches.is_null());
+        unsafe { &mut *self.dropped_batches }
     }
 
     fn method_replace_draw_calls(
@@ -1486,22 +1508,30 @@ impl EventHandler for Stage {
     fn update(&mut self) {
         // todo: trax is all messed up in this func
 
-        let methods = std::mem::take(&mut *self.method_queue.lock());
-
         if self.egl_ctx_is_disabled() {
             #[cfg(target_os = "android")]
             {
                 self.refresh_task = None;
             }
+            if !self.screen_was_off {
+                d!("Screen is switched off");
+            }
 
             // Immediately apply any pending batches when the screen is switched off
-            let batch_ids: Vec<_> = self.batches.keys().cloned().collect();
-            for batch_id in batch_ids {
-                self.process_method(GraphicsMethod::EndBatch(batch_id));
+            let batch_ids: Vec<_> = self.pending_batches.keys().cloned().collect();
+            if !batch_ids.is_empty() {
+                t!("Force closing pending batches: {batch_ids:?}");
             }
-            self.batches.clear();
+            for batch_id in batch_ids {
+                self.process_method(GraphicsMethod::EndBatch { batch_id, timest: unixtime() });
+                if !self.dropped_batches.insert(batch_id) {
+                    panic!("dropped batch {batch_id} already exits!");
+                }
+            }
+            assert!(self.pending_batches.is_empty());
 
             // Screen is off so collect all methods into the pruner
+            let methods = std::mem::take(&mut *self.method_queue.lock());
             self.pruner.drain(methods);
             self.screen_was_off = true;
             return
@@ -1519,13 +1549,18 @@ impl EventHandler for Stage {
         }
 
         // We actually want to skip draining the prune queue the first time so
-        // draw actually gets a chance to be called first.
-        // Otherwise we will just see a black screen for a sec or so.
+        // miniquad draw() actually gets a chance to be called first.
+        // Otherwise we will see a black screen for a sec or so while update() is running.
         if self.screen_was_off {
             self.screen_was_off = false;
+            d!("Screen is switched on");
+            return
         } else {
+            let span = span!(Level::TRACE, "pruner");
+            let _enter = span.enter();
+
             let methods = self.pruner.recv_all();
-            assert!(methods.is_empty() || self.batches.is_empty());
+            assert!(methods.is_empty() || self.pending_batches.is_empty());
             // Process all cached methods by the pruner from while the screen was off.
             for method in methods {
                 // Stale methods will be dropped by pruner, so they will not be caught by trax
@@ -1536,21 +1571,38 @@ impl EventHandler for Stage {
                 // We discard batches here but process_method uses them so implement this
                 // workaround.
                 match method {
-                    GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest, dcs } => {
-                        if let Err(err) = self.method_replace_draw_calls(timest, dcs) {
-                            e!("process_method for ReplaceGfxDrawCalls failed err: {err:?}");
-                            panic!("process_method failed!")
-                        }
+                    GraphicsMethod::NewTexture(_) |
+                    GraphicsMethod::DeleteTexture(_) |
+                    GraphicsMethod::NewVertexBuffer(_) |
+                    GraphicsMethod::NewIndexBuffer(_) |
+                    GraphicsMethod::DeleteBuffer(_) => self.process_method(method),
+
+                    GraphicsMethod::ReplaceGfxDrawCalls { .. } |
+                    GraphicsMethod::NewSeqAnim { .. } |
+                    GraphicsMethod::UpdateSeqAnim { .. } |
+                    GraphicsMethod::DeleteSeqAnim(_) |
+                    GraphicsMethod::StartBatch { .. } |
+                    GraphicsMethod::EndBatch { .. } => {
+                        panic!("unsupported pruned methods should be dropped!")
                     }
-                    _ => self.process_method(method),
+
+                    GraphicsMethod::Noop => panic!("noop"),
                 }
                 if DEBUG_TRAX {
                     get_trax().lock().flush();
                 }
             }
+
+            // Trigger a full screen redraw by sending a resize event
+            let (width, height) = miniquad::window::screen_size();
+            self.event_pub.notify_resize(Dimension::from([width, height]));
         }
 
+        let span = span!(Level::TRACE, "process");
+        let _enter = span.enter();
+
         // Process as many methods as we can
+        let methods = std::mem::take(&mut *self.method_queue.lock());
         for (epoch, method) in methods {
             if DEBUG_TRAX {
                 self.trax_method(epoch, &method);

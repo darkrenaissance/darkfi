@@ -116,7 +116,7 @@ impl Layer {
             for child in self.get_children() {
                 let obj = get_ui_object3(&child);
                 let Some(mut draw_update) = obj.draw(rect, atom).await else {
-                    t!("{child:?} draw returned none");
+                    //t!("{child:?} draw returned none");
                     continue
                 };
 
