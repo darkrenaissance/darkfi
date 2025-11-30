@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Level"],"fn":["file_field_formatter","set_terminal_writer","setup_logging","setup_test_logger","terminal_field_formatter"],"macro":["verbose"],"static":["TERMINAL_LAYER_HANDLE"],"struct":["ChannelWriter","EventFormatter","EventTimeFormatter","LevelFormatter","TargetFilter"],"trait":["TerminalWriter"]};
