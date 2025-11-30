@@ -27,7 +27,7 @@ use crate::{
     gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::{i18n::I18nBabelFish, unixtime},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -86,7 +86,6 @@ impl Layer {
 
     #[instrument(target = "ui::layer")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -94,7 +93,7 @@ impl Layer {
             error!(target: "ui:layer", "Layer failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
     async fn get_draw_calls(

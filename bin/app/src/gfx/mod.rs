@@ -39,7 +39,6 @@ use std::{
         Arc,
     },
 };
-use tracing::{debug, span, Level};
 
 pub mod anim;
 use anim::{Frame as AnimFrame, GfxSeqAnim};
@@ -50,11 +49,12 @@ mod shader;
 mod trax;
 use trax::get_trax;
 
+#[cfg(target_os = "android")]
+use crate::ExecutorPtr;
 use crate::{
-    error::{Error, Result},
     prop::{BatchGuardId, PropertyAtomicGuard},
     util::unixtime,
-    ExecutorPtr, GOD,
+    GOD,
 };
 
 // This is very noisy so suppress output by default
@@ -74,7 +74,6 @@ pub type DebugTag = Option<&'static str>;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "gfx", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx", $($arg)*); } }
-macro_rules! e { ($($arg:tt)*) => { error!(target: "gfx", $($arg)*); } }
 
 #[cfg(target_os = "android")]
 pub fn get_window_size_filename() -> PathBuf {
@@ -325,13 +324,8 @@ impl RenderApi {
         self.send_with_epoch(method, epoch);
     }
 
-    pub fn replace_draw_calls(
-        &self,
-        batch_id: BatchGuardId,
-        timest: Timestamp,
-        dcs: Vec<(DcId, DrawCall)>,
-    ) {
-        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs };
+    pub fn replace_draw_calls(&self, batch_id: BatchGuardId, dcs: Vec<(DcId, DrawCall)>) {
+        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
         self.send(method);
     }
 
@@ -748,7 +742,7 @@ pub enum GraphicsMethod {
     NewSeqAnim { id: AnimId, frames_len: usize, oneshot: bool, tag: DebugTag },
     UpdateSeqAnim { id: AnimId, frame_idx: usize, frame: AnimFrame, tag: DebugTag },
     DeleteSeqAnim((AnimId, DebugTag)),
-    ReplaceGfxDrawCalls { batch_id: BatchGuardId, timest: Timestamp, dcs: Vec<(DcId, DrawCall)> },
+    ReplaceGfxDrawCalls { batch_id: BatchGuardId, dcs: Vec<(DcId, DrawCall)> },
     StartBatch { batch_id: BatchGuardId, tag: DebugTag },
     EndBatch { batch_id: BatchGuardId, timest: Timestamp },
     Noop,
@@ -765,7 +759,7 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::NewSeqAnim { .. } => write!(f, "NewSeqAnim"),
             Self::UpdateSeqAnim { .. } => write!(f, "UpdateSeqAnim"),
             Self::DeleteSeqAnim(_) => write!(f, "DeleteSeqAnim"),
-            Self::ReplaceGfxDrawCalls { batch_id: bid, timest: _, dcs: _ } => {
+            Self::ReplaceGfxDrawCalls { batch_id: bid, dcs: _ } => {
                 write!(f, "ReplaceGfxDrawCalls({bid})")
             }
             Self::StartBatch { batch_id, tag } => write!(f, "StartBatch({batch_id}, {tag:?})"),
@@ -1084,7 +1078,9 @@ impl Stage {
                 }
             }
             GraphicsMethod::StartBatch { batch_id, tag } => {
-                t!("Start batch {batch_id}: {tag:?}");
+                if DEBUG_GFXAPI {
+                    t!("Start batch {batch_id}: {tag:?}");
+                }
                 if !self.pending_batches.insert(*batch_id, vec![]).is_none() {
                     panic!("batch {batch_id} already open!")
                 }
@@ -1094,16 +1090,20 @@ impl Stage {
             }
             GraphicsMethod::EndBatch { batch_id, timest } => {
                 if self.dropped_batches.remove(batch_id) {
-                    t!("End batch {batch_id} was dropped");
+                    if DEBUG_GFXAPI {
+                        t!("End batch {batch_id} was dropped");
+                    }
                     return
                 }
-                t!("End batch {batch_id}");
+                if DEBUG_GFXAPI {
+                    t!("End batch {batch_id}");
+                }
                 let Some(batch) = self.pending_batches.remove(batch_id) else {
                     panic!("unknown batch {batch_id}")
                 };
                 for mut method in batch {
                     match &mut method {
-                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, timest: _, dcs } => {
+                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, dcs } => {
                             let dcs = std::mem::take(dcs);
                             self.method_replace_draw_calls(*timest, dcs)
                         }
@@ -1300,8 +1300,8 @@ impl Stage {
             GraphicsMethod::DeleteSeqAnim(..) => {
                 //trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
-                trax.put_dcs(epoch, *batch_id, *timest, dcs);
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs } => {
+                trax.put_dcs(epoch, *batch_id, dcs);
             }
             GraphicsMethod::StartBatch { batch_id, tag } => {
                 trax.put_start_batch(epoch, *batch_id, *tag);
@@ -1323,10 +1323,8 @@ impl Stage {
         false
     }
 
+    #[instrument(skip_all, target = "gfx::process")]
     fn process_methods(&mut self) {
-        let span = span!(Level::TRACE, "process");
-        let _enter = span.enter();
-
         // Process as many methods as we can
         let methods = std::mem::take(&mut *self.method_queue.lock());
         for (epoch, method) in methods {
@@ -1340,7 +1338,10 @@ impl Stage {
                     trax.flush();
                 }
                 // Discard old rubbish
-                trace!(target: "gfx", "Discard method with old epoch: {epoch} curr: {} [method={method:?}]", self.epoch);
+                t!(
+                    "Discard method with old epoch: {epoch} curr: {} [method={method:?}]",
+                    self.epoch
+                );
                 continue
             }
             assert_eq!(epoch, self.epoch);
@@ -1351,10 +1352,8 @@ impl Stage {
         }
     }
 
+    #[instrument(skip_all, target = "gfx::pruner")]
     fn prime_screen(&mut self) {
-        let span = span!(Level::TRACE, "pruner");
-        let _enter = span.enter();
-
         let methods = self.pruner.recv_all();
         assert!(self.pending_batches.is_empty());
         // Process all cached methods by the pruner from while the screen was off.
@@ -1435,8 +1434,6 @@ struct PruneMethodHeap {
     new_tex: HashMap<TextureId, GraphicsMethod>,
     /// Deleted objects
     del: Vec<GraphicsMethod>,
-    /// Draw calls
-    dcs: HashMap<DcId, (BatchGuardId, Timestamp, DrawCall)>,
 
     epoch: EpochIndex,
 
@@ -1451,7 +1448,6 @@ impl PruneMethodHeap {
             new_buf: HashMap::new(),
             new_tex: HashMap::new(),
             del: vec![],
-            dcs: HashMap::new(),
             epoch,
             textures: std::ptr::null(),
             buffers: std::ptr::null(),
@@ -1524,24 +1520,14 @@ impl PruneMethodHeap {
                     t!("Discard ellided buffer {gbuff_id}");
                 }
             }
-            GraphicsMethod::NewSeqAnim { .. } => {
-                //self.new_buf.insert(gbuff_id, method);
-            }
-            GraphicsMethod::UpdateSeqAnim { .. } => {
-                //self.new_buf.insert(gbuff_id, method);
-            }
-            GraphicsMethod::DeleteSeqAnim(..) => {
-                //if self.new_buf.remove(&gbuff_id).is_none() {
-                //    self.del.push(method);
-                //}
-            }
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, timest, dcs } => {
-                //self.method_replace_draw_calls(batch_id, timest, dcs)
-            }
+            GraphicsMethod::NewSeqAnim { .. } => {}
+            GraphicsMethod::UpdateSeqAnim { .. } => {}
+            GraphicsMethod::DeleteSeqAnim(..) => {}
+            GraphicsMethod::ReplaceGfxDrawCalls { .. } => {}
             // Discard batches since we will apply everything all at once anyway
             // once the screen is switched on.
             GraphicsMethod::StartBatch { batch_id, tag } => {
-                t!("Pruner drop start batch {batch_id}");
+                t!("Pruner drop start batch {batch_id} debug={tag:?}");
                 if !self.dropped_batches().insert(*batch_id) {
                     panic!("dropped batch {batch_id} already exits!");
                 }
@@ -1568,47 +1554,15 @@ impl PruneMethodHeap {
         unsafe { &mut *self.dropped_batches }
     }
 
-    fn method_replace_draw_calls(
-        &mut self,
-        batch_id: BatchGuardId,
-        timest: Timestamp,
-        dcs: Vec<(DcId, DrawCall)>,
-    ) {
-        for (key, val) in dcs {
-            match self.dcs.get_mut(&key) {
-                Some(old_val) => {
-                    // Only replace the draw call if it is more recent
-                    if old_val.1 < timest {
-                        *old_val = (batch_id, timest, val);
-                    } else {
-                        t!("Rejected stale draw_call {key}: {val:?}");
-                    }
-                }
-                None => {
-                    self.dcs.insert(key, (batch_id, timest, val));
-                }
-            }
-        }
-    }
-
     /// Collect everything now the screen is on
     fn recv_all(&mut self) -> Vec<GraphicsMethod> {
         // Inhale that smoke deep
-        let mut meth = Vec::with_capacity(
-            self.new_buf.len() + self.new_tex.len() + self.del.len() + self.dcs.len(),
-        );
+        let mut meth = Vec::with_capacity(self.new_buf.len() + self.new_tex.len() + self.del.len());
         let new_buf = std::mem::take(&mut self.new_buf);
         let new_tex = std::mem::take(&mut self.new_tex);
         meth.extend(new_buf.into_values());
         meth.extend(new_tex.into_values());
         meth.append(&mut self.del);
-        for (dc_id, (batch_id, timest, dc)) in std::mem::take(&mut self.dcs) {
-            meth.push(GraphicsMethod::ReplaceGfxDrawCalls {
-                batch_id,
-                timest,
-                dcs: vec![(dc_id, dc)],
-            });
-        }
         meth
     }
 }
@@ -1627,8 +1581,6 @@ enum ScreenState {
     PrimedOn,
     // Second update ready to process pruned buffered allocs
     SwitchOn,
-    // Invalid state
-    Noop,
 }
 
 impl ScreenState {
@@ -1639,7 +1591,6 @@ impl ScreenState {
                 On | ReadyOn | PrimedOn | SwitchOn => SwitchOff,
                 SwitchOff => Off,
                 Off => Off,
-                Noop => panic!("noop"),
             }
         } else {
             match self {
@@ -1648,7 +1599,6 @@ impl ScreenState {
                 PrimedOn => SwitchOn,
                 SwitchOn => On,
                 On => On,
-                Noop => panic!("noop"),
             }
         };
     }
@@ -1723,7 +1673,6 @@ impl EventHandler for Stage {
 
                 self.process_methods();
             }
-            ScreenState::Noop => panic!("noop screen state"),
         }
     }
 

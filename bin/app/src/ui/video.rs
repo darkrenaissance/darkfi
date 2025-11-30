@@ -33,7 +33,7 @@ use crate::{
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
-    util::{spawn_thread, unixtime},
+    util::spawn_thread,
     ExecutorPtr,
 };
 
@@ -220,7 +220,6 @@ impl Video {
 
     #[instrument(target = "ui::video")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -228,7 +227,7 @@ impl Video {
             error!(target: "ui:video", "Video failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
     /// Called whenever any property changes.
@@ -386,11 +385,7 @@ impl UIObject for Video {
 impl Drop for Video {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("Video::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.dc_key, Default::default())],
-        );
+        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
     }
 }
 

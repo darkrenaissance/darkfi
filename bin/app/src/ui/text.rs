@@ -30,7 +30,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodeWeak},
     text2::{self, TEXT_CTX},
-    util::{i18n::I18nBabelFish, unixtime},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -139,7 +139,6 @@ impl Text {
 
     #[instrument(target = "ui::text")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -147,7 +146,7 @@ impl Text {
             error!(target: "ui::text", "Text failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
     async fn get_draw_calls(
@@ -214,11 +213,7 @@ impl UIObject for Text {
 impl Drop for Text {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("Text::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.dc_key, Default::default())],
-        );
+        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
     }
 }
 

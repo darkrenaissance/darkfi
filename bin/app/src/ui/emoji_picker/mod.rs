@@ -32,7 +32,6 @@ use crate::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
-    util::unixtime,
     ExecutorPtr,
 };
 
@@ -186,14 +185,13 @@ impl EmojiPicker {
 
     #[instrument(target = "ui::emoji_picker")]
     fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, atom) else {
             error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
     }
 
     fn get_draw_calls(
@@ -389,11 +387,7 @@ impl UIObject for EmojiPicker {
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("EmojiPicker::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.dc_key, Default::default())],
-        );
+        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
     }
 }
 

@@ -33,7 +33,7 @@ use crate::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::{i18n::I18nBabelFish, unixtime},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -443,7 +443,6 @@ impl Window {
 
     #[instrument(target = "ui::win")]
     pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
-        let timest = unixtime();
         let virt_size = self.screen_size.get() / self.scale.get();
         let rect = Rectangle::from([0., 0., virt_size.w, virt_size.h]);
 
@@ -466,7 +465,7 @@ impl Window {
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, draw_calls);
     }
 
     async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {

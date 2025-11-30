@@ -28,7 +28,6 @@ use crate::{
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
-    util::unixtime,
     ExecutorPtr,
 };
 
@@ -122,7 +121,6 @@ impl Image {
 
     #[instrument(target = "ui::button")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -130,7 +128,7 @@ impl Image {
             error!(target: "ui::image", "Image failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
     /// Called whenever any property changes.
@@ -219,11 +217,7 @@ impl UIObject for Image {
 impl Drop for Image {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("Image::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.dc_key, Default::default())],
-        );
+        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
     }
 }
 

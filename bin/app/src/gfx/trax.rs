@@ -51,14 +51,12 @@ impl Trax {
         &mut self,
         epoch: EpochIndex,
         batch_id: BatchGuardId,
-        timest: u64,
         dcs: &Vec<(u64, DrawCall)>,
     ) {
-        d!("put_dcs({epoch}, {batch_id}, {timest}, {dcs:?})");
+        d!("put_dcs({epoch}, {batch_id}, {dcs:?})");
         0u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         batch_id.encode(&mut self.buf).unwrap();
-        timest.encode(&mut self.buf).unwrap();
         dcs.encode(&mut self.buf).unwrap();
     }
 

@@ -26,7 +26,6 @@ use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
-    util::unixtime,
     ExecutorPtr,
 };
 
@@ -86,7 +85,6 @@ impl VectorArt {
 
     #[instrument(target = "ui::vector_art")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
@@ -94,7 +92,7 @@ impl VectorArt {
             error!(target: "ui:vector_art", "Mesh failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
     fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
@@ -172,11 +170,7 @@ impl UIObject for VectorArt {
 impl Drop for VectorArt {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("VectorArt::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.dc_key, Default::default())],
-        );
+        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
     }
 }
 

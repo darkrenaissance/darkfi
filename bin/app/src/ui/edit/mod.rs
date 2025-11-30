@@ -47,7 +47,6 @@ use crate::{
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text2::{self, Editor},
-    util::unixtime,
     ExecutorPtr,
 };
 
@@ -1013,14 +1012,12 @@ impl BaseEdit {
 
     #[instrument(target = "ui::edit")]
     async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let timest = unixtime();
         let draw_update = self.make_draw_calls().await;
-        self.render_api.replace_draw_calls(atom.batch_id, timest, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
     }
 
     /// Called when scroll changes. Moves content up or down. Nothing more.
     async fn redraw_scroll(&self, batch_id: BatchGuardId) {
-        let timest = unixtime();
         let rect = self.rect.get();
 
         let mut content_instrs = vec![DrawInstruction::ApplyView(rect.with_zero_pos())];
@@ -1042,18 +1039,16 @@ impl BaseEdit {
                 "chatedit_content",
             ),
         )];
-        self.render_api.replace_draw_calls(batch_id, timest, draw_main);
+        self.render_api.replace_draw_calls(batch_id, draw_main);
     }
 
     async fn redraw_cursor(&self, batch_id: BatchGuardId) {
-        let timest = unixtime();
         let instrs = self.get_cursor_instrs().await;
         let draw_calls = vec![(self.cursor_dc_key, DrawCall::new(instrs, vec![], 2, "curs_redr"))];
-        self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
+        self.render_api.replace_draw_calls(batch_id, draw_calls);
     }
 
     async fn redraw_select(&self, batch_id: BatchGuardId) {
-        let timest = unixtime();
         let sel_instrs = self.regen_select_mesh().await;
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
         let draw_calls = vec![
@@ -1063,7 +1058,7 @@ impl BaseEdit {
                 DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
             ),
         ];
-        self.render_api.replace_draw_calls(batch_id, timest, draw_calls);
+        self.render_api.replace_draw_calls(batch_id, draw_calls);
     }
 
     async fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
@@ -1357,11 +1352,8 @@ impl BaseEdit {
 impl Drop for BaseEdit {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("BaseEdit::drop"));
-        self.render_api.replace_draw_calls(
-            atom.batch_id,
-            unixtime(),
-            vec![(self.text_dc_key, Default::default())],
-        );
+        self.render_api
+            .replace_draw_calls(atom.batch_id, vec![(self.text_dc_key, Default::default())]);
     }
 }
 
