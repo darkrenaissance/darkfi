@@ -491,47 +491,22 @@ pub fn generate_mining_vms(
     Ok(vms)
 }
 
-/// Auxiliary function to mine provided header using provided RandomX
-/// VM (single thread).
-fn randomx_vm_mine(
-    vm: &RandomXVM,
-    target: &BigUint,
-    header: &mut Header,
-    stop_signal: &Receiver<()>,
-) -> Result<()> {
-    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Mining started!");
-    let mining_start = Instant::now();
-    loop {
-        // Check if stop signal is received
-        if stop_signal.is_full() {
-            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Stop signal received, exiting");
-            return Err(Error::MinerTaskStopped);
-        }
-
-        let out_hash = vm.calculate_hash(header.hash().inner())?;
-        let out_hash = BigUint::from_bytes_le(&out_hash);
-        if &out_hash <= target {
-            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Found block header using nonce {}", header.nonce);
-            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Block header hash {}", header.hash());
-            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
-            break;
-        }
-
-        header.nonce += 1;
-    }
-    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Completed mining in {:?}", mining_start.elapsed());
-    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Mined header: {header:?}");
-    Ok(())
-}
-
-/// Auxiliary function to mine provided header using provided RandomX
-/// VMs corresponding to a multiple threads setup.
-fn randomx_vms_mine(
+/// Mine provided header, based on provided PoW module next mine target,
+/// using provided RandomX VMs setup.
+pub fn mine_block(
     vms: &[Arc<RandomXVM>],
     target: &BigUint,
     header: &mut Header,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
+    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
+
+    // Check VMs were provided
+    if vms.is_empty() {
+        error!(target: "validator::pow::mine_block", "[MINER] No VMs were provided!");
+        return Err(Error::MinerTaskStopped)
+    }
+
     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Initializing mining threads...");
     let mut handles = Vec::with_capacity(vms.len());
     let found_header = Arc::new(AtomicBool::new(false));
@@ -612,32 +587,6 @@ fn randomx_vms_mine(
     header.nonce = found_nonce.load(Ordering::SeqCst);
     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Mined header: {header:?}");
     Ok(())
-}
-
-/// Mine provided header, based on provided PoW module next mine target,
-/// using provided RandomX VMs setup.
-pub fn mine_block(
-    vms: &[Arc<RandomXVM>],
-    target: &BigUint,
-    header: &mut Header,
-    stop_signal: &Receiver<()>,
-) -> Result<()> {
-    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
-
-    // Check if stop signal is received
-    if stop_signal.is_full() {
-        debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, exiting");
-        return Err(Error::MinerTaskStopped);
-    }
-
-    match vms.len() {
-        0 => {
-            error!(target: "validator::pow::mine_block", "[MINER] No VMs were provided!");
-            Err(Error::MinerTaskStopped)
-        }
-        1 => randomx_vm_mine(&vms[0], target, header, stop_signal),
-        _ => randomx_vms_mine(vms, target, header, stop_signal),
-    }
 }
 
 #[cfg(test)]
