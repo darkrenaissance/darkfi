@@ -254,8 +254,12 @@ impl Fu {
             match subscription.receive().await {
                 JsonResult::Notification(n) => {
                     let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
-                    let info =
-                        params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+                    let info = params.get("info");
+                    if info.is_none() {
+                        continue
+                    }
+                    let info = info.unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+
                     let hash = match info.get("hash") {
                         Some(hash_value) => hash_value.get::<String>().unwrap(),
                         None => continue,
@@ -725,8 +729,11 @@ impl Fu {
             match subscription.receive().await {
                 JsonResult::Notification(n) => {
                     let params = n.params.get::<HashMap<String, JsonValue>>().unwrap();
-                    let info =
-                        params.get("info").unwrap().get::<HashMap<String, JsonValue>>().unwrap();
+                    let info = params.get("info");
+                    if info.is_none() {
+                        continue
+                    }
+                    let info = info.unwrap().get::<HashMap<String, JsonValue>>().unwrap();
                     match params.get("event").unwrap().get::<String>().unwrap().as_str() {
                         "download_started" |
                         "metadata_download_completed" |
