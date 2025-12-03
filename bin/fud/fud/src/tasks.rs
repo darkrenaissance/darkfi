@@ -50,6 +50,7 @@ pub async fn handle_dht_events(fud: Arc<Fud>) -> Result<()> {
             }
             DhtEvent::BootstrapCompleted => {
                 let _ = fud.init().await;
+                notify_event!(fud, Ready);
             }
             _ => {}
         }

@@ -94,6 +94,7 @@ pub struct SeedersFound {
 
 #[derive(Clone, Debug)]
 pub enum FudEvent {
+    Ready,
     DownloadStarted(DownloadStarted),
     ChunkDownloadCompleted(ChunkDownloadCompleted),
     MetadataDownloadCompleted(MetadataDownloadCompleted),
@@ -217,6 +218,7 @@ impl From<SeedersFound> for JsonValue {
 impl From<FudEvent> for JsonValue {
     fn from(event: FudEvent) -> JsonValue {
         match event {
+            FudEvent::Ready => json_map([("event", json_str("ready"))]),
             FudEvent::DownloadStarted(info) => {
                 json_map([("event", json_str("download_started")), ("info", info.into())])
             }
@@ -280,6 +282,13 @@ macro_rules! notify_event {
                 hash: $resource.hash,
                 resource: $resource.clone(),
             }))
+            .await;
+    };
+    // This is for `FudEvent`s with no fields
+    ($fud:expr, $event:ident) => {
+        $fud
+            .event_publisher
+            .notify(FudEvent::$event)
             .await;
     };
 }
