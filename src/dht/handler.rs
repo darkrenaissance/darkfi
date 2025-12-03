@@ -37,7 +37,7 @@ pub trait DhtHandler: Send + Sync + Sized {
     fn dht(&self) -> Arc<Dht<Self>>;
 
     /// Get our own node
-    async fn node(&self) -> Self::Node;
+    async fn node(&self) -> Result<Self::Node>;
 
     /// Send PING request, which is used to know the node data of a peer
     /// (and most importantly, its ID/key in the DHT keyspace)

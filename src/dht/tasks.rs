@@ -182,6 +182,10 @@ pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
         let (node, channel) = dht.add_node_rx.recv().await.unwrap();
 
         let self_node = handler.node().await;
+        if self_node.is_err() {
+            continue;
+        }
+        let self_node = self_node.unwrap();
 
         let bucket_index = dht.get_bucket_index(&self_node.id(), &node.id()).await;
         let buckets_lock = dht.buckets.clone();

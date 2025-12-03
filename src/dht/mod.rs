@@ -305,7 +305,7 @@ impl<H: DhtHandler> Dht<H> {
         value: &H::Value,
         message: &M,
     ) -> Result<()> {
-        let self_node = self.handler().await.node().await;
+        let self_node = self.handler().await.node().await?;
         if self_node.addresses().is_empty() {
             return Err(().into()); // TODO
         }
@@ -326,19 +326,25 @@ impl<H: DhtHandler> Dht<H> {
 
     /// Lookup our own node id
     pub async fn bootstrap(&self) {
+        let self_node = self.handler().await.node().await;
+        if self_node.is_err() {
+            return;
+        }
+        let self_node = self_node.unwrap();
+
         self.set_bootstrapped(true).await;
 
         info!(target: "dht::bootstrap()", "[DHT] Bootstrapping");
         self.event_publisher.notify(DhtEvent::BootstrapStarted).await;
 
-        let self_node_id = self.handler().await.node().await.id();
-        let nodes = self.lookup_nodes(&self_node_id).await;
+        let _nodes = self.lookup_nodes(&self_node.id()).await;
 
-        if nodes.is_empty() {
-            self.set_bootstrapped(false).await;
-        } else {
-            self.event_publisher.notify(DhtEvent::BootstrapCompleted).await;
-        }
+        // if nodes.is_empty() {
+        //     self.set_bootstrapped(false).await;
+        // } else {
+        // }
+
+        self.event_publisher.notify(DhtEvent::BootstrapCompleted).await;
     }
 
     // TODO: Optimize this
@@ -351,7 +357,11 @@ impl<H: DhtHandler> Dht<H> {
         }
 
         // Send keys that are closer to this node than we are
-        let self_id = self.handler().await.node().await.id();
+        let self_node = self.handler().await.node().await;
+        if self_node.is_err() {
+            return;
+        }
+        let self_id = self_node.unwrap().id();
         for (key, value) in self.hash_table.read().await.iter() {
             let node_distance = BigUint::from_bytes_be(&self.distance(key, &node.id()));
             let self_distance = BigUint::from_bytes_be(&self.distance(key, &self_id));
@@ -375,7 +385,10 @@ impl<H: DhtHandler> Dht<H> {
     pub async fn remove_node(&self, node_id: &blake3::Hash) {
         let handler = self.handler().await;
         let self_node = handler.node().await;
-        let bucket_index = handler.dht().get_bucket_index(&self_node.id(), node_id).await;
+        if self_node.is_err() {
+            return;
+        }
+        let bucket_index = handler.dht().get_bucket_index(&self_node.unwrap().id(), node_id).await;
         let buckets_lock = handler.dht().buckets.clone();
         let mut buckets = buckets_lock.write().await;
         let bucket = &mut buckets[bucket_index];
@@ -550,10 +563,12 @@ impl<H: DhtHandler> Dht<H> {
                         .await;
 
                     // Remove our own node and duplicates
-                    let self_id = self.handler().await.node().await.id();
-                    nodes.retain(|node: &H::Node| {
-                        node.id() != self_id && seen_nodes.insert(node.id())
-                    });
+                    if let Ok(self_node) = self.handler().await.node().await {
+                        let self_id = self_node.id();
+                        nodes.retain(|node: &H::Node| {
+                            node.id() != self_id && seen_nodes.insert(node.id())
+                        });
+                    }
 
                     // Add new nodes to the list of nodes to visit
                     nodes_to_visit.extend(nodes.clone());
