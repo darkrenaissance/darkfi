@@ -33,9 +33,7 @@ use darkfi::{
         settings::RpcSettings,
     },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    validator::{
-        consensus::Fork, utils::best_fork_index, Validator, ValidatorConfig, ValidatorPtr,
-    },
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -111,13 +109,6 @@ impl DarkfiNode {
             mm_rpc_connections: Mutex::new(HashSet::new()),
             powrewardv1_zk,
         }))
-    }
-
-    /// Auxiliary function to grab best current fork.
-    pub async fn best_current_fork(&self) -> Result<Fork> {
-        let forks = self.validator.consensus.forks.read().await;
-        let index = best_fork_index(&forks)?;
-        forks[index].full_clone()
     }
 }
 

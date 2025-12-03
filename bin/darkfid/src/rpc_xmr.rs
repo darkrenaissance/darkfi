@@ -231,7 +231,7 @@ impl DarkfiNode {
         // multiple times and potentially missing a job. The lock is
         // released when this function exits.
         let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
-        let mut extended_fork = match self.best_current_fork().await {
+        let mut extended_fork = match self.validator.best_current_fork().await {
             Ok(f) => f,
             Err(e) => {
                 error!(

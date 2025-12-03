@@ -17,7 +17,6 @@
  */
 
 use std::{
-    collections::VecDeque,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -407,10 +406,14 @@ impl PoWModule {
             &self.darkfi_rx_keys.0
         };
 
+        // Generate the RandomX VMs for the key
+        let vms = generate_mining_vms(randomx_key, threads, stop_signal)?;
+
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
-        mine_block(randomx_key, &target, header, threads, stop_signal)
+        // Mine the block
+        mine_block(&vms, &target, header, stop_signal)
     }
 }
 
@@ -433,146 +436,145 @@ fn get_mining_flags() -> RandomXFlags {
     RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM
 }
 
-/// Auxiliary function to mine provided header using a single thread.
-fn single_thread_mine(
+/// Auxiliary function to generate mining VMs for provided RandomX key.
+pub fn generate_mining_vms(
     input: &HeaderHash,
+    threads: usize,
+    stop_signal: &Receiver<()>,
+) -> Result<Vec<Arc<RandomXVM>>> {
+    debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX cache and dataset...");
+    debug!(target: "validator::pow::generate_mining_vms", "[MINER] PoW input: {input}");
+    let setup_start = Instant::now();
+    let ds_start = Instant::now();
+    let flags = get_mining_flags();
+    let cache = RandomXCache::new(flags, &input.inner()[..])?;
+    let dataset_item_count = RandomXDataset::count()?;
+
+    // Single thread mining VM
+    if threads == 1 {
+        let dataset = RandomXDataset::new_init(flags, cache, 0, dataset_item_count)?;
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX cache and dataset: {:?}", ds_start.elapsed());
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX VM...");
+        let vm_start = Instant::now();
+        let vm = Arc::new(RandomXVM::new(flags, None, Some(dataset))?);
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX VM in {:?}", vm_start.elapsed());
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Setup time: {:?}", setup_start.elapsed());
+        return Ok(vec![vm])
+    }
+
+    // Multi thread mining VMs
+    let dataset = RandomXDataset::new(flags, cache, dataset_item_count)?;
+    debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX cache and dataset: {:?}", ds_start.elapsed());
+    let mut vms = Vec::with_capacity(threads);
+    let threads_u32 = threads as u32;
+    for t in 0..threads_u32 {
+        // Check if stop signal is received
+        if stop_signal.is_full() {
+            debug!(target: "validator::pow::generate_mining_vms", "[MINER] Stop signal received, exiting");
+            return Err(Error::MinerTaskStopped);
+        }
+
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX dataset for thread #{t}...");
+        let ds_start = Instant::now();
+        let a = (dataset_item_count * t) / threads_u32;
+        let b = (dataset_item_count * (t + 1)) / threads_u32;
+        let dataset = dataset.subset_init(a, b - a);
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX dataset for thread #{t} in {:?}",
+            ds_start.elapsed()
+        );
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX VM #{t}...");
+        let vm_start = Instant::now();
+        vms.push(Arc::new(RandomXVM::new(flags, None, Some(dataset))?));
+        debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX VM #{t} in {:?}", vm_start.elapsed());
+    }
+    debug!(target: "validator::pow::generate_mining_vms", "[MINER] Setup time: {:?}", setup_start.elapsed());
+    Ok(vms)
+}
+
+/// Auxiliary function to mine provided header using provided RandomX
+/// VM (single thread).
+fn randomx_vm_mine(
+    vm: &RandomXVM,
     target: &BigUint,
     header: &mut Header,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Initializing RandomX cache and dataset...");
-    let setup_start = Instant::now();
-    let flags = get_mining_flags();
-    let cache = RandomXCache::new(flags, &input.inner()[..])?;
-    let dataset_item_count = RandomXDataset::count()?;
-    let dataset = RandomXDataset::new_init(flags, cache, 0, dataset_item_count)?;
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Setup time: {:?}", setup_start.elapsed());
-
-    // Check if stop signal is received
-    if stop_signal.is_full() {
-        debug!(target: "validator::pow::single_thread_mine", "[MINER] Stop signal received, exiting");
-        return Err(Error::MinerTaskStopped);
-    }
-
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Initializing RandomX VM...");
-    let vm_start = Instant::now();
-    let vm = RandomXVM::new(flags, None, Some(dataset))?;
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Initialized RandomX VM in {:?}", vm_start.elapsed());
-
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Mining started!");
+    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Mining started!");
     let mining_start = Instant::now();
     loop {
         // Check if stop signal is received
         if stop_signal.is_full() {
-            debug!(target: "validator::pow::single_thread_mine", "[MINER] Stop signal received, exiting");
+            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Stop signal received, exiting");
             return Err(Error::MinerTaskStopped);
         }
 
         let out_hash = vm.calculate_hash(header.hash().inner())?;
         let out_hash = BigUint::from_bytes_le(&out_hash);
         if &out_hash <= target {
-            debug!(target: "validator::pow::single_thread_mine", "[MINER] Found block header using nonce {}", header.nonce);
-            debug!(target: "validator::pow::single_thread_mine", "[MINER] Block header hash {}", header.hash());
-            debug!(target: "validator::pow::single_thread_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
+            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Found block header using nonce {}", header.nonce);
+            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Block header hash {}", header.hash());
+            debug!(target: "validator::pow::randomx_vm_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
             break;
         }
 
         header.nonce += 1;
     }
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Completed mining in {:?}", mining_start.elapsed());
-    debug!(target: "validator::pow::single_thread_mine", "[MINER] Mined header: {header:?}");
+    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Completed mining in {:?}", mining_start.elapsed());
+    debug!(target: "validator::pow::randomx_vm_mine", "[MINER] Mined header: {header:?}");
     Ok(())
 }
 
-/// Auxiliary function to mine provided header using a multiple threads.
-fn multi_thread_mine(
-    input: &HeaderHash,
+/// Auxiliary function to mine provided header using provided RandomX
+/// VMs corresponding to a multiple threads setup.
+fn randomx_vms_mine(
+    vms: &[Arc<RandomXVM>],
     target: &BigUint,
     header: &mut Header,
-    threads: usize,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
-    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initializing RandomX cache and dataset...");
-    let setup_start = Instant::now();
-    let flags = get_mining_flags();
-    let cache = RandomXCache::new(flags, &input.inner()[..])?;
-    let dataset_item_count = RandomXDataset::count()?;
-    let dataset = RandomXDataset::new(flags, cache, dataset_item_count)?;
-    let mut subsets = VecDeque::with_capacity(threads);
-
-    // Multithreaded dataset init
-    let threads_u32 = threads as u32;
-    for t in 0..threads_u32 {
-        // Check if stop signal is received
-        if stop_signal.is_full() {
-            debug!(target: "validator::pow::multi_thread_mine", "[MINER] Stop signal received, exiting");
-            return Err(Error::MinerTaskStopped);
-        }
-
-        debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initializing RandomX dataset for thread #{t}...");
-        let ds_start = Instant::now();
-        let a = (dataset_item_count * t) / threads_u32;
-        let b = (dataset_item_count * (t + 1)) / threads_u32;
-        subsets.push_back(dataset.subset_init(a, b - a));
-        debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initialized RandomX dataset for thread #{t} in {:?}",
-            ds_start.elapsed()
-        );
-    }
-    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Setup time: {:?}", setup_start.elapsed());
-
-    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initializing mining threads...");
-    let mut handles = Vec::with_capacity(threads);
+    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Initializing mining threads...");
+    let mut handles = Vec::with_capacity(vms.len());
     let found_header = Arc::new(AtomicBool::new(false));
     let found_nonce = Arc::new(AtomicU64::new(0));
-    let threads_u64 = threads as u64;
+    let threads = vms.len() as u64;
     let mining_start = Instant::now();
-    for t in 0..threads_u64 {
+    for t in 0..threads {
         // Check if stop signal is received
         if stop_signal.is_full() {
-            debug!(target: "validator::pow::multi_thread_mine", "[MINER] Stop signal received, threads creation loop exiting");
+            debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Stop signal received, threads creation loop exiting");
             break
         }
 
         if found_header.load(Ordering::SeqCst) {
-            debug!(target: "validator::pow::multi_thread_mine", "[MINER] Block header found, threads creation loop exiting");
+            debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Block header found, threads creation loop exiting");
             break
         }
 
+        let vm = vms[t as usize].clone();
         let target = target.clone();
         let mut thread_header = header.clone();
         thread_header.nonce = t;
-        let found_header = Arc::clone(&found_header);
-        let found_nonce = Arc::clone(&found_nonce);
-        let dataset = subsets.pop_front().unwrap();
+        let found_header = found_header.clone();
+        let found_nonce = found_nonce.clone();
         let stop_signal = stop_signal.clone();
 
         handles.push(thread::spawn(move || {
-            debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initializing RandomX VM #{t}...");
-            let vm_start = Instant::now();
-            let vm = match RandomXVM::new(flags, None, Some(dataset)) {
-                Ok(vm) => vm,
-                Err(e) => {
-                    error!(target: "validator::pow::multi_thread_mine", "[MINER] Initialized RandomX VM #{t} failed: {e}");
-                    return
-                }
-            };
-            debug!(target: "validator::pow::multi_thread_mine", "[MINER] Initialized RandomX VM #{t} in {:?}", vm_start.elapsed());
             loop {
                 // Check if stop signal was received
                 if stop_signal.is_full() {
-                    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Stop signal received, thread #{t} exiting");
+                    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Stop signal received, thread #{t} exiting");
                     break
                 }
 
                 if found_header.load(Ordering::SeqCst) {
-                    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Block header found, thread #{t} exiting");
+                    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Block header found, thread #{t} exiting");
                     break;
                 }
 
                 let out_hash = match vm.calculate_hash(thread_header.hash().inner()) {
                     Ok(hash) => hash,
                     Err(e) => {
-                        error!(target: "validator::pow::multi_thread_mine", "[MINER] Calculating hash in thread #{t} failed: {e}");
+                        error!(target: "validator::pow::randomx_vms_mine", "[MINER] Calculating hash in thread #{t} failed: {e}");
                         break
                     }
                 };
@@ -580,17 +582,17 @@ fn multi_thread_mine(
                 if out_hash <= target {
                     found_header.store(true, Ordering::SeqCst);
                     found_nonce.store(thread_header.nonce, Ordering::SeqCst);
-                    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Thread #{t} found block header using nonce {}",
+                    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Thread #{t} found block header using nonce {}",
                         thread_header.nonce
                     );
-                    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Block header hash {}", thread_header.hash());
-                    debug!(target: "validator::pow::multi_thread_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
+                    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Block header hash {}", thread_header.hash());
+                    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
                     break;
                 }
 
                 // This means thread 0 will use nonces, 0, 4, 8, ...
                 // and thread 1 will use nonces, 1, 5, 9, ...
-                thread_header.nonce += threads_u64;
+                thread_header.nonce += threads;
             }
         }));
     }
@@ -602,26 +604,25 @@ fn multi_thread_mine(
 
     // Check if stop signal is received
     if stop_signal.is_full() {
-        debug!(target: "validator::pow::multi_thread_mine", "[MINER] Stop signal received, exiting");
+        debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Stop signal received, exiting");
         return Err(Error::MinerTaskStopped);
     }
 
-    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Completed mining in {:?}", mining_start.elapsed());
+    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Completed mining in {:?}", mining_start.elapsed());
     header.nonce = found_nonce.load(Ordering::SeqCst);
-    debug!(target: "validator::pow::multi_thread_mine", "[MINER] Mined header: {header:?}");
+    debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Mined header: {header:?}");
     Ok(())
 }
 
-/// Mine provided header, based on provided PoW module next mine target.
+/// Mine provided header, based on provided PoW module next mine target,
+/// using provided RandomX VMs setup.
 pub fn mine_block(
-    input: &HeaderHash,
+    vms: &[Arc<RandomXVM>],
     target: &BigUint,
     header: &mut Header,
-    threads: usize,
     stop_signal: &Receiver<()>,
 ) -> Result<()> {
     debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{target:064x}");
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {input}");
 
     // Check if stop signal is received
     if stop_signal.is_full() {
@@ -629,13 +630,13 @@ pub fn mine_block(
         return Err(Error::MinerTaskStopped);
     }
 
-    match threads {
+    match vms.len() {
         0 => {
-            error!(target: "validator::pow::mine_block", "[MINER] Can't use 0 threads!");
+            error!(target: "validator::pow::mine_block", "[MINER] No VMs were provided!");
             Err(Error::MinerTaskStopped)
         }
-        1 => single_thread_mine(input, target, header, stop_signal),
-        _ => multi_thread_mine(input, target, header, threads, stop_signal),
+        1 => randomx_vm_mine(&vms[0], target, header, stop_signal),
+        _ => randomx_vms_mine(vms, target, header, stop_signal),
     }
 }
 

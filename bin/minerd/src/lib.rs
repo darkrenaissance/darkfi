@@ -80,10 +80,10 @@ pub type MinerNodePtr = Arc<MinerNode>;
 pub struct MinerNode {
     /// Node configuration
     config: MinerNodeConfig,
-    /// Sender to stop miner threads
-    sender: Sender<()>,
-    /// Receiver to stop miner threads
-    stop_signal: Receiver<()>,
+    /// Sender and receiver to stop mining threads
+    mining_channel: (Sender<()>, Receiver<()>),
+    /// Sender and receiver to stop background threads
+    background_channel: (Sender<()>, Receiver<()>),
     /// JSON-RPC client to execute requests to darkfid daemon
     rpc_client: RwLock<DarkfidRpcClient>,
 }
@@ -91,40 +91,60 @@ pub struct MinerNode {
 impl MinerNode {
     pub async fn new(config: MinerNodeConfig, endpoint: Url, ex: &ExecutorPtr) -> MinerNodePtr {
         // Initialize the smol channels to send signal between the threads
-        let (sender, stop_signal) = smol::channel::bounded(1);
+        let mining_channel = smol::channel::bounded(1);
+        let background_channel = smol::channel::bounded(1);
 
         // Initialize JSON-RPC client
         let rpc_client = RwLock::new(DarkfidRpcClient::new(endpoint, ex.clone()).await);
 
-        Arc::new(Self { config, sender, stop_signal, rpc_client })
+        Arc::new(Self { config, mining_channel, background_channel, rpc_client })
     }
 
-    /// Auxiliary function to abort pending job.
-    pub async fn abort_pending(&self) {
-        // Check if a pending request is being processed
-        debug!(target: "minerd::abort_pending", "Checking if a pending job is being processed...");
-        if self.stop_signal.receiver_count() <= 1 {
-            debug!(target: "minerd::rpc", "No pending job!");
+    /// Auxiliary function to abort all pending tasks.
+    pub async fn abort(&self) {
+        self.abort_mining().await;
+        self.abort_background().await;
+    }
+
+    /// Auxiliary function to abort pending mining task.
+    pub async fn abort_mining(&self) {
+        Self::abort_task(&self.mining_channel.0, &self.mining_channel.1, "mining").await;
+    }
+
+    /// Auxiliary function to abort pending background Randomx VMs
+    /// generation task.
+    pub async fn abort_background(&self) {
+        Self::abort_task(&self.background_channel.0, &self.background_channel.1, "VMs generation")
+            .await;
+    }
+
+    /// Auxiliary function to abort pending task by signaling provided
+    /// channels.
+    async fn abort_task(sender: &Sender<()>, stop_signal: &Receiver<()>, task: &str) {
+        // Check if a pending task is being processed
+        debug!(target: "minerd::abort_task", "Checking if a pending {task} task is being processed...");
+        if stop_signal.receiver_count() <= 1 {
+            debug!(target: "minerd::abort_task", "No pending {task} task!");
             return
         }
 
-        info!(target: "minerd::abort_pending", "Pending job is in progress, sending stop signal...");
+        info!(target: "minerd::abort_task", "Pending {task} is in progress, sending stop signal...");
         // Send stop signal to worker
-        if let Err(e) = self.sender.try_send(()) {
-            error!(target: "minerd::abort_pending", "Failed to stop pending job: {e}");
+        if let Err(e) = sender.try_send(()) {
+            error!(target: "minerd::abort_task", "Failed to stop pending {task} task: {e}");
             return
         }
 
         // Wait for worker to terminate
-        info!(target: "minerd::abort_pending", "Waiting for job to terminate...");
-        while self.stop_signal.receiver_count() > 1 {
+        info!(target: "minerd::abort_task", "Waiting for {task} task to terminate...");
+        while stop_signal.receiver_count() > 1 {
             sleep(1).await;
         }
-        info!(target: "minerd::abort_pending", "Pending job terminated!");
+        info!(target: "minerd::abort_task", "Pending {task} task terminated!");
 
         // Consume channel item so its empty again
-        if let Err(e) = self.stop_signal.try_recv() {
-            error!(target: "minerd::abort_pending", "Failed to cleanup stop signal channel: {e}");
+        if let Err(e) = stop_signal.try_recv() {
+            error!(target: "minerd::abort_task", "Failed to cleanup stop signal channel: {e}");
         }
     }
 }
@@ -185,13 +205,13 @@ impl Minerd {
     pub async fn stop(&self) {
         info!(target: "minerd::Minerd::stop", "Terminating mining daemon...");
 
+        // Stop the mining node
+        info!(target: "minerd::Minerd::stop", "Stopping miner background tasks...");
+        self.node.abort().await;
+
         // Stop the polling task
         info!(target: "minerd::Minerd::stop", "Stopping polling task...");
         self.polling_task.stop().await;
-
-        // Stop the mining node
-        info!(target: "minerd::Minerd::stop", "Stopping miner threads...");
-        self.node.abort_pending().await;
 
         // Close the JSON-RPC client
         info!(target: "minerd::Minerd::stop", "Stopping JSON-RPC client...");

@@ -4318,6 +4318,7 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "num-bigint",
+ "randomx",
  "serde",
  "signal-hook",
  "signal-hook-async-std",

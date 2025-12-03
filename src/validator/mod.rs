@@ -825,6 +825,17 @@ impl Validator {
         Ok(())
     }
 
+    /// Auxiliary function to grab current RandomX keys.
+    /// If no forks exist, returns canonical keys.
+    pub async fn current_randomx_keys(&self) -> Result<(HeaderHash, HeaderHash)> {
+        self.consensus.current_randomx_keys().await
+    }
+
+    /// Auxiliary function to grab best current fork full clone.
+    pub async fn best_current_fork(&self) -> Result<Fork> {
+        self.consensus.best_current_fork().await
+    }
+
     /// Auxiliary function to retrieve current best fork next block height.
     pub async fn best_fork_next_block_height(&self) -> Result<u32> {
         let forks = self.consensus.forks.read().await;

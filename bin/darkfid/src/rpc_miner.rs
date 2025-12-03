@@ -66,6 +66,8 @@ pub struct BlockTemplate {
     pub block: BlockInfo,
     /// The base64 encoded RandomX key used
     randomx_key: String,
+    /// The base64 encoded next RandomX key used
+    next_randomx_key: String,
     /// The base64 encoded mining target used
     target: String,
     /// The signing secret for this block
@@ -73,6 +75,51 @@ pub struct BlockTemplate {
 }
 
 impl DarkfiNode {
+    // RPCAPI:
+    // Queries the validator for the current and next RandomX keys.
+    // If no forks exist, retrieves the canonical ones.
+    // Returns the current and next RandomX keys, both encoded as
+    // base64 strings.
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `String`: Current RandomX key (base64 encoded)
+    // * `String`: Current next RandomX key (base64 encoded)
+    //
+    // --> {"jsonrpc": "2.0", "method": "miner.get_current_randomx_keys", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["randomx_key", "next_randomx_key"], "id": 1}
+    pub async fn miner_get_current_randomx_keys(&self, id: u16, params: JsonValue) -> JsonResult {
+        // Verify request params
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Grab current RandomX keys
+        let (randomx_key, next_randomx_key) = match self.validator.current_randomx_keys().await {
+            Ok(keys) => keys,
+            Err(e) => {
+                error!(
+                    target: "darkfid::rpc::miner_get_current_randomx_keys",
+                    "[RPC] Retrieving current RandomX keys failed: {e}",
+                );
+                return JsonError::new(ErrorCode::InternalError, None, id).into()
+            }
+        };
+
+        // Encode them and build response
+        let response = JsonValue::Array(vec![
+            JsonValue::String(base64::encode(&serialize_async(&randomx_key).await)),
+            JsonValue::String(base64::encode(&serialize_async(&next_randomx_key).await)),
+        ]);
+
+        JsonResponse::new(response, id).into()
+    }
+
     // RPCAPI:
     // Queries the validator for the current best fork next header to
     // mine.
@@ -87,11 +134,12 @@ impl DarkfiNode {
     //
     // **Returns:**
     // * `String`: Current best fork RandomX key (base64 encoded)
+    // * `String`: Current best fork next RandomX key (base64 encoded)
     // * `String`: Current best fork mining target (base64 encoded)
     // * `String`: Current best fork next block header (base64 encoded)
     //
     // --> {"jsonrpc": "2.0", "method": "miner.get_header", "params": {"header": "hash", "recipient": "address"}, "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": ["randomx_key", "target", "header"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["randomx_key", "next_randomx_key", "target", "header"], "id": 1}
     pub async fn miner_get_header(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to miner
         if !*self.validator.synced.read().await {
@@ -176,7 +224,7 @@ impl DarkfiNode {
         // released when this function exits.
         let address_bytes = serialize_async(&(recipient, spend_hook, user_data)).await;
         let mut blocktemplates = self.blocktemplates.lock().await;
-        let mut extended_fork = match self.best_current_fork().await {
+        let mut extended_fork = match self.validator.best_current_fork().await {
             Ok(f) => f,
             Err(e) => {
                 error!(
@@ -202,6 +250,7 @@ impl DarkfiNode {
                     JsonResponse::new(
                         JsonValue::Array(vec![
                             JsonValue::String(blocktemplate.randomx_key.clone()),
+                            JsonValue::String(blocktemplate.next_randomx_key.clone()),
                             JsonValue::String(blocktemplate.target.clone()),
                             JsonValue::String(base64::encode(
                                 &serialize_async(&blocktemplate.block.header).await,
@@ -263,6 +312,11 @@ impl DarkfiNode {
             base64::encode(&serialize_async(&extended_fork.module.darkfi_rx_keys.0).await)
         };
 
+        // Grab the next RandomX key to use so miner can pregenerate
+        // mining VMs.
+        let next_randomx_key =
+            base64::encode(&serialize_async(&extended_fork.module.darkfi_rx_keys.1).await);
+
         // Convert the target
         let target = base64::encode(&target.to_bytes_le());
 
@@ -270,6 +324,7 @@ impl DarkfiNode {
         let blocktemplate = BlockTemplate {
             block,
             randomx_key: randomx_key.clone(),
+            next_randomx_key: next_randomx_key.clone(),
             target: target.clone(),
             secret,
         };
@@ -286,6 +341,7 @@ impl DarkfiNode {
 
         let response = JsonValue::Array(vec![
             JsonValue::String(randomx_key),
+            JsonValue::String(next_randomx_key),
             JsonValue::String(target),
             JsonValue::String(header),
         ]);

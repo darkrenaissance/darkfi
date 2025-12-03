@@ -448,6 +448,28 @@ impl Consensus {
         Ok(proposals)
     }
 
+    /// Auxiliary function to grab current RandomX keys.
+    /// If no forks exist, returns canonical keys.
+    pub async fn current_randomx_keys(&self) -> Result<(HeaderHash, HeaderHash)> {
+        // Grab a lock over current forks
+        let forks = self.forks.read().await;
+
+        // If no forks exist, return canonical keys
+        if forks.is_empty() {
+            return Ok(self.module.read().await.darkfi_rx_keys)
+        }
+
+        // Grab best fork keys
+        Ok(forks[best_fork_index(&forks)?].module.darkfi_rx_keys)
+    }
+
+    /// Auxiliary function to grab best current fork full clone.
+    pub async fn best_current_fork(&self) -> Result<Fork> {
+        let forks = self.forks.read().await;
+        let index = best_fork_index(&forks)?;
+        forks[index].full_clone()
+    }
+
     /// Auxiliary function to retrieve current best fork last header.
     /// If no forks exist, grab the last header from canonical.
     pub async fn best_fork_last_header(&self) -> Result<(u32, HeaderHash)> {
