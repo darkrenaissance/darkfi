@@ -248,11 +248,24 @@ impl ProtocolFud {
             info!(target: "fud::ProtocolFud::handle_fud_ping_request()", "Received PING REQUEST from {}", self.channel.display_address());
             self.fud.dht.update_channel(self.channel.info.id).await;
 
+            let self_node = self.fud.node().await;
+            if self_node.is_err() {
+                self.channel.stop().await;
+                continue
+            }
+            let state = self.fud.state.read().await;
+            if state.is_none() {
+                self.channel.stop().await;
+                continue
+            }
+
             let reply = FudPingReply {
-                node: self.fud.node().await,
+                node: self_node.unwrap(),
                 random: ping_req.random,
-                sig: self.fud.secret_key.read().await.sign(&ping_req.random.to_be_bytes()),
+                sig: state.clone().unwrap().secret_key.sign(&ping_req.random.to_be_bytes()),
             };
+            drop(state);
+
             if let Err(e) = self.channel.send(&reply).await {
                 self.fud
                     .dht

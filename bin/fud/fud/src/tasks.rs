@@ -27,7 +27,11 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::{event, event::notify_event, proto::FudAnnounce, Fud, FudEvent};
+use crate::{
+    event::{self, notify_event},
+    proto::FudAnnounce,
+    Fud, FudEvent, FudState,
+};
 
 /// Handle DHT events in fud.
 pub async fn handle_dht_events(fud: Arc<Fud>) -> Result<()> {
@@ -209,15 +213,17 @@ pub async fn announce_seed_task(fud: Arc<Fud>) -> Result<()> {
 
         info!(target: "fud::announce_seed_task()", "Announcing files...");
         for resource in seeding_resources {
-            let seeders = vec![fud.new_seeder(&resource.hash).await];
-            let _ = fud
-                .dht
-                .announce(
-                    &resource.hash,
-                    &seeders.clone(),
-                    &FudAnnounce { key: resource.hash, seeders },
-                )
-                .await;
+            if let Ok(seeder) = fud.new_seeder(&resource.hash).await {
+                let seeders = vec![seeder];
+                let _ = fud
+                    .dht
+                    .announce(
+                        &resource.hash,
+                        &seeders.clone(),
+                        &FudAnnounce { key: resource.hash, seeders },
+                    )
+                    .await;
+            }
         }
 
         info!(target: "fud::announce_seed_task()", "Pruning seeders...");
@@ -247,7 +253,12 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
             continue
         }
 
-        let block = fud.node_data.read().await.btc_block_hash;
+        let state = fud.state.read().await;
+        if state.is_none() {
+            continue
+        }
+        let block = state.clone().unwrap().node_data.btc_block_hash;
+        drop(state);
         let needs_dht_reset = match btc.block_hashes.iter().position(|b| *b == block) {
             Some(i) => i < 6,
             None => true,
@@ -306,8 +317,8 @@ pub async fn node_id_task(fud: Arc<Fud>) -> Result<()> {
         dht.reset().await;
 
         // Update our node data and our secret key
-        *fud.node_data.write().await = node_data;
-        *fud.secret_key.write().await = secret_key;
+        let mut state = fud.state.write().await;
+        *state = Some(FudState { node_data, secret_key });
 
         // DHT will be bootstrapped on the next channel connection
     }

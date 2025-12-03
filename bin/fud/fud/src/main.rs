@@ -89,11 +89,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Daemon instantiation
     let event_pub = Publisher::new();
-
     let fud: Arc<Fud> =
         Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?;
-
-    fud.start_tasks().await;
 
     info!(target: "fud", "Starting event subs task");
     let event_sub = JsonSubscriber::new("event");
@@ -134,6 +131,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::RpcServerStopped,
         ex.clone(),
     );
+
+    if let Err(e) = fud.start().await {
+        panic!("Error while starting fud: {e}");
+    }
 
     info!(target: "fud", "Starting P2P protocols");
     let registry = p2p.protocol_registry();

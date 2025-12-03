@@ -97,11 +97,16 @@ const SLED_PATH_TREE: &[u8] = b"_fud_paths";
 const SLED_FILE_SELECTION_TREE: &[u8] = b"_fud_file_selections";
 const SLED_SCRAP_TREE: &[u8] = b"_fud_scraps";
 
-pub struct Fud {
+#[derive(Clone, Debug)]
+pub struct FudState {
     /// Our own [`VerifiableNodeData`]
-    pub node_data: Arc<RwLock<VerifiableNodeData>>,
+    node_data: VerifiableNodeData,
     /// Our secret key (the public key is in `node_data`)
-    pub secret_key: Arc<RwLock<SecretKey>>,
+    secret_key: SecretKey,
+}
+
+pub struct Fud {
+    state: Arc<RwLock<Option<FudState>>>,
     /// The Geode instance
     geode: Geode,
     /// Default download directory
@@ -183,14 +188,8 @@ impl Fud {
             None => basedir.join("downloads"),
         };
 
-        // Run the PoW and generate a `VerifiableNodeData`
         let pow_settings: PowSettings = settings.pow.into();
-        let mut pow = FudPow::new(pow_settings.clone(), executor.clone());
-        if pow_settings.btc_enabled {
-            pow.bitcoin_hash_cache.update().await?; // Fetch BTC block hashes
-        }
-        let (node_data, secret_key) = pow.generate_node().await?;
-        info!(target: "fud::new()", "Your node ID: {}", hash_to_string(&node_data.id()));
+        let pow = FudPow::new(pow_settings.clone(), executor.clone());
 
         // Geode
         info!(target: "fud::new()", "Instantiating Geode instance");
@@ -205,8 +204,7 @@ impl Fud {
         let (lookup_tx, lookup_rx) = smol::channel::unbounded();
         let (verify_node_tx, verify_node_rx) = smol::channel::unbounded();
         let fud = Arc::new(Self {
-            node_data: Arc::new(RwLock::new(node_data)),
-            secret_key: Arc::new(RwLock::new(secret_key)),
+            state: Arc::new(RwLock::new(None)),
             geode,
             downloads_path,
             chunk_timeout: settings.chunk_timeout,
@@ -237,7 +235,25 @@ impl Fud {
         Ok(fud)
     }
 
-    pub async fn start_tasks(self: &Arc<Self>) {
+    /// Run the PoW and generate a `VerifiableNodeData`, then start tasks
+    pub async fn start(self: &Arc<Self>) -> Result<()> {
+        let mut pow = self.pow.write().await;
+        if pow.settings.read().await.btc_enabled {
+            pow.bitcoin_hash_cache.update().await?; // Fetch BTC block hashes
+        }
+        let (node_data, secret_key) = pow.generate_node().await?;
+        info!(target: "fud::init()", "Your node ID: {}", hash_to_string(&node_data.id()));
+        let mut state = self.state.write().await;
+        *state = Some(FudState { node_data, secret_key });
+        drop(state);
+        drop(pow);
+
+        self.start_tasks().await;
+
+        Ok(())
+    }
+
+    async fn start_tasks(self: &Arc<Self>) {
         let mut tasks = self.tasks.write().await;
         start_task!(self, "get", tasks::get_task, tasks);
         start_task!(self, "put", tasks::put_task, tasks);
@@ -322,7 +338,7 @@ impl Fud {
         info!(target: "fud::init()", "Verifying resources...");
         let resources = self.verify_resources(None).await?;
 
-        let self_node = self.node().await;
+        let self_node = self.node().await?;
 
         // Stop here if we have no external address
         if self_node.addresses.is_empty() {
@@ -331,24 +347,34 @@ impl Fud {
 
         // Add our own node as a seeder for the resources we are seeding
         for resource in &resources {
-            let self_router_items = vec![self.new_seeder(&resource.hash).await];
-            self.add_value(&resource.hash, &self_router_items).await;
+            if let Ok(seeder) = self.new_seeder(&resource.hash).await {
+                let self_router_items = vec![seeder];
+                self.add_value(&resource.hash, &self_router_items).await;
+            }
         }
 
         info!(target: "fud::init()", "Announcing resources...");
         for resource in resources {
-            let seeders = vec![self.new_seeder(&resource.hash).await];
-            let _ = self
-                .dht
-                .announce(
-                    &resource.hash,
-                    &seeders.clone(),
-                    &FudAnnounce { key: resource.hash, seeders },
-                )
-                .await;
+            if let Ok(seeder) = self.new_seeder(&resource.hash).await {
+                let seeders = vec![seeder];
+                let _ = self
+                    .dht
+                    .announce(
+                        &resource.hash,
+                        &seeders.clone(),
+                        &FudAnnounce { key: resource.hash, seeders },
+                    )
+                    .await;
+            }
         }
 
         Ok(())
+    }
+
+    /// Get a copy of the current resources
+    pub async fn resources(&self) -> HashMap<blake3::Hash, Resource> {
+        let resources = self.resources.read().await;
+        resources.clone()
     }
 
     /// Get resource path from hash using the sled db
@@ -385,19 +411,23 @@ impl Fud {
     }
 
     /// Create a new [`dht::FudSeeder`] for own node
-    pub async fn new_seeder(&self, key: &blake3::Hash) -> FudSeeder {
-        let node = self.node().await;
+    pub async fn new_seeder(&self, key: &blake3::Hash) -> Result<FudSeeder> {
+        let state = self.state.read().await;
+        if state.is_none() {
+            return Err(Error::Custom("Fud is not ready yet".to_string()))
+        }
+        let state_ = state.clone().unwrap();
+        drop(state);
+        let node = self.node().await?;
 
-        FudSeeder {
+        Ok(FudSeeder {
             key: *key,
             node: node.clone(),
-            sig: self
+            sig: state_
                 .secret_key
-                .read()
-                .await
                 .sign(&[key.as_bytes().to_vec(), serialize_async(&node).await].concat()),
             timestamp: Timestamp::current_time().inner(),
-        }
+        })
     }
 
     /// Verify if resources are complete and uncorrupted.
@@ -777,9 +807,11 @@ impl Fud {
 
             // Announce the resource if we have all chunks
             if chunked.is_complete() {
-                let seeders = vec![self.new_seeder(hash).await];
-                let self_announce = FudAnnounce { key: *hash, seeders: seeders.clone() };
-                let _ = self.dht.announce(hash, &seeders, &self_announce).await;
+                if let Ok(seeder) = self.new_seeder(hash).await {
+                    let seeders = vec![seeder];
+                    let self_announce = FudAnnounce { key: *hash, seeders: seeders.clone() };
+                    let _ = self.dht.announce(hash, &seeders, &self_announce).await;
+                }
             }
 
             // Send a DownloadCompleted event
@@ -1020,7 +1052,7 @@ impl Fud {
     /// Insert a file or directory from the file system.
     /// Called when `put()` creates a new put task.
     pub async fn insert_resource(&self, path: &PathBuf) -> Result<()> {
-        let self_node = self.node().await;
+        let self_node = self.node().await?;
 
         if self_node.addresses.is_empty() {
             return Err(Error::Custom(
@@ -1106,9 +1138,11 @@ impl Fud {
         drop(resources_write);
 
         // Announce the new resource
-        let seeders = vec![self.new_seeder(&hash).await];
-        let fud_announce = FudAnnounce { key: hash, seeders: seeders.clone() };
-        let _ = self.dht.announce(&hash, &seeders, &fud_announce).await;
+        if let Ok(seeder) = self.new_seeder(&hash).await {
+            let seeders = vec![seeder];
+            let fud_announce = FudAnnounce { key: hash, seeders: seeders.clone() };
+            let _ = self.dht.announce(&hash, &seeders, &fud_announce).await;
+        }
 
         // Send InsertCompleted event
         notify_event!(self, InsertCompleted, {

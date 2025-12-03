@@ -131,9 +131,14 @@ impl DhtHandler for Fud {
         self.dht.clone()
     }
 
-    async fn node(&self) -> FudNode {
-        FudNode {
-            data: self.node_data.read().await.clone(),
+    async fn node(&self) -> Result<FudNode> {
+        let state = self.state.read().await;
+        if state.is_none() {
+            return Err(Error::Custom("Fud is not ready yet".to_string()));
+        }
+
+        return Ok(FudNode {
+            data: state.clone().unwrap().node_data,
             addresses: self
                 .p2p
                 .clone()
@@ -144,7 +149,7 @@ impl DhtHandler for Fud {
                 .filter(|addr| !addr.to_string().contains("[::]"))
                 .cloned()
                 .collect(),
-        }
+        })
     }
 
     async fn ping(&self, channel: ChannelPtr) -> Result<FudNode> {
