@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_ARR_SIZE"],"struct":["FixedByteArray","MaxSizeVec"]};

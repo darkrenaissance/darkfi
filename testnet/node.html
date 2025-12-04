@@ -1,0 +1,576 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Running a Node - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../testnet/node.html" class="active"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../testnet/contract.html"><strong aria-hidden="true">9.</strong> Contracts</a></li><li class="chapter-item expanded "><a href="../testnet/merge-mining.html"><strong aria-hidden="true">10.</strong> Merge Mining</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/darkirc.html"><strong aria-hidden="true">11.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/darkirc/private_message.html"><strong aria-hidden="true">11.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/nodes/node-configurations.html"><strong aria-hidden="true">12.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/nodes/public-guide.html"><strong aria-hidden="true">12.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../misc/nodes/tor-guide.html"><strong aria-hidden="true">12.2.</strong> Tor Nodes</a></li><li class="chapter-item expanded "><a href="../misc/nodes/i2p-guide.html"><strong aria-hidden="true">12.3.</strong> I2p Nodes</a></li><li class="chapter-item expanded "><a href="../misc/nodes/nym-guide.html"><strong aria-hidden="true">12.4.</strong> Nym Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/network-troubleshooting.html"><strong aria-hidden="true">13.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../dev/dev.html"><strong aria-hidden="true">14.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/contrib.html"><strong aria-hidden="true">14.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/tor.html"><strong aria-hidden="true">14.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../dev/learn.html"><strong aria-hidden="true">14.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../dev/rustdoc.html"><strong aria-hidden="true">14.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../dev/native_contracts.html"><strong aria-hidden="true">14.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../dev/seminars.html"><strong aria-hidden="true">14.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../dev/bench.html"><strong aria-hidden="true">14.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/arch.html"><strong aria-hidden="true">15.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/overview.html"><strong aria-hidden="true">15.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../arch/anonymous_assets.html"><strong aria-hidden="true">15.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../arch/consensus.html"><strong aria-hidden="true">15.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../arch/tx_lifetime.html"><strong aria-hidden="true">15.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../arch/bridge.html"><strong aria-hidden="true">15.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../arch/tooling.html"><strong aria-hidden="true">15.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../arch/net/p2p-network.html"><strong aria-hidden="true">15.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../arch/services.html"><strong aria-hidden="true">15.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../arch/sc/sc.html"><strong aria-hidden="true">15.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/sc/tx-lifetime.html"><strong aria-hidden="true">15.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/dao.html"><strong aria-hidden="true">15.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../arch/dex.html"><strong aria-hidden="true">15.11.</strong> DEX</a></li><li class="chapter-item expanded "><a href="../arch/wallet.html"><strong aria-hidden="true">15.12.</strong> Wallet</a></li><li class="chapter-item expanded "><a href="../arch/chat.html"><strong aria-hidden="true">15.13.</strong> Chat</a></li></ol></li><li class="chapter-item expanded "><a href="../zkas/index.html"><strong aria-hidden="true">16.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/writing-zk-proofs.html"><strong aria-hidden="true">16.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../zkas/bincode.html"><strong aria-hidden="true">16.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../zkas/zkvm.html"><strong aria-hidden="true">16.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../zkas/examples.html"><strong aria-hidden="true">16.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/examples/voting.html"><strong aria-hidden="true">16.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../zkas/examples/sapling.html"><strong aria-hidden="true">16.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../clients/clients.html"><strong aria-hidden="true">17.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">17.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../crypto/fft.html"><strong aria-hidden="true">18.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../crypto/zk_explainer.html"><strong aria-hidden="true">19.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../crypto/research.html"><strong aria-hidden="true">20.</strong> Research</a></li><li class="chapter-item expanded "><a href="../crypto/rln.html"><strong aria-hidden="true">21.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../crypto/key-recovery.html"><strong aria-hidden="true">22.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../crypto/reading-maths-books.html"><strong aria-hidden="true">23.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../ui/ui.html"><strong aria-hidden="true">24.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../dep/0001.html"><strong aria-hidden="true">25.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0002.html"><strong aria-hidden="true">26.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../dep/0003.html"><strong aria-hidden="true">27.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0004.html"><strong aria-hidden="true">28.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded "><a href="../dep/0006.html"><strong aria-hidden="true">29.</strong> DEP 0006: App Identifier for Version and Verack Messages (draft)</a></li><li class="chapter-item expanded "><a href="../dep/0007.html"><strong aria-hidden="true">30.</strong> DEP 0007: Network profiles (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../spec/notation.html"><strong aria-hidden="true">31.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../spec/concepts.html"><strong aria-hidden="true">32.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/crypto-schemes.html"><strong aria-hidden="true">33.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">34.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/money.html"><strong aria-hidden="true">34.1.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/model.html"><strong aria-hidden="true">34.1.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/money/scheme.html"><strong aria-hidden="true">34.1.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/dao/dao.html"><strong aria-hidden="true">34.2.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/concepts.html"><strong aria-hidden="true">34.2.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/model.html"><strong aria-hidden="true">34.2.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/scheme.html"><strong aria-hidden="true">34.2.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/deploy/deploy.html"><strong aria-hidden="true">34.3.</strong> Deployooor</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/deploy/concepts.html"><strong aria-hidden="true">34.3.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/deploy/scheme.html"><strong aria-hidden="true">34.3.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/vesting/vesting.html"><strong aria-hidden="true">34.4.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../learn/dchat/dchat.html"><strong aria-hidden="true">35.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">36.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">36.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">36.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">36.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/settings.html"><strong aria-hidden="true">36.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">36.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">36.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">36.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">37.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">37.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">37.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">37.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">37.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">37.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">37.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">37.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">37.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">37.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">38.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">38.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">38.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">39.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">39.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">39.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">39.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../misc/vanityaddr.html"><strong aria-hidden="true">40.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/specification.html"><strong aria-hidden="true">41.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../misc/tau.html"><strong aria-hidden="true">42.</strong> tau</a></li><li class="chapter-item expanded "><a href="../misc/event_graph/event_graph.html"><strong aria-hidden="true">43.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/event_graph/network_protocol.html"><strong aria-hidden="true">43.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/dnetview.html"><strong aria-hidden="true">44.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">45.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zero2darkfi/darkmap.html"><strong aria-hidden="true">45.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/faq.html"><strong aria-hidden="true">46.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="../glossary/glossary.html"><strong aria-hidden="true">47.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="compiling-and-running-a-node"><a class="header" href="#compiling-and-running-a-node">Compiling and Running a Node</a></h1>
+<p><strong>DISCLAIMER: This is a work in progress and functionalities may not be
+available on the current deployed testnet as of 22-May-2025.</strong></p>
+<p>Please read the whole document first before executing commands, to
+understand all the steps required and how each component operates.
+Unless instructed otherwise, each daemon runs on its own shell, so don't
+stop a running one to start another.</p>
+<p>Each command to execute will be inside a codeblock, on its first line,
+marked by the user <code>$</code> symbol, followed by the expected output. For
+longer command outputs, some lines will be emmited to keep the guide
+simple.</p>
+<p>We also strongly suggest to first execute next guide steps on a
+<a href="#local-deployment">local environment</a> to become familiar with
+each command, before broadcasting transactions to the actual network.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>This tutorial will cover the three DarkFi blockchain components and
+their current features. The components covered are:</p>
+<ul>
+<li><code>darkfid</code> is the DarkFi fullnode. It validates blockchain transactions
+and stays connected to the p2p network. </li>
+<li><code>drk</code> is a CLI wallet. It provides an interface to smart contracts such
+as Money and DAO, manages our keys and coins, and scans the blockchain
+to update our balances.</li>
+<li><code>minerd</code> is the DarkFi mining daemon. Connects to <code>darkfid</code> over RPC,
+and requests new block headers to mine.</li>
+</ul>
+<p>The config files for all three daemons are sectioned into three parts,
+each marked <code>[network_config]</code>. The sections look like this:</p>
+<ul>
+<li><code>[network_config.&quot;testnet&quot;]</code></li>
+<li><code>[network_config.&quot;mainnet&quot;]</code></li>
+<li><code>[network_config.&quot;localnet&quot;]</code></li>
+</ul>
+<p>At the top of each daemon config file, we can modify the network being
+used by changing the following line:</p>
+<pre><code class="language-toml"># Blockchain network to use
+network = &quot;testnet&quot;
+</code></pre>
+<p>This enables us to configure the daemons for different contexts, namely
+mainnet, testnet and localnet. Mainnet is not active yet. Localnet can
+be setup by following the instructions <a href="#local-deployment">here</a>. The
+rest of this tutorial assumes we are setting up a testnet node.</p>
+<h2 id="compiling"><a class="header" href="#compiling">Compiling</a></h2>
+<p>Since this is still an early phase, we will not be installing any of
+the software system-wide. Instead, we'll be running all the commands
+from the git repository, so we're able to easily pull any necessary
+updates.</p>
+<p>Refer to the main <a href="../index.html#build">DarkFi</a> page for instructions
+on how to install Rust and necessary deps. Skip last step of the build
+process, as you don't need to compile all binaries of the project.</p>
+<p>Once you have the repository in place, and everything is installed, we
+can compile the <code>darkfid</code> node and the <code>drk</code> wallet CLI:</p>
+<pre><code class="language-shell">$ make darkfid drk
+
+...
+make -C bin/darkfid \
+        PREFIX=&quot;/home/anon/.cargo&quot; \
+        CARGO=&quot;cargo&quot; \
+        RUST_TARGET=&quot;x86_64-unknown-linux-gnu&quot; \
+        RUSTFLAGS=&quot;&quot;
+make[1]: Entering directory '/home/anon/darkfi/bin/darkfid'
+RUSTFLAGS=&quot;&quot; cargo build --target=x86_64-unknown-linux-gnu --release --package darkfid
+...
+   Compiling darkfid v0.5.0 (/home/anon/darkfi/bin/darkfid)
+    Finished `release` profile [optimized] target(s) in 4m 19s
+cp -f ../../target/x86_64-unknown-linux-gnu/release/darkfid darkfid
+cp -f ../../target/x86_64-unknown-linux-gnu/release/darkfid ../../darkfid
+make[1]: Leaving directory '/home/anon/darkfi/bin/darkfid'
+make -C bin/drk \
+        PREFIX=&quot;/home/anon/.cargo&quot; \
+        CARGO=&quot;cargo&quot; \
+        RUST_TARGET=&quot;x86_64-unknown-linux-gnu&quot; \
+        RUSTFLAGS=&quot;&quot;
+make[1]: Entering directory '/home/anon/darkfi/bin/drk'
+RUSTFLAGS=&quot;&quot; cargo build --target=x86_64-unknown-linux-gnu --release --package drk
+...
+   Compiling drk v0.5.0 (/home/anon/darkfi/bin/drk)
+    Finished `release` profile [optimized] target(s) in 2m 16s
+cp -f ../../target/x86_64-unknown-linux-gnu/release/drk drk
+cp -f ../../target/x86_64-unknown-linux-gnu/release/drk ../../drk
+make[1]: Leaving directory '/home/anon/darkfi/bin/drk'
+</code></pre>
+<p>This process will now compile the node and the wallet CLI tool.
+When finished, we can begin using the network. Run <code>darkfid</code> and <code>drk</code>
+once so their config files are spawned on your system. These config files
+will be used to <code>darkfid</code> and <code>drk</code>.</p>
+<p>Please note that the exact paths may differ depending on your local setup.</p>
+<pre><code class="language-shell">$ ./darkfid
+
+Config file created in &quot;~/.config/darkfi/darkfid_config.toml&quot;. Please review it and try again.
+</code></pre>
+<pre><code class="language-shell">$ ./drk interactive
+
+Config file created in &quot;~/.config/darkfi/drk_config.toml&quot;. Please review it and try again.
+</code></pre>
+<h2 id="running"><a class="header" href="#running">Running</a></h2>
+<h3 id="using-tor"><a class="header" href="#using-tor">Using Tor</a></h3>
+<p>DarkFi supports Tor for network-level anonymity. To use the testnet over
+Tor, you'll need to make some modifications to the <code>darkfid</code> config
+file.</p>
+<p>For detailed instructions and configuration options on how to do this,
+follow the <a href="../misc/nodes/tor-guide.html#configure-network-settings">Tor Guide</a>.
+The guide is using <code>darkirc</code> port <code>25552</code> for seeds and <code>25551</code> for
+<code>torrc</code> configuration, so in your actual configuration replace them
+with <code>darkfid</code> ones, where seeds use port <code>8343</code> and <code>torrc</code> should
+use port <code>8342</code>.</p>
+<h3 id="wallet-initialization"><a class="header" href="#wallet-initialization">Wallet initialization</a></h3>
+<p>Now it's time to initialize your wallet. For this we use <code>drk</code>, a separate
+wallet CLI which is created to interface with the smart contract used
+for payments and swaps.</p>
+<p>First, you need to change the password in the <code>drk</code> config. Open
+your config file in a text editor (the default path is
+<code>~/.config/darkfi/drk_config.toml</code>). Look for the section marked
+<code>[network_config.&quot;testnet&quot;]</code> and change this line:</p>
+<pre><code class="language-toml"># Password for the wallet database
+wallet_pass = &quot;changeme&quot;
+</code></pre>
+<p>Once you've changed the default password for your testnet wallet, we
+can proceed with the wallet initialization. We simply have to
+initialize a wallet, and create a keypair. The wallet address shown in
+the outputs is examplatory and will different from the one you get.</p>
+<pre><code class="language-shell">$ ./drk wallet initialize
+
+Initializing Money Merkle tree
+Successfully initialized Merkle tree for the Money contract
+Generating alias DRK for Token: 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb
+Initializing DAO Merkle trees
+Successfully initialized Merkle trees for the DAO contract
+</code></pre>
+<pre><code class="language-shell">$ ./drk wallet keygen
+
+Generating a new keypair
+New address:
+CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+</code></pre>
+<pre><code class="language-shell">$ ./drk wallet default-address 1
+</code></pre>
+<p>The second command will print out your new DarkFi address where you
+can receive payments. Take note of it. Alternatively, you can always
+retrieve your default address using:</p>
+<pre><code class="language-shell">$ ./drk wallet address
+
+CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+</code></pre>
+<h3 id="miner"><a class="header" href="#miner">Miner</a></h3>
+<p>It's not necessary for broadcasting transactions or proceeding with the
+rest of the tutorial (<code>darkfid</code> and <code>drk</code> handle this), but if you want
+to help secure the network, you can participate in the mining process
+by running the native <code>minerd</code> mining daemon.</p>
+<p>To mine on DarkFI we need to add a recipient to <code>minerd</code> that specifies
+where the mining rewards will be minted to.</p>
+<p>First, compile it:</p>
+<pre><code class="language-shell">$ make minerd
+
+...
+make -C bin/minerd \
+        PREFIX=&quot;/home/anon/.cargo&quot; \
+        CARGO=&quot;cargo&quot; \
+        RUST_TARGET=&quot;x86_64-unknown-linux-gnu&quot; \
+        RUSTFLAGS=&quot;&quot;
+make[1]: Entering directory '/home/anon/darkfi/bin/minerd'
+RUSTFLAGS=&quot;&quot; cargo build --target=x86_64-unknown-linux-gnu --release --package minerd
+...
+  Compiling minerd v0.5.0 (/home/anon/darkfi/bin/minerd)
+    Finished `release` profile [optimized] target(s) in 1m 25s
+cp -f ../../target/x86_64-unknown-linux-gnu/release/minerd minerd
+cp -f ../../target/x86_64-unknown-linux-gnu/release/minerd ../../minerd
+make[1]: Leaving directory '/home/anon/darkfi/bin/minerd'
+</code></pre>
+<p>This process will now compile the mining daemon. When finished, run
+<code>minerd</code> once so that it spawns its config file on your system. This
+config file is used to configure <code>minerd</code>. You can define how many
+threads will be used for mining. RandomX can use up to 2080 MiB per
+thread so configure it to not consume all your system available memory.</p>
+<pre><code class="language-shell">$ ./minerd
+
+Config file created in &quot;~/.config/darkfi/minerd_config.toml&quot;. Please review it and try again.
+</code></pre>
+<p>You now have to configure  <code>minerd</code> to use your wallet address as the
+rewards recipient, when it retrieves blocks from <code>darkfid</code> to mine.</p>
+<p>Open your <code>minerd</code> config file with a text editor (the default path
+is <code>~/.config/darkfi/minerd_config.toml</code>) and replace the
+<code>YOUR_WALLET_ADDRESS_HERE</code> string with your <code>drk</code> wallet address:</p>
+<pre><code class="language-toml"># Put the address from `./drk wallet address` here
+recipient = &quot;YOUR_WALLET_ADDRESS_HERE&quot;
+</code></pre>
+<p>You can retrieve your <code>drk</code> wallet address as follows:</p>
+<pre><code class="language-shell">$ ./drk wallet address
+
+CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+</code></pre>
+<p>Note: when modifying the <code>minerd</code> config file to use with the
+testnet, be sure to change the values under the section marked
+<code>[network_config.&quot;testnet&quot;]</code> (not localnet or mainnet!).</p>
+<p>Once that's in place, you can run it again and <code>minerd</code> will start,
+polling <code>darkfid</code> for new block headers to mine.</p>
+<pre><code class="language-shell">$ ./minerd
+
+14:20:06 [INFO] Starting DarkFi Mining Daemon...
+14:20:06 [INFO] Initializing a new mining daemon...
+14:20:06 [INFO] Mining daemon initialized successfully!
+14:20:06 [INFO] Starting mining daemon...
+14:20:06 [INFO] Mining daemon started successfully!
+14:20:06 [INFO] Received new job to mine block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+14:20:06 [INFO] Mining block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+14:20:06 [INFO] Mined block header beb0...42aa with nonce: 1
+14:20:06 [INFO] Mined block header hash: 36fe...753c
+14:20:06 [INFO] Submitting solution to darkfid...
+14:20:06 [INFO] Submition result: accepted
+...
+</code></pre>
+<h3 id="darkfid"><a class="header" href="#darkfid">Darkfid</a></h3>
+<p>Now that <code>darkfid</code> configuration is in place, you can run it again and
+<code>darkfid</code> will start, create the necessary keys for validation of blocks
+and transactions, and begin syncing the blockchain. </p>
+<pre><code class="language-shell">$ ./darkfid
+
+14:23:23 [INFO] Initializing DarkFi node...
+14:23:23 [INFO] Node is configured to run with fixed PoW difficulty: 1
+14:23:23 [INFO] Initializing a Darkfi daemon...
+14:23:23 [INFO] Initializing Validator
+14:23:23 [INFO] Initializing Blockchain
+14:23:23 [INFO] Deploying native WASM contracts
+14:23:23 [INFO] Deploying Money Contract with ContractID BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
+14:23:29 [INFO] Successfully deployed Money Contract
+14:23:29 [INFO] Deploying DAO Contract with ContractID Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
+...
+</code></pre>
+<p>As its syncing, you'll see periodic messages like this:</p>
+<pre><code class="language-shell">...
+[INFO] Blocks received: 4020/4763
+...
+</code></pre>
+<p>This will give you an indication of the current progress. Keep it running,
+and you should see a <code>Blockchain synced!</code> message after some time.</p>
+<p>If you're running <code>minerd</code>, you should see a notification like this:</p>
+<pre><code class="language-shell">...
+[INFO] [RPC] Server accepted conn from tcp://127.0.0.1:44974/
+...
+</code></pre>
+<p>This means that <code>darkfid</code> and <code>minerd</code> are connected over RPC and
+<code>minerd</code> can start mining. You will see log messages like these:</p>
+<pre><code class="language-shell">...
+14:23:56 [INFO] [RPC] Created new blocktemplate: address=9vw6...fG1U, spend_hook=-, user_data=-, hash=beb0...42aa
+14:24:04 [INFO] [RPC] Got solution submission for block template: beb0...42aa
+14:24:06 [INFO] [RPC] Mined block header hash: 36fe...753c
+14:24:06 [INFO] [RPC] Proposing new block to network
+...
+</code></pre>
+<p>When <code>darkfid</code> and <code>minerd</code> are correctly connected and you get an
+error on <code>minerd</code> like this:</p>
+<pre><code class="language-shell">...
+[ERROR] Failed mining block header b757...5fb1 with error: Miner task stopped
+...
+</code></pre>
+<p>That's expected behavior. It means your setup is correct and you are
+mining blocks. <code>Failed mining block header</code> happens when a new block
+was received by <code>darkfid</code>, extending the current best fork, so when
+<code>minerd</code> polls it again it retrieves the new block header to mine,
+interupting current mining workers to start mining the new one.</p>
+<p>Otherwise, you'll see a notification like this:</p>
+<pre><code class="language-shell">...
+[INFO] Mined block header 36fe...753c with nonce: 266292
+...
+</code></pre>
+<p>Which means the current height block has been mined succesfully by
+<code>minerd</code> and propagated to <code>darkfid</code> so it can broadcast it to the
+network.</p>
+<h3 id="wallet-sync"><a class="header" href="#wallet-sync">Wallet sync</a></h3>
+<p>From this point forward in the guide we will use <code>drk</code> in <code>interactive</code>
+mode for all our wallet operations. In another terminal, run the
+following command:</p>
+<pre><code class="language-shell">$ ./drk interactive
+
+drk&gt;
+</code></pre>
+<p>In order to receive incoming coins, you'll need to use the <code>drk</code>
+tool to subscribe on <code>darkfid</code> so you can receive notifications for
+incoming blocks. The blocks have to be scanned for transactions,
+and to find coins that are intended for you. In the interactive shell,
+run the following command to subscribe to new blocks:</p>
+<pre><code class="language-shell">drk&gt; subscribe
+
+Requested to scan from block number: 0
+Last confirmed block reported by darkfid: 1 - da4455f461df6833a68b659d1770f58e44b6bc4abdd934cb22d084c24333255f
+Requesting block 0...
+Block 0 received! Scanning block...
+=======================================
+Header {
+        Hash: b967812a860e8bf43deb03dd4f7cf69258f7719ddb7f2183d4e4fa3559b9f39d
+        Version: 1
+        Previous: 86bbac430a4b3a182f125b37a486e9c486bbfa34d84ef4a66b4a23e5f0c625b1
+        Height: 0
+        Timestamp: 2025-05-12T13:00:24
+        Nonce: 0
+        Transactions Root: 0x081361c364feba0d28a418e2e20c216ce442d5127036e3491ceaf1996fdb3c3b
+        State Root: afc1694dd6b290d8b92c33d3fc746707da9bed857eb9e90f11683d2e243b8047
+        Proof of Work data: Darkfi
+}
+=======================================
+[scan_block] Iterating over 1 transactions
+[scan_block] Processing transaction: 91525ff00a3755a8df93c626b59f6e36cf021d85ebccecdedc38f3f1890a15fc
+Requesting block 1...
+Block 1 received! Scanning block...
+...
+Requested to scan from block number: 2
+Last confirmed block reported by darkfid: 1 - da4455f461df6833a68b659d1770f58e44b6bc4abdd934cb22d084c24333255f
+Finished scanning blockchain
+Subscribing to receive notifications of incoming blocks
+Detached subscription to background
+All is good. Waiting for block notifications...
+</code></pre>
+<h2 id="local-deployment"><a class="header" href="#local-deployment">Local Deployment</a></h2>
+<p>For local (non-testnet) development we recommend running master, and
+use the existing <code>contrib/localnet/darkfid-single-node</code> folder, which
+provides the corresponding configurations to operate. Some outputs are
+emitted since they are identical to previous steps.</p>
+<p>First, compile <code>darkfid</code> node, <code>minerd</code> mining daemon and the <code>drk</code>
+wallet CLI:</p>
+<pre><code class="language-shell">$ make darkfid minerd drk
+</code></pre>
+<p>Enter the localnet folder, and initialize a wallet:</p>
+<pre><code class="language-shell">$ cd contrib/localnet/darkfid-single-node/
+$ ./init-wallet.sh
+</code></pre>
+<p>Then start the daemons and wait until <code>darkfid</code> is initialized:</p>
+<pre><code class="language-shell">$ ./tmux_sessions.sh
+</code></pre>
+<p>After some blocks have been generated we
+will see some <code>DRK</code> in our test wallet.
+On a different shell(or tmux pane in the session),
+navigate to <code>contrib/localnet/darkfid-single-node</code>
+folder again and check wallet balance</p>
+<pre><code class="language-shell">$ ./wallet-balance.sh
+
+ Token ID                                     | Aliases | Balance
+----------------------------------------------+---------+---------
+ 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 20
+</code></pre>
+<p>Don't forget that when using this local node, all operations
+should be executed inside the <code>contrib/localnet/darkfid-single-node</code>
+folder, and <code>./drk</code> command to be replaced by
+<code>../../../drk -c drk.toml</code>. All paths should be relative to this one.</p>
+<h2 id="advanced-usage"><a class="header" href="#advanced-usage">Advanced Usage</a></h2>
+<p>To run a node in full debug mode:</p>
+<pre><code class="language-shell">$ LOG_TARGETS='!sled,!rustls,!net' ./darkfid -vv | tee /tmp/darkfid.log
+</code></pre>
+<p>The <code>sled</code> and <code>net</code> targets are very noisy and slow down the node so
+we disable those.</p>
+<p>We can now view the log, and grep through it.</p>
+<pre><code class="language-shell">$ tail -n +0 -f /tmp/darkfid.log | grep -a --line-buffered -v DEBUG
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../philosophy/books.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../testnet/token.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../philosophy/books.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../testnet/token.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mermaid.min.js"></script>
+        <script src="../theme/mermaid-init.js"></script>
+        <script src="../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>

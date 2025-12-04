@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_node_task","channel_task","cleanup_channels_task","dht_refinery_task","disconnect_inbounds_task","events_task"]};

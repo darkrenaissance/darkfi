@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["consensus","fees","pow","randomx_factory","utils","verification"],"struct":["Validator","ValidatorConfig"],"type":["ValidatorPtr"]};
