@@ -486,6 +486,8 @@ pub fn create_chatview(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_method("update_file", vec![("hash", "Hash", CallArgType::Str)], None).unwrap();
+
     node
 }
 

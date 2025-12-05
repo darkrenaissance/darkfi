@@ -766,6 +766,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1505,6 +1514,7 @@ dependencies = [
  "async-trait",
  "atomic_float",
  "blake3",
+ "bs58",
  "chrono",
  "clap 4.5.53",
  "colored",
@@ -1515,6 +1525,7 @@ dependencies = [
  "file-rotate",
  "fluent",
  "freetype-rs",
+ "fud",
  "futures",
  "glam",
  "harfbuzz-sys",
@@ -1910,6 +1921,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "dynasm"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7d4c414c94bc830797115b8e5f434d58e7e80cb42ba88508c14bc6ea270625"
+dependencies = [
+ "bitflags 2.10.0",
+ "byteorder",
+ "lazy_static",
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
+]
+
+[[package]]
+name = "dynasmrt"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "602f7458a3859195fb840e6e0cce5f4330dd9dfbfece0edaf31fe427af346f55"
+dependencies = [
+ "byteorder",
+ "dynasm",
+ "fnv",
+ "memmap2",
+]
+
+[[package]]
 name = "easy-parallel"
 version = "3.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2052,6 +2090,19 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "equix"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89178c5241f5cc0c8f2b5ac5008f3c7a32caad341b1ec747a6e1e51d2e877110"
+dependencies = [
+ "arrayvec",
+ "hashx",
+ "num-traits",
+ "thiserror 2.0.17",
+ "visibility",
+]
 
 [[package]]
 name = "errno"
@@ -2227,6 +2278,12 @@ name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
+
+[[package]]
+name = "fixed-capacity-vec"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b31a14f5ee08ed1a40e1252b35af18bed062e3f39b69aab34decde36bc43e40"
 
 [[package]]
 name = "flate2"
@@ -2448,6 +2505,37 @@ dependencies = [
  "fslock-arti-fork",
  "thiserror 2.0.17",
  "winapi",
+]
+
+[[package]]
+name = "fud"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "blake2",
+ "blake3",
+ "bs58",
+ "darkfi",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "easy-parallel",
+ "equix",
+ "futures",
+ "num-bigint",
+ "rand 0.8.5",
+ "serde",
+ "sha2",
+ "signal-hook",
+ "signal-hook-async-std",
+ "sled-overlay",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "tinyjson",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -2813,6 +2901,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
 dependencies = [
  "hashbrown 0.15.5",
+]
+
+[[package]]
+name = "hashx"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cb639748a589a17df2126f8015897ab416e81113afb82f56df5d47fa1486ab1"
+dependencies = [
+ "arrayvec",
+ "blake2",
+ "dynasmrt",
+ "fixed-capacity-vec",
+ "hex",
+ "rand_core 0.9.3",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5180,6 +5283,28 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-async-std"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ae704a5db1c75caeec797eccb081a9980c8e374e8774c7cb7b26799cc727b38"
+dependencies = [
+ "async-io",
+ "futures-lite",
+ "libc",
+ "signal-hook",
+]
 
 [[package]]
 name = "signal-hook-registry"

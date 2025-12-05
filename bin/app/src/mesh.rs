@@ -32,6 +32,7 @@ pub const COLOR_LIGHTGREY: Color = [0.7, 0.7, 0.7, 1.];
 pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
 pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 pub const COLOR_PINK: Color = [0.8, 0.3, 0.8, 1.];
+pub const COLOR_CYAN: Color = [0., 1., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_PURPLE: Color = [1., 0., 1., 1.];
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
@@ -110,6 +111,61 @@ impl MeshBuilder {
     pub fn draw_filled_box(&mut self, obj: &Rectangle, color: Color) {
         let uv = Rectangle::zero();
         self.draw_box(obj, color, &uv);
+    }
+
+    pub fn draw_box_shadow(&mut self, obj: &Rectangle, color: Color, spread: f32) {
+        let (x1, y1) = obj.pos().unpack();
+        let (x2, y2) = obj.corner().unpack();
+
+        let uv = Rectangle::zero();
+        let (u1, v1) = uv.pos().unpack();
+        let (u2, v2) = uv.corner().unpack();
+
+        let color2 = [color[0], color[1], color[2], 0.];
+
+        // left
+        self.append(
+            vec![
+                Vertex { pos: [x1, y1], color, uv: [u1, v1] },
+                Vertex { pos: [x1 - spread, y1 - spread], color: color2, uv: [u2, v1] },
+                Vertex { pos: [x1, y2], color, uv: [u1, v2] },
+                Vertex { pos: [x1 - spread, y2 + spread], color: color2, uv: [u2, v2] },
+            ],
+            vec![0, 2, 1, 1, 2, 3],
+        );
+
+        // top
+        self.append(
+            vec![
+                Vertex { pos: [x1, y1], color, uv: [u1, v1] },
+                Vertex { pos: [x1 - spread, y1 - spread], color: color2, uv: [u2, v1] },
+                Vertex { pos: [x2, y1], color, uv: [u1, v2] },
+                Vertex { pos: [x2 + spread, y1 - spread], color: color2, uv: [u2, v2] },
+            ],
+            vec![0, 2, 1, 1, 2, 3],
+        );
+
+        // right
+        self.append(
+            vec![
+                Vertex { pos: [x2, y1], color, uv: [u1, v1] },
+                Vertex { pos: [x2 + spread, y1 - spread], color: color2, uv: [u2, v1] },
+                Vertex { pos: [x2, y2], color, uv: [u1, v2] },
+                Vertex { pos: [x2 + spread, y2 + spread], color: color2, uv: [u2, v2] },
+            ],
+            vec![0, 2, 1, 1, 2, 3],
+        );
+
+        // bottom
+        self.append(
+            vec![
+                Vertex { pos: [x1, y2], color, uv: [u1, v1] },
+                Vertex { pos: [x1 - spread, y2 + spread], color: color2, uv: [u2, v1] },
+                Vertex { pos: [x2, y2], color, uv: [u1, v2] },
+                Vertex { pos: [x2 + spread, y2 + spread], color: color2, uv: [u2, v2] },
+            ],
+            vec![0, 2, 1, 1, 2, 3],
+        );
     }
 
     pub fn draw_outline(&mut self, obj: &Rectangle, color: Color, thickness: f32) {

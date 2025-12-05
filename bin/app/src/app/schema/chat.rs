@@ -563,6 +563,7 @@ pub async fn make(
                 window_scale.clone(),
                 app.render_api.clone(),
                 app.text_shaper.clone(),
+                app.sg_root.clone(),
             )
         })
         .await;

@@ -24,6 +24,7 @@ use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEn
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
+use regex::Regex;
 use sled_overlay::sled;
 use std::{
     collections::VecDeque,
@@ -34,9 +35,10 @@ use std::{
     },
 };
 use tracing::instrument;
+use url::Url;
 
 mod page;
-use page::MessageBuffer;
+use page::{FileMessageStatus, MessageBuffer};
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
@@ -44,7 +46,7 @@ use crate::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
         PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
-    scene::{MethodCallSub, Pimpl, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::TextShaperPtr,
     ExecutorPtr,
 };
@@ -71,6 +73,11 @@ fn max(a: f32, b: f32) -> f32 {
     } else {
         b
     }
+}
+
+fn get_file_url(text: &String) -> Option<Url> {
+    let url_regex = Regex::new(r"fud://[^\s]+").unwrap();
+    url_regex.find(text).and_then(|match_| Url::parse(match_.as_str()).ok())
 }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -147,6 +154,7 @@ pub struct ChatView {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     render_api: RenderApi,
+    sg_root: SceneNodePtr,
 
     tree: sled::Tree,
     msgbuf: AsyncMutex<MessageBuffer>,
@@ -189,6 +197,7 @@ impl ChatView {
         window_scale: PropertyFloat32,
         render_api: RenderApi,
         text_shaper: TextShaperPtr,
+        sg_root: SceneNodePtr,
     ) -> Pimpl {
         t!("ChatView::new()");
 
@@ -230,6 +239,7 @@ impl ChatView {
             node: node.clone(),
             tasks: SyncMutex::new(vec![]),
             render_api: render_api.clone(),
+            sg_root,
 
             tree,
             msgbuf: AsyncMutex::new(MessageBuffer::new(
@@ -444,10 +454,30 @@ impl ChatView {
             t!("Mark sent message as confirmed");
         } else {
             t!("Inserting new message");
+
             // Insert the privmsg since it doesn't already exist
-            if msgbuf.insert_privmsg(timest, msg_id, nick, text).is_none() {
+            let privmsg = msgbuf.insert_privmsg(timest, msg_id.clone(), nick.clone(), text.clone());
+            if privmsg.is_none() {
                 // Not visible so no need to redraw
                 return
+            }
+
+            if let Some(url) = get_file_url(&text) {
+                if let Some(fud) = self.sg_root.lookup_node("/plugin/fud") {
+                    msgbuf.insert_filemsg(
+                        timest,
+                        msg_id,
+                        FileMessageStatus::Initializing,
+                        nick,
+                        url.clone(),
+                    );
+
+                    let mut data = vec![];
+                    url.encode(&mut data).unwrap();
+                    fud.call_method("get", data).await.unwrap();
+                }
+            } else {
+                error!(target: "ui::chatview", "Fud plugin has not been loaded");
             }
         }
 
@@ -559,6 +589,11 @@ impl ChatView {
             }
         };
 
+        let Some(fud) = self.sg_root.lookup_node("/plugin/fud") else {
+            error!(target: "ui::chatview", "Fud plugin has not been loaded");
+            return
+        };
+
         let mut do_redraw = false;
         for entry in iter {
             let Ok((k, v)) = entry else { break };
@@ -569,7 +604,26 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
 
             //t!("{timest:?} {chatmsg:?} [trace_id={trace_id}]");
-            let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
+            let msg_height = msgbuf.push_privmsg(
+                timest,
+                msg_id.clone(),
+                chatmsg.nick.clone(),
+                chatmsg.text.clone(),
+            );
+
+            if let Some(url) = get_file_url(&chatmsg.text) {
+                msgbuf.insert_filemsg(
+                    timest,
+                    msg_id,
+                    FileMessageStatus::Initializing,
+                    chatmsg.nick.clone(),
+                    url.clone(),
+                );
+
+                let mut data = vec![];
+                url.encode(&mut data).unwrap();
+                fud.call_method("get", data).await.unwrap();
+            }
 
             remaining_load_height -= msg_height;
             if remaining_load_height <= 0. {
@@ -754,6 +808,22 @@ impl UIObject for ChatView {
             }
         });
 
+        let method_sub = node_ref.subscribe_method_call("update_file").unwrap();
+        let self_ = self.clone();
+        let update_file_task = ex.spawn(async move {
+            loop {
+                let Ok(method_call) = method_sub.receive().await else {
+                    d!("Event relayer closed");
+                    return
+                };
+                let mut msgbuf = self_.msgbuf.lock().await;
+                msgbuf.update_file(&method_call.data).await;
+                msgbuf.adjust_params();
+                let atom = self_.render_api.make_guard(gfxtag!("ChatView::update_file_task"));
+                self_.redraw_cached(atom.batch_id, &mut msgbuf).await;
+            }
+        });
+
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         async fn reload_view(self_: Arc<ChatView>, batch: BatchGuardPtr) {
@@ -783,8 +853,13 @@ impl UIObject for ChatView {
         on_modify.when_change(self.rect.prop(), redraw);
         //on_modify.when_change(self.debug.prop(), redraw);
 
-        let mut tasks =
-            vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];
+        let mut tasks = vec![
+            insert_line_method_task,
+            insert_unconf_line_method_task,
+            motion_task,
+            bgload_task,
+            update_file_task,
+        ];
         tasks.append(&mut on_modify.tasks);
 
         *self.tasks.lock() = tasks;

@@ -24,6 +24,9 @@ pub mod darkirc;
 pub use darkirc::DarkIrc;
 pub use darkirc::DarkIrcPtr;
 
+pub mod fud;
+pub use fud::{FudPlugin as Fud, FudPluginPtr as FudPtr};
+
 use darkfi::net::Settings as NetSettings;
 
 use crate::{

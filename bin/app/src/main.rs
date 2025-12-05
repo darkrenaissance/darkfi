@@ -283,6 +283,14 @@ async fn load_plugins(
         })
         .await;
 
+    let fud = create_fud("fud");
+    let sg_root2 = sg_root.clone();
+    let fud = fud
+        .setup(|me| async {
+            plugin::Fud::new(me, sg_root2, ex.clone()).await.expect("Fud pimpl setup")
+        })
+        .await;
+
     let (slot, recvr) = Slot::new("recvmsg");
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
@@ -399,6 +407,7 @@ async fn load_plugins(
     });
 
     plugin.link(darkirc);
+    plugin.link(fud);
 
     i!("Plugins loaded");
     futures::join!(listen_recv, listen_connect);
@@ -442,6 +451,19 @@ pub fn create_darkirc(name: &str) -> SceneNode {
         None,
     )
     .unwrap();
+
+    node
+}
+
+pub fn create_fud(name: &str) -> SceneNode {
+    t!("create_fud({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Plugin);
+
+    let mut prop = Property::new("ready", PropertyType::Bool, PropertySubType::Null);
+    prop.set_defaults_bool(vec![false]).unwrap();
+    node.add_property(prop).unwrap();
+
+    node.add_method("get", vec![("hash", "Hash", CallArgType::Str)], None).unwrap();
 
     node
 }

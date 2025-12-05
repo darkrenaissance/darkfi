@@ -17,18 +17,27 @@
  */
 
 use async_gen::{gen as async_gen, AsyncIter};
+use async_trait::async_trait;
 use chrono::{Local, NaiveDate, TimeZone};
+use darkfi_serial::{Decodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::stream::{Stream, StreamExt};
+use image::{ImageBuffer, ImageReader, Rgba};
+use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
+    io::Cursor,
     pin::pin,
+    sync::Arc,
 };
+use url::Url;
 
 use super::{max, MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawMesh, Rectangle, RenderApi},
-    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_PINK, COLOR_WHITE},
+    gfx::{gfxtag, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi},
+    mesh::{
+        Color, MeshBuilder, COLOR_BLUE, COLOR_CYAN, COLOR_GREEN, COLOR_PINK, COLOR_RED, COLOR_WHITE,
+    },
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
     text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
     util::enumerate_mut,
@@ -484,11 +493,300 @@ impl std::fmt::Debug for DateMessage {
     }
 }
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub enum FileMessageStatus {
+    Initializing,
+    Downloading { progress: f32 },
+    Downloaded { path: String },
+    Error { msg: String },
+}
+
+type GenericImageBuffer = ImageBuffer<Rgba<u8>, Vec<u8>>;
+
+#[derive(Clone)]
+pub struct FileMessage {
+    font_size: f32,
+    window_scale: f32,
+    max_width: f32,
+
+    file_url: Url,
+    status: FileMessageStatus,
+    imgbuf: Arc<SyncMutex<Option<GenericImageBuffer>>>,
+    timestamp: Timestamp,
+    glyphs: Vec<Vec<Glyph>>,
+
+    atlas: text::RenderedAtlas,
+}
+
+impl FileMessage {
+    const GLOW_SIZE: f32 = 20.;
+    const MARGIN_TOP: f32 = 4.;
+    const MARGIN_BOTTOM: f32 = 10.;
+    const BOX_PADDING_TOP: f32 = 15.;
+    const BOX_PADDING_BOTTOM: f32 = 8.;
+    const BOX_PADDING_X: f32 = 15.;
+    const IMG_MAX_HEIGHT: f32 = 500.;
+
+    pub fn new(
+        font_size: f32,
+        window_scale: f32,
+
+        file_url: Url,
+        status: FileMessageStatus,
+        timestamp: Timestamp,
+        _nick: String,
+
+        text_shaper: &TextShaper,
+        render_api: &RenderApi,
+    ) -> Message {
+        let mut glyphs = Vec::new();
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_filemsg"));
+
+        for str in Self::filestr(&file_url, &status) {
+            let glyphs_ = text_shaper.shape(str, font_size, window_scale);
+            atlas.push(&glyphs_);
+            glyphs.push(glyphs_);
+        }
+
+        let atlas = atlas.make();
+
+        Message::File(Self {
+            font_size,
+            window_scale,
+            max_width: 0.,
+            file_url,
+            status,
+            imgbuf: Arc::new(SyncMutex::new(None)),
+            timestamp,
+            glyphs,
+            atlas,
+        })
+    }
+
+    fn filestr(file_url: &Url, status: &FileMessageStatus) -> Vec<String> {
+        let status_str = match status {
+            FileMessageStatus::Initializing => "starting fud".to_string(),
+            FileMessageStatus::Downloading { progress } => format!("downloading [{progress:.1}%]"),
+            FileMessageStatus::Downloaded { .. } => "downloaded".to_string(),
+            FileMessageStatus::Error { msg } => msg.to_lowercase(),
+        };
+
+        vec![
+            file_url
+                .host_str()
+                .map(|file_hash| {
+                    if file_hash.len() >= 12 {
+                        let first_part = &file_hash[..4];
+                        let last_part = &file_hash[file_hash.len() - 4..];
+                        format!("{}...{}", first_part, last_part)
+                    } else {
+                        file_hash.to_string()
+                    }
+                })
+                .unwrap_or("???".to_string()),
+            status_str,
+        ]
+    }
+
+    pub fn set_status(&mut self, status: &FileMessageStatus) {
+        self.status = status.clone();
+
+        if let FileMessageStatus::Downloaded { .. } = status {
+            let mut imgbuf = self.imgbuf.lock();
+            *imgbuf = self.load_img();
+        }
+    }
+
+    fn adjust_params(
+        &mut self,
+        font_size: f32,
+        window_scale: f32,
+        text_shaper: &TextShaper,
+        render_api: &RenderApi,
+    ) {
+        self.font_size = font_size;
+        self.window_scale = window_scale;
+
+        self.glyphs = Vec::new();
+        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_filemsg"));
+
+        for str in Self::filestr(&self.file_url, &self.status) {
+            let glyphs = text_shaper.shape(str, font_size, window_scale);
+            atlas.push(&glyphs);
+            self.glyphs.push(glyphs);
+        }
+
+        self.atlas = atlas.make();
+    }
+
+    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
+        let width = line_width - timestamp_width;
+        // clamp to > 0
+        self.max_width = max(width, 0.);
+    }
+
+    fn clear_mesh(&mut self) {}
+
+    fn get_img_size(&self, imgbuf: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> (f32, f32) {
+        let img_w = imgbuf.width() as f32;
+        let img_h = imgbuf.height() as f32;
+
+        let width_scale = (self.max_width - Self::GLOW_SIZE) / img_w;
+        let height_scale = Self::IMG_MAX_HEIGHT / img_h;
+
+        let scale = width_scale.min(height_scale);
+        (img_w * scale, img_h * scale)
+    }
+
+    fn gen_mesh(
+        &mut self,
+        _clip: &Rectangle,
+        line_height: f32,
+        baseline: f32,
+        timestamp_width: f32,
+        _nick_colors: &[Color],
+        timestamp_color: Color,
+        _text_color: Color,
+        _debug_render: bool,
+        render_api: &RenderApi,
+    ) -> Vec<DrawMesh> {
+        let uv_rect = Rectangle::from([0., 0., 1., 1.]);
+
+        let imgbuf_ = self.imgbuf.lock();
+        if let Some(ref imgbuf) = *imgbuf_ {
+            let (img_w, img_h) = self.get_img_size(imgbuf);
+            drop(imgbuf_);
+
+            let mesh_rect =
+                Rectangle::from([timestamp_width, -img_h - Self::MARGIN_BOTTOM, img_w, img_h]);
+            let texture = self.load_texture(render_api);
+            let mut mesh_gradient = MeshBuilder::new(gfxtag!("file_gradient"));
+            let glow_color = [timestamp_color[0], timestamp_color[1], timestamp_color[2], 0.5];
+            mesh_gradient.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
+
+            let mesh_gradient = mesh_gradient.alloc(render_api);
+            let mesh_gradient = mesh_gradient.draw_untextured();
+
+            let mut mesh_img = MeshBuilder::new(gfxtag!("file_img"));
+            mesh_img.draw_box(&mesh_rect, COLOR_WHITE, &uv_rect);
+            let mesh_img = mesh_img.alloc(render_api);
+            let mesh_img = mesh_img.draw_with_texture(texture);
+            return vec![mesh_img, mesh_gradient];
+        }
+        drop(imgbuf_);
+
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg"));
+
+        let color = match self.status {
+            FileMessageStatus::Initializing => timestamp_color,
+            FileMessageStatus::Downloading { .. } => COLOR_CYAN,
+            FileMessageStatus::Downloaded { .. } => COLOR_GREEN,
+            FileMessageStatus::Error { .. } => COLOR_RED,
+        };
+
+        let mut text_width = 0.;
+        for (i, glyphs) in self.glyphs.iter().enumerate() {
+            let glyph_pos_iter =
+                GlyphPositionIter::new(self.font_size, self.window_scale, &glyphs, baseline);
+            for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
+                let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+                if glyph_rect.x + glyph_rect.w > text_width {
+                    text_width = glyph_rect.x + glyph_rect.w;
+                }
+                glyph_rect.x += timestamp_width + Self::BOX_PADDING_X;
+                glyph_rect.y -= line_height * (self.glyphs.len() - i) as f32 +
+                    Self::BOX_PADDING_BOTTOM +
+                    Self::MARGIN_BOTTOM;
+                mesh.draw_box(&glyph_rect, color, uv_rect);
+            }
+        }
+
+        let box_width = text_width + Self::BOX_PADDING_X * 2.;
+        let box_height = self.glyphs.len() as f32 * line_height +
+            Self::BOX_PADDING_TOP +
+            Self::BOX_PADDING_BOTTOM;
+        let mesh_rect = Rectangle::from([
+            timestamp_width,
+            -box_height - Self::MARGIN_BOTTOM,
+            box_width,
+            box_height,
+        ]);
+        mesh.draw_outline(&mesh_rect, color, 1.);
+
+        let glow_color = [color[0], color[1], color[2], 0.3];
+        mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
+
+        let mesh = mesh.alloc(render_api);
+        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
+
+        vec![mesh]
+    }
+
+    fn load_img(&self) -> Option<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+        if let FileMessageStatus::Downloaded { path } = &self.status {
+            let path = path.as_str();
+
+            let data = Arc::new(SyncMutex::new(vec![]));
+            let data2 = data.clone();
+            miniquad::fs::load_file(path, move |res| match res {
+                Ok(res) => *data2.lock() = res,
+                Err(e) => {
+                    error!("Resource not found! {e}");
+                }
+            });
+            let data = std::mem::take(&mut *data.lock());
+            let Ok(img) =
+                ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode()
+            else {
+                return None;
+            };
+            return Some(img.to_rgba8());
+        }
+
+        None
+    }
+
+    fn load_texture(&self, render_api: &RenderApi) -> ManagedTexturePtr {
+        let imgbuf = self.imgbuf.lock();
+        let img = imgbuf.as_ref().unwrap();
+
+        let width = img.width() as u16;
+        let height = img.height() as u16;
+        let bmp = img.as_raw().clone();
+        drop(imgbuf);
+
+        render_api.new_texture(width, height, bmp, gfxtag!("file_img_texture"))
+    }
+
+    pub fn height(&self, line_height: f32) -> f32 {
+        let imgbuf = self.imgbuf.lock();
+        imgbuf
+            .as_ref()
+            .map(|buf| self.get_img_size(buf).1 as f32 + Self::MARGIN_TOP + Self::MARGIN_BOTTOM)
+            .unwrap_or(
+                line_height * self.glyphs.len() as f32 +
+                    Self::BOX_PADDING_TOP +
+                    Self::BOX_PADDING_BOTTOM +
+                    Self::MARGIN_TOP +
+                    Self::MARGIN_BOTTOM,
+            )
+    }
+
+    fn select(&mut self) {}
+}
+
+impl std::fmt::Debug for FileMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "file: {}", self.file_url)
+    }
+}
+
 /// Easier than fucking around with traits nonsense
 #[derive(Debug)]
 pub enum Message {
     Priv(PrivMessage),
     Date(DateMessage),
+    File(FileMessage),
 }
 
 impl Message {
@@ -496,6 +794,7 @@ impl Message {
         match self {
             Self::Priv(m) => m.timestamp,
             Self::Date(m) => m.timestamp,
+            Self::File(m) => m.timestamp,
         }
     }
 
@@ -503,6 +802,7 @@ impl Message {
         match self {
             Self::Priv(m) => m.height(line_height),
             Self::Date(_) => line_height,
+            Self::File(m) => m.height(line_height),
         }
     }
 
@@ -527,6 +827,7 @@ impl Message {
                 render_api,
             ),
             Self::Date(m) => m.adjust_params(font_size, window_scale, text_shaper, render_api),
+            Self::File(m) => m.adjust_params(font_size, window_scale, text_shaper, render_api),
         }
     }
 
@@ -534,6 +835,7 @@ impl Message {
         match self {
             Self::Priv(m) => m.adjust_width(line_width, timestamp_width),
             Self::Date(_) => {}
+            Self::File(m) => m.adjust_width(line_width, timestamp_width),
         }
     }
 
@@ -541,6 +843,7 @@ impl Message {
         match self {
             Self::Priv(m) => m.clear_mesh(),
             Self::Date(m) => m.clear_mesh(),
+            Self::File(m) => m.clear_mesh(),
         }
     }
 
@@ -557,9 +860,9 @@ impl Message {
         hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
+    ) -> Vec<DrawMesh> {
         match self {
-            Self::Priv(m) => m.gen_mesh(
+            Self::Priv(m) => vec![m.gen_mesh(
                 clip,
                 line_height,
                 msg_spacing,
@@ -571,8 +874,8 @@ impl Message {
                 hi_bg_color,
                 debug_render,
                 render_api,
-            ),
-            Self::Date(m) => m.gen_mesh(
+            )],
+            Self::Date(m) => vec![m.gen_mesh(
                 clip,
                 line_height,
                 baseline,
@@ -583,6 +886,17 @@ impl Message {
                 // No hi_bg_color since dates can't be highlighted
                 debug_render,
                 render_api,
+            )],
+            Self::File(m) => m.gen_mesh(
+                clip,
+                line_height,
+                baseline,
+                timestamp_width,
+                nick_colors,
+                timestamp_color,
+                text_color,
+                debug_render,
+                render_api,
             ),
         }
     }
@@ -591,6 +905,7 @@ impl Message {
         match self {
             Self::Priv(_) => false,
             Self::Date(_) => true,
+            Self::File(_) => false,
         }
     }
 
@@ -598,12 +913,20 @@ impl Message {
         match self {
             Self::Priv(m) => m.select(),
             Self::Date(_) => {}
+            Self::File(m) => m.select(),
         }
     }
 
     fn get_privmsg_mut(&mut self) -> Option<&mut PrivMessage> {
         match self {
             Message::Priv(msg) => Some(msg),
+            _ => None,
+        }
+    }
+
+    fn get_filemsg_mut(&mut self) -> Option<&mut FileMessage> {
+        match self {
+            Message::File(msg) => Some(msg),
             _ => None,
         }
     }
@@ -925,7 +1248,7 @@ impl MessageBuffer {
                 continue
             }
 
-            let mesh = msg.gen_mesh(
+            for mesh in msg.gen_mesh(
                 rect,
                 line_height,
                 msg_spacing,
@@ -937,9 +1260,9 @@ impl MessageBuffer {
                 hi_bg_color,
                 debug_render,
                 &render_api,
-            );
-
-            meshes.push((current_pos, mesh));
+            ) {
+                meshes.push((current_pos, mesh));
+            }
 
             current_pos += msg_spacing;
             current_pos += mesh_height;
@@ -947,6 +1270,50 @@ impl MessageBuffer {
 
         //t!("gen_meshes() returning {} meshes", meshes.len());
         meshes
+    }
+
+    pub fn insert_filemsg(
+        &mut self,
+        timest: Timestamp,
+        msg_id: MessageId,
+        status: FileMessageStatus,
+        nick: String,
+        file_url: Url,
+    ) -> Option<&mut FileMessage> {
+        t!("insert_filemsg({timest}, {msg_id}, {nick}, {file_url})");
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+
+        let msg = FileMessage::new(
+            font_size,
+            window_scale,
+            file_url,
+            status,
+            timest,
+            nick,
+            &self.text_shaper,
+            &self.render_api,
+        );
+
+        // Timestamps go from most recent backwards
+        let mut idx = None;
+        for (i, msg) in enumerate_mut(&mut self.msgs) {
+            if timest >= msg.timestamp() {
+                idx = Some(i);
+                break
+            }
+        }
+
+        let idx = match idx {
+            Some(idx) => idx,
+            None => {
+                let last_page_idx = 0;
+                last_page_idx
+            }
+        };
+
+        self.msgs.insert(idx, msg);
+        self.msgs[idx].get_filemsg_mut()
     }
 
     /// Gets around borrow checker with unsafe
@@ -1042,12 +1409,47 @@ impl MessageBuffer {
                 }
 
                 msg.select();
+
                 msg.clear_mesh();
                 break
             }
 
             current_pos += msg_spacing;
             current_pos += mesh_height;
+        }
+    }
+
+    pub async fn update_file(&mut self, data: &Vec<u8>) {
+        let mut cur = Cursor::new(data);
+        let hash = String::decode(&mut cur).unwrap();
+        let status = String::decode(&mut cur).unwrap();
+
+        let status = match status.as_str() {
+            "downloading" => {
+                let progress = f32::decode(&mut cur).unwrap();
+                FileMessageStatus::Downloading { progress }
+            }
+            "downloaded" => {
+                let path = String::decode(&mut cur).unwrap();
+                FileMessageStatus::Downloaded { path }
+            }
+            "error" => {
+                let msg = String::decode(&mut cur).unwrap();
+                FileMessageStatus::Error { msg }
+            }
+            _ => FileMessageStatus::Initializing,
+        };
+
+        // TODO: keep a cache of file messages somewhere to avoid looping
+        // over all messages
+        for msg in &mut self.msgs {
+            if let Some(filemsg) = msg.get_filemsg_mut() {
+                if filemsg.file_url.host_str() == Some(&hash) {
+                    filemsg.set_status(&status);
+                    filemsg.adjust_width(self.line_width, self.timestamp_width.get());
+                    filemsg.clear_mesh();
+                }
+            }
         }
     }
 }

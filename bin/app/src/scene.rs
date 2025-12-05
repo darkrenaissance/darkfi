@@ -546,6 +546,7 @@ pub enum Pimpl {
     Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
     DarkIrc(plugin::DarkIrcPtr),
+    Fud(plugin::FudPtr),
 }
 
 impl std::fmt::Debug for Pimpl {

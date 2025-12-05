@@ -27,6 +27,8 @@ zeromq = { version = "0.4.1", default-features = false, features = ["async-std-r
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {version = "0.5.0", features = ["async"]}
+fud = { path = "../fud/fud/" }
+bs58 = "0.5.1"
 thiserror = "2.0.12"
 smol = "2.0.2"
 atomic_float = "1.1.0"
