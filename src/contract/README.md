@@ -2,16 +2,16 @@ This directory contains native WASM contracts on DarkFi:
 
 ## Money
 
-* https://darkrenaissance.github.io/darkfi/development/darkfi_money_contract/index.html
+* https://darkrenaissance.github.io/darkfi/spec/contract/money/money.html
 
 ## DAO
 
-* https://darkrenaissance.github.io/darkfi/development/darkfi_dao_contract/index.html
+* https://darkrenaissance.github.io/darkfi/spec/contract/dao/dao.html
 
 ## Consensus
 
-* https://darkrenaissance.github.io/darkfi/development/darkfi_consensus_contract/index.html
+* https://darkrenaissance.github.io/darkfi/arch/consensus.html
 
 ## Deployooor
 
-* https://darkrenaissance.github.io/darkfi/development/darkfi_deployooor_contract/index.html
+* https://darkrenaissance.github.io/darkfi/arch/arch.html#non-native-smart-contract-deployment
