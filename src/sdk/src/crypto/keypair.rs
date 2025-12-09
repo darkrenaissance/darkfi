@@ -35,6 +35,25 @@ use rand_core::{CryptoRng, RngCore};
 use super::{constants::NullifierK, util::fp_mod_fv};
 use crate::error::ContractError;
 
+#[repr(u8)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum Network {
+    Mainnet = 0x01,
+    Testnet = 0x04,
+}
+
+impl TryFrom<u8> for Network {
+    type Error = ContractError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x01 => Ok(Self::Mainnet),
+            0x04 => Ok(Self::Testnet),
+            _ => Err(ContractError::IoError("Invalid Network".to_string())),
+        }
+    }
+}
+
 /// Keypair structure holding a `SecretKey` and its respective `PublicKey`
 #[derive(Copy, Clone, PartialEq, Eq, Debug, SerialEncodable, SerialDecodable)]
 pub struct Keypair {
@@ -208,5 +227,76 @@ impl core::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_bytes()).into_string();
         write!(f, "{disp}")
+    }
+}
+
+pub struct Address {
+    prefix: Network,
+    spending_key: PublicKey,
+    viewing_key: PublicKey,
+}
+
+impl core::fmt::Display for Address {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let mut payload = Vec::with_capacity(69);
+        payload.push(self.prefix as u8);
+        payload.extend_from_slice(&self.spending_key.to_bytes());
+        payload.extend_from_slice(&self.viewing_key.to_bytes());
+
+        let checksum = blake3::hash(&payload);
+        payload.extend_from_slice(&checksum.as_bytes()[..4]);
+
+        write!(f, "{}", bs58::encode(payload).into_string())
+    }
+}
+
+impl FromStr for Address {
+    type Err = ContractError;
+
+    fn from_str(enc: &str) -> Result<Self, Self::Err> {
+        let decoded = bs58::decode(enc).into_vec()?;
+        if decoded.len() != 69 {
+            return Err(Self::Err::IoError("Invalid address length".to_string()))
+        }
+
+        let r_network = Network::try_from(decoded[0])?;
+        let r_spending_key = PublicKey::from_bytes(decoded[1..33].try_into().unwrap())?;
+        let r_viewing_key = PublicKey::from_bytes(decoded[33..65].try_into().unwrap())?;
+        let r_checksum = &decoded[65..];
+
+        let checksum = blake3::hash(&decoded[..65]);
+        if r_checksum != &checksum.as_bytes()[..4] {
+            return Err(Self::Err::IoError("Invalid address checksum".to_string()))
+        }
+
+        Ok(Self { prefix: r_network, spending_key: r_spending_key, viewing_key: r_viewing_key })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::crypto::poseidon_hash;
+    use rand::rngs::OsRng;
+
+    #[test]
+    fn test_address_encoding() {
+        let spending_keypair = Keypair::random(&mut OsRng);
+        let viewing_secret = SecretKey::from(poseidon_hash([spending_keypair.secret.inner()]));
+        let viewing_keypair = Keypair::new(viewing_secret);
+
+        let address = Address {
+            prefix: Network::Mainnet,
+            spending_key: spending_keypair.public,
+            viewing_key: viewing_keypair.public,
+        };
+
+        let addr_enc = address.to_string();
+        let addr_dec = Address::from_str(&addr_enc).unwrap();
+
+        assert_eq!(address.prefix, addr_dec.prefix);
+        assert_eq!(address.spending_key, addr_dec.spending_key);
+        assert_eq!(address.viewing_key, addr_dec.viewing_key);
     }
 }
