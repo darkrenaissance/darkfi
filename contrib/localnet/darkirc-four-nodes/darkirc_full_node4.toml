@@ -29,6 +29,11 @@ rpc_listen = "tcp://127.0.0.1:8893"
 ## Disabled RPC methods
 #rpc_disabled_methods = ["p2p.get_info"]
 
+# [rln]
+# nullifier = "8iktbkj7FXGEKqWR6v6EAXjB2XwdQPFLZLx9YnUJYbCy"
+# trapdoor = "4PP6JaUSabTuuCd9F41QA7yFFWwVwxMHjdjowfepHKxV"
+# user_message_limit = 10
+
 ## P2P net settings
 [net]
 ## Connection slots
