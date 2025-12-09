@@ -16,13 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufReader, Cursor},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
 use darkfi::{
     event_graph::Event,
@@ -32,8 +26,11 @@ use darkfi::{
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::crypto::MerkleTree;
-use darkfi_serial::serialize_async;
+use darkfi_sdk::{
+    crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
+    pasta::Fp,
+};
+use darkfi_serial::{deserialize_async, deserialize_async_partial};
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
@@ -49,7 +46,11 @@ use smol::{
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};
+use super::{
+    client::Client,
+    services::nickserv::{ACCOUNTS_DB_PREFIX, ACCOUNTS_KEY_RLN_IDENTITY},
+    IrcChannel, IrcContact, Priv, Privmsg,
+};
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
@@ -93,9 +94,7 @@ pub struct IrcServer {
     /// Persistent server storage
     pub server_store: sled::Tree,
     /// RLN identity storage
-    pub rln_identity_store: sled::Tree,
-    /// RLN Signal VerifyingKey
-    pub rln_signal_vk: VerifyingKey,
+    pub rln_identity_tree: RwLock<SmtMemoryFp>,
 }
 
 impl IrcServer {
@@ -152,7 +151,9 @@ impl IrcServer {
 
         // Open persistent dbs
         let server_store = darkirc.sled.open_tree("server_store")?;
-        let rln_identity_store = darkirc.sled.open_tree("rln_identity_store")?;
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let mut identity_tree = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         // Generate RLN proving and verifying keys, if needed
         let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
@@ -167,20 +168,13 @@ impl IrcServer {
             server_store.insert("rlnv2-diff-signal-pk", buf)?;
         }
 
-        let rln_signal_vk = match server_store.get("rlnv2-diff-signal-vk")? {
-            Some(vk) => {
-                let mut reader = Cursor::new(vk);
-                VerifyingKey::read(&mut reader, rln_signal_circuit)?
-            }
-            None => {
-                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-                let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
-                let mut buf = vec![];
-                verifyingkey.write(&mut buf)?;
-                server_store.insert("rlnv2-diff-signal-vk", buf)?;
-                verifyingkey
-            }
-        };
+        if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+            let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
+            let mut buf = vec![];
+            verifyingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-signal-vk", buf)?;
+        }
 
         if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
@@ -194,7 +188,7 @@ impl IrcServer {
 
         if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
+            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
             let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
             let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
             let mut buf = vec![];
@@ -202,11 +196,36 @@ impl IrcServer {
             server_store.insert("rlnv2-diff-slash-vk", buf)?;
         }
 
-        // Initialize RLN Incremental Merkle tree if necessary
-        if server_store.get("rln_identity_tree")?.is_none() {
-            let tree = MerkleTree::new(1);
-            server_store.insert("rln_identity_tree", serialize_async(&tree).await)?;
+        // Construct SMT from static DAG
+        let mut events = darkirc.event_graph.static_fetch_all().await?;
+        events.sort_by(|a, b| a.header.timestamp.cmp(&b.header.timestamp));
+
+        for event in events.iter() {
+            // info!("event: {}", event.id());
+            let fetched_rln_commitment: Fp = match deserialize_async_partial(event.content()).await
+            {
+                Ok((v, _)) => v,
+                Err(e) => {
+                    error!(target: "irc::server", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
+                    continue
+                }
+            };
+
+            let commitment = vec![fetched_rln_commitment];
+            let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+            identity_tree.insert_batch(commitment)?;
         }
+
+        // Set the default RLN account if any
+        let default_db = darkirc.sled.open_tree(format!("{}default", ACCOUNTS_DB_PREFIX))?;
+        let rln_identity = if !default_db.is_empty() {
+            let default_accnt = default_db.get(ACCOUNTS_KEY_RLN_IDENTITY)?.unwrap();
+            let default_accnt = deserialize_async(&default_accnt).await.unwrap();
+            info!("Default RLN account set");
+            Some(default_accnt)
+        } else {
+            None
+        };
 
         let self_ = Arc::new(Self {
             darkirc,
@@ -216,12 +235,11 @@ impl IrcServer {
             autojoin: RwLock::new(Vec::new()),
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
-            rln_identity: RwLock::new(None),
+            rln_identity: RwLock::new(rln_identity),
             clients: Mutex::new(HashMap::new()),
             password,
             server_store,
-            rln_identity_store,
-            rln_signal_vk,
+            rln_identity_tree: RwLock::new(identity_tree),
         });
 
         // Load any channel/contact configuration.
@@ -251,7 +269,7 @@ impl IrcServer {
         let contacts = parse_configured_contacts(&contents)?;
 
         // Parse RLN identity
-        let rln_identity = parse_rln_identity(&contents)?;
+        let _rln_identity = parse_rln_identity(&contents)?;
 
         // Persist unconfigured channels (joined from client, or autojoined without config)
         let channels = {
@@ -267,7 +285,7 @@ impl IrcServer {
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
-        *self.rln_identity.write().await = rln_identity;
+        // *self.rln_identity.write().await = rln_identity;
 
         Ok(())
     }
@@ -306,9 +324,10 @@ impl IrcServer {
 
                     // Subscribe to incoming events and set up the connection.
                     let incoming = self.darkirc.event_graph.event_pub.clone().subscribe().await;
+                    let incoming_st = self.darkirc.event_graph.static_pub.clone().subscribe().await;
                     if let Err(e) = self
                         .clone()
-                        .process_connection(stream, peer_addr, incoming, ex.clone())
+                        .process_connection(stream, peer_addr, incoming, incoming_st, ex.clone())
                         .await
                     {
                         error!("[IRC SERVER] Failed processing new connection: {e}");
@@ -320,9 +339,10 @@ impl IrcServer {
                 None => {
                     // Subscribe to incoming events and set up the connection.
                     let incoming = self.darkirc.event_graph.event_pub.clone().subscribe().await;
+                    let incoming_st = self.darkirc.event_graph.static_pub.clone().subscribe().await;
                     if let Err(e) = self
                         .clone()
-                        .process_connection(stream, peer_addr, incoming, ex.clone())
+                        .process_connection(stream, peer_addr, incoming, incoming_st, ex.clone())
                         .await
                     {
                         error!("[IRC SERVER] Failed processing new connection: {e}");
@@ -343,10 +363,11 @@ impl IrcServer {
         stream: C,
         peer_addr: SocketAddr,
         incoming: Subscription<Event>,
+        incoming_st: Subscription<Event>,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
         let port = peer_addr.port();
-        let client = Client::new(self.clone(), incoming, peer_addr).await?;
+        let client = Client::new(self.clone(), incoming, incoming_st, peer_addr).await?;
 
         let conn_task = StoppableTask::new();
         self.clients.lock().await.insert(port, conn_task.clone());

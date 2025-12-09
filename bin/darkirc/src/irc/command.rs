@@ -659,7 +659,7 @@ impl Client {
 
         // Handle queries to NickServ
         if target.to_lowercase().as_str() == "nickserv" {
-            return self.nickserv.handle_query(message.strip_prefix(':').unwrap()).await
+            return self.nickserv.handle_query(args).await
         }
 
         // If it's a DM and we don't have an encryption key, we will

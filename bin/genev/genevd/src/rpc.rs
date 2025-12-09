@@ -219,7 +219,7 @@ impl JsonRpcInterface {
             error!("Failed inserting new event to DAG: {e}");
         } else {
             // Otherwise, broadcast it
-            self.p2p.broadcast(&EventPut(event)).await;
+            self.p2p.broadcast(&EventPut(event, vec![])).await;
         }
 
         let json = JsonValue::Boolean(true);

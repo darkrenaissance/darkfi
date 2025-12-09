@@ -574,6 +574,9 @@ pub enum Error {
     // ==================
     // Event Graph errors
     // ==================
+    #[error("Static DAG sync failed")]
+    StaticDagSyncFailed,
+
     #[error("DAG sync failed")]
     DagSyncFailed,
 
