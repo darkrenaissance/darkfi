@@ -226,7 +226,7 @@ pub fn parse_rln_identity(data: &toml::Value) -> Result<Option<RlnIdentity>> {
         return Err(ParseFailed("RLN trapdoor not a string"))
     };
 
-    let user_message_limit = if let Some(msglimit) = msglimit.as_float() {
+    let user_message_limit = if let Some(msglimit) = msglimit.as_integer() {
         msglimit as u64
     } else {
         return Err(ParseFailed("RLN user message limit not a number"))

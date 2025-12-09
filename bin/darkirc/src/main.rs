@@ -581,6 +581,17 @@ async fn sync_task(
             info!("Got peer connection");
             // We'll attempt to sync for ever
             if !skip_dag_sync {
+                info!("Syncing static DAG");
+                match event_graph.static_sync().await {
+                    Ok(()) => {
+                        info!("Static synced successfully")
+                    }
+                    Err(e) => {
+                        error!("Failed syncing static graph: {e}");
+                        p2p.stop().await;
+                        return Err(Error::StaticDagSyncFailed)
+                    }
+                }
                 info!("Syncing event DAG");
                 match event_graph.sync_selected(dags_count, fast_mode).await {
                     Ok(()) => break,

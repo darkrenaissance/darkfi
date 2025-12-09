@@ -16,8 +16,5 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Rate-Limit Nullifiers
-pub mod rln;
-
 /// NickServ implementation, used for account management
 pub mod nickserv;

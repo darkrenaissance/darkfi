@@ -49,6 +49,11 @@ impl Header {
         Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
     }
 
+    pub async fn new_static(event_graph: &EventGraph) -> Self {
+        let (layer, parents) = event_graph.get_next_layer_with_parents_static().await;
+        Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
+    }
+
     pub async fn with_timestamp(timestamp: u64, event_graph: &EventGraph) -> Self {
         let current_dag_name = event_graph.current_genesis.read().await.header.timestamp;
         let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
@@ -148,6 +153,11 @@ impl Event {
     /// of the codebase.
     pub async fn new(data: Vec<u8>, event_graph: &EventGraph) -> Self {
         let header = Header::new(event_graph).await;
+        Self { header, content: data }
+    }
+
+    pub async fn new_static(data: Vec<u8>, event_graph: &EventGraph) -> Self {
+        let header = Header::new_static(event_graph).await;
         Self { header, content: data }
     }
 

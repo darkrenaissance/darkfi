@@ -331,7 +331,7 @@ async fn start_sync_loop(
                         error!(target: "taud", "Failed inserting new event to DAG: {e}");
                     } else {
                         // Otherwise, broadcast it
-                        p2p.broadcast(&EventPut(event)).await;
+                        p2p.broadcast(&EventPut(event, vec![])).await;
                     }
                 }
             }

@@ -28,10 +28,10 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    bridgetree::Position,
-    crypto::{pasta_prelude::FromUniformBytes, poseidon_hash, MerkleTree},
+    crypto::{pasta_prelude::FromUniformBytes, poseidon_hash, smt::SmtMemoryFp},
     pasta::pallas,
 };
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use tracing::info;
 
@@ -46,6 +46,9 @@ pub const RLN_EPOCH_LEN: u64 = 600; // 10 min
 
 pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("../../proof/rlnv2-diff-signal.zk.bin");
 pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("../../proof/rlnv2-diff-slash.zk.bin");
+
+/// TODO: this should be configurable
+pub const USER_MSG_LIMIT: u64 = 6;
 
 /// Find closest epoch to given timestamp
 pub fn closest_epoch(timestamp: u64) -> u64 {
@@ -62,7 +65,7 @@ pub fn hash_event(event: &Event) -> pallas::Base {
     pallas::Base::from_uniform_bytes(&buf)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct RlnIdentity {
     pub nullifier: pallas::Base,
     pub trapdoor: pallas::Base,
@@ -81,25 +84,52 @@ impl RlnIdentity {
                 pallas::Base::random(&mut rng),
             ]),
             trapdoor: poseidon_hash([RLN_TRAPDOOR_DERIVATION_PATH, pallas::Base::random(&mut rng)]),
-            user_message_limit: 100,
+            user_message_limit: USER_MSG_LIMIT,
             message_id: 1,
             last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
         }
     }
 
     pub fn commitment(&self) -> pallas::Base {
-        poseidon_hash([
-            poseidon_hash([self.nullifier, self.trapdoor]),
-            pallas::Base::from(self.user_message_limit),
-        ])
+        let identity_secret = poseidon_hash([self.nullifier, self.trapdoor]);
+        let identity_secret_hash = poseidon_hash([identity_secret, self.user_message_limit.into()]);
+
+        poseidon_hash([identity_secret_hash])
     }
+
+    // pub fn _create_register_proof(
+    //     &self,
+    //     event: &Event,
+    //     identity_tree: &mut SmtMemoryFp,
+    //     register_pk: &ProvingKey,
+    // ) -> Result<Proof> {
+    //     let witnesses = vec![
+    //         Witness::Base(Value::known(self.nullifier)),
+    //         Witness::Base(Value::known(self.trapdoor)),
+    //         Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+    //     ];
+
+    //     let public_inputs = vec![self.commitment(), pallas::Base::from(self.user_message_limit)];
+
+    //     info!(target: "crypto::rln::create_register_proof", "[RLN] Creating register proof for event {}", event.header.id());
+    //     let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+    //     let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
+
+    //     let proof =
+    //         Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng).unwrap();
+
+    //     let leaf = vec![self.commitment()];
+    //     let leaf: Vec<_> = leaf.into_iter().map(|l| (l, l)).collect();
+    //     // TODO: Recipients should verify that identity doesn't exist already before insert.
+    //     identity_tree.insert_batch(leaf.clone()).unwrap(); // leaf == pos
+    //     Ok(proof)
+    // }
 
     pub fn create_signal_proof(
         &self,
         event: &Event,
-        identity_tree: &MerkleTree,
-        identity_pos: Position,
-        proving_key: &ProvingKey,
+        identity_tree: &SmtMemoryFp,
+        signal_pk: &ProvingKey,
     ) -> Result<(Proof, Vec<pallas::Base>)> {
         // 1. Construct share
         let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
@@ -112,32 +142,32 @@ impl RlnIdentity {
 
         let internal_nullifier = poseidon_hash([a_1]);
 
-        // 2. Create Merkle proof
-        let identity_root = identity_tree.root(0).unwrap();
-        let identity_path = identity_tree.witness(identity_pos, 0).unwrap();
+        // 2. Inclusion proof
+        let identity_root = identity_tree.root();
+        let identity_path = identity_tree.prove_membership(&self.commitment());
+        // TODO: Delete me later
+        assert!(identity_path.verify(&identity_root, &self.commitment(), &self.commitment()));
 
         // 3. Create ZK proof
         let witnesses = vec![
             Witness::Base(Value::known(self.nullifier)),
             Witness::Base(Value::known(self.trapdoor)),
-            Witness::MerklePath(Value::known(identity_path.clone().try_into().unwrap())),
-            Witness::Uint32(Value::known(u64::from(identity_pos).try_into().unwrap())),
-            Witness::Base(Value::known(x)),
-            Witness::Base(Value::known(external_nullifier)),
-            Witness::Base(Value::known(message_id)),
             Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+            Witness::SparseMerklePath(Value::known(identity_path.path)),
+            Witness::Base(Value::known(x)),
+            Witness::Base(Value::known(message_id)),
             Witness::Base(Value::known(epoch)),
         ];
 
-        let public_inputs =
-            vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
+        let public_inputs = vec![identity_root, external_nullifier, x, y, internal_nullifier];
 
-        info!(target: "crypto::rln::create_proof", "[RLN] Creating proof for event {}", event.header.id());
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        info!(target: "crypto::rln::create_signal_proof", "[RLN] Creating signal proof for event {}", event.header.id());
+        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
 
-        let proof = Proof::create(proving_key, &[signal_circuit], &public_inputs, &mut OsRng)?;
-        Ok((proof, vec![y, internal_nullifier]))
+        let proof = Proof::create(signal_pk, &[signal_circuit], &public_inputs, &mut OsRng)?;
+        // Ok((proof, vec![y, internal_nullifier]))
+        Ok((proof, public_inputs))
     }
 }
 

@@ -26,9 +26,12 @@ use std::{
     },
 };
 
-use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncodable};
+use darkfi_sdk::pasta::pallas;
+use darkfi_serial::{
+    async_trait, deserialize_async, deserialize_async_partial, SerialDecodable, SerialEncodable,
+};
 use smol::Executor;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS};
 use crate::{
@@ -40,6 +43,7 @@ use crate::{
     },
     system::msleep,
     util::time::NanoTimestamp,
+    zk::Proof,
     Error, Result,
 };
 
@@ -106,6 +110,8 @@ pub struct ProtocolEventGraph {
     event_graph: EventGraphPtr,
     /// `MessageSubscriber` for `EventPut`
     ev_put_sub: MessageSubscription<EventPut>,
+    /// `MessageSubscriber` for `StaticPut`
+    st_put_sub: MessageSubscription<StaticPut>,
     /// `MessageSubscriber` for `EventReq`
     ev_req_sub: MessageSubscription<EventReq>,
     /// `MessageSubscriber` for `EventRep`
@@ -133,8 +139,14 @@ pub struct ProtocolEventGraph {
 
 /// A P2P message representing publishing an event on the network
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct EventPut(pub Event);
+pub struct EventPut(pub Event, pub Vec<u8>);
 impl_p2p_message!(EventPut, "EventGraph::EventPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
+
+/// A P2P message representing publishing an event of a static graph
+/// (most likely RLN_identities) on the network
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct StaticPut(pub Event);
+impl_p2p_message!(StaticPut, "EventGraph::StaticPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing an event request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -176,6 +188,7 @@ impl ProtocolBase for ProtocolEventGraph {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         self.jobsman.clone().start(ex.clone());
         self.jobsman.clone().spawn(self.clone().handle_event_put(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_static_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;
         // self.jobsman.clone().spawn(self.clone().handle_header_put(), ex.clone()).await;
         // self.jobsman.clone().spawn(self.clone().handle_header_req(), ex.clone()).await;
@@ -194,6 +207,7 @@ impl ProtocolEventGraph {
     pub async fn init(event_graph: EventGraphPtr, channel: ChannelPtr) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<EventPut>().await;
+        msg_subsystem.add_dispatch::<StaticPut>().await;
         msg_subsystem.add_dispatch::<EventReq>().await;
         msg_subsystem.add_dispatch::<EventRep>().await;
         msg_subsystem.add_dispatch::<HeaderPut>().await;
@@ -203,6 +217,7 @@ impl ProtocolEventGraph {
         msg_subsystem.add_dispatch::<TipRep>().await;
 
         let ev_put_sub = channel.subscribe_msg::<EventPut>().await?;
+        let st_put_sub = channel.subscribe_msg::<StaticPut>().await?;
         let ev_req_sub = channel.subscribe_msg::<EventReq>().await?;
         let ev_rep_sub = channel.subscribe_msg::<EventRep>().await?;
         let _hdr_put_sub = channel.subscribe_msg::<HeaderPut>().await?;
@@ -217,6 +232,7 @@ impl ProtocolEventGraph {
             channel: channel.clone(),
             event_graph,
             ev_put_sub,
+            st_put_sub,
             ev_req_sub,
             ev_rep_sub,
             _hdr_put_sub,
@@ -259,8 +275,8 @@ impl ProtocolEventGraph {
         let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
 
         loop {
-            let event = match self.ev_put_sub.receive().await {
-                Ok(v) => v.0.clone(),
+            let (event, blob) = match self.ev_put_sub.receive().await {
+                Ok(v) => (v.0.clone(), v.1.clone()),
                 Err(_) => continue,
             };
             trace!(
@@ -277,9 +293,57 @@ impl ProtocolEventGraph {
                 continue
             }
 
+            ////////////////////
+            let mut verification_failed = false;
+            #[allow(clippy::never_loop)]
+            loop {
+                let (proof, public_inputs): (Proof, Vec<pallas::Base>) =
+                    match deserialize_async_partial(&blob).await {
+                        Ok((v, _)) => v,
+                        Err(e) => {
+                            error!(target: "event_graph::protocol::handle_event_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
+                            break
+                        }
+                    };
+
+                if public_inputs.len() != 2 {
+                    error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Received event has the wrong number of public inputs");
+                    verification_failed = true;
+                    break
+                }
+
+                // info!("public_inputs: {:?}", public_inputs);
+
+                info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Verifying incoming Event RLN proof");
+                // let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
+                // let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
+                // let x = hash_event(event);
+                // let y = public_inputs[0];
+                // let internal_nullifier = public_inputs[1];
+
+                // verification_failed =
+                //     proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
+                verification_failed =
+                    match proof.verify(&self.event_graph.signal_vk, &public_inputs) {
+                        Ok(()) => false,
+                        Err(e) => {
+                            error!("error: {e}");
+                            true
+                        }
+                    };
+                break
+            }
+
+            if verification_failed {
+                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event proof verification failed");
+                continue
+            }
+            ////////////////////
+
             // If we have already seen the event, we'll stay quiet.
             let current_genesis = self.event_graph.current_genesis.read().await;
-            let dag_name = current_genesis.header.timestamp.to_string();
+            let genesis_timestamp = current_genesis.header.timestamp;
+            let dag_name = genesis_timestamp.to_string();
             let hdr_tree_name = format!("headers_{dag_name}");
             let event_id = event.id();
             if self
@@ -319,7 +383,6 @@ impl ProtocolEventGraph {
             // The genesis event marks the last time the Dag has been pruned of old
             // events. The pruning interval is defined by the days_rotation field
             // of [`EventGraph`].
-            let genesis_timestamp = self.event_graph.current_genesis.read().await.header.timestamp;
             if event.header.timestamp < genesis_timestamp {
                 debug!(
                     target: "event_graph::protocol::handle_event_put",
@@ -396,16 +459,18 @@ impl ProtocolEventGraph {
                         .send(&EventReq(missing_parents.clone().into_iter().collect()))
                         .await?;
 
-                    let outbound_connect_timeout = self
-                        .event_graph
-                        .p2p
-                        .settings()
-                        .read_arc()
-                        .await
-                        .outbound_connect_timeout(self.channel.address().scheme());
                     // Node waits for response
-                    let Ok(parents) =
-                        self.ev_rep_sub.receive_with_timeout(outbound_connect_timeout).await
+                    let Ok(parents) = self
+                        .ev_rep_sub
+                        .receive_with_timeout(
+                            self.event_graph
+                                .p2p
+                                .settings()
+                                .read()
+                                .await
+                                .outbound_connect_timeout_max(),
+                        )
+                        .await
                     else {
                         error!(
                             target: "event_graph::protocol::handle_event_put",
@@ -516,7 +581,87 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            self.broadcaster_push.send(EventPut(event)).await.expect("push broadcaster closed");
+            self.broadcaster_push
+                .send(EventPut(event, blob))
+                .await
+                .expect("push broadcaster closed");
+        }
+    }
+
+    async fn handle_static_put(self: Arc<Self>) -> Result<()> {
+        // Rolling window of event timestamps on this channel
+        let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
+
+        loop {
+            let event = match self.st_put_sub.receive().await {
+                Ok(v) => v.0.clone(),
+                Err(_) => continue,
+            };
+            trace!(
+                 target: "event_graph::protocol::handle_event_put()",
+                 "Got EventPut: {} [{}]", event.id(), self.channel.address(),
+            );
+
+            info!("Received a static event: {:?}", event);
+
+            // Check if node has finished syncing its DAG
+            if !*self.event_graph.synced.read().await {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put",
+                    "DAG is still syncing, skipping..."
+                );
+                continue
+            }
+
+            let event_id = event.id();
+            if self.event_graph.static_dag.contains_key(event_id.as_bytes())? {
+                debug!(
+                    target: "event_graph::protocol::handle_static_put()",
+                    "Event {} is already known", event_id,
+                );
+                continue
+            }
+
+            // Check if event's parents are in the static DAG
+            for parent in event.header.parents.iter() {
+                if *parent == NULL_ID {
+                    continue
+                }
+                if !self.event_graph.static_dag.contains_key(parent.as_bytes())? {
+                    debug!(
+                        target: "event_graph::protocol::handle_static_put()",
+                        "Event {} is orphan", event_id,
+                    );
+                    return Err(Error::EventNotFound("Event is orphan".to_owned()))
+                }
+            }
+
+            // There's a new unique event.
+            // Apply ban logic to stop network floods.
+            bantimes.ticktock();
+            if bantimes.count() > WINDOW_MAXSIZE {
+                self.channel.ban().await;
+                // This error is actually unused. We could return Ok here too.
+                return Err(Error::MaliciousFlood)
+            }
+
+            // Validate the new event first. If we do not consider it valid, we
+            // will just drop it and stay quiet. If the malicious threshold
+            // is reached, we will stop the connection.
+            if !event.validate_new() {
+                self.clone().increase_malicious_count().await?;
+                continue
+            }
+
+            // At this point, this is a new event to us. Let's see if we
+            // have all of its parents.
+            debug!(
+                target: "event_graph::protocol::handle_event_put()",
+                "Event {} is new", event_id,
+            );
+
+            self.event_graph.static_insert(&event).await?;
+            self.event_graph.static_broadcast(event).await?
         }
     }
 
@@ -704,11 +849,20 @@ impl ProtocolEventGraph {
 
             // We received a tip request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let dag_timestamp = u64::from_str(&dag_name)?;
-            let store = self.event_graph.dag_store.read().await;
-            let (_, layers) = match store.header_dags.get(&dag_timestamp) {
-                Some(v) => v,
-                None => continue,
+            let layers = match dag_name.as_str() {
+                "static-dag" => {
+                    let tips = self.event_graph.static_unreferenced_tips().await;
+                    &tips.clone()
+                }
+                _ => {
+                    let dag_timestamp = u64::from_str(&dag_name)?;
+                    let store = self.event_graph.dag_store.read().await;
+                    let (_, layers) = match store.header_dags.get(&dag_timestamp) {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    &layers.clone()
+                }
             };
             // let layers = self.event_graph.dag_store.read().await.find_unreferenced_tips(&dag_name).await;
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;

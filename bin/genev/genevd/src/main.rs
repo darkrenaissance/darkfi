@@ -155,6 +155,17 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!(target: "genevd", "Waiting for some P2P connections...");
     sleep(5).await;
 
+    match event_graph.static_sync().await {
+        Ok(()) => {
+            info!("static synced successfully")
+        }
+        Err(e) => {
+            error!("failed syncing static graph: {e}");
+            p2p.stop().await;
+            return Err(Error::DagSyncFailed)
+        }
+    }
+
     // We'll attempt to sync 5 times
     if !settings.skip_dag_sync {
         for i in 1..=6 {

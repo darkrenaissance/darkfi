@@ -19,6 +19,7 @@
 // use async_std::stream::from_iter;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    io::Cursor,
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -43,9 +44,14 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::{
-    event_graph::util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
+    event_graph::{
+        proto::StaticPut,
+        util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
+    },
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    zk::{empty_witnesses, VerifyingKey, ZkCircuit},
+    zkas::ZkBinary,
     Error, Result,
 };
 
@@ -330,6 +336,8 @@ pub struct EventGraph {
     p2p: P2pPtr,
     /// Sled tree containing the headers
     dag_store: RwLock<DAGStore>,
+    /// Static DAG
+    static_dag: sled::Tree,
     /// Replay logs path.
     datastore: PathBuf,
     /// Run in replay_mode where if set we log Sled DB instructions
@@ -346,6 +354,9 @@ pub struct EventGraph {
     /// Event publisher, this notifies whenever an event is
     /// inserted into the DAG
     pub event_pub: PublisherPtr<Event>,
+    /// Static Event publisher, this notifies whenever a static event is
+    /// inserted into the static DAG
+    pub static_pub: PublisherPtr<Event>,
     /// Current genesis event
     pub current_genesis: RwLock<Event>,
     /// Currently configured DAG rotation, in hours
@@ -356,9 +367,10 @@ pub struct EventGraph {
     pub deg_enabled: RwLock<bool>,
     /// The publisher for which we can give deg info over
     deg_publisher: PublisherPtr<DegEvent>,
-    /// Run in replay_mode where if set we log Sled DB instructions
-    /// into `datastore`, useful to reacreate a faulty DAG to debug.
+    /// Run in fast mode where if set we sync only headers.
     fast_mode: bool,
+    /// Signaling verify key
+    signal_vk: VerifyingKey,
 }
 
 impl EventGraph {
@@ -383,8 +395,30 @@ impl EventGraph {
         hours_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        // Read or build signal verifying key
+        let signal_zkbin = include_bytes!("proofs/rlnv2-diff-signal.zk.bin");
+        let signal_zkbin = ZkBinary::decode(signal_zkbin, false).unwrap();
+        let signal_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
+
+        let signal_vk = match sled_db.get("rlnv2-diff-signal-vk")? {
+            Some(vk) => {
+                let mut reader = Cursor::new(vk);
+                VerifyingKey::read(&mut reader, signal_empty_circuit)?
+            }
+            None => {
+                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+                let verifyingkey = VerifyingKey::build(signal_zkbin.k, &signal_empty_circuit);
+                let mut buf = vec![];
+                verifyingkey.write(&mut buf)?;
+                sled_db.insert("rlnv2-diff-signal-vk", buf)?;
+                verifyingkey
+            }
+        };
+
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_pub = Publisher::new();
+        let static_pub = Publisher::new();
 
         // Create the current genesis event based on the `hours_rotation`
         let current_genesis = generate_genesis(hours_rotation);
@@ -394,23 +428,28 @@ impl EventGraph {
             header_dags: BTreeMap::default(),
             main_dags: BTreeMap::default(),
         }
-        .new(sled_db, hours_rotation)
+        .new(sled_db.clone(), hours_rotation)
         .await;
+
+        let static_dag = Self::static_new(sled_db).await?;
 
         let self_ = Arc::new(Self {
             p2p,
             dag_store: RwLock::new(dag_store.clone()),
+            static_dag,
             datastore,
             replay_mode,
             fast_mode,
             broadcasted_ids,
             prune_task: OnceCell::new(),
             event_pub,
+            static_pub,
             current_genesis: RwLock::new(current_genesis.clone()),
             hours_rotation,
             synced: RwLock::new(false),
             deg_enabled: RwLock::new(false),
             deg_publisher: Publisher::new(),
+            signal_vk,
         });
 
         // Check if we have it in our DAG.
@@ -995,6 +1034,60 @@ impl EventGraph {
         (next_layer, parents)
     }
 
+    /// Find the unreferenced tips in the current DAG state, mapped by their layers.
+    async fn find_unreferenced_tips_static(&self, dag: &sled::Tree) -> LayerUTips {
+        // First get all the event IDs
+        let mut tips = HashSet::new();
+        for iter_elem in dag.iter() {
+            let (id, _) = iter_elem.unwrap();
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            tips.insert(id);
+        }
+        // Iterate again to find unreferenced IDs
+        for iter_elem in dag.iter() {
+            let (_, event) = iter_elem.unwrap();
+            let event: Event = deserialize_async(&event).await.unwrap();
+            for parent in event.header.parents.iter() {
+                tips.remove(parent);
+            }
+        }
+        // Build the layers map
+        let mut map: LayerUTips = BTreeMap::new();
+        for tip in tips {
+            let event = self.static_fetch(&tip).await.unwrap().unwrap();
+            if let Some(layer_tips) = map.get_mut(&event.header.layer) {
+                layer_tips.insert(tip);
+            } else {
+                let mut layer_tips = HashSet::new();
+                layer_tips.insert(tip);
+                map.insert(event.header.layer, layer_tips);
+            }
+        }
+
+        map
+    }
+
+    async fn get_next_layer_with_parents_static(&self) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
+        let unreferenced_tips = self.find_unreferenced_tips_static(&self.static_dag).await;
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        let mut index = 0;
+        'outer: for (_, tips) in unreferenced_tips.iter().rev() {
+            for tip in tips.iter() {
+                parents[index] = *tip;
+                index += 1;
+                if index >= N_EVENT_PARENTS {
+                    break 'outer;
+                }
+            }
+        }
+
+        let next_layer = unreferenced_tips.last_key_value().unwrap().0 + 1;
+
+        assert!(parents.iter().any(|x| x != &NULL_ID));
+        (next_layer, parents)
+    }
+
     /// Internal function used for DAG sorting.
     async fn get_unreferenced_tips_sorted(&self) -> Vec<[blake3::Hash; N_EVENT_PARENTS]> {
         let mut vec_tips = vec![];
@@ -1159,6 +1252,123 @@ impl EventGraph {
         result.sort_by(|a, b| a.header.layer.cmp(&b.header.layer));
 
         Ok(result)
+    }
+
+    pub async fn static_new(sled_db: sled::Db) -> Result<sled::Tree> {
+        let static_dag = sled_db.open_tree("static-dag")?;
+
+        let genesis = generate_genesis(0);
+        let mut overlay = SledTreeOverlay::new(&static_dag);
+
+        let event_se = serialize_async(&genesis).await;
+
+        // Add the event to the overlay
+        overlay.insert(genesis.id().as_bytes(), &event_se).unwrap();
+
+        // Aggregate changes into a single batch
+        let batch = match overlay.aggregate() {
+            Some(b) => b,
+            None => return Ok(static_dag),
+        };
+
+        // Atomically apply the batch.
+        // Panic if something is corrupted.
+        if let Err(e) = static_dag.apply_batch(batch) {
+            panic!("Failed applying dag_insert batch to sled: {}", e);
+        }
+
+        Ok(static_dag)
+    }
+
+    pub async fn static_sync(&self) -> Result<()> {
+        self.dag_sync(self.static_dag.clone(), false).await?;
+        Ok(())
+    }
+
+    pub async fn static_broadcast(&self, event: Event) -> Result<()> {
+        self.p2p.broadcast(&StaticPut(event)).await;
+        Ok(())
+    }
+
+    pub async fn static_insert(&self, event: &Event) -> Result<()> {
+        let mut overlay = SledTreeOverlay::new(&self.static_dag);
+
+        let event_se = serialize_async(event).await;
+
+        // Add the event to the overlay
+        overlay.insert(event.id().as_bytes(), &event_se).unwrap();
+
+        // Aggregate changes into a single batch
+        let batch = match overlay.aggregate() {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+
+        // Atomically apply the batch.
+        // Panic if something is corrupted.
+        if let Err(e) = self.static_dag.apply_batch(batch) {
+            panic!("Failed applying dag_insert batch to sled: {}", e);
+        }
+
+        // Send out notifications about the new event
+        self.static_pub.notify(event.clone()).await;
+
+        Ok(())
+    }
+
+    pub async fn static_fetch(&self, event_id: &Hash) -> Result<Option<Event>> {
+        let Some(bytes) = self.static_dag.get(event_id.as_bytes())? else {
+            return Ok(None);
+        };
+        let event: Event = deserialize_async(&bytes).await?;
+
+        return Ok(Some(event))
+    }
+
+    pub async fn static_fetch_all(&self) -> Result<Vec<Event>> {
+        let mut events = vec![];
+        for iter_elem in self.static_dag.iter() {
+            let (id, _) = iter_elem.unwrap();
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let event = self.static_fetch(&id).await?.unwrap();
+            if event.header.parents == NULL_PARENTS {
+                continue
+            }
+            events.push(event);
+        }
+        Ok(events)
+    }
+
+    pub async fn static_unreferenced_tips(&self) -> LayerUTips {
+        // First get all the event IDs
+        let mut tips = HashSet::new();
+        for iter_elem in self.static_dag.iter() {
+            let (id, _) = iter_elem.unwrap();
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            tips.insert(id);
+        }
+        // Iterate again to find unreferenced IDs
+        for iter_elem in self.static_dag.iter() {
+            let (_, event) = iter_elem.unwrap();
+            let event: Event = deserialize_async(&event).await.unwrap();
+            for parent in event.header.parents.iter() {
+                tips.remove(parent);
+            }
+        }
+        // Build the layers map
+        let mut map: LayerUTips = BTreeMap::new();
+        for tip in tips {
+            let event = self.static_fetch(&tip).await.unwrap().unwrap();
+            if let Some(layer_tips) = map.get_mut(&event.header.layer) {
+                layer_tips.insert(tip);
+            } else {
+                let mut layer_tips = HashSet::new();
+                layer_tips.insert(tip);
+                map.insert(event.header.layer, layer_tips);
+            }
+        }
+
+        map
     }
 }
 

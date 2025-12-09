@@ -16,24 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    str::{FromStr, SplitAsciiWhitespace},
-    sync::Arc,
-};
+use std::{str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
 
-use darkfi::Result;
-use darkfi_sdk::crypto::SecretKey;
+use darkfi::{event_graph::Event, Result};
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::serialize_async;
 use smol::lock::RwLock;
 
-use super::{
-    super::{client::ReplyType, rpl::*},
-    rln::RlnIdentity,
+use super::super::{client::ReplyType, rpl::*};
+use crate::{
+    crypto::rln::{closest_epoch, RlnIdentity, USER_MSG_LIMIT},
+    IrcServer,
 };
-use crate::IrcServer;
 
-const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
-const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
+pub const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
+pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
 
 const NICKSERV_USAGE: &str = r#"***** NickServ Help ***** 
 
@@ -79,12 +76,14 @@ impl NickServ {
         let nick = self.nickname.read().await.to_string();
         let mut tokens = query.split_ascii_whitespace();
 
+        tokens.next();
         let Some(command) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
                 format!("{nick} :No text to send"),
             ))])
         };
+        let command = command.strip_prefix(':').unwrap();
 
         match command.to_uppercase().as_str() {
             "INFO" => self.handle_info(&nick, &mut tokens).await,
@@ -115,12 +114,12 @@ impl NickServ {
         let account_name = tokens.next();
         let identity_nullifier = tokens.next();
         let identity_trapdoor = tokens.next();
-        let leaf_pos = tokens.next();
+        let user_msg_limit = tokens.next();
 
         if account_name.is_none() ||
             identity_nullifier.is_none() ||
             identity_trapdoor.is_none() ||
-            leaf_pos.is_none()
+            user_msg_limit.is_none()
         {
             return Ok(vec![
                 ReplyType::Notice((
@@ -131,7 +130,7 @@ impl NickServ {
                 ReplyType::Notice((
                     "NickServ".to_string(),
                     nick.to_string(),
-                    "Use `REGISTER <account_name> <identity_nullifier> <identity_trapdoor> <leaf_pos>`."
+                    "Use `REGISTER <account_name> <identity_nullifier> <identity_trapdoor> <user_msg_limit>`."
                         .to_string(),
                 )),
             ])
@@ -140,7 +139,7 @@ impl NickServ {
         let account_name = account_name.unwrap();
         let identity_nullifier = identity_nullifier.unwrap();
         let identity_trapdoor = identity_trapdoor.unwrap();
-        let leaf_pos = leaf_pos.unwrap();
+        let _user_msg_limit = user_msg_limit.unwrap();
 
         // Open the sled tree
         let db =
@@ -154,45 +153,70 @@ impl NickServ {
             ))])
         }
 
-        // TODO: WIF
+        // Open the sled tree
+        let db_default =
+            self.server.darkirc.sled.open_tree(format!("{}default", ACCOUNTS_DB_PREFIX))?;
+
         // Parse the secrets
-        let identity_nullifier = match SecretKey::from_str(identity_nullifier) {
-            Ok(v) => v,
-            Err(e) => {
-                return Ok(vec![ReplyType::Notice((
-                    "NickServ".to_string(),
-                    nick.to_string(),
-                    format!("Invalid identity_nullifier: {e}"),
-                ))])
-            }
-        };
+        let nullifier_bytes = bs58::decode(identity_nullifier).into_vec()?;
+        let identity_nullifier =
+            match pallas::Base::from_repr(nullifier_bytes.try_into().unwrap()).into_option() {
+                Some(v) => v,
+                None => {
+                    return Ok(vec![ReplyType::Notice((
+                        "NickServ".to_string(),
+                        nick.to_string(),
+                        format!("Invalid identity_nullifier"),
+                    ))])
+                }
+            };
 
-        let identity_trapdoor = match SecretKey::from_str(identity_trapdoor) {
-            Ok(v) => v,
-            Err(e) => {
-                return Ok(vec![ReplyType::Notice((
-                    "NickServ".to_string(),
-                    nick.to_string(),
-                    format!("Invalid identity_trapdoor: {e}"),
-                ))])
-            }
-        };
-
-        let leaf_pos = match u64::from_str(leaf_pos) {
-            Ok(v) => v,
-            Err(e) => {
-                return Ok(vec![ReplyType::Notice((
-                    "NickServ".to_string(),
-                    nick.to_string(),
-                    format!("Invalid leaf_pos: {e}"),
-                ))])
-            }
-        };
+        let trapdoor_bytes = bs58::decode(identity_trapdoor).into_vec()?;
+        let identity_trapdoor =
+            match pallas::Base::from_repr(trapdoor_bytes.try_into().unwrap()).into_option() {
+                Some(v) => v,
+                None => {
+                    return Ok(vec![ReplyType::Notice((
+                        "NickServ".to_string(),
+                        nick.to_string(),
+                        format!("Invalid identity_trapdoor"),
+                    ))])
+                }
+            };
 
         // Create a new RLN identity and insert it into the db tree
-        let rln_identity =
-            RlnIdentity { identity_nullifier, identity_trapdoor, leaf_pos: leaf_pos.into() };
-        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&rln_identity).await)?;
+        let new_rln_identity = RlnIdentity {
+            nullifier: identity_nullifier,
+            trapdoor: identity_trapdoor,
+            user_message_limit: USER_MSG_LIMIT,
+            message_id: 1, // TODO
+            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
+        };
+
+        // Store account
+        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+        // Set default account if not already
+        if db_default.is_empty() {
+            db_default
+                .insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+        }
+
+        *self.server.rln_identity.write().await = Some(new_rln_identity);
+
+        // Update SMT, DAG and broadcast
+        let mut identities_tree = self.server.rln_identity_tree.write().await;
+        let rln_commitment = new_rln_identity.commitment();
+        // info!("register commitment: {}", rln_commitment.to_string());
+
+        let commitment = vec![rln_commitment];
+        let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+        identities_tree.insert_batch(commitment)?;
+        // info!("root: {}", identities_tree.root().to_string());
+
+        let evgr = &self.server.darkirc.event_graph;
+        let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
+        evgr.static_insert(&event).await?;
+        evgr.static_broadcast(event).await?;
 
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),
