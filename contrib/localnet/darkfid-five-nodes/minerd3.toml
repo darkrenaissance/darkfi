@@ -9,6 +9,9 @@
 # PoW miner number of threads to use
 threads = 1
 
+# Number of nonces to execute in system hashrate benchmark
+#bench = 1000
+
 # Polling rate to ask darkfid for mining jobs
 #polling_rate = 2
 

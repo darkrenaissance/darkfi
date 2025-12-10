@@ -32,7 +32,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 
-use minerd::{MinerNodeConfig, Minerd};
+use minerd::{benchmark::benchmark, MinerNodeConfig, Minerd};
 
 const CONFIG_FILE: &str = "minerd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../minerd.toml");
@@ -48,6 +48,10 @@ struct Args {
     #[structopt(short, long, default_value = "4")]
     /// PoW miner number of threads to use
     threads: usize,
+
+    #[structopt(short, long)]
+    /// Number of nonces to execute in system hashrate benchmark
+    bench: Option<u64>,
 
     #[structopt(short, long, default_value = "2")]
     /// Polling rate to ask darkfid for mining jobs
@@ -140,6 +144,11 @@ pub async fn parse_blockchain_config(
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
+    // Run system hashrate benchmark if requested
+    if let Some(nonces) = args.bench {
+        return benchmark(args.threads, nonces)
+    }
+
     info!(target: "minerd", "Starting DarkFi Mining Daemon...");
 
     // Grab blockchain network configuration

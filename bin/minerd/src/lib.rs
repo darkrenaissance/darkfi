@@ -32,6 +32,9 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::Keypair;
 
+/// Miner benchmarking related methods
+pub mod benchmark;
+
 /// darkfid JSON-RPC related methods
 mod rpc;
 use rpc::{polling_task, DarkfidRpcClient};
