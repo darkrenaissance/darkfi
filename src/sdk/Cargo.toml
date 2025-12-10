@@ -24,7 +24,7 @@ thiserror = "2.0.17"
 darkfi-serial = {version = "0.5.1", features = ["crypto"]}
 
 # Encoding
-bs58 = "0.5.1"
+bs58 = {version = "0.5.1", features = ["check"]}
 num = "0.4.3"
 sha2 = "0.10.9"
 
