@@ -389,6 +389,7 @@ impl PoWModule {
     }
 
     /// Mine provided block, based on next mine target.
+    /// Note: this is used in tests not in actual mining.
     pub fn mine_block(
         &self,
         header: &mut Header,
@@ -407,7 +408,8 @@ impl PoWModule {
         };
 
         // Generate the RandomX VMs for the key
-        let vms = generate_mining_vms(randomx_key, threads, stop_signal)?;
+        let flags = get_mining_flags(false, false, false);
+        let vms = generate_mining_vms(flags, randomx_key, threads, stop_signal)?;
 
         // Grab the next mine target
         let target = self.next_mine_target()?;
@@ -431,9 +433,18 @@ impl std::fmt::Display for PoWModule {
 ///
 /// Note: RandomX recommended flags will include `SSSE3` and `AVX2`
 /// extensions if CPU supports them.
-fn get_mining_flags() -> RandomXFlags {
-    // TODO: Try adding `| RandomXFlags::LARGEPAGES`.
-    RandomXFlags::get_recommended_flags() | RandomXFlags::FULLMEM
+pub fn get_mining_flags(fast_mode: bool, large_pages: bool, secure: bool) -> RandomXFlags {
+    let mut flags = RandomXFlags::get_recommended_flags();
+    if fast_mode {
+        flags |= RandomXFlags::FULLMEM;
+    }
+    if large_pages {
+        flags |= RandomXFlags::LARGEPAGES;
+    }
+    if secure && flags.contains(RandomXFlags::JIT) {
+        flags |= RandomXFlags::SECURE;
+    }
+    flags
 }
 
 /// Auxiliary function to initialize a `RandomXDataset` using all
@@ -485,24 +496,31 @@ fn init_dataset(
 
 /// Auxiliary function to generate mining VMs for provided RandomX key.
 pub fn generate_mining_vms(
+    flags: RandomXFlags,
     input: &HeaderHash,
     threads: usize,
     stop_signal: &Receiver<()>,
 ) -> Result<Vec<Arc<RandomXVM>>> {
-    // Initialize dataset
     debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX cache and dataset...");
     debug!(target: "validator::pow::generate_mining_vms", "[MINER] PoW input: {input}");
     let setup_start = Instant::now();
-    let ds_start = Instant::now();
-    let flags = get_mining_flags();
-    let dataset = init_dataset(flags, input, stop_signal)?;
-    debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX cache and dataset: {:?}", ds_start.elapsed());
+    // Check if fast mode is enabled
+    let (cache, dataset) = if flags.contains(RandomXFlags::FULLMEM) {
+        // Initialize dataset
+        let dataset = init_dataset(flags, input, stop_signal)?;
+        (None, Some(dataset))
+    } else {
+        // Initialize cache for light mode
+        let cache = RandomXCache::new(flags, &input.inner()[..])?;
+        (Some(cache), None)
+    };
+    debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX cache and dataset: {:?}", setup_start.elapsed());
 
     // Single thread mining VM
     if threads == 1 {
         debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX VM...");
         let vm_start = Instant::now();
-        let vm = Arc::new(RandomXVM::new(flags, None, Some(dataset))?);
+        let vm = Arc::new(RandomXVM::new(flags, cache, dataset)?);
         debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX VM in {:?}", vm_start.elapsed());
         debug!(target: "validator::pow::generate_mining_vms", "[MINER] Setup time: {:?}", setup_start.elapsed());
         return Ok(vec![vm])
@@ -521,7 +539,7 @@ pub fn generate_mining_vms(
 
         debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initializing RandomX VM #{t}...");
         let vm_start = Instant::now();
-        vms.push(Arc::new(RandomXVM::new(flags, None, Some(dataset.clone()))?));
+        vms.push(Arc::new(RandomXVM::new(flags, cache.clone(), dataset.clone())?));
         debug!(target: "validator::pow::generate_mining_vms", "[MINER] Initialized RandomX VM #{t} in {:?}", vm_start.elapsed());
     }
     debug!(target: "validator::pow::generate_mining_vms", "[MINER] Setup time: {:?}", setup_start.elapsed());

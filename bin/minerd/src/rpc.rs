@@ -19,7 +19,7 @@
 use std::{sync::Arc, thread};
 
 use num_bigint::BigUint;
-use randomx::RandomXVM;
+use randomx::{RandomXFlags, RandomXVM};
 use smol::channel::{Receiver, Sender};
 use tracing::{debug, error, info};
 use url::Url;
@@ -29,7 +29,7 @@ use darkfi::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
     system::{sleep, ExecutorPtr, StoppableTask},
     util::encoding::base64,
-    validator::pow::{generate_mining_vms, mine_block},
+    validator::pow::{generate_mining_vms, get_mining_flags, mine_block},
     Error, Result,
 };
 use darkfi_serial::deserialize_async;
@@ -276,7 +276,10 @@ pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
     // Cache current and next RandomX keys and current VMs
     let (mut current_randomx_key, mut next_randomx_key) = miner.randomx_keys().await?;
     info!(target: "minerd::rpc::mining_task", "Initializing {} mining VMs for key: {current_randomx_key}", miner.config.threads);
+    let mining_flags =
+        get_mining_flags(miner.config.fast_mode, miner.config.large_pages, miner.config.secure);
     let mut current_vms = Arc::new(generate_mining_vms(
+        mining_flags,
         &current_randomx_key,
         miner.config.threads,
         &miner.mining_channel.1.clone(),
@@ -291,7 +294,8 @@ pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
         let sender = vms_sender.clone();
         let stop_singal = miner.background_channel.1.clone();
         thread::spawn(move || {
-            match vms_generation_task(next_randomx_key, threads, sender, stop_singal) {
+            match vms_generation_task(mining_flags, next_randomx_key, threads, sender, stop_singal)
+            {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => {
                     error!(target: "minerd::rpc::polling_task", "RandomX VMs generation task failed: {e}")
@@ -344,6 +348,7 @@ pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
                 // Generate the RandomX VMs for the key
                 info!(target: "minerd::rpc::mining_task", "Initializing {} mining VMs for key: {randomx_key}", miner.config.threads);
                 current_vms = Arc::new(generate_mining_vms(
+                    mining_flags,
                     &randomx_key,
                     miner.config.threads,
                     &miner.mining_channel.1.clone(),
@@ -366,7 +371,7 @@ pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
             let sender = vms_sender.clone();
             let stop_singal = miner.background_channel.1.clone();
             thread::spawn(move || {
-                match vms_generation_task(next_key, threads, sender, stop_singal) {
+                match vms_generation_task(mining_flags, next_key, threads, sender, stop_singal) {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
                         error!(target: "minerd::rpc::polling_task", "RandomX VMs generation task failed: {e}")
@@ -427,6 +432,7 @@ async fn mining_task(
 /// Async task to generate RandomX VMs in the background and push them
 /// in provided channel.
 fn vms_generation_task(
+    mining_flags: RandomXFlags,
     randomx_key: HeaderHash,
     threads: usize,
     sender: Sender<Vec<Arc<RandomXVM>>>,
@@ -434,7 +440,7 @@ fn vms_generation_task(
 ) -> Result<()> {
     // Generate the RandomX VMs for the key
     info!(target: "minerd::rpc::vms_generation_task", "Initializing {threads} mining VMs for key: {randomx_key}");
-    let vms = generate_mining_vms(&randomx_key, threads, &stop_signal)?;
+    let vms = generate_mining_vms(mining_flags, &randomx_key, threads, &stop_signal)?;
     // Push them into the channel
     sender.send_blocking(vms)?;
     Ok(())

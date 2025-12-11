@@ -45,13 +45,25 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(short, long, default_value = "4")]
-    /// PoW miner number of threads to use
-    threads: usize,
-
     #[structopt(short, long)]
     /// Number of nonces to execute in system hashrate benchmark
     bench: Option<u64>,
+
+    #[structopt(long)]
+    /// Flag indicating whether to run miner in light mode
+    light_mode: bool,
+
+    #[structopt(long)]
+    /// Flag indicating whether to run miner with Large Pages
+    large_pages: bool,
+
+    #[structopt(long)]
+    /// Flag indicating whether to run miner with secure access to JIT memory (if supported)
+    secure: bool,
+
+    #[structopt(short, long, default_value = "4")]
+    /// PoW miner number of threads to use
+    threads: usize,
 
     #[structopt(short, long, default_value = "2")]
     /// Polling rate to ask darkfid for mining jobs
@@ -146,7 +158,7 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     // Run system hashrate benchmark if requested
     if let Some(nonces) = args.bench {
-        return benchmark(args.threads, nonces)
+        return benchmark(!args.light_mode, args.large_pages, args.secure, args.threads, nonces)
     }
 
     info!(target: "minerd", "Starting DarkFi Mining Daemon...");
@@ -193,8 +205,15 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     }
 
     // Generate the daemon
-    let miner_config =
-        MinerNodeConfig::new(args.threads, args.polling_rate, args.stop_at_height, wallet_config);
+    let miner_config = MinerNodeConfig::new(
+        !args.light_mode,
+        args.large_pages,
+        args.secure,
+        args.threads,
+        args.polling_rate,
+        args.stop_at_height,
+        wallet_config,
+    );
     let daemon = Minerd::init(miner_config, blockchain_config.endpoint, &ex).await;
     daemon.start(&ex);
 

@@ -41,6 +41,12 @@ use rpc::{polling_task, DarkfidRpcClient};
 
 /// Auxiliary structure representing miner node configuration.
 pub struct MinerNodeConfig {
+    /// Flag indicating whether to mine in fast mode
+    fast_mode: bool,
+    /// Flag indicating whether to mine with Large Pages
+    large_pages: bool,
+    /// Flag indicating whether to mine with secure access to JIT memory (if supported)
+    secure: bool,
     /// PoW miner number of threads to use
     threads: usize,
     /// Polling rate to ask darkfid for mining jobs
@@ -54,6 +60,9 @@ pub struct MinerNodeConfig {
 impl Default for MinerNodeConfig {
     fn default() -> Self {
         Self::new(
+            true,
+            false,
+            false,
             1,
             5,
             0,
@@ -67,12 +76,23 @@ impl Default for MinerNodeConfig {
 
 impl MinerNodeConfig {
     pub fn new(
+        fast_mode: bool,
+        large_pages: bool,
+        secure: bool,
         threads: usize,
         polling_rate: u64,
         stop_at_height: u32,
         wallet_config: HashMap<String, JsonValue>,
     ) -> Self {
-        Self { threads, polling_rate, stop_at_height, wallet_config }
+        Self {
+            fast_mode,
+            large_pages,
+            secure,
+            threads,
+            polling_rate,
+            stop_at_height,
+            wallet_config,
+        }
     }
 }
 

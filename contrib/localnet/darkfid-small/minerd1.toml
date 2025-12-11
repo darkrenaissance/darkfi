@@ -6,11 +6,20 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# PoW miner number of threads to use
-threads = 2
-
 # Number of nonces to execute in system hashrate benchmark
 #bench = 1000
+
+# Flag indicating whether to run miner in light mode
+light_mode = false
+
+# Flag indicating whether to run miner with Large Pages
+large_pages = false
+
+# Flag indicating whether to run miner with secure access to JIT memory (if supported)
+secure = false
+
+# PoW miner number of threads to use
+threads = 2
 
 # Polling rate to ask darkfid for mining jobs
 #polling_rate = 2

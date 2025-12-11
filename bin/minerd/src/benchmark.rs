@@ -31,13 +31,19 @@ use tracing::{error, info};
 use darkfi::{
     blockchain::{Header, HeaderHash},
     util::time::Timestamp,
-    validator::pow::generate_mining_vms,
+    validator::pow::{generate_mining_vms, get_mining_flags},
     Result,
 };
 
 /// Performs provided number of nonces simulating mining for provided
 /// threads count to determine system hashrate.
-pub fn benchmark(threads: usize, nonces: u64) -> Result<()> {
+pub fn benchmark(
+    fast_mode: bool,
+    large_pages: bool,
+    secure: bool,
+    threads: usize,
+    nonces: u64,
+) -> Result<()> {
     // Check provided params are valid
     if threads == 0 {
         error!(target: "minerd::benchmark", "No threads were configured!");
@@ -55,7 +61,8 @@ pub fn benchmark(threads: usize, nonces: u64) -> Result<()> {
         HeaderHash::from_str("c09967802bab1a95a4c434f18beb5a79e68ec7c75b252eb47e56516f32db8ce1")?;
     info!(target: "minerd::benchmark", "Initializing {threads} VMs for key: {key}");
     let (_, recvr) = smol::channel::bounded(1);
-    let vms = generate_mining_vms(&key, threads, &recvr)?;
+    let flags = get_mining_flags(fast_mode, large_pages, secure);
+    let vms = generate_mining_vms(flags, &key, threads, &recvr)?;
 
     // Use a dummy header to mine for reproducible results
     let header = Header::new(key, 1, Timestamp::from_u64(1765378623), 0);
