@@ -219,8 +219,8 @@ pub enum Network {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum AddressPrefix {
-    MainnetStandard = 0x63,
-    TestnetStandard = 0x87,
+    MainnetStandard = 0x39,
+    TestnetStandard = 0xaf,
 }
 
 impl AddressPrefix {
@@ -237,20 +237,18 @@ impl TryFrom<u8> for AddressPrefix {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x63 => Ok(Self::MainnetStandard),
-            0x87 => Ok(Self::TestnetStandard),
+            0x39 => Ok(Self::MainnetStandard),
+            0xaf => Ok(Self::TestnetStandard),
             _ => Err(ContractError::IoError("Invalid address type".to_string())),
         }
     }
 }
 
-/// Defines a standard DarkFi pasta curve address containing spending and
-/// viewing pubkeys.
+/// Defines a standard DarkFi pasta curve address containing prefix and pubkey.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct StandardAddress {
     network: Network,
     spending_key: PublicKey,
-    viewing_key: PublicKey,
 }
 
 impl StandardAddress {
@@ -267,6 +265,12 @@ impl From<StandardAddress> for Address {
         Address::Standard(v)
     }
 }
+
+/// The address checksum is the first four bytes of the hashed data.
+const ADDR_CHECKSUM_LEN: usize = 4;
+
+/// Standard address consist of `[prefix][public_key][checksum]`.
+const STANDARD_ADDR_LEN: usize = 1 + 32 + ADDR_CHECKSUM_LEN;
 
 /// Addresses defined on DarkFi. Catch-all enum.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -294,27 +298,25 @@ impl FromStr for Address {
         let r_addrtype = AddressPrefix::try_from(dec[0])?;
         match r_addrtype {
             AddressPrefix::MainnetStandard | AddressPrefix::TestnetStandard => {
-                // Standard addresses consist of [prefix][spend_key][view_key][checksum].
-                // Prefix is 1 byte, keys are 32 byte each, and checksum is 4 bytes. This
-                // should total to 69 bytes for standard addresses.
-                if dec.len() != 69 {
+                // Standard addresses consist of [prefix][public_key][checksum].
+                // Prefix is 1 byte, key is 32 bytes, and checksum is 4 bytes.
+                // This should total to 37 bytes for standard addresses.
+                if dec.len() != STANDARD_ADDR_LEN {
                     return Err(Self::Err::IoError("Invalid address length".to_string()))
                 }
 
-                let r_spending_key = PublicKey::from_bytes(dec[1..33].try_into().unwrap())?;
-                let r_viewing_key = PublicKey::from_bytes(dec[33..65].try_into().unwrap())?;
-                let r_checksum = &dec[65..];
+                let r_spending_key = PublicKey::from_bytes(
+                    dec[1..STANDARD_ADDR_LEN - ADDR_CHECKSUM_LEN].try_into().unwrap(),
+                )?;
+                let r_checksum = &dec[STANDARD_ADDR_LEN - ADDR_CHECKSUM_LEN..];
 
-                let checksum = blake3::hash(&dec[..65]);
-                if r_checksum != &checksum.as_bytes()[..4] {
+                let checksum = blake3::hash(&dec[..STANDARD_ADDR_LEN - ADDR_CHECKSUM_LEN]);
+                if r_checksum != &checksum.as_bytes()[..ADDR_CHECKSUM_LEN] {
                     return Err(Self::Err::IoError("Invalid address checksum".to_string()))
                 }
 
-                let addr = StandardAddress {
-                    network: r_addrtype.network(),
-                    spending_key: r_spending_key,
-                    viewing_key: r_viewing_key,
-                };
+                let addr =
+                    StandardAddress { network: r_addrtype.network(), spending_key: r_spending_key };
 
                 Ok(Self::Standard(addr))
             }
@@ -326,12 +328,11 @@ impl core::fmt::Display for Address {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let payload = match self {
             Self::Standard(addr) => {
-                let mut payload = Vec::with_capacity(69);
+                let mut payload = Vec::with_capacity(STANDARD_ADDR_LEN);
                 payload.push(addr.prefix() as u8);
                 payload.extend_from_slice(&addr.spending_key.to_bytes());
-                payload.extend_from_slice(&addr.viewing_key.to_bytes());
                 let checksum = blake3::hash(&payload);
-                payload.extend_from_slice(&checksum.as_bytes()[..4]);
+                payload.extend_from_slice(&checksum.as_bytes()[..ADDR_CHECKSUM_LEN]);
                 payload
             }
         };
@@ -344,24 +345,20 @@ impl core::fmt::Display for Address {
 mod tests {
     use super::*;
 
-    use crate::crypto::poseidon_hash;
     use rand::rngs::OsRng;
 
     #[test]
     fn test_standard_address_encoding() {
         let s_kp = Keypair::random(&mut OsRng);
-        let v_kp = Keypair::new(SecretKey::from(poseidon_hash([s_kp.secret.inner()])));
 
-        let s_addr = StandardAddress {
-            network: Network::Mainnet,
-            spending_key: s_kp.public,
-            viewing_key: v_kp.public,
-        };
+        let s_addr = StandardAddress { network: Network::Mainnet, spending_key: s_kp.public };
 
         let addr: Address = s_addr.into();
         let encoded = addr.to_string();
         let decoded = Address::from_str(&encoded).unwrap();
 
         assert_eq!(addr, decoded);
+
+        println!("{encoded}");
     }
 }
