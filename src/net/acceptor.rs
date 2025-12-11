@@ -25,7 +25,7 @@ use std::{
 };
 
 use smol::Executor;
-use tracing::{error, warn};
+use tracing::warn;
 use url::Url;
 
 use super::{
@@ -208,18 +208,6 @@ impl Acceptor {
                             "[P2P] Unhandled OS Error: {e} {x}"
                         );
                         continue
-
-                        /*
-                        error!(
-                            target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Acceptor failed listening: {e} ({x})"
-                        );
-                        error!(
-                            target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Closing listener loop"
-                        );
-                        return Err(e.into())
-                        */
                     }
                 },
 
@@ -230,7 +218,7 @@ impl Acceptor {
                 Err(e) if e.kind() == ErrorKind::Other => {
                     if let Some(inner) = std::error::Error::source(&e) {
                         if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
-                            error!(
+                            warn!(
                                 target: "net::acceptor::run_accept_loop()",
                                 "[P2P] rustls listener error: {inner:?}"
                             );
@@ -238,26 +226,19 @@ impl Acceptor {
                         }
                     }
 
-                    error!(
+                    warn!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Unhandled ErrorKind::Other error: {e:?}"
                     );
-                    return Err(e.into())
+                    continue
                 }
 
                 // Errors we didn't handle above:
                 Err(e) => {
-                    error!(
+                    warn!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Unhandled listener.next() error: {e}"
                     );
-                    /*
-                    error!(
-                        target: "net::acceptor::run_accept_loop()",
-                        "[P2P] Closing listener loop"
-                    );
-                    return Err(e.into())
-                    */
                     continue
                 }
             }

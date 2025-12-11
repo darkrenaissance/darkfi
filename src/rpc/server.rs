@@ -24,7 +24,7 @@ use smol::{
     lock::{Mutex, MutexGuard},
 };
 use tinyjson::JsonValue;
-use tracing::{debug, error, info};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use super::{
@@ -287,7 +287,7 @@ pub async fn accept<'a, T: 'a>(
         let line = match String::from_utf8(buf) {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                warn!(
                     target: "rpc::server::accept()",
                     "[RPC SERVER] Failed parsing string from read buffer: {e}"
                 );
@@ -299,7 +299,7 @@ pub async fn accept<'a, T: 'a>(
         let val: JsonValue = match line.trim().parse() {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                warn!(
                     target: "rpc::server::accept()",
                     "[RPC SERVER] Failed parsing JSON string: {e}"
                 );
@@ -311,7 +311,7 @@ pub async fn accept<'a, T: 'a>(
         let req = match JsonRequest::try_from(&val) {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                warn!(
                     target: "rpc::server::accept()",
                     "[RPC SERVER] Failed casting JSON to a JsonRequest: {e}"
                 );
@@ -401,33 +401,65 @@ async fn run_accept_loop<'a, T: 'a>(
             // As per accept(2) recommendation:
             Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
                 libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
-                _ => {
-                    error!(
+                libc::ECONNRESET => {
+                    warn!(
                         target: "rpc::server::run_accept_loop()",
-                        "[RPC] Server failed listening: {e}"
+                        "[RPC] Connection reset by peer in accept_loop"
                     );
-                    error!(
+                    continue
+                }
+                libc::ETIMEDOUT => {
+                    warn!(
                         target: "rpc::server::run_accept_loop()",
-                        "[RPC] Closing accept loop"
+                        "[RPC] Connection timed out in accept_loop"
                     );
-                    return Err(e.into())
+                    continue
+                }
+                libc::EPIPE => {
+                    warn!(
+                        target: "rpc::server::run_accept_loop()",
+                        "[RPC] Broken pipe in accept_loop"
+                    );
+                    continue
+                }
+                x => {
+                    warn!(
+                        target: "rpc::server::run_accept_loop()",
+                        "[RPC] Unhandled OS Error: {e} {x}"
+                    );
+                    continue
                 }
             },
 
             // In case a TLS handshake fails, we'll get this:
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,
 
+            // Handle ErrorKind::Other
+            Err(e) if e.kind() == ErrorKind::Other => {
+                if let Some(inner) = std::error::Error::source(&e) {
+                    if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
+                        warn!(
+                            target: "rpc::server::run_accept_loop()",
+                            "[RPC] rustls listener error: {inner:?}"
+                        );
+                        continue
+                    }
+                }
+
+                warn!(
+                    target: "rpc::server::run_accept_loop()",
+                    "[RPC] Unhandled ErrorKind::Other error: {e:?}"
+                );
+                continue
+            }
+
             // Errors we didn't handle above:
             Err(e) => {
-                error!(
+                warn!(
                     target: "rpc::server::run_accept_loop()",
                     "[RPC] Unhandled listener.next() error: {e}"
                 );
-                error!(
-                    target: "rpc::server::run_accept_loop()",
-                    "[RPC] Closing acceptloop"
-                );
-                return Err(e.into())
+                continue
             }
         }
     }
