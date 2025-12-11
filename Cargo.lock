@@ -5679,7 +5679,7 @@ dependencies = [
 [[package]]
 name = "randomx"
 version = "1.2.1"
-source = "git+https://codeberg.org/darkrenaissance/RandomX#49e59631dbe3db2481c7b0fdf1ae228e822bf05c"
+source = "git+https://codeberg.org/darkrenaissance/RandomX#0e31d5a23983164a171276dea7bea94dc58ca8ed"
 dependencies = [
  "bindgen 0.72.1",
  "bitflags 2.10.0",

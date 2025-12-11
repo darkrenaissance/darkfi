@@ -16,7 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{str::FromStr, thread, time::Instant};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
 
 use tracing::{error, info};
 
@@ -55,19 +63,20 @@ pub fn benchmark(threads: usize, nonces: u64) -> Result<()> {
     // Start mining
     info!(target: "minerd::benchmark", "Starting mining threads...");
     let mut handles = Vec::with_capacity(vms.len());
+    let atomic_nonce = Arc::new(AtomicU64::new(0));
     let threads = vms.len() as u64;
     let mining_start = Instant::now();
     for t in 0..threads {
         let vm = vms[t as usize].clone();
         let mut thread_header = header.clone();
-        thread_header.nonce = t;
+        let atomic_nonce = atomic_nonce.clone();
 
         handles.push(thread::spawn(move || {
+            thread_header.nonce = atomic_nonce.fetch_add(1, Ordering::SeqCst);
+            vm.calculate_hash_first(thread_header.hash().inner()).unwrap();
             while thread_header.nonce < nonces {
-                let _ = vm.calculate_hash(thread_header.hash().inner());
-                // This means thread 0 will use nonces, 0, 4, 8, ...
-                // and thread 1 will use nonces, 1, 5, 9, ...
-                thread_header.nonce += threads;
+                thread_header.nonce = atomic_nonce.fetch_add(1, Ordering::SeqCst);
+                let _ = vm.calculate_hash_next(thread_header.hash().inner()).unwrap();
             }
         }));
     }

@@ -546,6 +546,7 @@ pub fn mine_block(
 
     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Initializing mining threads...");
     let mut handles = Vec::with_capacity(vms.len());
+    let atomic_nonce = Arc::new(AtomicU64::new(0));
     let found_header = Arc::new(AtomicBool::new(false));
     let found_nonce = Arc::new(AtomicU64::new(0));
     let threads = vms.len() as u64;
@@ -565,12 +566,18 @@ pub fn mine_block(
         let vm = vms[t as usize].clone();
         let target = target.clone();
         let mut thread_header = header.clone();
-        thread_header.nonce = t;
+        let atomic_nonce = atomic_nonce.clone();
         let found_header = found_header.clone();
         let found_nonce = found_nonce.clone();
         let stop_signal = stop_signal.clone();
 
         handles.push(thread::spawn(move || {
+            let mut last_nonce = atomic_nonce.fetch_add(1, Ordering::SeqCst);
+            thread_header.nonce = last_nonce;
+            if let Err(e) = vm.calculate_hash_first(thread_header.hash().inner()) {
+                error!(target: "validator::pow::randomx_vms_mine", "[MINER] Calculating hash in thread #{t} failed: {e}");
+                return
+            };
             loop {
                 // Check if stop signal was received
                 if stop_signal.is_full() {
@@ -583,7 +590,8 @@ pub fn mine_block(
                     break;
                 }
 
-                let out_hash = match vm.calculate_hash(thread_header.hash().inner()) {
+                thread_header.nonce = atomic_nonce.fetch_add(1, Ordering::SeqCst);
+                let out_hash = match vm.calculate_hash_next(thread_header.hash().inner()) {
                     Ok(hash) => hash,
                     Err(e) => {
                         error!(target: "validator::pow::randomx_vms_mine", "[MINER] Calculating hash in thread #{t} failed: {e}");
@@ -593,6 +601,7 @@ pub fn mine_block(
                 let out_hash = BigUint::from_bytes_le(&out_hash);
                 if out_hash <= target {
                     found_header.store(true, Ordering::SeqCst);
+                    thread_header.nonce = last_nonce; // Since out hash refers to previous run nonce
                     found_nonce.store(thread_header.nonce, Ordering::SeqCst);
                     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Thread #{t} found block header using nonce {}",
                         thread_header.nonce
@@ -601,10 +610,7 @@ pub fn mine_block(
                     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] RandomX output: 0x{out_hash:064x}");
                     break;
                 }
-
-                // This means thread 0 will use nonces, 0, 4, 8, ...
-                // and thread 1 will use nonces, 1, 5, 9, ...
-                thread_header.nonce += threads;
+                last_nonce = thread_header.nonce;
             }
         }));
     }
