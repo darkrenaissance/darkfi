@@ -46,7 +46,7 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::{serialize, Encodable};
 use num_bigint::BigUint;
 use sled_overlay::sled;
 use tracing::warn;
@@ -211,7 +211,7 @@ impl Wallet {
         block_height: u32,
     ) -> Result<()> {
         if self.bench_wasm {
-            benchmark_wasm_calls(callname, &self.validator, &tx, block_height).await;
+            let _ = benchmark_wasm_calls(callname, &self.validator, &tx, block_height).await;
         }
 
         self.validator
@@ -325,12 +325,12 @@ async fn benchmark_wasm_calls(
     validator: &Validator,
     tx: &Transaction,
     block_height: u32,
-) {
-    let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv").unwrap();
+) -> Result<()> {
+    let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv")?;
 
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
-        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id).unwrap();
+        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
@@ -344,31 +344,34 @@ async fn benchmark_wasm_calls(
 
         // Write call data
         let mut payload = vec![];
-        tx.calls.encode(&mut payload).unwrap();
+        tx.calls.encode(&mut payload)?;
 
         let mut times = [0; 3];
         let now = std::time::Instant::now();
-        let _metadata = runtime.metadata(&payload).expect("metadata");
+        let _metadata = runtime.metadata(&payload)?;
         times[0] = now.elapsed().as_micros();
 
         let now = std::time::Instant::now();
-        let update = runtime.exec(&payload).expect("exec");
+        let mut update = vec![call.data.data[0]];
+        update.append(&mut runtime.exec(&payload)?);
         times[1] = now.elapsed().as_micros();
 
         let now = std::time::Instant::now();
-        runtime.apply(&update).expect("update");
+        runtime.apply(&update)?;
         times[2] = now.elapsed().as_micros();
 
         writeln!(
             file,
-            "{}, {}, {}, {}, {}, {}",
+            "{}, {}, {}, {}, {}, {}, {}",
             callname,
             tx.hash(),
             idx,
             times[0],
             times[1],
-            times[2]
-        )
-        .unwrap();
+            times[2],
+            serialize(tx).len()
+        )?;
     }
+
+    Ok(())
 }
