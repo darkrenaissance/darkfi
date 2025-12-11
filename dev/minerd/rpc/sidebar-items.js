@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["mining_task","polling_task","vms_generation_task"],"struct":["DarkfidRpcClient"]};

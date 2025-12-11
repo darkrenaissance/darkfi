@@ -1,0 +1,415 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/net/message_publisher.rs`."><title>message_publisher.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="darkfi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">darkfi/net/</div>message_publisher.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">/* This file is part of DarkFi (https://dark.fi)
+<a href=#2 id=2 data-nosnippet>2</a> *
+<a href=#3 id=3 data-nosnippet>3</a> * Copyright (C) 2020-2025 Dyne.org foundation
+<a href=#4 id=4 data-nosnippet>4</a> *
+<a href=#5 id=5 data-nosnippet>5</a> * This program is free software: you can redistribute it and/or modify
+<a href=#6 id=6 data-nosnippet>6</a> * it under the terms of the GNU Affero General Public License as
+<a href=#7 id=7 data-nosnippet>7</a> * published by the Free Software Foundation, either version 3 of the
+<a href=#8 id=8 data-nosnippet>8</a> * License, or (at your option) any later version.
+<a href=#9 id=9 data-nosnippet>9</a> *
+<a href=#10 id=10 data-nosnippet>10</a> * This program is distributed in the hope that it will be useful,
+<a href=#11 id=11 data-nosnippet>11</a> * but WITHOUT ANY WARRANTY; without even the implied warranty of
+<a href=#12 id=12 data-nosnippet>12</a> * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+<a href=#13 id=13 data-nosnippet>13</a> * GNU Affero General Public License for more details.
+<a href=#14 id=14 data-nosnippet>14</a> *
+<a href=#15 id=15 data-nosnippet>15</a> * You should have received a copy of the GNU Affero General Public License
+<a href=#16 id=16 data-nosnippet>16</a> * along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;.
+<a href=#17 id=17 data-nosnippet>17</a> */
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">use </span>std::{any::Any, collections::HashMap, sync::Arc, time::Duration};
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>async_trait::async_trait;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>futures::stream::{FuturesUnordered, StreamExt};
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>rand::{rngs::OsRng, Rng};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>smol::{io::AsyncReadExt, lock::Mutex};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>tracing::{debug, error};
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">super</span>::message::Message;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use crate</span>::{
+<a href=#29 id=29 data-nosnippet>29</a>    net::{metering::MeteringQueue, transport::PtStream},
+<a href=#30 id=30 data-nosnippet>30</a>    system::{msleep, timeout::timeout},
+<a href=#31 id=31 data-nosnippet>31</a>    Error, <span class="prelude-ty">Result</span>,
+<a href=#32 id=32 data-nosnippet>32</a>};
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>darkfi_serial::{AsyncDecodable, VarInt};
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// 64-bit identifier for message subscription.
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">pub type </span>MessageSubscriptionId = u64;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">type </span>MessageResult&lt;M&gt; = <span class="prelude-ty">Result</span>&lt;Arc&lt;M&gt;&gt;;
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="doccomment">/// Dispatcher subscriptions HashMap type.
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">type </span>DispatcherSubscriptionsMap&lt;M&gt; =
+<a href=#41 id=41 data-nosnippet>41</a>    Mutex&lt;HashMap&lt;MessageSubscriptionId, smol::channel::Sender&lt;(MessageResult&lt;M&gt;, <span class="prelude-ty">Option</span>&lt;u64&gt;)&gt;&gt;&gt;;
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a><span class="doccomment">/// A dispatcher that is unique to every [`Message`].
+<a href=#44 id=44 data-nosnippet>44</a>///
+<a href=#45 id=45 data-nosnippet>45</a>/// Maintains a list of subscriptions to a unique Message
+<a href=#46 id=46 data-nosnippet>46</a>/// type and handles sending messages across these
+<a href=#47 id=47 data-nosnippet>47</a>/// subscriptions.
+<a href=#48 id=48 data-nosnippet>48</a>///
+<a href=#49 id=49 data-nosnippet>49</a>/// Additionally, holds a `MeteringQueue` using the
+<a href=#50 id=50 data-nosnippet>50</a>/// [`Message`] configuration to perform rate limiting
+<a href=#51 id=51 data-nosnippet>51</a>/// of propagation towards the subscriptions.
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="attr">#[derive(Debug)]
+<a href=#53 id=53 data-nosnippet>53</a></span><span class="kw">struct </span>MessageDispatcher&lt;M: Message&gt; {
+<a href=#54 id=54 data-nosnippet>54</a>    subs: DispatcherSubscriptionsMap&lt;M&gt;,
+<a href=#55 id=55 data-nosnippet>55</a>    metering_queue: Mutex&lt;MeteringQueue&gt;,
+<a href=#56 id=56 data-nosnippet>56</a>}
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">impl</span>&lt;M: Message&gt; MessageDispatcher&lt;M&gt; {
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// Create a new message dispatcher
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="self">Self </span>{
+<a href=#62 id=62 data-nosnippet>62</a>            subs: Mutex::new(HashMap::new()),
+<a href=#63 id=63 data-nosnippet>63</a>            metering_queue: Mutex::new(MeteringQueue::new(M::METERING_CONFIGURATION)),
+<a href=#64 id=64 data-nosnippet>64</a>        }
+<a href=#65 id=65 data-nosnippet>65</a>    }
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="doccomment">/// Create a random ID.
+<a href=#68 id=68 data-nosnippet>68</a>    </span><span class="kw">fn </span>random_id() -&gt; MessageSubscriptionId {
+<a href=#69 id=69 data-nosnippet>69</a>        OsRng.gen()
+<a href=#70 id=70 data-nosnippet>70</a>    }
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// Subscribe to a channel.
+<a href=#73 id=73 data-nosnippet>73</a>    /// Assigns a new ID and adds it to the list of subscriptions.
+<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">pub async fn </span>subscribe(<span class="self">self</span>: Arc&lt;<span class="self">Self</span>&gt;) -&gt; MessageSubscription&lt;M&gt; {
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">let </span>(sender, recv_queue) = smol::channel::unbounded();
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="comment">// Guard against overwriting
+<a href=#77 id=77 data-nosnippet>77</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>id = <span class="self">Self</span>::random_id();
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span><span class="kw-2">mut </span>subs = <span class="self">self</span>.subs.lock().<span class="kw">await</span>;
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">loop </span>{
+<a href=#80 id=80 data-nosnippet>80</a>            <span class="kw">if </span>subs.contains_key(<span class="kw-2">&amp;</span>id) {
+<a href=#81 id=81 data-nosnippet>81</a>                id = <span class="self">Self</span>::random_id();
+<a href=#82 id=82 data-nosnippet>82</a>                <span class="kw">continue
+<a href=#83 id=83 data-nosnippet>83</a>            </span>}
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>            subs.insert(id, sender);
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="kw">break
+<a href=#87 id=87 data-nosnippet>87</a>        </span>}
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>        drop(subs);
+<a href=#90 id=90 data-nosnippet>90</a>        MessageSubscription { id, recv_queue, parent: <span class="self">self </span>}
+<a href=#91 id=91 data-nosnippet>91</a>    }
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="doccomment">/// Unsubscribe from a channel.
+<a href=#94 id=94 data-nosnippet>94</a>    /// Removes the associated ID from the subscriber list.
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">async fn </span>unsubscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, sub_id: MessageSubscriptionId) {
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="self">self</span>.subs.lock().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>sub_id);
+<a href=#97 id=97 data-nosnippet>97</a>    }
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="doccomment">/// Private function to concurrently transmit a message to all subscriber channels.
+<a href=#100 id=100 data-nosnippet>100</a>    /// Automatically clear all inactive channels. Strictly used internally.
+<a href=#101 id=101 data-nosnippet>101</a>    </span><span class="kw">async fn </span>_trigger_all(<span class="kw-2">&amp;</span><span class="self">self</span>, message: MessageResult&lt;M&gt;) {
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span><span class="kw-2">mut </span>subs = <span class="self">self</span>.subs.lock().<span class="kw">await</span>;
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">let </span>msg_result_type = <span class="kw">if </span>message.is_ok() { <span class="string">"Ok" </span>} <span class="kw">else </span>{ <span class="string">"Err" </span>};
+<a href=#105 id=105 data-nosnippet>105</a>        <span class="macro">debug!</span>(
+<a href=#106 id=106 data-nosnippet>106</a>            target: <span class="string">"net::message_publisher::_trigger_all()"</span>, <span class="string">"START msg={msg_result_type}({}), subs={}"</span>,
+<a href=#107 id=107 data-nosnippet>107</a>            M::NAME, subs.len()
+<a href=#108 id=108 data-nosnippet>108</a>        );
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="comment">// Insert metering information and grab potential sleep time
+<a href=#111 id=111 data-nosnippet>111</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>queue = <span class="self">self</span>.metering_queue.lock().<span class="kw">await</span>;
+<a href=#112 id=112 data-nosnippet>112</a>        queue.push(<span class="kw-2">&amp;</span>M::METERING_SCORE);
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">let </span>sleep_time = queue.sleep_time();
+<a href=#114 id=114 data-nosnippet>114</a>        drop(queue);
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::new();
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span><span class="kw-2">mut </span>garbage_ids = <span class="macro">vec!</span>[];
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="comment">// Prep the futures for concurrent execution
+<a href=#120 id=120 data-nosnippet>120</a>        </span><span class="kw">for </span>(sub_id, sub) <span class="kw">in </span><span class="kw-2">&amp;*</span>subs {
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="kw">let </span>sub_id = <span class="kw-2">*</span>sub_id;
+<a href=#122 id=122 data-nosnippet>122</a>            <span class="kw">let </span>sub = sub.clone();
+<a href=#123 id=123 data-nosnippet>123</a>            <span class="kw">let </span>message = message.clone();
+<a href=#124 id=124 data-nosnippet>124</a>            futures.push(<span class="kw">async move </span>{
+<a href=#125 id=125 data-nosnippet>125</a>                <span class="kw">match </span>sub.send((message, sleep_time)).<span class="kw">await </span>{
+<a href=#126 id=126 data-nosnippet>126</a>                    <span class="prelude-val">Ok</span>(res) =&gt; <span class="prelude-val">Ok</span>((sub_id, res)),
+<a href=#127 id=127 data-nosnippet>127</a>                    <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>((sub_id, err)),
+<a href=#128 id=128 data-nosnippet>128</a>                }
+<a href=#129 id=129 data-nosnippet>129</a>            });
+<a href=#130 id=130 data-nosnippet>130</a>        }
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="comment">// Start polling
+<a href=#133 id=133 data-nosnippet>133</a>        </span><span class="kw">while let </span><span class="prelude-val">Some</span>(r) = futures.next().<span class="kw">await </span>{
+<a href=#134 id=134 data-nosnippet>134</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>((sub_id, _err)) = r {
+<a href=#135 id=135 data-nosnippet>135</a>                garbage_ids.push(sub_id);
+<a href=#136 id=136 data-nosnippet>136</a>            }
+<a href=#137 id=137 data-nosnippet>137</a>        }
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>        <span class="comment">// Garbage cleanup
+<a href=#140 id=140 data-nosnippet>140</a>        </span><span class="kw">for </span>sub_id <span class="kw">in </span>garbage_ids {
+<a href=#141 id=141 data-nosnippet>141</a>            subs.remove(<span class="kw-2">&amp;</span>sub_id);
+<a href=#142 id=142 data-nosnippet>142</a>        }
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="macro">debug!</span>(
+<a href=#145 id=145 data-nosnippet>145</a>            target: <span class="string">"net::message_publisher::_trigger_all()"</span>, <span class="string">"END msg={msg_result_type}({}), subs={}"</span>,
+<a href=#146 id=146 data-nosnippet>146</a>            M::NAME, subs.len(),
+<a href=#147 id=147 data-nosnippet>147</a>        );
+<a href=#148 id=148 data-nosnippet>148</a>    }
+<a href=#149 id=149 data-nosnippet>149</a>}
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a><span class="doccomment">/// Handles message subscriptions through a subscription ID and
+<a href=#152 id=152 data-nosnippet>152</a>/// a receiver channel.
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="attr">#[derive(Debug)]
+<a href=#154 id=154 data-nosnippet>154</a></span><span class="kw">pub struct </span>MessageSubscription&lt;M: Message&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>    id: MessageSubscriptionId,
+<a href=#156 id=156 data-nosnippet>156</a>    recv_queue: smol::channel::Receiver&lt;(MessageResult&lt;M&gt;, <span class="prelude-ty">Option</span>&lt;u64&gt;)&gt;,
+<a href=#157 id=157 data-nosnippet>157</a>    parent: Arc&lt;MessageDispatcher&lt;M&gt;&gt;,
+<a href=#158 id=158 data-nosnippet>158</a>}
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a><span class="kw">impl</span>&lt;M: Message&gt; MessageSubscription&lt;M&gt; {
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="doccomment">/// Start receiving messages.
+<a href=#162 id=162 data-nosnippet>162</a>    /// Sender also provides with a sleep time,
+<a href=#163 id=163 data-nosnippet>163</a>    /// in case rate limit has started.
+<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">pub async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MessageResult&lt;M&gt; {
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>(message, sleep_time) = <span class="kw">match </span><span class="self">self</span>.recv_queue.recv().<span class="kw">await </span>{
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="prelude-val">Ok</span>(pair) =&gt; pair,
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">"MessageSubscription::receive(): recv_queue failed! {e}"</span>),
+<a href=#168 id=168 data-nosnippet>168</a>        };
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>        <span class="comment">// Check if we need to sleep
+<a href=#171 id=171 data-nosnippet>171</a>        </span><span class="kw">if </span>message.is_ok() {
+<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(sleep_time) = sleep_time {
+<a href=#173 id=173 data-nosnippet>173</a>                msleep(sleep_time).<span class="kw">await</span>;
+<a href=#174 id=174 data-nosnippet>174</a>            }
+<a href=#175 id=175 data-nosnippet>175</a>        }
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>        message
+<a href=#178 id=178 data-nosnippet>178</a>    }
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="doccomment">/// Start receiving messages with timeout.
+<a href=#181 id=181 data-nosnippet>181</a>    </span><span class="kw">pub async fn </span>receive_with_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>, seconds: u64) -&gt; MessageResult&lt;M&gt; {
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">let </span>dur = Duration::from_secs(seconds);
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span><span class="prelude-val">Ok</span>(res) = timeout(dur, <span class="self">self</span>.recv_queue.recv()).<span class="kw">await else </span>{
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::ConnectTimeout)
+<a href=#185 id=185 data-nosnippet>185</a>        };
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>(message, sleep_time) = <span class="kw">match </span>res {
+<a href=#188 id=188 data-nosnippet>188</a>            <span class="prelude-val">Ok</span>(pair) =&gt; pair,
+<a href=#189 id=189 data-nosnippet>189</a>            <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#190 id=190 data-nosnippet>190</a>                <span class="macro">panic!</span>(<span class="string">"MessageSubscription::receive_with_timeout(): recv_queue failed! {e}"</span>)
+<a href=#191 id=191 data-nosnippet>191</a>            }
+<a href=#192 id=192 data-nosnippet>192</a>        };
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="comment">// Check if we need to sleep
+<a href=#195 id=195 data-nosnippet>195</a>        </span><span class="kw">if </span>message.is_ok() {
+<a href=#196 id=196 data-nosnippet>196</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(sleep_time) = sleep_time {
+<a href=#197 id=197 data-nosnippet>197</a>                msleep(sleep_time).<span class="kw">await</span>;
+<a href=#198 id=198 data-nosnippet>198</a>            }
+<a href=#199 id=199 data-nosnippet>199</a>        }
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>        message
+<a href=#202 id=202 data-nosnippet>202</a>    }
+<a href=#203 id=203 data-nosnippet>203</a>
+<a href=#204 id=204 data-nosnippet>204</a>    <span class="doccomment">/// Cleans existing items from the receiver channel.
+<a href=#205 id=205 data-nosnippet>205</a>    </span><span class="kw">pub async fn </span>clean(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">loop </span>{
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="kw">match </span><span class="self">self</span>.recv_queue.try_recv() {
+<a href=#208 id=208 data-nosnippet>208</a>                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
+<a href=#209 id=209 data-nosnippet>209</a>                <span class="prelude-val">Err</span>(smol::channel::TryRecvError::Empty) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+<a href=#210 id=210 data-nosnippet>210</a>                <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">panic!</span>(<span class="string">"MessageSubscription::receive(): recv_queue failed! {e}"</span>),
+<a href=#211 id=211 data-nosnippet>211</a>            }
+<a href=#212 id=212 data-nosnippet>212</a>        }
+<a href=#213 id=213 data-nosnippet>213</a>    }
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="doccomment">/// Unsubscribe from a message subscription. Must be called manually.
+<a href=#216 id=216 data-nosnippet>216</a>    </span><span class="kw">pub async fn </span>unsubscribe(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="self">self</span>.parent.unsubscribe(<span class="self">self</span>.id).<span class="kw">await
+<a href=#218 id=218 data-nosnippet>218</a>    </span>}
+<a href=#219 id=219 data-nosnippet>219</a>}
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a><span class="doccomment">/// Generic interface for the message dispatcher.
+<a href=#222 id=222 data-nosnippet>222</a></span><span class="attr">#[async_trait]
+<a href=#223 id=223 data-nosnippet>223</a></span><span class="kw">trait </span>MessageDispatcherInterface: Send + Sync {
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="kw">async fn </span>trigger(
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#226 id=226 data-nosnippet>226</a>        stream: <span class="kw-2">&amp;mut </span>smol::io::ReadHalf&lt;Box&lt;<span class="kw">dyn </span>PtStream + <span class="lifetime">'static</span>&gt;&gt;,
+<a href=#227 id=227 data-nosnippet>227</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">async fn </span>trigger_error(<span class="kw-2">&amp;</span><span class="self">self</span>, err: Error);
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>    <span class="kw">async fn </span>metering_score(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">fn </span>as_any(<span class="self">self</span>: Arc&lt;<span class="self">Self</span>&gt;) -&gt; Arc&lt;<span class="kw">dyn </span>Any + Send + Sync&gt;;
+<a href=#234 id=234 data-nosnippet>234</a>}
+<a href=#235 id=235 data-nosnippet>235</a>
+<a href=#236 id=236 data-nosnippet>236</a><span class="doccomment">/// Local implementation of the Message Dispatcher Interface
+<a href=#237 id=237 data-nosnippet>237</a></span><span class="attr">#[async_trait]
+<a href=#238 id=238 data-nosnippet>238</a></span><span class="kw">impl</span>&lt;M: Message&gt; MessageDispatcherInterface <span class="kw">for </span>MessageDispatcher&lt;M&gt; {
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="doccomment">/// Internal function to deserialize data into a message type
+<a href=#240 id=240 data-nosnippet>240</a>    /// and dispatch it across subscriber channels. Reads directly
+<a href=#241 id=241 data-nosnippet>241</a>    /// from an inbound stream.
+<a href=#242 id=242 data-nosnippet>242</a>    ///
+<a href=#243 id=243 data-nosnippet>243</a>    /// We extract the message length from the stream and use `take()`
+<a href=#244 id=244 data-nosnippet>244</a>    /// to allocate an appropriately sized buffer as a basic DDOS protection.
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">async fn </span>trigger(
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#247 id=247 data-nosnippet>247</a>        stream: <span class="kw-2">&amp;mut </span>smol::io::ReadHalf&lt;Box&lt;<span class="kw">dyn </span>PtStream + <span class="lifetime">'static</span>&gt;&gt;,
+<a href=#248 id=248 data-nosnippet>248</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#249 id=249 data-nosnippet>249</a>        <span class="comment">// Parse message length
+<a href=#250 id=250 data-nosnippet>250</a>        </span><span class="kw">let </span>length = <span class="kw">match </span>VarInt::decode_async(stream).<span class="kw">await </span>{
+<a href=#251 id=251 data-nosnippet>251</a>            <span class="prelude-val">Ok</span>(int) =&gt; int.<span class="number">0</span>,
+<a href=#252 id=252 data-nosnippet>252</a>            <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#253 id=253 data-nosnippet>253</a>                <span class="macro">error!</span>(
+<a href=#254 id=254 data-nosnippet>254</a>                    target: <span class="string">"net::message_publisher::trigger()"</span>,
+<a href=#255 id=255 data-nosnippet>255</a>                    <span class="string">"Unable to decode VarInt. Dropping...: {err}"
+<a href=#256 id=256 data-nosnippet>256</a>                </span>);
+<a href=#257 id=257 data-nosnippet>257</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::MessageInvalid)
+<a href=#258 id=258 data-nosnippet>258</a>            }
+<a href=#259 id=259 data-nosnippet>259</a>        };
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="comment">// Check the message length does not exceed set limit
+<a href=#262 id=262 data-nosnippet>262</a>        </span><span class="kw">if </span>M::MAX_BYTES &gt; <span class="number">0 </span>&amp;&amp; length &gt; M::MAX_BYTES {
+<a href=#263 id=263 data-nosnippet>263</a>            <span class="macro">error!</span>(
+<a href=#264 id=264 data-nosnippet>264</a>                target: <span class="string">"net::message_publisher::trigger()"</span>,
+<a href=#265 id=265 data-nosnippet>265</a>                <span class="string">"Message length ({length}) exceeds configured limit ({}). Dropping..."</span>,
+<a href=#266 id=266 data-nosnippet>266</a>                M::MAX_BYTES
+<a href=#267 id=267 data-nosnippet>267</a>            );
+<a href=#268 id=268 data-nosnippet>268</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::MessageInvalid)
+<a href=#269 id=269 data-nosnippet>269</a>        }
+<a href=#270 id=270 data-nosnippet>270</a>
+<a href=#271 id=271 data-nosnippet>271</a>        <span class="comment">// Deserialize stream into type
+<a href=#272 id=272 data-nosnippet>272</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>take = stream.take(length);
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>message = <span class="kw">match </span>M::decode_async(<span class="kw-2">&amp;mut </span>take).<span class="kw">await </span>{
+<a href=#274 id=274 data-nosnippet>274</a>            <span class="prelude-val">Ok</span>(payload) =&gt; <span class="prelude-val">Ok</span>(Arc::new(payload)),
+<a href=#275 id=275 data-nosnippet>275</a>            <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#276 id=276 data-nosnippet>276</a>                <span class="macro">error!</span>(
+<a href=#277 id=277 data-nosnippet>277</a>                    target: <span class="string">"net::message_publisher::trigger()"</span>,
+<a href=#278 id=278 data-nosnippet>278</a>                    <span class="string">"Unable to decode data. Dropping...: {err}"
+<a href=#279 id=279 data-nosnippet>279</a>                </span>);
+<a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::MessageInvalid)
+<a href=#281 id=281 data-nosnippet>281</a>            }
+<a href=#282 id=282 data-nosnippet>282</a>        };
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="comment">// Send down the pipes
+<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="self">self</span>._trigger_all(message).<span class="kw">await</span>;
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="prelude-val">Ok</span>(())
+<a href=#287 id=287 data-nosnippet>287</a>    }
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="doccomment">/// Internal function that sends an error message to all subscriber channels.
+<a href=#290 id=290 data-nosnippet>290</a>    </span><span class="kw">async fn </span>trigger_error(<span class="kw-2">&amp;</span><span class="self">self</span>, err: Error) {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="self">self</span>._trigger_all(<span class="prelude-val">Err</span>(err)).<span class="kw">await</span>;
+<a href=#292 id=292 data-nosnippet>292</a>    }
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="doccomment">/// Internal function to retrieve metering queue current total score,
+<a href=#295 id=295 data-nosnippet>295</a>    /// after prunning expired metering information.
+<a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">async fn </span>metering_score(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.metering_queue.lock().<span class="kw">await</span>;
+<a href=#298 id=298 data-nosnippet>298</a>        lock.clean();
+<a href=#299 id=299 data-nosnippet>299</a>        lock.total()
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="doccomment">/// Converts to `Any` trait. Enables the dynamic modification of static types.
+<a href=#303 id=303 data-nosnippet>303</a>    </span><span class="kw">fn </span>as_any(<span class="self">self</span>: Arc&lt;<span class="self">Self</span>&gt;) -&gt; Arc&lt;<span class="kw">dyn </span>Any + Send + Sync&gt; {
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="self">self
+<a href=#305 id=305 data-nosnippet>305</a>    </span>}
+<a href=#306 id=306 data-nosnippet>306</a>}
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a><span class="doccomment">/// Generic publish/subscribe class that maintains a list of dispatchers.
+<a href=#309 id=309 data-nosnippet>309</a>///
+<a href=#310 id=310 data-nosnippet>310</a>/// Dispatchers transmit messages to subscribers and are specific to one
+<a href=#311 id=311 data-nosnippet>311</a>/// message type.
+<a href=#312 id=312 data-nosnippet>312</a>///
+<a href=#313 id=313 data-nosnippet>313</a>/// Additionally, holds a global metering limit, which is the sum of each
+<a href=#314 id=314 data-nosnippet>314</a>/// dispatcher `MeteringQueue` threshold, to drop the connection if passed.
+<a href=#315 id=315 data-nosnippet>315</a></span><span class="attr">#[derive(Default)]
+<a href=#316 id=316 data-nosnippet>316</a></span><span class="kw">pub struct </span>MessageSubsystem {
+<a href=#317 id=317 data-nosnippet>317</a>    dispatchers: Mutex&lt;HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, Arc&lt;<span class="kw">dyn </span>MessageDispatcherInterface&gt;&gt;&gt;,
+<a href=#318 id=318 data-nosnippet>318</a>    metering_limit: Mutex&lt;u64&gt;,
+<a href=#319 id=319 data-nosnippet>319</a>}
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a><span class="kw">impl </span>MessageSubsystem {
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="doccomment">/// Create a new message subsystem.
+<a href=#323 id=323 data-nosnippet>323</a>    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="self">Self </span>{ dispatchers: Mutex::new(HashMap::new()), metering_limit: Mutex::new(<span class="number">0</span>) }
+<a href=#325 id=325 data-nosnippet>325</a>    }
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="doccomment">/// Add a new dispatcher for specified [`Message`].
+<a href=#328 id=328 data-nosnippet>328</a>    </span><span class="kw">pub async fn </span>add_dispatch&lt;M: Message&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="comment">// First lock the dispatchers
+<a href=#330 id=330 data-nosnippet>330</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.dispatchers.lock().<span class="kw">await</span>;
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="comment">// Update the metering limit
+<a href=#333 id=333 data-nosnippet>333</a>        </span><span class="kw-2">*</span><span class="self">self</span>.metering_limit.lock().<span class="kw">await </span>+= M::METERING_CONFIGURATION.threshold;
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="comment">// Insert the new dispatcher
+<a href=#336 id=336 data-nosnippet>336</a>        </span>lock.insert(M::NAME, Arc::new(MessageDispatcher::&lt;M&gt;::new()));
+<a href=#337 id=337 data-nosnippet>337</a>    }
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// Subscribes to a [`Message`]. Using the Message name, the method
+<a href=#340 id=340 data-nosnippet>340</a>    /// returns the associated `MessageDispatcher` from the list of
+<a href=#341 id=341 data-nosnippet>341</a>    /// dispatchers and calls `subscribe()`.
+<a href=#342 id=342 data-nosnippet>342</a>    </span><span class="kw">pub async fn </span>subscribe&lt;M: Message&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MessageSubscription&lt;M&gt;&gt; {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>dispatcher = <span class="self">self</span>.dispatchers.lock().<span class="kw">await</span>.get(M::NAME).cloned();
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw">let </span>sub = <span class="kw">match </span>dispatcher {
+<a href=#346 id=346 data-nosnippet>346</a>            <span class="prelude-val">Some</span>(dispatcher) =&gt; {
+<a href=#347 id=347 data-nosnippet>347</a>                <span class="kw">let </span>dispatcher: Arc&lt;MessageDispatcher&lt;M&gt;&gt; = dispatcher
+<a href=#348 id=348 data-nosnippet>348</a>                    .as_any()
+<a href=#349 id=349 data-nosnippet>349</a>                    .downcast::&lt;MessageDispatcher&lt;M&gt;&gt;()
+<a href=#350 id=350 data-nosnippet>350</a>                    .expect(<span class="string">"Multiple messages registered with different names"</span>);
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>                dispatcher.subscribe().<span class="kw">await
+<a href=#353 id=353 data-nosnippet>353</a>            </span>}
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#356 id=356 data-nosnippet>356</a>                <span class="comment">// Normal return failure here
+<a href=#357 id=357 data-nosnippet>357</a>                </span><span class="kw">return </span><span class="prelude-val">Err</span>(Error::NetworkOperationFailed)
+<a href=#358 id=358 data-nosnippet>358</a>            }
+<a href=#359 id=359 data-nosnippet>359</a>        };
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="prelude-val">Ok</span>(sub)
+<a href=#362 id=362 data-nosnippet>362</a>    }
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a>    <span class="doccomment">/// Transmits a payload to a dispatcher.
+<a href=#365 id=365 data-nosnippet>365</a>    /// Returns an error if the payload fails to transmit.
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub async fn </span>notify(
+<a href=#367 id=367 data-nosnippet>367</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#368 id=368 data-nosnippet>368</a>        command: <span class="kw-2">&amp;</span>str,
+<a href=#369 id=369 data-nosnippet>369</a>        reader: <span class="kw-2">&amp;mut </span>smol::io::ReadHalf&lt;Box&lt;<span class="kw">dyn </span>PtStream + <span class="lifetime">'static</span>&gt;&gt;,
+<a href=#370 id=370 data-nosnippet>370</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="comment">// Iterate over dispatchers and keep track of their current
+<a href=#372 id=372 data-nosnippet>372</a>        // metering score
+<a href=#373 id=373 data-nosnippet>373</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>found = <span class="bool-val">false</span>;
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span><span class="kw-2">mut </span>total_score = <span class="number">0</span>;
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">for </span>(name, dispatcher) <span class="kw">in </span><span class="self">self</span>.dispatchers.lock().<span class="kw">await</span>.iter() {
+<a href=#376 id=376 data-nosnippet>376</a>            <span class="comment">// If dispatcher is the command one, trasmit the message
+<a href=#377 id=377 data-nosnippet>377</a>            </span><span class="kw">if </span>name == <span class="kw-2">&amp;</span>command {
+<a href=#378 id=378 data-nosnippet>378</a>                dispatcher.trigger(reader).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#379 id=379 data-nosnippet>379</a>                found = <span class="bool-val">true</span>;
+<a href=#380 id=380 data-nosnippet>380</a>            }
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>            <span class="comment">// Grab its total score
+<a href=#383 id=383 data-nosnippet>383</a>            </span>total_score += dispatcher.metering_score().<span class="kw">await</span>;
+<a href=#384 id=384 data-nosnippet>384</a>        }
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>        <span class="comment">// Check if dispatcher was found
+<a href=#387 id=387 data-nosnippet>387</a>        </span><span class="kw">if </span>!found {
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::MissingDispatcher)
+<a href=#389 id=389 data-nosnippet>389</a>        }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="comment">// Check if we are over the global metering limit
+<a href=#392 id=392 data-nosnippet>392</a>        </span><span class="kw">if </span>total_score &gt; <span class="kw-2">*</span><span class="self">self</span>.metering_limit.lock().<span class="kw">await </span>{
+<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::MeteringLimitExceeded)
+<a href=#394 id=394 data-nosnippet>394</a>        }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>        <span class="prelude-val">Ok</span>(())
+<a href=#397 id=397 data-nosnippet>397</a>    }
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="doccomment">/// Concurrently transmits an error message across dispatchers.
+<a href=#400 id=400 data-nosnippet>400</a>    </span><span class="kw">pub async fn </span>trigger_error(<span class="kw-2">&amp;</span><span class="self">self</span>, err: Error) {
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::new();
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">let </span>dispatchers = <span class="self">self</span>.dispatchers.lock().<span class="kw">await</span>;
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">for </span>dispatcher <span class="kw">in </span>dispatchers.values() {
+<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">let </span>dispatcher = dispatcher.clone();
+<a href=#407 id=407 data-nosnippet>407</a>            <span class="kw">let </span>error = err.clone();
+<a href=#408 id=408 data-nosnippet>408</a>            futures.push(<span class="kw">async move </span>{ dispatcher.trigger_error(error).<span class="kw">await </span>});
+<a href=#409 id=409 data-nosnippet>409</a>        }
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a>        drop(dispatchers);
+<a href=#412 id=412 data-nosnippet>412</a>
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(_r) = futures.next().<span class="kw">await </span>{}
+<a href=#414 id=414 data-nosnippet>414</a>    }
+<a href=#415 id=415 data-nosnippet>415</a>}</code></pre></div></section></main></body></html>

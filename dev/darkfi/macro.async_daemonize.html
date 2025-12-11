@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This macro is used for a standard way of daemonizing darkfi binaries with TOML config file configuration, and argument parsing."><title>async_daemonize in darkfi - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="darkfi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">async_daemonize</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../darkfi/index.html">darkfi</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">darkfi</a></div><h1>Macro <span class="macro">async_<wbr>daemonize</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/darkfi/util/cli.rs.html#128-317">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! async_daemonize {
+    ($realmain:ident) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This macro is used for a standard way of daemonizing darkfi binaries
+with TOML config file configuration, and argument parsing.</p>
+<p>It also spawns a multithreaded async executor and passes it into the
+given function.</p>
+<p>The Cargo.toml dependencies needed for this are:</p>
+<div class="example-wrap"><pre class="language-text"><code>darkfi = { path = &quot;../../&quot;, features = [&quot;util&quot;] }
+easy-parallel = &quot;3.2.0&quot;
+signal-hook-async-std = &quot;0.2.2&quot;
+signal-hook = &quot;0.3.15&quot;
+tracing-subscriber = &quot;0.3.19&quot;
+tracing-appender = &quot;0.2.3&quot;
+smol = &quot;1.2.5&quot;
+
+# Argument parsing
+serde = {version = &quot;1.0.135&quot;, features = [&quot;derive&quot;]}
+structopt = &quot;0.3.26&quot;
+structopt-toml = &quot;0.5.1&quot;</code></pre></div>
+<p>Example usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>darkfi::{async_daemonize, cli_desc, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>smol::stream::StreamExt;
+<span class="kw">use </span>structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+
+<span class="kw">const </span>CONFIG_FILE: <span class="kw-2">&amp;</span>str = <span class="string">"daemond_config.toml"</span>;
+<span class="kw">const </span>CONFIG_FILE_CONTENTS: <span class="kw-2">&amp;</span>str = <span class="macro">include_str!</span>(<span class="string">"../daemond_config.toml"</span>);
+
+<span class="attr">#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = <span class="string">"daemond"</span>, about = <span class="macro">cli_desc!</span>())]
+</span><span class="kw">struct </span>Args {
+    <span class="attr">#[structopt(short, long)]
+    </span><span class="doccomment">/// Configuration file to use
+    </span>config: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="attr">#[structopt(short, long)]
+    </span><span class="doccomment">/// Set log file to ouput into
+    </span>log: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="attr">#[structopt(short, parse(from_occurrences))]
+    </span><span class="doccomment">/// Increase verbosity (-vvv supported)
+    </span>verbose: u8,
+}
+
+<span class="macro">async_daemonize!</span>(realmain);
+<span class="kw">async fn </span>realmain(args: Args, ex: Arc&lt;smol::Executor&lt;<span class="lifetime">'static</span>&gt;&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="macro">println!</span>(<span class="string">"Hello, world!"</span>);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div></div></details></section></div></main></body></html>

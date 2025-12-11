@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW","BLOCK_FUTURE_TIME_LIMIT","BUF_SIZE","CUT_BEGIN","CUT_END","DIFFICULTY_WINDOW","RANDOMX_KEY_CHANGE_DELAY","RANDOMX_KEY_CHANGING_HEIGHT","RETAINED","_DIFFICULTY_CUT","_DIFFICULTY_LAG"],"fn":["generate_mining_vms","get_mining_flags","init_dataset","mine_block"],"struct":["PoWModule"]};

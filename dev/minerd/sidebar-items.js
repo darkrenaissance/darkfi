@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["benchmark","rpc"],"struct":["MinerNode","MinerNodeConfig","Minerd"],"type":["MinerNodePtr","MinerdPtr"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_ordered_tx_hashes_from_block","extract_aux_merkle_root","extract_aux_merkle_root_from_block","insert_aux_chain_mr_and_info_into_block","monero_block_deserialize","parse_extra_field_truncate_on_error"],"mod":["fixed_array","keccak","merkle_proof","merkle_tree_parameters","utils"],"struct":["MoneroPowData"],"type":["AuxChainHashes"]};
