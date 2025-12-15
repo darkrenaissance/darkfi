@@ -18,8 +18,6 @@
 
 use std::sync::Arc;
 
-use tracing::error;
-
 use darkfi::{
     error::RpcError,
     rpc::jsonrpc::{ErrorCode, JsonError},
