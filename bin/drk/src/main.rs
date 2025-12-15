@@ -46,8 +46,9 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, ContractId, FuncId, FuncRef, Keypair, PublicKey,
-        SecretKey, DAO_CONTRACT_ID,
+        keypair::{Address, Network},
+        note::AeadEncryptedNote,
+        BaseBlind, ContractId, FuncId, FuncRef, Keypair, SecretKey, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -59,6 +60,7 @@ use drk::{
         generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
         print_output,
     },
+    common::*,
     dao::{DaoParams, ProposalRecord},
     interactive::interactive,
     money::BALANCE_BASE10_DECIMALS,
@@ -598,7 +600,13 @@ struct BlockchainNetwork {
 async fn parse_blockchain_config(
     config: Option<String>,
     network: &str,
-) -> Result<BlockchainNetwork> {
+) -> Result<(BlockchainNetwork, Network)> {
+    let used_net = match network {
+        "mainnet" | "localnet" => Network::Mainnet,
+        "testnet" => Network::Testnet,
+        _ => return Err(Error::ParseFailed("Invalid blockchain network")),
+    };
+
     // Grab config path
     let config_path = get_config_path(config, CONFIG_FILE)?;
 
@@ -633,11 +641,12 @@ async fn parse_blockchain_config(
             }
         };
 
-    Ok(network_config)
+    Ok((network_config, used_net))
 }
 
 /// Auxiliary function to create a `Drk` wallet for provided configuration.
 async fn new_wallet(
+    network: Network,
     cache_path: String,
     wallet_path: String,
     wallet_pass: String,
@@ -651,7 +660,7 @@ async fn new_wallet(
         exit(2);
     }
 
-    match Drk::new(cache_path, wallet_path, wallet_pass, endpoint, ex, fun).await {
+    match Drk::new(network, cache_path, wallet_path, wallet_pass, endpoint, ex, fun).await {
         Ok(wallet) => wallet,
         Err(e) => {
             eprintln!("Error initializing wallet: {e}");
@@ -663,7 +672,7 @@ async fn new_wallet(
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     // Grab blockchain network configuration
-    let blockchain_config = match args.network.as_str() {
+    let (blockchain_config, network) = match args.network.as_str() {
         "localnet" => parse_blockchain_config(args.config, "localnet").await?,
         "testnet" => parse_blockchain_config(args.config, "testnet").await?,
         "mainnet" => parse_blockchain_config(args.config, "mainnet").await?,
@@ -686,6 +695,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             set_terminal_writer(args.verbose, non_blocking)?;
 
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -695,6 +705,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             )
             .await
             .into_ptr();
+
             interactive(
                 &drk,
                 &blockchain_config.endpoint,
@@ -704,6 +715,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 &ex,
             )
             .await;
+
             drk.read().await.stop_rpc_client().await?;
             Ok(())
         }
@@ -719,6 +731,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
         Subcmd::Ping => {
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -743,6 +756,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
         Subcmd::Wallet { command } => {
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -824,18 +838,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 WalletSubcmd::Addresses => {
                     let addresses = drk.addresses().await?;
-
-                    // Create a prettytable with the new data:
-                    let mut table = Table::new();
-                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                    table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
-                    for (key_id, public_key, secret_key, is_default) in addresses {
-                        let is_default = match is_default {
-                            1 => "*",
-                            _ => "",
-                        };
-                        table.add_row(row![key_id, public_key, secret_key, is_default]);
-                    }
+                    let table = prettytable_addrs(drk.network, &addresses);
 
                     if table.is_empty() {
                         println!("No addresses found");
@@ -895,72 +898,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 WalletSubcmd::Coins => {
                     let coins = drk.get_coins(true).await?;
-
                     if coins.is_empty() {
                         return Ok(())
                     }
-
                     let aliases_map = drk.get_aliases_mapped_by_token().await?;
-
-                    let mut table = Table::new();
-                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                    table.set_titles(row![
-                        "Coin",
-                        "Token ID",
-                        "Aliases",
-                        "Value",
-                        "Spend Hook",
-                        "User Data",
-                        "Creation Height",
-                        "Spent",
-                        "Spent Height",
-                        "Spent TX"
-                    ]);
-                    for coin in coins {
-                        let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
-                            Some(a) => a,
-                            None => "-",
-                        };
-
-                        let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-                            format!("{}", coin.0.note.spend_hook)
-                        } else {
-                            String::from("-")
-                        };
-
-                        let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
-                            bs58::encode(&serialize_async(&coin.0.note.user_data).await)
-                                .into_string()
-                                .to_string()
-                        } else {
-                            String::from("-")
-                        };
-
-                        let spent_height = match coin.3 {
-                            Some(spent_height) => spent_height.to_string(),
-                            None => String::from("-"),
-                        };
-
-                        table.add_row(row![
-                            bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
-                                .into_string()
-                                .to_string(),
-                            coin.0.note.token_id,
-                            aliases,
-                            format!(
-                                "{} ({})",
-                                coin.0.note.value,
-                                encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
-                            ),
-                            spend_hook,
-                            user_data,
-                            coin.1,
-                            coin.2,
-                            spent_height,
-                            coin.4,
-                        ]);
-                    }
-
+                    let table = prettytable_coins(&coins, &aliases_map);
                     println!("{table}");
                 }
 
@@ -1016,6 +958,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -1055,6 +998,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             let coin = Coin::from(elem);
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -1073,6 +1017,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
         Subcmd::Transfer { amount, token, recipient, spend_hook, user_data, half_split } => {
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -1087,13 +1032,18 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 exit(2);
             }
 
-            let rcpt = match PublicKey::from_str(&recipient) {
+            let rcpt = match Address::from_str(&recipient) {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("Invalid recipient: {e}");
                     exit(2);
                 }
             };
+
+            if rcpt.network() != drk.network {
+                eprintln!("Recipient address prefix mismatch");
+                exit(2);
+            }
 
             let token_id = match drk.get_token(token).await {
                 Ok(t) => t,
@@ -1136,7 +1086,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             };
 
             let tx = match drk
-                .transfer(&amount, token_id, rcpt, spend_hook, user_data, half_split)
+                .transfer(&amount, token_id, *rcpt.public_key(), spend_hook, user_data, half_split)
                 .await
             {
                 Ok(t) => t,
@@ -1154,6 +1104,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         Subcmd::Otc { command } => match command {
             OtcSubcmd::Init { value_pair, token_pair } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1188,6 +1139,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let partial: PartialSwapData = deserialize_async(&bytes).await?;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1217,6 +1169,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1240,6 +1193,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let mut tx = parse_tx_from_stdin().await?;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1293,6 +1247,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1359,6 +1314,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let params = DaoParams::from_toml_str(&buf)?;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1380,6 +1336,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::List { name } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1401,6 +1358,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::Balance { name } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1425,22 +1383,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     }
                 };
 
-                // Create a prettytable with the new data:
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Aliases", "Balance"]);
-                for (token_id, balance) in balmap.iter() {
-                    let aliases = match aliases_map.get(token_id) {
-                        Some(a) => a,
-                        None => "-",
-                    };
-
-                    table.add_row(row![
-                        token_id,
-                        aliases,
-                        encode_base10(*balance, BALANCE_BASE10_DECIMALS)
-                    ]);
-                }
+                let table = prettytable_balance(&balmap, &aliases_map);
 
                 if table.is_empty() {
                     println!("No unspent balances found");
@@ -1453,6 +1396,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::Mint { name } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1483,6 +1427,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 user_data,
             } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1497,13 +1442,18 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     exit(2);
                 }
 
-                let rcpt = match PublicKey::from_str(&recipient) {
+                let rcpt = match Address::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
                         eprintln!("Invalid recipient: {e}");
                         exit(2);
                     }
                 };
+
+                if rcpt.network() != drk.network {
+                    eprintln!("Recipient address prefix mismatch");
+                    exit(2);
+                }
 
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
@@ -1547,7 +1497,13 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 let proposal = match drk
                     .dao_propose_transfer(
-                        &name, duration, &amount, token_id, rcpt, spend_hook, user_data,
+                        &name,
+                        duration,
+                        &amount,
+                        token_id,
+                        *rcpt.public_key(),
+                        spend_hook,
+                        user_data,
                     )
                     .await
                 {
@@ -1565,6 +1521,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::ProposeGeneric { name, duration, user_data } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1610,6 +1567,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::Proposals { name } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1637,6 +1595,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1845,6 +1804,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let encrypted_proposal: AeadEncryptedNote = deserialize_async(&bytes).await?;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1912,6 +1872,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1942,6 +1903,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -1999,6 +1961,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             DaoSubcmd::MiningConfig { name } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2023,6 +1986,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let mut tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -2053,6 +2017,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let tx = parse_tx_from_stdin().await?;
 
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -2091,6 +2056,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
         Subcmd::Scan { reset } => {
             let drk = new_wallet(
+                network,
                 blockchain_config.cache_path,
                 blockchain_config.wallet_path,
                 blockchain_config.wallet_pass,
@@ -2124,6 +2090,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx_hash = TransactionHash(*blake3::Hash::from_hex(&tx_hash)?.as_bytes());
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2164,6 +2131,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 let tx = parse_tx_from_stdin().await?;
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2189,6 +2157,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2248,6 +2217,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             ExplorerSubcmd::ClearReverted => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2270,6 +2240,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             ExplorerSubcmd::ScannedBlocks { height } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2336,6 +2307,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2368,6 +2340,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2378,13 +2351,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
                 let map = drk.get_aliases(alias, token_id).await?;
 
-                // Create a prettytable with the new data:
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Alias", "Token ID"]);
-                for (alias, token_id) in map.iter() {
-                    table.add_row(row![alias, token_id]);
-                }
+                let table = prettytable_aliases(&map);
 
                 if table.is_empty() {
                     println!("No aliases found");
@@ -2397,6 +2364,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             AliasSubcmd::Remove { alias } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2436,6 +2404,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2452,6 +2421,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             TokenSubcmd::GenerateMint => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2470,6 +2440,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             TokenSubcmd::List => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2487,30 +2458,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     }
                 };
 
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row![
-                    "Token ID",
-                    "Aliases",
-                    "Mint Authority",
-                    "Token Blind",
-                    "Frozen",
-                    "Freeze Height"
-                ]);
-
-                for (token_id, authority, blind, frozen, freeze_height) in tokens {
-                    let aliases = match aliases_map.get(&token_id.to_string()) {
-                        Some(a) => a,
-                        None => "-",
-                    };
-
-                    let freeze_height = match freeze_height {
-                        Some(freeze_height) => freeze_height.to_string(),
-                        None => String::from("-"),
-                    };
-
-                    table.add_row(row![token_id, aliases, authority, blind, frozen, freeze_height]);
-                }
+                let table = prettytable_tokenlist(&tokens, &aliases_map);
 
                 if table.is_empty() {
                     println!("No tokens found");
@@ -2523,6 +2471,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             TokenSubcmd::Mint { token, amount, recipient, spend_hook, user_data } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2537,13 +2486,18 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     exit(2);
                 }
 
-                let rcpt = match PublicKey::from_str(&recipient) {
+                let rcpt = match Address::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
                         eprintln!("Invalid recipient: {e}");
                         exit(2);
                     }
                 };
+
+                if rcpt.network() != drk.network {
+                    eprintln!("Recipient address prefix mismatch");
+                    exit(2);
+                }
 
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
@@ -2585,7 +2539,9 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     None => None,
                 };
 
-                let tx = match drk.mint_token(&amount, rcpt, token_id, spend_hook, user_data).await
+                let tx = match drk
+                    .mint_token(&amount, *rcpt.public_key(), token_id, spend_hook, user_data)
+                    .await
                 {
                     Ok(tx) => tx,
                     Err(e) => {
@@ -2601,6 +2557,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             TokenSubcmd::Freeze { token } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2634,6 +2591,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         Subcmd::Contract { command } => match command {
             ContractSubcmd::GenerateDeploy => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2656,6 +2614,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             ContractSubcmd::List { contract_id } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2676,13 +2635,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                     let history = drk.get_deploy_auth_history(&contract_id).await?;
 
-                    let mut table = Table::new();
-                    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                    table.set_titles(row!["Transaction Hash", "Type", "Block Height"]);
-
-                    for (tx_hash, tx_type, block_height) in history {
-                        table.add_row(row![tx_hash, tx_type, block_height]);
-                    }
+                    let table = prettytable_contract_history(&history);
 
                     if table.is_empty() {
                         println!("No history records found");
@@ -2695,17 +2648,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                 let auths = drk.list_deploy_auth().await?;
 
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Contract ID", "Secret Key", "Locked", "Lock Height"]);
-
-                for (contract_id, secret_key, is_locked, lock_height) in auths {
-                    let lock_height = match lock_height {
-                        Some(lock_height) => lock_height.to_string(),
-                        None => String::from("-"),
-                    };
-                    table.add_row(row![contract_id, secret_key, is_locked, lock_height]);
-                }
+                let table = prettytable_contract_auth(&auths);
 
                 if table.is_empty() {
                     println!("No deploy authorities found");
@@ -2718,6 +2661,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             ContractSubcmd::ExportData { tx_hash } => {
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2752,6 +2696,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,
@@ -2785,6 +2730,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 };
 
                 let drk = new_wallet(
+                    network,
                     blockchain_config.cache_path,
                     blockchain_config.wallet_path,
                     blockchain_config.wallet_pass,

@@ -217,6 +217,12 @@ pub enum Network {
     Testnet,
 }
 
+impl Network {
+    pub fn is_testnet(self) -> bool {
+        self == Network::Testnet
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum AddressPrefix {
     MainnetStandard = 0x39,
@@ -258,6 +264,14 @@ impl StandardAddress {
             Network::Testnet => AddressPrefix::TestnetStandard,
         }
     }
+
+    pub fn public_key(&self) -> &PublicKey {
+        &self.spending_key
+    }
+
+    pub fn from_public(network: Network, public_key: PublicKey) -> Self {
+        Self { network, spending_key: public_key }
+    }
 }
 
 impl From<StandardAddress> for Address {
@@ -282,6 +296,12 @@ impl Address {
     pub fn network(&self) -> Network {
         match self {
             Self::Standard(addr) => addr.network,
+        }
+    }
+
+    pub fn public_key(&self) -> &PublicKey {
+        match self {
+            Self::Standard(addr) => addr.public_key(),
         }
     }
 }

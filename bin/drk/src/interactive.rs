@@ -48,8 +48,9 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, ContractId, FuncId, FuncRef, Keypair, PublicKey,
-        SecretKey, DAO_CONTRACT_ID,
+        keypair::{Address, StandardAddress},
+        note::AeadEncryptedNote,
+        BaseBlind, ContractId, FuncId, FuncRef, Keypair, SecretKey, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -61,6 +62,7 @@ use crate::{
         append_or_print, generate_completions, kaching, parse_token_pair, parse_tx_from_input,
         parse_value_pair, print_output,
     },
+    common::*,
     dao::{DaoParams, ProposalRecord},
     money::BALANCE_BASE10_DECIMALS,
     rpc::subscribe_blocks,
@@ -831,8 +833,9 @@ async fn handle_wallet_keygen(drk: &DrkPtr, output: &mut Vec<String>) {
 
 /// Auxiliary function to define the wallet balance subcommand handling.
 async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
-    let lock = drk.read().await;
-    let balmap = match lock.money_balance().await {
+    let drk = drk.read().await;
+
+    let balmap = match drk.money_balance().await {
         Ok(m) => m,
         Err(e) => {
             output.push(format!("Failed to fetch balances map: {e}"));
@@ -840,7 +843,7 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
         }
     };
 
-    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+    let alimap = match drk.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
             output.push(format!("Failed to fetch aliases map: {e}"));
@@ -848,18 +851,7 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
         }
     };
 
-    // Create a prettytable with the new data:
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Token ID", "Aliases", "Balance"]);
-    for (token_id, balance) in balmap.iter() {
-        let aliases = match aliases_map.get(token_id) {
-            Some(a) => a,
-            None => "-",
-        };
-
-        table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
-    }
+    let table = prettytable_balance(&balmap, &alimap);
 
     if table.is_empty() {
         output.push(String::from("No unspent balances found"));
@@ -870,33 +862,33 @@ async fn handle_wallet_balance(drk: &DrkPtr, output: &mut Vec<String>) {
 
 /// Auxiliary function to define the wallet address subcommand handling.
 async fn handle_wallet_address(drk: &DrkPtr, output: &mut Vec<String>) {
-    match drk.read().await.default_address().await {
-        Ok(address) => output.push(format!("{address}")),
-        Err(e) => output.push(format!("Failed to fetch default address: {e}")),
-    }
+    let drk = drk.read().await;
+
+    let public_key = match drk.default_address().await {
+        Ok(v) => v,
+        Err(e) => {
+            output.push(format!("Failed to fetch default address: {e}"));
+            return
+        }
+    };
+
+    let addr: Address = StandardAddress::from_public(drk.network, public_key).into();
+    output.push(format!("{addr}"));
 }
 
 /// Auxiliary function to define the wallet addresses subcommand handling.
 async fn handle_wallet_addresses(drk: &DrkPtr, output: &mut Vec<String>) {
-    let addresses = match drk.read().await.addresses().await {
-        Ok(a) => a,
+    let drk = drk.read().await;
+    let network = drk.network;
+    let addresses = match drk.addresses().await {
+        Ok(v) => v,
         Err(e) => {
             output.push(format!("Failed to fetch addresses: {e}"));
             return
         }
     };
 
-    // Create a prettytable with the new data:
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
-    for (key_id, public_key, secret_key, is_default) in addresses {
-        let is_default = match is_default {
-            1 => "*",
-            _ => "",
-        };
-        table.add_row(row![key_id, public_key, secret_key, is_default]);
-    }
+    let table = prettytable_addrs(network, &addresses);
 
     if table.is_empty() {
         output.push(String::from("No addresses found"));
@@ -1011,61 +1003,7 @@ async fn handle_wallet_coins(drk: &DrkPtr, output: &mut Vec<String>) {
         }
     };
 
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row![
-        "Coin",
-        "Token ID",
-        "Aliases",
-        "Value",
-        "Spend Hook",
-        "User Data",
-        "Creation Height",
-        "Spent",
-        "Spent Height",
-        "Spent TX"
-    ]);
-    for coin in coins {
-        let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
-            Some(a) => a,
-            None => "-",
-        };
-
-        let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-            format!("{}", coin.0.note.spend_hook)
-        } else {
-            String::from("-")
-        };
-
-        let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
-            bs58::encode(&serialize_async(&coin.0.note.user_data).await).into_string().to_string()
-        } else {
-            String::from("-")
-        };
-
-        let spent_height = match coin.3 {
-            Some(spent_height) => spent_height.to_string(),
-            None => String::from("-"),
-        };
-
-        table.add_row(row![
-            bs58::encode(&serialize_async(&coin.0.coin.inner()).await).into_string().to_string(),
-            coin.0.note.token_id,
-            aliases,
-            format!(
-                "{} ({})",
-                coin.0.note.value,
-                encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
-            ),
-            spend_hook,
-            user_data,
-            coin.1,
-            coin.2,
-            spent_height,
-            coin.4,
-        ]);
-    }
-
+    let table = prettytable_coins(&coins, &aliases_map);
     output.push(format!("{table}"));
 }
 
@@ -1228,13 +1166,19 @@ async fn handle_transfer(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
     };
     index += 1;
 
-    let rcpt = match PublicKey::from_str(parts[index]) {
+    let rcpt = match Address::from_str(parts[index]) {
         Ok(r) => r,
         Err(e) => {
             output.push(format!("Invalid recipient: {e}"));
             return
         }
     };
+
+    if rcpt.network() != lock.network {
+        output.push("Mismatched recipient address prefix".to_string());
+        return
+    }
+
     index += 1;
 
     let spend_hook = if index < parts.len() {
@@ -1280,7 +1224,10 @@ async fn handle_transfer(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>)
         None
     };
 
-    match lock.transfer(&amount, token_id, rcpt, spend_hook, user_data, half_split).await {
+    match lock
+        .transfer(&amount, token_id, *rcpt.public_key(), spend_hook, user_data, half_split)
+        .await
+    {
         Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
         Err(e) => output.push(format!("Failed to create payment transaction: {e}")),
     }
@@ -1691,7 +1638,7 @@ async fn handle_dao_balance(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Strin
         }
     };
 
-    let aliases_map = match lock.get_aliases_mapped_by_token().await {
+    let alimap = match lock.get_aliases_mapped_by_token().await {
         Ok(m) => m,
         Err(e) => {
             output.push(format!("Failed to fetch aliases map: {e}"));
@@ -1699,17 +1646,7 @@ async fn handle_dao_balance(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Strin
         }
     };
 
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Token ID", "Aliases", "Balance"]);
-    for (token_id, balance) in balmap.iter() {
-        let aliases = match aliases_map.get(token_id) {
-            Some(a) => a,
-            None => "-",
-        };
-
-        table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
-    }
+    let table = prettytable_balance(&balmap, &alimap);
 
     if table.is_empty() {
         output.push(String::from("No unspent balances found"))
@@ -1765,13 +1702,18 @@ async fn handle_dao_propose_transfer(drk: &DrkPtr, parts: &[&str], output: &mut 
         }
     };
 
-    let rcpt = match PublicKey::from_str(parts[6]) {
+    let rcpt = match Address::from_str(parts[6]) {
         Ok(r) => r,
         Err(e) => {
             output.push(format!("Invalid recipient: {e}"));
             return
         }
     };
+
+    if rcpt.network() != lock.network {
+        output.push("Recipient address prefix mismatch".to_string());
+        return
+    }
 
     let mut index = 7;
     let spend_hook = if index < parts.len() {
@@ -1820,7 +1762,15 @@ async fn handle_dao_propose_transfer(drk: &DrkPtr, parts: &[&str], output: &mut 
     match drk
         .read()
         .await
-        .dao_propose_transfer(parts[2], duration, &amount, token_id, rcpt, spend_hook, user_data)
+        .dao_propose_transfer(
+            parts[2],
+            duration,
+            &amount,
+            token_id,
+            *rcpt.public_key(),
+            spend_hook,
+            user_data,
+        )
         .await
     {
         Ok(proposal) => output.push(format!("Generated proposal: {}", proposal.bulla())),
@@ -2859,13 +2809,7 @@ async fn handle_alias_show(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
         }
     };
 
-    // Create a prettytable with the new data:
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Alias", "Token ID"]);
-    for (alias, token_id) in map.iter() {
-        table.add_row(row![alias, token_id]);
-    }
+    let table = prettytable_aliases(&map);
 
     if table.is_empty() {
         output.push(String::from("No aliases found"));
@@ -2989,30 +2933,7 @@ async fn handle_token_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
         }
     };
 
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row![
-        "Token ID",
-        "Aliases",
-        "Mint Authority",
-        "Token Blind",
-        "Frozen",
-        "Freeze Height"
-    ]);
-
-    for (token_id, authority, blind, frozen, freeze_height) in tokens {
-        let aliases = match aliases_map.get(&token_id.to_string()) {
-            Some(a) => a,
-            None => "-",
-        };
-
-        let freeze_height = match freeze_height {
-            Some(freeze_height) => freeze_height.to_string(),
-            None => String::from("-"),
-        };
-
-        table.add_row(row![token_id, aliases, authority, blind, frozen, freeze_height]);
-    }
+    let table = prettytable_tokenlist(&tokens, &aliases_map);
 
     if table.is_empty() {
         output.push(String::from("No tokens found"));
@@ -3038,7 +2959,7 @@ async fn handle_token_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
         return
     }
 
-    let rcpt = match PublicKey::from_str(parts[4]) {
+    let rcpt = match Address::from_str(parts[4]) {
         Ok(r) => r,
         Err(e) => {
             output.push(format!("Invalid recipient: {e}"));
@@ -3047,6 +2968,12 @@ async fn handle_token_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
     };
 
     let lock = drk.read().await;
+
+    if rcpt.network() != lock.network {
+        output.push("Recipient address prefix mismatch".to_string());
+        return
+    }
+
     let token_id = match lock.get_token(String::from(parts[2])).await {
         Ok(t) => t,
         Err(e) => {
@@ -3100,7 +3027,7 @@ async fn handle_token_mint(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String
         None
     };
 
-    match lock.mint_token(&amount, rcpt, token_id, spend_hook, user_data).await {
+    match lock.mint_token(&amount, *rcpt.public_key(), token_id, spend_hook, user_data).await {
         Ok(t) => output.push(base64::encode(&serialize_async(&t).await)),
         Err(e) => output.push(format!("Failed to create token mint transaction: {e}")),
     }
@@ -3195,14 +3122,7 @@ async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
             }
         };
 
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-        table.set_titles(row!["Transaction Hash", "Type", "Block Height"]);
-
-        for (tx_hash, tx_type, block_height) in history {
-            table.add_row(row![tx_hash, tx_type, block_height]);
-        }
-
+        let table = prettytable_contract_history(&history);
         if table.is_empty() {
             output.push(String::from("No history records found"));
         } else {
@@ -3219,17 +3139,7 @@ async fn handle_contract_list(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Str
         }
     };
 
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Contract ID", "Secret Key", "Locked", "Lock Height"]);
-
-    for (contract_id, secret_key, is_locked, lock_height) in auths {
-        let lock_height = match lock_height {
-            Some(lock_height) => lock_height.to_string(),
-            None => String::from("-"),
-        };
-        table.add_row(row![contract_id, secret_key, is_locked, lock_height]);
-    }
+    let table = prettytable_contract_auth(&auths);
 
     if table.is_empty() {
         output.push(String::from("No deploy authorities found"));

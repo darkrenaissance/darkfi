@@ -22,10 +22,14 @@ use smol::lock::RwLock;
 use url::Url;
 
 use darkfi::{system::ExecutorPtr, util::path::expand_path, Error, Result};
+use darkfi_sdk::crypto::keypair::Network;
 
 /// Error codes
 pub mod error;
 use error::{WalletDbError, WalletDbResult};
+
+/// Common shared functions
+pub mod common;
 
 /// darkfid JSON-RPC related methods
 pub mod rpc;
@@ -74,6 +78,8 @@ pub type DrkPtr = Arc<RwLock<Drk>>;
 
 /// CLI-util structure
 pub struct Drk {
+    /// Blockchain network
+    pub network: Network,
     /// Blockchain cache database operations handler
     pub cache: Cache,
     /// Wallet database operations handler
@@ -86,6 +92,7 @@ pub struct Drk {
 
 impl Drk {
     pub async fn new(
+        network: Network,
         cache_path: String,
         wallet_path: String,
         wallet_pass: String,
@@ -118,7 +125,7 @@ impl Drk {
             None
         };
 
-        Ok(Self { cache, wallet, rpc_client, fun })
+        Ok(Self { network, cache, wallet, rpc_client, fun })
     }
 
     pub fn into_ptr(self) -> DrkPtr {
