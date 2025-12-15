@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+rustfmt.toml
+tx-replayer
+*.zst
+*.json.gz

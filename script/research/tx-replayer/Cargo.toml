@@ -1,0 +1,24 @@
+[package]
+name = "tx-replayer"
+version = "0.1.0"
+description = "CLI-utility to replay transactions for analysis"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+darkfi = {path = "../../../", features = ["validator"]}
+darkfi-sdk = {path = "../../../src/sdk"}
+sled-overlay = {version = "0.1.10"}
+smol = {version = "2.0.2"}
+clap = {version = "4.4.11", features = ["derive"]}
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}
+
+[profile.release]
+debug = true
