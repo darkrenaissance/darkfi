@@ -825,10 +825,11 @@ impl Validator {
         Ok(())
     }
 
-    /// Auxiliary function to grab current RandomX keys.
-    /// If no forks exist, returns canonical keys.
-    pub async fn current_randomx_keys(&self) -> Result<(HeaderHash, HeaderHash)> {
-        self.consensus.current_randomx_keys().await
+    /// Auxiliary function to grab current mining RandomX key,
+    /// based on next block height.
+    /// If no forks exist, returns the canonical key.
+    pub async fn current_mining_randomx_key(&self) -> Result<HeaderHash> {
+        self.consensus.current_mining_randomx_key().await
     }
 
     /// Auxiliary function to grab best current fork full clone.

@@ -84,7 +84,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             // =============
             // Miner methods
             // =============
-            "miner.get_current_randomx_keys" => self.miner_get_current_randomx_keys(req.id, req.params).await,
+            "miner.get_current_mining_randomx_key" => self.miner_get_current_mining_randomx_key(req.id, req.params).await,
             "miner.get_header" => self.miner_get_header(req.id, req.params).await,
             "miner.submit_solution" => self.miner_submit_solution(req.id, req.params).await,
 

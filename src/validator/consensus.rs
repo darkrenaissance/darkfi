@@ -37,7 +37,7 @@ use crate::{
     runtime::vm_runtime::GAS_LIMIT,
     tx::{Transaction, MAX_TX_CALLS},
     validator::{
-        pow::PoWModule,
+        pow::{PoWModule, RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
         utils::{best_fork_index, block_rank, find_extended_fork_index},
         verification::{verify_proposal, verify_transaction},
     },
@@ -448,19 +448,34 @@ impl Consensus {
         Ok(proposals)
     }
 
-    /// Auxiliary function to grab current RandomX keys.
-    /// If no forks exist, returns canonical keys.
-    pub async fn current_randomx_keys(&self) -> Result<(HeaderHash, HeaderHash)> {
+    /// Auxiliary function to grab current mining RandomX key,
+    /// based on next block height.
+    /// If no forks exist, returns the canonical key.
+    pub async fn current_mining_randomx_key(&self) -> Result<HeaderHash> {
         // Grab a lock over current forks
         let forks = self.forks.read().await;
 
-        // If no forks exist, return canonical keys
-        if forks.is_empty() {
-            return Ok(self.module.read().await.darkfi_rx_keys)
-        }
+        // Grab next block height and current keys.
+        // If no forks exist, use canonical keys
+        let (next_block_height, rx_keys) = if forks.is_empty() {
+            let (next_block_height, _) = self.blockchain.last()?;
+            (next_block_height + 1, self.module.read().await.darkfi_rx_keys)
+        } else {
+            // Grab best fork and its last proposal
+            let fork = &forks[best_fork_index(&forks)?];
+            let last = fork.last_proposal()?;
+            (last.block.header.height + 1, fork.module.darkfi_rx_keys)
+        };
 
-        // Grab best fork keys
-        Ok(forks[best_fork_index(&forks)?].module.darkfi_rx_keys)
+        // We only use the next key when the next block is the
+        // height changing one.
+        if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
+            next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
+        {
+            Ok(rx_keys.1)
+        } else {
+            Ok(rx_keys.0)
+        }
     }
 
     /// Auxiliary function to grab best current fork full clone.

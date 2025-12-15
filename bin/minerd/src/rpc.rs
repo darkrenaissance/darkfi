@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, thread};
+use std::sync::Arc;
 
 use num_bigint::BigUint;
-use randomx::{RandomXFlags, RandomXVM};
-use smol::channel::{Receiver, Sender};
+use randomx::RandomXVM;
 use tracing::{debug, error, info};
 use url::Url;
 
@@ -60,70 +59,63 @@ impl DarkfidRpcClient {
 
 impl MinerNode {
     /// Auxiliary function to request configured darkfid daemon for
-    /// its current and next RandomX keys.
-    async fn randomx_keys(&self) -> Result<(HeaderHash, HeaderHash)> {
+    /// its current mining RandomX key.
+    async fn randomx_key(&self) -> Result<HeaderHash> {
         loop {
-            debug!(target: "minerd::rpc::randomx_keys", "Executing RandomX keys request to darkfid...");
+            debug!(target: "minerd::rpc::randomx_key", "Executing mining RandomX key request to darkfid...");
             let params = match self
-                .darkfid_daemon_request("miner.get_current_randomx_keys", &JsonValue::Array(vec![]))
+                .darkfid_daemon_request(
+                    "miner.get_current_mining_randomx_key",
+                    &JsonValue::Array(vec![]),
+                )
                 .await
             {
                 Ok(params) => params,
                 Err(e) => {
-                    error!(target: "minerd::rpc::randomx_keys", "darkfid request failed: {e}");
+                    error!(target: "minerd::rpc::randomx_key", "darkfid request failed: {e}");
                     self.sleep().await?;
                     continue
                 }
             };
-            debug!(target: "minerd::rpc::randomx_keys", "Got reply: {params:?}");
+            debug!(target: "minerd::rpc::randomx_key", "Got reply: {params:?}");
 
             // Verify response parameters
             if !params.is_array() {
-                error!(target: "minerd::rpc::randomx_keys", "darkfid responded with invalid params: {params:?}");
+                error!(target: "minerd::rpc::randomx_key", "darkfid responded with invalid params: {params:?}");
                 self.sleep().await?;
                 continue
             }
             let params = params.get::<Vec<JsonValue>>().unwrap();
             if params.is_empty() {
-                debug!(target: "minerd::rpc::randomx_keys", "darkfid response is empty");
+                debug!(target: "minerd::rpc::randomx_key", "darkfid response is empty");
                 self.sleep().await?;
                 continue
             }
-            if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
-                error!(target: "minerd::rpc::randomx_keys", "darkfid responded with invalid params: {params:?}");
+            if params.len() != 1 || !params[0].is_string() {
+                error!(target: "minerd::rpc::randomx_key", "darkfid responded with invalid params: {params:?}");
                 self.sleep().await?;
                 continue
             }
 
             // Parse parameters
             let Some(randomx_key_bytes) = base64::decode(params[0].get::<String>().unwrap()) else {
-                error!(target: "minerd::rpc::randomx_keys", "Failed to parse RandomX key bytes");
+                error!(target: "minerd::rpc::randomx_key", "Failed to parse RandomX key bytes");
                 self.sleep().await?;
                 continue
             };
             let Ok(randomx_key) = deserialize_async::<HeaderHash>(&randomx_key_bytes).await else {
-                error!(target: "minerd::rpc::randomx_keys", "Failed to parse RandomX key");
-                self.sleep().await?;
-                continue
-            };
-            let Some(next_key_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
-                error!(target: "minerd::rpc::randomx_keys", "Failed to parse next RandomX key bytes");
-                self.sleep().await?;
-                continue
-            };
-            let Ok(next_key) = deserialize_async::<HeaderHash>(&next_key_bytes).await else {
-                error!(target: "minerd::rpc::randomx_keys", "Failed to parse next RandomX key");
+                error!(target: "minerd::rpc::randomx_key", "Failed to parse RandomX key");
                 self.sleep().await?;
                 continue
             };
 
-            return Ok((randomx_key, next_key))
+            return Ok(randomx_key)
         }
     }
 
     /// Auxiliary function to poll configured darkfid daemon for a new
     /// mining job.
-    async fn poll(&self, header: &str) -> Result<(HeaderHash, HeaderHash, BigUint, Header)> {
+    async fn poll(&self, header: &str) -> Result<(HeaderHash, BigUint, Header)> {
         loop {
             debug!(target: "minerd::rpc::poll", "Executing poll request to darkfid...");
             let mut request_params = self.config.wallet_config.clone();
@@ -153,11 +145,10 @@ impl MinerNode {
                 self.sleep().await?;
                 continue
             }
-            if params.len() != 4 ||
+            if params.len() != 3 ||
                 !params[0].is_string() ||
                 !params[1].is_string() ||
-                !params[2].is_string() ||
-                !params[3].is_string()
+                !params[2].is_string()
             {
                 error!(target: "minerd::rpc::poll", "darkfid responded with invalid params: {params:?}");
                 self.sleep().await?;
@@ -175,23 +166,13 @@ impl MinerNode {
                 self.sleep().await?;
                 continue
             };
-            let Some(next_key_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
-                error!(target: "minerd::rpc::poll", "Failed to parse next RandomX key bytes");
-                self.sleep().await?;
-                continue
-            };
-            let Ok(next_key) = deserialize_async::<HeaderHash>(&next_key_bytes).await else {
-                error!(target: "minerd::rpc::poll", "Failed to parse next RandomX key");
-                self.sleep().await?;
-                continue
-            };
-            let Some(target_bytes) = base64::decode(params[2].get::<String>().unwrap()) else {
+            let Some(target_bytes) = base64::decode(params[1].get::<String>().unwrap()) else {
                 error!(target: "minerd::rpc::poll", "Failed to parse target bytes");
                 self.sleep().await?;
                 continue
             };
             let target = BigUint::from_bytes_le(&target_bytes);
-            let Some(header_bytes) = base64::decode(params[3].get::<String>().unwrap()) else {
+            let Some(header_bytes) = base64::decode(params[2].get::<String>().unwrap()) else {
                 error!(target: "minerd::rpc::poll", "Failed to parse header bytes");
                 self.sleep().await?;
                 continue
@@ -202,7 +183,7 @@ impl MinerNode {
                 continue
             };
 
-            return Ok((randomx_key, next_key, target, header))
+            return Ok((randomx_key, target, header))
         }
     }
 
@@ -273,46 +254,26 @@ impl MinerNode {
 /// Async task to poll darkfid for new mining jobs. Once a new job is
 /// received, spawns a mining task in the background.
 pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
-    // Cache current and next RandomX keys and current VMs
-    let (mut current_randomx_key, mut next_randomx_key) = miner.randomx_keys().await?;
+    // Cache current RandomX key and its VMs
+    let mut current_randomx_key = miner.randomx_key().await?;
     info!(target: "minerd::rpc::mining_task", "Initializing {} mining VMs for key: {current_randomx_key}", miner.config.threads);
     let mining_flags =
         get_mining_flags(miner.config.fast_mode, miner.config.large_pages, miner.config.secure);
-    let mut current_vms = Arc::new(generate_mining_vms(
+    let mut _current_vms = Arc::new(generate_mining_vms(
         mining_flags,
         &current_randomx_key,
         miner.config.threads,
         &miner.mining_channel.1.clone(),
     )?);
 
-    // Initialize the smol channel to send signal between the threads
-    let (vms_sender, vms_receiver) = smol::channel::bounded(1);
-
-    // Detach next RandomX VMs generation in the background if needed
-    if current_randomx_key != next_randomx_key {
-        let threads = miner.config.threads;
-        let sender = vms_sender.clone();
-        let stop_singal = miner.background_channel.1.clone();
-        thread::spawn(move || {
-            match vms_generation_task(mining_flags, next_randomx_key, threads, sender, stop_singal)
-            {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => {
-                    error!(target: "minerd::rpc::polling_task", "RandomX VMs generation task failed: {e}")
-                }
-            }
-        });
-    }
-
     // Use the dummy Header on first poll
     let mut current_job = current_randomx_key.to_string();
     loop {
         // Poll darkfid for a mining job
-        let (randomx_key, next_key, target, header) = miner.poll(&current_job).await?;
+        let (randomx_key, target, header) = miner.poll(&current_job).await?;
         let header_hash = header.hash().to_string();
         debug!(target: "minerd::rpc::polling_task", "Received job:");
         debug!(target: "minerd::rpc::polling_task", "\tRandomX key - {randomx_key}");
-        debug!(target: "minerd::rpc::polling_task", "\tNext RandomX key - {next_key}");
         debug!(target: "minerd::rpc::polling_task", "\tTarget - {target}");
         debug!(target: "minerd::rpc::polling_task", "\tHeader - {header_hash}");
 
@@ -337,53 +298,23 @@ pub async fn polling_task(miner: MinerNodePtr, ex: ExecutorPtr) -> Result<()> {
 
         // Check if the current RandomX key has changed
         if randomx_key != current_randomx_key {
+            // Drop previous VMs
+            _current_vms = Arc::new(vec![]);
+
+            // Generate the RandomX VMs for the key
+            info!(target: "minerd::rpc::mining_task", "Initializing {} mining VMs for key: {randomx_key}", miner.config.threads);
+            _current_vms = Arc::new(generate_mining_vms(
+                mining_flags,
+                &randomx_key,
+                miner.config.threads,
+                &miner.mining_channel.1.clone(),
+            )?);
             current_randomx_key = randomx_key;
-
-            // Check if we should shift to next VMs
-            if current_randomx_key == next_randomx_key {
-                // Shift next generated VMs into current ones
-                info!(target: "minerd::rpc::mining_task", "Grabing next mining VMs from channel for key: {randomx_key}");
-                current_vms = Arc::new(vms_receiver.recv().await?);
-            } else {
-                // Generate the RandomX VMs for the key
-                info!(target: "minerd::rpc::mining_task", "Initializing {} mining VMs for key: {randomx_key}", miner.config.threads);
-                current_vms = Arc::new(generate_mining_vms(
-                    mining_flags,
-                    &randomx_key,
-                    miner.config.threads,
-                    &miner.mining_channel.1.clone(),
-                )?);
-            }
-        }
-
-        // Check if the next RandomX key has changed
-        if next_key != next_randomx_key && next_key != randomx_key {
-            // Abord pending VMs generation task
-            miner.abort_background().await;
-
-            // Consume VMs channel item so its empty
-            if let Err(e) = vms_receiver.try_recv() {
-                debug!(target: "minerd::rpc::mining_task", "Failed to cleanup VMs receiver: {e}");
-            }
-
-            // Detach next RandomX VMs generation in the background
-            let threads = miner.config.threads;
-            let sender = vms_sender.clone();
-            let stop_singal = miner.background_channel.1.clone();
-            thread::spawn(move || {
-                match vms_generation_task(mining_flags, next_key, threads, sender, stop_singal) {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => {
-                        error!(target: "minerd::rpc::polling_task", "RandomX VMs generation task failed: {e}")
-                    }
-                }
-            });
-            next_randomx_key = next_key;
         }
 
         // Detach mining task
         StoppableTask::new().start(
-            mining_task(miner.clone(), current_vms.clone(), target, header),
+            mining_task(miner.clone(), _current_vms.clone(), target, header),
             |res| async {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -426,22 +357,5 @@ async fn mining_task(
     let result = miner.submit(header.nonce as f64).await;
     info!(target: "minerd::rpc::submit", "Submition result: {result}");
 
-    Ok(())
-}
-
-/// Async task to generate RandomX VMs in the background and push them
-/// in provided channel.
-fn vms_generation_task(
-    mining_flags: RandomXFlags,
-    randomx_key: HeaderHash,
-    threads: usize,
-    sender: Sender<Vec<Arc<RandomXVM>>>,
-    stop_signal: Receiver<()>,
-) -> Result<()> {
-    // Generate the RandomX VMs for the key
-    info!(target: "minerd::rpc::vms_generation_task", "Initializing {threads} mining VMs for key: {randomx_key}");
-    let vms = generate_mining_vms(mining_flags, &randomx_key, threads, &stop_signal)?;
-    // Push them into the channel
-    sender.send_blocking(vms)?;
     Ok(())
 }
