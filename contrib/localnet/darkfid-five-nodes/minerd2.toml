@@ -35,7 +35,7 @@ network = "localnet"
 # Wallet mining address to receive mining rewards.
 # This is a dummy one so the miner can start,
 # replace with your own one.
-recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
+recipient = "DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf"
 
 # Optional contract spend hook to use in the mining reward
 #spend_hook = "YOUR_SPEND_HOOK_HERE"

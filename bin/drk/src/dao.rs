@@ -58,13 +58,13 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        keypair::{Address, StandardAddress},
+        keypair::{Address, PublicKey, SecretKey, StandardAddress},
         pasta_prelude::PrimeField,
         poseidon_hash,
         smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
         util::{fp_mod_fv, fp_to_u64},
-        BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
-        SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MerkleTree, ScalarBlind, DAO_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     dark_tree::DarkTree,
     pasta::pallas,
@@ -1914,7 +1914,9 @@ impl Drk {
     /// Fetch known unspent balances from the wallet for the given DAO name.
     pub async fn dao_mining_config(&self, name: &str, output: &mut Vec<String>) -> Result<()> {
         let dao = self.get_dao_by_name(name).await?;
-        let recipient = dao.params.dao.notes_public_key;
+        let address: Address =
+            StandardAddress::from_public(self.network, dao.params.dao.notes_public_key).into();
+        let recipient = address.to_string();
         let spend_hook = format!(
             "{}",
             FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }

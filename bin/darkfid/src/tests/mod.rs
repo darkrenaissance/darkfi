@@ -26,7 +26,7 @@ use darkfi::{
     Result,
 };
 use darkfi_contract_test_harness::init_logger;
-use darkfi_sdk::num_traits::One;
+use darkfi_sdk::{crypto::keypair::Network, num_traits::One};
 use num_bigint::BigUint;
 use smol::Executor;
 use tracing::warn;
@@ -288,6 +288,7 @@ fn darkfid_programmatic_control() -> Result<()> {
 
                 // Initialize a daemon
                 let daemon = crate::Darkfid::init(
+                    Network::Mainnet,
                     &sled_db,
                     &config,
                     &darkfi::net::Settings::default(),

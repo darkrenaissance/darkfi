@@ -1968,6 +1968,8 @@ async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
                     return
                 }
             };
+            let recipient: Address =
+                StandardAddress::from_public(lock.network, coin.public_key).into();
             let spend_hook = if coin.spend_hook == FuncId::none() {
                 "-".to_string()
             } else {
@@ -1983,7 +1985,7 @@ async fn handle_dao_proposal(drk: &DrkPtr, parts: &[&str], output: &mut Vec<Stri
             contract_calls.push_str(&format!(
                 "\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
                 "Recipient",
-                coin.public_key,
+                recipient,
                 "Amount",
                 coin.value,
                 encode_base10(coin.value, BALANCE_BASE10_DECIMALS),

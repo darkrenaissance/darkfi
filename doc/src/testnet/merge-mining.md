@@ -191,6 +191,12 @@ or press `p` to pause mining.
 
 ## p2pool setup with merge-mining
 
+> NOTE: `p2pool` uses plain `http` connections for RPC calls, as its
+> assumed to be running on a localnet. Don't run a `p2pool` instance
+> with a `darkfid` instance outside of your network, since someone
+> snooping your traffic can see your wallet address used for the block
+> rewards.
+
 Now that everything is in order, we can use `p2pool` with merge-mining
 enabled in order to merge mine DarkFi. For receiving mining rewards
 on DarkFi, we'll need a DarkFi wallet address so make sure you have
@@ -244,7 +250,7 @@ To retrieve a DAO merge mining configuration, execute:
 drk> dao mining-config {YOUR_DAO}
 
 DarkFi TOML configuration:
-recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
+recipient = "{YOUR_DAO_WALLET_ADDRESS}"
 spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
 user_data = "{YOUR_DAO_BULLA}"
 

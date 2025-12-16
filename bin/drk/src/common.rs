@@ -38,7 +38,7 @@ pub fn prettytable_addrs(
 ) -> Table {
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Key ID", "Address", "Secret Key", "Is Default"]);
+    table.set_titles(row!["Key ID", "Address", "Public Key", "Secret Key", "Is Default"]);
     for (key_id, public_key, secret_key, is_default) in addresses {
         let is_default = match is_default {
             1 => "*",
@@ -46,7 +46,7 @@ pub fn prettytable_addrs(
         };
 
         let address: Address = StandardAddress::from_public(network, *public_key).into();
-        table.add_row(row![key_id, address, secret_key, is_default]);
+        table.add_row(row![key_id, address, public_key, secret_key, is_default]);
     }
 
     table

@@ -49,8 +49,10 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree::Position,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::PrimeField, BaseBlind, FuncId, Keypair, MerkleNode,
-        MerkleTree, PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
+        keypair::{Address, Keypair, PublicKey, SecretKey, StandardAddress},
+        note::AeadEncryptedNote,
+        pasta_prelude::PrimeField,
+        BaseBlind, FuncId, MerkleNode, MerkleTree, ScalarBlind, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -157,7 +159,8 @@ impl Drk {
         )?;
 
         output.push(String::from("New address:"));
-        output.push(format!("{}", keypair.public));
+        let address: Address = StandardAddress::from_public(self.network, keypair.public).into();
+        output.push(format!("{address}"));
 
         Ok(())
     }
@@ -293,6 +296,8 @@ impl Drk {
             return Err(Error::ParseFailed("[mining_address] Key bytes parsing failed"))
         };
         let public_key: PublicKey = deserialize_async(key_bytes).await?;
+        let address: Address = StandardAddress::from_public(self.network, public_key).into();
+        let recipient = address.to_string();
 
         let spend_hook = spend_hook.as_ref().map(|spend_hook| spend_hook.to_string());
 
@@ -300,7 +305,7 @@ impl Drk {
             user_data.as_ref().map(|user_data| bs58::encode(user_data.to_repr()).into_string());
 
         output.push(String::from("DarkFi TOML configuration:"));
-        output.push(format!("recipient = \"{public_key}\""));
+        output.push(format!("recipient = \"{recipient}\""));
         match spend_hook {
             Some(ref spend_hook) => output.push(format!("spend_hook = \"{spend_hook}\"")),
             None => output.push(String::from("#spend_hook = \"\"")),
@@ -310,7 +315,7 @@ impl Drk {
             None => output.push(String::from("#user_data = \"\"")),
         }
         output.push(String::from("\nP2Pool wallet address to use:"));
-        output.push(base64::encode(&serialize(&(public_key, spend_hook, user_data))).to_string());
+        output.push(base64::encode(&serialize(&(recipient, spend_hook, user_data))).to_string());
 
         Ok(())
     }

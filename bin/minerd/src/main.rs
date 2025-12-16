@@ -28,7 +28,7 @@ use darkfi::{
     util::path::get_config_path, Error, Result,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::PrimeField, FuncId, PublicKey},
+    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId},
     pasta::pallas,
 };
 
@@ -176,7 +176,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     debug!(target: "minerd", "Blockchain config: {blockchain_config:?}");
 
     // Parse the network wallet configuration
-    if PublicKey::from_str(&blockchain_config.recipient).is_err() {
+    if Address::from_str(&blockchain_config.recipient).is_err() {
         return Err(Error::InvalidAddress)
     }
     let mut wallet_config = HashMap::from([(

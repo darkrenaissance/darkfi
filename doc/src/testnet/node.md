@@ -167,7 +167,7 @@ $ ./drk wallet keygen
 
 Generating a new keypair
 New address:
-CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
 ```
 
 ```shell
@@ -181,7 +181,7 @@ retrieve your default address using:
 ```shell
 $ ./drk wallet address
 
-CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
 ```
 
 ### Miner
@@ -244,12 +244,19 @@ You can retrieve your `drk` wallet address as follows:
 ```shell
 $ ./drk wallet address
 
-CbaqFqGTgn86Zh9AjUeMw3DJyVCshaPSPFtmj6Cyd5yU
+DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
 ```
 
-Note: when modifying the `minerd` config file to use with the
-testnet, be sure to change the values under the section marked
-`[network_config."testnet"]` (not localnet or mainnet!).
+> Notes:
+>
+> When modifying the `minerd` config file to use with the
+> testnet, be sure to change the values under the section marked
+> `[network_config."testnet"]` (not localnet or mainnet!).
+>
+> If you are not on the same network as the `darkfid` instance you
+> are using, you must configure and use `tcp+tls` for the RPC
+> endpoints, so your traffic is not plaintext, as it contains your
+> wallet address used for the block rewards.
 
 Once that's in place, you can run it again and `minerd` will start,
 polling `darkfid` for new block headers to mine.

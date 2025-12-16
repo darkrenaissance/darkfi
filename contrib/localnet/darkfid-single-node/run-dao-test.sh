@@ -68,7 +68,7 @@ wait_dao_mint() {
 }
 
 fill_treasury() {
-    PUBKEY="$($DRK dao list AnonDAO | grep '^Notes Public key: ' | cut -d ' ' -f4)"
+    PUBKEY="$($DRK dao list AnonDAO | grep '^Wallet Address: ' | cut -d ' ' -f3)"
     SPEND_HOOK="$($DRK dao spend-hook)"
     BULLA="$($DRK dao list AnonDAO | grep '^Bulla: ' | cut -d' ' -f2)"
     $DRK transfer 20 DAWN "$PUBKEY" "$SPEND_HOOK" "$BULLA" | tee $OUTPUT_FOLDER/xfer.tx | $DRK broadcast

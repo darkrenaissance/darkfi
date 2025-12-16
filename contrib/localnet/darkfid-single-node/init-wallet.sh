@@ -7,4 +7,4 @@ $DRK wallet initialize
 $DRK wallet keygen
 $DRK wallet default-address 1
 wallet=$($DRK wallet address)
-sed -i -e "s|9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U|$wallet|g" minerd.toml
+sed -i -e "s|DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf|$wallet|g" minerd.toml

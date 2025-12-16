@@ -30,7 +30,7 @@ use darkfi::{
     system::{sleep, ExecutorPtr, StoppableTask, StoppableTaskPtr},
     Error,
 };
-use darkfi_sdk::crypto::Keypair;
+use darkfi_sdk::crypto::keypair::{Address, Keypair, Network, StandardAddress};
 
 /// Miner benchmarking related methods
 pub mod benchmark;
@@ -59,6 +59,8 @@ pub struct MinerNodeConfig {
 
 impl Default for MinerNodeConfig {
     fn default() -> Self {
+        let address: Address =
+            StandardAddress::from_public(Network::Mainnet, Keypair::default().public).into();
         Self::new(
             true,
             false,
@@ -66,10 +68,7 @@ impl Default for MinerNodeConfig {
             1,
             5,
             0,
-            HashMap::from([(
-                String::from("recipient"),
-                JsonValue::String(Keypair::default().public.to_string()),
-            )]),
+            HashMap::from([(String::from("recipient"), JsonValue::String(address.to_string()))]),
         )
     }
 }

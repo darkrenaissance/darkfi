@@ -32,7 +32,7 @@ use darkfi::{
     validator::consensus::Proposal,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::PrimeField, FuncId, PublicKey},
+    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId},
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
@@ -61,8 +61,11 @@ impl DarkfiNode {
     // --> {"jsonrpc":"2.0", "method": "merge_mining_get_chain_id", "id": 1}
     // <-- {"jsonrpc":"2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
     pub async fn xmr_merge_mining_get_chain_id(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Check request doesn't contain params
-        if !params.get::<Vec<JsonValue>>().unwrap().is_empty() {
+        // Verify request params
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -113,70 +116,50 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
+        if params.len() != 4 {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
 
         // Parse address mining configuration
         let Some(address) = params.get("address") else {
-            return JsonError::new(InvalidParams, Some("missing address".to_string()), id).into()
+            return server_error(RpcError::MinerMissingAddress, id, None)
         };
         let Some(address) = address.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAddress, id, None)
         };
         let Some(address_bytes) = base64::decode(address) else {
-            return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAddress, id, None)
         };
         let Ok((recipient, spend_hook, user_data)) =
-            deserialize_async::<(PublicKey, Option<String>, Option<String>)>(&address_bytes).await
+            deserialize_async::<(String, Option<String>, Option<String>)>(&address_bytes).await
         else {
-            return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAddress, id, None)
         };
+        let Ok(recipient) = Address::from_str(&recipient) else {
+            return server_error(RpcError::MinerInvalidRecipient, id, None)
+        };
+        if recipient.network() != self.network {
+            return server_error(RpcError::MinerInvalidRecipientPrefix, id, None)
+        }
         let spend_hook = match spend_hook {
             Some(s) => match FuncId::from_str(&s) {
                 Ok(s) => Some(s),
-                Err(_) => {
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("invalid address format".to_string()),
-                        id,
-                    )
-                    .into()
-                }
+                Err(_) => return server_error(RpcError::MinerInvalidSpendHook, id, None),
             },
             None => None,
         };
         let user_data: Option<pallas::Base> = match user_data {
             Some(u) => {
                 let Ok(bytes) = bs58::decode(&u).into_vec() else {
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("invalid address format".to_string()),
-                        id,
-                    )
-                    .into()
+                    return server_error(RpcError::MinerInvalidUserData, id, None)
                 };
                 let bytes: [u8; 32] = match bytes.try_into() {
                     Ok(b) => b,
-                    Err(_) => {
-                        return JsonError::new(
-                            InvalidParams,
-                            Some("invalid address format".to_string()),
-                            id,
-                        )
-                        .into()
-                    }
+                    Err(_) => return server_error(RpcError::MinerInvalidUserData, id, None),
                 };
                 match pallas::Base::from_repr(bytes).into() {
                     Some(v) => Some(v),
-                    None => {
-                        return JsonError::new(
-                            InvalidParams,
-                            Some("invalid address format".to_string()),
-                            id,
-                        )
-                        .into()
-                    }
+                    None => return server_error(RpcError::MinerInvalidUserData, id, None),
                 }
             }
             None => None,
@@ -184,38 +167,33 @@ impl DarkfiNode {
 
         // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
-            return JsonError::new(InvalidParams, Some("missing aux_hash".to_string()), id).into()
+            return server_error(RpcError::MinerMissingAuxHash, id, None)
         };
         let Some(aux_hash) = aux_hash.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid aux_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxHash, id, None)
         };
         let Ok(aux_hash) = HeaderHash::from_str(aux_hash) else {
-            return JsonError::new(InvalidParams, Some("invalid aux_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxHash, id, None)
         };
 
         // Parse height
         let Some(height) = params.get("height") else {
-            return JsonError::new(InvalidParams, Some("missing height".to_string()), id).into()
+            return server_error(RpcError::MinerMissingHeight, id, None)
         };
         let Some(height) = height.get::<f64>() else {
-            return JsonError::new(InvalidParams, Some("invalid height format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidHeight, id, None)
         };
         let height = *height as u64;
 
         // Parse prev_id
         let Some(prev_id) = params.get("prev_id") else {
-            return JsonError::new(InvalidParams, Some("missing prev_id".to_string()), id).into()
+            return server_error(RpcError::MinerMissingPrevId, id, None)
         };
         let Some(prev_id) = prev_id.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid prev_id format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidPrevId, id, None)
         };
         let Ok(prev_id) = hex::decode(prev_id) else {
-            return JsonError::new(InvalidParams, Some("invalid prev_id format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidPrevId, id, None)
         };
         let prev_id = monero::Hash::from_slice(&prev_id);
 
@@ -372,157 +350,120 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
+        if params.len() != 6 {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
 
         // Parse address mining configuration from aux_blob
         let Some(aux_blob) = params.get("aux_blob") else {
-            return JsonError::new(InvalidParams, Some("missing aux_blob".to_string()), id).into()
+            return server_error(RpcError::MinerMissingAuxBlob, id, None)
         };
         let Some(aux_blob) = aux_blob.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxBlob, id, None)
         };
         let Ok(address_bytes) = hex::decode(aux_blob) else {
-            return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxBlob, id, None)
         };
-        let Ok((_, spend_hook, user_data)) =
-            deserialize_async::<(PublicKey, Option<String>, Option<String>)>(&address_bytes).await
+        let Ok((recipient, spend_hook, user_data)) =
+            deserialize_async::<(String, Option<String>, Option<String>)>(&address_bytes).await
         else {
-            return JsonError::new(InvalidParams, Some("invalid aux_blob format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxBlob, id, None)
         };
+        let Ok(recipient) = Address::from_str(&recipient) else {
+            return server_error(RpcError::MinerInvalidRecipient, id, None)
+        };
+        if recipient.network() != self.network {
+            return server_error(RpcError::MinerInvalidRecipientPrefix, id, None)
+        }
         if let Some(spend_hook) = spend_hook {
             if FuncId::from_str(&spend_hook).is_err() {
-                return JsonError::new(
-                    InvalidParams,
-                    Some("invalid aux_blob format".to_string()),
-                    id,
-                )
-                .into()
+                return server_error(RpcError::MinerInvalidSpendHook, id, None)
             }
         };
         if let Some(user_data) = user_data {
             let Ok(bytes) = bs58::decode(&user_data).into_vec() else {
-                return JsonError::new(InvalidParams, Some("invalid address format".to_string()), id)
-                    .into()
+                return server_error(RpcError::MinerInvalidUserData, id, None)
             };
             let bytes: [u8; 32] = match bytes.try_into() {
                 Ok(b) => b,
-                Err(_) => {
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("invalid aux_blob format".to_string()),
-                        id,
-                    )
-                    .into()
-                }
+                Err(_) => return server_error(RpcError::MinerInvalidUserData, id, None),
             };
             let _: pallas::Base = match pallas::Base::from_repr(bytes).into() {
                 Some(v) => v,
-                None => {
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("invalid aux_blob format".to_string()),
-                        id,
-                    )
-                    .into()
-                }
+                None => return server_error(RpcError::MinerInvalidUserData, id, None),
             };
         };
 
         // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
-            return JsonError::new(InvalidParams, Some("missing aux_hash".to_string()), id).into()
+            return server_error(RpcError::MinerMissingAuxHash, id, None)
         };
         let Some(aux_hash) = aux_hash.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid aux_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxHash, id, None)
         };
         let Ok(aux_hash) = HeaderHash::from_str(aux_hash) else {
-            return JsonError::new(InvalidParams, Some("invalid aux_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidAuxHash, id, None)
         };
 
         // If we don't know about this job, we can just abort here.
         let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
         if !mm_blocktemplates.contains_key(&address_bytes) {
-            return JsonError::new(InvalidParams, Some("unknown address".to_string()), id).into()
+            return server_error(RpcError::MinerUnknownJob, id, None)
         }
 
         // Parse blob
         let Some(blob) = params.get("blob") else {
-            return JsonError::new(InvalidParams, Some("missing blob".to_string()), id).into()
+            return server_error(RpcError::MinerMissingBlob, id, None)
         };
         let Some(blob) = blob.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid blob format".to_string()), id).into()
+            return server_error(RpcError::MinerInvalidBlob, id, None)
         };
         let Ok(block) = monero_block_deserialize(blob) else {
-            return JsonError::new(InvalidParams, Some("invalid blob format".to_string()), id).into()
+            return server_error(RpcError::MinerInvalidBlob, id, None)
         };
 
         // Parse merkle_proof
         let Some(merkle_proof_j) = params.get("merkle_proof") else {
-            return JsonError::new(InvalidParams, Some("missing merkle_proof".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerMissingMerkleProof, id, None)
         };
         let Some(merkle_proof_j) = merkle_proof_j.get::<Vec<JsonValue>>() else {
-            return JsonError::new(
-                InvalidParams,
-                Some("invalid merkle_proof format".to_string()),
-                id,
-            )
-            .into()
+            return server_error(RpcError::MinerInvalidMerkleProof, id, None)
         };
         let mut merkle_proof: Vec<monero::Hash> = Vec::with_capacity(merkle_proof_j.len());
         for hash in merkle_proof_j.iter() {
             match hash.get::<String>() {
                 Some(v) => {
                     let Ok(val) = monero::Hash::from_hex(v) else {
-                        return JsonError::new(
-                            InvalidParams,
-                            Some("invalid merkle_proof format".to_string()),
-                            id,
-                        )
-                        .into()
+                        return server_error(RpcError::MinerInvalidMerkleProof, id, None)
                     };
 
                     merkle_proof.push(val);
                 }
-                None => {
-                    return JsonError::new(
-                        InvalidParams,
-                        Some("invalid merkle_proof format".to_string()),
-                        id,
-                    )
-                    .into()
-                }
+                None => return server_error(RpcError::MinerInvalidMerkleProof, id, None),
             }
         }
 
         // Parse path
         let Some(path) = params.get("path") else {
-            return JsonError::new(InvalidParams, Some("missing path".to_string()), id).into()
+            return server_error(RpcError::MinerMissingPath, id, None)
         };
         let Some(path) = path.get::<f64>() else {
-            return JsonError::new(InvalidParams, Some("invalid path format".to_string()), id).into()
+            return server_error(RpcError::MinerInvalidPath, id, None)
         };
         let path = *path as u32;
 
         // Parse seed_hash
         let Some(seed_hash) = params.get("seed_hash") else {
-            return JsonError::new(InvalidParams, Some("missing seed_hash".to_string()), id).into()
+            return server_error(RpcError::MinerMissingSeedHash, id, None)
         };
         let Some(seed_hash) = seed_hash.get::<String>() else {
-            return JsonError::new(InvalidParams, Some("invalid seed_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidSeedHash, id, None)
         };
         let Ok(seed_hash) = monero::Hash::from_hex(seed_hash) else {
-            return JsonError::new(InvalidParams, Some("invalid seed_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidSeedHash, id, None)
         };
         let Ok(seed_hash) = FixedByteArray::from_bytes(seed_hash.as_bytes()) else {
-            return JsonError::new(InvalidParams, Some("invalid seed_hash format".to_string()), id)
-                .into()
+            return server_error(RpcError::MinerInvalidSeedHash, id, None)
         };
 
         info!(
@@ -532,12 +473,7 @@ impl DarkfiNode {
 
         // Construct the MoneroPowData
         let Some(merkle_proof) = MerkleProof::try_construct(merkle_proof, path) else {
-            return JsonError::new(
-                InvalidParams,
-                Some("could not construct aux chain merkle proof".to_string()),
-                id,
-            )
-            .into()
+            return server_error(RpcError::MinerMerkleProofConstructionFailed, id, None)
         };
         let monero_pow_data = match MoneroPowData::new(block, seed_hash, merkle_proof) {
             Ok(v) => v,
@@ -546,12 +482,7 @@ impl DarkfiNode {
                     target: "darkfid::rpc_xmr::xmr_merge_mining_submit_solution",
                     "[RPC-XMR] Failed constructing MoneroPowData: {e}",
                 );
-                return JsonError::new(
-                    InvalidParams,
-                    Some("failed constructing moneropowdata".to_string()),
-                    id,
-                )
-                .into()
+                return server_error(RpcError::MinerMoneroPowDataConstructionFailed, id, None)
             }
         };
 

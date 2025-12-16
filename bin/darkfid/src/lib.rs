@@ -39,7 +39,10 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_money_contract::MONEY_CONTRACT_ZKAS_MINT_NS_V1;
-use darkfi_sdk::crypto::{keypair::SecretKey, MONEY_CONTRACT_ID};
+use darkfi_sdk::crypto::{
+    keypair::{Network, SecretKey},
+    MONEY_CONTRACT_ID,
+};
 
 #[cfg(test)]
 mod tests;
@@ -69,6 +72,8 @@ pub type DarkfiNodePtr = Arc<DarkfiNode>;
 
 /// Structure representing a DarkFi node
 pub struct DarkfiNode {
+    /// Blockchain network
+    network: Network,
     /// P2P network protocols handler.
     p2p_handler: DarkfidP2pHandlerPtr,
     /// Validator(node) pointer
@@ -91,6 +96,7 @@ pub struct DarkfiNode {
 
 impl DarkfiNode {
     pub async fn new(
+        network: Network,
         p2p_handler: DarkfidP2pHandlerPtr,
         validator: ValidatorPtr,
         txs_batch_size: usize,
@@ -99,6 +105,7 @@ impl DarkfiNode {
         let powrewardv1_zk = PowRewardV1Zk::new(validator.clone())?;
 
         Ok(Arc::new(Self {
+            network,
             p2p_handler,
             validator,
             txs_batch_size,
@@ -161,6 +168,7 @@ impl Darkfid {
     /// Generates a new `DarkfiNode` for provided configuration,
     /// along with all the corresponding background tasks.
     pub async fn init(
+        network: Network,
         sled_db: &sled_overlay::sled::Db,
         config: &ValidatorConfig,
         net_settings: &Settings,
@@ -194,7 +202,8 @@ impl Darkfid {
         subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
         // Initialize node
-        let node = DarkfiNode::new(p2p_handler, validator, txs_batch_size, subscribers).await?;
+        let node =
+            DarkfiNode::new(network, p2p_handler, validator, txs_batch_size, subscribers).await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();

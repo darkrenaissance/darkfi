@@ -725,7 +725,7 @@ configuration, execute:
 drk> dao mining-config {YOUR_DAO}
 
 DarkFi TOML configuration:
-recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
+recipient = "{YOUR_DAO_WALLET_ADDRESS}"
 spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
 user_data = "{YOUR_DAO_BULLA}"
 
@@ -738,8 +738,8 @@ corresponding fields(uncomment if needed) as per retrieved
 configuration:
 
 ```toml
-# Put your DAO notes public key here
-recipient = "{YOUR_DAO_NOTES_PUBLIC_KEY}"
+# Put your DAO wallet address here
+recipient = "{YOUR_DAO_WALLET_ADDRESS}"
 
 # Put the DAO contract spend hook here
 spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"

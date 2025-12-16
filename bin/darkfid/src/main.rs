@@ -35,6 +35,7 @@ use darkfi::{
     validator::{Validator, ValidatorConfig},
     Error, Result,
 };
+use darkfi_sdk::crypto::keypair::Network;
 use darkfi_serial::deserialize_async;
 
 use darkfid::{task::consensus::ConsensusInitTaskConfig, Darkfid};
@@ -148,7 +149,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Initializing DarkFi node...");
 
     // Grab blockchain network configuration
-    let (blockchain_config, genesis_block) = match args.network.as_str() {
+    let ((network, blockchain_config), genesis_block) = match args.network.as_str() {
         "localnet" => {
             (parse_blockchain_config(args.config, "localnet").await?, GENESIS_BLOCK_LOCALNET)
         }
@@ -234,6 +235,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Generate the daemon
     let daemon = Darkfid::init(
+        network,
         &sled_db,
         &config,
         &blockchain_config.net.into(),
@@ -275,7 +277,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 pub async fn parse_blockchain_config(
     config: Option<String>,
     network: &str,
-) -> Result<BlockchainNetwork> {
+) -> Result<(Network, BlockchainNetwork)> {
+    // Grab network prefix
+    let used_net = match network {
+        "mainnet" | "localnet" => Network::Mainnet,
+        "testnet" => Network::Testnet,
+        _ => return Err(Error::ParseFailed("Invalid blockchain network")),
+    };
+
     // Grab config path
     let config_path = get_config_path(config, CONFIG_FILE)?;
     debug!(target: "darkfid", "Parsing configuration file: {config_path:?}");
@@ -312,5 +321,5 @@ pub async fn parse_blockchain_config(
         };
     debug!(target: "darkfid", "Parsed network configuration: {network_config:?}");
 
-    Ok(network_config)
+    Ok((used_net, network_config))
 }

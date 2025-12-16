@@ -3,10 +3,10 @@
 Using the tokens we minted, we can make payments to other addresses.
 We will use a dummy recepient, but you can also test this with friends.
 Let's try to send some `ANON` tokens to
-`8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`:
+`DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf`:
 
 ```shell
-drk> transfer 2.69 ANON 8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj | broadcast
+drk> transfer 2.69 ANON DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf | broadcast
 
 [mark_tx_spend] Processing transaction: 47b4818caec22470427922f506d72788233001a79113907fd1a93b7756b07395
 [mark_tx_spend] Found Money contract in call 0
@@ -16,8 +16,9 @@ Transaction ID: 47b4818caec22470427922f506d72788233001a79113907fd1a93b7756b07395
 ```
 
 On success we'll see a transaction ID. Now again the same confirmation
-process has to occur and `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`
-will receive the tokens you've sent.
+process has to occur and
+`DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf` will receive
+the tokens you've sent.
 
 ![pablo-waiting1](img/pablo1.jpg)
 

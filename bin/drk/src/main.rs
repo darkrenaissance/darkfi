@@ -46,9 +46,9 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        keypair::{Address, Network},
+        keypair::{Address, Keypair, Network, SecretKey, StandardAddress},
         note::AeadEncryptedNote,
-        BaseBlind, ContractId, FuncId, FuncRef, Keypair, SecretKey, DAO_CONTRACT_ID,
+        BaseBlind, ContractId, FuncId, FuncRef, DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -600,7 +600,8 @@ struct BlockchainNetwork {
 async fn parse_blockchain_config(
     config: Option<String>,
     network: &str,
-) -> Result<(BlockchainNetwork, Network)> {
+) -> Result<(Network, BlockchainNetwork)> {
+    // Grab network
     let used_net = match network {
         "mainnet" | "localnet" => Network::Mainnet,
         "testnet" => Network::Testnet,
@@ -641,7 +642,7 @@ async fn parse_blockchain_config(
             }
         };
 
-    Ok((network_config, used_net))
+    Ok((used_net, network_config))
 }
 
 /// Auxiliary function to create a `Drk` wallet for provided configuration.
@@ -672,7 +673,7 @@ async fn new_wallet(
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     // Grab blockchain network configuration
-    let (blockchain_config, network) = match args.network.as_str() {
+    let (network, blockchain_config) = match args.network.as_str() {
         "localnet" => parse_blockchain_config(args.config, "localnet").await?,
         "testnet" => parse_blockchain_config(args.config, "testnet").await?,
         "mainnet" => parse_blockchain_config(args.config, "mainnet").await?,
@@ -829,7 +830,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 }
 
                 WalletSubcmd::Address => match drk.default_address().await {
-                    Ok(address) => println!("{address}"),
+                    Ok(public_key) => {
+                        let address: Address =
+                            StandardAddress::from_public(drk.network, public_key).into();
+                        println!("{address}");
+                    }
                     Err(e) => {
                         eprintln!("Failed to fetch default address: {e}");
                         exit(2);
@@ -1681,6 +1686,8 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         }
                         let coin: CoinAttributes =
                             deserialize_async(proposal.data.as_ref().unwrap()).await?;
+                        let recipient: Address =
+                            StandardAddress::from_public(drk.network, coin.public_key).into();
                         let spend_hook = if coin.spend_hook == FuncId::none() {
                             "-".to_string()
                         } else {
@@ -1695,7 +1702,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                         contract_calls.push_str(&format!("\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
                         "Recipient",
-                        coin.public_key,
+                        recipient,
                         "Amount",
                         coin.value,
                         encode_base10(coin.value, BALANCE_BASE10_DECIMALS),

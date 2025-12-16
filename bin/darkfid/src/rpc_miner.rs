@@ -35,8 +35,9 @@ use darkfi::{
 use darkfi_money_contract::{client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction};
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::PrimeField, FuncId, Keypair, MerkleTree, PublicKey, SecretKey,
-        MONEY_CONTRACT_ID,
+        keypair::{Address, Keypair, SecretKey},
+        pasta_prelude::PrimeField,
+        FuncId, MerkleTree, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -52,7 +53,7 @@ use crate::{proto::ProposalMessage, server_error, DarkfiNode, RpcError};
 /// Auxiliary structure representing node miner rewards recipient configuration.
 pub struct MinerRewardsRecipientConfig {
     /// Wallet mining address to receive mining rewards
-    pub recipient: PublicKey,
+    pub recipient: Address,
     /// Optional contract spend hook to use in the mining reward
     pub spend_hook: Option<FuncId>,
     /// Optional contract user data to use in the mining reward.
@@ -168,11 +169,14 @@ impl DarkfiNode {
         let Some(recipient) = params.get("recipient") else {
             return server_error(RpcError::MinerMissingRecipient, id, None)
         };
-        let Some(recipient) = recipient.get::<String>() else {
+        let Some(recipient_str) = recipient.get::<String>() else {
             return server_error(RpcError::MinerInvalidRecipient, id, None)
         };
-        let Ok(recipient) = PublicKey::from_str(recipient) else {
+        let Ok(recipient) = Address::from_str(recipient_str) else {
             return server_error(RpcError::MinerInvalidRecipient, id, None)
+        };
+        if recipient.network() != self.network {
+            return server_error(RpcError::MinerInvalidRecipientPrefix, id, None)
         };
 
         // Parse spend hook
@@ -221,7 +225,8 @@ impl DarkfiNode {
         // We'll also obtain a lock here to avoid getting polled
         // multiple times and potentially missing a job. The lock is
         // released when this function exits.
-        let address_bytes = serialize_async(&(recipient, spend_hook, user_data)).await;
+        let address_bytes =
+            serialize_async(&(recipient_str.clone().into_bytes(), spend_hook, user_data)).await;
         let mut blocktemplates = self.blocktemplates.lock().await;
         let mut extended_fork = match self.validator.best_current_fork().await {
             Ok(f) => f,
@@ -267,7 +272,6 @@ impl DarkfiNode {
         // At this point, we should query the Validator for a new blocktemplate.
         // We first need to construct `MinerRewardsRecipientConfig` from the
         // address configuration provided to us through the RPC.
-        let recipient_str = format!("{recipient}");
         let spend_hook_str = match spend_hook {
             Some(spend_hook) => format!("{spend_hook}"),
             None => String::from("-"),
@@ -373,11 +377,14 @@ impl DarkfiNode {
         let Some(recipient) = params.get("recipient") else {
             return server_error(RpcError::MinerMissingRecipient, id, None)
         };
-        let Some(recipient) = recipient.get::<String>() else {
+        let Some(recipient_str) = recipient.get::<String>() else {
             return server_error(RpcError::MinerInvalidRecipient, id, None)
         };
-        let Ok(recipient) = PublicKey::from_str(recipient) else {
+        let Ok(recipient) = Address::from_str(recipient_str) else {
             return server_error(RpcError::MinerInvalidRecipient, id, None)
+        };
+        if recipient.network() != self.network {
+            return server_error(RpcError::MinerInvalidRecipientPrefix, id, None)
         };
 
         // Parse spend hook
@@ -424,7 +431,8 @@ impl DarkfiNode {
         };
 
         // If we don't know about this job, we can just abort here.
-        let address_bytes = serialize_async(&(recipient, spend_hook, user_data)).await;
+        let address_bytes =
+            serialize_async(&(recipient_str.clone().into_bytes(), spend_hook, user_data)).await;
         let mut blocktemplates = self.blocktemplates.lock().await;
         let Some(blocktemplate) = blocktemplates.get(&address_bytes) else {
             return server_error(RpcError::MinerUnknownJob, id, None)
@@ -565,7 +573,7 @@ fn generate_transaction(
         signature_keypair: *block_signing_keypair,
         block_height,
         fees,
-        recipient: Some(recipient_config.recipient),
+        recipient: Some(*recipient_config.recipient.public_key()),
         spend_hook: recipient_config.spend_hook,
         user_data: recipient_config.user_data,
         mint_zkbin: zkbin.clone(),

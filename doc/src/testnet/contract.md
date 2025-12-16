@@ -185,11 +185,11 @@ Set it as the default one in the wallet and grab its secret key:
 ```shell
 drk> wallet addresses
 
- Key ID                | Public Key       | Secret Key                  | Is Default
------------------------+------------------+-----------------------------+------------
- 1                     | {NORMAL_ADDRESS} | {NORMAL_ADDRESS_SECRET_KEY} | *
+ Key ID                | Address          | Public Key                  | Secret Key                  | Is Default
+-----------------------+------------------+-----------------------------+-----------------------------+------------
+ 1                     | {NORMAL_ADDRESS} | {NORMAL_ADDRESS_PUBLIC_KEY} | {NORMAL_ADDRESS_SECRET_KEY} | *
  ...
- {DUMMY_ADDRESS_INDEX} | {DUMMY_ADDRESS}  | {DUMMY_ADDRESS_SECRET_KEY}  |
+ {DUMMY_ADDRESS_INDEX} | {DUMMY_ADDRESS}  | {DUMMY_ADDRESS_PUBLIC_KEY}  | {DUMMY_ADDRESS_SECRET_KEY}  |
 
 drk> wallet default-address {DUMMY_ADDRESS_INDEX}
 ```

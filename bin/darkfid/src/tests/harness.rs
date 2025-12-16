@@ -38,7 +38,10 @@ use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{Keypair, MerkleTree, MONEY_CONTRACT_ID},
+    crypto::{
+        keypair::{Keypair, Network},
+        MerkleTree, MONEY_CONTRACT_ID,
+    },
     ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -288,8 +291,14 @@ pub async fn generate_node(
     subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
-    let node =
-        DarkfiNode::new(p2p_handler.clone(), validator.clone(), 50, subscribers.clone()).await?;
+    let node = DarkfiNode::new(
+        Network::Mainnet,
+        p2p_handler.clone(),
+        validator.clone(),
+        50,
+        subscribers.clone(),
+    )
+    .await?;
 
     p2p_handler.clone().start(ex, &validator, &subscribers).await?;
 
