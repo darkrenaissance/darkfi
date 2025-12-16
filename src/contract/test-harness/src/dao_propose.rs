@@ -130,7 +130,6 @@ impl TestHarness {
             blind: Blind::random(&mut OsRng),
         };
 
-        let signature_secret = SecretKey::random(&mut OsRng);
         let dao_bulla = dao.to_bulla();
 
         let call = DaoProposeCall {
@@ -144,10 +143,9 @@ impl TestHarness {
                 .witness(*wallet.dao_leafs.get(&dao_bulla).unwrap(), 0)
                 .unwrap(),
             dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
-            signature_secret,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             dao_proposer_secret_key,
             dao_propose_burn_zkbin,
             dao_propose_burn_pk,
@@ -166,8 +164,8 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&[signature_secret])?;
-            tx.signatures = vec![sigs];
+            let sigs = tx.create_sigs(&signature_secrets)?;
+            tx.signatures.push(sigs);
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
                 self.append_fee_call(proposer, tx, block_height, &[]).await?;
@@ -180,8 +178,8 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
         if let Some(fee_signature_secrets) = fee_signature_secrets {
             let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
@@ -250,7 +248,6 @@ impl TestHarness {
             blind: Blind::random(&mut OsRng),
         };
 
-        let signature_secret = SecretKey::random(&mut OsRng);
         let dao_bulla = dao.to_bulla();
 
         let call = DaoProposeCall {
@@ -264,10 +261,9 @@ impl TestHarness {
                 .witness(*wallet.dao_leafs.get(&dao_bulla).unwrap(), 0)
                 .unwrap(),
             dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
-            signature_secret,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             dao_proposer_secret_key,
             dao_propose_burn_zkbin,
             dao_propose_burn_pk,
@@ -286,8 +282,8 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&[signature_secret])?;
-            tx.signatures = vec![sigs];
+            let sigs = tx.create_sigs(&signature_secrets)?;
+            tx.signatures.push(sigs);
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
                 self.append_fee_call(proposer, tx, block_height, &[]).await?;
@@ -300,8 +296,8 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
         if let Some(fee_signature_secrets) = fee_signature_secrets {
             let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);

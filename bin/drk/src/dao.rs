@@ -58,6 +58,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
+        keypair::{Address, StandardAddress},
         pasta_prelude::PrimeField,
         poseidon_hash,
         smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
@@ -1587,8 +1588,6 @@ impl Drk {
 
     /// Import given DAO vote into the wallet.
     pub async fn put_dao_vote(&self, vote: &VoteRecord) -> WalletDbResult<()> {
-        println!("Importing DAO vote into wallet");
-
         // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
@@ -1619,8 +1618,6 @@ impl Drk {
 
         // Execute the query
         self.wallet.exec_sql(&query, params)?;
-
-        println!("DAO vote added to wallet");
 
         Ok(())
     }
@@ -1872,6 +1869,9 @@ impl Drk {
         if let Some(name) = name {
             let dao = self.get_dao_by_name(name).await?;
             output.push(format!("{dao}"));
+            let address: Address =
+                StandardAddress::from_public(self.network, dao.params.dao.notes_public_key).into();
+            output.push(format!("Wallet Address: {address}"));
             return Ok(());
         }
 
@@ -2521,10 +2521,8 @@ impl Drk {
             inputs.push(input);
         }
 
-        // Now create the parameters for the proposal tx
-        let signature_secret = SecretKey::random(&mut OsRng);
-
-        // Fetch the daos Merkle tree to compute the DAO Merkle path and root
+        // Now create the parameters for the proposal tx.
+        // Fetch the daos Merkle tree to compute the DAO Merkle path and root.
         let (daos_tree, _) = self.get_dao_trees().await?;
         let (dao_merkle_path, dao_merkle_root) = {
             let root = daos_tree.root(0).unwrap();
@@ -2546,10 +2544,9 @@ impl Drk {
             dao_leaf_position: dao.leaf_position.unwrap(),
             dao_merkle_path,
             dao_merkle_root,
-            signature_secret,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             &dao.params.proposer_secret_key.unwrap(),
             &propose_burn_zkbin,
             &propose_burn_pk,
@@ -2568,8 +2565,8 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
 
         let tree = self.get_money_tree().await?;
         let (fee_call, fee_proofs, fee_secrets) =
@@ -2580,7 +2577,7 @@ impl Drk {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
+        let sigs = tx.create_sigs(&signature_secrets)?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;
         tx.signatures.push(sigs);
@@ -2704,10 +2701,8 @@ impl Drk {
             inputs.push(input);
         }
 
-        // Now create the parameters for the proposal tx
-        let signature_secret = SecretKey::random(&mut OsRng);
-
-        // Fetch the daos Merkle tree to compute the DAO Merkle path and root
+        // Now create the parameters for the proposal tx.
+        // Fetch the daos Merkle tree to compute the DAO Merkle path and root.
         let (daos_tree, _) = self.get_dao_trees().await?;
         let (dao_merkle_path, dao_merkle_root) = {
             let root = daos_tree.root(0).unwrap();
@@ -2729,10 +2724,9 @@ impl Drk {
             dao_leaf_position: dao.leaf_position.unwrap(),
             dao_merkle_path,
             dao_merkle_root,
-            signature_secret,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             &dao.params.proposer_secret_key.unwrap(),
             &propose_burn_zkbin,
             &propose_burn_pk,
@@ -2751,8 +2745,8 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
 
         let tree = self.get_money_tree().await?;
         let (fee_call, fee_proofs, fee_secrets) =
@@ -2763,7 +2757,7 @@ impl Drk {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
+        let sigs = tx.create_sigs(&signature_secrets)?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;
         tx.signatures.push(sigs);
@@ -2891,7 +2885,6 @@ impl Drk {
         let dao_vote_main_pk = ProvingKey::build(dao_vote_main_zkbin.k, &dao_vote_main_circuit);
 
         // Now create the parameters for the vote tx
-        let signature_secret = SecretKey::random(&mut OsRng);
         let mut inputs = Vec::with_capacity(gov_owncoins_to_use.len());
         for gov_owncoin in gov_owncoins_to_use {
             // Skip governance coins that are not part of the snapshot
@@ -2915,7 +2908,6 @@ impl Drk {
                 note: gov_owncoin.note.clone(),
                 leaf_position: gov_owncoin.leaf_position,
                 merkle_path,
-                signature_secret,
             };
             inputs.push(input);
         }
@@ -2946,7 +2938,7 @@ impl Drk {
             current_blockwindow,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             &dao_vote_burn_zkbin,
             &dao_vote_burn_pk,
             &dao_vote_main_zkbin,
@@ -2964,8 +2956,8 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
 
         let tree = self.get_money_tree().await?;
         let (fee_call, fee_proofs, fee_secrets) =
@@ -2976,7 +2968,7 @@ impl Drk {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
+        let sigs = tx.create_sigs(&signature_secrets)?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;
         tx.signatures.push(sigs);

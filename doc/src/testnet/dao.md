@@ -135,6 +135,7 @@ Bulla blind: 6TVkmM...Jjd5zC
 Leaf position: None
 Transaction hash: None
 Call index: None
+Wallet Address: DX7N6v...5Lz8Pp
 ```
 
 ## Minting
@@ -186,13 +187,14 @@ Leaf position: Position(0)
 Mint height: 10
 Transaction hash: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
 Call index: 0
+Wallet Address: DX7N6v...5Lz8Pp
 ```
 
 ## Sending money to the treasury
 
 Let's send some tokens to the DAO's treasury so we're able to make
-a proposal to send those somewhere. First, find the DAO bulla, the
-dao contract spend hook and the DAO notes public key.
+a proposal to send those somewhere. First, find the DAO wallet address,
+the DAO bulla and the dao contract spend hook.
 
 Then create a transfer transaction as follows:
 
@@ -231,10 +233,11 @@ Leaf position: Position(0)
 Mint height: 10
 Transaction hash: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
 Call index: 0
+Wallet Address: DX7N6v...5Lz8Pp
 ```
 
 ```shell
-drk> transfer 10 DAWN {DAO_NOTES_PUBLIC_KEY} {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} | broadcast
+drk> transfer 10 DAWN {DAO_WALLET_ADDRESS} {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} | broadcast
 
 [mark_tx_spend] Processing transaction: a4db439f75de88457cadd849131394ae37723c943ea5c088b218d6dc0f7982f1
 [mark_tx_spend] Found Money contract in call 0
@@ -565,7 +568,7 @@ instead of transfering some to the DAO, we will mint them
 directly into it:
 
 ```shell
-drk> token mint ANON 20 {DAO_NOTES_PUBLIC_KEY} {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} | broadcast
+drk> token mint ANON 20 {DAO_WALLET_ADDRESS} {DAO_CONTRACT_SPEND_HOOK} {DAO_BULLA} | broadcast
 
 [mark_tx_spend] Processing transaction: 781632eb1d0e4566582c1bb34f4a99516d62357761659d4e5e965ac9d199b581
 [mark_tx_spend] Found Money contract in call 0
@@ -638,10 +641,11 @@ Leaf position: Position(3)
 Mint height: 23
 Transaction hash: cfc31bee7d198d7d59e9f40f76a98e93230320ec6dd8c606af32d9bee28fcf0e
 Call index: 0
+Wallet Address: Ui5C2e...1IO4Aa
 ```
 
 ```shell
-drk> dao propose-transfer AnonDAO 1 6.9 ANON {DAWN_DAO_NOTES_PUBLIC_KEY} {DAO_CONTRACT_SPEND_HOOK} {DAWN_DAO_BULLA}
+drk> dao propose-transfer AnonDAO 1 6.9 ANON {DAWN_DAO_WALLET_ADDRESS} {DAO_CONTRACT_SPEND_HOOK} {DAWN_DAO_BULLA}
 
 Generated proposal: {PROPOSAL_BULLA}
 ```

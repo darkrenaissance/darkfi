@@ -59,7 +59,6 @@ pub struct DaoProposeCall<'a, T: StorageAdapter<Value = pallas::Base>> {
     pub dao_leaf_position: bridgetree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
-    pub signature_secret: SecretKey,
 }
 
 impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
@@ -70,14 +69,12 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoProposeParams, Vec<Proof>)> {
+    ) -> Result<(DaoProposeParams, Vec<Proof>, Vec<SecretKey>)> {
         let mut proofs = vec![];
+        let mut signature_secrets = vec![];
 
         let gov_token_blind = Blind::random(&mut OsRng);
-
         let smt_null_root = self.money_null_smt.root();
-        let signature_public = PublicKey::from_secret(self.signature_secret);
-        let (sig_x, sig_y) = signature_public.xy();
 
         let mut inputs = vec![];
         let mut total_funds = 0;
@@ -111,6 +108,10 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 )
             }
 
+            let signature_secret = SecretKey::random(&mut OsRng);
+            let signature_public = PublicKey::from_secret(signature_secret);
+            let (sig_x, sig_y) = signature_public.xy();
+
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
@@ -123,7 +124,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::SparseMerklePath(Value::known(smt_null_path.path)),
-                Witness::Base(Value::known(self.signature_secret.inner())),
+                Witness::Base(Value::known(signature_secret.inner())),
             ];
 
             // TODO: We need a generic ZkSet widget to avoid doing this all the time
@@ -165,6 +166,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
             let proving_key = &burn_pk;
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
+            signature_secrets.push(signature_secret);
 
             let input = DaoProposeParamsInput {
                 value_commit,
@@ -258,6 +260,6 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
             inputs,
         };
 
-        Ok((params, proofs))
+        Ok((params, proofs, signature_secrets))
     }
 }

@@ -49,7 +49,6 @@ pub struct DaoVoteInput {
     pub note: darkfi_money_contract::client::MoneyNote,
     pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
-    pub signature_secret: SecretKey,
 }
 
 // Inside ZK proof, check proposal is correct.
@@ -70,7 +69,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoVoteParams, Vec<Proof>)> {
+    ) -> Result<(DaoVoteParams, Vec<Proof>, Vec<SecretKey>)> {
         debug!(target: "contract::dao::client::vote", "make()");
 
         if self.dao.to_bulla() != self.proposal.dao_bulla {
@@ -79,6 +78,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         let proposal_bulla = self.proposal.to_bulla();
 
         let mut proofs = vec![];
+        let mut signature_secrets = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
@@ -113,7 +113,8 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
             all_vote_value += input.note.value;
             all_vote_blind += value_blind;
 
-            let signature_public = PublicKey::from_secret(input.signature_secret);
+            let signature_secret = SecretKey::random(&mut OsRng);
+            let signature_public = PublicKey::from_secret(signature_secret);
 
             // Note from the previous output
             let note = input.note;
@@ -152,7 +153,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::SparseMerklePath(Value::known(smt_null_path.path)),
-                Witness::Base(Value::known(input.signature_secret.inner())),
+                Witness::Base(Value::known(signature_secret.inner())),
             ];
 
             let merkle_root = {
@@ -199,6 +200,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
             debug!(target: "contract::dao::client::vote", "input_proof Proof::create()");
             let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
+            signature_secrets.push(signature_secret);
 
             let input = DaoVoteParamsInput {
                 vote_commit,
@@ -327,6 +329,6 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         let params =
             DaoVoteParams { token_commit, proposal_bulla, yes_vote_commit, note: enc_note, inputs };
 
-        Ok((params, proofs))
+        Ok((params, proofs, signature_secrets))
     }
 }

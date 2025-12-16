@@ -31,11 +31,10 @@ use darkfi_money_contract::{
     model::MoneyFeeParamsV1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode, SecretKey},
+    crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
-use rand::rngs::OsRng;
 use tracing::debug;
 
 use super::{Holder, TestHarness};
@@ -68,14 +67,11 @@ impl TestHarness {
             .unwrap()
             .clone();
 
-        let signature_secret = SecretKey::random(&mut OsRng);
-
         let input = DaoVoteInput {
             secret: wallet.keypair.secret,
             note: vote_owncoin.note.clone(),
             leaf_position: vote_owncoin.leaf_position,
             merkle_path: snapshot_money_merkle_tree.witness(vote_owncoin.leaf_position, 0).unwrap(),
-            signature_secret,
         };
 
         let block_target = wallet.validator.consensus.module.read().await.target;
@@ -89,7 +85,7 @@ impl TestHarness {
             current_blockwindow,
         };
 
-        let (params, proofs) = call.make(
+        let (params, proofs, signature_secrets) = call.make(
             dao_vote_burn_zkbin,
             dao_vote_burn_pk,
             dao_vote_main_zkbin,
@@ -107,8 +103,8 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&[signature_secret])?;
-            tx.signatures = vec![sigs];
+            let sigs = tx.create_sigs(&signature_secrets)?;
+            tx.signatures.push(sigs);
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
                 self.append_fee_call(voter, tx, block_height, &[]).await?;
@@ -121,8 +117,8 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[signature_secret])?;
-        tx.signatures = vec![sigs];
+        let sigs = tx.create_sigs(&signature_secrets)?;
+        tx.signatures.push(sigs);
         if let Some(fee_signature_secrets) = fee_signature_secrets {
             let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
