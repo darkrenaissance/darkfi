@@ -2687,10 +2687,11 @@ async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &m
             }
         };
 
-        match lock.get_scanned_block_hash(&height) {
-            Ok(hash) => {
+        match lock.get_scanned_block(&height) {
+            Ok((hash, signing_key)) => {
                 output.push(format!("Height: {height}"));
                 output.push(format!("Hash: {hash}"));
+                output.push(format!("Signing key: {signing_key}"));
             }
             Err(e) => output.push(format!("Failed to retrieve scanned block record: {e}")),
         };
@@ -2705,13 +2706,7 @@ async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &m
         }
     };
 
-    // Create a prettytable with the new data:
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-    table.set_titles(row!["Height", "Hash"]);
-    for (height, hash) in map.iter() {
-        table.add_row(row![height, hash]);
-    }
+    let table = prettytable_scanned_blocks(&map);
 
     if table.is_empty() {
         output.push(String::from("No scanned blocks records found"));

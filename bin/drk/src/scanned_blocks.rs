@@ -28,21 +28,21 @@ use crate::{
 
 impl Drk {
     /// Get a scanned block information record.
-    pub fn get_scanned_block_hash(&self, height: &u32) -> WalletDbResult<String> {
+    pub fn get_scanned_block(&self, height: &u32) -> WalletDbResult<(String, String)> {
         let Ok(query_result) = self.cache.scanned_blocks.get(height.to_be_bytes()) else {
             return Err(WalletDbError::QueryExecutionFailed);
         };
-        let Some(hash_bytes) = query_result else {
+        let Some(value_bytes) = query_result else {
             return Err(WalletDbError::RowNotFound);
         };
-        let Ok(hash) = deserialize(&hash_bytes) else {
+        let Ok((hash, signing_key)) = deserialize(&value_bytes) else {
             return Err(WalletDbError::ParseColumnValueError);
         };
-        Ok(hash)
+        Ok((hash, signing_key))
     }
 
     /// Fetch all scanned block information records.
-    pub fn get_scanned_block_records(&self) -> WalletDbResult<Vec<(u32, String)>> {
+    pub fn get_scanned_block_records(&self) -> WalletDbResult<Vec<(u32, String, String)>> {
         let mut scanned_blocks = vec![];
 
         for record in self.cache.scanned_blocks.iter() {
@@ -54,10 +54,10 @@ impl Drk {
                 Err(_) => return Err(WalletDbError::ParseColumnValueError),
             };
             let key = u32::from_be_bytes(key);
-            let Ok(value) = deserialize(&value) else {
+            let Ok((hash, signing_key)) = deserialize(&value) else {
                 return Err(WalletDbError::ParseColumnValueError);
             };
-            scanned_blocks.push((key, value));
+            scanned_blocks.push((key, hash, signing_key));
         }
 
         Ok(scanned_blocks)
@@ -75,10 +75,10 @@ impl Drk {
             Err(_) => return Err(WalletDbError::ParseColumnValueError),
         };
         let key = u32::from_be_bytes(key);
-        let Ok(value) = deserialize(&value) else {
+        let Ok((hash, _)) = deserialize::<(String, String)>(&value) else {
             return Err(WalletDbError::ParseColumnValueError);
         };
-        Ok((key, value))
+        Ok((key, hash))
     }
 
     /// Reset the scanned blocks information records in the cache.

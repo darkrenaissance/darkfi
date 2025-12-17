@@ -207,3 +207,14 @@ pub fn prettytable_aliases(alimap: &HashMap<String, TokenId>) -> Table {
 
     table
 }
+
+pub fn prettytable_scanned_blocks(scanned_blocks: &[(u32, String, String)]) -> Table {
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Height", "Hash", "Signing Key"]);
+    for (height, hash, signing_key) in scanned_blocks {
+        table.add_row(row![height, hash, signing_key]);
+    }
+
+    table
+}

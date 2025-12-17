@@ -58,7 +58,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
+use darkfi_serial::{deserialize, deserialize_async, serialize, serialize_async, AsyncEncodable};
 
 use crate::{
     cache::CacheSmt,
@@ -742,15 +742,16 @@ impl Drk {
     }
 
     /// Auxiliary function to grab all the nullifiers, coins with their
-    /// notes and freezes from a transaction money call.
+    /// notes and a flag indicating if its a block reward, and freezes
+    /// from a transaction money call.
     async fn parse_money_call(
         &self,
         scan_cache: &mut ScanCache,
         call_idx: &usize,
         calls: &[DarkLeaf<ContractCall>],
-    ) -> Result<(Vec<Nullifier>, Vec<(Coin, AeadEncryptedNote)>, Vec<TokenId>)> {
+    ) -> Result<(Vec<Nullifier>, Vec<(Coin, AeadEncryptedNote, bool)>, Vec<TokenId>)> {
         let mut nullifiers: Vec<Nullifier> = vec![];
-        let mut coins: Vec<(Coin, AeadEncryptedNote)> = vec![];
+        let mut coins: Vec<(Coin, AeadEncryptedNote, bool)> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
         let call = &calls[*call_idx];
@@ -760,19 +761,19 @@ impl Drk {
                 scan_cache.log(String::from("[parse_money_call] Found Money::FeeV1 call"));
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
-                coins.push((params.output.coin, params.output.note));
+                coins.push((params.output.coin, params.output.note, false));
             }
             MoneyFunction::GenesisMintV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::GenesisMintV1 call"));
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 for output in params.outputs {
-                    coins.push((output.coin, output.note));
+                    coins.push((output.coin, output.note, false));
                 }
             }
             MoneyFunction::PoWRewardV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::PoWRewardV1 call"));
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push((params.output.coin, params.output.note));
+                coins.push((params.output.coin, params.output.note, true));
             }
             MoneyFunction::TransferV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::TransferV1 call"));
@@ -783,7 +784,7 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push((output.coin, output.note));
+                    coins.push((output.coin, output.note, false));
                 }
             }
             MoneyFunction::OtcSwapV1 => {
@@ -795,7 +796,7 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push((output.coin, output.note));
+                    coins.push((output.coin, output.note, false));
                 }
             }
             MoneyFunction::AuthTokenMintV1 => {
@@ -817,33 +818,38 @@ impl Drk {
                 let child_call = &calls[child_idx];
                 let child_params: MoneyAuthTokenMintParamsV1 =
                     deserialize_async(&child_call.data.data[1..]).await?;
-                coins.push((params.coin, child_params.enc_note));
+                coins.push((params.coin, child_params.enc_note, false));
             }
         }
 
         Ok((nullifiers, coins, freezes))
     }
 
-    /// Auxiliary function to handle coins with their notes from a
-    /// transaction money call.
-    /// Returns our found own coins.
+    /// Auxiliary function to handle coins with their notes and flag
+    /// indicating if its a block reward from a transaction money call.
+    /// Returns our found own coins along with the block signing key,
+    /// if found.
     fn handle_money_call_coins(
         &self,
         tree: &mut MerkleTree,
         secrets: &[SecretKey],
         messages_buffer: &mut Vec<String>,
-        coins: &[(Coin, AeadEncryptedNote)],
-    ) -> Vec<OwnCoin> {
+        coins: &[(Coin, AeadEncryptedNote, bool)],
+    ) -> Result<(Vec<OwnCoin>, Option<SecretKey>)> {
         // Keep track of our own coins found in the vec
         let mut owncoins = vec![];
 
         // Check if provided coins vec is empty
         if coins.is_empty() {
-            return owncoins
+            return Ok((owncoins, None))
         }
 
-        // Handle provided coins vector and grab our own
-        for (coin, note) in coins {
+        // Handle provided coins vector and grab our own,
+        // along with the block signing key if its a block
+        // reward coin. Only one reward call and coin exists
+        // in each block.
+        let mut block_signing_key = None;
+        for (coin, note, is_block_reward) in coins {
             // Append the new coin to the Merkle tree.
             // Every coin has to be added.
             tree.append(MerkleNode::from(coin.inner()));
@@ -857,12 +863,18 @@ impl Drk {
                 messages_buffer
                     .push(String::from("[handle_money_call_coins] Witnessing coin in Merkle tree"));
                 let leaf_position = tree.mark().unwrap();
+                if *is_block_reward {
+                    messages_buffer
+                        .push(String::from("[handle_money_call_coins] Grabing block signing key"));
+                    block_signing_key = Some(deserialize(&note.memo)?);
+                }
                 let owncoin = OwnCoin { coin: *coin, note, secret: *secret, leaf_position };
                 owncoins.push(owncoin);
+                break
             }
         }
 
-        owncoins
+        Ok((owncoins, block_signing_key))
     }
 
     /// Auxiliary function to handle own coins from a transaction money
@@ -997,7 +1009,7 @@ impl Drk {
     /// Append data related to Money contract transactions into the
     /// wallet database and update the provided scan cache.
     /// Returns a flag indicating if provided data refer to our own
-    /// wallet.
+    /// wallet along with the block signing key, if found.
     pub async fn apply_tx_money_data(
         &self,
         scan_cache: &mut ScanCache,
@@ -1005,18 +1017,18 @@ impl Drk {
         calls: &[DarkLeaf<ContractCall>],
         tx_hash: &String,
         block_height: &u32,
-    ) -> Result<bool> {
+    ) -> Result<(bool, Option<SecretKey>)> {
         // Parse the call
         let (nullifiers, coins, freezes) =
             self.parse_money_call(scan_cache, call_idx, calls).await?;
 
         // Parse call coins and grab our own
-        let owncoins = self.handle_money_call_coins(
+        let (owncoins, block_signing_key) = self.handle_money_call_coins(
             &mut scan_cache.money_tree,
             &scan_cache.notes_secrets,
             &mut scan_cache.messages_buffer,
             &coins,
-        );
+        )?;
 
         // Update nullifiers smt
         self.smt_insert(&mut scan_cache.money_smt, &nullifiers)?;
@@ -1041,7 +1053,7 @@ impl Drk {
             kaching().await;
         }
 
-        Ok(wallet_spent_coins || !owncoins.is_empty() || wallet_freezes)
+        Ok((wallet_spent_coins || !owncoins.is_empty() || wallet_freezes, block_signing_key))
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.

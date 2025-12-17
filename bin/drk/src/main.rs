@@ -2258,8 +2258,8 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 if let Some(height) = height {
-                    let hash = match drk.get_scanned_block_hash(&height) {
-                        Ok(h) => h,
+                    let (hash, signing_key) = match drk.get_scanned_block(&height) {
+                        Ok(p) => p,
                         Err(e) => {
                             eprintln!("Failed to retrieve scanned block record: {e}");
                             exit(2);
@@ -2268,6 +2268,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
                     println!("Height: {height}");
                     println!("Hash: {hash}");
+                    println!("Signing key: {signing_key}");
 
                     return Ok(())
                 }
@@ -2280,13 +2281,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     }
                 };
 
-                // Create a prettytable with the new data:
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Height", "Hash"]);
-                for (height, hash) in map.iter() {
-                    table.add_row(row![height, hash]);
-                }
+                let table = prettytable_scanned_blocks(&map);
 
                 if table.is_empty() {
                     println!("No scanned blocks records found");

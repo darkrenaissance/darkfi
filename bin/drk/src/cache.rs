@@ -23,7 +23,7 @@ use darkfi_sdk::{
     crypto::{
         pasta_prelude::PrimeField,
         smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH},
-        MerkleTree,
+        MerkleTree, SecretKey,
     },
     error::{ContractError, ContractResult},
     pasta::pallas,
@@ -139,14 +139,24 @@ impl CacheOverlay {
         Ok(Self(overlay))
     }
 
-    /// Insert a `u32` and a block hash into overlay's scanned blocks
-    /// tree. The block height is used as the key, and the serialized
-    /// blockhash string is used as value.
-    pub fn insert_scanned_block(&mut self, height: &u32, hash: &HeaderHash) -> Result<()> {
+    /// Insert a `u32`, a block hash and an optional signing key into
+    /// overlay's scanned blocks tree. The block height is used as the
+    /// key, while the serialized blockhash and key strings are used as
+    /// the value.
+    pub fn insert_scanned_block(
+        &mut self,
+        height: &u32,
+        hash: &HeaderHash,
+        signing_key: &Option<SecretKey>,
+    ) -> Result<()> {
+        let block_signing_key = match signing_key {
+            Some(key) => key.to_string(),
+            None => String::from("-"),
+        };
         self.0.insert(
             SLED_SCANNED_BLOCKS_TREE,
             &height.to_be_bytes(),
-            &serialize(&hash.to_string()),
+            &serialize(&(hash.to_string(), block_signing_key)),
         )?;
         Ok(())
     }

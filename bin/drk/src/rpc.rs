@@ -187,6 +187,7 @@ impl Drk {
         scan_cache.log(format!("{}", block.header));
         scan_cache.log(String::from("======================================="));
         scan_cache.log(format!("[scan_block] Iterating over {} transactions", block.txs.len()));
+        let mut block_signing_key = None;
         for tx in block.txs.iter() {
             let tx_hash = tx.hash();
             let tx_hash_string = tx_hash.to_string();
@@ -195,7 +196,7 @@ impl Drk {
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     scan_cache.log(format!("[scan_block] Found Money contract in call {i}"));
-                    if self
+                    let (is_wallet_tx, signing_key) = self
                         .apply_tx_money_data(
                             scan_cache,
                             &i,
@@ -203,9 +204,13 @@ impl Drk {
                             &tx_hash_string,
                             &block.header.height,
                         )
-                        .await?
-                    {
+                        .await?;
+                    if is_wallet_tx {
                         wallet_tx = true;
+                        // Only one block signing key exists per block
+                        if signing_key.is_some() {
+                            block_signing_key = signing_key;
+                        }
                     }
                     continue
                 }
@@ -255,11 +260,11 @@ impl Drk {
         }
 
         // Insert the block record
-        scan_cache
-            .money_smt
-            .store
-            .overlay
-            .insert_scanned_block(&block.header.height, &block.header.hash())?;
+        scan_cache.money_smt.store.overlay.insert_scanned_block(
+            &block.header.height,
+            &block.header.hash(),
+            &block_signing_key,
+        )?;
 
         // Grab the overlay current diff
         let diff = scan_cache.money_smt.store.overlay.0.diff(&[])?;
@@ -329,7 +334,7 @@ impl Drk {
             height = height.saturating_sub(1);
             while height != 0 {
                 // Grab our scanned block hash for that height
-                let scanned_block_hash = self.get_scanned_block_hash(&height)?;
+                let (scanned_block_hash, _) = self.get_scanned_block(&height)?;
 
                 // Grab the block from darkfid for that height
                 let block = match self.get_block_by_height(height).await {
