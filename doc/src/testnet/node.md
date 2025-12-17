@@ -218,8 +218,11 @@ make[1]: Leaving directory '/home/anon/darkfi/bin/minerd'
 This process will now compile the mining daemon. When finished, run
 `minerd` once so that it spawns its config file on your system. This
 config file is used to configure `minerd`. You can define how many
-threads will be used for mining. RandomX can use up to 2080 MiB per
-thread so configure it to not consume all your system available memory.
+threads will be used for mining. RandomX can use up to `2080 MiB` of
+shared memory, so configure `minerd` to not consume all your system
+available memory. Refer to [ram consumption](#ram-consumption) section
+to see expected totals using various configurations, so you can
+configure your `minerd` accordingly.
 
 ```shell
 $ ./minerd
@@ -277,6 +280,96 @@ $ ./minerd
 14:20:06 [INFO] Submition result: accepted
 ...
 ```
+
+#### Minerd configuration
+
+`minerd` configuration file provides several ways to optimize RAM
+utilization and mining hashrate. This section will describe some of the
+provided configuration flags, along with a table at the end showcasing
+total daemon RAM consuption using each. By default, `minerd` is running
+using `fast-mode`, where `2080 MiB` of shared memory is required for
+the RandomX dataset. To enable or disable a flag, simply set its value
+to `true` or `false` in the configuration file and restart `minerd`.
+Read what each flag does before enabling it.
+
+#### `light-mode`
+
+In this mode, `minerd` will run using only `256 MiB` of shared memory,
+but in will run significantly slower, with huge impact on hashrate. It
+is used mainly for verification, not mining, but its available in case
+system resources are ultra limited.
+
+#### `large-pages`
+
+`Huge Pages`, also known as `Large Pages` (on `Windows`) and
+`Super Pages` (on `BSD` or `macOS`) is the process of reserving RAM
+with larger than default chunk (page) size, which give the CPU/OS fewer
+entries to look-up, and increases mining hashrate performance up to
+50%. General recommendations is `1280` pages for RandomX. Please note
+`1280` pages means `2560 MiB` of memory will be reserved for huge pages
+and become not available for other usage. Before enabling the flag, we
+must reserve the huge pages, otherwise `minerd` will gives us an
+allocation error.
+
+To temporary (until next reboot) reserve huge pages, execute as `root`:
+
+```shell
+# sysctl -w vm.nr_hugepages=1280
+```
+
+To verify huge pages have been reserved, execute:
+
+```shell
+$ grep Huge /proc/meminfo
+
+...
+HugePages_Total:    1280
+HugePages_Free:     1280
+...
+```
+
+To permantly reserve huge pages, you need to modify your boot
+configuration. In this example, we will use `grub` to reserve the
+pages.
+
+> Note:
+> Before proceeding, take a backup of your current `grub`
+> configuration file and be extra carefull on following the
+> instructions, as mistakes will result in your system not booting.
+
+Open your current `grub` configuration file (the default path is
+`/etc/default/grub`), find `GRUB_CMDLINE_LINUX_DEFAULT` option and
+append `hugepagesz=2MB hugepages=1280` at the end of its parameters.
+The option should look like this:
+
+```text
+GRUB_CMDLINE_LINUX_DEFAULT="{YOUR_PREVIOUS_PARAMETERS} hugepagesz=2MB hugepages=1280"
+```
+
+Save the file and execute as `root`:
+
+```shell
+# update-grub
+```
+
+Now you can reboot your system and huge pages will be reserved. If you
+want to revert, just remove the huge pages parameters from your `grub`
+configuration, update it and reboot.
+
+#### RAM consumption
+
+Here is a table showcasing `minerd` daemon total RAM consumption in MiB
+using various threads count for mining and optimization flags.
+
+| Threads | `light-mode` | `fast-mode` | `fast-mode` + `large-pages` |
+|---------|--------------|-------------|-----------------------------|
+| 1       | 271          | 2351        | 14.0                        |
+| 4       | 277          | 2357        | 14.2                        |
+| 8       | 285          | 2365        | 14.4                        |
+
+> Note:
+> The last column shows sow low RAM consumption because the dataset is
+> allocated in the already reserved system huge pages.
 
 ### Darkfid
 
