@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `bin/darkfid/src/error.rs`."><title>error.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="darkfid" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">darkfid/</div>error.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">/* This file is part of DarkFi (https://dark.fi)
+<a href=#2 id=2 data-nosnippet>2</a> *
+<a href=#3 id=3 data-nosnippet>3</a> * Copyright (C) 2020-2025 Dyne.org foundation
+<a href=#4 id=4 data-nosnippet>4</a> *
+<a href=#5 id=5 data-nosnippet>5</a> * This program is free software: you can redistribute it and/or modify
+<a href=#6 id=6 data-nosnippet>6</a> * it under the terms of the GNU Affero General Public License as
+<a href=#7 id=7 data-nosnippet>7</a> * published by the Free Software Foundation, either version 3 of the
+<a href=#8 id=8 data-nosnippet>8</a> * License, or (at your option) any later version.
+<a href=#9 id=9 data-nosnippet>9</a> *
+<a href=#10 id=10 data-nosnippet>10</a> * This program is distributed in the hope that it will be useful,
+<a href=#11 id=11 data-nosnippet>11</a> * but WITHOUT ANY WARRANTY; without even the implied warranty of
+<a href=#12 id=12 data-nosnippet>12</a> * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+<a href=#13 id=13 data-nosnippet>13</a> * GNU Affero General Public License for more details.
+<a href=#14 id=14 data-nosnippet>14</a> *
+<a href=#15 id=15 data-nosnippet>15</a> * You should have received a copy of the GNU Affero General Public License
+<a href=#16 id=16 data-nosnippet>16</a> * along with this program.  If not, see &lt;https://www.gnu.org/licenses/&gt;.
+<a href=#17 id=17 data-nosnippet>17</a> */
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">use </span>darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="doccomment">/// Custom RPC errors available for darkfid.
+<a href=#22 id=22 data-nosnippet>22</a>/// Please sort them sensefully.
+<a href=#23 id=23 data-nosnippet>23</a></span><span class="kw">pub enum </span>RpcError {
+<a href=#24 id=24 data-nosnippet>24</a>    <span class="comment">// Transaction-related errors
+<a href=#25 id=25 data-nosnippet>25</a>    </span>TxSimulationFail = -<span class="number">32110</span>,
+<a href=#26 id=26 data-nosnippet>26</a>    TxGasCalculationFail = -<span class="number">32111</span>,
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="comment">// State-related errors,
+<a href=#29 id=29 data-nosnippet>29</a>    </span>NotSynced = -<span class="number">32120</span>,
+<a href=#30 id=30 data-nosnippet>30</a>    UnknownBlockHeight = -<span class="number">32121</span>,
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="comment">// Parsing errors
+<a href=#33 id=33 data-nosnippet>33</a>    </span>ParseError = -<span class="number">32190</span>,
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="comment">// Contract-related errors
+<a href=#36 id=36 data-nosnippet>36</a>    </span>ContractZkasDbNotFound = -<span class="number">32200</span>,
+<a href=#37 id=37 data-nosnippet>37</a>    ContractStateNotFound = -<span class="number">32201</span>,
+<a href=#38 id=38 data-nosnippet>38</a>    ContractStateKeyNotFound = -<span class="number">32202</span>,
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="comment">// Miner errors
+<a href=#41 id=41 data-nosnippet>41</a>    </span>MinerMissingHeader = -<span class="number">32300</span>,
+<a href=#42 id=42 data-nosnippet>42</a>    MinerInvalidHeader = -<span class="number">32301</span>,
+<a href=#43 id=43 data-nosnippet>43</a>    MinerMissingRecipient = -<span class="number">32302</span>,
+<a href=#44 id=44 data-nosnippet>44</a>    MinerInvalidRecipient = -<span class="number">32303</span>,
+<a href=#45 id=45 data-nosnippet>45</a>    MinerInvalidRecipientPrefix = -<span class="number">32304</span>,
+<a href=#46 id=46 data-nosnippet>46</a>    MinerInvalidSpendHook = -<span class="number">32305</span>,
+<a href=#47 id=47 data-nosnippet>47</a>    MinerInvalidUserData = -<span class="number">32306</span>,
+<a href=#48 id=48 data-nosnippet>48</a>    MinerMissingNonce = -<span class="number">32307</span>,
+<a href=#49 id=49 data-nosnippet>49</a>    MinerInvalidNonce = -<span class="number">32308</span>,
+<a href=#50 id=50 data-nosnippet>50</a>    MinerMissingAddress = -<span class="number">32309</span>,
+<a href=#51 id=51 data-nosnippet>51</a>    MinerInvalidAddress = -<span class="number">32310</span>,
+<a href=#52 id=52 data-nosnippet>52</a>    MinerMissingAuxHash = -<span class="number">32311</span>,
+<a href=#53 id=53 data-nosnippet>53</a>    MinerInvalidAuxHash = -<span class="number">32312</span>,
+<a href=#54 id=54 data-nosnippet>54</a>    MinerMissingHeight = -<span class="number">32313</span>,
+<a href=#55 id=55 data-nosnippet>55</a>    MinerInvalidHeight = -<span class="number">32314</span>,
+<a href=#56 id=56 data-nosnippet>56</a>    MinerMissingPrevId = -<span class="number">32315</span>,
+<a href=#57 id=57 data-nosnippet>57</a>    MinerInvalidPrevId = -<span class="number">32316</span>,
+<a href=#58 id=58 data-nosnippet>58</a>    MinerMissingAuxBlob = -<span class="number">32317</span>,
+<a href=#59 id=59 data-nosnippet>59</a>    MinerInvalidAuxBlob = -<span class="number">32318</span>,
+<a href=#60 id=60 data-nosnippet>60</a>    MinerMissingBlob = -<span class="number">32319</span>,
+<a href=#61 id=61 data-nosnippet>61</a>    MinerInvalidBlob = -<span class="number">32320</span>,
+<a href=#62 id=62 data-nosnippet>62</a>    MinerMissingMerkleProof = -<span class="number">32321</span>,
+<a href=#63 id=63 data-nosnippet>63</a>    MinerInvalidMerkleProof = -<span class="number">32322</span>,
+<a href=#64 id=64 data-nosnippet>64</a>    MinerMissingPath = -<span class="number">32323</span>,
+<a href=#65 id=65 data-nosnippet>65</a>    MinerInvalidPath = -<span class="number">32324</span>,
+<a href=#66 id=66 data-nosnippet>66</a>    MinerMissingSeedHash = -<span class="number">32325</span>,
+<a href=#67 id=67 data-nosnippet>67</a>    MinerInvalidSeedHash = -<span class="number">32326</span>,
+<a href=#68 id=68 data-nosnippet>68</a>    MinerMerkleProofConstructionFailed = -<span class="number">32327</span>,
+<a href=#69 id=69 data-nosnippet>69</a>    MinerMoneroPowDataConstructionFailed = -<span class="number">32328</span>,
+<a href=#70 id=70 data-nosnippet>70</a>    MinerUnknownJob = -<span class="number">32329</span>,
+<a href=#71 id=71 data-nosnippet>71</a>}
+<a href=#72 id=72 data-nosnippet>72</a>
+<a href=#73 id=73 data-nosnippet>73</a><span class="kw">fn </span>to_tuple(e: RpcError) -&gt; (i32, String) {
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">let </span>msg = <span class="kw">match </span>e {
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="comment">// Transaction-related errors
+<a href=#76 id=76 data-nosnippet>76</a>        </span>RpcError::TxSimulationFail =&gt; <span class="string">"Failed simulating transaction state change"</span>,
+<a href=#77 id=77 data-nosnippet>77</a>        RpcError::TxGasCalculationFail =&gt; <span class="string">"Failed to calculate transaction's gas"</span>,
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="comment">// State-related errors
+<a href=#79 id=79 data-nosnippet>79</a>        </span>RpcError::NotSynced =&gt; <span class="string">"Blockchain is not synced"</span>,
+<a href=#80 id=80 data-nosnippet>80</a>        RpcError::UnknownBlockHeight =&gt; <span class="string">"Did not find block height"</span>,
+<a href=#81 id=81 data-nosnippet>81</a>        <span class="comment">// Parsing errors
+<a href=#82 id=82 data-nosnippet>82</a>        </span>RpcError::ParseError =&gt; <span class="string">"Parse error"</span>,
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="comment">// Contract-related errors
+<a href=#84 id=84 data-nosnippet>84</a>        </span>RpcError::ContractZkasDbNotFound =&gt; <span class="string">"zkas database not found for given contract"</span>,
+<a href=#85 id=85 data-nosnippet>85</a>        RpcError::ContractStateNotFound =&gt; <span class="string">"Records not found for given contract state"</span>,
+<a href=#86 id=86 data-nosnippet>86</a>        RpcError::ContractStateKeyNotFound =&gt; <span class="string">"Value not found for given contract state key"</span>,
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="comment">// Miner errors
+<a href=#88 id=88 data-nosnippet>88</a>        </span>RpcError::MinerMissingHeader =&gt; <span class="string">"Request is missing the Header hash"</span>,
+<a href=#89 id=89 data-nosnippet>89</a>        RpcError::MinerInvalidHeader =&gt; <span class="string">"Request Header hash is invalid"</span>,
+<a href=#90 id=90 data-nosnippet>90</a>        RpcError::MinerMissingRecipient =&gt; <span class="string">"Request is missing the recipient wallet address"</span>,
+<a href=#91 id=91 data-nosnippet>91</a>        RpcError::MinerInvalidRecipient =&gt; <span class="string">"Request recipient wallet address is invalid"</span>,
+<a href=#92 id=92 data-nosnippet>92</a>        RpcError::MinerInvalidRecipientPrefix =&gt; {
+<a href=#93 id=93 data-nosnippet>93</a>            <span class="string">"Request recipient wallet address prefix is invalid"
+<a href=#94 id=94 data-nosnippet>94</a>        </span>}
+<a href=#95 id=95 data-nosnippet>95</a>        RpcError::MinerInvalidSpendHook =&gt; <span class="string">"Request spend hook is invalid"</span>,
+<a href=#96 id=96 data-nosnippet>96</a>        RpcError::MinerInvalidUserData =&gt; <span class="string">"Request user data is invalid"</span>,
+<a href=#97 id=97 data-nosnippet>97</a>        RpcError::MinerMissingNonce =&gt; <span class="string">"Request is missing the Header nonce"</span>,
+<a href=#98 id=98 data-nosnippet>98</a>        RpcError::MinerInvalidNonce =&gt; <span class="string">"Request Header nonce is invalid"</span>,
+<a href=#99 id=99 data-nosnippet>99</a>        RpcError::MinerMissingAddress =&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>            <span class="string">"Request is missing the recipient wallet address configuration"
+<a href=#101 id=101 data-nosnippet>101</a>        </span>}
+<a href=#102 id=102 data-nosnippet>102</a>        RpcError::MinerInvalidAddress =&gt; {
+<a href=#103 id=103 data-nosnippet>103</a>            <span class="string">"Request recipient wallet address configuration is invalid"
+<a href=#104 id=104 data-nosnippet>104</a>        </span>}
+<a href=#105 id=105 data-nosnippet>105</a>        RpcError::MinerMissingAuxHash =&gt; <span class="string">"Request is missing the merge mining job (aux_hash)"</span>,
+<a href=#106 id=106 data-nosnippet>106</a>        RpcError::MinerInvalidAuxHash =&gt; <span class="string">"Request merge mining job (aux_hash) is invalid"</span>,
+<a href=#107 id=107 data-nosnippet>107</a>        RpcError::MinerMissingHeight =&gt; <span class="string">"Request is missing the Monero height"</span>,
+<a href=#108 id=108 data-nosnippet>108</a>        RpcError::MinerInvalidHeight =&gt; <span class="string">"Request Monero height is invalid"</span>,
+<a href=#109 id=109 data-nosnippet>109</a>        RpcError::MinerMissingPrevId =&gt; <span class="string">"Request is missing the hash of the previous Monero block"</span>,
+<a href=#110 id=110 data-nosnippet>110</a>        RpcError::MinerInvalidPrevId =&gt; <span class="string">"Request hash of the previous Monero block is invalid"</span>,
+<a href=#111 id=111 data-nosnippet>111</a>        RpcError::MinerMissingAuxBlob =&gt; <span class="string">"Request is missing the merge mining blob"</span>,
+<a href=#112 id=112 data-nosnippet>112</a>        RpcError::MinerInvalidAuxBlob =&gt; <span class="string">"Request merge mining bob is invalid"</span>,
+<a href=#113 id=113 data-nosnippet>113</a>        RpcError::MinerMissingBlob =&gt; <span class="string">"Request is missing the Monero block template"</span>,
+<a href=#114 id=114 data-nosnippet>114</a>        RpcError::MinerInvalidBlob =&gt; <span class="string">"Request Monero block template is invalid"</span>,
+<a href=#115 id=115 data-nosnippet>115</a>        RpcError::MinerMissingMerkleProof =&gt; <span class="string">"Request is missing the Merkle proof"</span>,
+<a href=#116 id=116 data-nosnippet>116</a>        RpcError::MinerInvalidMerkleProof =&gt; <span class="string">"Request Merkle proof is invalid"</span>,
+<a href=#117 id=117 data-nosnippet>117</a>        RpcError::MinerMissingPath =&gt; <span class="string">"Request is missing the Merkle proof path"</span>,
+<a href=#118 id=118 data-nosnippet>118</a>        RpcError::MinerInvalidPath =&gt; <span class="string">"Request Merkle proof path is invalid"</span>,
+<a href=#119 id=119 data-nosnippet>119</a>        RpcError::MinerMissingSeedHash =&gt; <span class="string">"Request is missing the RandomX seed key"</span>,
+<a href=#120 id=120 data-nosnippet>120</a>        RpcError::MinerInvalidSeedHash =&gt; <span class="string">"Request RandomX seed key is invalid"</span>,
+<a href=#121 id=121 data-nosnippet>121</a>        RpcError::MinerMerkleProofConstructionFailed =&gt; {
+<a href=#122 id=122 data-nosnippet>122</a>            <span class="string">"failed constructing aux chain Merkle proof"
+<a href=#123 id=123 data-nosnippet>123</a>        </span>}
+<a href=#124 id=124 data-nosnippet>124</a>        RpcError::MinerMoneroPowDataConstructionFailed =&gt; <span class="string">"Failed constructing Monero PoW data"</span>,
+<a href=#125 id=125 data-nosnippet>125</a>        RpcError::MinerUnknownJob =&gt; <span class="string">"Request job is unknown"</span>,
+<a href=#126 id=126 data-nosnippet>126</a>    };
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    (e <span class="kw">as </span>i32, msg.to_string())
+<a href=#129 id=129 data-nosnippet>129</a>}
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a><span class="kw">pub fn </span>server_error(e: RpcError, id: u16, msg: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;) -&gt; JsonResult {
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">let </span>(code, default_msg) = to_tuple(e);
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(message) = msg {
+<a href=#135 id=135 data-nosnippet>135</a>        <span class="kw">return </span>JsonError::new(ServerError(code), <span class="prelude-val">Some</span>(message.to_string()), id).into()
+<a href=#136 id=136 data-nosnippet>136</a>    }
+<a href=#137 id=137 data-nosnippet>137</a>
+<a href=#138 id=138 data-nosnippet>138</a>    JsonError::new(ServerError(code), <span class="prelude-val">Some</span>(default_msg), id).into()
+<a href=#139 id=139 data-nosnippet>139</a>}</code></pre></div></section></main></body></html>

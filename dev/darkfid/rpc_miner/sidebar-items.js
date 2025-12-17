@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_next_block","generate_transaction"],"struct":["BlockTemplate","MinerRewardsRecipientConfig"]};

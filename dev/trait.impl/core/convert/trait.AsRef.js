@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["darkfi",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.92.0/std/primitive.u8.html\">u8</a>]&gt; for <a class=\"struct\" href=\"darkfi/zk/proof/struct.Proof.html\" title=\"struct darkfi::zk::proof::Proof\">Proof</a>"],["impl&lt;T, const MAX_SIZE: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.92.0/std/primitive.usize.html\">usize</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.92.0/std/primitive.slice.html\">[T]</a>&gt; for <a class=\"struct\" href=\"darkfi/blockchain/monero/fixed_array/struct.MaxSizeVec.html\" title=\"struct darkfi::blockchain::monero::fixed_array::MaxSizeVec\">MaxSizeVec</a>&lt;T, MAX_SIZE&gt;<div class=\"where\">where\n    T: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>,</div>"]]],["fud",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.92.0/std/primitive.u8.html\">u8</a>]&gt; for <a class=\"struct\" href=\"fud/equix/struct.Challenge.html\" title=\"struct fud::equix::Challenge\">Challenge</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1264,378]}

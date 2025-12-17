@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Chunk-based file storage implementation. This is a building block for a DHT or something similar."><title>darkfi::geode - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="darkfi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module geode</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../darkfi/index.html">darkfi</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module geode</a></h2><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate darkfi</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">darkfi</a></div><h1>Module <span>geode</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/darkfi/geode/mod.rs.html#19-503">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Chunk-based file storage implementation.
+This is a building block for a DHT or something similar.</p>
+<p>The API supports file/directory insertion and retrieval. There is
+intentionally no <code>remove</code> support. File removal should be handled
+externally, and then it is only required to run <code>garbage_collect()</code> to
+clean things up.</p>
+<p>The hash of a file is the BLAKE3 hash of hashed chunks in the correct
+order.
+The hash of a directory is the BLAKE3 hash of hashed chunks in the correct
+order and the ordered list of (file path, file sizes).
+All hashes (file, directory, chunk) are 32 bytes long, and are encoded in
+base58 whenever necessary.</p>
+<p>The filesystem hierarchy stores a <code>files</code> directory storing metadata
+about a full file and a <code>directories</code> directory storing metadata about all
+files in a directory (all subdirectories included).
+The filename of a file in <code>files</code> or <code>directories</code> is the hash of the
+file/directory as defined above.
+Inside a file in <code>files</code> is the ordered list of the chunks making up the
+full file.
+Inside a file in <code>directories</code> is the ordered list of the chunks making up
+each full file, and the (relative) file path and hash of all files in the
+directory.</p>
+<p>To get the chunks you split the full file into <code>MAX_CHUNK_SIZE</code> sized
+slices, the last chunk is the only one that can be smaller than that.</p>
+<p>It might look like the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>/files/B9fFKaEYphw2oH5PDbeL1TTAcSzL6ax84p8SjBKzuYzX
+/files/<span class="number">8nA3ndjFFee3n5wMPLZampLpGaMJi3od4MSyaXPDoF91
+</span>/files/...
+/directories/FXDduPcEohVzsSxtNVSFU64qtYxEVEHBMkF4k5cBvt3B
+/directories/AHjU1LizfGqsGnF8VSa9kphSQ5pqS4YjmPqme5RZajsj
+/directories/...</code></pre></div>
+<p>Inside a file metadata (file in <code>files</code>) is the ordered list of chunk
+hashes, for example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="number">2bQPxSR8Frz7S7JW3DRAzEtkrHfLXB1CN65V7az77pUp
+</span>CvjvN6MfWQYK54DgKNR7MPgFSZqsCgpWKF2p8ot66CCP</code></pre></div>
+<p>Inside a directory metadata (file in <code>directories</code>) is, in addition to
+chunk hashes, the path and size of each file in the directory. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="number">8Kb55jeqJsq7WTBN93gvBzh2zmXAXVPh111VqD3Hi42V
+</span>GLiBqpLPTbpJhSMYfzi3s7WivrTViov7ShX7uso6fG5s
+picture.jpg <span class="number">312948</span></code></pre></div>
+<p>Chunks of a directory can include multiple files, if multiple files fit
+into <code>MAX_CHUNK_SIZE</code>. The chunks are computed as if all the files were
+concatenated into a single big file, to minimize the number of chunks.</p>
+<p>The full file is not copied, and individual chunks are not stored by
+geode. Additionally it does not keep track of the full files path.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="chunked_storage/index.html" title="mod darkfi::geode::chunked_storage">chunked_<wbr>storage</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="file_sequence/index.html" title="mod darkfi::geode::file_sequence">file_<wbr>sequence</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="util/index.html" title="mod darkfi::geode::util">util</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ChunkedStorage.html" title="struct darkfi::geode::ChunkedStorage">Chunked<wbr>Storage</a></dt><dd><code>ChunkedStorage</code> is a representation of a file or directory we’re trying to
+retrieve from <code>Geode</code>.</dd><dt><a class="struct" href="struct.FileSequence.html" title="struct darkfi::geode::FileSequence">File<wbr>Sequence</a></dt><dd><code>FileSequence</code> is an object that implements <code>AsyncRead</code>, <code>AsyncSeek</code>, and
+<code>AsyncWrite</code> for an ordered list of (file path, file size).</dd><dt><a class="struct" href="struct.Geode.html" title="struct darkfi::geode::Geode">Geode</a></dt><dd>Chunk-based file storage interface.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.DIRS_PATH.html" title="constant darkfi::geode::DIRS_PATH">DIRS_<wbr>PATH</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Path prefix where directory metadata is stored</dd><dt><a class="constant" href="constant.FILES_PATH.html" title="constant darkfi::geode::FILES_PATH">FILES_<wbr>PATH</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Path prefix where file metadata is stored</dd><dt><a class="constant" href="constant.MAX_CHUNK_SIZE.html" title="constant darkfi::geode::MAX_CHUNK_SIZE">MAX_<wbr>CHUNK_<wbr>SIZE</a></dt><dd>Defined maximum size of a stored chunk (256 KiB)</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.hash_to_string.html" title="fn darkfi::geode::hash_to_string">hash_<wbr>to_<wbr>string</a></dt><dt><a class="fn" href="fn.read_until_filled.html" title="fn darkfi::geode::read_until_filled">read_<wbr>until_<wbr>filled</a></dt><dd>smol::fs::File::read does not guarantee that the buffer will be filled, even if the buffer is
+smaller than the file. This is a workaround.
+This reads the stream until the buffer is full or until we reached the end of the stream.</dd></dl></section></div></main></body></html>

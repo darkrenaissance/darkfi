@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["log_request_failure"],"mod":["blocks","contracts","statistics","transactions"],"struct":["DarkfidRpcClient"]};
