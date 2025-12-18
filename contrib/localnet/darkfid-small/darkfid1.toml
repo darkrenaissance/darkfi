@@ -43,9 +43,6 @@ skip_fees = false
 # Optional sync checkpoint hash
 #checkpoint = ""
 
-# Optional bootstrap timestamp
-#bootstrap = 1712581283
-
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
 # JSON-RPC listen URL

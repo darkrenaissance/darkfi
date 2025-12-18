@@ -42,8 +42,6 @@ pub struct ConsensusInitTaskConfig {
     pub checkpoint_height: Option<u32>,
     /// Optional sync checkpoint hash
     pub checkpoint: Option<String>,
-    /// Optional bootstrap timestamp
-    pub bootstrap: u64,
 }
 
 /// Sync the node consensus state and start the corresponding task, based on node type.
@@ -57,13 +55,12 @@ pub async fn consensus_init_task(
     //       until its healthy again
     node.validator.consensus.healthcheck().await?;
 
-    // Check if network is configured to start in the future.
-    // NOTE: Always configure the network to start in the future when bootstrapping
-    // or restarting it.
+    // Check if network genesis is in the future.
     let current = Timestamp::current_time().inner();
-    if current < config.bootstrap {
-        let diff = config.bootstrap - current;
-        info!(target: "darkfid::task::consensus_init_task", "Waiting for network bootstrap: {diff} seconds");
+    let genesis = node.validator.consensus.module.read().await.genesis.inner();
+    if current < genesis {
+        let diff = genesis - current;
+        info!(target: "darkfid::task::consensus_init_task", "Waiting for network genesis: {diff} seconds");
         sleep(diff).await;
     }
 

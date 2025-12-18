@@ -267,7 +267,6 @@ fn darkfid_programmatic_control() -> Result<()> {
                     .get_headroot()
                     .unwrap()
                     .unwrap();
-                let bootstrap = genesis_block.header.timestamp.inner();
                 let config = darkfi::validator::ValidatorConfig {
                     confirmation_threshold: 1,
                     pow_target: 20,
@@ -279,7 +278,6 @@ fn darkfid_programmatic_control() -> Result<()> {
                     skip_sync: true,
                     checkpoint_height: None,
                     checkpoint: None,
-                    bootstrap,
                 };
                 let rpc_settings = RpcSettings {
                     listen: Url::parse("tcp://127.0.0.1:8240").unwrap(),

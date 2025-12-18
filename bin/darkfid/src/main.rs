@@ -124,10 +124,6 @@ pub struct BlockchainNetwork {
     checkpoint: Option<String>,
 
     #[structopt(long)]
-    /// Optional bootstrap timestamp
-    bootstrap: Option<u64>,
-
-    #[structopt(long)]
     /// Garbage collection task transactions batch size
     txs_batch_size: Option<usize>,
 
@@ -168,12 +164,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Parse the genesis block
     let bytes = base64::decode(genesis_block.trim()).unwrap();
     let genesis_block: BlockInfo = deserialize_async(&bytes).await?;
-
-    // Compute the bootstrap timestamp
-    let bootstrap = match blockchain_config.bootstrap {
-        Some(b) => b,
-        None => genesis_block.header.timestamp.inner(),
-    };
 
     // Initialize or open sled database
     let db_path = expand_path(&blockchain_config.database)?;
@@ -249,7 +239,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         skip_sync: blockchain_config.skip_sync,
         checkpoint_height: blockchain_config.checkpoint_height,
         checkpoint: blockchain_config.checkpoint,
-        bootstrap,
     };
     daemon
         .start(

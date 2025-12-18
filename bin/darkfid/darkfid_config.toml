@@ -32,9 +32,6 @@ skip_fees = false
 # Optional sync checkpoint hash
 #checkpoint = ""
 
-# Optional bootstrap timestamp
-#bootstrap = 1712581283
-
 # Garbage collection task transactions batch size
 txs_batch_size = 50
 
@@ -157,9 +154,6 @@ skip_fees = false
 
 # Optional sync checkpoint hash
 #checkpoint = ""
-
-# Optional bootstrap timestamp
-#bootstrap = 1712581283
 
 # Garbage collection task transactions batch size
 txs_batch_size = 50
@@ -288,9 +282,6 @@ skip_fees = false
 
 # Optional sync checkpoint hash
 #checkpoint = ""
-
-# Optional bootstrap timestamp
-#bootstrap = 1712581283
 
 # Garbage collection task transactions batch size
 txs_batch_size = 50
