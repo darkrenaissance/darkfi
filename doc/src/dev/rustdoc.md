@@ -28,3 +28,4 @@ Here the rustdoc for this repository's crates can be found.
 
 * [`darkfi-money-contract`](darkfi_money_contract/index.html)
 * [`darkfi-dao-contract`](darkfi_dao_contract/index.html)
+* [`darkfi-deployooor-contract`](darkfi_deployooor_contract/index.html)
