@@ -33,6 +33,10 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::{
+    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId},
+    pasta::pallas,
+};
 use darkfi_serial::deserialize_async;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
@@ -414,9 +418,18 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("Fetch scanned blocks records")
         .args(&[height]);
 
-    let explorer = SubCommand::with_name("explorer")
-        .about("Explorer related subcommands")
-        .subcommands(vec![fetch_tx, simulate_tx, txs_history, clear_reverted, scanned_blocks]);
+    let mining_config = SubCommand::with_name("mining-config")
+        .about("Read a mining configuration from stdin and display its parts");
+
+    let explorer =
+        SubCommand::with_name("explorer").about("Explorer related subcommands").subcommands(vec![
+            fetch_tx,
+            simulate_tx,
+            txs_history,
+            clear_reverted,
+            scanned_blocks,
+            mining_config,
+        ]);
 
     // Alias
     let alias = Arg::with_name("alias").help("Token alias");
@@ -630,4 +643,84 @@ pub async fn append_or_print(
     for msg in messages {
         buf.push(msg);
     }
+}
+
+/// Auxiliary function to parse a base64 encoded mining configuration
+/// from stdin.
+pub async fn parse_mining_config_from_stdin(
+) -> Result<(String, String, Option<String>, Option<String>)> {
+    let mut buf = String::new();
+    stdin().read_to_string(&mut buf)?;
+    let config = buf.trim();
+    let (recipient, spend_hook, user_data) = match base64::decode(config) {
+        Some(bytes) => deserialize_async(&bytes).await?,
+        None => return Err(Error::ParseFailed("Failed to decode mining configuration")),
+    };
+    Ok((config.to_string(), recipient, spend_hook, user_data))
+}
+
+/// Auxiliary function to parse a base64 encoded mining configuration
+/// from provided input or fallback to stdin if its empty.
+pub async fn parse_mining_config_from_input(
+    input: &[String],
+) -> Result<(String, String, Option<String>, Option<String>)> {
+    match input.len() {
+        0 => parse_mining_config_from_stdin().await,
+        1 => {
+            let config = input[0].trim();
+            let (recipient, spend_hook, user_data) = match base64::decode(config) {
+                Some(bytes) => deserialize_async(&bytes).await?,
+                None => return Err(Error::ParseFailed("Failed to decode mining configuration")),
+            };
+            Ok((config.to_string(), recipient, spend_hook, user_data))
+        }
+        _ => Err(Error::ParseFailed("Multiline input provided")),
+    }
+}
+
+/// Auxiliary function to display the parts of a mining configuration.
+pub fn display_mining_config(
+    config: &str,
+    recipient_str: &str,
+    spend_hook: &Option<String>,
+    user_data: &Option<String>,
+    output: &mut Vec<String>,
+) {
+    output.push(format!("Mining configuration: {config}"));
+
+    match Address::from_str(recipient_str) {
+        Ok(recipient) => {
+            output.push(format!("Recipient: {recipient_str}"));
+            output.push(format!("Public key: {}", recipient.public_key()));
+            output.push(format!("Network: {:?}", recipient.network()));
+        }
+        Err(e) => output.push(format!("Recipient: Invalid ({e})")),
+    }
+
+    let spend_hook = match spend_hook {
+        Some(spend_hook_str) => match FuncId::from_str(spend_hook_str) {
+            Ok(_) => String::from(spend_hook_str),
+            Err(e) => format!("Invalid ({e})"),
+        },
+        None => String::from("-"),
+    };
+    output.push(format!("Spend hook: {spend_hook}"));
+
+    let user_data = match user_data {
+        Some(user_data_str) => match bs58::decode(&user_data_str).into_vec() {
+            Ok(bytes) => match bytes.try_into() {
+                Ok(bytes) => {
+                    if pallas::Base::from_repr(bytes).is_some().into() {
+                        String::from(user_data_str)
+                    } else {
+                        String::from("Invalid")
+                    }
+                }
+                Err(e) => format!("Invalid ({e:?})"),
+            },
+            Err(e) => format!("Invalid ({e})"),
+        },
+        None => String::from("-"),
+    };
+    output.push(format!("User data: {user_data}"));
 }

@@ -57,8 +57,8 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use drk::{
     cli_util::{
-        generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
-        print_output,
+        display_mining_config, generate_completions, kaching, parse_mining_config_from_stdin,
+        parse_token_pair, parse_tx_from_stdin, parse_value_pair, print_output,
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
@@ -459,6 +459,9 @@ enum ExplorerSubcmd {
         /// Fetch specific height record (optional)
         height: Option<u32>,
     },
+
+    /// Read a mining configuration from stdin and display its parts
+    MiningConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -2288,6 +2291,16 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 } else {
                     println!("{table}");
                 }
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::MiningConfig => {
+                let (config, recipient, spend_hook, user_data) =
+                    parse_mining_config_from_stdin().await?;
+                let mut output = vec![];
+                display_mining_config(&config, &recipient, &spend_hook, &user_data, &mut output);
+                print_output(&output);
 
                 Ok(())
             }

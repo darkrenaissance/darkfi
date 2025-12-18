@@ -59,8 +59,9 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     cli_util::{
-        append_or_print, generate_completions, kaching, parse_token_pair, parse_tx_from_input,
-        parse_value_pair, print_output,
+        append_or_print, display_mining_config, generate_completions, kaching,
+        parse_mining_config_from_input, parse_token_pair, parse_tx_from_input, parse_value_pair,
+        print_output,
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
@@ -248,7 +249,8 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "explorer simulate-tx");
         lc.push(prefix.clone() + "explorer txs-history");
         lc.push(prefix.clone() + "explorer clear-reverted");
-        lc.push(prefix + "explorer scanned-blocks");
+        lc.push(prefix.clone() + "explorer scanned-blocks");
+        lc.push(prefix + "explorer mining-config");
         return
     }
 
@@ -359,7 +361,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "dao mining-config " => Some(("<name>".to_string(), color, bold)),
         "scan " => Some(("[--reset]".to_string(), color, bold)),
         "scan --reset " => Some(("<height>".to_string(), color, bold)),
-        "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)".to_string(), color, bold)),
+        "explorer " => Some(("(fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks|mining-config)".to_string(), color, bold)),
         "explorer fetch-tx " => Some(("[--encode] <tx-hash>".to_string(), color, bold)),
         "explorer txs-history " => Some(("[--encode] [tx-hash]".to_string(), color, bold)),
         "explorer scanned-blocks " => Some(("[height]".to_string(), color, bold)),
@@ -2480,7 +2482,7 @@ async fn handle_explorer(drk: &DrkPtr, parts: &[&str], input: &[String], output:
     if parts.len() < 2 {
         output.push(String::from("Malformed `explorer` command"));
         output.push(String::from(
-            "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)",
+            "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks|mining-config)",
         ));
         return
     }
@@ -2492,10 +2494,11 @@ async fn handle_explorer(drk: &DrkPtr, parts: &[&str], input: &[String], output:
         "txs-history" => handle_explorer_txs_history(drk, parts, output).await,
         "clear-reverted" => handle_explorer_clear_reverted(drk, parts, output).await,
         "scanned-blocks" => handle_explorer_scanned_blocks(drk, parts, output).await,
+        "mining-config" => handle_explorer_mining_config(parts, input, output).await,
         _ => {
             output.push(format!("Unrecognized explorer subcommand: {}", parts[1]));
             output.push(String::from(
-                "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks)",
+                "Usage: explorer (fetch-tx|simulate-tx|txs-history|clear-reverted|scanned-blocks|mining-config)",
             ));
         }
     }
@@ -2713,6 +2716,27 @@ async fn handle_explorer_scanned_blocks(drk: &DrkPtr, parts: &[&str], output: &m
     } else {
         output.push(format!("{table}"));
     }
+}
+
+/// Auxiliary function to define the explorer mining config subcommand handling.
+async fn handle_explorer_mining_config(parts: &[&str], input: &[String], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 2 {
+        output.push(String::from("Malformed `explorer mining-config` subcommand"));
+        output.push(String::from("Usage: explorer mining-config"));
+        return
+    }
+
+    let (config, recipient, spend_hook, user_data) =
+        match parse_mining_config_from_input(input).await {
+            Ok(c) => c,
+            Err(e) => {
+                output.push(format!("Error while parsing mining config: {e}"));
+                return
+            }
+        };
+
+    display_mining_config(&config, &recipient, &spend_hook, &user_data, output)
 }
 
 /// Auxiliary function to define the alias command handling.
