@@ -39,7 +39,7 @@ Once the `heaptrack` report is generated you can view it using `heaptrack_gui`.
 | #  | Opcode                | RAM Usage | Verifying Key Size | Proof Size |
 |----|-----------------------|-----------|--------------------|------------|
 | 0  | sparse_merkle_root    | 17.1 MB   | 1.2 MB             | 7.7 kB     |
-| 1  | merkle_root           | 8.1 MB    | 572.2 kB           | 7.7 kB     |
+| 1  | merkle_root           | 2.4 MB    | 145.6 kB           | 7.6 kB     |
 | 2  | posedion_hash         | 2.4 MB    | 145.6 kB           | 7.6 kB     |
 | 3  | base_add              | 2.4 MB    | 145.6 kB           | 7.6 kB     |
 | 4  | base_mul              | 2.4 MB    | 145.6 kB           | 7.6 kB     |
