@@ -91,6 +91,8 @@ tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
 tor-dirmgr = { version="0.36.0", features=["static"] }
 
+[target.'cfg(target_os = "ios")'.dependencies]
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
 #rusqlite = {version = "0.37.0", features = ["bundled"]}
