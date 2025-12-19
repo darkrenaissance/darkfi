@@ -292,13 +292,11 @@ impl PoWModule {
         self.verify_block_hash(header)
     }
 
-    /// Verify provided block corresponds to next mine target.
-    pub fn verify_block_hash(&self, header: &Header) -> Result<()> {
+    /// Verify provided block hash is less than provided mine target.
+    pub fn verify_block_target(&self, header: &Header, target: &BigUint) -> Result<BigUint> {
         let verifier_setup = Instant::now();
 
-        // Grab the next mine target
-        let target = self.next_mine_target()?;
-
+        // Grab verifier output hash based on block PoW data
         let (out_hash, verification_time) = match &header.pow_data {
             DarkFi => {
                 // Check which VM key should be used.
@@ -315,7 +313,7 @@ impl PoWModule {
                 let vm = self.darkfi_rx_factory.create(&randomx_key.inner()[..])?;
 
                 debug!(
-                    target: "validator::pow::verify_block",
+                    target: "validator::pow::verify_block_target",
                     "[VERIFIER] DarkFi PoW setup time: {:?}",
                     verifier_setup.elapsed(),
                 );
@@ -328,7 +326,7 @@ impl PoWModule {
                 let vm = self.monero_rx_factory.create(powdata.randomx_key())?;
 
                 debug!(
-                    target: "validator::pow::verify_block",
+                    target: "validator::pow::verify_block_target",
                     "[VERIFIER] Monero PoW setup time: {:?}",
                     verifier_setup.elapsed(),
                 );
@@ -338,13 +336,23 @@ impl PoWModule {
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
         };
+        debug!(target: "validator::pow::verify_block_target", "[VERIFIER] Verification time: {:?}", verification_time.elapsed());
 
-        // Verify hash is less than the expected mine target
-        if out_hash > target {
+        // Verify hash is less than the provided mine target
+        if out_hash > *target {
             return Err(Error::PoWInvalidOutHash)
         }
-        debug!(target: "validator::pow::verify_block", "[VERIFIER] Verification time: {:?}", verification_time.elapsed());
 
+        Ok(out_hash)
+    }
+
+    /// Verify provided block corresponds to next mine target.
+    pub fn verify_block_hash(&self, header: &Header) -> Result<()> {
+        // Grab the next mine target
+        let target = self.next_mine_target()?;
+
+        // Verify hash is less than the expected mine target
+        let _ = self.verify_block_target(header, &target)?;
         Ok(())
     }
 

@@ -400,26 +400,19 @@ async fn handle_reorg(
                 return true
             }
 
-            // Grab next mine target and difficulty
-            let (next_target, next_difficulty) = match headers_module
-                .next_mine_target_and_difficulty()
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    debug!(target: "darkfid::task::handle_reorg", "Retrieving next mine target and difficulty failed: {e}");
-                    return false
-                }
-            };
-
             // Verify header hash and calculate its rank
-            let (target_distance_sq, hash_distance_sq) = match header_rank(
+            let (next_difficulty, target_distance_sq, hash_distance_sq) = match header_rank(
+                &headers_module,
                 peer_header,
-                &next_target,
             ) {
-                Ok(distances) => distances,
-                Err(e) => {
-                    debug!(target: "darkfid::task::handle_reorg", "Invalid header hash detected: {e}");
+                Ok(tuple) => tuple,
+                Err(Error::PoWInvalidOutHash) => {
+                    debug!(target: "darkfid::task::handle_reorg", "Invalid header hash detected");
                     return true
+                }
+                Err(e) => {
+                    debug!(target: "darkfid::task::handle_reorg", "Computing header rank failed: {e}");
+                    return false
                 }
             };
 
