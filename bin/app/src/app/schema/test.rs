@@ -33,14 +33,14 @@ use crate::{
 
 const LIGHTMODE: bool = false;
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 mod ui_consts {
     //pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
     //pub const KING_PATH: &str = "king.png";
     pub const VID_PATH: &str = "forest/forest_{frame}.png";
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod ui_consts {
     //pub const CHATDB_PATH: &str = "chatdb";
     //pub const KING_PATH: &str = "assets/king.png";

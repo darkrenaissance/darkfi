@@ -30,6 +30,11 @@ mod ui_consts {
     pub const LOCALE_PATH: &str = "assets/lang/{locale}/{entry}";
 }
 
+#[cfg(target_os = "ios")]
+mod ui_consts {
+    pub const LOCALE_PATH: &str = "lang/{locale}/{entry}";
+}
+
 pub use ui_consts::*;
 
 static ENTRIES: &[&'static str] = &["app.ftl"];

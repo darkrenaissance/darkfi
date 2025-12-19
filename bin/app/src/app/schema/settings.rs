@@ -36,7 +36,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(any(target_os = "android", feature = "emulate-android"))]
+#[cfg(any(target_os = "android", target_os = "ios", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
@@ -59,7 +59,7 @@ mod android_ui_consts {
     pub const BACKARROW_BG_W: f32 = 120.;
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 mod ui_consts {
     pub use super::android_ui_consts::*;
 }
