@@ -655,13 +655,13 @@ impl ContractStoreOverlay {
                 Some(hash) => hash,
                 None => *EMPTY_HASH,
             };
-            debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::hash(&wasm_monotree_root));
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::Hash::from(wasm_monotree_root));
             root = tree.insert(
                 root.as_ref(),
                 blake3::hash(SLED_BINCODE_TREE).as_bytes(),
                 &wasm_monotree_root,
             )?;
-            debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::hash(&root.unwrap()));
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
         }
 
         // Iterate over contract states monotrees pointers
@@ -697,9 +697,9 @@ impl ContractStoreOverlay {
                 Some(hash) => hash,
                 None => *EMPTY_HASH,
             };
-            debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::hash(&state_monotree_root));
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New root: {}", blake3::Hash::from(state_monotree_root));
             root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
-            debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::hash(&root.unwrap()));
+            debug!(target: "blockchain::contractstore::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
         }
         tree.set_headroot(root.as_ref());
 
