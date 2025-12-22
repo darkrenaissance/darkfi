@@ -69,6 +69,7 @@ pub async fn consensus_init_task(
     node.validator.consensus.generate_empty_fork().await?;
 
     // Sync blockchain
+    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
     let checkpoint = if !config.skip_sync {
         // Parse configured checkpoint
         if config.checkpoint_height.is_some() && config.checkpoint.is_none() {
@@ -81,7 +82,16 @@ pub async fn consensus_init_task(
             None
         };
 
-        sync_task(&node, checkpoint).await?;
+        loop {
+            match sync_task(&node, checkpoint).await {
+                Ok(_) => break,
+                Err(e) => {
+                    error!(target: "darkfid::task::consensus_task", "Sync task failed: {e}");
+                    info!(target: "darkfid::task::consensus_task", "Sleeping for {comms_timeout} before retry...");
+                    sleep(comms_timeout).await;
+                }
+            }
+        }
         checkpoint
     } else {
         *node.validator.synced.write().await = true;
@@ -97,7 +107,16 @@ pub async fn consensus_init_task(
                 *node.validator.synced.write().await = false;
                 node.validator.consensus.purge_forks().await?;
                 if !config.skip_sync {
-                    sync_task(&node, checkpoint).await?;
+                    loop {
+                        match sync_task(&node, checkpoint).await {
+                            Ok(_) => break,
+                            Err(e) => {
+                                error!(target: "darkfid::task::consensus_task", "Sync task failed: {e}");
+                                info!(target: "darkfid::task::consensus_task", "Sleeping for {comms_timeout} before retry...");
+                                sleep(comms_timeout).await;
+                            }
+                        }
+                    }
                 } else {
                     *node.validator.synced.write().await = true;
                 }
