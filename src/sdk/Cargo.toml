@@ -46,7 +46,7 @@ subtle = "2.6.1"
 hashbrown = "0.16.0"
 
 # Storage
-sled-overlay = "0.1.12"
+sled-overlay = "0.1.13"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}

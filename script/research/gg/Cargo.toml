@@ -23,7 +23,7 @@ darkfi-serial = "0.5.1"
 # Misc
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
-sled-overlay = "0.1.12"
+sled-overlay = "0.1.13"
 smol = "2.0.2"
 
 [patch.crates-io]

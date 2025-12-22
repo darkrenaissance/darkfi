@@ -29,7 +29,7 @@ prettytable-rs = "0.10.0"
 rand = "0.8.5"
 rodio = {version = "0.20.1", default-features = false, features = ["minimp3"]}
 rusqlite = {version = "0.37.0", features = ["sqlcipher"]}
-sled-overlay = "0.1.12"
+sled-overlay = "0.1.13"
 toml = "0.9.8"
 tracing = "0.1.41"
 url = "2.5.4"
