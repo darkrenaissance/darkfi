@@ -32,7 +32,7 @@ structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
 # Database
-sled-overlay = "0.1.11"
+sled-overlay = "0.1.12"
 
 # Misc
 blake3 = "1.8.2"
