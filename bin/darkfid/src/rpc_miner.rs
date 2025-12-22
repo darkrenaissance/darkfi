@@ -534,7 +534,12 @@ pub async fn generate_next_block(
     txs.push(tx);
 
     // Grab the updated contracts states root
-    overlay.lock().unwrap().contracts.update_state_monotree(&mut extended_fork.state_monotree)?;
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&extended_fork.diffs)?;
+    overlay
+        .lock()
+        .unwrap()
+        .contracts
+        .update_state_monotree(&diff, &mut extended_fork.state_monotree)?;
     let Some(state_root) = extended_fork.state_monotree.get_headroot()? else {
         return Err(Error::ContractsStatesRootNotFoundError);
     };

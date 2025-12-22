@@ -84,6 +84,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Append block3 to fork and generate the next one
     verify_block(
         &fork.overlay,
+        &fork.diffs,
         &fork.module,
         &mut fork.state_monotree,
         &block3,

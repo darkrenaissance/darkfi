@@ -257,6 +257,7 @@ impl Harness {
         // Append new block to fork
         verify_block(
             &fork.overlay,
+            &fork.diffs,
             &fork.module,
             &mut fork.state_monotree,
             &block,

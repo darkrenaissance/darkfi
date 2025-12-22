@@ -457,6 +457,7 @@ impl Validator {
             // Verify block
             match verify_checkpoint_block(
                 &overlay,
+                &diffs,
                 &mut state_monotree,
                 block,
                 &headers[index],
@@ -567,6 +568,7 @@ impl Validator {
             // Verify block
             match verify_block(
                 &overlay,
+                &diffs,
                 &module,
                 &mut state_monotree,
                 block,
@@ -787,6 +789,9 @@ impl Validator {
         // Grab current contracts states monotree to validate each block
         let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
 
+        // Keep track of all block database state diffs
+        let mut diffs = vec![];
+
         // Validate and insert each block
         info!(target: "validator::validate_blockchain", "Validating rest blocks...");
         blocks_count -= 1;
@@ -798,6 +803,7 @@ impl Validator {
             // Verify block
             if let Err(e) = verify_block(
                 &overlay,
+                &diffs,
                 &module,
                 &mut state_monotree,
                 &block,
@@ -813,6 +819,10 @@ impl Validator {
 
             // Update PoW module
             module.append(&block.header, &module.next_difficulty()?)?;
+
+            // Store block database state diff
+            let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?;
+            diffs.push(diff);
 
             // Use last inserted block as next iteration previous
             previous = block;

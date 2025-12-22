@@ -31,6 +31,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
 use num_bigint::BigUint;
+use sled_overlay::SledDbOverlayStateDiff;
 use smol::io::Cursor;
 use tracing::{debug, error, warn};
 
@@ -209,6 +210,7 @@ pub fn validate_blockchain(
 /// Verify given [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
+    diffs: &[SledDbOverlayStateDiff],
     module: &PoWModule,
     state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
@@ -269,7 +271,8 @@ pub async fn verify_block(
     }
 
     // Update the provided contracts states monotree and verify header contracts states root
-    overlay.lock().unwrap().contracts.update_state_monotree(state_monotree)?;
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
+    overlay.lock().unwrap().contracts.update_state_monotree(&diff, state_monotree)?;
     let Some(state_root) = state_monotree.get_headroot()? else {
         return Err(Error::ContractsStatesRootNotFoundError);
     };
@@ -293,6 +296,7 @@ pub async fn verify_block(
 /// Verify given checkpoint [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
+    diffs: &[SledDbOverlayStateDiff],
     state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
     header: &HeaderHash,
@@ -347,7 +351,8 @@ pub async fn verify_checkpoint_block(
     }
 
     // Update the provided contracts states monotree and verify header contracts states root
-    overlay.lock().unwrap().contracts.update_state_monotree(state_monotree)?;
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
+    overlay.lock().unwrap().contracts.update_state_monotree(&diff, state_monotree)?;
     let Some(state_root) = state_monotree.get_headroot()? else {
         return Err(Error::ContractsStatesRootNotFoundError);
     };
@@ -1114,6 +1119,7 @@ pub async fn verify_proposal(
     // Verify proposal block (2)
     if let Err(e) = verify_block(
         &fork.overlay,
+        &fork.diffs,
         &fork.module,
         &mut fork.state_monotree,
         &proposal.block,
@@ -1157,6 +1163,7 @@ pub async fn verify_fork_proposal(
     // Verify proposal block (2)
     if let Err(e) = verify_block(
         &fork.overlay,
+        &fork.diffs,
         &fork.module,
         &mut fork.state_monotree,
         &proposal.block,
