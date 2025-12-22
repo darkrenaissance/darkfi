@@ -1711,6 +1711,7 @@ impl EventHandler for Stage {
         };
         render_ctx.draw();
 
+        self.ctx.end_render_pass();
         self.ctx.commit_frame();
     }
 
