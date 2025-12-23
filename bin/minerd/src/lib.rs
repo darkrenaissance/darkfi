@@ -38,6 +38,9 @@ pub mod benchmark;
 /// Hardware interfaces
 pub mod hw;
 
+/// CPU information
+pub mod cpu;
+
 /// darkfid JSON-RPC related methods
 mod rpc;
 use rpc::{polling_task, DarkfidRpcClient};

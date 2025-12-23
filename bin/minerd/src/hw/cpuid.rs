@@ -74,25 +74,18 @@ impl fmt::Display for AmdZenGeneration {
 pub struct CpuInfo {
     /// CPU vendor
     pub vendor: Vendor,
-
     /// Vendor string (e.g., "GenuineIntel", "AuthenticAMD")
     pub vendor_string: String,
-
     /// CPU family (after extended family calculation)
     pub family: u32,
-
     /// CPU model (after extended model calculation)
     pub model: u32,
-
     /// CPU stepping
     pub stepping: u32,
-
     /// Brand string (e.g., "AMD Ryzen 9 7950X")
     pub brand_string: String,
-
     /// AMD Zen generation (if AMD)
     pub zen_generation: Option<AmdZenGeneration>,
-
     /// CPU supports CAT L3
     pub has_cat_l3: bool,
 }

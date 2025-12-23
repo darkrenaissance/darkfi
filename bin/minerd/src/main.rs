@@ -34,6 +34,7 @@ use darkfi_sdk::{
 
 use minerd::{
     benchmark::benchmark,
+    cpu::CpuThreads,
     hw::{cpuid::CpuInfo, RxMsr},
     MinerNodeConfig, Minerd,
 };
@@ -180,7 +181,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
     if args.boost {
         let mut rxmsr = RxMsr::new();
-        rxmsr.init(args.cache_qos, args.threads, true);
+        // TODO: Right now I think we just assume default "-1" threads.
+        //       It might be incorrect, and would require a bit of config
+        //       modification to ensure something that supports defining
+        //       an array of specific cpus/threads to use.
+        let threads = CpuThreads::new(args.threads, 1);
+        rxmsr.init(args.cache_qos, threads.threads(), true);
     }
 
     // Run system hashrate benchmark if requested

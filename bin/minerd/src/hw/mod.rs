@@ -20,6 +20,8 @@ use std::collections::HashSet;
 
 use tracing::{debug, error, info, warn};
 
+use crate::cpu::CpuThread;
+
 /// CPU detection pub mod cpuid;
 pub mod cpuid;
 use cpuid::{CpuInfo, CpuThreads};
@@ -49,7 +51,7 @@ impl RxMsr {
         Self { is_initialized: false, is_enabled: false, cache_qos: false, saved_items: vec![] }
     }
 
-    pub fn init(&mut self, cache_qos: bool, threads: usize, save: bool) -> bool {
+    pub fn init(&mut self, cache_qos: bool, threads: &[CpuThread], save: bool) -> bool {
         if self.is_initialized {
             return self.is_enabled
         }
@@ -101,7 +103,7 @@ impl RxMsr {
 
         let saved_items = std::mem::take(&mut self.saved_items);
 
-        if !self.wrmsr(&saved_items, 0, self.cache_qos, false) {
+        if !self.wrmsr(&saved_items, &[], self.cache_qos, false) {
             error!("[msr] Failed to restore to initial state");
         }
     }
@@ -109,7 +111,7 @@ impl RxMsr {
     fn wrmsr(
         &mut self,
         preset: &[MsrItem],
-        threads: usize, // TODO: This should be a slice of threads
+        threads: &[CpuThread],
         cache_qos: bool,
         save: bool,
     ) -> bool {
@@ -134,16 +136,13 @@ impl RxMsr {
         }
 
         // Which CPU cores will have access top the full L3 cache
-        // TODO: Check xmrig/crypto/rx/RxMsr.cpp::wsmsr()
-        //let cpu_threads = CpuThreads::detect();
-        //let units: HashSet<i32> = cpu_threads.thread_ids().into_iter().collect();
+        let mut cache_enabled: HashSet<i32> = HashSet::new();
+        let mut cache_qos_disabled = threads.is_empty();
 
-        let cache_enabled: HashSet<i32> = HashSet::new();
-        //let mut cache_qos_disabled = threads.is_empty();
-        let cache_qos_disabled = true;
+        if cache_qos {
+            let cpu_threads = CpuThreads::detect();
+            let units: HashSet<i32> = cpu_threads.thread_ids().into_iter().collect();
 
-        /*
-        if cache_qos && !cache_qos_disabled {
             for thread in threads {
                 let affinity = thread.affinity();
                 // If some thread has no affinity or wrong affinity,
@@ -153,12 +152,11 @@ impl RxMsr {
                     warn!(
                         "Cache QoS can only be enabled when all mining threads have affinity set"
                     );
+                    break
                 }
-                break
+                cache_enabled.insert(affinity);
             }
-            cache_enabled.insert(affinity);
         }
-        */
 
         // Apply MSR values to all CPUs
         msr.write_all(|cpu| {
