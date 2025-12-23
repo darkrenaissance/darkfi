@@ -33,12 +33,15 @@ use std::sync::{Arc, Weak};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
+use super::CpuThreads;
+
 mod error;
 mod msr_item;
-mod msr_presets;
+pub(super) mod msr_presets;
 
 use error::{MsrError, MsrResult};
-use msr_item::MsrItem;
+pub use msr_item::{MsrItem, NO_MASK};
+pub use msr_presets::MsrPreset;
 
 #[cfg(target_os = "linux")]
 mod msr_linux;
@@ -66,7 +69,7 @@ impl Msr {
     /// Get or create the MSR singleton
     ///
     /// Returns `None` if MSR is not available on this system.
-    pub fn get(units: Vec<i32>) -> Option<Arc<Self>> {
+    pub fn get() -> Option<Arc<Self>> {
         let mut instance = INSTANCE.lock();
 
         // Try to upgrade the weak reference
@@ -76,7 +79,33 @@ impl Msr {
             }
         }
 
-        // Create new instance
+        // Autodetect CPU units
+        let units = CpuThreads::detect().thread_ids();
+
+        let msr = Arc::new(Self { inner: MsrImpl::new(units) });
+
+        if msr.is_available() {
+            *instance = Arc::downgrade(&msr);
+            Some(msr)
+        } else {
+            None
+        }
+    }
+
+    /// Get or create the MSR singleton with specific CPU units
+    ///
+    /// Returns `None` if MSR is not available on this system.
+    pub fn get_with_units(units: Vec<i32>) -> Option<Arc<Self>> {
+        let mut instance = INSTANCE.lock();
+
+        // Try to upgrade the weak reference
+        if let Some(msr) = instance.upgrade() {
+            if msr.is_available() {
+                return Some(msr);
+            }
+        }
+
+        // Create new instance with provided units
         let msr = Arc::new(Self { inner: MsrImpl::new(units) });
 
         if msr.is_available() {

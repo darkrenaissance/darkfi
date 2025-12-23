@@ -21,6 +21,9 @@ secure = false
 # PoW miner number of threads to use
 #threads = 4
 
+# Assign full L3 cache to CPU
+cache_qos = false
+
 # Polling rate to ask darkfid for mining jobs
 #polling_rate = 2
 

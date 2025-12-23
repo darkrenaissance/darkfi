@@ -32,7 +32,11 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 
-use minerd::{benchmark::benchmark, hw::cpuid::CpuInfo, MinerNodeConfig, Minerd};
+use minerd::{
+    benchmark::benchmark,
+    hw::{cpuid::CpuInfo, RxMsr},
+    MinerNodeConfig, Minerd,
+};
 
 const CONFIG_FILE: &str = "minerd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../minerd.toml");
@@ -65,6 +69,10 @@ struct Args {
     /// PoW miner number of threads to use
     threads: usize,
 
+    #[structopt(long)]
+    /// Assign full L3 cache to CPU
+    cache_qos: bool,
+
     #[structopt(short, long, default_value = "2")]
     /// Polling rate to ask darkfid for mining jobs
     polling_rate: u64,
@@ -88,6 +96,10 @@ struct Args {
     #[structopt(long)]
     /// Print CPU information
     cpuid: bool,
+
+    #[structopt(long)]
+    /// Perform oneshot hashrate boost ops
+    boost: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -164,6 +176,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         let cpuinfo = CpuInfo::detect();
         println!("{}", cpuinfo);
         return Ok(())
+    }
+
+    if args.boost {
+        let mut rxmsr = RxMsr::new();
+        rxmsr.init(args.cache_qos, args.threads, true);
     }
 
     // Run system hashrate benchmark if requested
