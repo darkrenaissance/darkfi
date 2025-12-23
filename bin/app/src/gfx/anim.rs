@@ -64,7 +64,7 @@ impl GfxSeqAnim {
     ) {
         assert!(frame_idx < self.frames.len());
         let duration = std::time::Duration::from_millis(frame.duration as u64);
-        let dc = frame.dc.compile(textures, buffers, 0).unwrap();
+        let dc = frame.dc.compile(textures, buffers, 0);
         self.frames[frame_idx] = Some(GfxFrame { duration, dc });
         //t!("got frame {frame_idx}");
     }

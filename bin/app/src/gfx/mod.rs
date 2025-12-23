@@ -362,46 +362,46 @@ impl DrawMesh {
         textures: &HashMap<TextureId, miniquad::TextureId>,
         buffers: &HashMap<BufferId, miniquad::BufferId>,
         debug_str: &'static str,
-    ) -> Option<GfxDrawMesh> {
+    ) -> GfxDrawMesh {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
         let _buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
         let texture = match self.texture {
-            Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture, debug_str),
+            Some(gfx_texture) => Some(Self::get_texture(textures, gfx_texture, debug_str)),
             None => None,
         };
-        Some(GfxDrawMesh {
-            vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id, debug_str)?,
-            index_buffer: Self::try_get_buffer(buffers, index_buffer_id, debug_str)?,
+        GfxDrawMesh {
+            vertex_buffer: Self::get_buffer(buffers, vertex_buffer_id, debug_str),
+            index_buffer: Self::get_buffer(buffers, index_buffer_id, debug_str),
             _buffers_keep_alive,
             texture,
             num_elements: self.num_elements,
-        })
+        }
     }
 
-    fn try_get_texture(
+    fn get_texture(
         textures: &HashMap<TextureId, miniquad::TextureId>,
         gfx_texture: ManagedTexturePtr,
         debug_str: &'static str,
-    ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
+    ) -> (ManagedTexturePtr, miniquad::TextureId) {
         let gfx_texture_id = gfx_texture.id;
 
         let Some(_mq_texture_id) = textures.get(&gfx_texture_id) else {
             panic!("Missing texture ID={gfx_texture_id} debug={debug_str}")
         };
 
-        Some((gfx_texture, textures[&gfx_texture_id]))
+        (gfx_texture, textures[&gfx_texture_id])
     }
 
-    fn try_get_buffer(
+    fn get_buffer(
         buffers: &HashMap<BufferId, miniquad::BufferId>,
         gfx_buffer_id: BufferId,
         debug_str: &'static str,
-    ) -> Option<miniquad::BufferId> {
+    ) -> miniquad::BufferId {
         let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
             panic!("Missing buffer ID={gfx_buffer_id} debug={debug_str}")
         };
-        Some(*mq_buffer_id)
+        *mq_buffer_id
     }
 }
 
@@ -459,19 +459,18 @@ impl DrawInstruction {
         textures: &HashMap<TextureId, miniquad::TextureId>,
         buffers: &HashMap<BufferId, miniquad::BufferId>,
         debug_str: &'static str,
-    ) -> Option<GfxDrawInstruction> {
-        let instr = match self {
+    ) -> GfxDrawInstruction {
+        match self {
             Self::SetScale(scale) => GfxDrawInstruction::SetScale(scale),
             Self::Move(off) => GfxDrawInstruction::Move(off),
             Self::SetPos(pos) => GfxDrawInstruction::SetPos(pos),
             Self::ApplyView(view) => GfxDrawInstruction::ApplyView(view),
             Self::Draw(mesh) => {
-                GfxDrawInstruction::Draw(mesh.compile(textures, buffers, debug_str)?)
+                GfxDrawInstruction::Draw(mesh.compile(textures, buffers, debug_str))
             }
             Self::Animation(anim) => GfxDrawInstruction::Animation(anim),
             Self::EnableDebug => GfxDrawInstruction::EnableDebug,
-        };
-        Some(instr)
+        }
     }
 }
 
@@ -498,17 +497,17 @@ impl DrawCall {
         textures: &HashMap<TextureId, miniquad::TextureId>,
         buffers: &HashMap<BufferId, miniquad::BufferId>,
         timest: Timestamp,
-    ) -> Option<GfxDrawCall> {
-        Some(GfxDrawCall {
+    ) -> GfxDrawCall {
+        GfxDrawCall {
             instrs: self
                 .instrs
                 .into_iter()
                 .map(|i| i.compile(textures, buffers, self.debug_str))
-                .collect::<Option<Vec<_>>>()?,
+                .collect(),
             dcs: self.dcs,
             z_index: self.z_index,
             timest,
-        })
+        }
     }
 }
 
@@ -1244,12 +1243,7 @@ impl Stage {
             d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
         for (key, val) in dcs {
-            let Some(val) = val.compile(&self.textures, &self.buffers, timest) else {
-                if DEBUG_TRAX {
-                    get_trax().lock().put_stat(3);
-                }
-                panic!("fatal: replace_draw_calls({timest}, ...) failed with item ID={key}")
-            };
+            let val = val.compile(&self.textures, &self.buffers, timest);
             //self.draw_calls.insert(key, val);
             match self.draw_calls.get_mut(&key) {
                 Some(old_val) => {
