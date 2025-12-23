@@ -912,7 +912,7 @@ struct Stage {
 
     textures: Box<HashMap<TextureId, miniquad::TextureId>>,
     buffers: Box<HashMap<BufferId, miniquad::BufferId>>,
-    anims: HashMap<AnimId, GfxSeqAnim>,
+    anims: Box<HashMap<AnimId, GfxSeqAnim>>,
 
     epoch: EpochIndex,
     method_queue: Arc<SyncMutex<Vec<(EpochIndex, GraphicsMethod)>>>,
@@ -961,6 +961,8 @@ impl Stage {
         god.fg_runtime.push_task(sink_task);
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
+
+        let anims: HashMap<AnimId, GfxSeqAnim> = HashMap::new();
 
         let mut shader_meta: ShaderMeta = shader::meta();
         shader_meta.uniforms.uniforms.push(UniformDesc::new("Projection", UniformType::Mat4));
@@ -1017,7 +1019,7 @@ impl Stage {
 
             textures: Box::new(HashMap::new()),
             buffers: Box::new(HashMap::new()),
-            anims: HashMap::new(),
+            anims: Box::new(anims),
 
             epoch,
             method_queue,
@@ -1033,6 +1035,7 @@ impl Stage {
 
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
+        self_.pruner.anims = &*self_.anims as *const _;
         self_.pruner.dropped_batches = &mut *self_.dropped_batches as *mut _;
 
         self_.start_refresh_task();
@@ -1370,12 +1373,12 @@ impl Stage {
                 GraphicsMethod::DeleteTexture(_) |
                 GraphicsMethod::NewVertexBuffer(_) |
                 GraphicsMethod::NewIndexBuffer(_) |
-                GraphicsMethod::DeleteBuffer(_) => self.process_method(method),
-
-                GraphicsMethod::ReplaceGfxDrawCalls { .. } |
+                GraphicsMethod::DeleteBuffer(_) |
                 GraphicsMethod::NewSeqAnim { .. } |
                 GraphicsMethod::UpdateSeqAnim { .. } |
-                GraphicsMethod::DeleteSeqAnim(_) |
+                GraphicsMethod::DeleteSeqAnim(_) => self.process_method(method),
+
+                GraphicsMethod::ReplaceGfxDrawCalls { .. } |
                 GraphicsMethod::StartBatch { .. } |
                 GraphicsMethod::EndBatch { .. } => {
                     panic!("unsupported pruned methods should be dropped!")
@@ -1424,6 +1427,11 @@ impl Stage {
     }
 }
 
+struct PendingAnim {
+    new_method: GraphicsMethod,
+    updates: HashMap<usize, GraphicsMethod>,
+}
+
 /// This is used to process the method queue while the screen is off to avoid the queue
 /// becoming congested and using up all the memory.
 /// Will drop alloc/delete pairs, and merge draw calls together.
@@ -1435,10 +1443,17 @@ struct PruneMethodHeap {
     /// Deleted objects
     del: Vec<GraphicsMethod>,
 
+    new_anim: HashMap<AnimId, PendingAnim>,
+    /// Existing anim updates
+    anim_updates: HashMap<AnimId, HashMap<usize, GraphicsMethod>>,
+    /// Existing anim deletes
+    anim_deletes: HashSet<AnimId>,
+
     epoch: EpochIndex,
 
     textures: *const HashMap<TextureId, miniquad::TextureId>,
     buffers: *const HashMap<BufferId, miniquad::BufferId>,
+    anims: *const HashMap<AnimId, GfxSeqAnim>,
     dropped_batches: *mut HashSet<BatchGuardId>,
 }
 
@@ -1448,9 +1463,13 @@ impl PruneMethodHeap {
             new_buf: HashMap::new(),
             new_tex: HashMap::new(),
             del: vec![],
+            new_anim: HashMap::new(),
+            anim_updates: HashMap::new(),
+            anim_deletes: HashSet::new(),
             epoch,
             textures: std::ptr::null(),
             buffers: std::ptr::null(),
+            anims: std::ptr::null(),
             dropped_batches: std::ptr::null_mut(),
         }
     }
@@ -1520,9 +1539,35 @@ impl PruneMethodHeap {
                     t!("Discard ellided buffer {gbuff_id}");
                 }
             }
-            GraphicsMethod::NewSeqAnim { .. } => {}
-            GraphicsMethod::UpdateSeqAnim { .. } => {}
-            GraphicsMethod::DeleteSeqAnim(..) => {}
+            GraphicsMethod::NewSeqAnim { id, .. } => {
+                self.new_anim.insert(
+                    *id,
+                    PendingAnim {
+                        updates: HashMap::new(),
+                        new_method: std::mem::take(&mut method),
+                    },
+                );
+            }
+
+            GraphicsMethod::UpdateSeqAnim { id, frame_idx, .. } => {
+                if let Some(pending) = self.new_anim.get_mut(id) {
+                    pending.updates.insert(*frame_idx, method);
+                } else if self.anims().contains_key(id) {
+                    self.anim_updates.entry(*id).or_default().insert(*frame_idx, method);
+                } else {
+                    panic!("UpdateSeqAnim for unknown anim {id}");
+                }
+            }
+
+            GraphicsMethod::DeleteSeqAnim((id, _)) => {
+                if self.new_anim.remove(id).is_some() {
+                } else if self.anims().contains_key(id) {
+                    self.anim_deletes.insert(*id);
+                    self.anim_updates.remove(id);
+                } else {
+                    panic!("DeleteSeqAnim for unknown anim {id}");
+                }
+            }
             GraphicsMethod::ReplaceGfxDrawCalls { .. } => {}
             // Discard batches since we will apply everything all at once anyway
             // once the screen is switched on.
@@ -1549,6 +1594,10 @@ impl PruneMethodHeap {
         assert!(!self.buffers.is_null());
         unsafe { &*self.buffers }
     }
+    fn anims(&self) -> &HashMap<AnimId, GfxSeqAnim> {
+        assert!(!self.anims.is_null());
+        unsafe { &*self.anims }
+    }
     fn dropped_batches(&mut self) -> &mut HashSet<BatchGuardId> {
         assert!(!self.dropped_batches.is_null());
         unsafe { &mut *self.dropped_batches }
@@ -1557,13 +1606,64 @@ impl PruneMethodHeap {
     /// Collect everything now the screen is on
     fn recv_all(&mut self) -> Vec<GraphicsMethod> {
         // Inhale that smoke deep
-        let mut meth = Vec::with_capacity(self.new_buf.len() + self.new_tex.len() + self.del.len());
+        let mut meth = Vec::with_capacity(
+            self.new_buf.len() +
+                self.new_tex.len() +
+                self.del.len() +
+                self.new_anim.len() +
+                self.anim_updates.len() +
+                self.anim_deletes.len(),
+        );
+
+        self.drain_resources(&mut meth);
+        self.drain_anims(&mut meth);
+
+        meth
+    }
+
+    fn drain_resources(&mut self, meth: &mut Vec<GraphicsMethod>) {
         let new_buf = std::mem::take(&mut self.new_buf);
         let new_tex = std::mem::take(&mut self.new_tex);
         meth.extend(new_buf.into_values());
         meth.extend(new_tex.into_values());
         meth.append(&mut self.del);
-        meth
+    }
+
+    fn drain_anims(&mut self, meth: &mut Vec<GraphicsMethod>) {
+        self.drain_pending_anims(meth);
+        self.drain_live_anims(meth);
+    }
+
+    fn drain_pending_anims(&mut self, meth: &mut Vec<GraphicsMethod>) {
+        for (_id, pending) in std::mem::take(&mut self.new_anim) {
+            meth.push(pending.new_method);
+
+            let mut updates: Vec<_> = pending.updates.into_iter().collect();
+            updates.sort_by_key(|(idx, _)| *idx);
+            for (_, update) in updates {
+                meth.push(update);
+            }
+        }
+    }
+
+    fn drain_live_anims(&mut self, meth: &mut Vec<GraphicsMethod>) {
+        let mut updates: Vec<_> = self
+            .anim_updates
+            .drain()
+            .flat_map(|(anim_id, frame_updates)| {
+                let mut sorted: Vec<_> = frame_updates.into_iter().collect();
+                sorted.sort_by_key(|(idx, _)| *idx);
+                sorted.into_iter().map(move |(idx, update)| (anim_id, idx, update))
+            })
+            .collect();
+        updates.sort_by_key(|(anim_id, idx, _)| (*anim_id, *idx));
+        for (_, _, update) in updates {
+            meth.push(update);
+        }
+
+        for id in std::mem::take(&mut self.anim_deletes) {
+            meth.push(GraphicsMethod::DeleteSeqAnim((id, None)));
+        }
     }
 }
 
