@@ -16,5 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// CPU detection
+pub mod cpuid;
+
 /// Model-Specific Registers
 pub mod msr;

@@ -35,6 +35,7 @@ use parking_lot::Mutex;
 
 mod error;
 mod msr_item;
+mod msr_presets;
 
 use error::{MsrError, MsrResult};
 use msr_item::MsrItem;

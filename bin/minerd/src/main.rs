@@ -32,7 +32,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 
-use minerd::{benchmark::benchmark, MinerNodeConfig, Minerd};
+use minerd::{benchmark::benchmark, hw::cpuid::CpuInfo, MinerNodeConfig, Minerd};
 
 const CONFIG_FILE: &str = "minerd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../minerd.toml");
@@ -84,6 +84,10 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
+
+    #[structopt(long)]
+    /// Print CPU information
+    cpuid: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -156,6 +160,12 @@ pub async fn parse_blockchain_config(
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
+    if args.cpuid {
+        let cpuinfo = CpuInfo::detect();
+        println!("{}", cpuinfo);
+        return Ok(())
+    }
+
     // Run system hashrate benchmark if requested
     if let Some(nonces) = args.bench {
         return benchmark(!args.light_mode, args.large_pages, args.secure, args.threads, nonces)
