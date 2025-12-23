@@ -9,6 +9,10 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
+libc = "0.2.178"
+parking_lot = "0.12.5"
+once_cell = "1.21.3"
+
 # Darkfi
 darkfi = {path = "../../", features = ["async-daemonize", "validator", "rpc", "bs58"]}
 darkfi-sdk = {path = "../../src/sdk"}

@@ -35,6 +35,9 @@ use darkfi_sdk::crypto::keypair::{Address, Keypair, Network, StandardAddress};
 /// Miner benchmarking related methods
 pub mod benchmark;
 
+/// Hardware interfaces
+pub mod hw;
+
 /// darkfid JSON-RPC related methods
 mod rpc;
 use rpc::{polling_task, DarkfidRpcClient};
