@@ -187,6 +187,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         //       an array of specific cpus/threads to use.
         let threads = CpuThreads::new(args.threads, 1);
         rxmsr.init(args.cache_qos, threads.threads(), true);
+        return Ok(())
     }
 
     // Run system hashrate benchmark if requested
