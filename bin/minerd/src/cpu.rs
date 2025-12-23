@@ -27,14 +27,17 @@ impl CpuThread {
         Self { affinity, intensity: intensity.unwrap_or(0) }
     }
 
+    #[inline]
     pub fn is_valid(&self) -> bool {
         self.intensity <= 8
     }
 
+    #[inline]
     pub fn affinity(&self) -> i32 {
         self.affinity
     }
 
+    #[inline]
     pub fn intensity(&self) -> u32 {
         if self.intensity == 0 {
             1
