@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 /// CPU Vendor
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +92,9 @@ pub struct CpuInfo {
 
     /// AMD Zen generation (if AMD)
     pub zen_generation: Option<AmdZenGeneration>,
+
+    /// CPU supports CAT L3
+    pub has_cat_l3: bool,
 }
 
 impl CpuInfo {
@@ -104,7 +107,22 @@ impl CpuInfo {
         let zen_generation =
             if vendor == Vendor::Amd { Some(detect_zen_generation(family, model)) } else { None };
 
-        Self { vendor, vendor_string, family, model, stepping, brand_string, zen_generation }
+        let has_cat_l3 = detect_cat_l3();
+
+        Self {
+            vendor,
+            vendor_string,
+            family,
+            model,
+            stepping,
+            brand_string,
+            zen_generation,
+            has_cat_l3,
+        }
+    }
+
+    pub fn threads(&self) -> CpuThreads {
+        CpuThreads::detect()
     }
 
     /// Check if this is an AMD CPU
@@ -136,6 +154,7 @@ impl fmt::Display for CpuInfo {
         if let Some(zen) = &self.zen_generation {
             writeln!(f, "  Generation: {}", zen)?;
         }
+        writeln!(f, "  CAT L3: {}", if self.has_cat_l3 { "supported" } else { "not supported" })?;
         Ok(())
     }
 }
@@ -267,6 +286,28 @@ fn detect_zen_generation(family: u32, model: u32) -> AmdZenGeneration {
     }
 }
 
+/// Detect Cache Allocation Technology L3 support
+fn detect_cat_l3() -> bool {
+    let (max_leaf, _, _, _) = cpuid(0, 0);
+    if max_leaf < 7 {
+        return false;
+    }
+
+    let (_, ebx, _, _) = cpuid(7, 0);
+    let has_rdt_a = (ebx >> 15) & 1 != 0;
+
+    if !has_rdt_a {
+        return false;
+    }
+
+    if max_leaf < 0x10 {
+        return false;
+    }
+
+    let (_, ebx, _, _) = cpuid(0x10, 0);
+    (ebx >> 1) & 1 != 0
+}
+
 /// Get the number of logical CPUs
 pub fn get_cpu_count() -> usize {
     #[cfg(target_os = "linux")]
@@ -300,4 +341,429 @@ pub fn get_cpu_count() -> usize {
 /// Get list of CPU unit IDs
 pub fn get_cpu_units() -> Vec<i32> {
     (0..get_cpu_count() as i32).collect()
+}
+
+/// Information about a single CPU/logical processor
+#[derive(Debug, Clone)]
+pub struct CpuThread {
+    /// Logical processor ID (used for affinity)
+    pub id: i32,
+    /// Physical core ID this thread belongs to
+    pub core_id: i32,
+    /// Package/socket ID
+    pub package_id: i32,
+    /// NUMA node ID
+    pub node_id: i32,
+}
+
+/// CPU topology information
+#[derive(Debug, Clone)]
+pub struct CpuThreads {
+    /// All logical processors
+    threads: Vec<CpuThread>,
+    /// Number of physical packages/sockets
+    packages: u32,
+    /// Number of physical cores (total across all packages)
+    cores: u32,
+    /// Number of logical processors (threads)
+    logical: u32,
+    /// Number of NUMA nodes
+    nodes: u32,
+    /// L3 cache size in bytes (per package, 0 if unknown)
+    l3_cache_size: u64,
+    /// SMT/Hyperthreading support
+    smt_enabled: bool,
+}
+
+impl CpuThreads {
+    pub fn detect() -> Self {
+        #[cfg(target_os = "linux")]
+        {
+            Self::detect_linux()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Self::detect_windows()
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        {
+            Self::detect_fallback()
+        }
+    }
+
+    pub fn threads(&self) -> &[CpuThread] {
+        &self.threads
+    }
+
+    pub fn thread_ids(&self) -> Vec<i32> {
+        self.threads.iter().map(|t| t.id).collect()
+    }
+
+    pub fn one_per_core(&self) -> Vec<i32> {
+        let mut seen_cores: HashMap<(i32, i32), i32> = HashMap::new();
+
+        for thread in &self.threads {
+            let key = (thread.package_id, thread.core_id);
+            seen_cores.entry(key).or_insert(thread.id);
+        }
+
+        let mut result: Vec<i32> = seen_cores.into_values().collect();
+        result.sort();
+        result
+    }
+
+    pub fn one_per_package(&self) -> Vec<i32> {
+        let mut seen_packages: HashMap<i32, i32> = HashMap::new();
+
+        for thread in &self.threads {
+            seen_packages.entry(thread.package_id).or_insert(thread.id);
+        }
+
+        let mut result: Vec<i32> = seen_packages.into_values().collect();
+        result.sort();
+        result
+    }
+
+    pub fn threads_for_package(&self, package_id: i32) -> Vec<i32> {
+        self.threads.iter().filter(|t| t.package_id == package_id).map(|t| t.id).collect()
+    }
+
+    pub fn threads_for_node(&self, node_id: i32) -> Vec<i32> {
+        self.threads.iter().filter(|t| t.node_id == node_id).map(|t| t.id).collect()
+    }
+
+    pub fn packages(&self) -> u32 {
+        self.packages
+    }
+
+    pub fn cores(&self) -> u32 {
+        self.cores
+    }
+
+    pub fn logical(&self) -> u32 {
+        self.logical
+    }
+
+    pub fn nodes(&self) -> u32 {
+        self.nodes
+    }
+
+    pub fn l3_cache_size(&self) -> u64 {
+        self.l3_cache_size
+    }
+
+    pub fn smt_enabled(&self) -> bool {
+        self.smt_enabled
+    }
+
+    pub fn threads_per_core(&self) -> u32 {
+        if self.cores > 0 {
+            self.logical / self.cores
+        } else {
+            1
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn detect_linux() -> Self {
+        let mut threads = Vec::new();
+        let mut max_package = 0i32;
+        let mut max_node = 0i32;
+        let mut core_set: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
+        let mut l3_cache_size = 0u64;
+
+        // Enumerate all CPUs
+        if let Ok(entries) = std::fs::read_dir("/sys/devices/system/cpu") {
+            let mut cpu_ids: Vec<i32> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let name = e.file_name();
+                    let name = name.to_string_lossy();
+                    if let Some(n) = name.strip_prefix("cpu") {
+                        n.parse::<i32>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            cpu_ids.sort();
+
+            for cpu_id in cpu_ids {
+                let base_path = format!("/sys/devices/system/cpu/cpu{}", cpu_id);
+
+                // Check if this CPU is online (cpu0 is always online)
+                if cpu_id != 0 {
+                    let online_path = format!("{}/online", base_path);
+                    if let Ok(online) = std::fs::read_to_string(&online_path) {
+                        if online.trim() == "0" {
+                            continue; // Skip offline CPUs
+                        }
+                    }
+                }
+
+                let topology_path = format!("{}/topology", base_path);
+
+                let core_id = read_sysfs_int(&format!("{}/core_id", topology_path)).unwrap_or(0);
+                let package_id =
+                    read_sysfs_int(&format!("{}/physical_package_id", topology_path)).unwrap_or(0);
+
+                // NUMA node detection
+                let node_id = detect_numa_node(cpu_id);
+
+                max_package = max_package.max(package_id);
+                max_node = max_node.max(node_id);
+                core_set.insert((package_id, core_id));
+
+                threads.push(CpuThread { id: cpu_id, core_id, package_id, node_id });
+
+                // Get L3 cache size (once)
+                if l3_cache_size == 0 {
+                    l3_cache_size = detect_l3_cache_size(cpu_id);
+                }
+            }
+        }
+
+        let logical = threads.len() as u32;
+        let cores = core_set.len() as u32;
+        let packages = (max_package + 1) as u32;
+        let nodes = (max_node + 1) as u32;
+        let smt_enabled = logical > cores;
+
+        Self { threads, packages, cores, logical, nodes, l3_cache_size, smt_enabled }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn detect_windows() -> Self {
+        use std::{mem, ptr};
+
+        // We'll use GetLogicalProcessorInformationEx for detailed topology
+        // For now, use a simpler approach with environment variables and CPUID
+
+        let logical = std::env::var("NUMBER_OF_PROCESSORS")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(1);
+
+        // Try to get more detailed info via Windows API
+        let (packages, cores, nodes, l3_cache_size) = get_windows_topology_info();
+
+        let smt_enabled = logical > cores;
+
+        // Build thread list (simplified - assumes sequential IDs)
+        let threads_per_core = if cores > 0 { logical / cores } else { 1 };
+        let cores_per_package = if packages > 0 { cores / packages } else { cores };
+
+        let mut threads = Vec::with_capacity(logical as usize);
+
+        for i in 0..logical {
+            let core_id = (i / threads_per_core) as i32;
+            let package_id = (core_id as u32 / cores_per_package) as i32;
+
+            threads.push(CpuThread {
+                id: i as i32,
+                core_id: core_id % cores_per_package as i32,
+                package_id,
+                node_id: package_id, // Simplified: assume 1 NUMA node per package
+            });
+        }
+
+        Self { threads, packages, cores, logical, nodes, l3_cache_size, smt_enabled }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    fn detect_fallback() -> Self {
+        let logical = 1u32;
+
+        Self {
+            threads: vec![CpuThread { id: 0, core_id: 0, package_id: 0, node_id: 0 }],
+            packages: 1,
+            cores: 1,
+            logical,
+            nodes: 1,
+            l3_cache_size: 0,
+            smt_enabled: false,
+        }
+    }
+}
+
+impl fmt::Display for CpuThreads {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "CPU Topology:")?;
+        writeln!(f, "  Packages: {}", self.packages)?;
+        writeln!(f, "  Cores: {}", self.cores)?;
+        writeln!(f, "  Threads: {}", self.logical)?;
+        writeln!(f, "  NUMA nodes: {}", self.nodes)?;
+        writeln!(f, "  SMT: {}", if self.smt_enabled { "enabled" } else { "disabled" })?;
+        if self.l3_cache_size > 0 {
+            writeln!(f, "  L3 Cache: {} MB", self.l3_cache_size / (1024 * 1024))?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_sysfs_int(path: &str) -> Option<i32> {
+    std::fs::read_to_string(path).ok().and_then(|s| s.trim().parse().ok())
+}
+
+#[cfg(target_os = "linux")]
+fn detect_numa_node(cpu_id: i32) -> i32 {
+    // Try to find which NUMA node this CPU belongs to
+    if let Ok(entries) = std::fs::read_dir("/sys/devices/system/node") {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if let Some(n) = name.strip_prefix("node") {
+                if let Ok(node_id) = n.parse::<i32>() {
+                    let cpulist_path = format!("/sys/devices/system/node/{}/cpulist", name);
+                    if let Ok(cpulist) = std::fs::read_to_string(&cpulist_path) {
+                        if cpu_in_list(cpu_id, &cpulist) {
+                            return node_id;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    0 // Default to node 0
+}
+
+#[cfg(target_os = "linux")]
+fn cpu_in_list(cpu_id: i32, list: &str) -> bool {
+    for part in list.trim().split(',') {
+        if part.contains('-') {
+            let range: Vec<&str> = part.split('-').collect();
+            if range.len() == 2 {
+                if let (Ok(start), Ok(end)) = (range[0].parse::<i32>(), range[1].parse::<i32>()) {
+                    if cpu_id >= start && cpu_id <= end {
+                        return true;
+                    }
+                }
+            }
+        } else if let Ok(id) = part.parse::<i32>() {
+            if id == cpu_id {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn detect_l3_cache_size(cpu_id: i32) -> u64 {
+    // Look through cache indices for L3
+    for index in 0..10 {
+        let cache_path = format!("/sys/devices/system/cpu/cpu{}/cache/index{}", cpu_id, index);
+
+        let level_path = format!("{}/level", cache_path);
+        let size_path = format!("{}/size", cache_path);
+
+        if let Ok(level) = std::fs::read_to_string(&level_path) {
+            if level.trim() == "3" {
+                if let Ok(size_str) = std::fs::read_to_string(&size_path) {
+                    return parse_cache_size(&size_str);
+                }
+            }
+        }
+    }
+    0
+}
+
+#[cfg(target_os = "linux")]
+fn parse_cache_size(size_str: &str) -> u64 {
+    let s = size_str.trim().to_uppercase();
+
+    if let Some(kb) = s.strip_suffix('K') {
+        kb.parse::<u64>().unwrap_or(0) * 1024
+    } else if let Some(mb) = s.strip_suffix('M') {
+        mb.parse::<u64>().unwrap_or(0) * 1024 * 1024
+    } else if let Some(gb) = s.strip_suffix('G') {
+        gb.parse::<u64>().unwrap_or(0) * 1024 * 1024 * 1024
+    } else {
+        s.parse::<u64>().unwrap_or(0)
+    }
+}
+
+// Windows helper functions
+#[cfg(target_os = "windows")]
+fn get_windows_topology_info() -> (u32, u32, u32, u64) {
+    /* UNTESTED:
+    use std::mem;
+    use windows::Win32::System::SystemInformation::{
+        GetLogicalProcessorInformation, RelationCache, RelationNumaNode, RelationProcessorCore,
+        RelationProcessorPackage, SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+    };
+
+    let mut packages = 1u32;
+    let mut cores = 0u32;
+    let mut nodes = 1u32;
+    let mut l3_cache_size = 0u64;
+
+    // Get required buffer size
+    let mut buffer_size = 0u32;
+    unsafe {
+        let _ = GetLogicalProcessorInformation(None, &mut buffer_size);
+    }
+
+    if buffer_size == 0 {
+        // Fallback to simple detection
+        let logical = std::env::var("NUMBER_OF_PROCESSORS")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(1);
+        return (1, logical, 1, 0);
+    }
+
+    let count = buffer_size as usize / mem::size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>();
+    let mut buffer: Vec<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> =
+        vec![unsafe { mem::zeroed() }; count];
+
+    let result =
+        unsafe { GetLogicalProcessorInformation(Some(buffer.as_mut_ptr()), &mut buffer_size) };
+
+    if result.is_ok() {
+        let mut package_count = 0u32;
+        let mut numa_count = 0u32;
+
+        for info in &buffer {
+            match info.Relationship {
+                RelationProcessorCore => {
+                    cores += 1;
+                }
+                RelationProcessorPackage => {
+                    package_count += 1;
+                }
+                RelationNumaNode => {
+                    numa_count += 1;
+                }
+                RelationCache => {
+                    let cache = unsafe { info.Anonymous.Cache };
+                    if cache.Level == 3 && l3_cache_size == 0 {
+                        l3_cache_size = cache.Size as u64;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if package_count > 0 {
+            packages = package_count;
+        }
+        if numa_count > 0 {
+            nodes = numa_count;
+        }
+    }
+
+    // If cores is still 0, use logical count
+    if cores == 0 {
+        cores = std::env::var("NUMBER_OF_PROCESSORS")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(1);
+    }
+
+    (packages, cores, nodes, l3_cache_size)
+    */
+    (0, 0, 0, 0)
 }
