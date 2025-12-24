@@ -18,7 +18,7 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc,
     },
     thread,
@@ -572,10 +572,10 @@ pub fn mine_block(
 
     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Initializing mining threads...");
     let mut handles = Vec::with_capacity(vms.len());
-    let atomic_nonce = Arc::new(AtomicU64::new(0));
+    let atomic_nonce = Arc::new(AtomicU32::new(0));
     let found_header = Arc::new(AtomicBool::new(false));
-    let found_nonce = Arc::new(AtomicU64::new(0));
-    let threads = vms.len() as u64;
+    let found_nonce = Arc::new(AtomicU32::new(0));
+    let threads = vms.len() as u32;
     let mining_start = Instant::now();
     for t in 0..threads {
         // Check if stop signal is received

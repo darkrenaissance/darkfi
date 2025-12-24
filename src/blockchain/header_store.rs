@@ -97,7 +97,7 @@ pub struct Header {
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
-    pub nonce: u64,
+    pub nonce: u32,
     /// Merkle tree root of the transactions hashes contained in this block
     pub transactions_root: MerkleNode,
     /// Contracts states Monotree(SMT) root this block commits to
@@ -109,7 +109,7 @@ pub struct Header {
 impl Header {
     /// Generates a new header with default transactions and state root,
     /// using DarkFi native Proof of Work data.
-    pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
+    pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u32) -> Self {
         let version = block_version(height);
         let transactions_root = MerkleTree::new(1).root(0).unwrap();
         let state_root = *EMPTY_HASH;
@@ -187,7 +187,7 @@ impl Default for Header {
             HeaderHash::new(blake3::hash(b"Let there be dark!").into()),
             0u32,
             Timestamp::current_time(),
-            0u64,
+            0u32,
         )
     }
 }

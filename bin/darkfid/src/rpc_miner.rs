@@ -445,7 +445,7 @@ impl DarkfiNode {
 
         // Sign the DarkFi block
         let mut block = blocktemplate.block.clone();
-        block.header.nonce = *nonce as u64;
+        block.header.nonce = *nonce as u32;
         block.sign(&blocktemplate.secret);
         info!(
             target: "darkfid::rpc::miner_submit_solution",

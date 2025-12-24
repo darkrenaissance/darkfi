@@ -52,7 +52,7 @@ pub struct BlockRecord {
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
-    pub nonce: u64,
+    pub nonce: u32,
     /// Merkle tree root of the transactions hashes contained in this block
     pub transactions_root: String,
     /// Contracts states Monotree(SMT) root this block commits to
