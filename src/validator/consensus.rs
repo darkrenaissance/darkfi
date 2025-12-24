@@ -27,7 +27,7 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayStateDiff;
 use smol::lock::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     blockchain::{
@@ -1004,5 +1004,13 @@ impl Fork {
         }
 
         Ok(())
+    }
+
+    /// Auxiliary function to purge all new trees from the fork
+    /// overlay.
+    pub fn purge_new_trees(&self) {
+        if let Err(e) = self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees() {
+            error!(target: "validator::consensus::fork::purge_new_trees", "Purging new trees in the overlay failed: {e}");
+        }
     }
 }
