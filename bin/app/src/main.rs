@@ -59,6 +59,7 @@ mod text;
 mod text2;
 mod ui;
 mod util;
+mod video;
 
 use crate::{
     app::{App, AppPtr},

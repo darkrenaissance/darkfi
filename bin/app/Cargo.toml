@@ -19,6 +19,11 @@ freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
 image = "0.25.5"
 qoi = "0.4.1"
+
+# AV1 video decoding - rav1d with Rust API from leo030303 fork
+# Disable default features to avoid NASM dependency (asm)
+rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", default-features = false, features = ["bitdepth_8"] }
+
 tracing = "0.1.41"
 glam = "0.29.2"
 #zmq = "0.10.0"
