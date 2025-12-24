@@ -32,7 +32,6 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
 		--release --package $(PKGNAME)
 	cp -f target/$(WASM_TARGET)/release/$@ $@
-	wasm-strip $@
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \

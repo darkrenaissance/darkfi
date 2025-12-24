@@ -36,7 +36,6 @@ RUSTFLAGS="" cargo build --target=wasm32-unknown-unknown \
     Compiling wasm_hello_world v0.0.1 (/home/anon/darkfi/example/wasm-hello-world)
     Finished `release` profile [optimized] target(s) in 15.90s
 cp -f target/wasm32-unknown-unknown/release/wasm_hello_world.wasm wasm_hello_world.wasm
-wasm-strip wasm_hello_world.wasm
 ```
 
 Apart from the contract, an example client to interact with it is
