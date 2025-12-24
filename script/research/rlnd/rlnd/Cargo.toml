@@ -17,7 +17,7 @@ darkfi-serial = "0.5.0"
 
 # Misc
 bs58 = "0.5.1"
-sled-overlay = "0.1.13"
+sled-overlay = "0.1.14"
 tracing = "0.1.41"
 
 # JSON-RPC
