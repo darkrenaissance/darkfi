@@ -34,8 +34,8 @@ use darkfi_serial::{deserialize, Encodable};
 use crate::{
     error::DaoError,
     model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams, VecAuthCallCommit},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS,
 };
 
 /// `get_metdata` function for `Dao::AuthMoneyTransfer`
@@ -72,7 +72,7 @@ pub(crate) fn dao_authxfer_get_metadata(
         let coin = output.coin;
         let (ephem_x, ephem_y) = enc_attrs.ephem_public.xy();
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string(),
+            DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string(),
             vec![
                 coin.inner(),
                 ephem_x,
@@ -97,7 +97,7 @@ pub(crate) fn dao_authxfer_get_metadata(
 
     let (ephem_x, ephem_y) = self_params.dao_change_attrs.ephem_public.xy();
     zk_public_inputs.push((
-        DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
+        DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS.to_string(),
         vec![
             exec_params.proposal_bulla.inner(),
             input_user_data_enc,

@@ -24,7 +24,7 @@ use darkfi_dao_contract::{
     blockwindow,
     client::{DaoProposeCall, DaoProposeStakeInput},
     model::{Dao, DaoAuthCall, DaoProposal, DaoProposeParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
@@ -61,10 +61,10 @@ impl TestHarness {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS).unwrap();
 
         let (dao_propose_main_pk, dao_propose_main_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS).unwrap();
 
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins
@@ -201,10 +201,10 @@ impl TestHarness {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS).unwrap();
 
         let (dao_propose_main_pk, dao_propose_main_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS).unwrap();
 
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins

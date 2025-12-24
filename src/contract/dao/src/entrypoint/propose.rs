@@ -36,8 +36,8 @@ use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
-    DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_MERKLE_ROOTS_TREE, DAO_CONTRACT_PROPOSAL_BULLAS_TREE,
+    DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS,
     PROPOSAL_SNAPSHOT_CUTOFF_LIMIT,
 };
 
@@ -72,7 +72,7 @@ pub(crate) fn dao_propose_get_metadata(
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string(),
+            DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS.to_string(),
             vec![
                 input.smt_null_root,
                 *value_coords.x(),
@@ -92,7 +92,7 @@ pub(crate) fn dao_propose_get_metadata(
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((
-        DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS.to_string(),
+        DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS.to_string(),
         vec![
             params.token_commit,
             params.dao_merkle_root.inner(),
@@ -182,14 +182,14 @@ pub(crate) fn dao_propose_process_instruction(
     }
 
     // Is the DAO bulla generated in the ZK proof valid
-    let dao_roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
+    let dao_roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_MERKLE_ROOTS_TREE)?;
     if !wasm::db::db_contains_key(dao_roots_db, &serialize(&params.dao_merkle_root))? {
         msg!("[Dao::Propose] Error: Invalid DAO Merkle root: {}", params.dao_merkle_root);
         return Err(DaoError::InvalidDaoMerkleRoot.into())
     }
 
     // Make sure the proposal doesn't already exist
-    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
     if wasm::db::db_contains_key(proposal_db, &serialize(&params.proposal_bulla))? {
         msg!("[Dao::Propose] Error: Proposal already exists: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalAlreadyExists.into())
@@ -227,7 +227,7 @@ pub(crate) fn dao_propose_process_update(
     update: DaoProposeUpdate,
 ) -> ContractResult {
     // Grab all db handles we want to work on
-    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
 
     // Build the proposal metadata
     let proposal_metadata = DaoProposalMetadata {

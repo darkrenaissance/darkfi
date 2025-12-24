@@ -24,9 +24,9 @@ use darkfi_dao_contract::{
     blockwindow,
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoProposal},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_EXEC_NS,
 };
 use darkfi_money_contract::{
     client::{transfer_v1 as xfer, MoneyNote, OwnCoin},
@@ -70,13 +70,13 @@ impl TestHarness {
         let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
         let (dao_exec_pk, dao_exec_zkbin) = match dao_early_exec_secret_key {
-            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS).unwrap(),
-            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap(),
+            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_EARLY_EXEC_NS).unwrap(),
+            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_EXEC_NS).unwrap(),
         };
         let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS).unwrap();
         let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS).unwrap();
 
         let input_user_data_blind = Blind::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);
@@ -270,8 +270,8 @@ impl TestHarness {
         let wallet = self.holders.get_mut(holder).unwrap();
 
         let (dao_exec_pk, dao_exec_zkbin) = match dao_early_exec_secret_key {
-            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS).unwrap(),
-            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap(),
+            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_EARLY_EXEC_NS).unwrap(),
+            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_EXEC_NS).unwrap(),
         };
 
         // Create the exec call

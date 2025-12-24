@@ -30,8 +30,7 @@ use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata, VecAuthCallCommit},
-    DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DAO_CONTRACT_PROPOSAL_BULLAS_TREE, DAO_CONTRACT_ZKAS_EARLY_EXEC_NS, DAO_CONTRACT_ZKAS_EXEC_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
@@ -57,8 +56,8 @@ pub(crate) fn dao_exec_get_metadata(
 
     // Grab proof namespace to use, based on early execution flag
     let proof_namespace = match params.early_exec {
-        true => DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS.to_string(),
-        false => DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
+        true => DAO_CONTRACT_ZKAS_EARLY_EXEC_NS.to_string(),
+        false => DAO_CONTRACT_ZKAS_EXEC_NS.to_string(),
     };
 
     zk_public_inputs.push((
@@ -126,7 +125,7 @@ pub(crate) fn dao_exec_process_instruction(
     ///////////////////////////////////////////////////
 
     // Get the ProposalVote from DAO state
-    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
     let Some(data) = wasm::db::db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
         msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
@@ -148,7 +147,7 @@ pub(crate) fn dao_exec_process_instruction(
 /// `process_update` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_update(cid: ContractId, update: DaoExecUpdate) -> ContractResult {
     // Remove proposal from db
-    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
     wasm::db::db_del(proposal_db, &serialize(&update.proposal_bulla))?;
 
     Ok(())

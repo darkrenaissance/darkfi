@@ -29,9 +29,8 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 use crate::{
     error::DaoError,
     model::{DaoMintParams, DaoMintUpdate},
-    DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_INFO_TREE,
-    DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
-    DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_BULLAS_TREE, DAO_CONTRACT_INFO_TREE, DAO_CONTRACT_LATEST_ROOT,
+    DAO_CONTRACT_MERKLE_ROOTS_TREE, DAO_CONTRACT_MERKLE_TREE, DAO_CONTRACT_ZKAS_MINT_NS,
 };
 
 /// `get_metadata` function for `Dao::Mint`
@@ -52,7 +51,7 @@ pub(crate) fn dao_mint_get_metadata(
     let (pub_x, pub_y) = params.dao_pubkey.xy();
 
     zk_public_inputs.push((
-        DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string(),
+        DAO_CONTRACT_ZKAS_MINT_NS.to_string(),
         vec![pub_x, pub_y, params.dao_bulla.inner()],
     ));
 
@@ -74,7 +73,7 @@ pub(crate) fn dao_mint_process_instruction(
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Check the DAO bulla doesn't already exist
-    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
+    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_BULLAS_TREE)?;
     if wasm::db::db_contains_key(bulla_db, &serialize(&params.dao_bulla.inner()))? {
         msg!("[DAO::Mint] Error: DAO already exists {}", params.dao_bulla);
         return Err(DaoError::DaoAlreadyExists.into())
@@ -88,9 +87,9 @@ pub(crate) fn dao_mint_process_instruction(
 /// `process_update` function for `Dao::Mint`
 pub(crate) fn dao_mint_process_update(cid: ContractId, update: DaoMintUpdate) -> ContractResult {
     // Grab all db handles we want to work on
-    let info_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE)?;
-    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
-    let roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
+    let info_db = wasm::db::db_lookup(cid, DAO_CONTRACT_INFO_TREE)?;
+    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_BULLAS_TREE)?;
+    let roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_MERKLE_ROOTS_TREE)?;
 
     wasm::db::db_set(bulla_db, &serialize(&update.dao_bulla), &[])?;
 
@@ -98,8 +97,8 @@ pub(crate) fn dao_mint_process_update(cid: ContractId, update: DaoMintUpdate) ->
     wasm::merkle::merkle_add(
         info_db,
         roots_db,
-        DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
-        DAO_CONTRACT_KEY_DAO_MERKLE_TREE,
+        DAO_CONTRACT_LATEST_ROOT,
+        DAO_CONTRACT_MERKLE_TREE,
         &dao,
     )?;
 

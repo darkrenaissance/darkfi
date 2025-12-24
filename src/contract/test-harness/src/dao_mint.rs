@@ -23,7 +23,7 @@ use darkfi::{
 use darkfi_dao_contract::{
     client::make_mint_call,
     model::{Dao, DaoMintParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_MINT_NS,
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
@@ -57,7 +57,7 @@ impl TestHarness {
         block_height: u32,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
         let (dao_mint_pk, dao_mint_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_MINT_NS).unwrap();
 
         // Create the call
         let (params, proofs) = make_mint_call(

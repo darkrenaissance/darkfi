@@ -61,35 +61,35 @@ pub mod entrypoint;
 pub mod client;
 
 // These are the different sled trees that will be created
-pub const DAO_CONTRACT_DB_INFO_TREE: &str = "dao_info";
-pub const DAO_CONTRACT_DB_DAO_BULLAS: &str = "dao_bullas";
-pub const DAO_CONTRACT_DB_DAO_MERKLE_ROOTS: &str = "dao_roots";
-pub const DAO_CONTRACT_DB_PROPOSAL_BULLAS: &str = "dao_proposals";
-pub const DAO_CONTRACT_DB_VOTE_NULLIFIERS: &str = "dao_vote_nullifiers";
+pub const DAO_CONTRACT_INFO_TREE: &str = "info";
+pub const DAO_CONTRACT_BULLAS_TREE: &str = "bullas";
+pub const DAO_CONTRACT_MERKLE_ROOTS_TREE: &str = "roots";
+pub const DAO_CONTRACT_PROPOSAL_BULLAS_TREE: &str = "proposals";
+pub const DAO_CONTRACT_VOTE_NULLIFIERS_TREE: &str = "vote_nullifiers";
 
 // These are keys inside the info tree
-pub const DAO_CONTRACT_KEY_DB_VERSION: &[u8] = b"db_version";
-pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
-pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
+pub const DAO_CONTRACT_DB_VERSION: &[u8] = b"db_version";
+pub const DAO_CONTRACT_MERKLE_TREE: &[u8] = b"merkle_tree";
+pub const DAO_CONTRACT_LATEST_ROOT: &[u8] = b"last_root";
 
 /// zkas dao mint circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "Mint";
+pub const DAO_CONTRACT_ZKAS_MINT_NS: &str = "Mint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "VoteInput";
+pub const DAO_CONTRACT_ZKAS_VOTE_INPUT_NS: &str = "VoteInput";
 /// zkas dao vote main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "VoteMain";
+pub const DAO_CONTRACT_ZKAS_VOTE_MAIN_NS: &str = "VoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
+pub const DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS: &str = "ProposeInput";
 /// zkas dao propose main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
+pub const DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS: &str = "ProposeMain";
 /// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
+pub const DAO_CONTRACT_ZKAS_EXEC_NS: &str = "Exec";
 /// zkas dao early exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS: &str = "EarlyExec";
+pub const DAO_CONTRACT_ZKAS_EARLY_EXEC_NS: &str = "EarlyExec";
 /// zkas dao auth money_transfer circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
+pub const DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
 /// zkas dao auth money_transfer encrypted coin circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
+pub const DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
 
 /// Not allowed to make proposals using snapshots with block heights older than this depth
 pub const PROPOSAL_SNAPSHOT_CUTOFF_LIMIT: u32 = 100;

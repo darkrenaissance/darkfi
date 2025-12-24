@@ -28,9 +28,9 @@ use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use crate::{
     model::{DaoExecUpdate, DaoMintUpdate, DaoProposeUpdate, DaoVoteUpdate},
-    DaoFunction, DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS,
-    DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
-    DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_KEY_DB_VERSION,
+    DaoFunction, DAO_CONTRACT_BULLAS_TREE, DAO_CONTRACT_DB_VERSION, DAO_CONTRACT_INFO_TREE,
+    DAO_CONTRACT_MERKLE_ROOTS_TREE, DAO_CONTRACT_MERKLE_TREE, DAO_CONTRACT_PROPOSAL_BULLAS_TREE,
+    DAO_CONTRACT_VOTE_NULLIFIERS_TREE,
 };
 
 /// `Dao::Mint` functions
@@ -79,13 +79,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer-enc-coin.zk.bin")[..])?;
 
     // Set up db for general info
-    let dao_info_db = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
+    let dao_info_db = match wasm::db::db_lookup(cid, DAO_CONTRACT_INFO_TREE) {
         Ok(v) => v,
-        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_INFO_TREE)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_INFO_TREE)?,
     };
 
     // Set up the entries in the header table
-    match wasm::db::db_get(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE)? {
+    match wasm::db::db_get(dao_info_db, DAO_CONTRACT_MERKLE_TREE)? {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
@@ -101,42 +101,38 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             tree_data.write_u32(0)?;
             tree.encode(&mut tree_data)?;
 
-            wasm::db::db_set(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, &tree_data)?;
+            wasm::db::db_set(dao_info_db, DAO_CONTRACT_MERKLE_TREE, &tree_data)?;
         }
     }
 
     // Set up db to avoid double creating DAOs
-    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_BULLAS_TREE) {
         Ok(v) => v,
-        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_DAO_BULLAS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_BULLAS_TREE)?,
     };
 
     // Set up db for DAO bulla Merkle roots
-    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_MERKLE_ROOTS_TREE) {
         Ok(v) => v,
-        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_MERKLE_ROOTS_TREE)?,
     };
 
     // Set up db for proposal votes
     // k: ProposalBulla
     // v: (BlindAggregateVote, bool) (the bool marks if the proposal is finished)
-    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE) {
         Ok(v) => v,
-        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?,
     };
 
     // TODO: These nullifiers should exist per-proposal
-    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_VOTE_NULLIFIERS_TREE) {
         Ok(v) => v,
-        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_VOTE_NULLIFIERS_TREE)?,
     };
 
     // Update db version
-    wasm::db::db_set(
-        dao_info_db,
-        DAO_CONTRACT_KEY_DB_VERSION,
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    wasm::db::db_set(dao_info_db, DAO_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }

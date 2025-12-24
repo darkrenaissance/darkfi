@@ -30,8 +30,8 @@ use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
-    DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DAO_CONTRACT_PROPOSAL_BULLAS_TREE, DAO_CONTRACT_VOTE_NULLIFIERS_TREE,
+    DAO_CONTRACT_ZKAS_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_VOTE_MAIN_NS,
 };
 
 /// `get_metdata` function for `Dao::Vote`
@@ -56,9 +56,8 @@ pub(crate) fn dao_vote_get_metadata(
     // Commitment calculation for all votes
     let mut all_vote_commit = pallas::Point::identity();
 
-    let proposal_votes_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = wasm::db::db_get(proposal_votes_db, &serialize(&params.proposal_bulla))?
-    else {
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
+    let Some(data) = wasm::db::db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
         msg!("[Dao::Vote] Error: Proposal doesn't exist: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
@@ -74,7 +73,7 @@ pub(crate) fn dao_vote_get_metadata(
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS.to_string(),
+            DAO_CONTRACT_ZKAS_VOTE_INPUT_NS.to_string(),
             vec![
                 proposal_metadata.snapshot_nulls,
                 params.proposal_bulla.inner(),
@@ -97,7 +96,7 @@ pub(crate) fn dao_vote_get_metadata(
 
     let (ephem_x, ephem_y) = params.note.ephem_public.xy();
     zk_public_inputs.push((
-        DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
+        DAO_CONTRACT_ZKAS_VOTE_MAIN_NS.to_string(),
         vec![
             params.token_commit,
             params.proposal_bulla.inner(),
@@ -133,9 +132,8 @@ pub(crate) fn dao_vote_process_instruction(
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     // Check proposal bulla exists
-    let proposal_votes_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = wasm::db::db_get(proposal_votes_db, &serialize(&params.proposal_bulla))?
-    else {
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
+    let Some(data) = wasm::db::db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
         msg!("[Dao::Vote] Error: Proposal doesn't exist: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
@@ -144,7 +142,7 @@ pub(crate) fn dao_vote_process_instruction(
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Check the Merkle root and nullifiers for the input coins are valid
-    let dao_vote_nullifier_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
+    let dao_vote_nullifier_db = wasm::db::db_lookup(cid, DAO_CONTRACT_VOTE_NULLIFIERS_TREE)?;
     let mut vote_nullifiers = vec![];
 
     for input in &params.inputs {
@@ -174,19 +172,19 @@ pub(crate) fn dao_vote_process_instruction(
 /// `process_update` function for `Dao::Vote`
 pub(crate) fn dao_vote_process_update(cid: ContractId, update: DaoVoteUpdate) -> ContractResult {
     // Grab all db handles we want to work on
-    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_PROPOSAL_BULLAS_TREE)?;
 
     // Perform this code:
     //   total_yes_vote_commit += update.yes_vote_commit
     //   total_all_vote_commit += update.all_vote_commit
     wasm::db::db_set(
-        proposal_vote_db,
+        proposal_db,
         &serialize(&update.proposal_bulla),
         &serialize(&update.proposal_metadata),
     )?;
 
     // We are essentially doing: vote_nulls.append(update_nulls)
-    let dao_vote_nulls_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
+    let dao_vote_nulls_db = wasm::db::db_lookup(cid, DAO_CONTRACT_VOTE_NULLIFIERS_TREE)?;
 
     for nullifier in update.vote_nullifiers {
         // Uniqueness is enforced for (proposal_bulla, nullifier)

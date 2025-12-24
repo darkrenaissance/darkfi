@@ -24,7 +24,7 @@ use darkfi_dao_contract::{
     blockwindow,
     client::{DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoProposal, DaoVoteParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
@@ -52,10 +52,10 @@ impl TestHarness {
         let wallet = self.holders.get(voter).unwrap();
 
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_VOTE_INPUT_NS).unwrap();
 
         let (dao_vote_main_pk, dao_vote_main_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_VOTE_MAIN_NS).unwrap();
 
         let (_, snapshot_money_merkle_tree) =
             wallet.dao_prop_leafs.get(&proposal.to_bulla()).unwrap();

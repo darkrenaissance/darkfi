@@ -43,11 +43,11 @@ use darkfi_dao_contract::{
         Dao, DaoAuthCall, DaoBulla, DaoExecParams, DaoMintParams, DaoProposal, DaoProposalBulla,
         DaoProposeParams, DaoVoteParams,
     },
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_EXEC_NS, DAO_CONTRACT_ZKAS_MINT_NS, DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS,
+    DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_VOTE_INPUT_NS,
+    DAO_CONTRACT_ZKAS_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
     client::transfer_v1::{select_coins, TransferCallBuilder, TransferCallInput},
@@ -2140,7 +2140,7 @@ impl Drk {
         // Now we grab the DAO mint
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
-        let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_MINT_NS)
+        let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_MINT_NS)
         else {
             return Err(Error::DatabaseError("[dao_mint] DAO Mint circuit not found".to_string()))
         };
@@ -2479,7 +2479,7 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
         let Some(propose_burn_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS)
         else {
             return Err(Error::Custom(
                 "[dao_transfer_proposal_tx] Propose Burn circuit not found".to_string(),
@@ -2487,7 +2487,7 @@ impl Drk {
         };
 
         let Some(propose_main_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS)
         else {
             return Err(Error::Custom(
                 "[dao_transfer_proposal_tx] Propose Main circuit not found".to_string(),
@@ -2659,7 +2659,7 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
         let Some(propose_burn_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS)
         else {
             return Err(Error::Custom(
                 "[dao_generic_proposal_tx] Propose Burn circuit not found".to_string(),
@@ -2667,7 +2667,7 @@ impl Drk {
         };
 
         let Some(propose_main_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS)
         else {
             return Err(Error::Custom(
                 "[dao_generic_proposal_tx] Propose Main circuit not found".to_string(),
@@ -2863,13 +2863,13 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
         let Some(dao_vote_burn_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_VOTE_INPUT_NS)
         else {
             return Err(Error::Custom("[dao_vote] DAO Vote Burn circuit not found".to_string()))
         };
 
         let Some(dao_vote_main_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_VOTE_MAIN_NS)
         else {
             return Err(Error::Custom("[dao_vote] DAO Vote Main circuit not found".to_string()))
         };
@@ -3131,11 +3131,10 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
         let (namespace, early_exec_secret_key) = match early {
-            true => (
-                DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
-                Some(dao.params.early_exec_secret_key.unwrap()),
-            ),
-            false => (DAO_CONTRACT_ZKAS_DAO_EXEC_NS, None),
+            true => {
+                (DAO_CONTRACT_ZKAS_EARLY_EXEC_NS, Some(dao.params.early_exec_secret_key.unwrap()))
+            }
+            false => (DAO_CONTRACT_ZKAS_EXEC_NS, None),
         };
 
         let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == namespace) else {
@@ -3145,7 +3144,7 @@ impl Drk {
         };
 
         let Some(dao_auth_transfer_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS)
         else {
             return Err(Error::Custom(
                 "[dao_exec_transfer] DAO AuthTransfer circuit not found".to_string(),
@@ -3153,7 +3152,7 @@ impl Drk {
         };
 
         let Some(dao_auth_transfer_enc_coin_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS)
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS)
         else {
             return Err(Error::Custom(
                 "[dao_exec_transfer] DAO AuthTransferEncCoin circuit not found".to_string(),
@@ -3416,11 +3415,10 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
         let (namespace, early_exec_secret_key) = match early {
-            true => (
-                DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
-                Some(dao.params.early_exec_secret_key.unwrap()),
-            ),
-            false => (DAO_CONTRACT_ZKAS_DAO_EXEC_NS, None),
+            true => {
+                (DAO_CONTRACT_ZKAS_EARLY_EXEC_NS, Some(dao.params.early_exec_secret_key.unwrap()))
+            }
+            false => (DAO_CONTRACT_ZKAS_EXEC_NS, None),
         };
 
         let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == namespace) else {
