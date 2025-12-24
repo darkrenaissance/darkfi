@@ -94,10 +94,10 @@ pub struct Header {
     pub previous: HeaderHash,
     /// Block height
     pub height: u32,
-    /// Block creation timestamp
-    pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u32,
+    /// Block creation timestamp
+    pub timestamp: Timestamp,
     /// Merkle tree root of the transactions hashes contained in this block
     pub transactions_root: MerkleNode,
     /// Contracts states Monotree(SMT) root this block commits to
@@ -177,6 +177,15 @@ impl Header {
                 powdata.aux_chain_merkle_proof.calculate_root(&aux_hash) == merkle_root
             }
         }
+    }
+
+    /// Create a blockhashing blob from this header
+    pub fn to_blockhashing_blob(&self) -> Vec<u8> {
+        // For XMRig, we need to pad the blob so that our nonce ends
+        // up at byte offset 39.
+        let mut blob = vec![0x00, 0x00];
+        blob.extend_from_slice(&serialize(self));
+        blob
     }
 }
 
