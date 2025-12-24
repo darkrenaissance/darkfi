@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod ivf;
-pub mod yuv_conv;
+mod decoder;
+mod ivf;
+mod yuv_conv;
 
 pub use ivf::{IvfDemuxer, IvfError, IvfResult};
 pub use yuv_conv::yuv420p_to_rgba;
-

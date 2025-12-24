@@ -39,14 +39,11 @@ pub enum IvfError {
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
-
-    #[error("Invalid frame size: {0}")]
-    InvalidFrameSize(u32),
 }
 
 impl From<std::io::Error> for IvfError {
     fn from(_: std::io::Error) -> Self {
-        IvfError::UnexpectedEof
+        Self::UnexpectedEof
     }
 }
 
@@ -90,10 +87,6 @@ pub struct IvfDemuxer {
 impl IvfDemuxer {
     /// Create a new IVF demuxer from raw bytes
     pub fn from_bytes(data: Vec<u8>) -> IvfResult<Self> {
-        if data.len() < 32 {
-            return Err(IvfError::UnexpectedEof);
-        }
-
         let mut self_ = Self {
             cur: Cursor::new(data),
             header: unsafe { std::mem::zeroed() },

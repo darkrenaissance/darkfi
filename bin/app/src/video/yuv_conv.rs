@@ -114,14 +114,7 @@ mod tests {
         let v_stride = width / 2;
 
         let rgba = yuv420p_to_rgba(
-            &y_plane,
-            &u_plane,
-            &v_plane,
-            width,
-            height,
-            y_stride,
-            u_stride,
-            v_stride,
+            &y_plane, &u_plane, &v_plane, width, height, y_stride, u_stride, v_stride,
         );
 
         // Check output size
