@@ -319,7 +319,7 @@ impl PoWModule {
                 );
 
                 let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(header.hash().inner())?;
+                let out_hash = vm.calculate_hash(&header.to_blockhashing_blob())?;
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
             Monero(powdata) => {
