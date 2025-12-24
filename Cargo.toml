@@ -22,7 +22,6 @@ bench = false
 members = [
     "bin/zkas",
     "bin/darkfid",
-    "bin/minerd",
     "bin/explorer/explorerd",
     "bin/drk",
     "bin/fud/fu",
