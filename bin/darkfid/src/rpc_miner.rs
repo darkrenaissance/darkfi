@@ -62,18 +62,20 @@ pub struct MinerRewardsRecipientConfig {
 }
 
 /// Auxiliary structure representing a block template for native mining.
+#[derive(Debug, Clone)]
 pub struct BlockTemplate {
-    /// The block that is being mined
+    /// Block that is being mined
     pub block: BlockInfo,
-    /// The base64 encoded RandomX key used
-    randomx_key: String,
-    /// The base64 encoded mining target used
-    target: String,
-    /// The signing secret for this block
-    secret: SecretKey,
+    /// RandomX init key
+    pub randomx_key: [u8; 32],
+    /// Block mining target
+    pub target: BigUint,
+    /// Ephemeral signing secret for this blocktemplate
+    pub secret: SecretKey,
 }
 
 impl DarkfiNode {
+    /*
     // RPCAPI:
     // Queries the validator for the current mining RandomX key,
     // based on next block height.
@@ -484,6 +486,7 @@ impl DarkfiNode {
 
         JsonResponse::new(JsonValue::String(String::from("accepted")), id).into()
     }
+    */
 }
 
 /// Auxiliary function to generate next block in an atomic manner.
