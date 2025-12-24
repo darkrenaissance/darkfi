@@ -153,6 +153,10 @@ Broadcasting transaction...
 Transaction ID: e9ded45928f2e2dbcb4f8365653220a8e2346987dd8b75fe1ffdc401ce0362c2
 ```
 
+Now the transaction should be published to the network, waiting to be
+included in a block. After the transaction is confirmed, perform the
+next one:
+
 ```shell
 drk> token mint DAWN 20.0 {YOUR_ADDRESS} | broadcast
 
@@ -164,9 +168,9 @@ Broadcasting transaction...
 Transaction ID: e404241902ba0a8825cf199b3083bff81cd518ca30928ca1267d5e0008f32277
 ```
 
-Now the transaction should be published to the network. When the
-transaction is confirmed, your wallet should have your new tokens
-listed when you run:
+The transaction is now published to the network. When the transaction
+is confirmed, your wallet should have your new tokens listed when you
+run:
 
 ```shell
 drk> wallet balance

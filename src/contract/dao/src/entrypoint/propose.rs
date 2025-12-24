@@ -227,7 +227,7 @@ pub(crate) fn dao_propose_process_update(
     update: DaoProposeUpdate,
 ) -> ContractResult {
     // Grab all db handles we want to work on
-    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
 
     // Build the proposal metadata
     let proposal_metadata = DaoProposalMetadata {
@@ -238,7 +238,7 @@ pub(crate) fn dao_propose_process_update(
 
     // Set the new proposal in the db
     wasm::db::db_set(
-        proposal_vote_db,
+        proposal_db,
         &serialize(&update.proposal_bulla),
         &serialize(&proposal_metadata),
     )?;

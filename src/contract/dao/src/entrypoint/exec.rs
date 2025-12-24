@@ -148,8 +148,8 @@ pub(crate) fn dao_exec_process_instruction(
 /// `process_update` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_update(cid: ContractId, update: DaoExecUpdate) -> ContractResult {
     // Remove proposal from db
-    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    wasm::db::db_del(proposal_vote_db, &serialize(&update.proposal_bulla))?;
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    wasm::db::db_del(proposal_db, &serialize(&update.proposal_bulla))?;
 
     Ok(())
 }
