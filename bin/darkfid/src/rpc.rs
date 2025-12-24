@@ -36,9 +36,11 @@ use darkfi::{
 
 use crate::DarkfiNode;
 
-/// Default JSON-RPC `RequestHandler` type
+/// Default JSON-RPC `RequestHandler`
 pub struct DefaultRpcHandler;
-/// HTTP JSON-RPC `RequestHandler` type for p2pool
+/// JSON-RPC `RequestHandler` for Stratum
+pub struct StratumRpcHandler;
+/// HTTP JSON-RPC `RequestHandler` for p2pool/merge mining
 pub struct MmRpcHandler;
 
 #[async_trait]
@@ -84,9 +86,11 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             // =============
             // Miner methods
             // =============
+            /*
             "miner.get_current_mining_randomx_key" => self.miner_get_current_mining_randomx_key(req.id, req.params).await,
             "miner.get_header" => self.miner_get_header(req.id, req.params).await,
             "miner.submit_solution" => self.miner_submit_solution(req.id, req.params).await,
+            */
 
             // ==============
             // Invalid method
@@ -97,6 +101,28 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
+    }
+}
+
+#[async_trait]
+#[rustfmt::skip]
+impl RequestHandler<StratumRpcHandler> for DarkfiNode {
+	async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+		debug!(target: "darkfid::stratum_rpc", "--> {}", req.stringify().unwrap());
+
+		match req.method.as_str() {
+			// ======================
+			// Stratum mining methods
+			// ======================
+			"login" => self.stratum_login(req.id, req.params).await,
+			"submit" => self.stratum_submit(req.id, req.params).await,
+			"keepalived" => self.stratum_keepalived(req.id, req.params).await,
+			_ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+		}
+	}
+
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
+        self.stratum_rpc_connections.lock().await
     }
 }
 

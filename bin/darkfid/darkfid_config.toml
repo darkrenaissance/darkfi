@@ -43,6 +43,9 @@ rpc_listen = "tcp://127.0.0.1:8340"
 # Disabled RPC methods
 rpc_disabled_methods = ["p2p.get_info"]
 
+[network_config."testnet".stratum_rpc]
+rpc_listen = "tcp://127.0.0.1:8341"
+
 ## Testnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."testnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)

@@ -52,11 +52,12 @@ use error::{server_error, RpcError};
 
 /// JSON-RPC requests handler and methods
 mod rpc;
-use rpc::{DefaultRpcHandler, MmRpcHandler};
+use rpc::{DefaultRpcHandler, MmRpcHandler, StratumRpcHandler};
 mod rpc_blockchain;
 mod rpc_miner;
 mod rpc_tx;
 use rpc_miner::BlockTemplate;
+mod rpc_stratum;
 mod rpc_xmr;
 
 /// Validator async tasks
@@ -69,6 +70,25 @@ use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
 
 /// Atomic pointer to the DarkFi node
 pub type DarkfiNodePtr = Arc<DarkfiNode>;
+
+/// Storage for active mining jobs. These are stored per connection ID.
+/// A new map will be made for each stratum login.
+#[derive(Debug, Default)]
+pub struct MiningJobs(HashMap<[u8; 32], BlockTemplate>);
+
+impl MiningJobs {
+    pub fn insert(&mut self, job_id: [u8; 32], blocktemplate: BlockTemplate) {
+        self.0.insert(job_id, blocktemplate);
+    }
+
+    pub fn get(&self, job_id: &[u8; 32]) -> Option<&BlockTemplate> {
+        self.0.get(job_id)
+    }
+
+    pub fn get_mut(&mut self, job_id: &[u8; 32]) -> Option<&mut BlockTemplate> {
+        self.0.get_mut(job_id)
+    }
+}
 
 /// Structure representing a DarkFi node
 pub struct DarkfiNode {
@@ -84,10 +104,14 @@ pub struct DarkfiNode {
     subscribers: HashMap<&'static str, JsonSubscriber>,
     /// Native mining block templates
     blocktemplates: Mutex<HashMap<Vec<u8>, BlockTemplate>>,
+    /// Active mining jobs per connection ID
+    mining_jobs: Mutex<HashMap<[u8; 32], MiningJobs>>,
     /// Merge mining block templates
     mm_blocktemplates: Mutex<HashMap<Vec<u8>, (BlockInfo, f64, SecretKey)>>,
-    /// JSON-RPC connection tracker
+    /// Main JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// Stratum JSON-RPC connection tracker
+    stratum_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// HTTP JSON-RPC connection tracker
     mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// PowRewardV1 ZK data
@@ -110,9 +134,11 @@ impl DarkfiNode {
             validator,
             txs_batch_size,
             subscribers,
+            mining_jobs: Mutex::new(HashMap::new()),
             blocktemplates: Mutex::new(HashMap::new()),
             mm_blocktemplates: Mutex::new(HashMap::new()),
             rpc_connections: Mutex::new(HashSet::new()),
+            stratum_rpc_connections: Mutex::new(HashSet::new()),
             mm_rpc_connections: Mutex::new(HashSet::new()),
             powrewardv1_zk,
         }))
@@ -154,8 +180,10 @@ pub struct Darkfid {
     node: DarkfiNodePtr,
     /// `dnet` background task
     dnet_task: StoppableTaskPtr,
-    /// JSON-RPC background task
+    /// Main JSON-RPC background task
     rpc_task: StoppableTaskPtr,
+    /// Stratum JSON-RPC background task
+    stratum_rpc_task: StoppableTaskPtr,
     /// HTTP JSON-RPC background task
     mm_rpc_task: StoppableTaskPtr,
     /// Consensus protocol background task
@@ -208,12 +236,20 @@ impl Darkfid {
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
         let rpc_task = StoppableTask::new();
+        let stratum_rpc_task = StoppableTask::new();
         let mm_rpc_task = StoppableTask::new();
         let consensus_task = StoppableTask::new();
 
         info!(target: "darkfid::Darkfid::init", "Darkfi daemon initialized successfully!");
 
-        Ok(Arc::new(Self { node, dnet_task, rpc_task, mm_rpc_task, consensus_task }))
+        Ok(Arc::new(Self {
+            node,
+            dnet_task,
+            rpc_task,
+            stratum_rpc_task,
+            mm_rpc_task,
+            consensus_task,
+        }))
     }
 
     /// Start the DarkFi daemon in the given executor, using the provided JSON-RPC listen url
@@ -222,6 +258,7 @@ impl Darkfid {
         &self,
         executor: &ExecutorPtr,
         rpc_settings: &RpcSettings,
+        stratum_rpc_settings: &RpcSettings,
         mm_rpc_settings: &Option<RpcSettings>,
         config: &ConsensusInitTaskConfig,
     ) -> Result<()> {
@@ -250,31 +287,46 @@ impl Darkfid {
             executor.clone(),
         );
 
-        // Start the JSON-RPC task
-        info!(target: "darkfid::Darkfid::start", "Starting JSON-RPC server");
+        // Start the main JSON-RPC task
+        info!(target: "darkfid::Darkfid::start", "Starting main JSON-RPC server");
         let node_ = self.node.clone();
         self.rpc_task.clone().start(
             listen_and_serve::<DefaultRpcHandler>(rpc_settings.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::stop_connections(&node_).await,
-                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting JSON-RPC server: {e}"),
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting main JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,
             executor.clone(),
         );
 
-        // Start the HTTP JSON-RPC task
+        // Start the stratum server JSON-RPC task
+        info!(target: "darkfid::Darkfid::start", "Starting Stratum JSON-RPC server");
+        let node_ = self.node.clone();
+        self.stratum_rpc_task.clone().start(
+            listen_and_serve::<StratumRpcHandler>(stratum_rpc_settings.clone(), self.node.clone(), None, executor.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<StratumRpcHandler>>::stop_connections(&node_).await,
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting Stratum JSON-RPC server: {e}"),
+                }
+            },
+            Error::RpcServerStopped,
+            executor.clone(),
+        );
+
+        // Start the merge mining JSON-RPC task
         if let Some(mm_rpc) = mm_rpc_settings {
-            info!(target: "darkfid::Darkfid::start", "Starting HTTP JSON-RPC server");
+            info!(target: "darkfid::Darkfid::start", "Starting merge mining JSON-RPC server");
             let node_ = self.node.clone();
             self.mm_rpc_task.clone().start(
                 listen_and_serve::<MmRpcHandler>(mm_rpc.clone(), self.node.clone(), None, executor.clone()),
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<MmRpcHandler>>::stop_connections(&node_).await,
-                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting HTTP JSON-RPC server: {e}"),
+                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting merge mining JSON-RPC server: {e}"),
                     }
                 },
                 Error::RpcServerStopped,
@@ -329,12 +381,16 @@ impl Darkfid {
         self.dnet_task.stop().await;
 
         // Stop the JSON-RPC task
-        info!(target: "darkfid::Darkfid::stop", "Stopping JSON-RPC server...");
+        info!(target: "darkfid::Darkfid::stop", "Stopping main JSON-RPC server...");
         self.rpc_task.stop().await;
 
-        // Stop the HTTP JSON-RPC task
-        info!(target: "darkfid::Darkfid::stop", "Stopping HTTP JSON-RPC server...");
-        self.rpc_task.stop().await;
+        // Stop the Stratum JSON-RPC task
+        info!(target: "darkfid::Darkfid::stop", "Stopping Stratum JSON-RPC server...");
+        self.stratum_rpc_task.stop().await;
+
+        // Stop the merge mining JSON-RPC task
+        info!(target: "darkfid::Darkfid::stop", "Stopping merge mining JSON-RPC server...");
+        self.mm_rpc_task.stop().await;
 
         // Stop the P2P network
         info!(target: "darkfid::Darkfid::stop", "Stopping P2P network protocols handler...");
