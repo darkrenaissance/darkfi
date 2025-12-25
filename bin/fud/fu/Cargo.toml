@@ -17,9 +17,9 @@ smol = "2.0.2"
 
 # Misc
 clap = {version = "4.4.11", features = ["derive"]}
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
-url = "2.5.4"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+url = "2.5.7"
 termcolor = "1.4.1"
 
 [lints]

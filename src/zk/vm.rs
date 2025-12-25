@@ -471,6 +471,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 lagrange_coeffs[0],
                 lookup,
                 range_check,
+                false, // allow_init_from_private_point
             );
             let merkle_cfg1 = MerkleChip::configure(meta, sinsemilla_cfg1.clone());
             (sinsemilla_cfg1, merkle_cfg1)
@@ -484,6 +485,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 lagrange_coeffs[1],
                 lookup,
                 range_check,
+                false, // allow_init_from_private_point
             );
             let merkle_cfg2 = MerkleChip::configure(meta, sinsemilla_cfg2.clone());
             (sinsemilla_cfg2, merkle_cfg2)

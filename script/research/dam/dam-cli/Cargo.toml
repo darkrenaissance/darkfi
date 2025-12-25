@@ -16,7 +16,7 @@ darkfi-serial = "0.5.0"
 
 # Misc
 clap = {version = "4.4.11", features = ["derive"]}
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
 smol = "2.0.2"
-url = "2.5.4"
+url = "2.5.7"

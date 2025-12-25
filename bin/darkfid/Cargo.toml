@@ -19,7 +19,7 @@ darkfi-serial = "0.5.0"
 # Misc
 blake3 = "1.8.2"
 bs58 = "0.5.1"
-tracing = "0.1.41"
+tracing = "0.1.44"
 num-bigint = "0.4.6"
 rand = "0.8.5"
 sled-overlay = "0.1.14"
@@ -28,7 +28,7 @@ toml = "0.9.8"
 # JSON-RPC
 async-trait = "0.1.89"
 tinyjson = "2.5.1"
-url = "2.5.4"
+url = "2.5.7"
 
 # Monero
 monero = "0.21.0"
@@ -38,8 +38,8 @@ hex = "0.4.3"
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.4"
 smol = "2.0.2"
 
 # Argument parsing

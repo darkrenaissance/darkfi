@@ -22,7 +22,7 @@ use std::{
     str::FromStr,
 };
 
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, OutputStreamBuilder, Sink};
 use smol::channel::Sender;
 use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
@@ -110,8 +110,8 @@ pub async fn kaching() {
 
     let cursor = Cursor::new(WALLET_MP3);
 
-    let Ok((_stream, stream_handle)) = OutputStream::try_default() else { return };
-    let Ok(sink) = Sink::try_new(&stream_handle) else { return };
+    let Ok(stream_handle) = OutputStreamBuilder::open_default_stream() else { return };
+    let sink = Sink::connect_new(stream_handle.mixer());
 
     let Ok(source) = Decoder::new(cursor) else { return };
     sink.append(source);

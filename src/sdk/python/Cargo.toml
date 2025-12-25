@@ -20,8 +20,8 @@ darkfi_dao_contract = {path = "../../contract/dao", features=["no-entrypoint", "
 darkfi_deployooor_contract = {path = "../../contract/deployooor", features=["no-entrypoint", "client"]}
 darkfi-sdk = {path = "../"}
 darkfi-serial = {version = "0.5.1", features = ["crypto"]}
-halo2_proofs = {version = "0.3.1", features = ["circuit-params", "dev-graph", "sanity-checks"]}
-halo2_gadgets = {version = "0.3.1", features = ["circuit-params"]}
+halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}
+halo2_gadgets = {version = "0.4.0", features = ["circuit-params"]}
 plotters = "0.3.7"
 pyo3 = "0.26.0"
 rand = "0.8.5"

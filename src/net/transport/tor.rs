@@ -226,7 +226,14 @@ impl TorListener {
         };
 
         let (onion_service, rendreq_stream) = match client.launch_onion_service(hs_config) {
-            Ok(v) => v,
+            Ok(Some(v)) => v,
+            Ok(None) => {
+                error!(
+                    target: "net::tor::do_listen",
+                    "[P2P] Onion service disabled in config",
+                );
+                return Err(io::Error::other("Internal Tor error"));
+            }
             Err(e) => {
                 error!(
                     target: "net::tor::do_listen",

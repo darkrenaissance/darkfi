@@ -32,8 +32,8 @@ sled-overlay = "0.1.14"
 blake3 = "1.8.2"
 
 # Misc
-tracing = "0.1.41"
-url = "2.5.4"
+tracing = "0.1.44"
+url = "2.5.7"
 
 # Daemon
 smol = "2.0.2"
@@ -45,8 +45,8 @@ semver = {version = "1.0.27", optional = true}
 easy-parallel = {version = "3.3.1", optional = true}
 signal-hook-async-std = {version = "0.3.0", optional = true}
 signal-hook = {version = "0.3.18", optional = true}
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"], optional = true }
-tracing-appender = { version = "0.2.3", optional = true }
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"], optional = true }
+tracing-appender = { version = "0.2.4", optional = true }
 serde = {version = "1.0.228", features = ["derive"], optional = true}
 structopt = {version = "0.3.26", optional = true}
 structopt-toml = {version = "0.5.1", optional = true}

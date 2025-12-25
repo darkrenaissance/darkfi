@@ -17,15 +17,15 @@ miniquad = { git = "https://github.com/not-fl3/miniquad" }
 harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = ["bundled"] }
 freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
-image = "0.25.5"
+image = "0.25.9"
 qoi = "0.4.1"
 
 # AV1 video decoding - rav1d with Rust API from leo030303 fork
 # Disable default features to avoid NASM dependency (asm)
 rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", default-features = false, features = ["bitdepth_8"] }
 
-tracing = "0.1.41"
-glam = "0.29.2"
+tracing = "0.1.44"
+glam = "0.30.9"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
@@ -34,40 +34,40 @@ darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", 
 darkfi-serial = {version = "0.5.0", features = ["async"]}
 fud = { path = "../fud/fud/" }
 bs58 = "0.5.1"
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 smol = "2.0.2"
 atomic_float = "1.1.0"
 async-channel = "2.5.0"
 easy-parallel = "3.3.1"
 rand = "0.8.5"
-async-lock = "3.4.1"
+async-lock = "3.4.2"
 async-broadcast = "0.7.2"
 futures = "0.3.31"
 async-recursion = "1.1.1"
 colored = "3.0.0"
 #rustpython-vm = "0.3.1"
 sled-overlay = "0.1.14"
-url = "2.5.4"
-semver = "1.0.26"
-chrono = "0.4.41"
+url = "2.5.7"
+semver = "1.0.27"
+chrono = "0.4.42"
 async-gen = "0.2.3"
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 blake3 = "1.8.2"
-clap = { version = "4.5", features = ["derive"] }
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.3"
+clap = { version = "4.5.53", features = ["derive"] }
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.4"
 # For log files
-file-rotate = "0.7.6"
-parking_lot = { version = "0.12.4", features = ["nightly"] }
-regex = "1.11"
+file-rotate = "0.8.0"
+parking_lot = { version = "0.12.5", features = ["nightly"] }
+regex = "1.12.2"
 parley = { git = "https://github.com/linebender/parley.git" }
-swash = "0.2.5"
+swash = "0.2.6"
 zeno = "0.3.3"
-peniko = "*"
+peniko = "0.5.0"
 
-fluent = "0.17"
-unic-langid = { version = "0.9", features = ["unic-langid-macros"] }
-indoc = "2"
+fluent = "0.17.0"
+unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
+indoc = "2.0.7"
 
 [features]
 emulate-android = []
@@ -94,14 +94,14 @@ dirs = "5.0.1"
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
-tor-dirmgr = { version="0.36.0", features=["static"] }
+tor-dirmgr = { version="0.37.0", features=["static"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
 #rusqlite = {version = "0.37.0", features = ["bundled"]}
-tor-dirmgr = { version="0.36.0", features=["static"] }
+tor-dirmgr = { version="0.37.0", features=["static"] }
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

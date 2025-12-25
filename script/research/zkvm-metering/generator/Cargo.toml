@@ -12,8 +12,8 @@ edition = "2024"
 [dependencies]
 darkfi-sdk = {path = "../../../../src/sdk"}
 darkfi = {path = "../../../../", features = ["zk"]}
-halo2_proofs = {version = "0.3.1", features = ["circuit-params"]}
-halo2_gadgets = {version = "0.3.1", features = ["circuit-params"]}
+halo2_proofs = {version = "0.3.2", features = ["circuit-params"]}
+halo2_gadgets = {version = "0.4.0", features = ["circuit-params"]}
 rand = "0.8.5"
 darkfi-serial = "0.5.0"
 

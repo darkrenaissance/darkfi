@@ -27,19 +27,19 @@ linenoise-rs = "0.1.1"
 num-bigint = "0.4.6"
 prettytable-rs = "0.10.0"
 rand = "0.8.5"
-rodio = {version = "0.20.1", default-features = false, features = ["minimp3"]}
+rodio = {version = "0.21.1", default-features = false, features = ["playback", "mp3"]}
 rusqlite = {version = "0.37.0", features = ["sqlcipher"]}
 sled-overlay = "0.1.14"
 toml = "0.9.8"
-tracing = "0.1.41"
-url = "2.5.4"
+tracing = "0.1.44"
+url = "2.5.7"
 
 # Daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.4"
 smol = "2.0.2"
 
 # Argument parsing

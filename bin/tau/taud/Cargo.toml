@@ -43,18 +43,18 @@ toml = "0.9.8"
 async-trait = "0.1.89"
 chrono = "0.4.42"
 futures = "0.3.31"
-libc = "0.2.177"
-tracing = "0.1.41"
+libc = "0.2.178"
+tracing = "0.1.44"
 thiserror = "2.0.17"
 tinyjson = "2.5.1"
-url = "2.5.4"
+url = "2.5.7"
 
 # Daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.4"
 smol = "2.0.2"
 
 # Argument parsing

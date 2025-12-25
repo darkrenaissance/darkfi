@@ -29,9 +29,9 @@ sha2 = "0.10.9"
 async-trait = "0.1.89"
 blake3 = "1.8.2"
 rand = "0.8.5"
-tracing = "0.1.41"
+tracing = "0.1.44"
 tinyjson = "2.5.1"
-url = "2.5.4"
+url = "2.5.7"
 num-bigint = "0.4.6"
 
 # Daemon
@@ -39,13 +39,13 @@ easy-parallel = "3.3.1"
 futures = "0.3.31"
 signal-hook-async-std = "0.3.0"
 signal-hook = "0.3.18"
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.4"
 smol = "2.0.2"
 
 # Equi-X
 blake2 = "0.10.6"
-equix = "0.2.5"
+equix = "0.5.1"
 
 # Database
 sled-overlay = "0.1.14"

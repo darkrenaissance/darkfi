@@ -123,7 +123,7 @@ impl DarkfiNode {
             let mut hasher = blake3::Hasher::new();
             hasher.update(&address.to_string().into_bytes());
             hasher.update(&Timestamp::current_time().inner().to_le_bytes());
-            hasher.finalize().as_bytes().clone()
+            *hasher.finalize().as_bytes()
         };
 
         // Now we should register this login, and create a blocktemplate and
@@ -193,7 +193,7 @@ impl DarkfiNode {
 
         // Construct everything needed for the Stratum response.
         let blob = blocktemplate.block.header.to_blockhashing_blob();
-        let job_id = blocktemplate.block.header.hash().inner().clone();
+        let job_id = *blocktemplate.block.header.hash().inner();
         let height = blocktemplate.block.header.height as f64;
         // The target should be compacted to 8 bytes little-endian.
         let target = &target.to_bytes_le()[..8];
@@ -205,15 +205,15 @@ impl DarkfiNode {
         // Construct response
         let job: HashMap<String, JsonValue> = HashMap::from([
             ("blob".to_string(), hex::encode(&blob).to_string().into()),
-            ("job_id".to_string(), hex::encode(&job_id).to_string().into()),
+            ("job_id".to_string(), hex::encode(job_id).to_string().into()),
             ("height".to_string(), height.into()),
             ("target".to_string(), hex::encode(target).into()),
             ("algo".to_string(), "rx/0".to_string().into()),
-            ("seed_hash".to_string(), hex::encode(&seed_hash).into()),
+            ("seed_hash".to_string(), hex::encode(seed_hash).into()),
         ]);
 
         let result = HashMap::from([
-            ("id".to_string(), hex::encode(&conn_id).into()),
+            ("id".to_string(), hex::encode(conn_id).into()),
             ("job".to_string(), job.into()),
             ("status".to_string(), "OK".to_string().into()),
         ]);
@@ -268,13 +268,13 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        let Ok(conn_id) = hex::decode(&conn_id) else {
+        let Ok(conn_id) = hex::decode(conn_id) else {
             return JsonError::new(InvalidParams, None, id).into()
         };
         if conn_id.len() != 32 {
             return JsonError::new(InvalidParams, None, id).into()
         }
-        let Ok(job_id) = hex::decode(&job_id) else {
+        let Ok(job_id) = hex::decode(job_id) else {
             return JsonError::new(InvalidParams, None, id).into()
         };
         if job_id.len() != 32 {
@@ -295,7 +295,7 @@ impl DarkfiNode {
         };
 
         // Parse the nonce into u32.
-        let Ok(nonce_bytes) = hex::decode(&nonce) else {
+        let Ok(nonce_bytes) = hex::decode(nonce) else {
             return JsonError::new(InvalidParams, None, id).into()
         };
         if nonce_bytes.len() != 4 {

@@ -22,4 +22,4 @@ clap = {version = "4.4.11", features = ["derive"]}
 prettytable-rs = "0.10.0"
 rand = "0.8.5"
 smol = "2.0.2"
-url = "2.5.4"
+url = "2.5.7"

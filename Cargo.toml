@@ -51,9 +51,9 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.177"
+libc = "0.2.178"
 thiserror = "2.0.17"
-tracing = "0.1.41"
+tracing = "0.1.44"
 
 # async-runtime
 async-recursion = {version = "1.1.1", optional = true}
@@ -67,13 +67,13 @@ futures-rustls = {version = "0.26.0", default-features = false, features = ["log
 
 # Pluggable Transports
 socket2 = {version = "0.6.1", features = ["all"], optional = true}
-arti-client = {version = "0.36.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
-tor-error = {version = "0.36.0", optional = true}
-tor-rtcompat = {version = "0.36.0", features = ["async-std", "rustls"], optional = true}
-tor-hscrypto = {version = "0.36.0", optional = true}
-tor-hsservice = {version = "0.36.0", optional = true}
-tor-proto = {version = "0.36.0", optional = true}
-tor-cell = {version = "0.36.0", optional = true}
+arti-client = {version = "0.37.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
+tor-error = {version = "0.37.0", optional = true}
+tor-rtcompat = {version = "0.37.0", features = ["async-std", "rustls"], optional = true}
+tor-hscrypto = {version = "0.37.0", optional = true}
+tor-hsservice = {version = "0.37.0", optional = true}
+tor-proto = {version = "0.37.0", optional = true}
+tor-cell = {version = "0.37.0", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.1.1", optional = true}
@@ -103,12 +103,12 @@ darkfi-derive = {version = "0.5.1", optional = true}
 chrono = {version = "0.4.42", optional = true}
 lazy_static = {version = "1.5.0", optional = true}
 num-bigint = {version = "0.4.6", optional = true}
-url = {version = "2.5.4", features = ["serde"], optional = true}
+url = {version = "2.5.7", features = ["serde"], optional = true}
 
 # Misc
 regex = {version = "1.12.2", optional = true}
-tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt"], optional = true }
-tracing-appender = {version = "0.2.3", optional = true }
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"], optional = true }
+tracing-appender = {version = "0.2.4", optional = true }
 nu-ansi-term = {version = "0.50.3", optional = true}
 
 
@@ -116,8 +116,8 @@ nu-ansi-term = {version = "0.50.3", optional = true}
 rand = {version = "0.8.5", optional = true}
 blake3 = {version = "1.8.2", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
-halo2_proofs = {version = "0.3.1", features = ["circuit-params"], optional = true}
-halo2_gadgets = {version = "0.3.1", features = ["circuit-params"], optional = true}
+halo2_proofs = {version = "0.3.2", features = ["circuit-params"], optional = true}
+halo2_gadgets = {version = "0.4.0", features = ["circuit-params"], optional = true}
 sha2 = {version = "0.10.9", optional = true}
 
 # Smart contract runtime
@@ -142,7 +142,7 @@ plotters = "0.3.7"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
 # Used for benchmarks
-criterion = { version = "0.7.0", features = ["html_reports"] }
+criterion = { version = "0.8.1", features = ["html_reports"] }
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -335,10 +335,10 @@ dht = [
 # -----END LIBRARY FEATURES-----
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
 # Forked "url" crate with added P2P schemas
-url = {git="https://github.com/darkrenaissance/rust-url", branch="main"}
+url = {git="https://github.com/darkrenaissance/rust-url", branch="v257"}
 
 [[bench]]
 name = "zk_arith"

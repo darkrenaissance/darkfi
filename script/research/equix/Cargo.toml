@@ -11,8 +11,8 @@ path = "src/lib.rs"
 
 [dependencies]
 blake2 = "0.10.6"
-criterion = { version = "0.7.0", features = ["html_reports"] }
-equix = "0.2.5"
+criterion = { version = "0.8.1", features = ["html_reports"] }
+equix = "0.5.1"
 rand = "0.8.5"
 
 [[bench]]
