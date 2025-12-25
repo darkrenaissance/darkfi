@@ -15,5 +15,5 @@ rand = "0.8.5"
 blake3 = "1.8.2"
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
