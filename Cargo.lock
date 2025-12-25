@@ -1833,7 +1833,6 @@ dependencies = [
  "randomx",
  "rcgen",
  "regex",
- "rustls-pemfile",
  "semver",
  "serde",
  "sha2",
@@ -1859,7 +1858,7 @@ dependencies = [
  "wasmer",
  "wasmer-compiler-singlepass",
  "wasmer-middlewares",
- "x509-parser",
+ "x509-parser 0.17.0",
 ]
 
 [[package]]
@@ -5754,13 +5753,15 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.12.1"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48406db8ac1f3cbc7dcdb56ec355343817958a356ff430259bb07baf7607e1e1"
+checksum = "3ec0a99f2de91c3cddc84b37e7db80e4d96b743e05607f647eb236fc0455907f"
 dependencies = [
  "pem",
  "ring",
+ "rustls-pki-types",
  "time",
+ "x509-parser 0.18.0",
  "yasna",
 ]
 
@@ -9506,6 +9507,24 @@ name = "x509-parser"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4569f339c0c402346d4a75a9e39cf8dad310e287eef1ff56d4c68e5067f53460"
+dependencies = [
+ "asn1-rs",
+ "data-encoding",
+ "der-parser",
+ "lazy_static",
+ "nom",
+ "oid-registry",
+ "ring",
+ "rusticata-macros",
+ "thiserror 2.0.17",
+ "time",
+]
+
+[[package]]
+name = "x509-parser"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb3e137310115a65136898d2079f003ce33331a6c4b0d51f1531d1be082b6425"
 dependencies = [
  "asn1-rs",
  "data-encoding",

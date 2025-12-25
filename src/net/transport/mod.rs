@@ -267,7 +267,7 @@ impl Dialer {
             DialerVariant::TcpTls(dialer) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let stream = dialer.do_dial(sockaddr[0], timeout).await?;
-                let tlsupgrade = tls::TlsUpgrade::new().await;
+                let tlsupgrade = tls::TlsUpgrade::new().await?;
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
@@ -285,7 +285,7 @@ impl Dialer {
                 let host = self.endpoint.host_str().unwrap();
                 let port = self.endpoint.port().unwrap();
                 let stream = dialer.do_dial(host, port, timeout).await?;
-                let tlsupgrade = tls::TlsUpgrade::new().await;
+                let tlsupgrade = tls::TlsUpgrade::new().await?;
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
@@ -319,7 +319,7 @@ impl Dialer {
             #[cfg(feature = "p2p-socks5")]
             DialerVariant::Socks5Tls(dialer) => {
                 let stream = dialer.do_dial().await?;
-                let tlsupgrade = tls::TlsUpgrade::new().await;
+                let tlsupgrade = tls::TlsUpgrade::new().await?;
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
@@ -398,7 +398,7 @@ impl Listener {
             ListenerVariant::TcpTls(listener) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let l = listener.do_listen(sockaddr[0]).await?;
-                let tlsupgrade = tls::TlsUpgrade::new().await;
+                let tlsupgrade = tls::TlsUpgrade::new().await?;
                 let l = tlsupgrade.upgrade_listener_tcp_tls(l).await?;
                 Ok(Box::new(l))
             }

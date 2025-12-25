@@ -29,7 +29,7 @@ use futures_rustls::{
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
-use rustls_pemfile::pkcs8_private_keys;
+use rcgen::string::Ia5String;
 use tracing::error;
 use x509_parser::{
     parse_x509_certificate,
@@ -254,30 +254,39 @@ pub struct TlsUpgrade {
 }
 
 impl TlsUpgrade {
-    pub async fn new() -> Self {
+    pub async fn new() -> io::Result<Self> {
         // On each instantiation, generate a new keypair and certificate
-        let keypair_pem = ed25519_compact::KeyPair::generate().to_pem();
-        let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes()).next().unwrap().unwrap();
-        let secret_key = PrivateKeyDer::Pkcs8(secret_key);
+        let Ok(keypair) = rcgen::KeyPair::generate() else {
+            return Err(io::Error::other("Failed to generate TLS keypair"))
+        };
 
-        let mut cert_params = rcgen::CertificateParams::new(&[]);
-        cert_params.alg = &rcgen::PKCS_ED25519;
-        cert_params.key_pair = Some(rcgen::KeyPair::from_pem(&keypair_pem).unwrap());
-        cert_params.subject_alt_names = vec![rcgen::SanType::DnsName("dark.fi".to_string())];
+        let Ok(mut cert_params) = rcgen::CertificateParams::new(&[]) else {
+            return Err(io::Error::other("Failed to generate TLS params"))
+        };
+
+        cert_params.subject_alt_names =
+            vec![rcgen::SanType::DnsName(Ia5String::try_from("dark.fi").unwrap())];
         cert_params.extended_key_usages = vec![
             rcgen::ExtendedKeyUsagePurpose::ClientAuth,
             rcgen::ExtendedKeyUsagePurpose::ServerAuth,
         ];
 
-        let certificate = rcgen::Certificate::from_params(cert_params).unwrap();
-        let certificate = certificate.serialize_der().unwrap();
+        let Ok(certificate) = cert_params.self_signed(&keypair) else {
+            return Err(io::Error::other("Failed to sign TLS certificate"))
+        };
+        let certificate = certificate.der();
+
+        let keypair_der = keypair.serialize_der();
+        let Ok(secret_key_der) = PrivateKeyDer::try_from(keypair_der) else {
+            return Err(io::Error::other("Failed to deserialize DER TLS secret"))
+        };
 
         // Server-side config
         let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
         let server_config = Arc::new(
             ServerConfig::builder_with_protocol_versions(&[&TLS13])
                 .with_client_cert_verifier(client_cert_verifier)
-                .with_single_cert(vec![certificate.clone().into()], secret_key.clone_key())
+                .with_single_cert(vec![certificate.clone()], secret_key_der.clone_key())
                 .unwrap(),
         );
 
@@ -287,11 +296,11 @@ impl TlsUpgrade {
             ClientConfig::builder_with_protocol_versions(&[&TLS13])
                 .dangerous()
                 .with_custom_certificate_verifier(server_cert_verifier)
-                .with_client_auth_cert(vec![certificate.into()], secret_key)
+                .with_client_auth_cert(vec![certificate.clone()], secret_key_der)
                 .unwrap(),
         );
 
-        Self { server_config, client_config }
+        Ok(Self { server_config, client_config })
     }
 
     pub async fn upgrade_dialer_tls<IO>(self, stream: IO) -> io::Result<TlsStream<IO>>
