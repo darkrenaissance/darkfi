@@ -127,7 +127,8 @@ mod ui_consts {
 mod desktop_paths {
     use std::path::PathBuf;
 
-    pub const VID_PATH: &str = "assets/forest_1920x1080/{frame}.qoi";
+    //pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
+    pub const VID_PATH: &str = "assets/forest2/forest_1920x1080.ivf.{frame}";
     pub const VID_ASPECT_RATIO: f32 = 16. / 9.;
 
     pub fn get_chatdb_path() -> PathBuf {
@@ -341,7 +342,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
         //layer_node.link(node);
-        node.set_property_u32(atom, Role::App, "length", 150).unwrap();
         let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
         layer_node.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {

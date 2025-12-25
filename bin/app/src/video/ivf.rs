@@ -25,9 +25,6 @@ use darkfi_serial::Decodable;
 use std::io::{Cursor, Read};
 use thiserror::Error;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "video::ivf", $($arg)*); } }
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "video::ivf", $($arg)*); } }
-
 /// Errors that can occur during IVF demuxing
 #[derive(Debug, Error)]
 pub enum IvfError {
@@ -64,7 +61,7 @@ pub type IvfResult<T> = Result<T, IvfError>;
 /// unused (u32)      - unused (4 bytes)
 /// ```
 #[derive(Debug, Clone)]
-struct IvfHeader {
+pub struct IvfHeader {
     signature: [u8; 4],
     version: u16,
     header_len: u16,
@@ -73,20 +70,30 @@ struct IvfHeader {
     pub height: u16,
     timebase_den: u32,
     timebase_num: u32,
-    num_frames: u32,
+    pub num_frames: u32,
     unused: u32,
 }
 
-/// IVF demuxer for AV1 video files
-pub struct IvfDemuxer {
+/// Streaming IVF demuxer for chunked video files
+///
+/// This demuxer is designed for videos split into multiple chunks
+/// (e.g., forest_1920x1080.ivf.000, forest_1920x1080.ivf.001, ...).
+/// It handles frames that may span across chunk boundaries.
+pub struct IvfStreamingDemuxer {
+    /// Cursor wrapping the data buffer
     cur: Cursor<Vec<u8>>,
+    /// Parsed IVF header
     pub header: IvfHeader,
+    /// Current frame counter
     current_frame: u32,
 }
 
-impl IvfDemuxer {
-    /// Create a new IVF demuxer from raw bytes
-    pub fn from_bytes(data: Vec<u8>) -> IvfResult<Self> {
+impl IvfStreamingDemuxer {
+    /// Create a new streaming IVF demuxer from the first chunk
+    ///
+    /// The first chunk must contain the 32-byte IVF header followed by
+    /// frame data. Remaining chunks should be fed via `feed_data`.
+    pub fn from_first_chunk(data: Vec<u8>) -> IvfResult<Self> {
         let mut self_ = Self {
             cur: Cursor::new(data),
             header: unsafe { std::mem::zeroed() },
@@ -105,32 +112,10 @@ impl IvfDemuxer {
             return Err(IvfError::UnsupportedCodec(self_.header.codec_fourcc));
         }
 
-        d!(
-            "IVF header: {}x{} frames={}",
-            self_.header.width,
-            self_.header.height,
-            self_.header.num_frames
-        );
-
         Ok(self_)
     }
 
-    /// Parse IVF header from bytes
-    ///
-    /// # IVF Header Structure (32 bytes, little-endian)
-    ///
-    /// | Offset | Size | Field           | Value                      |
-    /// |--------|------|-----------------|----------------------------|
-    /// | 0      | 4    | signature       | "DKIF"                     |
-    /// | 4      | 2    | version         | 0                          |
-    /// | 6      | 2    | header_len      | 32                         |
-    /// | 8      | 4    | codec_fourcc    | "AV01" for AV1             |
-    /// | 12     | 2    | width           | Frame width in pixels      |
-    /// | 14     | 2    | height          | Frame height in pixels     |
-    /// | 16     | 4    | timebase_den    | FPS denominator            |
-    /// | 20     | 4    | timebase_num    | FPS numerator              |
-    /// | 24     | 4    | num_frames      | Total frames               |
-    /// | 28     | 4    | unused          | Reserved                   |
+    /// Parse IVF header from bytes (shared with IvfDemuxer)
     fn parse_header(&mut self) -> Result<(), std::io::Error> {
         // Offset 0-3: Signature "DKIF" (raw bytes)
         let mut signature = [0u8; 4];
@@ -176,27 +161,64 @@ impl IvfDemuxer {
         Ok(())
     }
 
-    /// Get the next frame's AV1 bitstream data
+    /// Feed additional chunk data to the internal buffer
     ///
-    /// # IVF Frame Header Structure (12 bytes, little-endian)
-    ///
-    /// | Offset | Size | Field       | Description                           |
-    /// |--------|------|-------------|---------------------------------------|
-    /// | 0      | 4    | frame_size  | Size of frame data in bytes           |
-    /// | 4      | 8    | timestamp   | Presentation timestamp                |
-    ///
-    /// The frame data immediately follows the 12-byte header.
-    pub fn next_frame(&mut self) -> Result<Vec<u8>, std::io::Error> {
-        // Offset 0-3: Frame size in bytes
-        let frame_size = u32::decode(&mut self.cur)?;
-        // Offset 4-11: Timestamp (8 bytes) - not used for linear playback
-        let _timestamp = u64::decode(&mut self.cur)?;
+    /// After feeding data, call `try_read_frame()` to extract complete frames.
+    pub fn feed_data(&mut self, mut data: Vec<u8>) {
+        let pos = self.cur.position() as usize;
+        let buffer = self.cur.get_mut();
 
+        // Append new data to buffer
+        buffer.append(&mut data);
+
+        // Reset cursor to continue reading
+        self.cur.set_position(pos as u64);
+    }
+
+    /// Try to read the next complete frame
+    ///
+    /// Returns `Ok(Some(frame))` if a complete frame is available,
+    /// `Ok(None)` if more data is needed, or `Err` on invalid data.
+    pub fn try_read_frame(&mut self) -> Option<Vec<u8>> {
+        let current_pos = self.cur.position() as usize;
+
+        // Check if we have enough bytes for frame header (12 bytes)
+        if self.buffer_len() < current_pos + 12 {
+            return None;
+        }
+
+        // Save cursor position in case we need to roll back
+        let saved_pos = self.cur.position();
+
+        // Read frame header
+        let frame_size = u32::decode(&mut self.cur).unwrap();
+        let _timestamp = u64::decode(&mut self.cur).unwrap();
+
+        let frame_end = self.cur.position() as usize + frame_size as usize;
+
+        // Check if we have the complete frame
+        if self.buffer_len() < frame_end {
+            // Incomplete frame, reset cursor
+            self.cur.set_position(saved_pos);
+            return None;
+        }
+
+        // Read the frame data
         let mut frame_data = vec![0u8; frame_size as usize];
-        self.cur.read_exact(&mut frame_data)?;
-        // Read the frame
+        self.cur.read_exact(&mut frame_data).unwrap();
+
         self.current_frame += 1;
-        Ok(frame_data)
+        Some(frame_data)
+    }
+
+    /// Have we read all frames?
+    pub fn is_finished(&self) -> bool {
+        assert!(self.current_frame < self.header.num_frames);
+        self.current_frame == self.header.num_frames - 1
+    }
+
+    fn buffer_len(&mut self) -> usize {
+        self.cur.get_mut().len()
     }
 }
 

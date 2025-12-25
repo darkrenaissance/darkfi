@@ -42,8 +42,8 @@ pub use gesture::GesturePtr;
 mod image;
 #[allow(unused_imports)]
 pub use image::{Image, ImagePtr};
-mod video;
-pub use video::{Video, VideoPtr};
+mod vid;
+pub use vid::{Video, VideoPtr};
 mod vector_art;
 pub use vector_art::{
     shape::{ShapeVertex, VectorShape},

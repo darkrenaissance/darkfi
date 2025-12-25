@@ -21,8 +21,6 @@
 //! This module provides functions to convert YUV420P planar format
 //! to RGBA format for GPU rendering.
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "video::yuv_conv", $($arg)*); } }
-
 /// Convert YUV420P planar format to RGBA
 ///
 /// # Arguments
@@ -55,8 +53,6 @@ pub fn yuv420p_to_rgba(
     u_stride: usize,
     v_stride: usize,
 ) -> Vec<u8> {
-    //t!("yuv420p_to_rgba() {}x{} strides: y={} u={} v={}", width, height, y_stride, u_stride, v_stride);
-
     let mut rgba = vec![0u8; width * height * 4];
 
     for y in 0..height {

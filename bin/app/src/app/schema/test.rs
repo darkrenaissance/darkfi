@@ -44,7 +44,7 @@ mod ui_consts {
 mod ui_consts {
     //pub const CHATDB_PATH: &str = "chatdb";
     //pub const KING_PATH: &str = "assets/king.png";
-    pub const VID_PATH: &str = "assets/forest/forest_{frame}.png";
+    pub const VID_PATH: &str = "assets/forest2/forest_1920x1080.ivf.{frame}";
 }
 
 use ui_consts::*;
@@ -234,7 +234,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 3, 600.).unwrap();
     node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.set_property_u32(atom, Role::App, "length", 357).unwrap();
     let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.link(node);
 

@@ -20,5 +20,6 @@ mod decoder;
 mod ivf;
 mod yuv_conv;
 
-pub use ivf::{IvfDemuxer, IvfError, IvfResult};
+pub use decoder::{DecodedFrame, Rav1dDecoder};
+pub use ivf::{IvfHeader, IvfStreamingDemuxer};
 pub use yuv_conv::yuv420p_to_rgba;

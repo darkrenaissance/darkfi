@@ -175,11 +175,7 @@ pub fn create_video(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
-    prop.set_ui_text("Path", "Path format string using {frame} in the name");
-    node.add_property(prop).unwrap();
-
-    let mut prop = Property::new("length", PropertyType::Uint32, PropertySubType::Null);
-    prop.set_ui_text("Frame Length", "Total frames to load (last frame + 1)");
+    prop.set_ui_text("Path", "Path to .ivf video file (AV1 format)");
     node.add_property(prop).unwrap();
 
     node

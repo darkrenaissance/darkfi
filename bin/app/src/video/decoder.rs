@@ -22,7 +22,9 @@
 
 use rav1d::{Decoder as Rav1dDecoderInner, Picture, PlanarImageComponent, Rav1dError};
 
-use super::yuv_conv::yuv420p_to_rgba;
+pub type DecoderResult<T> = Result<T, Rav1dError>;
+
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:video", $($arg)*); } }
 
 /// A decoded frame containing RGBA data
 #[derive(Debug, Clone)]
@@ -37,7 +39,7 @@ pub struct DecodedFrame {
 
 /// rav1d AV1 video decoder wrapper
 ///
-/// This wraps the rav1d decoder and provides automatic YUV to RGBA conversion.
+/// This wraps the rav1d decoder and provides automatic planar GBR to RGBA conversion.
 pub struct Rav1dDecoder {
     /// Inner decoder from rav1d
     decoder: Rav1dDecoderInner,
@@ -48,52 +50,96 @@ impl Rav1dDecoder {
         Self { decoder: Rav1dDecoderInner::new().unwrap() }
     }
 
-    /// Decode AV1 bitstream data
-    pub fn decode(&mut self, data: &[u8]) -> Result<DecodedFrame, Rav1dError> {
-        // Send data to decoder
-        // Need to copy data because send_data requires 'static ownership
+    /// Send AV1 bitstream data to the decoder without getting a frame
+    pub fn send_data(&mut self, data: &[u8]) -> DecoderResult<()> {
         let data = data.to_vec();
         match self.decoder.send_data(data, None, None, None) {
             Ok(_) => {}
             Err(Rav1dError::TryAgain) => {
-                // Pending data - try to send it again
                 while let Err(Rav1dError::TryAgain) = self.decoder.send_pending_data() {
                     // Continue sending pending data
                 }
             }
             Err(err) => return Err(err),
         }
-
-        self.get_pic()
+        Ok(())
     }
 
-    fn get_pic(&mut self) -> Result<DecodedFrame, Rav1dError> {
-        self.decoder.get_picture().map(|pic| Self::conv(pic))
+    /// Get the next decoded frame from the decoder
+    pub fn get_pic(&mut self) -> DecoderResult<DecodedFrame> {
+        let now = std::time::Instant::now();
+        let pix = self.decoder.get_picture();
+        t!("decoder get pix: {:?}", now.elapsed());
+
+        let now = std::time::Instant::now();
+        let res = pix.map(|pic| Self::conv(pic));
+        t!("decoder conv: {:?}", now.elapsed());
+        res
     }
 
-    /// Convert a rav1d Picture to RGBA
+    /// Decode AV1 bitstream data and get all available frames
+    /// Returns a vector of frames (may be empty if decoder needs more data)
+    pub fn decode(&mut self, data: &[u8]) -> DecoderResult<Vec<DecodedFrame>> {
+        self.send_data(data)?;
+
+        let mut frames = Vec::new();
+        loop {
+            match self.get_pic() {
+                Ok(frame) => frames.push(frame),
+                Err(Rav1dError::TryAgain) => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(frames)
+    }
+
+    /// Convert a rav1d Picture from planar GBR to RGBA
     fn conv(pic: Picture) -> DecodedFrame {
-        let y_plane = pic.plane(PlanarImageComponent::Y);
-        let u_plane = pic.plane(PlanarImageComponent::U);
-        let v_plane = pic.plane(PlanarImageComponent::V);
+        let g_plane = pic.plane(PlanarImageComponent::Y);
+        let b_plane = pic.plane(PlanarImageComponent::U);
+        let r_plane = pic.plane(PlanarImageComponent::V);
 
-        let y_stride = pic.stride(PlanarImageComponent::Y) as usize;
-        let u_stride = pic.stride(PlanarImageComponent::U) as usize;
-        let v_stride = pic.stride(PlanarImageComponent::V) as usize;
+        let g_stride = pic.stride(PlanarImageComponent::Y) as usize;
+        let b_stride = pic.stride(PlanarImageComponent::U) as usize;
+        let r_stride = pic.stride(PlanarImageComponent::V) as usize;
 
         let width = pic.width() as usize;
         let height = pic.height() as usize;
 
-        let data = yuv420p_to_rgba(
-            &y_plane, &u_plane, &v_plane, width, height, y_stride, u_stride, v_stride,
-        );
+        let mut rgba = vec![0u8; width * height * 4];
 
-        DecodedFrame { width: width as u32, height: height as u32, data }
+        for y in 0..height {
+            for x in 0..width {
+                let g_idx = y * g_stride + x;
+                let b_idx = y * b_stride + x;
+                let r_idx = y * r_stride + x;
+
+                let r = r_plane[r_idx];
+                let g = g_plane[g_idx];
+                let b = b_plane[b_idx];
+
+                let out_idx = (y * width + x) * 4;
+                rgba[out_idx] = r;
+                rgba[out_idx + 1] = g;
+                rgba[out_idx + 2] = b;
+                rgba[out_idx + 3] = 255;
+            }
+        }
+
+        DecodedFrame { width: width as u32, height: height as u32, data: rgba }
     }
 
     /// Flush the decoder to get any remaining frames
-    pub fn flush(&mut self) -> Result<DecodedFrame, Rav1dError> {
+    pub fn flush(&mut self) -> DecoderResult<Vec<DecodedFrame>> {
         self.decoder.flush();
-        self.get_pic()
+        let mut frames = Vec::new();
+        loop {
+            match self.get_pic() {
+                Ok(frame) => frames.push(frame),
+                Err(Rav1dError::TryAgain) => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(frames)
     }
 }
