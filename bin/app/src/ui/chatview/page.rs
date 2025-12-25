@@ -22,6 +22,7 @@ use chrono::{Local, NaiveDate, TimeZone};
 use darkfi_serial::{Decodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::stream::{Stream, StreamExt};
 use image::{ImageBuffer, ImageReader, Rgba};
+use miniquad::TextureFormat;
 use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::HashMap,
@@ -755,7 +756,13 @@ impl FileMessage {
         let bmp = img.as_raw().clone();
         drop(imgbuf);
 
-        render_api.new_texture(width, height, bmp, gfxtag!("file_img_texture"))
+        render_api.new_texture(
+            width,
+            height,
+            bmp,
+            TextureFormat::RGBA8,
+            gfxtag!("file_img_texture"),
+        )
     }
 
     pub fn height(&self, line_height: f32) -> f32 {

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::TextureId;
+use miniquad::{TextureFormat, TextureId};
 
 use crate::{
     error::Result,
@@ -111,8 +111,9 @@ pub async fn make_texture_atlas(
     }
 
     // Finally allocate the texture
-    let texture_id =
-        render_api.new_texture(total_width as u16, total_height as u16, atlas_bmp).await?;
+    let texture_id = render_api
+        .new_texture(total_width as u16, total_height as u16, atlas_bmp, TextureFormat::RGBA8)
+        .await?;
 
     Ok(RenderedAtlas { uv_rects, texture_id })
 }

@@ -25,8 +25,9 @@ use miniquad::native::egl;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
     BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
-    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TouchPhase,
-    UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource,
+    TextureFormat, TextureKind, TextureParams, TextureWrap, TouchPhase, UniformDesc, UniformType,
+    VertexAttribute, VertexFormat,
 };
 use parking_lot::Mutex as SyncMutex;
 use std::{
@@ -216,11 +217,12 @@ impl RenderApi {
         width: u16,
         height: u16,
         data: Vec<u8>,
+        fmt: TextureFormat,
         tag: DebugTag,
     ) -> (TextureId, EpochIndex) {
         let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
 
-        let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id, tag));
+        let method = GraphicsMethod::NewTexture((width, height, data, fmt, gfx_texture_id, tag));
         let epoch = self.send(method);
 
         (gfx_texture_id, epoch)
@@ -231,9 +233,10 @@ impl RenderApi {
         width: u16,
         height: u16,
         data: Vec<u8>,
+        fmt: TextureFormat,
         tag: DebugTag,
     ) -> ManagedTexturePtr {
-        let (id, epoch) = self.new_unmanaged_texture(width, height, data, tag);
+        let (id, epoch) = self.new_unmanaged_texture(width, height, data, fmt, tag);
         Arc::new(ManagedTexture { id, epoch, render_api: self.clone(), tag })
     }
 
@@ -733,7 +736,7 @@ type DcId = u64;
 
 #[derive(Clone)]
 pub enum GraphicsMethod {
-    NewTexture((u16, u16, Vec<u8>, TextureId, DebugTag)),
+    NewTexture((u16, u16, Vec<u8>, TextureFormat, TextureId, DebugTag)),
     DeleteTexture((TextureId, DebugTag)),
     NewVertexBuffer((Vec<Vertex>, BufferId, DebugTag)),
     NewIndexBuffer((Vec<u16>, BufferId, DebugTag)),
@@ -1045,8 +1048,8 @@ impl Stage {
     fn process_method(&mut self, mut method: GraphicsMethod) {
         //d!("Received method: {method:?}");
         match &mut method {
-            GraphicsMethod::NewTexture((width, height, data, gtex_id, _)) => {
-                self.method_new_texture(*width, *height, data, *gtex_id)
+            GraphicsMethod::NewTexture((width, height, data, fmt, gtex_id, _)) => {
+                self.method_new_texture(*width, *height, data, *fmt, *gtex_id)
             }
             GraphicsMethod::DeleteTexture((gtex_id, _)) => self.method_delete_texture(*gtex_id),
             GraphicsMethod::NewVertexBuffer((verts, gbuff_id, _)) => {
@@ -1122,9 +1125,24 @@ impl Stage {
         width: u16,
         height: u16,
         data: &Vec<u8>,
+        fmt: TextureFormat,
         gfx_texture_id: TextureId,
     ) {
-        let texture = self.ctx.new_texture_from_rgba8(width, height, data);
+        let texture = self.ctx.new_texture_from_data_and_format(
+            data,
+            TextureParams {
+                kind: TextureKind::Texture2D,
+                format: fmt,
+                width: width as _,
+                height: height as _,
+                wrap: TextureWrap::Clamp,
+                min_filter: miniquad::FilterMode::Linear,
+                mag_filter: miniquad::FilterMode::Linear,
+                mipmap_filter: miniquad::MipmapFilterMode::None,
+                allocate_mipmaps: false,
+                sample_count: 1,
+            },
+        );
         if DEBUG_GFXAPI {
             d!("Invoked method: new_texture({width}, {height}, ..., {gfx_texture_id}) -> {texture:?}");
             //d!("Invoked method: new_texture({}, {}, ..., {}) -> {:?}\n{}",
@@ -1273,7 +1291,7 @@ impl Stage {
     fn trax_method(&self, epoch: EpochIndex, method: &GraphicsMethod) {
         let mut trax = get_trax().lock();
         match method {
-            GraphicsMethod::NewTexture((_, _, _, gtex_id, tag)) => {
+            GraphicsMethod::NewTexture((_, _, _, _, gtex_id, tag)) => {
                 trax.put_tex(epoch, *gtex_id, *tag);
             }
             GraphicsMethod::DeleteTexture((gtex_id, tag)) => {
@@ -1487,7 +1505,7 @@ impl PruneMethodHeap {
 
     fn process_method(&mut self, mut method: GraphicsMethod) {
         match &method {
-            GraphicsMethod::NewTexture((_, _, _, gtex_id, _)) => {
+            GraphicsMethod::NewTexture((_, _, _, _, gtex_id, _)) => {
                 if DEBUG_GFXAPI {
                     t!("Prune method: new_texture(..., {gtex_id})");
                 }

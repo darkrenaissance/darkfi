@@ -18,6 +18,7 @@
 
 use async_trait::async_trait;
 use image::ImageReader;
+use miniquad::TextureFormat;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{io::Cursor, sync::Arc};
@@ -116,7 +117,7 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        self.render_api.new_texture(width, height, bmp, gfxtag!("img"))
+        self.render_api.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("img"))
     }
 
     #[instrument(target = "ui::button")]

@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use miniquad::TextureFormat;
+
 use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi};
 
 /// Prevents render artifacts from aliasing.
@@ -177,8 +179,13 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture =
-            self.render_api.new_texture(self.width as u16, self.height as u16, atlas, self.tag);
+        let texture = self.render_api.new_texture(
+            self.width as u16,
+            self.height as u16,
+            atlas,
+            TextureFormat::RGBA8,
+            self.tag,
+        );
 
         let uv_rects = self.compute_uvs();
         let glyph_ids = self.glyph_ids;

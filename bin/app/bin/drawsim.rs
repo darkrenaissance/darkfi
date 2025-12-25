@@ -30,7 +30,8 @@ use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
     BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
     PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TouchPhase,
-    UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    TextureFormat, TextureKind, TextureParams, TextureWrap, UniformDesc, UniformType,
+    VertexAttribute, VertexFormat,
     UniformBlockLayout,
 };
 
@@ -293,8 +294,8 @@ impl Stage {
     fn process_method(&mut self, method: GraphicsMethod) {
         //println!("Received method: {:?}", method);
         match method {
-            GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
-                self.method_new_texture(width, height, data, gfx_texture_id)
+            GraphicsMethod::NewTexture((width, height, data, fmt, gfx_texture_id, _)) => {
+                self.method_new_texture(width, height, data, fmt, gfx_texture_id)
             }
             GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
             GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
@@ -313,9 +314,24 @@ impl Stage {
         width: u16,
         height: u16,
         data: Vec<u8>,
+        fmt: TextureFormat,
         gfx_texture_id: GfxTextureId,
     ) {
-        let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
+        let texture = self.ctx.new_texture_from_data_and_format(
+            &data,
+            TextureParams {
+                kind: TextureKind::Texture2D,
+                format: fmt,
+                width: width as _,
+                height: height as _,
+                wrap: TextureWrap::Clamp,
+                min_filter: miniquad::FilterMode::Linear,
+                mag_filter: miniquad::FilterMode::Linear,
+                mipmap_filter: miniquad::MipmapFilterMode::None,
+                allocate_mipmaps: false,
+                sample_count: 1,
+            },
+        );
         if DEBUG_GFXAPI {
             println!("Invoked method: new_texture({}, {}, ..., {}) -> {:?}",
                    width, height, gfx_texture_id, texture);
