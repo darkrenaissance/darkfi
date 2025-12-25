@@ -26,8 +26,9 @@ use arg::Args;
 use darkfi::{util::cli::ProgressInc, ANSI_LOGO};
 use darkfi_money_contract::{model::TokenId, MoneyFunction};
 use darkfi_sdk::crypto::{
-    contract_id::MONEY_CONTRACT_ID, poseidon_hash, BaseBlind, ContractId, FuncRef, PublicKey,
-    SecretKey,
+    contract_id::MONEY_CONTRACT_ID,
+    keypair::{Address, Network, StandardAddress},
+    poseidon_hash, BaseBlind, ContractId, FuncRef, PublicKey, SecretKey,
 };
 use rand::rngs::OsRng;
 use rayon::iter::ParallelIterator;
@@ -42,11 +43,12 @@ Arguments:
   <PREFIX>    Prefixes to search
 
 Options:
-  -c    Make the search case-sensitive
-  -t    Number of threads to use (defaults to number of available CPUs)
-  -A    Search for an address
-  -C    Search for a Contract ID
-  -T    Search for a Token ID
+  -c             Make the search case-sensitive
+  -t             Number of threads to use (defaults to number of available CPUs)
+  -A             Search for an address
+  -C             Search for a Contract ID
+  -T             Search for a Token ID
+  -n <network>   Network to search (mainnet/testnet, default=mainnet)
 "#;
 
 fn usage() {
@@ -54,7 +56,8 @@ fn usage() {
 }
 
 struct DrkAddr {
-    pub public: PublicKey,
+    pub address: Address,
+    pub _public: PublicKey,
     pub secret: SecretKey,
 }
 
@@ -70,7 +73,7 @@ struct DrkContract {
 }
 
 trait Prefixable {
-    fn new() -> Self;
+    fn new(network: Network) -> Self;
     fn to_string(&self) -> String;
     fn _get_secret(&self) -> SecretKey;
 
@@ -88,14 +91,17 @@ trait Prefixable {
 }
 
 impl Prefixable for DrkAddr {
-    fn new() -> Self {
+    fn new(network: Network) -> Self {
         let secret = SecretKey::random(&mut OsRng);
         let public = PublicKey::from_secret(secret);
-        Self { public, secret }
+        let address = StandardAddress::from_public(network, public).into();
+        Self { address, _public: public, secret }
     }
 
     fn to_string(&self) -> String {
-        self.public.to_string()
+        let mut a = self.address.to_string();
+        a.remove(0);
+        a.to_string()
     }
 
     fn _get_secret(&self) -> SecretKey {
@@ -104,7 +110,7 @@ impl Prefixable for DrkAddr {
 }
 
 impl Prefixable for DrkToken {
-    fn new() -> Self {
+    fn new(_network: Network) -> Self {
         // Generate the mint authority secret key and blind
         let secret = SecretKey::random(&mut OsRng);
         let blind = BaseBlind::random(&mut OsRng);
@@ -136,7 +142,7 @@ impl Prefixable for DrkToken {
 }
 
 impl Prefixable for DrkContract {
-    fn new() -> Self {
+    fn new(_network: Network) -> Self {
         let secret = SecretKey::random(&mut OsRng);
         let contract_id = ContractId::derive(secret);
         Self { contract_id, secret }
@@ -158,6 +164,8 @@ fn main() -> ExitCode {
     let mut addrflag = false;
     let mut toknflag = false;
     let mut ctrcflag = false;
+    let mut nflag = false;
+    let mut nvalue = "mainnet".to_string();
 
     let mut n_threads = available_parallelism().unwrap().get();
 
@@ -168,6 +176,10 @@ fn main() -> ExitCode {
             'T' => toknflag = true,
             'C' => ctrcflag = true,
             't' => n_threads = args.eargf().parse::<usize>().unwrap(),
+            'n' => {
+                nflag = true;
+                nvalue = args.eargf().to_string();
+            }
             _ => hflag = true,
         });
 
@@ -178,6 +190,15 @@ fn main() -> ExitCode {
         usage();
         return ExitCode::FAILURE
     }
+
+    let network = match nvalue.as_str() {
+        "mainnet" => Network::Mainnet,
+        "testnet" => Network::Testnet,
+        _ => {
+            eprintln!("Invalid network. Use 'testnet' or 'mainnet'.");
+            return ExitCode::FAILURE
+        }
+    };
 
     if (addrflag as u8 + toknflag as u8 + ctrcflag as u8) != 1 {
         eprintln!("The search flags are mutually exclusive. Use only one of -A/-C/-T.");
@@ -210,7 +231,7 @@ fn main() -> ExitCode {
         if addrflag {
             let addr = rayon::iter::repeat(DrkAddr::new)
                 .inspect(|_| progress_.inc(1))
-                .map(|create| create())
+                .map(|create| create(network))
                 .find_any(|address| address.starts_with_any(&argv, cflag))
                 .expect("Failed to find an address match");
 
@@ -222,14 +243,14 @@ fn main() -> ExitCode {
 
             println!(
                 "{{\"address\":\"{}\",\"attempts\":{attempts},\"secret\":\"{}\"}}",
-                addr.public, addr.secret,
+                addr.address, addr.secret,
             );
         }
 
         if toknflag {
             let tid = rayon::iter::repeat(DrkToken::new)
                 .inspect(|_| progress_.inc(1))
-                .map(|create| create())
+                .map(|create| create(network))
                 .find_any(|token_id| token_id.starts_with_any(&argv, cflag))
                 .expect("Failed to find a token ID match");
 
@@ -245,7 +266,7 @@ fn main() -> ExitCode {
         if ctrcflag {
             let cid = rayon::iter::repeat(DrkContract::new)
                 .inspect(|_| progress_.inc(1))
-                .map(|create| create())
+                .map(|create| create(network))
                 .find_any(|contract_id| contract_id.starts_with_any(&argv, cflag))
                 .expect("Failed to find a contract ID match");
 
