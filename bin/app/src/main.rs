@@ -297,7 +297,7 @@ async fn load_plugins(
     let sg_root2 = sg_root.clone();
     let fud = fud
         .setup(|me| async {
-            plugin::Fud::new(me, sg_root2, ex.clone()).await.expect("Fud pimpl setup")
+            plugin::FudPlugin::new(me, sg_root2, ex.clone()).await.expect("Fud pimpl setup")
         })
         .await;
 
