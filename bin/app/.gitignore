@@ -5,3 +5,5 @@ src/build_info.rs
 *.apk
 *.otf
 *.ttf
+*.zip
+/assets
