@@ -20,10 +20,6 @@ freetype-rs = { version = "0.37.0", features = ["bundled"] }
 image = "0.25.9"
 qoi = "0.4.1"
 
-# AV1 video decoding - rav1d with Rust API from leo030303 fork
-# Disable default features to avoid NASM dependency (asm)
-rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", default-features = false, features = ["bitdepth_8"] }
-
 tracing = "0.1.44"
 glam = "0.30.9"
 #zmq = "0.10.0"
@@ -68,6 +64,15 @@ peniko = "0.5.0"
 fluent = "0.17.0"
 unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
 indoc = "2.0.7"
+
+# AV1 video decoding - rav1d with Rust API from leo030303 fork
+# Disable default features to avoid NASM dependency (asm)
+rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
+
+# This makes a HUGE difference to decoding speed.
+# Over 160s to like 2s.
+[profile.dev.package.rav1d]
+opt-level = 3
 
 [features]
 emulate-android = []
