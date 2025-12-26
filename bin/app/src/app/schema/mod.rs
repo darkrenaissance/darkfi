@@ -43,7 +43,7 @@ pub mod test;
 const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
 
-#[cfg(any(target_os = "android", target_os = "ios", feature = "emulate-android"))]
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
@@ -77,53 +77,7 @@ mod ui_consts {
     }
 }
 
-#[cfg(target_os = "ios")]
-mod ui_consts {
-    use std::path::PathBuf;
-
-    pub const VID_PATH: &str = "forest_720x1280/{frame}.qoi";
-    pub const VID_ASPECT_RATIO: f32 = 9. / 16.;
-    pub use super::android_ui_consts::*;
-
-    fn get_ios_docs_dir() -> PathBuf {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(home).join("Documents")
-    }
-
-    pub fn get_chatdb_path() -> PathBuf {
-        let path = get_ios_docs_dir().join("darkfi/app/chatdb");
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        path
-    }
-
-    pub fn get_first_time_filename() -> PathBuf {
-        let path = get_ios_docs_dir().join("darkfi/app/first_time");
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        path
-    }
-
-    pub fn get_window_scale_filename() -> PathBuf {
-        let path = get_ios_docs_dir().join("darkfi/app/window_scale");
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        path
-    }
-
-    pub fn get_settingsdb_path() -> PathBuf {
-        let path = get_ios_docs_dir().join("darkfi/app/settings");
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        path
-    }
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 mod desktop_paths {
     use std::path::PathBuf;
 

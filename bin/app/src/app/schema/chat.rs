@@ -46,7 +46,7 @@ use crate::{
 
 use super::{ColorScheme, COLOR_SCHEME};
 
-#[cfg(any(target_os = "android", target_os = "ios", feature = "emulate-android"))]
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     use crate::gfx::{Point, Rectangle};
 
@@ -99,7 +99,7 @@ mod android_ui_consts {
     pub const ACTION_LABEL_POS: Point = Point::new(55., 50.);
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(target_os = "android")]
 mod ui_consts {
     pub use super::android_ui_consts::*;
 }

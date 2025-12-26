@@ -31,95 +31,6 @@ android: android-release
 
 # Platform release builds
 
-ios-release: $(SRC) fonts forest_720x1280 forest_1920x1080
-	# Create the app bundle structure
-	rm -rf DarkFi.app
-	mkdir -p DarkFi.app
-	# Build for iOS device (aarch64)
-	SDKROOT=$$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null); \
-	if [ -z "$$SDKROOT" ]; then \
-		SDKROOT=$$(xcodebuild -version -sdk iphoneos Path 2>/dev/null); \
-	fi; \
-	if [ -z "$$SDKROOT" ]; then \
-		echo "ERROR: Could not find iphoneos SDK."; \
-		echo "Current xcode-select path: $$(xcode-select -p)"; \
-		echo "Ensure Xcode is installed and selected: sudo xcode-select -s /Applications/Xcode.app"; \
-		exit 1; \
-	fi; \
-	export SDKROOT=$$SDKROOT; \
-	export IPHONEOS_DEPLOYMENT_TARGET=14.0; \
-	cargo build --target aarch64-apple-ios --release $(RELEASE_FEATURES)
-	# Copy the binary
-	cp target/aarch64-apple-ios/release/darkfi-app DarkFi.app/
-	# Copy resources
-	cp ios-Info.plist DarkFi.app/Info.plist
-	cp -r assets/lang DarkFi.app/
-	cp -r assets/forest_720x1280 DarkFi.app/
-	cp -r assets/forest_1920x1080 DarkFi.app/
-	cp assets/*.png DarkFi.app/ || true
-	cp embedded.mobileprovision DarkFi.app/ || echo "Warning: No provisioning profile found. Device builds will fail to launch."
-	cp ibm-plex-mono-regular.otf DarkFi.app/
-	cp NotoColorEmoji.ttf DarkFi.app/
-	# Sign the app bundle with entitlements
-	codesign --force --sign - --entitlements DarkFi.entitlements --timestamp=none DarkFi.app
-	# Create a dummy PkgInfo (optional but good practice)
-	echo "APPL????" > DarkFi.app/PkgInfo
-	@echo "DarkFi.app built for device (aarch64)."
-
-ios-sim: $(SRC) fonts forest_720x1280 forest_1920x1080
-	# Create the app bundle structure
-	rm -rf DarkFi.app
-	mkdir -p DarkFi.app
-	# Build for iOS simulator (Detect Arch)
-	SDKROOT=$$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null); \
-	if [ -z "$$SDKROOT" ]; then \
-		SDKROOT=$$(xcodebuild -version -sdk iphonesimulator Path 2>/dev/null); \
-	fi; \
-	if [ -z "$$SDKROOT" ]; then \
-		echo "ERROR: Could not find iphonesimulator SDK."; \
-		echo "Current xcode-select path: $$(xcode-select -p)"; \
-		echo "Ensure Xcode is installed and selected: sudo xcode-select -s /Applications/Xcode.app"; \
-		exit 1; \
-	fi; \
-	export SDKROOT=$$SDKROOT; \
-	export IPHONEOS_DEPLOYMENT_TARGET=14.0; \
-	ARCH=$$(uname -m); \
-	if [ "$$ARCH" = "arm64" ]; then \
-		echo "Detected Apple Silicon (arm64). Building for aarch64-apple-ios-sim..."; \
-		cargo build --target aarch64-apple-ios-sim --release $(RELEASE_FEATURES); \
-		cp target/aarch64-apple-ios-sim/release/darkfi-app DarkFi.app/; \
-	else \
-		echo "Detected Intel (x86_64). Building for x86_64-apple-ios..."; \
-		cargo build --target x86_64-apple-ios --release $(RELEASE_FEATURES); \
-		cp target/x86_64-apple-ios/release/darkfi-app DarkFi.app/; \
-	fi
-	# Copy resources
-	cp ios-Info.plist DarkFi.app/Info.plist
-	cp -r assets/lang DarkFi.app/
-	cp -r assets/forest_720x1280 DarkFi.app/
-	cp -r assets/forest_1920x1080 DarkFi.app/
-	cp assets/*.png DarkFi.app/ || true
-	cp ibm-plex-mono-regular.otf DarkFi.app/
-	cp NotoColorEmoji.ttf DarkFi.app/
-	# Sign the app bundle with entitlements
-	codesign --force --sign - --entitlements DarkFi.entitlements --timestamp=none DarkFi.app
-	echo "APPL????" > DarkFi.app/PkgInfo
-	@echo "DarkFi.app built for simulator."
-
-ios-xcode:
-	rm -rf DarkFi.xcodeproj
-	mkdir -p DarkFi.xcodeproj
-	# Generate unique IDs for the project file (24 chars)
-	sed -e "s/CONFIG_LIST_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/MAIN_GROUP_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/LEGACY_TARGET_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/PROJECT_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/PROJECT_CONFIG_LIST_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/DEBUG_CONFIG_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    -e "s/RELEASE_CONFIG_ID/$$(uuidgen | tr -d - | tr '[:lower:]' '[:upper:]' | cut -c 1-24)/g" \
-	    project.pbxproj.template > DarkFi.xcodeproj/project.pbxproj
-	@echo "Generated DarkFi.xcodeproj. Open it in Xcode and ensure the 'External Build Tool' configuration points to 'make' and target 'ios-release' in this directory."
-
 macos-release: build-release
 	-mv darkfi-app darkfi-app.macos
 macos-debug: build-debug
@@ -163,14 +74,14 @@ forest_1920x1080.zip:
 assets/forest_1920x1080/000.qoi:
 	cd assets && unzip ../forest_1920x1080.zip
 forest_1920x1080: forest_1920x1080.zip assets/forest_1920x1080/000.qoi
-	# rm -fr assets/forest_729x1280/
+	rm -fr assets/forest_729x1280/
 
 forest_720x1280.zip:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest_720x1280.zip
 assets/forest_720x1280/000.qoi:
 	cd assets && unzip ../forest_720x1280.zip
 forest_720x1280: forest_720x1280.zip assets/forest_720x1280/000.qoi
-	# rm -fr assets/forest_1920x1080/
+	rm -fr assets/forest_1920x1080/
 
 # Developer targets
 
@@ -201,9 +112,6 @@ fmt:
 
 clean:
 	podman run -v $(shell pwd):/root/dw -w /root/dw -t apk rm -fr target/
-	rm -fr target/
 	rm -f darkfi-app.apk
-	rm -rf DarkFi.app
-	rm -rf DarkFi.xcodeproj
 
 .PHONY: all android cli clean

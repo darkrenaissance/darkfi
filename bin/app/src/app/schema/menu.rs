@@ -31,7 +31,7 @@ use crate::{
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
-#[cfg(any(target_os = "android", target_os = "ios", feature = "emulate-android"))]
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
     pub const CHANNEL_LABEL_Y: f32 = 35.;
@@ -39,7 +39,7 @@ mod android_ui_consts {
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(target_os = "android")]
 mod ui_consts {
     pub use super::android_ui_consts::*;
 }
