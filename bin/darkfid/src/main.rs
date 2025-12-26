@@ -135,9 +135,9 @@ pub struct BlockchainNetwork {
     /// Main server JSON-RPC settings
     rpc: RpcSettingsOpt,
 
-    #[structopt(flatten)]
-    /// Stratum server JSON-RPC settings
-    stratum_rpc: RpcSettingsOpt,
+    #[structopt(skip)]
+    /// Stratum server JSON-RPC settings (optional)
+    stratum_rpc: Option<RpcSettingsOpt>,
 
     #[structopt(skip)]
     /// Merge mining server JSON-RPC settings (optional)
@@ -248,7 +248,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         .start(
             &ex,
             &blockchain_config.rpc.into(),
-            &blockchain_config.stratum_rpc.into(),
+            &blockchain_config.stratum_rpc.map(|stratum_rpc_opts| stratum_rpc_opts.into()),
             &blockchain_config.mm_rpc.map(|mm_rpc_opts| mm_rpc_opts.into()),
             &config,
         )

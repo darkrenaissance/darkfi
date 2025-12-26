@@ -30,7 +30,7 @@ use tracing::{error, info};
 
 use crate::{
     proto::ProposalMessage,
-    rpc_miner::{generate_next_block, MinerRewardsRecipientConfig},
+    registry::model::{generate_next_block, MinerRewardsRecipientConfig},
     BlockTemplate, DarkfiNode, MiningJobs,
 };
 
@@ -132,7 +132,7 @@ impl DarkfiNode {
         // JSONRPC notifications to this connection when a new job is available.
 
         // We'll clear any existing jobs for this login.
-        let mut mining_jobs = self.mining_jobs.lock().await;
+        let mut mining_jobs = self.registry.mining_jobs.lock().await;
         mining_jobs.insert(conn_id, MiningJobs::default());
 
         // Find applicable chain fork
@@ -165,8 +165,8 @@ impl DarkfiNode {
         let (target, block, secret) = match generate_next_block(
             &mut extended_fork,
             &recipient_config,
-            &self.powrewardv1_zk.zkbin,
-            &self.powrewardv1_zk.provingkey,
+            &self.registry.powrewardv1_zk.zkbin,
+            &self.registry.powrewardv1_zk.provingkey,
             target,
             self.validator.verify_fees,
         )
@@ -285,7 +285,7 @@ impl DarkfiNode {
         let job_id: [u8; 32] = job_id.try_into().unwrap();
 
         // We should be aware of this conn_id and job_id.
-        let mut mining_jobs = self.mining_jobs.lock().await;
+        let mut mining_jobs = self.registry.mining_jobs.lock().await;
         let Some(jobs) = mining_jobs.get_mut(&conn_id) else {
             return JsonError::new(InvalidParams, None, id).into()
         };

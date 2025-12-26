@@ -224,8 +224,8 @@ async fn consensus_task(
 /// active forks or last confirmed block.
 async fn clean_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
     // Grab a lock over node mining templates
-    let mut blocktemplates = node.blocktemplates.lock().await;
-    let mut mm_blocktemplates = node.mm_blocktemplates.lock().await;
+    let mut blocktemplates = node.registry.blocktemplates.lock().await;
+    let mut mm_blocktemplates = node.registry.mm_blocktemplates.lock().await;
 
     // Early return if no mining block templates exist
     if blocktemplates.is_empty() && mm_blocktemplates.is_empty() {
@@ -268,20 +268,20 @@ async fn clean_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
 
     // Loop through merge mining templates to find which can be dropped
     let mut dropped_templates = vec![];
-    'outer: for (key, (block, _, _)) in mm_blocktemplates.iter() {
+    'outer: for (key, blocktemplate) in mm_blocktemplates.iter() {
         // Loop through all the forks
         for fork in forks.iter() {
             // Traverse fork proposals sequence in reverse
             for p_hash in fork.proposals.iter().rev() {
                 // Check if job extends this fork
-                if &block.header.previous == p_hash {
+                if &blocktemplate.block.header.previous == p_hash {
                     continue 'outer
                 }
             }
         }
 
         // Check if it extends last confirmed block
-        if block.header.previous == last_confirmed {
+        if blocktemplate.block.header.previous == last_confirmed {
             continue
         }
 

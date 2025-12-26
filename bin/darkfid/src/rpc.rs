@@ -122,7 +122,7 @@ impl RequestHandler<StratumRpcHandler> for DarkfiNode {
 	}
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
-        self.stratum_rpc_connections.lock().await
+        self.registry.stratum_rpc_connections.lock().await
     }
 }
 
@@ -148,7 +148,7 @@ impl RequestHandler<MmRpcHandler> for DarkfiNode {
     }
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
-        self.mm_rpc_connections.lock().await
+        self.registry.mm_rpc_connections.lock().await
     }
 }
 

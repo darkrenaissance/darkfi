@@ -51,6 +51,7 @@ use url::Url;
 
 use crate::{
     proto::{DarkfidP2pHandler, ProposalMessage},
+    registry::DarkfiMinersRegistry,
     task::sync::sync_task,
     DarkfiNode, DarkfiNodePtr,
 };
@@ -292,16 +293,18 @@ pub async fn generate_node(
     subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
+    let registry = DarkfiMinersRegistry::init(&validator)?;
     let node = DarkfiNode::new(
         Network::Mainnet,
-        p2p_handler.clone(),
         validator.clone(),
+        p2p_handler.clone(),
+        registry,
         50,
         subscribers.clone(),
     )
     .await?;
 
-    p2p_handler.clone().start(ex, &validator, &subscribers).await?;
+    p2p_handler.start(ex, &validator, &subscribers).await?;
 
     node.validator.consensus.generate_empty_fork().await?;
 

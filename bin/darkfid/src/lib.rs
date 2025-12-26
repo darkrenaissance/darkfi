@@ -25,7 +25,6 @@ use smol::lock::Mutex;
 use tracing::{debug, error, info};
 
 use darkfi::{
-    blockchain::BlockInfo,
     net::settings::Settings,
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -34,15 +33,9 @@ use darkfi::{
     },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
-    zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_money_contract::MONEY_CONTRACT_ZKAS_MINT_NS_V1;
-use darkfi_sdk::crypto::{
-    keypair::{Network, SecretKey},
-    MONEY_CONTRACT_ID,
-};
+use darkfi_sdk::crypto::keypair::Network;
 
 #[cfg(test)]
 mod tests;
@@ -55,9 +48,8 @@ mod rpc;
 use rpc::{DefaultRpcHandler, MmRpcHandler, StratumRpcHandler};
 mod rpc_blockchain;
 mod rpc_miner;
-mod rpc_tx;
-use rpc_miner::BlockTemplate;
 mod rpc_stratum;
+mod rpc_tx;
 mod rpc_xmr;
 
 /// Validator async tasks
@@ -68,106 +60,52 @@ use task::{consensus::ConsensusInitTaskConfig, consensus_init_task};
 mod proto;
 use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
 
+/// Miners registry
+mod registry;
+use registry::{
+    model::{BlockTemplate, MiningJobs},
+    DarkfiMinersRegistry, DarkfiMinersRegistryPtr,
+};
+
 /// Atomic pointer to the DarkFi node
 pub type DarkfiNodePtr = Arc<DarkfiNode>;
-
-/// Storage for active mining jobs. These are stored per connection ID.
-/// A new map will be made for each stratum login.
-#[derive(Debug, Default)]
-pub struct MiningJobs(HashMap<[u8; 32], BlockTemplate>);
-
-impl MiningJobs {
-    pub fn insert(&mut self, job_id: [u8; 32], blocktemplate: BlockTemplate) {
-        self.0.insert(job_id, blocktemplate);
-    }
-
-    pub fn get(&self, job_id: &[u8; 32]) -> Option<&BlockTemplate> {
-        self.0.get(job_id)
-    }
-
-    pub fn get_mut(&mut self, job_id: &[u8; 32]) -> Option<&mut BlockTemplate> {
-        self.0.get_mut(job_id)
-    }
-}
 
 /// Structure representing a DarkFi node
 pub struct DarkfiNode {
     /// Blockchain network
     network: Network,
-    /// P2P network protocols handler.
-    p2p_handler: DarkfidP2pHandlerPtr,
     /// Validator(node) pointer
     validator: ValidatorPtr,
+    /// P2P network protocols handler
+    p2p_handler: DarkfidP2pHandlerPtr,
+    /// Node miners registry pointer
+    registry: DarkfiMinersRegistryPtr,
     /// Garbage collection task transactions batch size
     txs_batch_size: usize,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
-    /// Native mining block templates
-    blocktemplates: Mutex<HashMap<Vec<u8>, BlockTemplate>>,
-    /// Active mining jobs per connection ID
-    mining_jobs: Mutex<HashMap<[u8; 32], MiningJobs>>,
-    /// Merge mining block templates
-    mm_blocktemplates: Mutex<HashMap<Vec<u8>, (BlockInfo, f64, SecretKey)>>,
     /// Main JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// Stratum JSON-RPC connection tracker
-    stratum_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// HTTP JSON-RPC connection tracker
-    mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// PowRewardV1 ZK data
-    powrewardv1_zk: PowRewardV1Zk,
 }
 
 impl DarkfiNode {
     pub async fn new(
         network: Network,
-        p2p_handler: DarkfidP2pHandlerPtr,
         validator: ValidatorPtr,
+        p2p_handler: DarkfidP2pHandlerPtr,
+        registry: DarkfiMinersRegistryPtr,
         txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
     ) -> Result<DarkfiNodePtr> {
-        let powrewardv1_zk = PowRewardV1Zk::new(validator.clone())?;
-
         Ok(Arc::new(Self {
             network,
-            p2p_handler,
             validator,
+            p2p_handler,
+            registry,
             txs_batch_size,
             subscribers,
-            mining_jobs: Mutex::new(HashMap::new()),
-            blocktemplates: Mutex::new(HashMap::new()),
-            mm_blocktemplates: Mutex::new(HashMap::new()),
             rpc_connections: Mutex::new(HashSet::new()),
-            stratum_rpc_connections: Mutex::new(HashSet::new()),
-            mm_rpc_connections: Mutex::new(HashSet::new()),
-            powrewardv1_zk,
         }))
-    }
-}
-
-/// ZK data used to generate the "coinbase" transaction in a block
-pub(crate) struct PowRewardV1Zk {
-    pub zkbin: ZkBinary,
-    pub provingkey: ProvingKey,
-}
-
-impl PowRewardV1Zk {
-    pub fn new(validator: ValidatorPtr) -> Result<Self> {
-        info!(
-            target: "darkfid::PowRewardV1Zk::new",
-            "Generating PowRewardV1 ZkCircuit and ProvingKey...",
-        );
-
-        let (zkbin, _) = validator.blockchain.contracts.get_zkas(
-            &validator.blockchain.sled_db,
-            &MONEY_CONTRACT_ID,
-            MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-        )?;
-
-        let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
-        let provingkey = ProvingKey::build(zkbin.k, &circuit);
-
-        Ok(Self { zkbin, provingkey })
     }
 }
 
@@ -182,10 +120,6 @@ pub struct Darkfid {
     dnet_task: StoppableTaskPtr,
     /// Main JSON-RPC background task
     rpc_task: StoppableTaskPtr,
-    /// Stratum JSON-RPC background task
-    stratum_rpc_task: StoppableTaskPtr,
-    /// HTTP JSON-RPC background task
-    mm_rpc_task: StoppableTaskPtr,
     /// Consensus protocol background task
     consensus_task: StoppableTaskPtr,
 }
@@ -210,6 +144,9 @@ impl Darkfid {
         // Initialize P2P network
         let p2p_handler = DarkfidP2pHandler::init(net_settings, ex).await?;
 
+        // Initialize the miners registry
+        let registry = DarkfiMinersRegistry::init(&validator)?;
+
         // Grab blockchain network configured transactions batch size for garbage collection
         let txs_batch_size = match txs_batch_size {
             Some(b) => {
@@ -231,25 +168,17 @@ impl Darkfid {
 
         // Initialize node
         let node =
-            DarkfiNode::new(network, p2p_handler, validator, txs_batch_size, subscribers).await?;
+            DarkfiNode::new(network, validator, p2p_handler, registry, txs_batch_size, subscribers)
+                .await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
         let rpc_task = StoppableTask::new();
-        let stratum_rpc_task = StoppableTask::new();
-        let mm_rpc_task = StoppableTask::new();
         let consensus_task = StoppableTask::new();
 
         info!(target: "darkfid::Darkfid::init", "Darkfi daemon initialized successfully!");
 
-        Ok(Arc::new(Self {
-            node,
-            dnet_task,
-            rpc_task,
-            stratum_rpc_task,
-            mm_rpc_task,
-            consensus_task,
-        }))
+        Ok(Arc::new(Self { node, dnet_task, rpc_task, consensus_task }))
     }
 
     /// Start the DarkFi daemon in the given executor, using the provided JSON-RPC listen url
@@ -258,7 +187,7 @@ impl Darkfid {
         &self,
         executor: &ExecutorPtr,
         rpc_settings: &RpcSettings,
-        stratum_rpc_settings: &RpcSettings,
+        stratum_rpc_settings: &Option<RpcSettings>,
         mm_rpc_settings: &Option<RpcSettings>,
         config: &ConsensusInitTaskConfig,
     ) -> Result<()> {
@@ -302,53 +231,13 @@ impl Darkfid {
             executor.clone(),
         );
 
-        // Start the stratum server JSON-RPC task
-        info!(target: "darkfid::Darkfid::start", "Starting Stratum JSON-RPC server");
-        let node_ = self.node.clone();
-        self.stratum_rpc_task.clone().start(
-            listen_and_serve::<StratumRpcHandler>(stratum_rpc_settings.clone(), self.node.clone(), None, executor.clone()),
-            |res| async move {
-                match res {
-                    Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<StratumRpcHandler>>::stop_connections(&node_).await,
-                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting Stratum JSON-RPC server: {e}"),
-                }
-            },
-            Error::RpcServerStopped,
-            executor.clone(),
-        );
-
-        // Start the merge mining JSON-RPC task
-        if let Some(mm_rpc) = mm_rpc_settings {
-            info!(target: "darkfid::Darkfid::start", "Starting merge mining JSON-RPC server");
-            let node_ = self.node.clone();
-            self.mm_rpc_task.clone().start(
-                listen_and_serve::<MmRpcHandler>(mm_rpc.clone(), self.node.clone(), None, executor.clone()),
-                |res| async move {
-                    match res {
-                        Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<MmRpcHandler>>::stop_connections(&node_).await,
-                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting merge mining JSON-RPC server: {e}"),
-                    }
-                },
-                Error::RpcServerStopped,
-                executor.clone(),
-            );
-        } else {
-            // Create a dummy task
-            self.mm_rpc_task.clone().start(
-                async { Ok(()) },
-                |_| async { /* Do nothing */ },
-                Error::RpcServerStopped,
-                executor.clone(),
-            );
-        }
+        // Start the miners registry
+        info!(target: "darkfid::Darkfid::start", "Starting miners registry");
+        self.node.registry.start(executor, &self.node, stratum_rpc_settings, mm_rpc_settings)?;
 
         // Start the P2P network
         info!(target: "darkfid::Darkfid::start", "Starting P2P network");
-        self.node
-            .p2p_handler
-            .clone()
-            .start(executor, &self.node.validator, &self.node.subscribers)
-            .await?;
+        self.node.p2p_handler.start(executor, &self.node.validator, &self.node.subscribers).await?;
 
         // Start the consensus protocol
         info!(target: "darkfid::Darkfid::start", "Starting consensus protocol task");
@@ -380,17 +269,13 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::stop", "Stopping dnet subs task...");
         self.dnet_task.stop().await;
 
-        // Stop the JSON-RPC task
+        // Stop the main JSON-RPC task
         info!(target: "darkfid::Darkfid::stop", "Stopping main JSON-RPC server...");
         self.rpc_task.stop().await;
 
-        // Stop the Stratum JSON-RPC task
-        info!(target: "darkfid::Darkfid::stop", "Stopping Stratum JSON-RPC server...");
-        self.stratum_rpc_task.stop().await;
-
-        // Stop the merge mining JSON-RPC task
-        info!(target: "darkfid::Darkfid::stop", "Stopping merge mining JSON-RPC server...");
-        self.mm_rpc_task.stop().await;
+        // Stop the miners registry
+        info!(target: "darkfid::Darkfid::stop", "Stopping miners registry...");
+        self.node.registry.stop().await;
 
         // Stop the P2P network
         info!(target: "darkfid::Darkfid::stop", "Stopping P2P network protocols handler...");

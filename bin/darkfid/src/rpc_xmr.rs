@@ -42,7 +42,7 @@ use tracing::{error, info};
 
 use crate::{
     proto::ProposalMessage,
-    rpc_miner::{generate_next_block, MinerRewardsRecipientConfig},
+    registry::model::{generate_next_block, MinerRewardsRecipientConfig, MmBlockTemplate},
     server_error, DarkfiNode, RpcError,
 };
 
@@ -208,7 +208,7 @@ impl DarkfiNode {
         // We'll also obtain a lock here to avoid getting polled
         // multiple times and potentially missing a job. The lock is
         // released when this function exits.
-        let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
+        let mut mm_blocktemplates = self.registry.mm_blocktemplates.lock().await;
         let mut extended_fork = match self.validator.best_current_fork().await {
             Ok(f) => f,
             Err(e) => {
@@ -219,7 +219,7 @@ impl DarkfiNode {
                 return JsonError::new(ErrorCode::InternalError, None, id).into()
             }
         };
-        if let Some((block, difficulty, _)) = mm_blocktemplates.get(&address_bytes) {
+        if let Some(blocktemplate) = mm_blocktemplates.get(&address_bytes) {
             let last_proposal = match extended_fork.last_proposal() {
                 Ok(p) => p,
                 Err(e) => {
@@ -230,13 +230,13 @@ impl DarkfiNode {
                     return JsonError::new(ErrorCode::InternalError, None, id).into()
                 }
             };
-            if last_proposal.hash == block.header.previous {
-                let blockhash = block.header.template_hash();
+            if last_proposal.hash == blocktemplate.block.header.previous {
+                let blockhash = blocktemplate.block.header.template_hash();
                 return if blockhash != aux_hash {
                     JsonResponse::new(
                         JsonValue::from(HashMap::from([
                             ("aux_blob".to_string(), JsonValue::from(hex::encode(address_bytes))),
-                            ("aux_diff".to_string(), JsonValue::from(*difficulty)),
+                            ("aux_diff".to_string(), JsonValue::from(blocktemplate.difficulty)),
                             ("aux_hash".to_string(), JsonValue::from(blockhash.as_string())),
                         ])),
                         id,
@@ -279,11 +279,11 @@ impl DarkfiNode {
             }
         };
 
-        let (_, blocktemplate, block_signing_secret) = match generate_next_block(
+        let (_, block, block_signing_secret) = match generate_next_block(
             &mut extended_fork,
             &recipient_config,
-            &self.powrewardv1_zk.zkbin,
-            &self.powrewardv1_zk.provingkey,
+            &self.registry.powrewardv1_zk.zkbin,
+            &self.registry.powrewardv1_zk.provingkey,
             self.validator.consensus.module.read().await.target,
             self.validator.verify_fees,
         )
@@ -301,9 +301,11 @@ impl DarkfiNode {
 
         // Now we have the blocktemplate. We'll mark it down in memory,
         // and then ship it to RPC.
-        let blockhash = blocktemplate.header.template_hash();
-        mm_blocktemplates
-            .insert(address_bytes.clone(), (blocktemplate, difficulty, block_signing_secret));
+        let blockhash = block.header.template_hash();
+        mm_blocktemplates.insert(
+            address_bytes.clone(),
+            MmBlockTemplate { block, difficulty, secret: block_signing_secret },
+        );
         info!(
             target: "darkfid::rpc_xmr::xmr_merge_mining_get_aux_block",
             "[RPC-XMR] Created new blocktemplate: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}, aux_hash={blockhash}, height={height}, prev_id={prev_id}"
@@ -406,7 +408,7 @@ impl DarkfiNode {
         };
 
         // If we don't know about this job, we can just abort here.
-        let mut mm_blocktemplates = self.mm_blocktemplates.lock().await;
+        let mut mm_blocktemplates = self.registry.mm_blocktemplates.lock().await;
         if !mm_blocktemplates.contains_key(&address_bytes) {
             return server_error(RpcError::MinerUnknownJob, id, None)
         }
@@ -487,10 +489,10 @@ impl DarkfiNode {
         };
 
         // Append MoneroPowData to the DarkFi block and sign it
-        let (block, _, secret) = &mm_blocktemplates.get(&address_bytes).unwrap();
-        let mut block = block.clone();
+        let blocktemplate = &mm_blocktemplates.get(&address_bytes).unwrap();
+        let mut block = blocktemplate.block.clone();
         block.header.pow_data = PowData::Monero(monero_pow_data);
-        block.sign(secret);
+        block.sign(&blocktemplate.secret);
 
         // At this point we should be able to remove the submitted job.
         // We still won't release the lock in hope of proposing the block
