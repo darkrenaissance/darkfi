@@ -16,17 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
+
+use async_trait::async_trait;
+use smol::lock::MutexGuard;
+use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use darkfi::{
-    rpc::jsonrpc::{ErrorCode, ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    rpc::{
+        jsonrpc::{
+            ErrorCode, ErrorCode::InvalidParams, JsonError, JsonRequest, JsonResponse, JsonResult,
+        },
+        server::RequestHandler,
+    },
+    system::StoppableTaskPtr,
     util::{encoding::base64, time::Timestamp},
     validator::consensus::Proposal,
 };
 use darkfi_sdk::crypto::keypair::Address;
 use darkfi_serial::serialize_async;
-use tinyjson::JsonValue;
-use tracing::{error, info};
 
 use crate::{
     proto::ProposalMessage,
@@ -36,6 +48,31 @@ use crate::{
 
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM.md
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM_EXT.md
+
+/// JSON-RPC `RequestHandler` for Stratum
+pub struct StratumRpcHandler;
+
+#[async_trait]
+#[rustfmt::skip]
+impl RequestHandler<StratumRpcHandler> for DarkfiNode {
+	async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+		debug!(target: "darkfid::stratum_rpc", "--> {}", req.stringify().unwrap());
+
+		match req.method.as_str() {
+			// ======================
+			// Stratum mining methods
+			// ======================
+			"login" => self.stratum_login(req.id, req.params).await,
+			"submit" => self.stratum_submit(req.id, req.params).await,
+			"keepalived" => self.stratum_keepalived(req.id, req.params).await,
+			_ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+		}
+	}
+
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
+        self.registry.stratum_rpc_connections.lock().await
+    }
+}
 
 // TODO: We often just return InvalidParams. These should be cleaned up
 // and more verbose.

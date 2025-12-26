@@ -45,12 +45,7 @@ use error::{server_error, RpcError};
 
 /// JSON-RPC requests handler and methods
 mod rpc;
-use rpc::{DefaultRpcHandler, MmRpcHandler, StratumRpcHandler};
-mod rpc_blockchain;
-mod rpc_miner;
-mod rpc_stratum;
-mod rpc_tx;
-mod rpc_xmr;
+use rpc::DefaultRpcHandler;
 
 /// Validator async tasks
 pub mod task;

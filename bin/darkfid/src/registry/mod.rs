@@ -34,7 +34,10 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::{DarkfiNode, DarkfiNodePtr, MmRpcHandler, StratumRpcHandler};
+use crate::{
+    rpc::{rpc_stratum::StratumRpcHandler, rpc_xmr::MmRpcHandler},
+    DarkfiNode, DarkfiNodePtr,
+};
 
 /// Block related structures
 pub mod model;

@@ -36,12 +36,24 @@ use darkfi::{
 
 use crate::DarkfiNode;
 
+/// Blockchain related methods
+mod rpc_blockchain;
+
+/// Transactions related methods
+mod rpc_tx;
+
+// TODO: drop
+/// minerd related methods
+mod rpc_miner;
+
+/// Stratum JSON-RPC related methods for native mining
+pub mod rpc_stratum;
+
+/// HTTP JSON-RPC related methods for merge mining
+pub mod rpc_xmr;
+
 /// Default JSON-RPC `RequestHandler`
 pub struct DefaultRpcHandler;
-/// JSON-RPC `RequestHandler` for Stratum
-pub struct StratumRpcHandler;
-/// HTTP JSON-RPC `RequestHandler` for p2pool/merge mining
-pub struct MmRpcHandler;
 
 #[async_trait]
 #[rustfmt::skip]
@@ -83,6 +95,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "tx.clean_pending" => self.tx_clean_pending(req.id, req.params).await,
             "tx.calculate_fee" => self.tx_calculate_fee(req.id, req.params).await,
 
+            // TODO: drop
             // =============
             // Miner methods
             // =============
@@ -101,54 +114,6 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
-    }
-}
-
-#[async_trait]
-#[rustfmt::skip]
-impl RequestHandler<StratumRpcHandler> for DarkfiNode {
-	async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-		debug!(target: "darkfid::stratum_rpc", "--> {}", req.stringify().unwrap());
-
-		match req.method.as_str() {
-			// ======================
-			// Stratum mining methods
-			// ======================
-			"login" => self.stratum_login(req.id, req.params).await,
-			"submit" => self.stratum_submit(req.id, req.params).await,
-			"keepalived" => self.stratum_keepalived(req.id, req.params).await,
-			_ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-		}
-	}
-
-    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
-        self.registry.stratum_rpc_connections.lock().await
-    }
-}
-
-#[async_trait]
-#[rustfmt::skip]
-impl RequestHandler<MmRpcHandler> for DarkfiNode {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        debug!(target: "darkfid::mm_rpc", "--> {}", req.stringify().unwrap());
-
-        match req.method.as_str() {
-            // ================================================
-            // P2Pool methods requested for Monero Merge Mining
-            // ================================================
-            "merge_mining_get_chain_id" => self.xmr_merge_mining_get_chain_id(req.id, req.params).await,
-            "merge_mining_get_aux_block" => self.xmr_merge_mining_get_aux_block(req.id, req.params).await,
-            "merge_mining_submit_solution" => self.xmr_merge_mining_submit_solution(req.id, req.params).await,
-
-            // ==============
-            // Invalid method
-            // ==============
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-        }
-    }
-
-    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
-        self.registry.mm_rpc_connections.lock().await
     }
 }
 

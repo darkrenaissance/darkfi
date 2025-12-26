@@ -16,7 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
+
+use async_trait::async_trait;
+use hex::FromHex;
+use smol::lock::MutexGuard;
+use tinyjson::JsonValue;
+use tracing::{debug, error, info};
 
 use darkfi::{
     blockchain::{
@@ -27,7 +36,13 @@ use darkfi::{
         },
         HeaderHash,
     },
-    rpc::jsonrpc::{ErrorCode, ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    rpc::{
+        jsonrpc::{
+            ErrorCode, ErrorCode::InvalidParams, JsonError, JsonRequest, JsonResponse, JsonResult,
+        },
+        server::RequestHandler,
+    },
+    system::StoppableTaskPtr,
     util::encoding::base64,
     validator::consensus::Proposal,
 };
@@ -36,9 +51,6 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
-use hex::FromHex;
-use tinyjson::JsonValue;
-use tracing::{error, info};
 
 use crate::{
     proto::ProposalMessage,
@@ -47,6 +59,35 @@ use crate::{
 };
 
 // https://github.com/SChernykh/p2pool/blob/master/docs/MERGE_MINING.MD
+
+/// HTTP JSON-RPC `RequestHandler` for p2pool/merge mining
+pub struct MmRpcHandler;
+
+#[async_trait]
+#[rustfmt::skip]
+impl RequestHandler<MmRpcHandler> for DarkfiNode {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+        debug!(target: "darkfid::mm_rpc", "--> {}", req.stringify().unwrap());
+
+        match req.method.as_str() {
+            // ================================================
+            // P2Pool methods requested for Monero Merge Mining
+            // ================================================
+            "merge_mining_get_chain_id" => self.xmr_merge_mining_get_chain_id(req.id, req.params).await,
+            "merge_mining_get_aux_block" => self.xmr_merge_mining_get_aux_block(req.id, req.params).await,
+            "merge_mining_submit_solution" => self.xmr_merge_mining_submit_solution(req.id, req.params).await,
+
+            // ==============
+            // Invalid method
+            // ==============
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        }
+    }
+
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
+        self.registry.mm_rpc_connections.lock().await
+    }
+}
 
 impl DarkfiNode {
     // RPCAPI:
