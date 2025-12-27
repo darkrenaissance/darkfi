@@ -109,7 +109,7 @@ pub struct Header {
 impl Header {
     /// Generates a new header with default transactions and state root,
     /// using DarkFi native Proof of Work data.
-    pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u32) -> Self {
+    pub fn new(previous: HeaderHash, height: u32, nonce: u32, timestamp: Timestamp) -> Self {
         let version = block_version(height);
         let transactions_root = MerkleTree::new(1).root(0).unwrap();
         let state_root = *EMPTY_HASH;
@@ -118,8 +118,8 @@ impl Header {
             version,
             previous,
             height,
-            timestamp,
             nonce,
+            timestamp,
             transactions_root,
             state_root,
             pow_data,
@@ -179,8 +179,8 @@ impl Header {
         }
     }
 
-    /// Create a blockhashing blob from this header
-    pub fn to_blockhashing_blob(&self) -> Vec<u8> {
+    /// Create a block hashing blob from this header.
+    pub fn to_block_hashing_blob(&self) -> Vec<u8> {
         // For XMRig, we need to pad the blob so that our nonce ends
         // up at byte offset 39.
         let mut blob = vec![0x00, 0x00];
@@ -195,8 +195,8 @@ impl Default for Header {
         Header::new(
             HeaderHash::new(blake3::hash(b"Let there be dark!").into()),
             0u32,
-            Timestamp::current_time(),
             0u32,
+            Timestamp::current_time(),
         )
     }
 }

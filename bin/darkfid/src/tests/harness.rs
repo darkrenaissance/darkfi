@@ -231,7 +231,7 @@ impl Harness {
         let timestamp = previous.header.timestamp.checked_add(1.into())?;
 
         // Generate header
-        let header = Header::new(previous.hash(), block_height, timestamp, last_nonce);
+        let header = Header::new(previous.hash(), block_height, last_nonce, timestamp);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header);
@@ -293,16 +293,10 @@ pub async fn generate_node(
     subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
-    let registry = DarkfiMinersRegistry::init(&validator)?;
-    let node = DarkfiNode::new(
-        Network::Mainnet,
-        validator.clone(),
-        p2p_handler.clone(),
-        registry,
-        50,
-        subscribers.clone(),
-    )
-    .await?;
+    let registry = DarkfiMinersRegistry::init(Network::Mainnet, &validator)?;
+    let node =
+        DarkfiNode::new(validator.clone(), p2p_handler.clone(), registry, 50, subscribers.clone())
+            .await?;
 
     p2p_handler.start(ex, &validator, &subscribers).await?;
 

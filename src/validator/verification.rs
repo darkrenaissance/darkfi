@@ -1017,6 +1017,7 @@ pub async fn verify_transactions(
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {e}");
                 erroneous_txs.push(tx.clone());
+                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 overlay.lock().unwrap().revert_to_checkpoint()?;
                 continue
             }
@@ -1036,6 +1037,7 @@ pub async fn verify_transactions(
                 tx.hash()
             );
             erroneous_txs.push(tx.clone());
+            overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
             overlay.lock().unwrap().revert_to_checkpoint()?;
             break
         }

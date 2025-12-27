@@ -91,14 +91,7 @@ async fn simulate_unproposed_txs(
     let best_fork = &forks[best_fork_index(&forks)?];
 
     // Retrieve unproposed transactions
-    let (tx, total_gas_used, _, _) = best_fork
-        .unproposed_txs(
-            &best_fork.clone().blockchain,
-            current_block_height,
-            validator.consensus.module.read().await.target,
-            false,
-        )
-        .await?;
+    let (tx, total_gas_used, _) = best_fork.unproposed_txs(current_block_height, false).await?;
 
     Ok((tx.len() as u64, total_gas_used))
 }

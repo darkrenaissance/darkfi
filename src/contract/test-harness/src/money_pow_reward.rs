@@ -119,8 +119,8 @@ impl TestHarness {
         let header = Header::new(
             previous.hash(),
             previous.header.height + 1,
-            timestamp,
             previous.header.nonce,
+            timestamp,
         );
 
         // Generate the block

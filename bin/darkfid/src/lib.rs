@@ -57,18 +57,13 @@ use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
 
 /// Miners registry
 mod registry;
-use registry::{
-    model::{BlockTemplate, MiningJobs},
-    DarkfiMinersRegistry, DarkfiMinersRegistryPtr,
-};
+use registry::{DarkfiMinersRegistry, DarkfiMinersRegistryPtr};
 
 /// Atomic pointer to the DarkFi node
 pub type DarkfiNodePtr = Arc<DarkfiNode>;
 
 /// Structure representing a DarkFi node
 pub struct DarkfiNode {
-    /// Blockchain network
-    network: Network,
     /// Validator(node) pointer
     validator: ValidatorPtr,
     /// P2P network protocols handler
@@ -85,7 +80,6 @@ pub struct DarkfiNode {
 
 impl DarkfiNode {
     pub async fn new(
-        network: Network,
         validator: ValidatorPtr,
         p2p_handler: DarkfidP2pHandlerPtr,
         registry: DarkfiMinersRegistryPtr,
@@ -93,7 +87,6 @@ impl DarkfiNode {
         subscribers: HashMap<&'static str, JsonSubscriber>,
     ) -> Result<DarkfiNodePtr> {
         Ok(Arc::new(Self {
-            network,
             validator,
             p2p_handler,
             registry,
@@ -140,7 +133,7 @@ impl Darkfid {
         let p2p_handler = DarkfidP2pHandler::init(net_settings, ex).await?;
 
         // Initialize the miners registry
-        let registry = DarkfiMinersRegistry::init(&validator)?;
+        let registry = DarkfiMinersRegistry::init(network, &validator)?;
 
         // Grab blockchain network configured transactions batch size for garbage collection
         let txs_batch_size = match txs_batch_size {
@@ -163,8 +156,7 @@ impl Darkfid {
 
         // Initialize node
         let node =
-            DarkfiNode::new(network, validator, p2p_handler, registry, txs_batch_size, subscribers)
-                .await?;
+            DarkfiNode::new(validator, p2p_handler, registry, txs_batch_size, subscribers).await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();

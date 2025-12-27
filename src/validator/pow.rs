@@ -319,7 +319,7 @@ impl PoWModule {
                 );
 
                 let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(&header.to_blockhashing_blob())?;
+                let out_hash = vm.calculate_hash(&header.to_block_hashing_blob())?;
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
             Monero(powdata) => {
@@ -332,7 +332,7 @@ impl PoWModule {
                 );
 
                 let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(&powdata.to_blockhashing_blob())?;
+                let out_hash = vm.calculate_hash(&powdata.to_block_hashing_blob())?;
                 (BigUint::from_bytes_le(&out_hash), verification_time)
             }
         };
@@ -700,8 +700,8 @@ mod tests {
             let header = Header::new(
                 previous.hash(),
                 previous.height + 1,
-                parts[0].parse::<u64>().unwrap().into(),
                 0,
+                parts[0].parse::<u64>().unwrap().into(),
             );
             let difficulty = BigUint::from_str_radix(&parts[1], 10).unwrap();
 

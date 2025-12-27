@@ -151,8 +151,8 @@ impl MoneroPowData {
         (self.merkle_root == merkle_root) && self.coinbase_merkle_proof.check_coinbase_path()
     }
 
-    /// Returns the blockhashing_blob for the Monero block
-    pub fn to_blockhashing_blob(&self) -> Vec<u8> {
+    /// Returns the block hashing blob for the Monero block.
+    pub fn to_block_hashing_blob(&self) -> Vec<u8> {
         create_blockhashing_blob(&self.header, &self.merkle_root, u64::from(self.transaction_count))
     }
 

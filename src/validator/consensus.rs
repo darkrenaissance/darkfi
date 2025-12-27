@@ -840,23 +840,17 @@ impl Fork {
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions,
-    /// along with their total gas used, total paid fees and the overlay
-    /// used to verify the transactions for further processing.
+    /// along with their total gas used and total paid fees.
     ///
     /// Note: Always remember to purge new trees from the overlay if not needed.
     pub async fn unproposed_txs(
         &self,
-        blockchain: &Blockchain,
         verifying_block_height: u32,
-        block_target: u32,
         verify_fees: bool,
-    ) -> Result<(Vec<Transaction>, u64, u64, BlockchainOverlayPtr)> {
-        // Clone forks' overlay
-        let overlay = self.overlay.lock().unwrap().full_clone()?;
-
+    ) -> Result<(Vec<Transaction>, u64, u64)> {
         // Check if our mempool is not empty
         if self.mempool.is_empty() {
-            return Ok((vec![], 0, 0, overlay))
+            return Ok((vec![], 0, 0))
         }
 
         // Transactions Merkle tree
@@ -870,7 +864,7 @@ impl Fork {
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
         // Grab all current proposals transactions hashes
-        let proposals_txs = overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
+        let proposals_txs = self.overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
 
         // Iterate through all pending transactions in the forks' mempool
         let mut unproposed_txs = vec![];
@@ -882,7 +876,7 @@ impl Fork {
 
             // Retrieve the actual unproposed transaction
             let unproposed_tx =
-                blockchain.transactions.get_pending(&[*tx], true)?[0].clone().unwrap();
+                self.blockchain.transactions.get_pending(&[*tx], true)?[0].clone().unwrap();
 
             // Update the verifying keys map
             for call in &unproposed_tx.calls {
@@ -890,11 +884,11 @@ impl Fork {
             }
 
             // Verify the transaction against current state
-            overlay.lock().unwrap().checkpoint();
+            self.overlay.lock().unwrap().checkpoint();
             let gas_data = match verify_transaction(
-                &overlay,
+                &self.overlay,
                 verifying_block_height,
-                block_target,
+                self.module.target,
                 &unproposed_tx,
                 &mut tree,
                 &mut vks,
@@ -905,7 +899,8 @@ impl Fork {
                 Ok(gas_values) => gas_values,
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
-                    overlay.lock().unwrap().revert_to_checkpoint()?;
+                    self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+                    self.overlay.lock().unwrap().revert_to_checkpoint()?;
                     continue
                 }
             };
@@ -922,7 +917,8 @@ impl Fork {
                     target: "validator::consensus::unproposed_txs",
                     "Retrieving transaction {tx} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
                 );
-                overlay.lock().unwrap().revert_to_checkpoint()?;
+                self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+                self.overlay.lock().unwrap().revert_to_checkpoint()?;
                 break
             }
 
@@ -934,7 +930,7 @@ impl Fork {
             unproposed_txs.push(unproposed_tx);
         }
 
-        Ok((unproposed_txs, total_gas_used, total_gas_paid, overlay))
+        Ok((unproposed_txs, total_gas_used, total_gas_paid))
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.

@@ -192,8 +192,8 @@ async fn consensus_task(
             continue
         }
 
-        if let Err(e) = clean_blocktemplates(node).await {
-            error!(target: "darkfid", "Failed cleaning mining block templates: {e}")
+        if let Err(e) = node.registry.refresh(&node.validator).await {
+            error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
         }
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
@@ -218,81 +218,4 @@ async fn consensus_task(
             ex.clone(),
         );
     }
-}
-
-/// Auxiliary function to drop mining block templates not referencing
-/// active forks or last confirmed block.
-async fn clean_blocktemplates(node: &DarkfiNodePtr) -> Result<()> {
-    // Grab a lock over node mining templates
-    let mut blocktemplates = node.registry.blocktemplates.lock().await;
-    let mut mm_blocktemplates = node.registry.mm_blocktemplates.lock().await;
-
-    // Early return if no mining block templates exist
-    if blocktemplates.is_empty() && mm_blocktemplates.is_empty() {
-        return Ok(())
-    }
-
-    // Grab a lock over node forks
-    let forks = node.validator.consensus.forks.read().await;
-
-    // Grab last confirmed block for checks
-    let (_, last_confirmed) = node.validator.blockchain.last()?;
-
-    // Loop through templates to find which can be dropped
-    let mut dropped_templates = vec![];
-    'outer: for (key, blocktemplate) in blocktemplates.iter() {
-        // Loop through all the forks
-        for fork in forks.iter() {
-            // Traverse fork proposals sequence in reverse
-            for p_hash in fork.proposals.iter().rev() {
-                // Check if job extends this fork
-                if &blocktemplate.block.header.previous == p_hash {
-                    continue 'outer
-                }
-            }
-        }
-
-        // Check if it extends last confirmed block
-        if blocktemplate.block.header.previous == last_confirmed {
-            continue
-        }
-
-        // This job doesn't reference something so we drop it
-        dropped_templates.push(key.clone());
-    }
-
-    // Drop jobs not referencing active forks or last confirmed block
-    for key in dropped_templates {
-        blocktemplates.remove(&key);
-    }
-
-    // Loop through merge mining templates to find which can be dropped
-    let mut dropped_templates = vec![];
-    'outer: for (key, blocktemplate) in mm_blocktemplates.iter() {
-        // Loop through all the forks
-        for fork in forks.iter() {
-            // Traverse fork proposals sequence in reverse
-            for p_hash in fork.proposals.iter().rev() {
-                // Check if job extends this fork
-                if &blocktemplate.block.header.previous == p_hash {
-                    continue 'outer
-                }
-            }
-        }
-
-        // Check if it extends last confirmed block
-        if blocktemplate.block.header.previous == last_confirmed {
-            continue
-        }
-
-        // This job doesn't reference something so we drop it
-        dropped_templates.push(key.clone());
-    }
-
-    // Drop jobs not referencing active forks or last confirmed block
-    for key in dropped_templates {
-        mm_blocktemplates.remove(&key);
-    }
-
-    Ok(())
 }

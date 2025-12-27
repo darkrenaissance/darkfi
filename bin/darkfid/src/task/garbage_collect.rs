@@ -95,7 +95,7 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 };
 
                 // Verify transaction
-                match verify_transactions(
+                let result = verify_transactions(
                     &overlay,
                     next_block_height,
                     node.validator.consensus.module.read().await.target,
@@ -103,8 +103,13 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                     &mut MerkleTree::new(1),
                     false,
                 )
-                .await
-                {
+                .await;
+
+                // Drop new trees opened by the forks' overlay
+                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+
+                // Check result
+                match result {
                     Ok(_) => valid = true,
                     Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {
                         // Remove transaction from fork's mempool

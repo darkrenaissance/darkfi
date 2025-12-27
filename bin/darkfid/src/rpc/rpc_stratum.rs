@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use smol::lock::MutexGuard;
@@ -34,17 +31,9 @@ use darkfi::{
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
-    util::{encoding::base64, time::Timestamp},
-    validator::consensus::Proposal,
 };
-use darkfi_sdk::crypto::keypair::Address;
-use darkfi_serial::serialize_async;
 
-use crate::{
-    proto::ProposalMessage,
-    registry::model::{generate_next_block, MinerRewardsRecipientConfig},
-    BlockTemplate, DarkfiNode, MiningJobs,
-};
+use crate::{registry::model::MinerRewardsRecipientConfig, server_error, DarkfiNode, RpcError};
 
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM.md
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM_EXT.md
@@ -74,77 +63,92 @@ impl RequestHandler<StratumRpcHandler> for DarkfiNode {
     }
 }
 
-// TODO: We often just return InvalidParams. These should be cleaned up
-// and more verbose.
-// TODO: The jobs storing method is not the most ideal. Think of a better one.
-// `self.mining_jobs`
-
-// Random testnet address for reference:
-// fUfG4WhbHP5C2MhYW3FHctVqi2jfXHamoQeU8KiirKVtoMBEUejkwq9F
-
 impl DarkfiNode {
     // RPCAPI:
-    // Miner sends a `login` request after establishing connection
-    // in order to authorize.
+    // Register a new mining client to the registry and generate a new
+    // job.
     //
-    // The server will return a job along with an id.
-    // ```
-    // "job": {
-    //     "blob": 070780e6b9d...4d62fa6c77e76c3001",
-    //     "job_id": "q7PLUPL25UV0z5Ij14IyMk8htXbj",
-    //     "target": "b88d0600",
-    //     "algo": "rx/0"
-    // }
-    // ```
+    // **Request:**
+    // * `login` : A base-64 encoded wallet address mining configuration
+    // * `pass`  : Unused client password field. Expects default "x" value.
+    // * `agent` : Client agent description
+    // * `algo`  : Client supported mining algorithms
     //
-    // --> {"jsonrpc":"2.0", "method": "login", "id": 1, "params": {"login": "receiving_address", "pass": "x", "agent": "XMRig", "algo": ["rx/0"]}}
+    // **Response:**
+    // * `id`     : Registry client ID
+    // * `job`    : The generated mining job
+    // * `status` : Response status
+    //
+    // The generated mining job consists of the following fields:
+    // * `blob`      : The hex encoded block hashing blob of the job block
+    // * `job_id`    : Registry mining job ID
+    // * `height`    : The job block height
+    // * `target`    : Current mining target
+    // * `algo`      : The mining algorithm - RandomX
+    // * `seed_hash` : Current RandomX key
+    //
+    // --> {"jsonrpc":"2.0", "method": "login", "id": 1, "params": {"login": "MINING_CONFIG", "pass": "", "agent": "XMRig", "algo": ["rx/0"]}}
     // <-- {"jsonrpc":"2.0", "id": 1, "result": {"id": "1be0b7b6-b15a-47be-a17d-46b2911cf7d0", "job": { ... }, "status": "OK"}}
     pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
-        // TODO: Fail when not synced
+        // Check if node is synced before responding
+        if !*self.validator.synced.read().await {
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        let Some(login) = params.get("login") else {
-            return JsonError::new(InvalidParams, Some("Missing 'login'".to_string()), id).into()
-        };
-        let Some(login) = login.get::<String>() else {
+        if params.len() != 4 {
             return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Parse login mining configuration
+        let Some(wallet) = params.get("login") else {
+            return server_error(RpcError::MinerMissingLogin, id, None)
         };
+        let Some(wallet) = wallet.get::<String>() else {
+            return server_error(RpcError::MinerInvalidLogin, id, None)
+        };
+        let config =
+            match MinerRewardsRecipientConfig::from_base64(&self.registry.network, wallet).await {
+                Ok(c) => c,
+                Err(e) => return server_error(e, id, None),
+            };
+
+        // Parse password
         let Some(pass) = params.get("pass") else {
-            return JsonError::new(InvalidParams, Some("Missing 'pass'".to_string()), id).into()
+            return server_error(RpcError::MinerMissingPassword, id, None)
         };
-        let Some(_pass) = pass.get::<String>() else {
-            return JsonError::new(InvalidParams, None, id).into()
+        let Some(pass) = pass.get::<String>() else {
+            return server_error(RpcError::MinerInvalidPassword, id, None)
         };
+        if pass != "x" {
+            return server_error(RpcError::MinerInvalidPassword, id, None)
+        }
+
+        // Parse agent
         let Some(agent) = params.get("agent") else {
-            return JsonError::new(InvalidParams, Some("Missing 'agent'".to_string()), id).into()
+            return server_error(RpcError::MinerMissingAgent, id, None)
         };
         let Some(agent) = agent.get::<String>() else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-        let Some(algo) = params.get("algo") else {
-            return JsonError::new(InvalidParams, Some("Missing 'algo'".to_string()), id).into()
-        };
-        let Some(algo) = algo.get::<Vec<JsonValue>>() else {
-            return JsonError::new(InvalidParams, None, id).into()
+            return server_error(RpcError::MinerInvalidAgent, id, None)
         };
 
-        // Try to parse `login` as valid address. This will be the
-        // block reward recipient.
-        let Ok(address) = Address::from_str(login) else {
-            return JsonError::new(InvalidParams, Some("Invalid address".to_string()), id).into()
+        // Parge algo
+        let Some(algo) = params.get("algo") else {
+            return server_error(RpcError::MinerMissingAlgo, id, None)
         };
-        if address.network() != self.network {
-            return JsonError::new(InvalidParams, Some("Invalid address prefix".to_string()), id)
-                .into()
-        }
+        let Some(algo) = algo.get::<Vec<JsonValue>>() else {
+            return server_error(RpcError::MinerInvalidAlgo, id, None)
+        };
 
         // Iterate through `algo` to see if "rx/0" is supported.
         // rx/0 is RandomX.
         let mut found_rx0 = false;
         for i in algo {
             let Some(algo) = i.get::<String>() else {
-                return JsonError::new(InvalidParams, None, id).into()
+                return server_error(RpcError::MinerInvalidAlgo, id, None)
             };
             if algo == "rx/0" {
                 found_rx0 = true;
@@ -152,231 +156,184 @@ impl DarkfiNode {
             }
         }
         if !found_rx0 {
-            return JsonError::new(InvalidParams, Some("rx/0 not supported".to_string()), id).into()
+            return server_error(RpcError::MinerRandomXNotSupported, id, None)
         }
 
-        info!("[STRATUM] Got login from {} ({})", address, agent);
-        let conn_id = {
-            let mut hasher = blake3::Hasher::new();
-            hasher.update(&address.to_string().into_bytes());
-            hasher.update(&Timestamp::current_time().inner().to_le_bytes());
-            *hasher.finalize().as_bytes()
-        };
+        // Register the new miner
+        info!(target: "darkfid::rpc::rpc_stratum::stratum_login","[RPC-STRATUM] Got login from {wallet} ({agent})");
+        let (client_id, block_template, publisher) =
+            match self.registry.register_miner(&self.validator, wallet, &config).await {
+                Ok(p) => p,
+                Err(e) => {
+                    error!(
+                        target: "darkfid::rpc::rpc_stratum::stratum_login",
+                        "[RPC-STRATUM] Failed to register miner: {e}",
+                    );
+                    return JsonError::new(ErrorCode::InternalError, None, id).into()
+                }
+            };
 
-        // Now we should register this login, and create a blocktemplate and
-        // a job for them.
-        // TODO: We also have to spawn the notification task that will send
-        // JSONRPC notifications to this connection when a new job is available.
-
-        // We'll clear any existing jobs for this login.
-        let mut mining_jobs = self.registry.mining_jobs.lock().await;
-        mining_jobs.insert(conn_id, MiningJobs::default());
-
-        // Find applicable chain fork
-        let mut extended_fork = match self.validator.best_current_fork().await {
-            Ok(f) => f,
-            Err(e) => {
-                error!(
-                    target: "darkfid::rpc_stratum::stratum_login",
-                    "[STRATUM] Finding best fork index failed: {e}",
-                );
-                return JsonError::new(ErrorCode::InternalError, None, id).into()
-            }
-        };
-
-        // Query the Validator for a new blocktemplate.
-        // We first need to construct `MinerRewardsRecipientConfig` from the
-        // address configuration provided to us through the RPC.
-        // TODO: Parse any spend hook from the login. We might also want to
-        // define a specific address format if it includes extra data.
-        // We could also include arbitrary information in the login password.
-        let recipient_config =
-            MinerRewardsRecipientConfig { recipient: address, spend_hook: None, user_data: None };
-
-        // Find next block target
-        let target = self.validator.consensus.module.read().await.target;
-
-        // Generate blocktemplate with all the information.
-        // This will return the mining target, the entire block, and the
-        // ephemeral secret used to sign the mined block.
-        let (target, block, secret) = match generate_next_block(
-            &mut extended_fork,
-            &recipient_config,
-            &self.registry.powrewardv1_zk.zkbin,
-            &self.registry.powrewardv1_zk.provingkey,
-            target,
-            self.validator.verify_fees,
-        )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "darkfid::rpc_stratum::stratum_login",
-                    "[STRATUM] Failed to generate next blocktemplate: {e}",
-                );
-                return JsonError::new(ErrorCode::InternalError, None, id).into()
-            }
-        };
-
-        // Reference the RandomX dataset seed
-        // TODO: We can also send `next_seed_hash` when we know it.
-        let seed_hash = extended_fork.module.darkfi_rx_keys.0.inner();
-
-        // We will store this in our mining jobs map for reference when
-        // a miner solution is submitted.
-        let blocktemplate =
-            BlockTemplate { block, randomx_key: *seed_hash, target: target.clone(), secret };
-
-        // Construct everything needed for the Stratum response.
-        let blob = blocktemplate.block.header.to_blockhashing_blob();
-        let job_id = *blocktemplate.block.header.hash().inner();
-        let height = blocktemplate.block.header.height as f64;
-        // The target should be compacted to 8 bytes little-endian.
-        let target = &target.to_bytes_le()[..8];
-
-        // Store the job. unwrap should be fine because we created this above.
-        let jobs = mining_jobs.get_mut(&conn_id).unwrap();
-        jobs.insert(job_id, blocktemplate);
-
-        // Construct response
-        let job: HashMap<String, JsonValue> = HashMap::from([
-            ("blob".to_string(), hex::encode(&blob).to_string().into()),
-            ("job_id".to_string(), hex::encode(job_id).to_string().into()),
-            ("height".to_string(), height.into()),
-            ("target".to_string(), hex::encode(target).into()),
-            ("algo".to_string(), "rx/0".to_string().into()),
-            ("seed_hash".to_string(), hex::encode(seed_hash).into()),
-        ]);
-
-        let result = HashMap::from([
-            ("id".to_string(), hex::encode(conn_id).into()),
-            ("job".to_string(), job.into()),
-            ("status".to_string(), "OK".to_string().into()),
-        ]);
-
-        // Ship it.
-        JsonResponse::new(result.into(), id).into()
+        // Now we have the new job, we ship it to RPC
+        let (job_id, job) = block_template.job_notification();
+        info!(
+            target: "darkfid::rpc::rpc_stratum::stratum_login",
+            "[RPC-STRATUM] Created new mining job for client {client_id}: {job_id}"
+        );
+        let response = JsonValue::from(HashMap::from([
+            ("id".to_string(), JsonValue::from(client_id)),
+            ("job".to_string(), job),
+            ("status".to_string(), JsonValue::from(String::from("OK"))),
+        ]));
+        (publisher, JsonResponse::new(response, id)).into()
     }
 
     // RPCAPI:
     // Miner submits a job solution.
     //
+    // **Request:**
+    // * `id`     : Registry client ID
+    // * `job_id` : Registry mining job ID
+    // * `nonce`  : The hex encoded solution header nonce.
+    // * `result` : RandomX calculated hash
+    //
+    // **Response:**
+    // * `status`: Block submit status
+    //
     // --> {"jsonrpc":"2.0", "method": "submit", "id": 1, "params": {"id": "...", "job_id": "...", "nonce": "d0030040", "result": "e1364b8782719d7683e2ccd3d8f724bc59dfa780a9e960e7c0e0046acdb40100"}}
     // <-- {"jsonrpc":"2.0", "id": 1, "result": {"status": "OK"}}
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
-        // TODO: Maybe grab an exclusive lock to avoid the xmrig spam while
-        // we're doing the pow verification. xmrig spams us whenever it gets
-        // a solution, and this will end up in cloning a bunch of blocktemplates
-        // and is going to cause memory usage to go up significantly.
-        // Ideally we should block here until we finish each submit one-by-one
-        // and find a valid one. Then when we do find a valid one, we should
-        // clear the existing job(s) so this method will just return an error
-        // and not have to do all the block shenanigans.
-        // Additionally when a block is proposed successfully, the node should
-        // send a new job notification to xmrig so we should be fine.
-        // That notification part should also clear the existing jobs.
+        // Check if node is synced before responding
+        if !*self.validator.synced.read().await {
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        // Grab registry submissions lock
+        let submit_lock = self.registry.submit_lock.write().await;
+
+        // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        let Some(conn_id) = params.get("id") else {
-            return JsonError::new(InvalidParams, Some("Missing 'id'".to_string()), id).into()
-        };
-        let Some(conn_id) = conn_id.get::<String>() else {
+        if params.len() != 4 {
             return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Parse client id
+        let Some(client_id) = params.get("id") else {
+            return server_error(RpcError::MinerMissingClientId, id, None)
         };
+        let Some(client_id) = client_id.get::<String>() else {
+            return server_error(RpcError::MinerInvalidClientId, id, None)
+        };
+
+        // If we don't know about this client, we can just abort here
+        let clients = self.registry.clients.read().await;
+        let Some(client) = clients.get(client_id) else {
+            return server_error(RpcError::MinerUnknownClient, id, None)
+        };
+
+        // Parse job id
         let Some(job_id) = params.get("job_id") else {
-            return JsonError::new(InvalidParams, Some("Missing 'job_id'".to_string()), id).into()
+            return server_error(RpcError::MinerMissingJobId, id, None)
         };
         let Some(job_id) = job_id.get::<String>() else {
-            return JsonError::new(InvalidParams, None, id).into()
+            return server_error(RpcError::MinerInvalidJobId, id, None)
         };
+
+        // If we don't know about this job or it doesn't match the
+        // client one, we can just abort here
+        if &client.job != job_id {
+            return server_error(RpcError::MinerUnknownJob, id, None)
+        }
+        let jobs = self.registry.jobs.read().await;
+        let Some(wallet) = jobs.get(job_id) else {
+            return server_error(RpcError::MinerUnknownJob, id, None)
+        };
+
+        // If this job wallet template doesn't exist, we can just
+        // abort here.
+        let mut block_templates = self.registry.block_templates.write().await;
+        let Some(block_template) = block_templates.get_mut(wallet) else {
+            return server_error(RpcError::MinerUnknownJob, id, None)
+        };
+
+        // If this template has been already submitted, reject this
+        // submission.
+        if block_template.submitted {
+            return JsonResponse::new(
+                JsonValue::from(HashMap::from([(
+                    "status".to_string(),
+                    JsonValue::from(String::from("rejected")),
+                )])),
+                id,
+            )
+            .into()
+        }
+
+        // Parse nonce
         let Some(nonce) = params.get("nonce") else {
-            return JsonError::new(InvalidParams, Some("Missing 'nonce'".to_string()), id).into()
+            return server_error(RpcError::MinerMissingNonce, id, None)
         };
         let Some(nonce) = nonce.get::<String>() else {
-            return JsonError::new(InvalidParams, None, id).into()
+            return server_error(RpcError::MinerInvalidNonce, id, None)
         };
-        // result is the RandomX calculated hash. Useful to verify/debug.
-        let Some(result) = params.get("result") else {
-            return JsonError::new(InvalidParams, Some("Missing 'result'".to_string()), id).into()
-        };
-        let Some(_result) = result.get::<String>() else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-
-        let Ok(conn_id) = hex::decode(conn_id) else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-        if conn_id.len() != 32 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-        let Ok(job_id) = hex::decode(job_id) else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-        if job_id.len() != 32 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-
-        let conn_id: [u8; 32] = conn_id.try_into().unwrap();
-        let job_id: [u8; 32] = job_id.try_into().unwrap();
-
-        // We should be aware of this conn_id and job_id.
-        let mut mining_jobs = self.registry.mining_jobs.lock().await;
-        let Some(jobs) = mining_jobs.get_mut(&conn_id) else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-        // Get the blocktemplate.
-        let Some(blocktemplate) = jobs.get_mut(&job_id) else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-
-        // Parse the nonce into u32.
         let Ok(nonce_bytes) = hex::decode(nonce) else {
-            return JsonError::new(InvalidParams, None, id).into()
+            return server_error(RpcError::MinerInvalidNonce, id, None)
         };
         if nonce_bytes.len() != 4 {
-            return JsonError::new(InvalidParams, None, id).into()
+            return server_error(RpcError::MinerInvalidNonce, id, None)
         }
         let nonce = u32::from_le_bytes(nonce_bytes.try_into().unwrap());
 
-        // We clone the block, update the nonce,
-        // sign it, and ship it into a proposal.
-        let mut block = blocktemplate.block.clone();
-        block.header.nonce = nonce;
-        block.sign(&blocktemplate.secret);
+        // Parse result
+        let Some(result) = params.get("result") else {
+            return server_error(RpcError::MinerMissingResult, id, None)
+        };
+        let Some(_result) = result.get::<String>() else {
+            return server_error(RpcError::MinerInvalidResult, id, None)
+        };
 
         info!(
-            target: "darkfid::rpc_stratum::stratum_submit",
-            "[STRATUM] Proposing new block to network",
+            target: "darkfid::rpc::rpc_stratum::stratum_submit",
+            "[RPC-STRATUM] Got solution submission from client {client_id} for job: {job_id}",
         );
-        let proposal = Proposal::new(block);
-        if let Err(e) = self.validator.append_proposal(&proposal).await {
+
+        // Update the block nonce and sign it
+        let mut block = block_template.block.clone();
+        block.header.nonce = nonce;
+        block.sign(&block_template.secret);
+
+        // Submit the new block through the registry
+        if let Err(e) =
+            self.registry.submit(&self.validator, &self.subscribers, &self.p2p_handler, block).await
+        {
             error!(
-                target: "darkfid::rpc_stratum::stratum_submit",
-                "[STRATUM] Error proposing new block: {e}",
+                target: "darkfid::rpc::rpc_xmr::xmr_merge_submit_solution",
+                "[RPC-XMR] Error submitting new block: {e}",
             );
-            return JsonError::new(InvalidParams, None, id).into()
+            return JsonResponse::new(
+                JsonValue::from(HashMap::from([(
+                    "status".to_string(),
+                    JsonValue::from(String::from("rejected")),
+                )])),
+                id,
+            )
+            .into()
         }
 
-        // Proposal passed. We will now clear the jobs as it's assumed
-        // a new block needs to be mined.
-        mining_jobs.insert(conn_id, MiningJobs::default());
+        // Mark block as submitted
+        block_template.submitted = true;
 
-        // Broadcast to network
-        let proposals_sub = self.subscribers.get("proposals").unwrap();
-        let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
-        proposals_sub.notify(vec![enc_prop].into()).await;
-
-        info!(
-            target: "darkfid::rpc_stratum::stratum_submit",
-            "[STRATUM] Broadcasting new block to network",
-        );
-        let message = ProposalMessage(proposal);
-        self.p2p_handler.p2p.broadcast(&message).await;
+        // Release all locks
+        drop(block_templates);
+        drop(jobs);
+        drop(submit_lock);
 
         JsonResponse::new(
-            HashMap::from([("status".to_string(), "OK".to_string().into())]).into(),
+            JsonValue::from(HashMap::from([(
+                "status".to_string(),
+                JsonValue::from(String::from("OK")),
+            )])),
             id,
         )
         .into()
@@ -385,21 +342,47 @@ impl DarkfiNode {
     // RPCAPI:
     // Miner sends `keepalived` to prevent connection timeout.
     //
+    // **Request:**
+    // * `id` : Registry client ID
+    //
+    // **Response:**
+    // * `status`: Response status
+    //
     // --> {"jsonrpc":"2.0", "method": "keepalived", "id": 1, "params": {"id": "foo"}}
     // <-- {"jsonrpc":"2.0", "id": 1, "result": {"status": "KEEPALIVED"}}
     pub async fn stratum_keepalived(&self, id: u16, params: JsonValue) -> JsonResult {
+        // Check if node is synced before responding
+        if !*self.validator.synced.read().await {
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        let Some(_conn_id) = params.get("id") else {
-            return JsonError::new(InvalidParams, Some("Missing 'id'".to_string()), id).into()
+        if params.len() != 1 {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Parse client id
+        let Some(client_id) = params.get("id") else {
+            return server_error(RpcError::MinerMissingClientId, id, None)
+        };
+        let Some(client_id) = client_id.get::<String>() else {
+            return server_error(RpcError::MinerInvalidClientId, id, None)
         };
 
-        // TODO: This conn_id should likely exist. We should probably check
-        // that. Otherwise we might not want to reply at all.
+        // If we don't know about this client, we can just abort here
+        if !self.registry.clients.read().await.contains_key(client_id) {
+            return server_error(RpcError::MinerUnknownClient, id, None)
+        };
 
+        // Respond with keepalived message
         JsonResponse::new(
-            JsonValue::from(HashMap::from([("status".into(), "KEEPALIVED".to_string().into())])),
+            JsonValue::from(HashMap::from([(
+                "status".to_string(),
+                JsonValue::from(String::from("KEEPALIVED")),
+            )])),
             id,
         )
         .into()

@@ -115,4 +115,28 @@ impl<T: Clone> Publisher<T> {
             }
         }
     }
+
+    /// Clear inactive subscribtions.
+    /// Returns a flag indicating if we have active subscriptions
+    /// after cleanup.
+    pub async fn clear_inactive(&self) -> bool {
+        // Grab a lock over current jobs
+        let mut subs = self.subs.lock().await;
+
+        // Find inactive subscriptions
+        let mut dropped = vec![];
+        for (sub, channel) in subs.iter() {
+            if channel.receiver_count() == 0 {
+                dropped.push(*sub);
+            }
+        }
+
+        // Drop inactive subscriptions
+        for sub in dropped {
+            subs.remove(&sub);
+        }
+
+        // Return flag indicating if we still have subscriptions
+        subs.is_empty()
+    }
 }

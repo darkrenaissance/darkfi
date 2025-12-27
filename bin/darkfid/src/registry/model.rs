@@ -16,16 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
-use num_bigint::BigUint;
 use rand::rngs::OsRng;
+use tinyjson::JsonValue;
 use tracing::info;
 
 use darkfi::{
-    blockchain::{BlockInfo, Header},
+    blockchain::{BlockInfo, Header, HeaderHash},
+    rpc::jsonrpc::JsonSubscriber,
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    util::time::Timestamp,
+    util::{
+        encoding::base64,
+        time::{NanoTimestamp, Timestamp},
+    },
     validator::{consensus::Fork, verification::apply_producer_transaction, ValidatorPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -36,15 +40,19 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        keypair::{Address, Keypair, SecretKey},
+        keypair::{Address, Keypair, Network, SecretKey},
+        pasta_prelude::PrimeField,
         FuncId, MerkleTree, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::{deserialize_async, Encodable};
+
+use crate::error::RpcError;
 
 /// Auxiliary structure representing node miner rewards recipient configuration.
+#[derive(Debug, Clone)]
 pub struct MinerRewardsRecipientConfig {
     /// Wallet mining address to receive mining rewards
     pub recipient: Address,
@@ -55,47 +63,128 @@ pub struct MinerRewardsRecipientConfig {
     pub user_data: Option<pallas::Base>,
 }
 
-/// Auxiliary structure representing a block template for native
-/// mining.
+impl MinerRewardsRecipientConfig {
+    pub fn new(
+        recipient: Address,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
+    ) -> Self {
+        Self { recipient, spend_hook, user_data }
+    }
+
+    pub async fn from_base64(
+        network: &Network,
+        encoded_address: &str,
+    ) -> std::result::Result<Self, RpcError> {
+        let Some(address_bytes) = base64::decode(encoded_address) else {
+            return Err(RpcError::MinerInvalidWalletConfig)
+        };
+        let Ok((recipient, spend_hook, user_data)) =
+            deserialize_async::<(String, Option<String>, Option<String>)>(&address_bytes).await
+        else {
+            return Err(RpcError::MinerInvalidWalletConfig)
+        };
+        let Ok(recipient) = Address::from_str(&recipient) else {
+            return Err(RpcError::MinerInvalidRecipient)
+        };
+        if recipient.network() != *network {
+            return Err(RpcError::MinerInvalidRecipientPrefix)
+        }
+        let spend_hook = match spend_hook {
+            Some(s) => match FuncId::from_str(&s) {
+                Ok(s) => Some(s),
+                Err(_) => return Err(RpcError::MinerInvalidSpendHook),
+            },
+            None => None,
+        };
+        let user_data: Option<pallas::Base> = match user_data {
+            Some(u) => {
+                let Ok(bytes) = bs58::decode(&u).into_vec() else {
+                    return Err(RpcError::MinerInvalidUserData)
+                };
+                let bytes: [u8; 32] = match bytes.try_into() {
+                    Ok(b) => b,
+                    Err(_) => return Err(RpcError::MinerInvalidUserData),
+                };
+                match pallas::Base::from_repr(bytes).into() {
+                    Some(v) => Some(v),
+                    None => return Err(RpcError::MinerInvalidUserData),
+                }
+            }
+            None => None,
+        };
+
+        Ok(Self { recipient, spend_hook, user_data })
+    }
+}
+
+/// Auxiliary structure representing a block template for mining.
 #[derive(Debug, Clone)]
 pub struct BlockTemplate {
     /// Block that is being mined
     pub block: BlockInfo,
-    /// RandomX init key
-    pub randomx_key: [u8; 32],
-    /// Block mining target
-    pub target: BigUint,
-    /// Ephemeral signing secret for this blocktemplate
-    pub secret: SecretKey,
-}
-
-/// Auxiliary structure representing a block template for merge mining.
-#[derive(Debug, Clone)]
-pub struct MmBlockTemplate {
-    /// Block that is being mined
-    pub block: BlockInfo,
+    /// RandomX current key
+    pub randomx_key: HeaderHash,
+    /// Compacted block mining target
+    pub target: Vec<u8>,
     /// Block difficulty
     pub difficulty: f64,
     /// Ephemeral signing secret for this blocktemplate
     pub secret: SecretKey,
+    /// Flag indicating if this template has been submitted
+    pub submitted: bool,
 }
 
-/// Storage for active mining jobs. These are stored per connection ID.
-/// A new map will be made for each stratum login.
-#[derive(Debug, Default)]
-pub struct MiningJobs(HashMap<[u8; 32], BlockTemplate>);
-
-impl MiningJobs {
-    pub fn insert(&mut self, job_id: [u8; 32], blocktemplate: BlockTemplate) {
-        self.0.insert(job_id, blocktemplate);
+impl BlockTemplate {
+    fn new(
+        block: BlockInfo,
+        randomx_key: HeaderHash,
+        target: Vec<u8>,
+        difficulty: f64,
+        secret: SecretKey,
+    ) -> Self {
+        Self { block, randomx_key, target, difficulty, secret, submitted: false }
     }
 
-    pub fn get(&self, job_id: &[u8; 32]) -> Option<&BlockTemplate> {
-        self.0.get(job_id)
+    pub fn job_notification(&self) -> (String, JsonValue) {
+        let block_hash = hex::encode(self.block.header.hash().inner()).to_string();
+        let job = HashMap::from([
+            (
+                "blob".to_string(),
+                JsonValue::from(hex::encode(self.block.header.to_block_hashing_blob()).to_string()),
+            ),
+            ("job_id".to_string(), JsonValue::from(block_hash.clone())),
+            ("height".to_string(), JsonValue::from(self.block.header.height as f64)),
+            ("target".to_string(), JsonValue::from(hex::encode(&self.target))),
+            ("algo".to_string(), JsonValue::from(String::from("rx/0"))),
+            (
+                "seed_hash".to_string(),
+                JsonValue::from(hex::encode(self.randomx_key.inner()).to_string()),
+            ),
+        ]);
+        (block_hash, JsonValue::from(job))
     }
+}
 
-    pub fn get_mut(&mut self, job_id: &[u8; 32]) -> Option<&mut BlockTemplate> {
-        self.0.get_mut(job_id)
+/// Auxiliary structure representing a native miner client record.
+#[derive(Debug, Clone)]
+pub struct MinerClient {
+    /// Miner recipient configuration
+    pub config: MinerRewardsRecipientConfig,
+    /// Current mining job
+    pub job: String,
+    /// Connection publisher to push new jobs
+    pub publisher: JsonSubscriber,
+}
+
+impl MinerClient {
+    pub fn new(wallet: &str, config: &MinerRewardsRecipientConfig, job: &str) -> (String, Self) {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(wallet.as_bytes());
+        hasher.update(&NanoTimestamp::current_time().inner().to_le_bytes());
+        let client_id = hex::encode(hasher.finalize().as_bytes()).to_string();
+        let publisher = JsonSubscriber::new("job");
+        (client_id, Self { config: config.clone(), job: job.to_owned(), publisher })
     }
 }
 
@@ -125,25 +214,32 @@ impl PowRewardV1Zk {
     }
 }
 
-/// Auxiliary function to generate next block in an atomic manner.
-pub async fn generate_next_block(
+/// Auxiliary function to generate next mining block template, in an
+/// atomic manner.
+pub async fn generate_next_block_template(
     extended_fork: &mut Fork,
     recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-    block_target: u32,
     verify_fees: bool,
-) -> Result<(BigUint, BlockInfo, SecretKey)> {
+) -> Result<BlockTemplate> {
     // Grab forks' last block proposal(previous)
     let last_proposal = extended_fork.last_proposal()?;
 
     // Grab forks' next block height
     let next_block_height = last_proposal.block.header.height + 1;
 
+    // Grab forks' next mine target and difficulty
+    let (target, difficulty) = extended_fork.module.next_mine_target_and_difficulty()?;
+
+    // The target should be compacted to 8 bytes little-endian.
+    let target = target.to_bytes_le()[..8].to_vec();
+
+    // Cast difficulty to f64. This should always work.
+    let difficulty = difficulty.to_string().parse()?;
+
     // Grab forks' unproposed transactions
-    let (mut txs, _, fees, overlay) = extended_fork
-        .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
-        .await?;
+    let (mut txs, _, fees) = extended_fork.unproposed_txs(next_block_height, verify_fees).await?;
 
     // Create an ephemeral block signing keypair. Its secret key will
     // be stored in the PowReward transaction's encrypted note for
@@ -161,11 +257,11 @@ pub async fn generate_next_block(
         pk,
     )?;
 
-    // Apply producer transaction in the overlay
+    // Apply producer transaction in the forks' overlay
     let _ = apply_producer_transaction(
-        &overlay,
+        &extended_fork.overlay,
         next_block_height,
-        block_target,
+        extended_fork.module.target,
         &tx,
         &mut MerkleTree::new(1),
     )
@@ -173,8 +269,10 @@ pub async fn generate_next_block(
     txs.push(tx);
 
     // Grab the updated contracts states root
-    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&extended_fork.diffs)?;
-    overlay
+    let diff =
+        extended_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&extended_fork.diffs)?;
+    extended_fork
+        .overlay
         .lock()
         .unwrap()
         .contracts
@@ -183,12 +281,9 @@ pub async fn generate_next_block(
         return Err(Error::ContractsStatesRootNotFoundError);
     };
 
-    // Drop new trees opened by the unproposed transactions overlay
-    overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-
     // Generate the new header
     let mut header =
-        Header::new(last_proposal.hash, next_block_height, Timestamp::current_time(), 0);
+        Header::new(last_proposal.hash, next_block_height, 0, Timestamp::current_time());
     header.state_root = state_root;
 
     // Generate the block
@@ -197,10 +292,13 @@ pub async fn generate_next_block(
     // Add transactions to the block
     next_block.append_txs(txs);
 
-    // Grab the next mine target
-    let target = extended_fork.module.next_mine_target()?;
-
-    Ok((target, next_block, block_signing_keypair.secret))
+    Ok(BlockTemplate::new(
+        next_block,
+        extended_fork.module.darkfi_rx_keys.0,
+        target,
+        difficulty,
+        block_signing_keypair.secret,
+    ))
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction.
