@@ -18,7 +18,7 @@
 
 use darkfi_serial::{
     async_trait, AsyncEncodable, AsyncWrite, Decodable, Encodable, FutAsyncWriteExt,
-    SerialDecodable, SerialEncodable,
+    SerialDecodable, SerialEncodable, VarInt,
 };
 #[cfg(target_os = "android")]
 use miniquad::native::egl;
@@ -355,7 +355,7 @@ impl RenderApi {
 pub struct DrawMesh {
     pub vertex_buffer: ManagedBufferPtr,
     pub index_buffer: ManagedBufferPtr,
-    pub texture: Option<ManagedTexturePtr>,
+    pub textures: Option<Vec<ManagedTexturePtr>>,
     pub num_elements: i32,
 }
 
@@ -369,15 +369,23 @@ impl DrawMesh {
         let vertex_buffer_id = self.vertex_buffer.id;
         let index_buffer_id = self.index_buffer.id;
         let _buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
-        let texture = match self.texture {
-            Some(gfx_texture) => Some(Self::get_texture(textures, gfx_texture, debug_str)),
+
+        let textures = match self.textures {
+            Some(gfx_textures) => {
+                let mut compiled = Vec::with_capacity(gfx_textures.len());
+                for gfx_texture in gfx_textures {
+                    compiled.push(Self::get_texture(textures, gfx_texture, debug_str));
+                }
+                Some(compiled)
+            }
             None => None,
         };
+
         GfxDrawMesh {
             vertex_buffer: Self::get_buffer(buffers, vertex_buffer_id, debug_str),
             index_buffer: Self::get_buffer(buffers, index_buffer_id, debug_str),
             _buffers_keep_alive,
-            texture,
+            textures,
             num_elements: self.num_elements,
         }
     }
@@ -419,12 +427,15 @@ impl Encodable for DrawMesh {
         len += self.index_buffer.epoch.encode(s)?;
         len += self.index_buffer.tag.encode(s)?;
         len += self.index_buffer.buftype.encode(s)?;
-        match &self.texture {
-            Some(t) => {
+        match &self.textures {
+            Some(texs) => {
                 len += 1u8.encode(s)?;
-                len += t.id.encode(s)?;
-                len += t.epoch.encode(s)?;
-                len += t.tag.encode(s)?;
+                len += VarInt(texs.len() as u64).encode(s)?;
+                for t in texs {
+                    len += t.id.encode(s)?;
+                    len += t.epoch.encode(s)?;
+                    len += t.tag.encode(s)?;
+                }
             }
             None => {
                 len += 0u8.encode(s)?;
@@ -433,6 +444,12 @@ impl Encodable for DrawMesh {
         len += self.num_elements.encode(s)?;
         Ok(len)
     }
+}
+
+#[derive(Clone, Copy, Debug, SerialEncodable)]
+pub enum GraphicPipeline {
+    RGB,
+    YUV,
 }
 
 #[async_trait]
@@ -454,6 +471,7 @@ pub enum DrawInstruction {
     Draw(DrawMesh),
     Animation(AnimId),
     EnableDebug,
+    SetPipeline(GraphicPipeline),
 }
 
 impl DrawInstruction {
@@ -473,6 +491,7 @@ impl DrawInstruction {
             }
             Self::Animation(anim) => GfxDrawInstruction::Animation(anim),
             Self::EnableDebug => GfxDrawInstruction::EnableDebug,
+            Self::SetPipeline(pipeline) => GfxDrawInstruction::SetPipeline(pipeline),
         }
     }
 }
@@ -520,7 +539,7 @@ struct GfxDrawMesh {
     index_buffer: miniquad::BufferId,
     /// Keeps the buffers alive for the duration of this draw call
     _buffers_keep_alive: [ManagedBufferPtr; 2],
-    texture: Option<(ManagedTexturePtr, miniquad::TextureId)>,
+    textures: Option<Vec<(ManagedTexturePtr, miniquad::TextureId)>>,
     num_elements: i32,
 }
 
@@ -533,6 +552,7 @@ enum GfxDrawInstruction {
     Draw(GfxDrawMesh),
     Animation(AnimId),
     EnableDebug,
+    SetPipeline(GraphicPipeline),
 }
 
 #[derive(Clone, Debug)]
@@ -548,10 +568,12 @@ struct RenderContext<'a> {
     draw_calls: &'a HashMap<DcId, GfxDrawCall>,
     uniforms_data: [u8; 128],
     white_texture: miniquad::TextureId,
+    loaded_pipelines: &'a [Pipeline; 2],
 
     scale: f32,
     view: Rectangle,
     cursor: Point,
+    gfx_pipeline: GraphicPipeline,
 
     anims: &'a mut HashMap<AnimId, GfxSeqAnim>,
 }
@@ -614,6 +636,7 @@ impl<'a> RenderContext<'a> {
         let old_scale = self.scale;
         let old_view = self.view;
         let old_cursor = self.cursor;
+        let old_pipeline = self.gfx_pipeline;
 
         for (idx, instr) in draw_call.instrs.iter().enumerate() {
             if DEBUG_TRAX {
@@ -674,14 +697,14 @@ impl<'a> RenderContext<'a> {
                     if is_debug {
                         debug!(target: "gfx", "{ws}draw({mesh:?})");
                     }
-                    let texture = match mesh.texture {
-                        Some((_, texture)) => texture,
-                        None => self.white_texture,
+                    let images = match &mesh.textures {
+                        Some(texs) => texs.iter().map(|(_, tex_id)| *tex_id).collect(),
+                        None => vec![self.white_texture],
                     };
                     let bindings = Bindings {
                         vertex_buffers: vec![mesh.vertex_buffer],
                         index_buffer: mesh.index_buffer,
-                        images: vec![texture],
+                        images,
                     };
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
@@ -699,6 +722,15 @@ impl<'a> RenderContext<'a> {
                     }
                     is_debug = true;
                     debug!(target: "gfx", "Frame start");
+                }
+                GfxDrawInstruction::SetPipeline(pipeline) => {
+                    self.gfx_pipeline = *pipeline;
+                    let pipeline_idx = *pipeline as usize;
+                    assert!(pipeline_idx < self.loaded_pipelines.len());
+                    self.ctx.apply_pipeline(&self.loaded_pipelines[pipeline_idx]);
+                    if is_debug {
+                        debug!(target: "gfx", "{ws}set_pipeline({pipeline:?})");
+                    }
                 }
             }
         }
@@ -727,6 +759,10 @@ impl<'a> RenderContext<'a> {
         self.apply_view();
 
         self.cursor = old_cursor;
+        self.gfx_pipeline = old_pipeline;
+        let pipeline_idx = self.gfx_pipeline as usize;
+        assert!(pipeline_idx < self.loaded_pipelines.len());
+        self.ctx.apply_pipeline(&self.loaded_pipelines[pipeline_idx]);
         self.apply_model();
     }
 }
@@ -904,7 +940,7 @@ struct Stage {
     ctx: Box<dyn RenderingBackend>,
     #[cfg(target_os = "android")]
     libegl: egl::LibEgl,
-    pipeline: Pipeline,
+    loaded_pipelines: [Pipeline; 2],
     white_texture: miniquad::TextureId,
     draw_calls: HashMap<DcId, GfxDrawCall>,
     pending_batches: HashMap<BatchGuardId, Vec<GraphicsMethod>>,
@@ -966,42 +1002,8 @@ impl Stage {
 
         let anims: HashMap<AnimId, GfxSeqAnim> = HashMap::new();
 
-        let mut shader_meta: ShaderMeta = shader::meta();
-        shader_meta.uniforms.uniforms.push(UniformDesc::new("Projection", UniformType::Mat4));
-        shader_meta.uniforms.uniforms.push(UniformDesc::new("Model", UniformType::Mat4));
-
-        let shader = ctx
-            .new_shader(
-                match ctx.info().backend {
-                    Backend::OpenGl => ShaderSource::Glsl {
-                        vertex: shader::GL_VERTEX,
-                        fragment: shader::GL_FRAGMENT,
-                    },
-                    Backend::Metal => ShaderSource::Msl { program: shader::METAL },
-                },
-                shader_meta,
-            )
-            .unwrap();
-
-        let params = PipelineParams {
-            color_blend: Some(BlendState::new(
-                Equation::Add,
-                BlendFactor::Value(BlendValue::SourceAlpha),
-                BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
-            )),
-            ..Default::default()
-        };
-
-        let pipeline = ctx.new_pipeline(
-            &[BufferLayout::default()],
-            &[
-                VertexAttribute::new("in_pos", VertexFormat::Float2),
-                VertexAttribute::new("in_color", VertexFormat::Float4),
-                VertexAttribute::new("in_uv", VertexFormat::Float2),
-            ],
-            shader,
-            params,
-        );
+        let rgb_pipeline = shader::create_rgb_pipeline(&mut ctx);
+        let yuv_pipeline = shader::create_yuv_pipeline(&mut ctx);
 
         #[cfg(target_os = "android")]
         let libegl = egl::LibEgl::try_load().expect("Cant load LibEGL");
@@ -1010,7 +1012,7 @@ impl Stage {
             ctx,
             #[cfg(target_os = "android")]
             libegl,
-            pipeline,
+            loaded_pipelines: [rgb_pipeline, yuv_pipeline],
             white_texture,
             draw_calls: HashMap::from([(
                 0,
@@ -1790,7 +1792,9 @@ impl EventHandler for Stage {
 
     fn draw(&mut self) {
         self.ctx.begin_default_pass(PassAction::clear_color(0., 0., 0., 1.));
-        self.ctx.apply_pipeline(&self.pipeline);
+
+        // Apply default RGB pipeline
+        self.ctx.apply_pipeline(&self.loaded_pipelines[GraphicPipeline::RGB as usize]);
 
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
@@ -1816,9 +1820,11 @@ impl EventHandler for Stage {
             draw_calls: &self.draw_calls,
             uniforms_data,
             white_texture: self.white_texture,
+            loaded_pipelines: &self.loaded_pipelines,
             scale: 1.,
             view: Rectangle::from([0., 0., screen_w, screen_h]),
             cursor: Point::from([0., 0.]),
+            gfx_pipeline: GraphicPipeline::RGB,
             anims: &mut self.anims,
         };
         render_ctx.draw();

@@ -49,21 +49,22 @@ pub struct MeshInfo {
 }
 
 impl MeshInfo {
-    /// Convenience method
-    pub fn draw_with_texture(self, texture: ManagedTexturePtr) -> DrawMesh {
+    /// Convenience method for textured mesh
+    pub fn draw_with_textures(self, textures: Vec<ManagedTexturePtr>) -> DrawMesh {
         DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
-            texture: Some(texture),
+            textures: Some(textures),
             num_elements: self.num_elements,
         }
     }
+
     /// Convenience method
     pub fn draw_untextured(self) -> DrawMesh {
         DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
-            texture: None,
+            textures: None,
             num_elements: self.num_elements,
         }
     }

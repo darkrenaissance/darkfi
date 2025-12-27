@@ -133,7 +133,7 @@ fn render_glyph_run(
         );
     }
 
-    mesh.alloc(render_api).draw_with_texture(atlas.texture)
+    mesh.alloc(render_api).draw_with_textures(vec![atlas.texture])
 }
 
 fn render_underline(

@@ -109,7 +109,7 @@ impl VectorArt {
         //debug!(target: "ui::vector_art", "vec_draw_instrs {verts:?} | {indices:?} | {num_elements}");
         let vertex_buffer = self.render_api.new_vertex_buffer(verts, gfxtag!("vectorart"));
         let index_buffer = self.render_api.new_index_buffer(indices, gfxtag!("vectorart"));
-        let mesh = DrawMesh { vertex_buffer, index_buffer, texture: None, num_elements };
+        let mesh = DrawMesh { vertex_buffer, index_buffer, textures: None, num_elements };
 
         vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
     }

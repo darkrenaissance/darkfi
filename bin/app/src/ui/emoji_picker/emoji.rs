@@ -108,7 +108,7 @@ impl EmojiMeshes {
         let uv = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
         let mut mesh = MeshBuilder::new(gfxtag!("emoji_mesh"));
         mesh.draw_box(&Rectangle::new(x, y, w, h), COLOR_WHITE, &uv);
-        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
+        mesh.alloc(&self.render_api).draw_with_textures(vec![atlas.texture])
     }
 
     pub fn get_list<'a>(&'a self) -> &'a Vec<String> {

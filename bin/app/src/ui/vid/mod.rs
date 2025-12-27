@@ -24,8 +24,8 @@ use tracing::instrument;
 
 use crate::{
     gfx::{
-        anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedSeqAnimPtr,
-        ManagedTexturePtr, Rectangle, RenderApi,
+        anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, GraphicPipeline,
+        ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -38,19 +38,26 @@ use super::{DrawUpdate, OnModify, UIObject};
 mod ivf;
 mod threads;
 
-use threads::{spawn_decoder_thread, spawn_loader_demuxer_thread};
+use threads::spawn_decoder_thread;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:video", $($arg)*); } }
 
 pub type VideoPtr = Arc<Video>;
 
 #[derive(Clone)]
+pub struct YuvTextures {
+    y: ManagedTexturePtr,
+    u: ManagedTexturePtr,
+    v: ManagedTexturePtr,
+}
+
+#[derive(Clone)]
 pub struct Av1VideoData {
-    textures: Vec<Option<ManagedTexturePtr>>,
+    textures: Vec<Option<YuvTextures>>,
     anim: ManagedSeqAnimPtr,
 
-    textures_pub: async_broadcast::Sender<(usize, ManagedTexturePtr)>,
-    textures_sub: async_broadcast::Receiver<(usize, ManagedTexturePtr)>,
+    textures_pub: async_broadcast::Sender<(usize, YuvTextures)>,
+    textures_sub: async_broadcast::Receiver<(usize, YuvTextures)>,
 }
 
 impl Av1VideoData {
@@ -126,23 +133,11 @@ impl Video {
     fn load_video(&self) {
         let path = self.path.get();
 
-        // Thread 1 -> thread 2 channel: raw AV1 encoded frames
-        let (frame_tx, frame_rx) = mpsc::channel();
-
-        // Thread 1 (loader + demuxer):
-        // loads chunks, demuxes IVF -> AV1 frames, initializes vid_data
-        let loader_handle = spawn_loader_demuxer_thread(
-            path,
-            frame_tx,
-            self.vid_data.clone(),
-            self.render_api.clone(),
-        );
-        // Thread 2 (decoder):
-        // blocks on frame_rx, decodes AV1 -> RGB, creates textures directly
+        // Decoder thread:
+        // loads path, decodes AV1 -> RGB, creates textures directly
         let decoder_handle =
-            spawn_decoder_thread(frame_rx, self.vid_data.clone(), self.render_api.clone());
+            spawn_decoder_thread(path, self.vid_data.clone(), self.render_api.clone());
 
-        *self._load_handle.lock() = Some(loader_handle);
         *self._decoder_handle.lock() = Some(decoder_handle);
     }
 
@@ -202,24 +197,24 @@ impl Video {
         let mut loaded_n_frames = 0;
         let total_frames = vid_data.textures.len();
 
-        for (texture_idx, (mut texture, mut tsub)) in
+        for (tex_idx, (mut tex, mut tsub)) in
             vid_data.textures.into_iter().zip(tsubs.into_iter()).enumerate()
         {
             let vertex_buffer = mesh.vertex_buffer.clone();
             let index_buffer = mesh.index_buffer.clone();
 
-            let Some(texture) = texture.take() else {
+            let Some(tex) = tex.take() else {
                 let anim = vid_data.anim.clone();
                 let task = self.ex.spawn(async move {
-                    while let Ok((frame_idx, texture)) = tsub.recv().await {
-                        if frame_idx != texture_idx {
+                    while let Ok((frame_idx, tex)) = tsub.recv().await {
+                        if frame_idx != tex_idx {
                             continue
                         }
 
                         let mesh = DrawMesh {
                             vertex_buffer,
                             index_buffer,
-                            texture: Some(texture),
+                            textures: Some(vec![tex.y, tex.u, tex.v]),
                             num_elements: mesh.num_elements,
                         };
                         let dc = DrawCall {
@@ -240,7 +235,7 @@ impl Video {
             let mesh = DrawMesh {
                 vertex_buffer,
                 index_buffer,
-                texture: Some(texture),
+                textures: Some(vec![tex.y, tex.u, tex.v]),
                 num_elements: mesh.num_elements,
             };
             let dc = DrawCall {
@@ -249,7 +244,7 @@ impl Video {
                 z_index: 0,
                 debug_str: "video",
             };
-            vid_data.anim.update(texture_idx, Frame::new(40, dc));
+            vid_data.anim.update(tex_idx, Frame::new(40, dc));
             loaded_n_frames += 1;
         }
 
@@ -261,6 +256,7 @@ impl Video {
                 self.dc_key,
                 DrawCall::new(
                     vec![
+                        DrawInstruction::SetPipeline(GraphicPipeline::YUV),
                         DrawInstruction::Move(rect.pos()),
                         DrawInstruction::Animation(vid_data.anim.id),
                     ],

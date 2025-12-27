@@ -32,97 +32,15 @@ use crate::{
     util::spawn_thread,
 };
 
-use super::{ivf::IvfStreamingDemuxer, Av1VideoData};
+use super::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "ui:video", $($arg)*); } }
-
-/// Spawn the loader-demuxer thread (Thread 1 of 2)
-///
-/// This thread loads video file chunks sequentially and demuxes AV1 frames.
-///
-/// # Thread Coordination
-/// - Loads chunks from disk using format `path.{000, 001, 002, ...}` where `{frame}` is replaced
-/// - Demuxes IVF container to extract raw AV1 frames
-/// - Initializes vid_data with header info from first chunk
-/// - Sends frames to decoder thread via `frame_tx` channel
-/// - Signals completion by dropping `frame_tx`
-///
-/// # Arguments
-/// * `path` - Base path with `{frame}` placeholder, e.g. `"assets/video.ivf.{frame}"`
-/// * `frame_tx` - Channel sender for raw AV1 frames to decoder thread
-/// * `vid_data` - Shared video data storage to initialize
-/// * `render_api` - Render API for creating animation
-///
-/// # Returns
-/// JoinHandle for the spawned thread
-pub fn spawn_loader_demuxer_thread(
-    path: String,
-    frame_tx: Sender<Vec<u8>>,
-    vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
-    render_api: RenderApi,
-) -> std::thread::JoinHandle<()> {
-    spawn_thread("video-loader-demuxer", move || {
-        let mut chunk_idx: usize = 0;
-        let mut demuxer: Option<IvfStreamingDemuxer> = None;
-
-        loop {
-            // Replace {frame} placeholder with zero-padded chunk number
-            let chunk_path = path.replace("{frame}", &format!("{chunk_idx:03}"));
-            d!("Loading video chunk: {chunk_path}");
-
-            // Load chunk asynchronously via miniquad callback
-            let data = Arc::new(SyncMutex::new(None));
-            let data2 = data.clone();
-            miniquad::fs::load_file(&chunk_path, {
-                let chunk_path = chunk_path.clone();
-                move |res| match res {
-                    Ok(chunk) => *data2.lock() = Some(chunk),
-                    Err(err) => {
-                        error!("Failed to load chunk {chunk_path}: {err}");
-                    }
-                }
-            });
-            let data = std::mem::take(&mut *data.lock());
-
-            // Empty data means file not found - end of chunk sequence
-            let Some(data) = data else {
-                // Close channel to signal decoder thread
-                drop(frame_tx);
-                d!("Video demuxer finished");
-                return
-            };
-
-            if let Some(demuxer) = demuxer.as_mut() {
-                demuxer.feed_data(data);
-            } else {
-                // First chunk: initialize demuxer from IVF header
-                let dem = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
-                let num_frames = dem.header.num_frames as usize;
-                demuxer = Some(dem);
-
-                // Initialize vid_data with header info
-                *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
-            }
-
-            let demuxer = demuxer.as_mut().unwrap();
-            // Extract all complete frames from this chunk
-            while let Some(frame) = demuxer.try_read_frame() {
-                frame_tx.send(frame).unwrap();
-                d!("Sent video chunk {chunk_idx}");
-            }
-
-            chunk_idx += 1;
-        }
-    })
-}
 
 /// Spawn the decoder thread (Thread 2 of 2)
 ///
 /// This thread decodes AV1 frames and creates GPU textures directly.
 ///
 /// # Thread Coordination
-/// - Receives raw AV1 frames from loader-demuxer thread via `frame_rx` channel
 /// - Uses optimistic decoding strategy:
 ///   1. Drain all pending frames with `try_recv()`
 ///   2. When queue is empty, block on `recv()` for next frame
@@ -132,7 +50,6 @@ pub fn spawn_loader_demuxer_thread(
 /// - On channel close, flushes decoder
 ///
 /// # Arguments
-/// * `frame_rx` - Channel receiver for raw AV1 frames from loader-demuxer thread
 /// * `vid_data` - Shared video data storage to update with textures
 /// * `render_api` - Render API for creating textures
 /// * `dc_key` - Draw call key for triggering updates
@@ -140,7 +57,7 @@ pub fn spawn_loader_demuxer_thread(
 /// # Returns
 /// JoinHandle for the spawned thread
 pub fn spawn_decoder_thread(
-    frame_rx: Receiver<Vec<u8>>,
+    path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
     render_api: RenderApi,
 ) -> std::thread::JoinHandle<()> {
@@ -154,10 +71,26 @@ pub fn spawn_decoder_thread(
         let mut decoder = Rav1dDecoder::with_settings(&settings).unwrap();
         //let mut decoder = Rav1dDecoder::new().unwrap();
 
+        let data = Arc::new(SyncMutex::new(None));
+        let data2 = data.clone();
+        miniquad::fs::load_file(&path, {
+            move |res| match res {
+                Ok(chunk) => *data2.lock() = Some(chunk),
+                Err(err) => {
+                    error!("Failed to load chunk: {err}");
+                }
+            }
+        });
+        let data = std::mem::take(&mut *data.lock()).unwrap();
+
+        let mut demuxer = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
+        let num_frames = demuxer.header.num_frames as usize;
+
+        *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
+
         let mut frame_idx = 0;
         loop {
-            // Blocking receive - returns Err when channel closes
-            let Ok(av1_frame) = frame_rx.recv() else {
+            let Some(av1_frame) = demuxer.try_read_frame() else {
                 // Channel closed - drain decoder (like dav1dplay)
                 while let Ok(pic) = decoder.get_picture() {
                     process(&mut frame_idx, &pic, &vid_data, &render_api);
@@ -193,7 +126,6 @@ pub fn spawn_decoder_thread(
                 }
             }
         }
-        d!("Video decode finished, total frames: {frame_idx}");
     })
 }
 
@@ -204,46 +136,59 @@ fn process(
     render_api: &RenderApi,
 ) {
     // rav1d stores data as planar GBR (Y=G, U=B, V=R)
-    let g_plane = pic.plane(PlanarImageComponent::Y);
-    let b_plane = pic.plane(PlanarImageComponent::U);
-    let r_plane = pic.plane(PlanarImageComponent::V);
+    let y_plane = pic.plane(PlanarImageComponent::Y);
+    let u_plane = pic.plane(PlanarImageComponent::U);
+    let v_plane = pic.plane(PlanarImageComponent::V);
 
-    let g_stride = pic.stride(PlanarImageComponent::Y) as usize;
-    let b_stride = pic.stride(PlanarImageComponent::U) as usize;
-    let r_stride = pic.stride(PlanarImageComponent::V) as usize;
+    let y_stride = pic.stride(PlanarImageComponent::Y) as usize;
+    let u_stride = pic.stride(PlanarImageComponent::U) as usize;
+    let v_stride = pic.stride(PlanarImageComponent::V) as usize;
 
     let width = pic.width() as usize;
     let height = pic.height() as usize;
 
-    let mut buf = Vec::with_capacity(width * height * 3);
-    // Pack planar RGB into RGB format
-    for y in 0..height {
-        for x in 0..width {
-            let g_idx = y * g_stride + x;
-            let b_idx = y * b_stride + x;
-            let r_idx = y * r_stride + x;
+    // Y plane is full resolution
+    let y_data = y_plane[..(y_stride * height)].to_vec();
 
-            buf.push(r_plane[r_idx]);
-            buf.push(g_plane[g_idx]);
-            buf.push(b_plane[b_idx]);
-        }
-    }
+    // U and V planes are half resolution (4:2:0 subsampling)
+    let uv_width = width / 2;
+    let uv_height = height / 2;
+    let u_data = u_plane[..(u_stride * uv_height)].to_vec();
+    let v_data = v_plane[..(v_stride * uv_height)].to_vec();
 
-    // Create texture with RGB data
-    let tex = render_api.new_texture(
+    // Create 3 separate textures with Alpha format (1 byte per pixel)
+    let tex_y = render_api.new_texture(
         width as u16,
         height as u16,
-        buf,
-        TextureFormat::RGB8,
-        gfxtag!("video"),
+        y_data,
+        TextureFormat::Alpha,
+        gfxtag!("video_y"),
     );
+
+    let tex_u = render_api.new_texture(
+        uv_width as u16,
+        uv_height as u16,
+        u_data,
+        TextureFormat::Alpha,
+        gfxtag!("video_u"),
+    );
+
+    let tex_v = render_api.new_texture(
+        uv_width as u16,
+        uv_height as u16,
+        v_data,
+        TextureFormat::Alpha,
+        gfxtag!("video_v"),
+    );
+
+    let yuv_texs = YuvTextures { y: tex_y, u: tex_u, v: tex_v };
 
     {
         // Store in vid_data
         let mut vd_guard = vid_data.lock();
         let vd = vd_guard.as_mut().unwrap();
-        vd.textures[*frame_idx] = Some(tex.clone());
-        let _ = vd.textures_pub.try_broadcast((*frame_idx, tex));
+        vd.textures[*frame_idx] = Some(yuv_texs.clone());
+        let _ = vd.textures_pub.try_broadcast((*frame_idx, yuv_texs));
     }
     //d!("Loaded video frame {frame_idx}");
     *frame_idx += 1;

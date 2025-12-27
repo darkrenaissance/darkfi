@@ -157,7 +157,7 @@ impl Image {
         let mesh = DrawMesh {
             vertex_buffer: mesh.vertex_buffer,
             index_buffer: mesh.index_buffer,
-            texture: Some(texture),
+            textures: Some(vec![texture]),
             num_elements: mesh.num_elements,
         };
 

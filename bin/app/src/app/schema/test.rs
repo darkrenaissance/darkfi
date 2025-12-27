@@ -44,7 +44,7 @@ mod ui_consts {
 mod ui_consts {
     //pub const CHATDB_PATH: &str = "chatdb";
     //pub const KING_PATH: &str = "assets/king.png";
-    pub const VID_PATH: &str = "assets/forest2/forest_1920x1080.ivf.{frame}";
+    pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
 }
 
 use ui_consts::*;

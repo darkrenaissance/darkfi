@@ -206,7 +206,7 @@ impl PrivMessage {
         }
 
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
+        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
         self.mesh_cache = Some(mesh.clone());
 
         mesh
@@ -479,7 +479,7 @@ impl DateMessage {
         }
 
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
+        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
         self.mesh_cache = Some(mesh.clone());
 
         mesh
@@ -671,7 +671,7 @@ impl FileMessage {
             let mut mesh_img = MeshBuilder::new(gfxtag!("file_img"));
             mesh_img.draw_box(&mesh_rect, COLOR_WHITE, &uv_rect);
             let mesh_img = mesh_img.alloc(render_api);
-            let mesh_img = mesh_img.draw_with_texture(texture);
+            let mesh_img = mesh_img.draw_with_textures(vec![texture]);
             return vec![mesh_img, mesh_gradient];
         }
         drop(imgbuf_);
@@ -718,7 +718,7 @@ impl FileMessage {
         mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
 
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
+        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
 
         vec![mesh]
     }

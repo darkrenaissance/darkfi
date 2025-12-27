@@ -82,7 +82,7 @@ mod desktop_paths {
     use std::path::PathBuf;
 
     //pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
-    pub const VID_PATH: &str = "assets/forest2/forest_1920x1080.ivf.{frame}";
+    pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
     pub const VID_ASPECT_RATIO: f32 = 16. / 9.;
 
     pub fn get_chatdb_path() -> PathBuf {
