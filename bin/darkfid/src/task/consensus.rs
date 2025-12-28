@@ -188,12 +188,12 @@ async fn consensus_task(
             }
         };
 
-        if confirmed.is_empty() {
-            continue
-        }
-
         if let Err(e) = node.registry.refresh(&node.validator).await {
             error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
+        }
+
+        if confirmed.is_empty() {
+            continue
         }
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
