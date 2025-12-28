@@ -44,6 +44,7 @@ use darkfi::{
     },
     system::StoppableTaskPtr,
 };
+use darkfi_sdk::crypto::keypair::Network;
 
 use crate::{registry::model::MinerRewardsRecipientConfig, server_error, DarkfiNode, RpcError};
 
@@ -79,10 +80,11 @@ impl DarkfiNode {
     // Gets a unique ID that identifies this merge mined chain and
     // separates it from other chains.
     //
-    // * `chain_id`: A unique 32-byte hex-encoded value that identifies
-    //   this merge mined chain.
+    // * `chain_id`: A unique 32-byte hash that identifies this merge
+    //   mined chain.
     //
-    // darkfid will send the hash of the genesis block header.
+    // darkfid will send the hash:
+    //  H(genesis_hash || network || hard_fork_height)
     //
     // --> {"jsonrpc":"2.0", "method": "merge_mining_get_chain_id", "id": 1}
     // <-- {"jsonrpc":"2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
@@ -107,11 +109,17 @@ impl DarkfiNode {
             }
         };
 
-        // TODO: XXX: This should also have more specialized identifiers.
-        // e.g. chain_id = H(genesis || aux_nonce || checkpoint_height)
+        // Generate the chain id
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(genesis_hash.inner());
+        match self.registry.network {
+            Network::Mainnet => hasher.update("mainnet".as_bytes()),
+            Network::Testnet => hasher.update("testnet".as_bytes()),
+        };
+        hasher.update(&0u32.to_le_bytes());
+        let chain_id = hasher.finalize().to_string();
 
-        let response =
-            HashMap::from([("chain_id".to_string(), JsonValue::from(genesis_hash.to_string()))]);
+        let response = HashMap::from([("chain_id".to_string(), JsonValue::from(chain_id))]);
         JsonResponse::new(JsonValue::from(response), id).into()
     }
 
