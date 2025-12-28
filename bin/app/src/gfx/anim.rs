@@ -75,7 +75,6 @@ impl GfxSeqAnim {
     }
 
     pub fn tick(&mut self) -> Option<GfxDrawCall> {
-        //t!("tick");
         if self.curr_frame().is_none() {
             assert_eq!(self.current_idx, 0);
             return None

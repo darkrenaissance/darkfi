@@ -56,7 +56,7 @@ mod ui_consts {
     use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
-    pub const VID_PATH: &str = "forest_720x1280/{frame}.qoi";
+    pub const VID_PATH: &str = "forest_720x1280.ivf";
     pub const VID_ASPECT_RATIO: f32 = 9. / 16.;
     pub use super::android_ui_consts::*;
 
@@ -81,7 +81,6 @@ mod ui_consts {
 mod desktop_paths {
     use std::path::PathBuf;
 
-    //pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
     pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
     pub const VID_ASPECT_RATIO: f32 = 16. / 9.;
 

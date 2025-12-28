@@ -35,10 +35,10 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+mod decode;
 mod ivf;
-mod threads;
 
-use threads::spawn_decoder_thread;
+use decode::spawn_decoder_thread;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:video", $($arg)*); } }
 

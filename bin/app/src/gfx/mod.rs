@@ -20,6 +20,7 @@ use darkfi_serial::{
     async_trait, AsyncEncodable, AsyncWrite, Decodable, Encodable, FutAsyncWriteExt,
     SerialDecodable, SerialEncodable, VarInt,
 };
+use indoc::indoc;
 #[cfg(target_os = "android")]
 use miniquad::native::egl;
 use miniquad::{
@@ -581,14 +582,14 @@ struct RenderContext<'a> {
 impl<'a> RenderContext<'a> {
     fn draw(&mut self) {
         if DEBUG_RENDER {
-            debug!(target: "gfx", "RenderContext::draw()");
+            d!("RenderContext::draw()");
         }
         if DEBUG_TRAX {
             get_trax().lock().set_curr(0);
         }
         self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
-            debug!(target: "gfx", "RenderContext::draw() [DONE]");
+            d!("RenderContext::draw() [DONE]");
         }
     }
 
@@ -609,7 +610,7 @@ impl<'a> RenderContext<'a> {
         }
 
         if DEBUG_RENDER {
-            debug!(target: "gfx", "=> viewport {view_x} {view_y} {view_w} {view_h}");
+            d!("=> viewport {view_x} {view_y} {view_w} {view_h}");
         }
         self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
         self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
@@ -648,15 +649,17 @@ impl<'a> RenderContext<'a> {
                     self.view.w /= self.scale;
                     self.view.h /= self.scale;
                     if is_debug {
-                        debug!(target: "gfx", "{ws}set_scale({scale})");
+                        d!("{ws}set_scale({scale})");
                     }
                 }
                 GfxDrawInstruction::Move(off) => {
                     self.cursor += *off;
                     if is_debug {
-                        debug!(target: "gfx",
+                        d!(
                             "{ws}move({off:?})  cursor={:?}, scale={}, view={:?}",
-                            self.cursor, self.scale, self.view
+                            self.cursor,
+                            self.scale,
+                            self.view
                         );
                     }
                     self.apply_model();
@@ -664,9 +667,11 @@ impl<'a> RenderContext<'a> {
                 GfxDrawInstruction::SetPos(pos) => {
                     self.cursor = old_cursor + *pos;
                     if is_debug {
-                        debug!(target: "gfx",
+                        d!(
                             "{ws}set_pos({pos:?})  cursor={:?}, scale={}, view={:?}",
-                            self.cursor, self.scale, self.view
+                            self.cursor,
+                            self.scale,
+                            self.view
                         );
                     }
                     self.apply_model();
@@ -685,17 +690,14 @@ impl<'a> RenderContext<'a> {
                     // Cursor resets within the view
                     self.cursor = Point::zero();
                     if is_debug {
-                        debug!(target: "gfx",
-                            "{ws}apply_view({view:?})  scale={}, view={:?}",
-                            self.scale, self.view
-                        );
+                        d!("{ws}apply_view({view:?})  scale={}, view={:?}", self.scale, self.view);
                     }
                     self.apply_view();
                     self.apply_model();
                 }
                 GfxDrawInstruction::Draw(mesh) => {
                     if is_debug {
-                        debug!(target: "gfx", "{ws}draw({mesh:?})");
+                        d!("{ws}draw({mesh:?})");
                     }
                     let images = match &mesh.textures {
                         Some(texs) => texs.iter().map(|(_, tex_id)| *tex_id).collect(),
@@ -721,7 +723,7 @@ impl<'a> RenderContext<'a> {
                         indent = 0;
                     }
                     is_debug = true;
-                    debug!(target: "gfx", "Frame start");
+                    d!("Frame start");
                 }
                 GfxDrawInstruction::SetPipeline(pipeline) => {
                     self.gfx_pipeline = *pipeline;
@@ -729,7 +731,7 @@ impl<'a> RenderContext<'a> {
                     assert!(pipeline_idx < self.loaded_pipelines.len());
                     self.ctx.apply_pipeline(&self.loaded_pipelines[pipeline_idx]);
                     if is_debug {
-                        debug!(target: "gfx", "{ws}set_pipeline({pipeline:?})");
+                        d!("{ws}set_pipeline({pipeline:?})");
                     }
                 }
             }
@@ -744,7 +746,7 @@ impl<'a> RenderContext<'a> {
                 get_trax().lock().set_curr(*dc_key);
             }
             if is_debug {
-                debug!(target: "gfx", "{ws}drawcall {dc_key}");
+                d!("{ws}drawcall {dc_key}");
             }
             self.draw_call(dc, indent + 1, is_debug);
         }
@@ -752,7 +754,7 @@ impl<'a> RenderContext<'a> {
         self.scale = old_scale;
 
         if is_debug {
-            debug!(target: "gfx", "{ws}Frame close: cursor={old_cursor:?}, view={old_view:?}");
+            d!("{ws}Frame close: cursor={old_cursor:?}, view={old_view:?}");
         }
 
         self.view = old_view;
@@ -1127,14 +1129,14 @@ impl Stage {
         width: u16,
         height: u16,
         data: &Vec<u8>,
-        fmt: TextureFormat,
+        format: TextureFormat,
         gfx_texture_id: TextureId,
     ) {
         let texture = self.ctx.new_texture_from_data_and_format(
             data,
             TextureParams {
                 kind: TextureKind::Texture2D,
-                format: fmt,
+                format,
                 width: width as _,
                 height: height as _,
                 wrap: TextureWrap::Clamp,

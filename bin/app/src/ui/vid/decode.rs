@@ -34,7 +34,7 @@ use crate::{
 
 use super::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures};
 
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video::decode", $($arg)*); } }
 
 /// Spawn the decoder thread (Thread 2 of 2)
 ///
@@ -61,33 +61,33 @@ pub fn spawn_decoder_thread(
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
     render_api: RenderApi,
 ) -> std::thread::JoinHandle<()> {
-    spawn_thread("video-decoder", move || {
-        let mut settings = Rav1dSettings::new();
-        // 0 is auto detect
-        settings.set_n_threads(4);
-        // 0 is auto
-        settings.set_max_frame_delay(0);
+    let mut settings = Rav1dSettings::new();
+    // 0 is auto detect
+    settings.set_n_threads(4);
+    // 0 is auto
+    settings.set_max_frame_delay(0);
 
-        let mut decoder = Rav1dDecoder::with_settings(&settings).unwrap();
-        //let mut decoder = Rav1dDecoder::new().unwrap();
+    let mut decoder = Rav1dDecoder::with_settings(&settings).unwrap();
+    //let mut decoder = Rav1dDecoder::new().unwrap();
 
-        let data = Arc::new(SyncMutex::new(None));
-        let data2 = data.clone();
-        miniquad::fs::load_file(&path, {
-            move |res| match res {
-                Ok(chunk) => *data2.lock() = Some(chunk),
-                Err(err) => {
-                    error!("Failed to load chunk: {err}");
-                }
+    let data = Arc::new(SyncMutex::new(None));
+    let data2 = data.clone();
+    miniquad::fs::load_file(&path, {
+        move |res| match res {
+            Ok(chunk) => *data2.lock() = Some(chunk),
+            Err(err) => {
+                error!("Failed to load chunk: {err}");
             }
-        });
-        let data = std::mem::take(&mut *data.lock()).unwrap();
+        }
+    });
+    let data = std::mem::take(&mut *data.lock()).unwrap();
 
-        let mut demuxer = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
-        let num_frames = demuxer.header.num_frames as usize;
+    let mut demuxer = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
+    let num_frames = demuxer.header.num_frames as usize;
 
-        *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
+    *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
 
+    spawn_thread("video-decoder", move || {
         let mut frame_idx = 0;
         loop {
             let Some(av1_frame) = demuxer.try_read_frame() else {
@@ -96,7 +96,20 @@ pub fn spawn_decoder_thread(
                     process(&mut frame_idx, &pic, &vid_data, &render_api);
                 }
 
+                d!("Finished decoding video: {path}");
                 assert_eq!(frame_idx, vid_data.lock().as_ref().unwrap().textures.len());
+                assert_eq!(frame_idx, num_frames);
+                {
+                    let mut vd_guard = vid_data.lock();
+                    let vd = vd_guard.as_mut().unwrap();
+                    for (frame_idx, tex) in vd.textures.iter().enumerate() {
+                        if tex.is_none() {
+                            panic!(
+                                "Frame idx {frame_idx} / {num_frames} is none for video: {path}"
+                            );
+                        }
+                    }
+                }
                 return;
             };
 
@@ -148,13 +161,13 @@ fn process(
     let height = pic.height() as usize;
 
     // Y plane is full resolution
-    let y_data = y_plane[..(y_stride * height)].to_vec();
+    let y_data = copy_plane(&y_plane, y_stride, width, height);
 
     // U and V planes are half resolution (4:2:0 subsampling)
     let uv_width = width / 2;
     let uv_height = height / 2;
-    let u_data = u_plane[..(u_stride * uv_height)].to_vec();
-    let v_data = v_plane[..(v_stride * uv_height)].to_vec();
+    let u_data = copy_plane(&u_plane, u_stride, uv_width, uv_height);
+    let v_data = copy_plane(&v_plane, v_stride, uv_width, uv_height);
 
     // Create 3 separate textures with Alpha format (1 byte per pixel)
     let tex_y = render_api.new_texture(
@@ -183,13 +196,30 @@ fn process(
 
     let yuv_texs = YuvTextures { y: tex_y, u: tex_u, v: tex_v };
 
-    {
+    let num_frames = {
         // Store in vid_data
         let mut vd_guard = vid_data.lock();
         let vd = vd_guard.as_mut().unwrap();
         vd.textures[*frame_idx] = Some(yuv_texs.clone());
         let _ = vd.textures_pub.try_broadcast((*frame_idx, yuv_texs));
+        vd.textures.len()
+    };
+    if (*frame_idx % 10) == 0 {
+        let pct_loaded = 100. * *frame_idx as f32 / num_frames as f32;
+        d!("Loaded video frame {pct_loaded:.2}%%");
     }
-    //d!("Loaded video frame {frame_idx}");
     *frame_idx += 1;
+}
+
+/// Copy plane data row by row to handle stride padding.
+/// When stride > width, the decoder adds padding bytes for alignment.
+/// We need to copy only the actual pixel data, excluding the padding.
+fn copy_plane(plane: &[u8], stride: usize, width: usize, height: usize) -> Vec<u8> {
+    let mut data = Vec::with_capacity(width * height);
+    for row in 0..height {
+        let start = row * stride;
+        let end = start + width;
+        data.extend_from_slice(&plane[start..end]);
+    }
+    data
 }

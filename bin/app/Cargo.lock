@@ -4722,7 +4722,6 @@ dependencies = [
 [[package]]
 name = "rav1d"
 version = "1.1.0"
-source = "git+https://github.com/leo030303/rav1d?branch=add-rust-api#3ef268229621b863fd88a20cea226944d764dcd0"
 dependencies = [
  "assert_matches",
  "atomig",
