@@ -320,12 +320,13 @@ impl DarkfiMinersRegistry {
         p2p_handler: &DarkfidP2pHandlerPtr,
         block: BlockInfo,
     ) -> Result<()> {
+        let proposal = Proposal::new(block);
+        validator.append_proposal(&proposal).await?;
+
         info!(
             target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",
             "Proposing new block to network",
         );
-        let proposal = Proposal::new(block);
-        validator.append_proposal(&proposal).await?;
 
         let proposals_sub = subscribers.get("proposals").unwrap();
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
