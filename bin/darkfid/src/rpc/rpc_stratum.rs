@@ -86,6 +86,7 @@ impl DarkfiNode {
     // * `target`    : Current mining target
     // * `algo`      : The mining algorithm - RandomX
     // * `seed_hash` : Current RandomX key
+    // * `next_seed_hash`: (optional) Next RandomX key if it is known
     //
     // --> {"jsonrpc":"2.0", "method": "login", "id": 1, "params": {"login": "MINING_CONFIG", "pass": "", "agent": "XMRig", "algo": ["rx/0"]}}
     // <-- {"jsonrpc":"2.0", "id": 1, "result": {"id": "1be0b7b6-b15a-47be-a17d-46b2911cf7d0", "job": { ... }, "status": "OK"}}
@@ -99,9 +100,6 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        if params.len() != 4 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
 
         // Parse login mining configuration
         let Some(wallet) = params.get("login") else {
@@ -120,12 +118,9 @@ impl DarkfiNode {
         let Some(pass) = params.get("pass") else {
             return server_error(RpcError::MinerMissingPassword, id, None)
         };
-        let Some(pass) = pass.get::<String>() else {
+        let Some(_pass) = pass.get::<String>() else {
             return server_error(RpcError::MinerInvalidPassword, id, None)
         };
-        if pass != "x" {
-            return server_error(RpcError::MinerInvalidPassword, id, None)
-        }
 
         // Parse agent
         let Some(agent) = params.get("agent") else {
@@ -160,7 +155,10 @@ impl DarkfiNode {
         }
 
         // Register the new miner
-        info!(target: "darkfid::rpc::rpc_stratum::stratum_login","[RPC-STRATUM] Got login from {wallet} ({agent})");
+        info!(
+            target: "darkfid::rpc::rpc_stratum::stratum_login",
+            "[RPC-STRATUM] Got login from {wallet} ({agent})",
+        );
         let (client_id, block_template, publisher) =
             match self.registry.register_miner(&self.validator, wallet, &config).await {
                 Ok(p) => p,
@@ -214,9 +212,6 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        if params.len() != 4 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
 
         // Parse client id
         let Some(client_id) = params.get("id") else {
@@ -309,7 +304,7 @@ impl DarkfiNode {
         {
             error!(
                 target: "darkfid::rpc::rpc_xmr::xmr_merge_submit_solution",
-                "[RPC-XMR] Error submitting new block: {e}",
+                "[RPC-STRATUM] Error submitting new block: {e}",
             );
             return JsonResponse::new(
                 JsonValue::from(HashMap::from([(
@@ -360,9 +355,6 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        if params.len() != 1 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
 
         // Parse client id
         let Some(client_id) = params.get("id") else {

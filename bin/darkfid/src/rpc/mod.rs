@@ -42,10 +42,6 @@ mod rpc_blockchain;
 /// Transactions related methods
 mod rpc_tx;
 
-// TODO: drop
-/// minerd related methods
-mod rpc_miner;
-
 /// Stratum JSON-RPC related methods for native mining
 pub mod rpc_stratum;
 

@@ -65,10 +65,6 @@ impl RequestHandler<MmRpcHandler> for DarkfiNode {
             "merge_mining_get_chain_id" => self.xmr_merge_mining_get_chain_id(req.id, req.params).await,
             "merge_mining_get_aux_block" => self.xmr_merge_mining_get_aux_block(req.id, req.params).await,
             "merge_mining_submit_solution" => self.xmr_merge_mining_submit_solution(req.id, req.params).await,
-
-            // ==============
-            // Invalid method
-            // ==============
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -146,9 +142,6 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        if params.len() != 4 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
 
         // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
@@ -261,9 +254,6 @@ impl DarkfiNode {
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
-        if params.len() != 6 {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
 
         // Parse aux_hash
         let Some(aux_hash) = params.get("aux_hash") else {
