@@ -2,26 +2,27 @@ darkfid localnet
 ================
 
 This will start one `darkfid` node in localnet mode,
-along with a `minerd` daemon to mine blocks.
+along with an `xmrig` daemon to mine blocks.
 
-If we want to test wallet stuff, we must generate
-a testing wallet and pass its address to the `darkfid`
-config, so the wallet gets the block rewards the node
-produces. We generate a wallet, set it as the default
-and set its address as the `recipient` field in
-`minerd.toml`, using the porvided automated script:
-```
+If we want to test wallet stuff, we must generate a testing wallet and
+pass its mining configuration to the `xmrig` daemon, so the wallet gets
+the block rewards the node produces. We generate a wallet, set it as
+the default and set its address as the `XMRIG_USER` field in
+`tmux_sessions.sh`, using provided automated script:
+```shell
 % ./init-wallet.sh
 ```
 
-Then start the daemons and wait until `darkfid` is initialized:
-```
+Then make sure the `xmrig` daemon binary path is configured correctly
+in `tmux_sessions.sh`, start the daemons and wait until `darkfid` is
+initialized:
+```shell
 % ./tmux_sessions.sh
 ```
 
-After some blocks have been generated we
-will see some `DRK` in our test wallet.
-```
+After some blocks have been generated we will see some `DRK` in our
+test wallet:
+```shell
 % ./wallet-balance.sh
 ```
 

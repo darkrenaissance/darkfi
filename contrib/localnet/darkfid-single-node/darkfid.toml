@@ -43,10 +43,18 @@ rpc_listen = "tcp://127.0.0.1:48240"
 # Disabled RPC methods
 #rpc_disabled_methods = ["p2p.get_info"]
 
+## Localnet JSON-RPC settings for stratum mining requests (optional)
+[network_config."localnet".stratum_rpc]
+# JSON-RPC listen URL (stratum mining)
+rpc_listen = "tcp://127.0.0.1:48241"
+
+# Disabled RPC methods (stratum mining)
+#rpc_disabled_methods = []
+
 ## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."localnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8241"
+#rpc_listen = "http+tcp://127.0.0.1:48241"
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
