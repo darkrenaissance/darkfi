@@ -123,8 +123,8 @@ impl MinerRewardsRecipientConfig {
 pub struct BlockTemplate {
     /// Block that is being mined
     pub block: BlockInfo,
-    /// RandomX current key
-    pub randomx_key: HeaderHash,
+    /// RandomX current and next keys pair
+    pub randomx_keys: (HeaderHash, HeaderHash),
     /// Compacted block mining target
     pub target: Vec<u8>,
     /// Block difficulty
@@ -138,17 +138,17 @@ pub struct BlockTemplate {
 impl BlockTemplate {
     fn new(
         block: BlockInfo,
-        randomx_key: HeaderHash,
+        randomx_keys: (HeaderHash, HeaderHash),
         target: Vec<u8>,
         difficulty: f64,
         secret: SecretKey,
     ) -> Self {
-        Self { block, randomx_key, target, difficulty, secret, submitted: false }
+        Self { block, randomx_keys, target, difficulty, secret, submitted: false }
     }
 
     pub fn job_notification(&self) -> (String, JsonValue) {
         let block_hash = hex::encode(self.block.header.hash().inner()).to_string();
-        let job = HashMap::from([
+        let mut job = HashMap::from([
             (
                 "blob".to_string(),
                 JsonValue::from(hex::encode(self.block.header.to_block_hashing_blob()).to_string()),
@@ -159,9 +159,15 @@ impl BlockTemplate {
             ("algo".to_string(), JsonValue::from(String::from("rx/0"))),
             (
                 "seed_hash".to_string(),
-                JsonValue::from(hex::encode(self.randomx_key.inner()).to_string()),
+                JsonValue::from(hex::encode(self.randomx_keys.0.inner()).to_string()),
             ),
         ]);
+        if self.randomx_keys.0 != self.randomx_keys.1 {
+            job.insert(
+                "next_seed_hash".to_string(),
+                JsonValue::from(hex::encode(self.randomx_keys.1.inner()).to_string()),
+            );
+        }
         (block_hash, JsonValue::from(job))
     }
 }
@@ -304,7 +310,7 @@ pub async fn generate_next_block_template(
 
     Ok(BlockTemplate::new(
         next_block,
-        extended_fork.module.darkfi_rx_keys.0,
+        extended_fork.module.darkfi_rx_keys,
         target,
         difficulty,
         block_signing_keypair.secret,
