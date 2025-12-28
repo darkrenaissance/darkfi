@@ -291,30 +291,16 @@ impl Drk {
                 )))
             }
         };
-
         let Value::Blob(ref key_bytes) = row[0] else {
             return Err(Error::ParseFailed("[mining_address] Key bytes parsing failed"))
         };
         let public_key: PublicKey = deserialize_async(key_bytes).await?;
         let address: Address = StandardAddress::from_public(self.network, public_key).into();
         let recipient = address.to_string();
-
         let spend_hook = spend_hook.as_ref().map(|spend_hook| spend_hook.to_string());
-
         let user_data =
             user_data.as_ref().map(|user_data| bs58::encode(user_data.to_repr()).into_string());
-
-        output.push(String::from("DarkFi TOML configuration:"));
-        output.push(format!("recipient = \"{recipient}\""));
-        match spend_hook {
-            Some(ref spend_hook) => output.push(format!("spend_hook = \"{spend_hook}\"")),
-            None => output.push(String::from("#spend_hook = \"\"")),
-        }
-        match user_data {
-            Some(ref user_data) => output.push(format!("user_data = \"{user_data}\"")),
-            None => output.push(String::from("#user_data = \"\"")),
-        }
-        output.push(String::from("\nP2Pool wallet address to use:"));
+        output.push(String::from("DarkFi mining configuration address:"));
         output.push(base64::encode(&serialize(&(recipient, spend_hook, user_data))).to_string());
 
         Ok(())

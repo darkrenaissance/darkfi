@@ -686,7 +686,7 @@ pub fn display_mining_config(
     user_data: &Option<String>,
     output: &mut Vec<String>,
 ) {
-    output.push(format!("Mining configuration: {config}"));
+    output.push(format!("DarkFi mining configuration address: {config}"));
 
     match Address::from_str(recipient_str) {
         Ok(recipient) => {

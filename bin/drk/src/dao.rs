@@ -1923,11 +1923,7 @@ impl Drk {
                 .to_func_id()
         );
         let user_data = bs58::encode(dao.bulla().inner().to_repr()).into_string();
-        output.push(String::from("DarkFi TOML configuration:"));
-        output.push(format!("recipient = \"{recipient}\""));
-        output.push(format!("spend_hook = \"{spend_hook}\""));
-        output.push(format!("user_data = \"{user_data}\""));
-        output.push(String::from("\nP2Pool wallet address to use:"));
+        output.push(String::from("DarkFi DAO mining configuration address:"));
         output.push(
             base64::encode(&serialize(&(recipient, Some(spend_hook), Some(user_data)))).to_string(),
         );
