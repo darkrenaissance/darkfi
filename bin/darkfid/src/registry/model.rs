@@ -248,8 +248,12 @@ pub async fn generate_next_block_template(
     // Grab forks' next mine target and difficulty
     let (target, difficulty) = extended_fork.module.next_mine_target_and_difficulty()?;
 
-    // The target should be compacted to 8 bytes little-endian.
-    let target = target.to_bytes_le()[..8].to_vec();
+    // The target should be compacted to 8 bytes. We'll send the MSB.
+    let target_bytes = target.to_bytes_le();
+    let mut padded = [0u8; 32];
+    let len = target_bytes.len().min(32);
+    padded[..len].copy_from_slice(&target_bytes[..len]);
+    let target = padded[24..32].to_vec();
 
     // Cast difficulty to f64. This should always work.
     let difficulty = difficulty.to_string().parse()?;
