@@ -155,7 +155,7 @@ impl DarkfiNode {
         };
 
         // Check if we already have this job
-        if self.registry.jobs.read().await.contains_key(&aux_hash.to_string()) {
+        if self.registry.mm_jobs.read().await.contains_key(&aux_hash.to_string()) {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
@@ -266,8 +266,8 @@ impl DarkfiNode {
             return server_error(RpcError::MinerInvalidAuxHash, id, None)
         }
 
-        // If we don't know about this job, we can just abort here
-        let jobs = self.registry.jobs.read().await;
+        // If we don't know about this mm job, we can just abort here
+        let jobs = self.registry.mm_jobs.read().await;
         let Some(wallet) = jobs.get(aux_hash) else {
             return server_error(RpcError::MinerUnknownJob, id, None)
         };

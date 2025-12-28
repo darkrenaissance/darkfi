@@ -91,16 +91,6 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "tx.clean_pending" => self.tx_clean_pending(req.id, req.params).await,
             "tx.calculate_fee" => self.tx_calculate_fee(req.id, req.params).await,
 
-            // TODO: drop
-            // =============
-            // Miner methods
-            // =============
-            /*
-            "miner.get_current_mining_randomx_key" => self.miner_get_current_mining_randomx_key(req.id, req.params).await,
-            "miner.get_header" => self.miner_get_header(req.id, req.params).await,
-            "miner.submit_solution" => self.miner_submit_solution(req.id, req.params).await,
-            */
-
             // ==============
             // Invalid method
             // ==============

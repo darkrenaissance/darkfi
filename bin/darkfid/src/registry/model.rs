@@ -169,6 +169,8 @@ impl BlockTemplate {
 /// Auxiliary structure representing a native miner client record.
 #[derive(Debug, Clone)]
 pub struct MinerClient {
+    /// Miner wallet template key
+    pub wallet: String,
     /// Miner recipient configuration
     pub config: MinerRewardsRecipientConfig,
     /// Current mining job
@@ -184,7 +186,15 @@ impl MinerClient {
         hasher.update(&NanoTimestamp::current_time().inner().to_le_bytes());
         let client_id = hex::encode(hasher.finalize().as_bytes()).to_string();
         let publisher = JsonSubscriber::new("job");
-        (client_id, Self { config: config.clone(), job: job.to_owned(), publisher })
+        (
+            client_id,
+            Self {
+                wallet: String::from(wallet),
+                config: config.clone(),
+                job: job.to_owned(),
+                publisher,
+            },
+        )
     }
 }
 

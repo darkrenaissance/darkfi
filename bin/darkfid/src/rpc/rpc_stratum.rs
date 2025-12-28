@@ -159,7 +159,7 @@ impl DarkfiNode {
             target: "darkfid::rpc::rpc_stratum::stratum_login",
             "[RPC-STRATUM] Got login from {wallet} ({agent})",
         );
-        let (client_id, block_template, publisher) =
+        let (client_id, job_id, job, publisher) =
             match self.registry.register_miner(&self.validator, wallet, &config).await {
                 Ok(p) => p,
                 Err(e) => {
@@ -172,7 +172,6 @@ impl DarkfiNode {
             };
 
         // Now we have the new job, we ship it to RPC
-        let (job_id, job) = block_template.job_notification();
         info!(
             target: "darkfid::rpc::rpc_stratum::stratum_login",
             "[RPC-STRATUM] Created new mining job for client {client_id}: {job_id}"
@@ -222,8 +221,8 @@ impl DarkfiNode {
         };
 
         // If we don't know about this client, we can just abort here
-        let clients = self.registry.clients.read().await;
-        let Some(client) = clients.get(client_id) else {
+        let jobs = self.registry.jobs.read().await;
+        let Some(client) = jobs.get(client_id) else {
             return server_error(RpcError::MinerUnknownClient, id, None)
         };
 
@@ -235,20 +234,16 @@ impl DarkfiNode {
             return server_error(RpcError::MinerInvalidJobId, id, None)
         };
 
-        // If we don't know about this job or it doesn't match the
-        // client one, we can just abort here
+        // If this job doesn't match the client one, we can just abort
+        // here.
         if &client.job != job_id {
             return server_error(RpcError::MinerUnknownJob, id, None)
         }
-        let jobs = self.registry.jobs.read().await;
-        let Some(wallet) = jobs.get(job_id) else {
-            return server_error(RpcError::MinerUnknownJob, id, None)
-        };
 
-        // If this job wallet template doesn't exist, we can just
-        // abort here.
+        // If this client job wallet template doesn't exist, we can
+        // just abort here.
         let mut block_templates = self.registry.block_templates.write().await;
-        let Some(block_template) = block_templates.get_mut(wallet) else {
+        let Some(block_template) = block_templates.get_mut(&client.wallet) else {
             return server_error(RpcError::MinerUnknownJob, id, None)
         };
 
@@ -364,8 +359,8 @@ impl DarkfiNode {
             return server_error(RpcError::MinerInvalidClientId, id, None)
         };
 
-        // If we don't know about this client, we can just abort here
-        if !self.registry.clients.read().await.contains_key(client_id) {
+        // If we don't know about this client job, we can just abort here
+        if !self.registry.jobs.read().await.contains_key(client_id) {
             return server_error(RpcError::MinerUnknownClient, id, None)
         };
 
