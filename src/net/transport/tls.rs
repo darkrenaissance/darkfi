@@ -256,7 +256,7 @@ pub struct TlsUpgrade {
 impl TlsUpgrade {
     pub async fn new() -> io::Result<Self> {
         // On each instantiation, generate a new keypair and certificate
-        let Ok(keypair) = rcgen::KeyPair::generate() else {
+        let Ok(keypair) = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519) else {
             return Err(io::Error::other("Failed to generate TLS keypair"))
         };
 
