@@ -86,8 +86,8 @@ impl DarkfiNode {
     // darkfid will send the hash:
     //  H(genesis_hash || network || hard_fork_height)
     //
-    // --> {"jsonrpc":"2.0", "method": "merge_mining_get_chain_id", "id": 1}
-    // <-- {"jsonrpc":"2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "merge_mining_get_chain_id", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
     pub async fn xmr_merge_mining_get_chain_id(&self, id: u16, params: JsonValue) -> JsonResult {
         // Verify request params
         let Some(params) = params.get::<Vec<JsonValue>>() else {
@@ -138,8 +138,26 @@ impl DarkfiNode {
     // * `aux_diff`: Mining difficulty (decimal number)
     // * `aux_hash`: A 32-byte hex-encoded hash of merge mined block
     //
-    // --> {"jsonrpc":"2.0", "method": "merge_mining_get_aux_block", "params": {"address": "MERGE_MINED_CHAIN_ADDRESS", "aux_hash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f", "height": 3000000, "prev_id":"ad505b0be8a49b89273e307106fa42133cbd804456724c5e7635bd953215d92a"}, "id": 1}
-    // <-- {"jsonrpc":"2.0", "result": {"aux_blob": "", "aux_diff": 123456, "aux_hash":"f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f"}, "id": 1}
+    // --> {
+    //       "jsonrpc": "2.0",
+    //       "method": "merge_mining_get_aux_block",
+    //       "params": {
+    //         "address": "MERGE_MINED_CHAIN_ADDRESS",
+    //         "aux_hash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f",
+    //         "height": 3000000,
+    //         "prev_id":"ad505b0be8a49b89273e307106fa42133cbd804456724c5e7635bd953215d92a"
+    //       },
+    //       "id": 1
+    //     }
+    // <-- {
+    //       "jsonrpc":"2.0",
+    //       "result": {
+    //         "aux_blob": "fad344115...3151531",
+    //         "aux_diff": 123456,
+    //         "aux_hash":"f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f"
+    //       },
+    //       "id": 1
+    //     }
     pub async fn xmr_merge_mining_get_aux_block(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         if !*self.validator.synced.read().await {
@@ -247,7 +265,19 @@ impl DarkfiNode {
     // **Response:**
     // * `status`: Block submit status
     //
-    // --> {"jsonrpc":"2.0", "method": "merge_mining_submit_solution", "params": {"aux_blob": "", "aux_hash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f", "blob": "...", "merkle_proof": ["hash1", "hash2", "hash3"], "path": 3, "seed_hash": "22c3d47c595ae888b5d7fc304235f92f8854644d4fad38c5680a5d4a81009fcd"}, "id": 1}
+    // --> {
+    //       "jsonrpc":"2.0",
+    //       "method": "merge_mining_submit_solution",
+    //       "params": {
+    //         "aux_blob": "124125....35215136",
+    //         "aux_hash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f",
+    //         "blob": "...",
+    //         "merkle_proof": ["hash1", "hash2", "hash3"],
+    //         "path": 3,
+    //         "seed_hash": "22c3d47c595ae888b5d7fc304235f92f8854644d4fad38c5680a5d4a81009fcd"
+    //       },
+    //       "id": 1
+    //     }
     // <-- {"jsonrpc":"2.0", "result": {"status": "accepted"}, "id": 1}
     pub async fn xmr_merge_mining_submit_solution(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool

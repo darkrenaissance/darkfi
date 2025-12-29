@@ -29,6 +29,7 @@ use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 /// A ZkBinary decoded from compiled zkas code.
 /// This is used by the zkvm.
 #[derive(Clone, Debug)]
+// ANCHOR: zkbinary-struct
 pub struct ZkBinary {
     pub namespace: String,
     pub k: u32,
@@ -37,6 +38,7 @@ pub struct ZkBinary {
     pub witnesses: Vec<VarType>,
     pub opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
 }
+// ANCHOR_END: zkbinary-struct
 
 // https://stackoverflow.com/questions/35901547/how-can-i-find-a-subsequence-in-a-u8-slice
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {

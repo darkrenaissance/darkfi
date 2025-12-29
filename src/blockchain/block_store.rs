@@ -77,6 +77,7 @@ impl Block {
 /// to include more information that might be used in different
 /// block versions, without affecting the original struct.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: blockinfo
 pub struct BlockInfo {
     /// Block header data
     pub header: Header,
@@ -85,6 +86,7 @@ pub struct BlockInfo {
     /// Block producer signature
     pub signature: Signature,
 }
+// ANCHOR_END: blockinfo
 
 impl Default for BlockInfo {
     /// Represents the genesis block on current timestamp

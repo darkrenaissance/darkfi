@@ -42,24 +42,26 @@ impl DarkfiNode {
     // Returns a readable block upon success.
     //
     // **Params:**
-    // * `array[0]`: `u64` Block height (as string)
+    // * `array[0]`: `u32` block height
     //
     // **Returns:**
-    // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/dev/darkfi/blockchain/block_store/struct.BlockInfo.html)
-    //   struct serialized into base64.
+    // * `BlockInfo` serialized into base64.
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": ["0"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    // ```rust,no_run,noplayground
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // ```
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": [0], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "base64encodedblock", "id": 1}
     pub async fn blockchain_get_block(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_string() {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_number() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let block_height = match params[0].get::<String>().unwrap().parse::<u32>() {
-            Ok(v) => v,
-            Err(_) => return JsonError::new(ParseError, None, id).into(),
-        };
+        let block_height = *params[0].get::<f64>().unwrap() as u32;
 
         let blocks = match self.validator.blockchain.get_blocks_by_heights(&[block_height]) {
             Ok(v) => v,
@@ -79,17 +81,20 @@ impl DarkfiNode {
 
     // RPCAPI:
     // Queries the blockchain database for a given transaction.
-    // Returns a serialized `Transaction` object.
+    // Returns a base64 encoded `Transaction` object.
     //
     // **Params:**
     // * `array[0]`: Hex-encoded transaction hash string
     //
     // **Returns:**
-    // * Serialized [`Transaction`](https://darkrenaissance.github.io/darkfi/dev/darkfi/tx/struct.Transaction.html)
-    //   object encoded with base64
+    // * `Transaction serialized into base64.
+    //
+    // ```rust,no_run,noplayground
+    // {{#include ../../../src/tx/mod.rs:transaction-struct}}
+    // ```
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "base64encodedtx", "id": 1}
     pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
@@ -122,7 +127,7 @@ impl DarkfiNode {
     // Queries the blockchain database to find the last confirmed block.
     //
     // **Params:**
-    // * `None`
+    // * Empty
     //
     // **Returns:**
     // * `f64`   : Height of the last confirmed block
@@ -154,7 +159,7 @@ impl DarkfiNode {
     // Queries the validator to find the current best fork next block height.
     //
     // **Params:**
-    // * `None`
+    // * Empty
     //
     // **Returns:**
     // * `f64`: Current best fork next block height
@@ -182,13 +187,13 @@ impl DarkfiNode {
     // Queries the validator to get the currently configured block target time.
     //
     // **Params:**
-    // * `None`
+    // * Empty
     //
     // **Returns:**
     // * `f64`: Current block target time
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.block_target", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": 120, "id": 1}
     pub async fn blockchain_block_target(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -202,11 +207,18 @@ impl DarkfiNode {
 
     // RPCAPI:
     // Initializes a subscription to new incoming blocks.
+    //
     // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
     // new incoming blocks to the subscriber.
     //
+    // The notifications contain base64-encoded `BlockInfo` structs.
+    //
+    // ```rust,no_run,noplayground
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // ```
+    //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [`blockinfo`]}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": ["base64encodedblock"]}
     pub async fn blockchain_subscribe_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -218,11 +230,14 @@ impl DarkfiNode {
 
     // RPCAPI:
     // Initializes a subscription to new incoming transactions.
+    //
     // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
     // new incoming transactions to the subscriber.
     //
+    // The notifications contain hex-encoded transaction hashes.
+    //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [`tx_hash`]}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": ["tx_hash"]}
     pub async fn blockchain_subscribe_txs(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -236,8 +251,14 @@ impl DarkfiNode {
     // Initializes a subscription to new incoming proposals. Once a subscription is established,
     // `darkfid` will send JSON-RPC notifications of new incoming proposals to the subscriber.
     //
+    // The notifications contain base64-encoded `BlockInfo` structs.
+    //
+    // ```rust,no_run,noplayground
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // ```
+    //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [`blockinfo`]}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": ["base64encodedblock"]}
     pub async fn blockchain_subscribe_proposals(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -255,9 +276,12 @@ impl DarkfiNode {
     // * `array[0]`: base58-encoded contract ID string
     //
     // **Returns:**
-    // * `array[n]`: Pairs of: `zkas_namespace` string, serialized
-    //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/dev/darkfi/zkas/decoder/struct.ZkBinary.html)
-    //   object
+    // * `array[n]`: Pairs of: `zkas_namespace` strings and base64-encoded
+    //   `ZkBinary` objects.
+    //
+    // ```rust,no_run,noplayground
+    // {{#include ../../../src/zkas/decoder.rs:zkbinary-struct}}
+    // ```
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["Foo", "ABCD..."], ["Bar", "EFGH..."]], "id": 1}

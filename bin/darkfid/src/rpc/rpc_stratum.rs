@@ -79,7 +79,7 @@ impl DarkfiNode {
     // * `job`    : The generated mining job
     // * `status` : Response status
     //
-    // The generated mining job consists of the following fields:
+    // The generated mining job map consists of the following fields:
     // * `blob`      : The hex encoded block hashing blob of the job block
     // * `job_id`    : Registry mining job ID
     // * `height`    : The job block height
@@ -88,8 +88,34 @@ impl DarkfiNode {
     // * `seed_hash` : Current RandomX key
     // * `next_seed_hash`: (optional) Next RandomX key if it is known
     //
-    // --> {"jsonrpc":"2.0", "method": "login", "id": 1, "params": {"login": "MINING_CONFIG", "pass": "", "agent": "XMRig", "algo": ["rx/0"]}}
-    // <-- {"jsonrpc":"2.0", "id": 1, "result": {"id": "1be0b7b6-b15a-47be-a17d-46b2911cf7d0", "job": { ... }, "status": "OK"}}
+    // --> {
+    //       "jsonrpc": "2.0",
+    //       "method": "login",
+    //       "params": {
+    //         "login": "MINING_CONFIG",
+    //         "pass": "x",
+    //         "agent": "XMRig",
+    //         "algo": ["rx/0"]
+    //       },
+    //       "id": 1
+    //     }
+    // <-- {
+    //       "jsonrpc": "2.0",
+    //       "result": {
+    //         "id": "unique_connection-id",
+    //         "job": {
+    //           "blob": "abcdef...001234",
+    //           "job_id": "unique_job-id",
+    //           "height": 1234,
+    //           "target": "abcd1234",
+    //           "algo": "rx/0",
+    //           "seed_hash": "deadbeef...0234",
+    //           "next_seed_hash": "c0fefe...1243"
+    //         },
+    //         "status": "OK"
+    //       },
+    //       "id": 1
+    //     }
     pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         if !*self.validator.synced.read().await {
@@ -196,8 +222,18 @@ impl DarkfiNode {
     // **Response:**
     // * `status`: Block submit status
     //
-    // --> {"jsonrpc":"2.0", "method": "submit", "id": 1, "params": {"id": "...", "job_id": "...", "nonce": "d0030040", "result": "e1364b8782719d7683e2ccd3d8f724bc59dfa780a9e960e7c0e0046acdb40100"}}
-    // <-- {"jsonrpc":"2.0", "id": 1, "result": {"status": "OK"}}
+    // --> {
+    //       "jsonrpc": "2.0",
+    //       "method": "submit",
+    //       "params": {
+    //         "id": "unique_connection-id",
+    //         "job_id": "unique_job-id",
+    //         "nonce": "d0030040",
+    //         "result": "e1364b8782719d7683e2ccd3d8f724bc59dfa780a9e960e7c0e0046acdb40100"
+    //       },
+    //       "id": 1
+    //     }
+    // <-- {"jsonrpc": "2.0", "result": {"status": "OK"}, "id": 1}
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         if !*self.validator.synced.read().await {
@@ -365,8 +401,8 @@ impl DarkfiNode {
     // **Response:**
     // * `status`: Response status
     //
-    // --> {"jsonrpc":"2.0", "method": "keepalived", "id": 1, "params": {"id": "foo"}}
-    // <-- {"jsonrpc":"2.0", "id": 1, "result": {"status": "KEEPALIVED"}}
+    // --> {"jsonrpc": "2.0", "method": "keepalived", "params": {"id": "foo"}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"status": "KEEPALIVED"}, "id": 1}
     pub async fn stratum_keepalived(&self, id: u16, params: JsonValue) -> JsonResult {
         // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {

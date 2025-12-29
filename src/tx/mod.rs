@@ -54,6 +54,7 @@ macro_rules! zip {
 ///
 /// `DarkLeaf` is used to map relations between contract calls in the transaction.
 #[derive(Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+// ANCHOR: transaction-struct
 pub struct Transaction {
     /// Calls executed in this transaction
     pub calls: Vec<DarkLeaf<ContractCall>>,
@@ -62,6 +63,7 @@ pub struct Transaction {
     /// Attached Schnorr signatures
     pub signatures: Vec<Vec<Signature>>,
 }
+// ANCHOR_END: transaction-struct
 // ANCHOR_END: transaction
 
 impl Transaction {

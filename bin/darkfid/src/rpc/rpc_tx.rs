@@ -140,7 +140,7 @@ impl DarkfiNode {
     // Returns a vector of hex-encoded transaction hashes.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.pending", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["TxHash" , "..."], "id": 1}
     pub async fn tx_pending(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -171,7 +171,7 @@ impl DarkfiNode {
     // Returns a vector of hex-encoded transaction hashes.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.clean_pending", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["TxHash", "..."], "id": 1}
     pub async fn tx_clean_pending(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
