@@ -35,7 +35,7 @@ impl DarkfidRpcClient {
         let params = self
             .request(
                 "blockchain.get_block",
-                &JsonValue::Array(vec![JsonValue::String(height.to_string())]),
+                &JsonValue::Array(vec![JsonValue::Number(height as f64)]),
             )
             .await?;
         let param = params.get::<String>().unwrap();

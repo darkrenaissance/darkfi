@@ -136,7 +136,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         info!(target: "blockchain-storage-metrics", "Requesting block for height: {h}");
         let req = JsonRequest::new(
             "blockchain.get_block",
-            JsonValue::Array(vec![JsonValue::String(h.to_string())]),
+            JsonValue::Array(vec![JsonValue::Number(h as f64)]),
         );
         let rep = rpc_client.request(req).await?;
         let encoded_block = rep.get::<String>().unwrap();
