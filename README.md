@@ -44,8 +44,8 @@ transactions and stays connected to the p2p network.
 - `drk` is a CLI wallet. It provides an interface to smart contracts
 such as Money and DAO, manages our keys and coins, and scans the
 blockchain to update our balances.
-- `minerd` is the DarkFi mining daemon. It connects to darkfid over
-RPC and triggers commands for it to mine blocks.
+- `xmrig` is the mining daemon used in DarkFi. Connects to `darkfid`
+over its `Stratum` RPC, and requests new block headers to mine.
 
 To connect to the alpha testnet, [follow the tutorial][tutorial].
 

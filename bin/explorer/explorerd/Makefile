@@ -28,8 +28,6 @@ EXPLORERD_CONFIG := $(EXPLORERD_BIN)_config.toml
 # If these binaries are missing when launching the explorer node environment,
 # the Makefile (via a sub-make call) will build them if needed. Their configurations
 # are used to start the nodes.
-MINERD_BIN       := $(PROJECT_ROOT)/minerd
-MINERD_CONFIG    := $(PROJECT_ROOT)/bin/minerd/minerd_config.toml
 DARKFID_BIN      := $(PROJECT_ROOT)/darkfid
 DARKFID_CONFIG   := $(PROJECT_ROOT)/bin/darkfid/darkfid_config.toml
 
@@ -110,13 +108,9 @@ bundle_contracts_src:
 		(cd "$$TMP_DIR/$$contract" && tar --format=pax -cf ../../$${contract}_contract_src.tar *); \
 	done;
 
-# Start explorer on localnet (requires minerd)
-start-localnet: check-minerd
-
 # Starts an explorer node environment for `localnet`, `testnet`, or `mainnet` networks.
 # It validates the input network, stops any currently running nodes, initializes the log directory,
-# optionally starts `minerd` for `localnet`, and starts the remaining nodes while waiting for them
-# to properly initialize.
+# and starts the remaining nodes while waiting for them to properly initialize.
 start-%: check-darkfid check-explorerd
 	@if [ "$*" != "localnet" ] && [ "$*" != "testnet" ] && [ "$*" != "mainnet" ]; then \
 		echo "Error: Unsupported network '$*'. Use 'localnet', 'testnet', or 'mainnet'."; \
@@ -127,7 +121,6 @@ start-%: check-darkfid check-explorerd
 	@sh -c ' \
 		LOG_DIR=$(LOG_HOME)/$*; \
 		mkdir -p "$$LOG_DIR"; \
-		$(if $(filter localnet,$*), $(MINERD_BIN) -c $(MINERD_CONFIG) & echo $$! >> PIDs.txt; sleep 2;) \
 		$(DARKFID_BIN) $(VERBOSE) --log "$$LOG_DIR/darkfid.log" -c $(DARKFID_CONFIG) --network $* & echo $$! >> PIDs.txt; sleep 2; \
 		$(call wait_for_darkfid_startup, $$LOG_DIR) \
 		./$(EXPLORERD_BIN) $(VERBOSE) --log "$$LOG_DIR/explorerd.log" -c $(EXPLORERD_CONFIG) --network $* & echo $$! >> PIDs.txt; \
@@ -165,13 +158,6 @@ check-explorerd:
 	@if [ ! -f "$(EXPLORERD_BIN)" ]; then \
 		echo "Building explorerd..."; \
 		$(MAKE) -C .; \
-	fi
-
-# Check and build minerd if it does not exist
-check-minerd:
-	@if [ ! -f "$(MINERD_BIN)" ]; then \
-		echo "Building minerd..."; \
-		$(MAKE) -C "$(PROJECT_ROOT)" minerd; \
 	fi
 
 # Check and build contracts if they do not exist
@@ -227,4 +213,4 @@ define wait_for_explorerd_startup
   done;
 endef
 
-.PHONY: help all clean install uninstall bundle_contracts_src check-minerd check-darkfid check-explorerd stop start-%
+.PHONY: help all clean install uninstall bundle_contracts_src check-darkfid check-explorerd stop start-%

@@ -41,6 +41,6 @@ stop:
 	@$(MAKE) -C ./explorerd stop || true; \
 	$(MAKE) -C ./site stop || true; \
 
-.PHONY: start-% check-minerd check-darkfid check-explorerd check-site stop
+.PHONY: start-% check-darkfid check-explorerd check-site stop
 
 

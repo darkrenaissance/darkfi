@@ -42,13 +42,12 @@ The DarkFi Explorer provides a visual interface to explore blockchains on DarkFi
 
 ### Prerequisites
 Before you begin, ensure you have the following installed and configured:
-- **Rust 1.86 or later**: Required for building components written in Rust (like `darkfid`, `minerd`, `explorerd`)
+- **Rust 1.86 or later**: Required for building components written in Rust (like `darkfid`, `explorerd`)
 - **Python 3.12**: Required for building and running the Explorer Site (`site`).
 - **Darkfi Project Dependencies**: System dependencies required to compile Darkfi code. For details, see [Darkfi Build Dependencies](../../README.md#build).
 - **Darkfid**: Runs DarkFi blockchain nodes on respective networks.
-- **Minerd**: Mines blocks and is required if Darkfid is configured with a miner JSON-RPC endpoint and the associated miner isn’t running.
 
-> **Note** When using the `make` commands in the [Quick Start Guide](#quick-start-guide), Darkfid and Minerd are automatically built when needed.
+> **Note** When using the `make` commands in the [Quick Start Guide](#quick-start-guide), Darkfid is automatically built when needed.
 
 ### Start Localnet Explorer Environment
 
@@ -88,20 +87,20 @@ make start-no-sync-localnet
 Upon successful initialization of the Explorer environment, confirmation messages will appear in the startup logs. If these logs are not visible, the Explorer environment is still initializing. Allow sufficient time for the initialization process to complete before accessing the block explorer.
 
 ```
-07:09:22 [INFO] ========================================================================================
-07:09:22 [INFO]                    Started DarkFi Explorer Node                                        
-07:09:22 [INFO] ========================================================================================
-07:09:22 [INFO]   - Network: localnet                                 
-07:09:22 [INFO]   - JSON-RPC Endpoint: tcp://127.0.0.1:14567          
-07:09:22 [INFO]   - Database: ~/.local/share/darkfi/explorerd/localnet
-07:09:22 [INFO]   - Configuration: ./explorerd_config.toml
-07:09:22 [INFO]   - Reset Blocks: No
-07:09:22 [INFO] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-07:09:22 [INFO]   - Synced Blocks: 9                                  
-07:09:22 [INFO]   - Synced Transactions: 9                            
-07:09:22 [INFO]   - Connected Darkfi Node: tcp://127.0.0.1:8240       
-07:09:22 [INFO] ========================================================================================
-07:09:22 [INFO] All is good. Waiting for block notifications...
+[INFO] ========================================================================================
+[INFO]                    Started DarkFi Explorer Node
+[INFO] ========================================================================================
+[INFO]   - Network: localnet
+[INFO]   - JSON-RPC Endpoint: tcp://127.0.0.1:14567
+[INFO]   - Database: ~/.local/share/darkfi/explorerd/localnet
+[INFO]   - Configuration: ./explorerd_config.toml
+[INFO]   - Reset Blocks: No
+[INFO] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[INFO]   - Synced Blocks: 9
+[INFO]   - Synced Transactions: 9
+[INFO]   - Connected Darkfi Node: tcp://127.0.0.1:8240
+[INFO] ========================================================================================
+[INFO] All is good. Waiting for block notifications...
 Started explorer site on localnet network (PID=31911)
 Started localnet environment. Press Ctrl-C to stop.
 ```

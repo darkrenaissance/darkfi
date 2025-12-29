@@ -15,15 +15,6 @@ witness.json
 /bin/darkfid/darkfid
 /darkfid
 
-/bin/minerd/minerd
-/minerd
-
-/bin/explorer/explorerd/explorerd
-/explorerd
-
-/bin/darkfi-mmproxy/darkfi-mmproxy
-/darkfi-mmproxy
-
 /bin/drk/drk
 /drk
 
@@ -39,17 +30,14 @@ witness.json
 /bin/lilith/lilith
 /lilith
 
-/bin/swapd/swapd
-/swapd
-
 /bin/tau/taud/taud
 /taud
 
 /bin/vanityaddr/vanityaddr
 /vanityaddr
 
-/bin/darkwallet/darkwallet
-/darkwallet
+/bin/explorer/explorerd/explorerd
+/explorerd
 
 /bin/fud/fud/fud
 /fud

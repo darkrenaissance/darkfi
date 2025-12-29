@@ -19,12 +19,11 @@ The testnet and mainnet configurations serve as placeholders in preparation for 
 
 ## Prerequisites
 Before you begin, ensure you have the following installed and configured:
-- **Rust 1.86 or later**: Required for building components written in Rust (like `darkfid`, `minerd`, `explorerd`).
+- **Rust 1.86 or later**: Required for building components written in Rust (like `darkfid`, `explorerd`).
 - **Darkfi Project Dependencies**: System dependencies required to compile DarkFi code (see [Darkfi Build Dependencies](../../../README.md#build)).
 - **Darkfid**: Runs DarkFi blockchain nodes on respective networks.
-- **Minerd**: Mines blocks and is required if Darkfid is configured with a miner JSON-RPC endpoint and the associated miner isn’t running.
 
-> **Note** When using the `make` commands in the [Quick Start Guide](#quick-start-guide), Darkfid and Minerd are automatically built when needed.
+> **Note** When using the `make` commands in the [Quick Start Guide](#quick-start-guide), Darkfid is automatically built when needed.
 
 ## Quick-Start Guide
 
@@ -176,12 +175,9 @@ make install
 
 ##### Using darkfid's networks
 
-Start the `minerd` and `darkfid` daemons using their configurations.
+Start the `darkfid` daemon using their configurations.
 
 ```bash
-# Start the mining daemon
-minerd
-
 # Start darkfid (example uses localnet) 
 darkfid --network localnet
 ```
