@@ -342,15 +342,15 @@ impl DarkfiMinersRegistry {
         Ok(())
     }
 
-    /// Refresh outdated jobs in the registry based on provided
-    /// validator state.
-    pub async fn refresh(&self, validator: &ValidatorPtr) -> Result<()> {
-        // Grab registry locks
-        let submit_lock = self.submit_lock.write().await;
-        let mut jobs = self.jobs.write().await;
-        let mut mm_jobs = self.mm_jobs.write().await;
-        let mut block_templates = self.block_templates.write().await;
-
+    /// Refresh outdated jobs in the provided registry maps based on
+    /// provided validator state.
+    pub async fn refresh_jobs(
+        &self,
+        block_templates: &mut HashMap<String, BlockTemplate>,
+        jobs: &mut HashMap<String, MinerClient>,
+        mm_jobs: &mut HashMap<String, String>,
+        validator: &ValidatorPtr,
+    ) -> Result<()> {
         // Find inactive native jobs and drop them
         let mut dropped_jobs = vec![];
         let mut active_templates = HashSet::new();
@@ -456,10 +456,25 @@ impl DarkfiMinersRegistry {
             client.publisher.notify(notification).await;
         }
 
+        Ok(())
+    }
+
+    /// Refresh outdated jobs in the registry based on provided
+    /// validator state.
+    pub async fn refresh(&self, validator: &ValidatorPtr) -> Result<()> {
+        // Grab registry locks
+        let submit_lock = self.submit_lock.write().await;
+        let mut block_templates = self.block_templates.write().await;
+        let mut jobs = self.jobs.write().await;
+        let mut mm_jobs = self.mm_jobs.write().await;
+
+        // Refresh jobs
+        self.refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, validator).await?;
+
         // Release registry locks
         drop(block_templates);
-        drop(mm_jobs);
         drop(jobs);
+        drop(mm_jobs);
         drop(submit_lock);
 
         Ok(())

@@ -275,8 +275,8 @@ impl DarkfiNode {
         }
 
         // If we don't know about this mm job, we can just abort here
-        let jobs = self.registry.mm_jobs.read().await;
-        let Some(wallet) = jobs.get(aux_hash) else {
+        let mut mm_jobs = self.registry.mm_jobs.write().await;
+        let Some(wallet) = mm_jobs.get(aux_hash) else {
             return server_error(RpcError::MinerUnknownJob, id, None)
         };
 
@@ -399,9 +399,29 @@ impl DarkfiNode {
             self.registry.submit(&self.validator, &self.subscribers, &self.p2p_handler, block).await
         {
             error!(
-                target: "darkfid::rpc::rpc_xmr::xmr_merge_submit_solution",
+                target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_submit_solution",
                 "[RPC-XMR] Error submitting new block: {e}",
             );
+
+            // Try to refresh the jobs before returning error
+            let mut jobs = self.registry.jobs.write().await;
+            if let Err(e) = self
+                .registry
+                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &self.validator)
+                .await
+            {
+                error!(
+                    target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_submit_solution",
+                    "[RPC-XMR] Error refreshing registry jobs: {e}",
+                );
+            }
+
+            // Release all locks
+            drop(block_templates);
+            drop(jobs);
+            drop(mm_jobs);
+            drop(submit_lock);
+
             return JsonResponse::new(
                 JsonValue::from(HashMap::from([(
                     "status".to_string(),
@@ -417,7 +437,7 @@ impl DarkfiNode {
 
         // Release all locks
         drop(block_templates);
-        drop(jobs);
+        drop(mm_jobs);
         drop(submit_lock);
 
         JsonResponse::new(
