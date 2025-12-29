@@ -210,7 +210,7 @@ impl DarkfiNode {
                         target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_get_aux_block",
                         "[RPC-XMR] Failed to register merge miner: {e}",
                     );
-                    return JsonError::new(ErrorCode::InternalError, None, id).into()
+                    return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
                 }
             };
 

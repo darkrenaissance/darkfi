@@ -167,7 +167,7 @@ impl DarkfiNode {
                         target: "darkfid::rpc::rpc_stratum::stratum_login",
                         "[RPC-STRATUM] Failed to register miner: {e}",
                     );
-                    return JsonError::new(ErrorCode::InternalError, None, id).into()
+                    return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
                 }
             };
 
