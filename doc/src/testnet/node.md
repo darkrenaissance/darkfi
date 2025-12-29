@@ -23,16 +23,16 @@ each command, before broadcasting transactions to the actual network.
 This tutorial will cover the three DarkFi blockchain components and
 their current features. The components covered are:
 
-* `darkfid` is the DarkFi fullnode. It validates blockchain transactions
-and stays connected to the p2p network. 
-* `drk` is a CLI wallet. It provides an interface to smart contracts such
-as Money and DAO, manages our keys and coins, and scans the blockchain
-to update our balances.
-* `minerd` is the DarkFi mining daemon. Connects to `darkfid` over RPC,
-and requests new block headers to mine.
+* `darkfid` is the DarkFi fullnode. It validates blockchain
+transactions and stays connected to the p2p network.
+* `drk` is a CLI wallet. It provides an interface to smart contracts
+such as Money and DAO, manages our keys and coins, and scans the
+blockchain to update our balances.
+* `xmrig` is the mining daemon used in DarkFi. Connects to `darkfid`
+over its `Stratum` RPC, and requests new block headers to mine.
 
-The config files for all three daemons are sectioned into three parts,
-each marked `[network_config]`. The sections look like this:
+The config files for `darkfid` and `drk` are sectioned into three
+parts, each marked `[network_config]`. The sections look like this:
 
 * `[network_config."testnet"]`
 * `[network_config."mainnet"]`
@@ -184,211 +184,24 @@ $ ./drk wallet address
 DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
 ```
 
-### Miner
-
-It's not necessary for broadcasting transactions or proceeding with the
-rest of the tutorial (`darkfid` and `drk` handle this), but if you want
-to help secure the network, you can participate in the mining process
-by running the native `minerd` mining daemon.
-
-To mine on DarkFI we need to add a recipient to `minerd` that specifies
-where the mining rewards will be minted to.
-
-First, compile it:
-
-```shell
-$ make minerd
-
-...
-make -C bin/minerd \
-        PREFIX="/home/anon/.cargo" \
-        CARGO="cargo" \
-        RUST_TARGET="x86_64-unknown-linux-gnu" \
-        RUSTFLAGS=""
-make[1]: Entering directory '/home/anon/darkfi/bin/minerd'
-RUSTFLAGS="" cargo build --target=x86_64-unknown-linux-gnu --release --package minerd
-...
-  Compiling minerd v0.5.0 (/home/anon/darkfi/bin/minerd)
-    Finished `release` profile [optimized] target(s) in 1m 25s
-cp -f ../../target/x86_64-unknown-linux-gnu/release/minerd minerd
-cp -f ../../target/x86_64-unknown-linux-gnu/release/minerd ../../minerd
-make[1]: Leaving directory '/home/anon/darkfi/bin/minerd'
-```
-
-This process will now compile the mining daemon. When finished, run
-`minerd` once so that it spawns its config file on your system. This
-config file is used to configure `minerd`. You can define how many
-threads will be used for mining. RandomX can use up to `2080 MiB` of
-shared memory, so configure `minerd` to not consume all your system
-available memory. Refer to [ram consumption](#ram-consumption) section
-to see expected totals using various configurations, so you can
-configure your `minerd` accordingly.
-
-```shell
-$ ./minerd
-
-Config file created in "~/.config/darkfi/minerd_config.toml". Please review it and try again.
-```
-
-You now have to configure  `minerd` to use your wallet address as the
-rewards recipient, when it retrieves blocks from `darkfid` to mine.
-
-Open your `minerd` config file with a text editor (the default path
-is `~/.config/darkfi/minerd_config.toml`) and replace the
-`YOUR_WALLET_ADDRESS_HERE` string with your `drk` wallet address:
-
-```toml
-# Put the address from `./drk wallet address` here
-recipient = "YOUR_WALLET_ADDRESS_HERE"
-```
-
-You can retrieve your `drk` wallet address as follows:
-
-```shell
-$ ./drk wallet address
-
-DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
-```
-
-> Notes:
->
-> When modifying the `minerd` config file to use with the
-> testnet, be sure to change the values under the section marked
-> `[network_config."testnet"]` (not localnet or mainnet!).
->
-> If you are not on the same network as the `darkfid` instance you
-> are using, you must configure and use `tcp+tls` for the RPC
-> endpoints, so your traffic is not plaintext, as it contains your
-> wallet address used for the block rewards.
-
-Once that's in place, you can run it again and `minerd` will start,
-polling `darkfid` for new block headers to mine.
-
-```shell
-$ ./minerd
-
-14:20:06 [INFO] Starting DarkFi Mining Daemon...
-14:20:06 [INFO] Initializing a new mining daemon...
-14:20:06 [INFO] Mining daemon initialized successfully!
-14:20:06 [INFO] Starting mining daemon...
-14:20:06 [INFO] Mining daemon started successfully!
-14:20:06 [INFO] Received new job to mine block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-14:20:06 [INFO] Mining block header beb0...42aa with key 0edc...0679 for target: 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-14:20:06 [INFO] Mined block header beb0...42aa with nonce: 1
-14:20:06 [INFO] Mined block header hash: 36fe...753c
-14:20:06 [INFO] Submitting solution to darkfid...
-14:20:06 [INFO] Submition result: accepted
-...
-```
-
-#### Minerd configuration
-
-`minerd` configuration file provides several ways to optimize RAM
-utilization and mining hashrate. This section will describe some of the
-provided configuration flags, along with a table at the end showcasing
-total daemon RAM consuption using each. By default, `minerd` is running
-using `fast-mode`, where `2080 MiB` of shared memory is required for
-the RandomX dataset. To enable or disable a flag, simply set its value
-to `true` or `false` in the configuration file and restart `minerd`.
-Read what each flag does before enabling it.
-
-#### `light-mode`
-
-In this mode, `minerd` will run using only `256 MiB` of shared memory,
-but in will run significantly slower, with huge impact on hashrate. It
-is used mainly for verification, not mining, but its available in case
-system resources are ultra limited.
-
-#### `large-pages`
-
-`Huge Pages`, also known as `Large Pages` (on `Windows`) and
-`Super Pages` (on `BSD` or `macOS`) is the process of reserving RAM
-with larger than default chunk (page) size, which give the CPU/OS fewer
-entries to look-up, and increases mining hashrate performance up to
-50%. General recommendations is `1280` pages for RandomX. Please note
-`1280` pages means `2560 MiB` of memory will be reserved for huge pages
-and become not available for other usage. Before enabling the flag, we
-must reserve the huge pages, otherwise `minerd` will gives us an
-allocation error.
-
-To temporary (until next reboot) reserve huge pages, execute as `root`:
-
-```shell
-# sysctl -w vm.nr_hugepages=1280
-```
-
-To verify huge pages have been reserved, execute:
-
-```shell
-$ grep Huge /proc/meminfo
-
-...
-HugePages_Total:    1280
-HugePages_Free:     1280
-...
-```
-
-To permantly reserve huge pages, you need to modify your boot
-configuration. In this example, we will use `grub` to reserve the
-pages.
-
-> Note:
-> Before proceeding, take a backup of your current `grub`
-> configuration file and be extra carefull on following the
-> instructions, as mistakes will result in your system not booting.
-
-Open your current `grub` configuration file (the default path is
-`/etc/default/grub`), find `GRUB_CMDLINE_LINUX_DEFAULT` option and
-append `hugepagesz=2MB hugepages=1280` at the end of its parameters.
-The option should look like this:
-
-```text
-GRUB_CMDLINE_LINUX_DEFAULT="{YOUR_PREVIOUS_PARAMETERS} hugepagesz=2MB hugepages=1280"
-```
-
-Save the file and execute as `root`:
-
-```shell
-# update-grub
-```
-
-Now you can reboot your system and huge pages will be reserved. If you
-want to revert, just remove the huge pages parameters from your `grub`
-configuration, update it and reboot.
-
-#### RAM consumption
-
-Here is a table showcasing `minerd` daemon total RAM consumption in MiB
-using various threads count for mining and optimization flags.
-
-| Threads | `light-mode` | `fast-mode` | `fast-mode` + `large-pages` |
-|---------|--------------|-------------|-----------------------------|
-| 1       | 271          | 2351        | 14.0                        |
-| 4       | 277          | 2357        | 14.2                        |
-| 8       | 285          | 2365        | 14.4                        |
-
-> Note:
-> The last column shows sow low RAM consumption because the dataset is
-> allocated in the already reserved system huge pages.
-
 ### Darkfid
 
 Now that `darkfid` configuration is in place, you can run it again and
 `darkfid` will start, create the necessary keys for validation of blocks
-and transactions, and begin syncing the blockchain. 
+and transactions, and begin syncing the blockchain.
 
 ```shell
 $ ./darkfid
 
-14:23:23 [INFO] Initializing DarkFi node...
-14:23:23 [INFO] Node is configured to run with fixed PoW difficulty: 1
-14:23:23 [INFO] Initializing a Darkfi daemon...
-14:23:23 [INFO] Initializing Validator
-14:23:23 [INFO] Initializing Blockchain
-14:23:23 [INFO] Deploying native WASM contracts
-14:23:23 [INFO] Deploying Money Contract with ContractID BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
-14:23:29 [INFO] Successfully deployed Money Contract
-14:23:29 [INFO] Deploying DAO Contract with ContractID Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
+[INFO] Initializing DarkFi node...
+[INFO] Node is configured to run with fixed PoW difficulty: 1
+[INFO] Initializing a Darkfi daemon...
+[INFO] Initializing Validator
+[INFO] Initializing Blockchain
+[INFO] Deploying native WASM contracts
+[INFO] Deploying Money Contract with ContractID BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o
+[INFO] Successfully deployed Money Contract
+[INFO] Deploying DAO Contract with ContractID Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj
 ...
 ```
 
@@ -403,52 +216,101 @@ As its syncing, you'll see periodic messages like this:
 This will give you an indication of the current progress. Keep it running,
 and you should see a `Blockchain synced!` message after some time.
 
-If you're running `minerd`, you should see a notification like this:
+### Miner
+
+It's not necessary for broadcasting transactions or proceeding with the
+rest of the tutorial (`darkfid` and `drk` handle this), but if you want
+to help secure the network, you can participate in the mining process
+by running an `xmrig` mining daemon. In this example we will build
+`xmrig` from its respective source code repository. Make sure you are
+not in the DarkFi repository folder as we are going to retrieve
+external repos.
+
+First, install its [dependencies][1], retrieve its repo and checkout
+the latest release tag:
+
+```shell
+$ git clone --recursive https://github.com/xmrig/xmrig
+$ cd xmrig
+$ git checkout $(git describe --tags "$(git rev-list --tags --max-count=1)")
+```
+
+Now we can build it:
+
+```shell
+$ mkdir build
+```
+
+If you have already build `xmrig` above command will fail as folder
+already exists, so just continue to next ones:
+
+```shell
+$ cd build
+$ cmake ..
+$ make -j$(nproc)
+```
+
+The binary now exists in the current directory. Make sure you enable
+the `Stratum` RPC endpoint that will be used by `xmrig` in `darkfid`
+config:
+
+```toml
+[network_config."testnet".stratum_rpc]
+rpc_listen = "tcp://127.0.0.1:8341"
+```
+
+> Note:
+>
+> If you are not on the same network as the `darkfid` instance you
+> are using, you must configure and use `tcp+tls` for the RPC
+> endpoints, so your traffic is not plaintext, as it contains your
+> wallet address used for the block rewards.
+
+To mine on DarkFI we need to add a recipient to `xmrig` that specifies
+where the mining rewards will be minted to. You now have to configure
+`xmrig` to use your wallet address as the rewards recipient, when it
+retrieves blocks from `darkfid` to mine. Make sure you have
+[initialized](#wallet-initialization) your wallet and grab your first
+address mining configuration:
+
+```shell
+./drk wallet mining-configuration 1
+
+DarkFi mining configuration address:
+{YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+```
+
+Refer to [xmrig optimizations guide][2] to fully configure your system
+for maximum mining performance. Start `darkfid` as usual and then start
+`xmrig`, specifying how many threads to mine and for which wallet:
+
+```shell
+$ ./xmrig -u x+1 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+```
+
+In `darkfid`, you should see a notification like this:
 
 ```shell
 ...
-[INFO] [RPC] Server accepted conn from tcp://127.0.0.1:44974/
+[INFO] [RPC-STRATUM] Got login from {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION} ({AGENT_INFO})
 ...
 ```
 
-This means that `darkfid` and `minerd` are connected over RPC and
-`minerd` can start mining. You will see log messages like these:
+This means that `darkfid` and `xmr` are connected over the `Stratum`
+RPC and `xmrig` can start mining. You will see log messages like these:
 
 ```shell
 ...
-14:23:56 [INFO] [RPC] Created new blocktemplate: address=9vw6...fG1U, spend_hook=-, user_data=-, hash=beb0...42aa
-14:24:04 [INFO] [RPC] Got solution submission for block template: beb0...42aa
-14:24:06 [INFO] [RPC] Mined block header hash: 36fe...753c
-14:24:06 [INFO] [RPC] Proposing new block to network
+[INFO] Created new block template for wallet: address=DZns...rKkf, spend_hook=-, spend_hook=-, user_data=-
+[INFO] [RPC-STRATUM] Created new mining job for client 091e...9d71: 26d6...8a3c
+[INFO] [RPC-STRATUM] Got solution submission from client 091e...9d71 for job: 26d6...8a3c
+[INFO] Appended proposal 6188...e623c
+[INFO] Proposing new block to network
 ...
 ```
 
-When `darkfid` and `minerd` are correctly connected and you get an
-error on `minerd` like this:
-
-```shell
-...
-[ERROR] Failed mining block header b757...5fb1 with error: Miner task stopped
-...
-```
-
-That's expected behavior. It means your setup is correct and you are
-mining blocks. `Failed mining block header` happens when a new block
-was received by `darkfid`, extending the current best fork, so when
-`minerd` polls it again it retrieves the new block header to mine,
-interupting current mining workers to start mining the new one.
-
-Otherwise, you'll see a notification like this:
-
-```shell
-...
-[INFO] Mined block header 36fe...753c with nonce: 266292
-...
-```
-
-Which means the current height block has been mined succesfully by
-`minerd` and propagated to `darkfid` so it can broadcast it to the
-network.
+To stop mining you can `^C` `xmrig` anytime to quit it or press `p` to
+pause mining.
 
 ### Wallet sync
 
@@ -508,12 +370,16 @@ use the existing `contrib/localnet/darkfid-single-node` folder, which
 provides the corresponding configurations to operate. Some outputs are
 emitted since they are identical to previous steps.
 
-First, compile `darkfid` node, `minerd` mining daemon and the `drk`
-wallet CLI:
+First, compile `darkfid` node and the `drk` wallet CLI:
 
 ```shell
-$ make darkfid minerd drk
+$ make darkfid drk
 ```
+
+> Note:
+>
+> Make sure you have properly setup `xmrig` [miner](#miner) as its
+> required.
 
 Enter the localnet folder, and initialize a wallet:
 
@@ -522,7 +388,8 @@ $ cd contrib/localnet/darkfid-single-node/
 $ ./init-wallet.sh
 ```
 
-Then start the daemons and wait until `darkfid` is initialized:
+Then configure your `xmrig` mining daemon path in `tmux_sessions.sh`
+script, start the daemons and wait until `darkfid` is initialized:
 
 ```shell
 $ ./tmux_sessions.sh
@@ -563,3 +430,6 @@ We can now view the log, and grep through it.
 ```shell
 $ tail -n +0 -f /tmp/darkfid.log | grep -a --line-buffered -v DEBUG
 ```
+
+[1]: https://xmrig.com/docs/miner/build
+[2]: https://xmrig.com/docs/miner/randomx-optimization-guide

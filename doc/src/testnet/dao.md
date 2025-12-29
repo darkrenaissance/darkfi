@@ -724,28 +724,14 @@ configuration, execute:
 ```shell
 drk> dao mining-config {YOUR_DAO}
 
-DarkFi TOML configuration:
-recipient = "{YOUR_DAO_WALLET_ADDRESS}"
-spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
-user_data = "{YOUR_DAO_BULLA}"
-
-P2Pool wallet address to use:
-{YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+DarkFi DAO mining configuration address:
+{YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
-Then configure a `minerd` instance to mine for a DAO, by setting the
-corresponding fields(uncomment if needed) as per retrieved
-configuration:
+Then start an `xmrig` instance to mine for the DAO:
 
-```toml
-# Put your DAO wallet address here
-recipient = "{YOUR_DAO_WALLET_ADDRESS}"
-
-# Put the DAO contract spend hook here
-spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
-
-# Put your DAO bulla here
-user_data = "{YOUR_DAO_BULLA}"
+```shell
+$ ./xmrig -u x+1 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 After your miners have successfully mined confirmed blocks, you will

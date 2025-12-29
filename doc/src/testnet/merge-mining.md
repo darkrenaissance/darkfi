@@ -16,9 +16,11 @@ simple.
 
 ## Build binaries from source
 
-We can build Monero, `p2pool` and `xmrig` from their respective source
-code repositories. Make sure you are not in the DarkFi repository
-folder as we are going to retrieve external repos.
+We can build Monero and `p2pool` from their respective source code
+repositories. Make sure you are not in the DarkFi repository folder as
+we are going to retrieve external repos. Refer to
+[miner](node.md#miner) section of the guide to build `xmrig` as its
+required.
 
 ### Monero
 
@@ -82,35 +84,6 @@ $ make -j$(nproc)
 
 The binary now exists in the current directory.
 
-### xmrig
-
-Enter a new shell outside of previously build `p2pool` repo folder,
-install `xmrig` [dependencies][3] and then retrieve its repo and
-checkout the latest release tag:
-
-```
-$ git clone --recursive https://github.com/xmrig/xmrig
-$ cd xmrig
-$ git checkout $(git describe --tags "$(git rev-list --tags --max-count=1)")
-```
-
-Now we can build it:
-
-```shell
-$ mkdir build
-```
-
-If you have already build `xmrig` above command will fail as folder
-already exists, so just continue to next ones:
-
-```shell
-$ cd build
-$ cmake ..
-$ make -j$(nproc)
-```
-
-The binary now exists in the current directory.
-
 ## Monero setup
 
 We should first sync the Monero Testnet locally. We can simply do this
@@ -120,12 +93,12 @@ waiting for the sync to finish:
 ```shell
 $ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 0 --hide-my-port --add-peer 125.229.105.12:28081 --add-peer 37.187.74.171:28089 --fast-block-sync=1
 
-2025-05-22 13:04:16.492 I Synced 3601/2754128 (0%, 2750527 left)
-2025-05-22 13:04:27.315 I Synced 5801/2754128 (0%, 2748327 left)
+Synced 3601/2754128 (0%, 2750527 left)
+Synced 5801/2754128 (0%, 2748327 left)
 ...
-2025-05-22 13:04:38.705 I Synced 8101/2754128 (0%, 2746027 left)
-2025-05-22 13:04:44.676 I Synced 9301/2754128 (0%, 2744827 left)
-2025-05-22 13:04:47.174 I Synced 9801/2754128 (0%, 2744327 left)
+Synced 8101/2754128 (0%, 2746027 left)
+Synced 9301/2754128 (0%, 2744827 left)
+Synced 9801/2754128 (0%, 2744327 left)
 ```
 
 After the sync is finished, we will take the node offline and continue
@@ -206,22 +179,22 @@ first address configuration:
 ```shell
 drk> wallet mining-configuration 1
 
-DarkFi TOML configuration:
-recipient = "{YOUR_DARKFI_WALLET_ADDRESS}"
-#spend_hook = ""
-#user_data = ""
-
-P2Pool wallet address to use:
-{YOUR_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+DarkFi mining configuration address:
+{YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 We will also need `darkfid` running. Make sure you enable the RPC
-endpoint that will be used by p2pool in darkfid's config:
+endpoint that will be used by `p2pool` in `darkfid` config:
 
 ```toml
 [network_config."testnet".mm_rpc]
 rpc_listen = "http+tcp://127.0.0.1:8341"
 ```
+
+> Note:
+>
+> If you are also using a `Stratum` RPC endpoint make sure the two
+> ports are different.
 
 Then start `darkfid` as usual.
 
@@ -229,7 +202,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_P2POOL_WALLET_ADDRESS_CONFIGURATION_HERE}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 Now `p2pool` should communicate with both `monerod` and `darkfid` in
@@ -249,20 +222,15 @@ To retrieve a DAO merge mining configuration, execute:
 ```shell
 drk> dao mining-config {YOUR_DAO}
 
-DarkFi TOML configuration:
-recipient = "{YOUR_DAO_WALLET_ADDRESS}"
-spend_hook = "{DAO_CONTRACT_SPEND_HOOK}"
-user_data = "{YOUR_DAO_BULLA}"
-
-P2Pool wallet address to use:
-{YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+DarkFi DAO mining configuration address:
+{YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_DAO_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DAO_P2POOL_WALLET_ADDRESS_CONFIGURATION}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_DAO_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 After your miners have successfully mined confirmed blocks, you will
@@ -278,4 +246,3 @@ drk> dao balance {YOUR_DAO}
 
 [1]: https://github.com/monero-project/monero?tab=readme-ov-file#dependencies
 [2]: https://github.com/SChernykh/p2pool?tab=readme-ov-file#prerequisites
-[3]: https://xmrig.com/docs/miner/build
