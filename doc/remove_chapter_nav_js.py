@@ -4,33 +4,36 @@
 # python remove_chapter_nav_js.py
 # diff book/book.js /tmp/book.js
 
-with open("book/book.js") as f:
-    lines = f.read()
+from glob import glob
 
-lines = lines.split("\n")
+for file in glob("book/book-*.js"):
+    with open(file) as f:
+        lines = f.read()
 
-pre = []
-while True:
-    line = lines[0]
+    lines = lines.split("\n")
 
-    if "chapterNavigation()" in line:
-        break
+    pre = []
+    while True:
+        line = lines[0]
 
-    pre.append(lines.pop(0))
+        if "chapterNavigation()" in line:
+            break
 
-# chapterNavigation() {
-lines.pop(0)
+        pre.append(lines.pop(0))
 
-i = 1
-while True:
-    line = lines.pop(0)
-    i += line.count("{") - line.count("}")
-    assert i >= 0
-    if i == 0:
-        break
+    # chapterNavigation() {
+    lines.pop(0)
 
-src = "\n".join(pre + lines)
-#print(src)
+    i = 1
+    while True:
+        line = lines.pop(0)
+        i += line.count("{") - line.count("}")
+        assert i >= 0
+        if i == 0:
+            break
 
-with open("book/book.js", "w") as f:
-    f.write(src)
+    src = "\n".join(pre + lines)
+    #print(src)
+
+    with open(file, "w") as f:
+        f.write(src)
