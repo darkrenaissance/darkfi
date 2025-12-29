@@ -22,7 +22,7 @@ $(DARKFID_JSONRPC):
 	./build_jsonrpc.py ../bin/darkfid/src/rpc/mod.rs >> $@
 	for i in blockchain stratum tx xmr; do \
 		echo "## $$i methods" >> $@ ;\
-		./build_jsonrpc.py ../bin/darkfid/src/rpc/rpc_$$i.rs >> $@ ;\
+		./build_jsonrpc.py ../bin/darkfid/src/rpc/$$i.rs >> $@ ;\
 	done
 
 clean:
