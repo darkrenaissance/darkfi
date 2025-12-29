@@ -282,10 +282,11 @@ DarkFi mining configuration address:
 
 Refer to [xmrig optimizations guide][2] to fully configure your system
 for maximum mining performance. Start `darkfid` as usual and then start
-`xmrig`, specifying how many threads to mine and for which wallet:
+`xmrig`, specifying retries setup, how many threads to mine and for
+which wallet:
 
 ```shell
-$ ./xmrig -u x+1 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 In `darkfid`, you should see a notification like this:
