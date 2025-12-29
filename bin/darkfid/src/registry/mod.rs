@@ -42,7 +42,7 @@ use darkfi_serial::serialize_async;
 
 use crate::{
     proto::{DarkfidP2pHandlerPtr, ProposalMessage},
-    rpc::{rpc_stratum::StratumRpcHandler, rpc_xmr::MmRpcHandler},
+    rpc::{stratum::StratumRpcHandler, xmr::MmRpcHandler},
     DarkfiNode, DarkfiNodePtr,
 };
 

@@ -37,16 +37,16 @@ use darkfi::{
 use crate::DarkfiNode;
 
 /// Blockchain related methods
-mod rpc_blockchain;
+mod blockchain;
 
 /// Transactions related methods
-mod rpc_tx;
+mod tx;
 
 /// Stratum JSON-RPC related methods for native mining
-pub mod rpc_stratum;
+pub mod stratum;
 
 /// HTTP JSON-RPC related methods for merge mining
-pub mod rpc_xmr;
+pub mod xmr;
 
 /// Default JSON-RPC `RequestHandler`
 pub struct DefaultRpcHandler;
