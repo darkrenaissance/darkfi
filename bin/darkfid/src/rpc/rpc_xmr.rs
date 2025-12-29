@@ -143,7 +143,7 @@ impl DarkfiNode {
     pub async fn xmr_merge_mining_get_aux_block(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         if !*self.validator.synced.read().await {
-            return server_error(RpcError::NotSynced, id, None)
+            return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
         // Parse request params
@@ -252,7 +252,14 @@ impl DarkfiNode {
     pub async fn xmr_merge_mining_submit_solution(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         if !*self.validator.synced.read().await {
-            return server_error(RpcError::NotSynced, id, None)
+            return JsonResponse::new(
+                JsonValue::from(HashMap::from([(
+                    "status".to_string(),
+                    JsonValue::from(String::from("rejected")),
+                )])),
+                id,
+            )
+            .into()
         }
 
         // Grab registry submissions lock

@@ -93,7 +93,7 @@ impl DarkfiNode {
     pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         if !*self.validator.synced.read().await {
-            return server_error(RpcError::NotSynced, id, None)
+            return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
         // Parse request params
@@ -201,7 +201,14 @@ impl DarkfiNode {
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         if !*self.validator.synced.read().await {
-            return server_error(RpcError::NotSynced, id, None)
+            return JsonResponse::new(
+                JsonValue::from(HashMap::from([(
+                    "status".to_string(),
+                    JsonValue::from(String::from("rejected")),
+                )])),
+                id,
+            )
+            .into()
         }
 
         // Grab registry submissions lock
@@ -361,11 +368,6 @@ impl DarkfiNode {
     // --> {"jsonrpc":"2.0", "method": "keepalived", "id": 1, "params": {"id": "foo"}}
     // <-- {"jsonrpc":"2.0", "id": 1, "result": {"status": "KEEPALIVED"}}
     pub async fn stratum_keepalived(&self, id: u16, params: JsonValue) -> JsonResult {
-        // Check if node is synced before responding
-        if !*self.validator.synced.read().await {
-            return server_error(RpcError::NotSynced, id, None)
-        }
-
         // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
