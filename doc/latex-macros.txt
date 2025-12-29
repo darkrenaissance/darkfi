@@ -7,4 +7,3 @@
 \cY:{\mathcal{Y}}
 \ran:{\textrm{ran}}
 \max:{\textrm{max}}
-

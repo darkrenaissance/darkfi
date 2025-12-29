@@ -1,12 +1,12 @@
 [book]
 authors = ["DarkFi"]
 language = "en"
-multilingual = false
 src = "src"
 title = "The DarkFi Book"
+description = "DarkFi mdbook"
+text-direction = "ltr"
 
 [output.html]
-copy-fonts = true
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
 theme = "theme"
