@@ -45,17 +45,17 @@ win-release: $(SRC) fonts
 win-debug: $(SRC) fonts
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
-android-release: $(SRC) fonts forest_720x1280
+android-release: $(SRC) fonts forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
-android-debug: $(SRC) fonts forest_720x1280
+android-debug: $(SRC) fonts forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
-build-release: $(SRC) fonts forest_1920x1080
+build-release: $(SRC) fonts forest_1920x1080.ivf
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-build-debug: $(SRC) fonts forest_1920x1080
+build-debug: $(SRC) fonts forest_1920x1080.ivf
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
@@ -64,19 +64,29 @@ build-debug: $(SRC) fonts forest_1920x1080
 fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
 
 ibm-plex-mono-regular.otf:
-	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/ibm-plex-mono-regular.otf
+	wget -c https://dark.fi/assets/ibm-plex-mono-regular.otf
 
 NotoColorEmoji.ttf:
-	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
+	wget -c https://dark.fi/assets/NotoColorEmoji.ttf
+
+# App data
+
+forest_1920x1080.ivf:
+	rm assets/forest_720x1280.mp4
+	wget -P assets/ -c https://dark.fi/assets/forest_1920x1080.ivf
+
+forest_720x1280.mp4:
+	rm assets/forest_1920x1080.ivf
+	wget -P assets/ -c https://dark.fi/assets/forest_720x1280.mp4
 
 # Developer targets
 
-dev: $(SRC) fonts
+dev: $(SRC) fonts forest_1920x1080.ivf
 	$(CARGO) lbuild $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: $(SRC) fonts
+apk: $(SRC) fonts forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 
