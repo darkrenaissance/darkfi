@@ -65,11 +65,6 @@ fluent = "0.17.0"
 unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
 indoc = "2.0.7"
 
-# AV1 video decoding - rav1d with Rust API from leo030303 fork
-# Disable default features to avoid NASM dependency (asm)
-#rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
-rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
-
 # This makes a HUGE difference to decoding speed.
 # Over 160s to like 2s.
 [profile.dev.package.rav1d]
@@ -96,11 +91,17 @@ halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v032" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
+# AV1 video decoding - rav1d with Rust API from leo030303 fork
+# Enable ASM routines for non-Android platforms.
+#rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
+rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
 tor-dirmgr = { version="0.37.0", features=["static"] }
+# Disable asm for Android due to PIC relocation issues
+rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", default-features = false, features = ["bitdepth_8"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr

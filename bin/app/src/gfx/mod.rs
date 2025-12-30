@@ -20,7 +20,6 @@ use darkfi_serial::{
     async_trait, AsyncEncodable, AsyncWrite, Decodable, Encodable, FutAsyncWriteExt,
     SerialDecodable, SerialEncodable, VarInt,
 };
-use indoc::indoc;
 #[cfg(target_os = "android")]
 use miniquad::native::egl;
 use miniquad::{
@@ -1132,6 +1131,15 @@ impl Stage {
         format: TextureFormat,
         gfx_texture_id: TextureId,
     ) {
+        let fmt_size = format.size(width as u32, height as u32) as usize;
+        assert_eq!(
+            fmt_size,
+            data.len(),
+            "Texture data size mismatch for ID={gfx_texture_id}: \
+             expected {fmt_size}, got {} for {width}x{height} {:?}",
+            data.len(),
+            format
+        );
         let texture = self.ctx.new_texture_from_data_and_format(
             data,
             TextureParams {

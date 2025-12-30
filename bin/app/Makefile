@@ -69,28 +69,14 @@ ibm-plex-mono-regular.otf:
 NotoColorEmoji.ttf:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
 
-forest_1920x1080.zip:
-	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest_1920x1080.zip
-assets/forest_1920x1080/000.qoi:
-	cd assets && unzip ../forest_1920x1080.zip
-forest_1920x1080: forest_1920x1080.zip assets/forest_1920x1080/000.qoi
-	rm -fr assets/forest_729x1280/
-
-forest_720x1280.zip:
-	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/forest_720x1280.zip
-assets/forest_720x1280/000.qoi:
-	cd assets && unzip ../forest_720x1280.zip
-forest_720x1280: forest_720x1280.zip assets/forest_720x1280/000.qoi
-	rm -fr assets/forest_1920x1080/
-
 # Developer targets
 
-dev: $(SRC) fonts forest_1920x1080
+dev: $(SRC) fonts
 	$(CARGO) lbuild $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
-apk: $(SRC) fonts forest_720x1280
+apk: $(SRC) fonts
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 

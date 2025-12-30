@@ -19,8 +19,8 @@
 use miniquad::TextureFormat;
 use parking_lot::Mutex as SyncMutex;
 use rav1d::{
-    Decoder as Rav1dDecoder, Picture as Rav1dPicture, PlanarImageComponent, Rav1dError,
-    Settings as Rav1dSettings,
+    Decoder as Rav1dDecoder, InloopFilterType, Picture as Rav1dPicture, PlanarImageComponent,
+    Rav1dError, Settings as Rav1dSettings,
 };
 use std::sync::{
     mpsc::{Receiver, Sender},
@@ -65,7 +65,9 @@ pub fn spawn_decoder_thread(
     // 0 is auto detect
     settings.set_n_threads(4);
     // 0 is auto
-    settings.set_max_frame_delay(0);
+    settings.set_max_frame_delay(1);
+    settings.set_apply_grain(false);
+    settings.set_inloop_filters(InloopFilterType::empty());
 
     let mut decoder = Rav1dDecoder::with_settings(&settings).unwrap();
     //let mut decoder = Rav1dDecoder::new().unwrap();
