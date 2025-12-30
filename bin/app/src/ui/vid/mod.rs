@@ -181,13 +181,7 @@ impl Video {
             };
             let tsubs = vec![vid_data.textures_sub.clone(); vid_data.textures.len()];
             // Clone the data before the lock is released
-            let vid_data_clone = Av1VideoData {
-                textures: vid_data.textures.clone(),
-                anim: vid_data.anim.clone(),
-                textures_pub: vid_data.textures_pub.clone(),
-                textures_sub: vid_data.textures_sub.clone(),
-            };
-            (vid_data_clone, tsubs)
+            (vid_data.clone(), tsubs)
         };
         assert_eq!(vid_data.textures.len(), tsubs.len());
 
