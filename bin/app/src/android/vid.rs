@@ -124,19 +124,12 @@ pub fn videodecoder_init(path: &str) -> Option<VideoDecoderHandle> {
     unsafe {
         let env = android::attach_jni_env();
 
-        // Call MainActivity.createVideoDecoder() helper method
-        let activity_class = (**env).GetObjectClass.unwrap()(env, android::ACTIVITY);
-        let create_method = (**env).GetMethodID.unwrap()(
+        let decoder_obj = ndk_utils::call_object_method!(
             env,
-            activity_class,
-            b"createVideoDecoder\0".as_ptr() as _,
-            b"()Lvideodecode/VideoDecoder;\0".as_ptr() as _,
+            android::ACTIVITY,
+            "createVideoDecoder",
+            "()Lvideodecode/VideoDecoder;"
         );
-
-        let decoder_obj = (**env).CallObjectMethod.unwrap()(env, android::ACTIVITY, create_method);
-
-        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
-        delete_local_ref(env, activity_class);
 
         if decoder_obj.is_null() {
             error!(target: "android::vid", "Failed to create VideoDecoder object");
@@ -146,20 +139,11 @@ pub fn videodecoder_init(path: &str) -> Option<VideoDecoderHandle> {
         let cpath = std::ffi::CString::new(path).unwrap();
         let jpath = (**env).NewStringUTF.unwrap()(env, cpath.as_ptr());
 
-        // Get VideoDecoder class
-        let decoder_class = (**env).GetObjectClass.unwrap()(env, decoder_obj);
+        let result =
+            ndk_utils::call_bool_method!(env, decoder_obj, "init", "(Ljava/lang/String;)Z", jpath);
 
-        let init_video = (**env).GetMethodID.unwrap()(
-            env,
-            decoder_class,
-            b"init\0".as_ptr() as _,
-            b"(Ljava/lang/String;)Z\0".as_ptr() as _,
-        );
-
-        let result = (**env).CallBooleanMethod.unwrap()(env, decoder_obj, init_video, jpath);
-
+        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
         delete_local_ref(env, jpath);
-        delete_local_ref(env, decoder_class);
 
         if result == 0 {
             error!(target: "android::vid", "VideoDecoder.init() failed");
@@ -173,41 +157,13 @@ pub fn videodecoder_init(path: &str) -> Option<VideoDecoderHandle> {
 pub fn videodecoder_set_id(decoder_obj: ndk_sys::jobject, id: usize) {
     unsafe {
         let env = android::attach_jni_env();
-
-        let class_ptr = (**env).GetObjectClass.unwrap()(env, decoder_obj);
-
-        let method_id = (**env).GetMethodID.unwrap()(
-            env,
-            class_ptr,
-            b"setDecoderId\0".as_ptr() as _,
-            b"(I)V\0".as_ptr() as _,
-        );
-
-        (**env).CallVoidMethod.unwrap()(env, decoder_obj, method_id, id as i32);
-
-        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
-        delete_local_ref(env, class_ptr);
+        ndk_utils::call_void_method!(env, decoder_obj, "setDecoderId", "(I)V", id as i32);
     }
 }
 
 pub fn videodecoder_decode_all(decoder_obj: ndk_sys::jobject) -> i32 {
     unsafe {
         let env = android::attach_jni_env();
-
-        let class_ptr = (**env).GetObjectClass.unwrap()(env, decoder_obj);
-
-        let method_id = (**env).GetMethodID.unwrap()(
-            env,
-            class_ptr,
-            b"decodeAll\0".as_ptr() as _,
-            b"()I\0".as_ptr() as _,
-        );
-
-        let result = (**env).CallIntMethod.unwrap()(env, decoder_obj, method_id);
-
-        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
-        delete_local_ref(env, class_ptr);
-
-        result
+        ndk_utils::call_int_method!(env, decoder_obj, "decodeAll", "()I")
     }
 }

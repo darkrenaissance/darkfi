@@ -292,7 +292,9 @@ impl PluginSettings {
             self.get_setting("net.inbound_connections").unwrap().get_property_u32("value").unwrap()
                 as usize;
         //TODO: Update this when multiple active_profiles at a time is supported
-        if let Some(profile) = p2p_settings.profiles.get_mut(p2p_settings.active_profiles.first().unwrap()) {
+        if let Some(profile) =
+            p2p_settings.profiles.get_mut(p2p_settings.active_profiles.first().unwrap())
+        {
             profile.outbound_connect_timeout = self
                 .get_setting("net.outbound_connect_timeout")
                 .unwrap()

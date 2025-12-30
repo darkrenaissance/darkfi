@@ -124,5 +124,4 @@ fn process_frame(
     let vd = vd_guard.as_mut().unwrap();
     vd.textures[frame_idx] = Some(yuv_texs.clone());
     let _ = vd.textures_pub.try_broadcast((frame_idx, yuv_texs));
-    d!("Stored texture for frame {}", frame_idx);
 }
