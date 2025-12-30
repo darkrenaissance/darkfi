@@ -22,20 +22,13 @@ use rav1d::{
     Decoder as Rav1dDecoder, InloopFilterType, Picture as Rav1dPicture, PlanarImageComponent,
     Rav1dError, Settings as Rav1dSettings,
 };
-use std::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc,
-    },
-    time::Instant,
-};
+use std::{sync::Arc, time::Instant};
 
 use crate::{
     gfx::{gfxtag, RenderApi},
+    ui::vid::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures},
     util::spawn_thread,
 };
-
-use super::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video::decode", $($arg)*); } }
 

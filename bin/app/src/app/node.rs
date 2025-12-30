@@ -175,6 +175,9 @@ pub fn create_video(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
+    #[cfg(target_os = "android")]
+    prop.set_ui_text("Path", "Path to .mp4 video file (H.264 format)");
+    #[cfg(not(target_os = "android"))]
     prop.set_ui_text("Path", "Path to .ivf video file (AV1 format)");
     node.add_property(prop).unwrap();
 

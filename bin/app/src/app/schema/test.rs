@@ -37,7 +37,7 @@ const LIGHTMODE: bool = false;
 mod ui_consts {
     //pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
     //pub const KING_PATH: &str = "king.png";
-    pub const VID_PATH: &str = "forest_720x1280.ivf";
+    pub const VID_PATH: &str = "forest_720x1280.mp4";
 }
 
 #[cfg(not(target_os = "android"))]

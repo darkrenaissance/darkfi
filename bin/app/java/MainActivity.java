@@ -14,6 +14,7 @@ import java.util.HashMap;
 
 import autosuggest.InvisibleInputView;
 import autosuggest.CustomInputConnection;
+import videodecode.VideoDecoder;
 
 //% END
 
@@ -188,6 +189,12 @@ public boolean isImeVisible() {
     if (imeInsets == null)
         return false;
     return insets.isVisible(Type.ime());
+}
+
+public VideoDecoder createVideoDecoder() {
+    VideoDecoder decoder = new VideoDecoder();
+    decoder.setContext(this);
+    return decoder;
 }
 
 //% END

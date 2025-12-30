@@ -22,6 +22,8 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use crate::AndroidSuggestEvent;
 
+pub mod vid;
+
 macro_rules! call_mainactivity_int_method {
     ($method:expr, $sig:expr $(, $args:expr)*) => {{
         unsafe {

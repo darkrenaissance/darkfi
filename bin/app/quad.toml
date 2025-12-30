@@ -4,5 +4,6 @@ java_files = [
     "java/autosuggest/InvisibleInputView.java",
     #"java/autosuggest/InvisibleInputManager.java",
     "java/ForegroundService.java",
+    "java/videodecode/VideoDecoder.java"
 ]
 

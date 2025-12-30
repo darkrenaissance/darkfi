@@ -100,8 +100,7 @@ rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", fe
 tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
 tor-dirmgr = { version="0.37.0", features=["static"] }
-# Disable asm for Android due to PIC relocation issues
-rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", default-features = false, features = ["bitdepth_8"] }
+# Android uses MediaCodec for hardware-accelerated H.264 decoding instead of rav1d
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr

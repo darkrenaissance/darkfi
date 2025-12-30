@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
