@@ -247,10 +247,13 @@ impl God {
             cv.wait().await;
             app.start(event_pub, epoch).await;
         });
+
+        self.app.notify_start();
     }
 
     /// Put the app to sleep until the next restart.
     pub fn stop_app(&self) {
+        self.app.notify_stop();
         self.fg_runtime.stop();
         self.app.stop();
         info!(target: "main", "App stopped");
@@ -276,10 +279,14 @@ async fn load_plugins(
     let plugin = plugin.setup_null();
     sg_root.link(plugin.clone());
 
+    // DarkIrc needs /window to start
+    cv.wait().await;
     let darkirc = create_darkirc("darkirc");
     let darkirc = darkirc
         .setup(|me| async {
-            plugin::DarkIrc::new(me, ex.clone()).await.expect("DarkIrc pimpl setup")
+            plugin::DarkIrc::new(me, sg_root.clone(), ex.clone())
+                .await
+                .expect("DarkIrc pimpl setup")
         })
         .await;
 
@@ -357,7 +364,6 @@ async fn load_plugins(
     darkirc.register("connect", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let listen_connect = ex.spawn(async move {
-        cv.wait().await;
         let net0 = sg_root2.lookup_node("/window/netstatus_layer/net0").unwrap();
         let net1 = sg_root2.lookup_node("/window/netstatus_layer/net1").unwrap();
         let net2 = sg_root2.lookup_node("/window/netstatus_layer/net2").unwrap();

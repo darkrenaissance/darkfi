@@ -46,7 +46,7 @@ use sled_overlay::sled;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
@@ -60,6 +60,9 @@ const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
 const COOLOFF_SYNC_ATTEMPTS: usize = 6;
 const SYNC_MIN_PEERS: usize = 2;
+
+const P2P_OUTBOUND_ACTIVE: usize = 6;
+const P2P_OUTBOUND_SLEEP: usize = 1;
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
 /// then we will just correct it to the current time so messages appear sequential in the UI.
@@ -184,7 +187,7 @@ pub struct DarkIrc {
 }
 
 impl DarkIrc {
-    pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Result<Pimpl> {
+    pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
@@ -235,8 +238,8 @@ impl DarkIrc {
             profile.channel_handshake_timeout = 30;
             p2p_settings.profiles.insert("tcp+tls".to_string(), profile);
 
-            p2p_settings.outbound_connections = 3;
-            p2p_settings.inbound_connections = 0;
+            p2p_settings.outbound_connections = 5;
+            p2p_settings.inbound_connections = 2;
 
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
             p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
@@ -291,7 +294,7 @@ impl DarkIrc {
             nick,
             settings,
         });
-        self_.clone().start(ex).await;
+        self_.clone().start(sg_root, ex).await;
         Ok(Pimpl::DarkIrc(self_))
     }
 
@@ -514,7 +517,7 @@ impl DarkIrc {
         self_.settings.update_p2p_settings(&mut write_guard);
     }
 
-    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+    async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
         i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);
         let registry = self.p2p.protocol_registry();
@@ -555,7 +558,38 @@ impl DarkIrc {
         let channel_sub = self.p2p.hosts().subscribe_channel().await;
         let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
-        let mut tasks = vec![send_method_task, ev_task, dag_task];
+        // Subscribe to window start/stop signals for dynamic outbound connections
+        let window_node = sg_root.lookup_node("/window").unwrap();
+
+        let (start_slot, start_recv) = Slot::new("app_start");
+        window_node.register("start", start_slot).unwrap();
+        let p2p = self.p2p.clone();
+        let start_task = ex.spawn(async move {
+            while let Ok(_) = start_recv.recv().await {
+                i!("App started: set outbound connections to {P2P_OUTBOUND_ACTIVE}");
+                if let Err(e) =
+                    p2p.session_outbound().set_outbound_connections(P2P_OUTBOUND_ACTIVE).await
+                {
+                    e!("Failed to set outbound connections: {e}");
+                }
+            }
+        });
+
+        let (stop_slot, stop_recv) = Slot::new("app_stop");
+        window_node.register("stop", stop_slot).unwrap();
+        let p2p = self.p2p.clone();
+        let stop_task = ex.spawn(async move {
+            while let Ok(_) = stop_recv.recv().await {
+                i!("App stopped: set outbound connections to {P2P_OUTBOUND_SLEEP}");
+                if let Err(e) =
+                    p2p.session_outbound().set_outbound_connections(P2P_OUTBOUND_SLEEP).await
+                {
+                    e!("Failed to set outbound connections: {e}");
+                }
+            }
+        });
+
+        let mut tasks = vec![send_method_task, ev_task, dag_task, start_task, stop_task];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks).unwrap();
     }
