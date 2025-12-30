@@ -73,6 +73,12 @@ class JsonRpc:
     async def dnet_subscribe_events(self):
         return await self._subscribe("dnet.subscribe_events", [])
 
+    async def get_info(self):
+        return await self._make_request("p2p.get_info", [])
+
+    async def set_outbound_connections(self, n):
+        return await self._make_request("p2p.set_outbound_connections", [n])
+
 async def main(argv):
     rpc = JsonRpc()
     while True:
@@ -126,4 +132,6 @@ async def main(argv):
 
     await rpc.stop()
 
-asyncio.run(main(sys.argv))
+if __name__ == "__main__":
+    asyncio.run(main(sys.argv))
+

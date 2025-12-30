@@ -37,7 +37,7 @@ use std::{
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::Mutex;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::{
@@ -136,6 +136,67 @@ impl OutboundSession {
         for slot in slots {
             slot.notify();
         }
+    }
+
+    /// Sets the number of outbound connections.
+    /// If the number is less than the current, then it will first drop empty slots.
+    pub async fn set_outbound_connections(self: Arc<Self>, n: usize) -> Result<()> {
+        // Guaranteed to be correct since slots is locked for the duration of this method.
+        let mut slots = self.slots.lock().await;
+        let slots_len = slots.len();
+
+        if n > slots_len {
+            self.clone().add_slots(&mut slots, n).await;
+        } else if n < slots_len {
+            self.remove_slots(&mut slots, n).await;
+        }
+        // Do nothing when n == current
+
+        Ok(())
+    }
+
+    async fn add_slots(self: Arc<Self>, slots: &mut Vec<Arc<Slot>>, target: usize) {
+        let slots_len = slots.len();
+        let self_ = Arc::downgrade(&self);
+        for i in slots_len..target {
+            let slot = Slot::new(self_.clone(), i as u32);
+            slot.clone().start().await;
+            slots.push(slot);
+        }
+        info!(target: "net::outbound_session",
+            "[P2P] Increased outbound slots from {slots_len} to {target}");
+    }
+
+    /// Prefers to first remove empty slots.
+    async fn remove_slots(&self, slots: &mut Vec<Arc<Slot>>, target: usize) {
+        let slots_len = slots.len();
+        let num_to_remove = slots_len - target;
+        let mut removed = 0;
+
+        // First pass: remove empty slots (channel_id == 0)
+        let mut i = 0;
+        while i < slots.len() && removed < num_to_remove {
+            // Skip connected slots
+            if slots[i].channel_id.load(Ordering::Relaxed) != 0 {
+                i += 1;
+                continue
+            }
+
+            // Disconnect empty slots
+            let slot = slots.remove(i);
+            slot.stop().await;
+            removed += 1;
+        }
+
+        // Second pass: remove remaining slots (connected ones)
+        while removed < num_to_remove && !slots.is_empty() {
+            let slot = slots.remove(0);
+            slot.stop().await;
+            removed += 1;
+        }
+
+        info!(target: "net::outbound_session",
+            "[P2P] Decreased outbound slots from {slots_len} to {target}");
     }
 }
 
