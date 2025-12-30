@@ -71,12 +71,16 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "dnet.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let switch = params[0].get::<bool>().unwrap();
+        let Some(switch) = params[0].get::<bool>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
 
         if *switch {
             self.p2p.dnet_enable();
@@ -96,12 +100,16 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "p2p.set_outbound_connections", "params": [5], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn set_outbound_connections(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_number() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let n_f64 = params[0].get::<f64>().unwrap();
+        let Some(n_f64) = params[0].get::<f64>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         let n = *n_f64 as u32;
 
         if *n_f64 != n as f64 || n == 0 {
@@ -123,7 +131,9 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
     pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
@@ -139,7 +149,9 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [`event`]}
     pub async fn deg_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
@@ -155,12 +167,16 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn deg_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let switch = params[0].get::<bool>().unwrap();
+        let Some(switch) = params[0].get::<bool>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
 
         if *switch {
             self.event_graph.deg_enable().await;
@@ -177,7 +193,9 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn eg_get_info(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params_ = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params_) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if !params_.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
@@ -191,7 +209,9 @@ impl DarkIrc {
     // --> {"jsonrpc": "2.0", "method": "eventgraph.replay", "params": ..., "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn eg_rep_info(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params_ = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params_) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if !params_.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
