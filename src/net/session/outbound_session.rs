@@ -250,7 +250,7 @@ impl Slot {
         loop {
             // Activate the slot
             debug!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect",
                 "[P2P] Finding a host to connect to for outbound slot #{}",
                 self.slot,
             );
@@ -275,11 +275,11 @@ impl Slot {
             }
 
             let addr = if let Some(addr) = self.fetch_addrs().await {
-                debug!(target: "net::outbound_session::run()", "Fetched addr={}, slot #{}", addr.0,
+                debug!(target: "net::outbound_session::run", "Fetched addr={}, slot #{}", addr.0,
                 self.slot);
                 addr
             } else {
-                debug!(target: "net::outbound_session::run()", "No address found! Activating peer discovery...");
+                debug!(target: "net::outbound_session::run", "No address found! Activating peer discovery...");
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
@@ -298,7 +298,7 @@ impl Slot {
             let slot = self.slot;
 
             verbose!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect",
                 "[P2P] Connecting outbound slot #{slot} [{host}]"
             );
 
@@ -311,7 +311,7 @@ impl Slot {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
                     debug!(
-                        target: "net::outbound_session::try_connect()",
+                        target: "net::outbound_session::try_connect",
                         "[P2P] Outbound slot #{slot} connection failed: {err}"
                     );
 
@@ -330,7 +330,7 @@ impl Slot {
             let stop_sub = channel.subscribe_stop().await?;
 
             verbose!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect",
                 "[P2P] Outbound slot #{slot} connected [{}]",
                 channel.display_address()
             );
@@ -358,7 +358,7 @@ impl Slot {
                 self.channel_id.store(0, Ordering::Relaxed);
 
                 warn!(
-                    target: "net::outbound_session::try_connect()",
+                    target: "net::outbound_session::try_connect",
                     "[P2P] Suspending addr=[{}] slot #{slot}",
                     channel.display_address()
                 );
@@ -406,7 +406,7 @@ impl Slot {
 
             Err(err) => {
                 verbose!(
-                    target: "net::outbound_session::try_connect()",
+                    target: "net::outbound_session::try_connect",
                     "[P2P] Unable to connect outbound slot #{} {err}",
                     self.slot
                 );
@@ -423,7 +423,7 @@ impl Slot {
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
                 if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Suspend) {
-                    warn!(target: "net::outbound_session::try_connect()", "Error while suspending addr={addr}: {e}");
+                    warn!(target: "net::outbound_session::try_connect", "Error while suspending addr={addr}: {e}");
                 }
 
                 // Notify that channel processing failed
@@ -551,7 +551,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
             if current_attempt >= 4 {
                 verbose!(
-                    target: "net::outbound_session::peer_discovery()",
+                    target: "net::outbound_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
 
@@ -571,7 +571,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
                 verbose!(
-                    target: "net::outbound_session::peer_discovery()",
+                    target: "net::outbound_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
                 dnetev!(self, OutboundPeerDiscovery, {
@@ -598,13 +598,13 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 match result {
                     Ok(addrs_len) => {
                         verbose!(
-                            target: "net::outbound_session::peer_discovery()",
+                            target: "net::outbound_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
                     }
                     Err(_) => {
                         warn!(
-                            target: "net::outbound_session::peer_discovery()",
+                            target: "net::outbound_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );
                         // Just do seed next time
@@ -619,7 +619,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
                 verbose!(
-                    target: "net::outbound_session::peer_discovery()",
+                    target: "net::outbound_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 
                 dnetev!(self, OutboundPeerDiscovery, {

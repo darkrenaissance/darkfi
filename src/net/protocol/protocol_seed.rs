@@ -103,7 +103,7 @@ impl ProtocolBase for ProtocolSeed {
     /// to the seed server.  Sends a get-address message and receives an
     /// address messsage.
     async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.display_address());
+        debug!(target: "net::protocol_seed::start", "START => address={}", self.channel.display_address());
 
         // Send own address to the seed server
         self.send_my_addrs().await?;
@@ -125,19 +125,19 @@ impl ProtocolBase for ProtocolSeed {
         // Receive addresses
         let addrs_msg = self.addr_sub.receive().await?;
         debug!(
-            target: "net::protocol_seed::start()",
+            target: "net::protocol_seed::start",
             "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.display_address(),
         );
 
         if !addrs_msg.addrs.is_empty() {
             debug!(
-                target: "net::protocol_seed::start()",
+                target: "net::protocol_seed::start",
                 "Appending to greylist...",
             );
             self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
         }
 
-        debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.display_address());
+        debug!(target: "net::protocol_seed::start", "END => address={}", self.channel.display_address());
         Ok(())
     }
 

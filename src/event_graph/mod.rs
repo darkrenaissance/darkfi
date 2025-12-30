@@ -164,7 +164,7 @@ impl EventGraph {
         // If not, we can prune the DAG and insert this new genesis event.
         if !dag.contains_key(current_genesis.id().as_bytes())? {
             info!(
-                target: "event_graph::new()",
+                target: "event_graph::new",
                 "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
             );
             self_.dag_prune(current_genesis).await?;
@@ -183,7 +183,7 @@ impl EventGraph {
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                        Err(e) => error!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Failed stopping prune task: {e}")
+                        Err(e) => error!(target: "event_graph::_handle_stop", "[EVENTGRAPH] Failed stopping prune task: {e}")
                     }
                 },
                 Error::DetachedTaskStopped,
@@ -219,7 +219,7 @@ impl EventGraph {
         let channels = self.p2p.hosts().peers();
         let mut communicated_peers = channels.len();
         info!(
-            target: "event_graph::dag_sync()",
+            target: "event_graph::dag_sync",
             "[EVENTGRAPH] Syncing DAG from {communicated_peers} peers..."
         );
 
@@ -235,7 +235,7 @@ impl EventGraph {
                 Ok(v) => v,
                 Err(e) => {
                     error!(
-                        target: "event_graph::dag_sync()",
+                        target: "event_graph::dag_sync",
                         "[EVENTGRAPH] Sync: Couldn't subscribe TipReq for peer {url}, skipping ({e})"
                     );
                     communicated_peers -= 1;
@@ -245,7 +245,7 @@ impl EventGraph {
 
             if let Err(e) = channel.send(&TipReq {}).await {
                 error!(
-                    target: "event_graph::dag_sync()",
+                    target: "event_graph::dag_sync",
                     "[EVENTGRAPH] Sync: Couldn't contact peer {url}, skipping ({e})"
                 );
                 communicated_peers -= 1;
@@ -262,7 +262,7 @@ impl EventGraph {
             let Ok(peer_tips) = tip_rep_sub.receive_with_timeout(outbound_connect_timeout).await
             else {
                 error!(
-                    target: "event_graph::dag_sync()",
+                    target: "event_graph::dag_sync",
                     "[EVENTGRAPH] Sync: Peer {url} didn't reply with tips in time, skipping"
                 );
                 communicated_peers -= 1;
@@ -286,7 +286,7 @@ impl EventGraph {
         // After we've communicated all the peers, let's see what happened.
         if tips.is_empty() {
             error!(
-                target: "event_graph::dag_sync()",
+                target: "event_graph::dag_sync",
                 "[EVENTGRAPH] Sync: Could not find any DAG tips",
             );
             return Err(Error::DagSyncFailed)
@@ -316,11 +316,11 @@ impl EventGraph {
 
         if missing_parents.is_empty() {
             *self.synced.write().await = true;
-            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
+            info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
             return Ok(())
         }
 
-        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
+        info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Fetching events");
         let mut received_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut received_events_hashes = HashSet::new();
 
@@ -331,7 +331,7 @@ impl EventGraph {
                 let url = channel.display_address();
 
                 debug!(
-                    target: "event_graph::dag_sync()",
+                    target: "event_graph::dag_sync",
                     "Requesting {missing_parents:?} from {url}..."
                 );
 
@@ -339,7 +339,7 @@ impl EventGraph {
                     Ok(v) => v,
                     Err(e) => {
                         error!(
-                            target: "event_graph::dag_sync()",
+                            target: "event_graph::dag_sync",
                             "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {url}, skipping ({e})"
                         );
                         continue
@@ -349,7 +349,7 @@ impl EventGraph {
                 let request_missing_events = missing_parents.clone().into_iter().collect();
                 if let Err(e) = channel.send(&EventReq(request_missing_events)).await {
                     error!(
-                        target: "event_graph::dag_sync()",
+                        target: "event_graph::dag_sync",
                         "[EVENTGRAPH] Sync: Failed communicating EventReq({missing_parents:?}) to {url}: {e}"
                     );
                     continue
@@ -365,7 +365,7 @@ impl EventGraph {
                 let Ok(parent) = ev_rep_sub.receive_with_timeout(outbound_connect_timeout).await
                 else {
                     error!(
-                        target: "event_graph::dag_sync()",
+                        target: "event_graph::dag_sync",
                         "[EVENTGRAPH] Sync: Timeout waiting for parents {missing_parents:?} from {url}"
                     );
                     continue
@@ -377,7 +377,7 @@ impl EventGraph {
                     let parent_id = parent.id();
                     if !missing_parents.contains(&parent_id) {
                         error!(
-                            target: "event_graph::dag_sync()",
+                            target: "event_graph::dag_sync",
                             "[EVENTGRAPH] Sync: Peer {url} replied with a wrong event: {}",
                             parent.id()
                         );
@@ -385,7 +385,7 @@ impl EventGraph {
                     }
 
                     debug!(
-                        target: "event_graph::dag_sync()",
+                        target: "event_graph::dag_sync",
                         "Got correct parent event {parent_id}"
                     );
 
@@ -411,7 +411,7 @@ impl EventGraph {
                             !self.dag.contains_key(upper_parent.as_bytes()).unwrap()
                         {
                             debug!(
-                                target: "event_graph::dag_sync()",
+                                target: "event_graph::dag_sync",
                                 "Found upper missing parent event {upper_parent}"
                             );
                             missing_parents.insert(*upper_parent);
@@ -424,7 +424,7 @@ impl EventGraph {
 
             if !found_event {
                 error!(
-                    target: "event_graph::dag_sync()",
+                    target: "event_graph::dag_sync",
                     "[EVENTGRAPH] Sync: Failed to get all events",
                 );
                 return Err(Error::DagSyncFailed)
@@ -443,13 +443,13 @@ impl EventGraph {
 
         *self.synced.write().await = true;
 
-        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
+        info!(target: "event_graph::dag_sync", "[EVENTGRAPH] DAG synced successfully!");
         Ok(())
     }
 
     /// Atomically prune the DAG and insert the given event as genesis.
     async fn dag_prune(&self, genesis_event: Event) -> Result<()> {
-        debug!(target: "event_graph::dag_prune()", "Pruning DAG...");
+        debug!(target: "event_graph::dag_prune", "Pruning DAG...");
 
         // Acquire exclusive locks to unreferenced_tips, broadcasted_ids and
         // current_genesis while this operation is happening. We do this to
@@ -467,7 +467,7 @@ impl EventGraph {
         }
         batch.insert(genesis_event.id().as_bytes(), serialize_async(&genesis_event).await);
 
-        debug!(target: "event_graph::dag_prune()", "Applying batch...");
+        debug!(target: "event_graph::dag_prune", "Applying batch...");
         if let Err(e) = self.dag.apply_batch(batch) {
             panic!("Failed pruning DAG, sled apply_batch error: {e}");
         }
@@ -481,7 +481,7 @@ impl EventGraph {
         drop(broadcasted_ids);
         drop(current_genesis);
 
-        debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+        debug!(target: "event_graph::dag_prune", "DAG pruned successfully");
         Ok(())
     }
 
@@ -491,7 +491,7 @@ impl EventGraph {
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        debug!(target: "event_graph::dag_prune_task()", "Spawned background DAG pruning task");
+        debug!(target: "event_graph::dag_prune_task", "Spawned background DAG pruning task");
 
         loop {
             // Find the next rotation timestamp:
@@ -508,9 +508,9 @@ impl EventGraph {
             // Sleep until it's time to rotate.
             let s = millis_until_next_rotation(next_rotation);
 
-            debug!(target: "event_graph::dag_prune_task()", "Sleeping {s}ms until next DAG prune");
+            debug!(target: "event_graph::dag_prune_task", "Sleeping {s}ms until next DAG prune");
             msleep(s).await;
-            debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
+            debug!(target: "event_graph::dag_prune_task", "Rotation period reached");
 
             // Trigger DAG prune
             self.dag_prune(current_genesis).await?;
@@ -551,7 +551,7 @@ impl EventGraph {
         for event in events {
             let event_id = event.id();
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Inserting event {event_id} into the DAG"
             );
 
@@ -559,7 +559,7 @@ impl EventGraph {
                 .validate(&self.dag, genesis_timestamp, self.days_rotation, Some(&overlay))
                 .await?
             {
-                error!(target: "event_graph::dag_insert()", "Event {event_id} is invalid!");
+                error!(target: "event_graph::dag_insert", "Event {event_id} is invalid!");
                 return Err(Error::EventIsInvalid)
             }
 
@@ -591,13 +591,13 @@ impl EventGraph {
 
             // Update the unreferenced DAG tips set
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Event {event_id} parents {:#?}", event.parents,
             );
             for parent_id in event.parents.iter() {
                 if parent_id != &NULL_ID {
                     debug!(
-                        target: "event_graph::dag_insert()",
+                        target: "event_graph::dag_insert",
                         "Removing {parent_id} from unreferenced_tips"
                     );
 
@@ -617,7 +617,7 @@ impl EventGraph {
             }
             unreferenced_tips.retain(|_, tips| !tips.is_empty());
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Adding {event_id} to unreferenced tips"
             );
 
@@ -834,7 +834,7 @@ impl EventGraph {
         tips: BTreeMap<u64, HashSet<blake3::Hash>>,
     ) -> Result<Vec<Event>> {
         debug!(
-             target: "event_graph::fetch_successors_of()",
+             target: "event_graph::fetch_successors_of",
              "fetching successors of {tips:?}"
         );
 

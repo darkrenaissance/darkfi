@@ -104,19 +104,19 @@ impl ProtocolAddress {
     /// received addresses to the greylist.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_address::handle_receive_addrs()",
+            target: "net::protocol_address::handle_receive_addrs",
             "[START] address={}", self.channel.display_address(),
         );
 
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(
-                target: "net::protocol_address::handle_receive_addrs()",
+                target: "net::protocol_address::handle_receive_addrs",
                 "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.display_address(),
             );
 
             debug!(
-                target: "net::protocol_address::handle_receive_addrs()",
+                target: "net::protocol_address::handle_receive_addrs",
                 "Appending to greylist...",
             );
 
@@ -129,7 +129,7 @@ impl ProtocolAddress {
     /// with an address message.
     async fn handle_receive_get_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_address::handle_receive_get_addrs()",
+            target: "net::protocol_address::handle_receive_get_addrs",
             "[START] address={}", self.channel.display_address(),
         );
 
@@ -137,7 +137,7 @@ impl ProtocolAddress {
             let get_addrs_msg = self.get_addrs_sub.receive().await?;
 
             debug!(
-                target: "net::protocol_address::handle_receive_get_addrs()",
+                target: "net::protocol_address::handle_receive_get_addrs",
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.display_address(),
             );
 
@@ -150,7 +150,7 @@ impl ProtocolAddress {
                 .collect();
 
             // First we grab address with the requested transports from the gold list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching gold entries with schemes");
             let mut addrs = self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::Gold,
@@ -159,7 +159,7 @@ impl ProtocolAddress {
             );
 
             // Then we grab address with the requested transports from the whitelist
-            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching whitelist entries with schemes");
             addrs.append(&mut self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::White,
@@ -171,7 +171,7 @@ impl ProtocolAddress {
             // to fill a 2 * max length vector.
 
             // Then we grab address without the requested transports from the gold list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching gold entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
@@ -181,7 +181,7 @@ impl ProtocolAddress {
             ));
 
             // Then we grab address without the requested transports from the white list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching white entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
@@ -197,7 +197,7 @@ impl ProtocolAddress {
             so that they propagate on the network even if they're not
             popular transports. */
 
-            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching dark entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain));
@@ -206,7 +206,7 @@ impl ProtocolAddress {
             addrs.retain(|addr| TRANSPORT_COMBOS.contains(&addr.0.scheme()));
 
             debug!(
-                target: "net::protocol_address::handle_receive_get_addrs()",
+                target: "net::protocol_address::handle_receive_get_addrs",
                 "Sending {} addresses to {}", addrs.len(), self.channel.display_address(),
             );
 
@@ -273,7 +273,7 @@ impl ProtocolBase for ProtocolAddress {
     /// get-address msg.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(
-            target: "net::protocol_address::start()",
+            target: "net::protocol_address::start",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -300,7 +300,7 @@ impl ProtocolBase for ProtocolAddress {
         self.channel.send(&get_addrs).await?;
 
         debug!(
-            target: "net::protocol_address::start()",
+            target: "net::protocol_address::start",
             "END => address={}", self.channel.display_address(),
         );
 

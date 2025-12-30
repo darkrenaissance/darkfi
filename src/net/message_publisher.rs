@@ -103,7 +103,7 @@ impl<M: Message> MessageDispatcher<M> {
 
         let msg_result_type = if message.is_ok() { "Ok" } else { "Err" };
         debug!(
-            target: "net::message_publisher::_trigger_all()", "START msg={msg_result_type}({}), subs={}",
+            target: "net::message_publisher::_trigger_all", "START msg={msg_result_type}({}), subs={}",
             M::NAME, subs.len()
         );
 
@@ -142,7 +142,7 @@ impl<M: Message> MessageDispatcher<M> {
         }
 
         debug!(
-            target: "net::message_publisher::_trigger_all()", "END msg={msg_result_type}({}), subs={}",
+            target: "net::message_publisher::_trigger_all", "END msg={msg_result_type}({}), subs={}",
             M::NAME, subs.len(),
         );
     }
@@ -251,7 +251,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             Ok(int) => int.0,
             Err(err) => {
                 error!(
-                    target: "net::message_publisher::trigger()",
+                    target: "net::message_publisher::trigger",
                     "Unable to decode VarInt. Dropping...: {err}"
                 );
                 return Err(Error::MessageInvalid)
@@ -261,7 +261,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         // Check the message length does not exceed set limit
         if M::MAX_BYTES > 0 && length > M::MAX_BYTES {
             error!(
-                target: "net::message_publisher::trigger()",
+                target: "net::message_publisher::trigger",
                 "Message length ({length}) exceeds configured limit ({}). Dropping...",
                 M::MAX_BYTES
             );
@@ -274,7 +274,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             Ok(payload) => Ok(Arc::new(payload)),
             Err(err) => {
                 error!(
-                    target: "net::message_publisher::trigger()",
+                    target: "net::message_publisher::trigger",
                     "Unable to decode data. Dropping...: {err}"
                 );
                 return Err(Error::MessageInvalid)

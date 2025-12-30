@@ -360,45 +360,45 @@ impl HostContainer {
 
     /// Append host to a hostlist. Called when initalizing the hostlist in load_hosts().
     fn store(&self, color: usize, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store()", "[START] list={:?}",
+        trace!(target: "net::hosts::store", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
 
         let mut list = self.hostlists[color].write().unwrap();
         list.push((addr.clone(), last_seen));
-        debug!(target: "net::hosts::store()", "Added [{addr}] to {:?} list",
+        debug!(target: "net::hosts::store", "Added [{addr}] to {:?} list",
                HostColor::try_from(color).unwrap());
 
-        trace!(target: "net::hosts::store()", "[END] list={:?}",
+        trace!(target: "net::hosts::store", "[END] list={:?}",
                HostColor::try_from(color).unwrap());
     }
 
     /// Stores an address on a hostlist or updates its last_seen field if
     /// we already have the address.
     fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store_or_update()", "[START]");
+        trace!(target: "net::hosts::store_or_update", "[START]");
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().unwrap();
         if let Some(entry) = list.iter_mut().find(|(u, _)| *u == addr) {
             entry.1 = last_seen;
-            debug!(target: "net::hosts::store_or_update()", "Updated [{addr}] entry on {:?} list",
+            debug!(target: "net::hosts::store_or_update", "Updated [{addr}] entry on {:?} list",
                 color.clone());
         } else {
             list.push((addr.clone(), last_seen));
-            debug!(target: "net::hosts::store_or_update()", "Added [{addr}] to {color:?} list");
+            debug!(target: "net::hosts::store_or_update", "Added [{addr}] to {color:?} list");
         }
-        trace!(target: "net::hosts::store_or_update()", "[STOP]");
+        trace!(target: "net::hosts::store_or_update", "[STOP]");
     }
 
     /// Update the last_seen field of a peer on a hostlist.
     pub fn update_last_seen(&self, color: usize, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::update_last_seen()", "[START] list={:?}",
+        trace!(target: "net::hosts::update_last_seen", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
 
         let mut list = self.hostlists[color].write().unwrap();
         if let Some(entry) = list.iter_mut().find(|(u, _)| *u == addr) {
             entry.1 = last_seen;
         }
-        trace!(target: "net::hosts::update_last_seen()", "[END] list={:?}",
+        trace!(target: "net::hosts::update_last_seen", "[END] list={:?}",
                HostColor::try_from(color).unwrap());
     }
 
@@ -421,7 +421,7 @@ impl HostContainer {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
+        trace!(target: "net::hosts::fetch_with_schemes", "[START] {:?}",
                HostColor::try_from(color).unwrap());
 
         let list = self.hostlists[color].read().unwrap();
@@ -441,7 +441,7 @@ impl HostContainer {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "net::hosts::fetch_with_schemes()",
+                    debug!(target: "net::hosts::fetch_with_schemes",
                            "Found matching addr on list={:?}, returning {} addresses",
                            HostColor::try_from(color).unwrap(), ret.len());
                     return ret
@@ -450,7 +450,7 @@ impl HostContainer {
         }
 
         if ret.is_empty() {
-            debug!(target: "net::hosts::fetch_with_schemes()",
+            debug!(target: "net::hosts::fetch_with_schemes",
                    "No matching schemes found on list={:?}!", HostColor::try_from(color).unwrap())
         }
 
@@ -466,7 +466,7 @@ impl HostContainer {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
+        trace!(target: "net::hosts::fetch_with_schemes", "[START] {:?}",
                HostColor::try_from(color).unwrap());
 
         let list = self.hostlists[color].read().unwrap();
@@ -492,7 +492,7 @@ impl HostContainer {
         }
 
         if ret.is_empty() {
-            debug!(target: "net::hosts::fetch_excluding_schemes()", "No such schemes found!");
+            debug!(target: "net::hosts::fetch_excluding_schemes", "No such schemes found!");
         }
 
         ret
@@ -506,7 +506,7 @@ impl HostContainer {
         schemes: &[String],
     ) -> Option<((Url, u64), usize)> {
         // Retrieve all peers corresponding to that transport schemes
-        trace!(target: "net::hosts::fetch_random_with_schemes()", "[START] {color:?}");
+        trace!(target: "net::hosts::fetch_random_with_schemes", "[START] {color:?}");
         let list = self.fetch_with_schemes(color as usize, schemes, None);
 
         if list.is_empty() {
@@ -520,7 +520,7 @@ impl HostContainer {
 
     /// Get up to n random peers. Schemes are not taken into account.
     pub(in crate::net) fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random()", "[START] {color:?}");
+        trace!(target: "net::hosts::fetch_n_random", "[START] {color:?}");
         let n = n as usize;
         if n == 0 {
             return vec![]
@@ -534,7 +534,7 @@ impl HostContainer {
         }
 
         if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random()", "No entries found!");
+            debug!(target: "net::hosts::fetch_n_random", "No entries found!");
             return hosts
         }
 
@@ -550,7 +550,7 @@ impl HostContainer {
         schemes: &[String],
         n: u32,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random_with_schemes()", "[START] {color:?}");
+        trace!(target: "net::hosts::fetch_n_random_with_schemes", "[START] {color:?}");
         let index = color as usize;
         let n = n as usize;
         if n == 0 {
@@ -560,7 +560,7 @@ impl HostContainer {
         // Retrieve all peers corresponding to that transport schemes
         let hosts = self.fetch_with_schemes(index, schemes, None);
         if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random_with_schemes()",
+            debug!(target: "net::hosts::fetch_n_random_with_schemes",
                   "No such schemes found!");
             return hosts
         }
@@ -578,7 +578,7 @@ impl HostContainer {
         schemes: &[String],
         n: u32,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_excluding_schemes()", "[START] {color:?}");
+        trace!(target: "net::hosts::fetch_excluding_schemes", "[START] {color:?}");
         let index = color as usize;
         let n = n as usize;
         if n == 0 {
@@ -588,7 +588,7 @@ impl HostContainer {
         let hosts = self.fetch_excluding_schemes(index, schemes, None);
 
         if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random_excluding_schemes()",
+            debug!(target: "net::hosts::fetch_n_random_excluding_schemes",
             "No such schemes found!");
             return hosts
         }
@@ -603,7 +603,7 @@ impl HostContainer {
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().unwrap();
         if let Some(position) = list.iter().position(|(u, _)| u == addr) {
-            debug!(target: "net::hosts::remove_if_exists()", "Removing addr={addr} list={color:?}");
+            debug!(target: "net::hosts::remove_if_exists", "Removing addr={addr} list={color:?}");
             list.remove(position);
         }
     }
@@ -663,7 +663,7 @@ impl HostContainer {
                     let last_entry = list.pop().unwrap();
 
                     debug!(
-                        target: "net::hosts::resize()",
+                        target: "net::hosts::resize",
                         "{color:?}list reached max size. Removed {last_entry:?}"
                     );
                 }
@@ -687,7 +687,7 @@ impl HostContainer {
             // our system clock is behind or if other nodes are
             // misreporting the last_seen field.
             if now < last_seen {
-                debug!(target: "net::hosts::refresh()",
+                debug!(target: "net::hosts::refresh",
                 "last_seen [{now}] is newer than current system time [{last_seen}]. Skipping");
                 continue
             }
@@ -697,7 +697,7 @@ impl HostContainer {
         }
 
         for item in old_items {
-            debug!(target: "net::hosts::refresh()", "Removing {item:?}");
+            debug!(target: "net::hosts::refresh", "Removing {item:?}");
             self.remove_if_exists(color.clone(), &item);
         }
     }
@@ -716,7 +716,7 @@ impl HostContainer {
 
         let contents = load_file(&path);
         if let Err(e) = contents {
-            warn!(target: "net::hosts::load_hosts()", "Failed retrieving saved hosts: {e}");
+            warn!(target: "net::hosts::load_hosts", "Failed retrieving saved hosts: {e}");
             return Ok(())
         }
 
@@ -726,7 +726,7 @@ impl HostContainer {
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
                 Err(e) => {
-                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed URL {e}");
+                    debug!(target: "net::hosts::load_hosts", "Skipping malformed URL {e}");
                     continue
                 }
             };
@@ -734,7 +734,7 @@ impl HostContainer {
             let last_seen = match data[2].parse::<u64>() {
                 Ok(t) => t,
                 Err(e) => {
-                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed last seen {e}");
+                    debug!(target: "net::hosts::load_hosts", "Skipping malformed last seen {e}");
                     continue
                 }
             };
@@ -764,7 +764,7 @@ impl HostContainer {
                     self.refresh(HostColor::Dark, day);
                 }
                 _ => {
-                    debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
+                    debug!(target: "net::hosts::load_hosts", "Malformed list name...");
                 }
             }
         }
@@ -791,9 +791,9 @@ impl HostContainer {
         }
 
         if !tsv.is_empty() {
-            verbose!(target: "net::hosts::save_hosts()", "Saving hosts to: {path:?}");
+            verbose!(target: "net::hosts::save_hosts", "Saving hosts to: {path:?}");
             if let Err(e) = save_file(&path, &tsv) {
-                error!(target: "net::hosts::save_hosts()", "Failed saving hosts: {e}");
+                error!(target: "net::hosts::save_hosts", "Failed saving hosts: {e}");
             }
         }
 
@@ -922,7 +922,7 @@ impl Hosts {
     /// Safely insert into the HostContainer. Filters the addresses first before storing and
     /// notifies the publisher. Must be called when first receiving greylist addresses.
     pub(in crate::net) async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        trace!(target: "net::hosts:insert()", "[START]");
+        trace!(target: "net::hosts:insert", "[START]");
 
         // First filter these address to ensure this peer doesn't exist in our black, gold or
         // whitelist and apply transport filtering. If we don't support this transport,
@@ -931,13 +931,13 @@ impl Hosts {
         let mut addrs_len = 0;
 
         if filtered_addrs.is_empty() {
-            debug!(target: "net::hosts::insert()", "Filtered out all addresses");
+            debug!(target: "net::hosts::insert", "Filtered out all addresses");
         }
 
         // Then ensure we aren't currently trying to add this peer to the hostlist.
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
             if let Err(e) = self.try_register(addr.clone(), HostState::Insert) {
-                debug!(target: "net::hosts::insert()", "Cannot insert addr={}, err={e}",
+                debug!(target: "net::hosts::insert", "Cannot insert addr={}, err={e}",
                        addr.clone());
 
                 continue
@@ -950,12 +950,12 @@ impl Hosts {
             self.container.resize(color.clone());
 
             if let Err(e) = self.unregister(addr) {
-                warn!(target: "net::hosts::insert()", "Error while unregistering addr={addr}, err={e}");
+                warn!(target: "net::hosts::insert", "Error while unregistering addr={addr}, err={e}");
             }
         }
 
         self.store_publisher.notify(addrs_len).await;
-        trace!(target: "net::hosts:insert()", "[END]");
+        trace!(target: "net::hosts:insert", "[END]");
     }
 
     /// Check whether a peer is available to be refined currently. Returns true
@@ -973,7 +973,7 @@ impl Hosts {
     ) -> Result<HostState> {
         let mut registry = self.registry.lock().unwrap();
 
-        trace!(target: "net::hosts::try_update_registry()", "Try register addr={addr}, state={}",
+        trace!(target: "net::hosts::try_update_registry", "Try register addr={addr}, state={}",
                &new_state);
 
         if registry.contains_key(&addr) {
@@ -993,12 +993,12 @@ impl Hosts {
                 registry.insert(addr.clone(), state.clone());
             }
 
-            trace!(target: "net::hosts::try_update_registry()", "Returning result {result:?}");
+            trace!(target: "net::hosts::try_update_registry", "Returning result {result:?}");
 
             result
         } else {
             // We don't know this peer. We can safely update the state.
-            debug!(target: "net::hosts::try_update_registry()", "Inserting addr={addr}, state={}",
+            debug!(target: "net::hosts::try_update_registry", "Inserting addr={addr}, state={}",
                    &new_state);
 
             registry.insert(addr.clone(), new_state.clone());
@@ -1010,7 +1010,7 @@ impl Hosts {
     // Loop through hosts selected by Outbound Session and see if any of them are
     // free to connect to.
     pub(in crate::net) async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
-        trace!(target: "net::hosts::check_addrs()", "[START]");
+        trace!(target: "net::hosts::check_addrs", "[START]");
 
         let seeds = self.settings.read().await.seeds.clone();
         let external_addrs = self.external_addrs().await;
@@ -1043,7 +1043,7 @@ impl Hosts {
                 continue
             }
 
-            debug!(target: "net::hosts::check_addrs()", "Found valid host {host}");
+            debug!(target: "net::hosts::check_addrs", "Found valid host {host}");
             return Some((host.clone(), last_seen))
         }
 
@@ -1054,7 +1054,7 @@ impl Hosts {
     pub(in crate::net) fn unregister(&self, addr: &Url) -> Result<()> {
         let age = UNIX_EPOCH.elapsed().unwrap().as_secs();
         self.try_register(addr.clone(), HostState::Free(age))?;
-        debug!(target: "net::hosts::unregister()", "Unregistered: {}", &addr);
+        debug!(target: "net::hosts::unregister", "Unregistered: {}", &addr);
         Ok(())
     }
 
@@ -1433,7 +1433,7 @@ impl Hosts {
 
     /// Downgrade host to Greylist, remove from Gold or White list.
     pub async fn greylist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
-        debug!(target: "net::hosts:greylist_host()", "Downgrading addr={addr}");
+        debug!(target: "net::hosts:greylist_host", "Downgrading addr={addr}");
         self.move_host(addr, last_seen, HostColor::Grey).await?;
 
         // Free up this addr for future operations.
@@ -1441,7 +1441,7 @@ impl Hosts {
     }
 
     pub async fn whitelist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
-        debug!(target: "net::hosts:whitelist_host()", "Upgrading addr={addr}");
+        debug!(target: "net::hosts:whitelist_host", "Upgrading addr={addr}");
         self.move_host(addr, last_seen, HostColor::White).await?;
 
         // Free up this addr for future operations.
@@ -1467,12 +1467,12 @@ impl Hosts {
         last_seen: u64,
         destination: HostColor,
     ) -> Result<()> {
-        debug!(target: "net::hosts::move_host()", "Trying to move addr={addr} destination={destination:?}");
+        debug!(target: "net::hosts::move_host", "Trying to move addr={addr} destination={destination:?}");
 
         // If we cannot register this address as move, this will simply return here.
         self.try_register(addr.clone(), HostState::Move)?;
 
-        debug!(target: "net::hosts::move_host()", "Moving addr={} destination={destination:?}",
+        debug!(target: "net::hosts::move_host", "Moving addr={} destination={destination:?}",
             addr.clone());
 
         match destination {

@@ -234,7 +234,7 @@ impl Slot {
 
                             // Seed process complete
                             if hosts.container.is_empty(HostColor::Grey) {
-                                warn!(target: "net::session::seedsync_session()",
+                                warn!(target: "net::session::seedsync_session",
                                 "[P2P] Greylist empty after seeding");
                             }
 

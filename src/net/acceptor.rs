@@ -135,7 +135,7 @@ impl Acceptor {
                 // These channels are the channels spawned below on listener.next().is_ok().
                 // After the notification, we reset the condvar and retry this loop to see
                 // if we can accept more connections, and if not - we'll be back here.
-                warn!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
+                warn!(target: "net::acceptor::run_accept_loop", "Reached incoming conn limit, waiting...");
                 cv.wait().await;
                 cv.reset();
                 continue
@@ -148,7 +148,7 @@ impl Acceptor {
                     if hosts.container.contains(HostColor::Black as usize, &url) ||
                         hosts.block_all_ports(&url)
                     {
-                        warn!(target: "net::acceptor::run_accept_loop()", "Peer {url} is blacklisted");
+                        warn!(target: "net::acceptor::run_accept_loop", "Peer {url} is blacklisted");
                         continue
                     }
 
@@ -183,28 +183,28 @@ impl Acceptor {
                     libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
                     libc::ECONNRESET => {
                         warn!(
-                            target: "net::acceptor::run_accept_loop()",
+                            target: "net::acceptor::run_accept_loop",
                             "[P2P] Connection reset by peer in accept_loop"
                         );
                         continue
                     }
                     libc::ETIMEDOUT => {
                         warn!(
-                            target: "net::acceptor::run_accept_loop()",
+                            target: "net::acceptor::run_accept_loop",
                             "[P2P] Connection timed out in accept_loop"
                         );
                         continue
                     }
                     libc::EPIPE => {
                         warn!(
-                            target: "net::acceptor::run_accept_loop()",
+                            target: "net::acceptor::run_accept_loop",
                             "[P2P] Broken pipe in accept_loop"
                         );
                         continue
                     }
                     x => {
                         warn!(
-                            target: "net::acceptor::run_accept_loop()",
+                            target: "net::acceptor::run_accept_loop",
                             "[P2P] Unhandled OS Error: {e} {x}"
                         );
                         continue
@@ -219,7 +219,7 @@ impl Acceptor {
                     if let Some(inner) = std::error::Error::source(&e) {
                         if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
                             warn!(
-                                target: "net::acceptor::run_accept_loop()",
+                                target: "net::acceptor::run_accept_loop",
                                 "[P2P] rustls listener error: {inner:?}"
                             );
                             continue
@@ -227,7 +227,7 @@ impl Acceptor {
                     }
 
                     warn!(
-                        target: "net::acceptor::run_accept_loop()",
+                        target: "net::acceptor::run_accept_loop",
                         "[P2P] Unhandled ErrorKind::Other error: {e:?}"
                     );
                     continue
@@ -236,7 +236,7 @@ impl Acceptor {
                 // Errors we didn't handle above:
                 Err(e) => {
                     warn!(
-                        target: "net::acceptor::run_accept_loop()",
+                        target: "net::acceptor::run_accept_loop",
                         "[P2P] Unhandled listener.next() error: {e}"
                     );
                     continue

@@ -244,7 +244,7 @@ impl DirectSession {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "net::direct_session::get_channel_with_retries()", "{e}")
+                        error!(target: "net::direct_session::get_channel_with_retries", "{e}")
                     }
                 }
             },
@@ -537,7 +537,7 @@ impl PeerDiscovery {
 
             if current_attempt >= 4 {
                 verbose!(
-                    target: "net::direct_session::peer_discovery()",
+                    target: "net::direct_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
 
@@ -579,7 +579,7 @@ impl PeerDiscovery {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
                 verbose!(
-                    target: "net::direct_session::peer_discovery()",
+                    target: "net::direct_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
                 dnetev!(self, DirectPeerDiscovery, {
@@ -604,7 +604,7 @@ impl PeerDiscovery {
                 match result {
                     Ok(addrs_len) => {
                         verbose!(
-                            target: "net::direct_session::peer_discovery()",
+                            target: "net::direct_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
                         // Found some addrs, reset `current_attempt`
@@ -614,7 +614,7 @@ impl PeerDiscovery {
                     }
                     Err(_) => {
                         warn!(
-                            target: "net::direct_session::peer_discovery()",
+                            target: "net::direct_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );
                         // Just do seed next time
@@ -629,7 +629,7 @@ impl PeerDiscovery {
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
                 verbose!(
-                    target: "net::direct_session::peer_discovery()",
+                    target: "net::direct_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 
                 dnetev!(self, DirectPeerDiscovery, {

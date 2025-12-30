@@ -263,7 +263,7 @@ pub async fn accept<'a, T: 'a>(
     if let Some(conn_limit) = conn_limit {
         if rh.clone().active_connections().await >= conn_limit {
             debug!(
-                target: "rpc::server::accept()",
+                target: "rpc::server::accept",
                 "Connection limit reached, refusing new conn"
             );
             return Err(Error::RpcConnectionsExhausted)
@@ -288,7 +288,7 @@ pub async fn accept<'a, T: 'a>(
             Ok(v) => v,
             Err(e) => {
                 warn!(
-                    target: "rpc::server::accept()",
+                    target: "rpc::server::accept",
                     "[RPC SERVER] Failed parsing string from read buffer: {e}"
                 );
                 return Err(e.into())
@@ -300,7 +300,7 @@ pub async fn accept<'a, T: 'a>(
             Ok(v) => v,
             Err(e) => {
                 warn!(
-                    target: "rpc::server::accept()",
+                    target: "rpc::server::accept",
                     "[RPC SERVER] Failed parsing JSON string: {e}"
                 );
                 return Err(e.into())
@@ -312,7 +312,7 @@ pub async fn accept<'a, T: 'a>(
             Ok(v) => v,
             Err(e) => {
                 warn!(
-                    target: "rpc::server::accept()",
+                    target: "rpc::server::accept",
                     "[RPC SERVER] Failed casting JSON to a JsonRequest: {e}"
                 );
                 return Err(e.into())
@@ -403,28 +403,28 @@ async fn run_accept_loop<'a, T: 'a>(
                 libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
                 libc::ECONNRESET => {
                     warn!(
-                        target: "rpc::server::run_accept_loop()",
+                        target: "rpc::server::run_accept_loop",
                         "[RPC] Connection reset by peer in accept_loop"
                     );
                     continue
                 }
                 libc::ETIMEDOUT => {
                     warn!(
-                        target: "rpc::server::run_accept_loop()",
+                        target: "rpc::server::run_accept_loop",
                         "[RPC] Connection timed out in accept_loop"
                     );
                     continue
                 }
                 libc::EPIPE => {
                     warn!(
-                        target: "rpc::server::run_accept_loop()",
+                        target: "rpc::server::run_accept_loop",
                         "[RPC] Broken pipe in accept_loop"
                     );
                     continue
                 }
                 x => {
                     warn!(
-                        target: "rpc::server::run_accept_loop()",
+                        target: "rpc::server::run_accept_loop",
                         "[RPC] Unhandled OS Error: {e} {x}"
                     );
                     continue
@@ -439,7 +439,7 @@ async fn run_accept_loop<'a, T: 'a>(
                 if let Some(inner) = std::error::Error::source(&e) {
                     if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
                         warn!(
-                            target: "rpc::server::run_accept_loop()",
+                            target: "rpc::server::run_accept_loop",
                             "[RPC] rustls listener error: {inner:?}"
                         );
                         continue
@@ -447,7 +447,7 @@ async fn run_accept_loop<'a, T: 'a>(
                 }
 
                 warn!(
-                    target: "rpc::server::run_accept_loop()",
+                    target: "rpc::server::run_accept_loop",
                     "[RPC] Unhandled ErrorKind::Other error: {e:?}"
                 );
                 continue
@@ -456,7 +456,7 @@ async fn run_accept_loop<'a, T: 'a>(
             // Errors we didn't handle above:
             Err(e) => {
                 warn!(
-                    target: "rpc::server::run_accept_loop()",
+                    target: "rpc::server::run_accept_loop",
                     "[RPC] Unhandled listener.next() error: {e}"
                 );
                 continue

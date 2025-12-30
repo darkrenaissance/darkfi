@@ -102,7 +102,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
-            target: "runtime::util::get_object_bytes()",
+            target: "runtime::util::get_object_bytes",
             "[WASM] [{cid}] get_object_bytes(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
@@ -163,7 +163,7 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
-            target: "runtime::util::get_object_size()",
+            target: "runtime::util::get_object_size",
             "[WASM] [{cid}] get_object_size(): Called in unauthorized section: {e}"
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED

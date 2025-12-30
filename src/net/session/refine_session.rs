@@ -102,10 +102,10 @@ impl RefineSession {
         if let Some(ref hostlist) = self.p2p().settings().read().await.hostlist {
             match self.p2p().hosts().container.save_all(hostlist) {
                 Ok(()) => {
-                    debug!(target: "net::refine_session::stop()", "Save hosts successful!");
+                    debug!(target: "net::refine_session::stop", "Save hosts successful!");
                 }
                 Err(e) => {
-                    warn!(target: "net::refine_session::stop()", "Error saving hosts {e}");
+                    warn!(target: "net::refine_session::stop", "Error saving hosts {e}");
                 }
             }
         }
@@ -118,19 +118,19 @@ impl RefineSession {
         let self_ = Arc::downgrade(&self);
         let connector = Connector::new(self.p2p().settings(), self_);
 
-        debug!(target: "net::refinery::handshake_node()", "Attempting to connect to {addr}");
+        debug!(target: "net::refinery::handshake_node", "Attempting to connect to {addr}");
         match connector.connect(&addr).await {
             Ok((url, channel)) => {
-                debug!(target: "net::refinery::handshake_node()", "Successfully created a channel with {url}");
+                debug!(target: "net::refinery::handshake_node", "Successfully created a channel with {url}");
                 // First initialize the version protocol and its Version, Verack subscriptions.
                 let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
-                debug!(target: "net::refinery::handshake_node()", "Performing handshake protocols with {url}");
+                debug!(target: "net::refinery::handshake_node", "Performing handshake protocols with {url}");
                 // Then run the version exchange, store the channel and subscribe to a stop signal.
                 let handshake =
                     self.perform_handshake_protocols(proto_ver, channel.clone(), p2p.executor());
 
-                debug!(target: "net::refinery::handshake_node()", "Starting channel {url}");
+                debug!(target: "net::refinery::handshake_node", "Starting channel {url}");
                 channel.clone().start(p2p.executor());
 
                 // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
@@ -143,27 +143,27 @@ impl RefineSession {
 
                 let result = match select(handshake, timeout).await {
                     Either::Left((Ok(_), _)) => {
-                        debug!(target: "net::refinery::handshake_node()", "Handshake success!");
+                        debug!(target: "net::refinery::handshake_node", "Handshake success!");
                         true
                     }
                     Either::Left((Err(e), _)) => {
-                        debug!(target: "net::refinery::handshake_node()", "Handshake error={e}");
+                        debug!(target: "net::refinery::handshake_node", "Handshake error={e}");
                         false
                     }
                     Either::Right((_, _)) => {
-                        debug!(target: "net::refinery::handshake_node()", "Handshake timed out");
+                        debug!(target: "net::refinery::handshake_node", "Handshake timed out");
                         false
                     }
                 };
 
-                debug!(target: "net::refinery::handshake_node()", "Stopping channel {url}");
+                debug!(target: "net::refinery::handshake_node", "Stopping channel {url}");
                 channel.stop().await;
 
                 result
             }
 
             Err(e) => {
-                debug!(target: "net::refinery::handshake_node()", "Failed to connect ({e})");
+                debug!(target: "net::refinery::handshake_node", "Failed to connect ({e})");
                 false
             }
         }

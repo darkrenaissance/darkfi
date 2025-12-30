@@ -159,12 +159,12 @@ impl P2p {
 
     /// Reseed the P2P network.
     pub async fn seed(self: Arc<Self>) {
-        debug!(target: "net::p2p::seed()", "P2P::seed() [BEGIN]");
+        debug!(target: "net::p2p::seed", "P2P::seed() [BEGIN]");
 
         // Activate the seed session.
         self.session_seedsync().notify().await;
 
-        debug!(target: "net::p2p::seed()", "P2P::seed() [END]");
+        debug!(target: "net::p2p::seed", "P2P::seed() [END]");
     }
 
     /// Stop the running P2P subsystem
@@ -199,7 +199,7 @@ impl P2p {
     /// Broadcast a message concurrently to all given peers.
     pub async fn broadcast_to<M: Message>(&self, message: &M, channel_list: &[ChannelPtr]) {
         if channel_list.is_empty() {
-            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
+            warn!(target: "net::p2p::broadcast", "[P2P] No connected channels found for broadcast");
             return
         }
 
@@ -313,7 +313,7 @@ async fn broadcast_serialized_to<M: Message>(
                 .send_serialized(&message, &M::METERING_SCORE, &M::METERING_CONFIGURATION)
                 .map_err(|e| {
                     error!(
-                        target: "net::p2p::broadcast()",
+                        target: "net::p2p::broadcast",
                         "[P2P] Broadcasting message to {} failed: {e}",
                         channel.display_address()
                     );

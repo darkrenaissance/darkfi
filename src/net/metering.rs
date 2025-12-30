@@ -97,7 +97,7 @@ impl MeteringQueue {
             // This is an edge case where system reports a future timestamp
             // therefore elapsed computation fails.
             let Ok(elapsed) = ts.elapsed() else {
-                debug!(target: "net::metering::MeteringQueue::clean()", "Timestamp [{ts}] is in future. Removing...");
+                debug!(target: "net::metering::MeteringQueue::clean", "Timestamp [{ts}] is in future. Removing...");
                 let _ = self.queue.pop_front();
                 continue
             };

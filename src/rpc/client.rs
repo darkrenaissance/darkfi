@@ -107,7 +107,7 @@ impl RpcClient {
         req_recv: channel::Receiver<(JsonRequest, bool)>,
         req_skip_recv: channel::Receiver<()>,
     ) -> Result<()> {
-        debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
+        debug!(target: "rpc::client::reqrep_loop", "Starting reqrep loop");
 
         let (reader, mut writer) = smol::io::split(stream);
         let mut reader = BufReader::new(reader);
@@ -358,7 +358,7 @@ impl RpcChadClient {
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<JsonRequest>,
     ) -> Result<()> {
-        debug!(target: "rpc::chad_client::reqrep_loop()", "Starting reqrep loop");
+        debug!(target: "rpc::chad_client::reqrep_loop", "Starting reqrep loop");
 
         let (reader, mut writer) = smol::io::split(stream);
         let mut reader = BufReader::new(reader);

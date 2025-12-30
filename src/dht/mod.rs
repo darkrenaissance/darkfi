@@ -312,7 +312,7 @@ impl<H: DhtHandler> Dht<H> {
 
         self.handler().await.add_value(key, value).await;
         let nodes = self.lookup_nodes(key).await;
-        info!(target: "dht::announce()", "[DHT] Announcing {} to {} nodes", H::key_to_string(key), nodes.len());
+        info!(target: "dht::announce", "[DHT] Announcing {} to {} nodes", H::key_to_string(key), nodes.len());
 
         for node in nodes {
             if let Ok((channel, _)) = self.get_channel(&node).await {
@@ -334,7 +334,7 @@ impl<H: DhtHandler> Dht<H> {
 
         self.set_bootstrapped(true).await;
 
-        info!(target: "dht::bootstrap()", "[DHT] Bootstrapping");
+        info!(target: "dht::bootstrap", "[DHT] Bootstrapping");
         self.event_publisher.notify(DhtEvent::BootstrapStarted).await;
 
         let _nodes = self.lookup_nodes(&self_node.id()).await;
@@ -349,7 +349,7 @@ impl<H: DhtHandler> Dht<H> {
 
     // TODO: Optimize this
     async fn on_new_node(&self, node: &H::Node, channel: ChannelPtr) {
-        info!(target: "dht::on_new_node()", "[DHT] Found new node {}", H::key_to_string(&node.id()));
+        info!(target: "dht::on_new_node", "[DHT] Found new node {}", H::key_to_string(&node.id()));
 
         // If this is the first node we know about then bootstrap
         if !self.is_bootstrapped().await {
@@ -377,7 +377,7 @@ impl<H: DhtHandler> Dht<H> {
     pub async fn update_node(&self, node: &H::Node, channel: ChannelPtr) {
         self.p2p.session_direct().inc_channel_usage(&channel, 1).await;
         if let Err(e) = self.add_node_tx.send((node.clone(), channel.clone())).await {
-            warn!(target: "dht::update_node()", "[DHT] Cannot add node {}: {e}", H::key_to_string(&node.id()))
+            warn!(target: "dht::update_node", "[DHT] Cannot add node {}: {e}", H::key_to_string(&node.id()))
         }
     }
 
@@ -479,11 +479,11 @@ impl<H: DhtHandler> Dht<H> {
                 let handler = self.handler().await;
                 let res = match &lookup_type {
                     DhtLookupType::Nodes => {
-                        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Querying node {} for nodes lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
+                        info!(target: "dht::lookup", "[DHT] [LOOKUP] Querying node {} for nodes lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
                         handler.find_nodes(channel.clone(), key).await.map(DhtLookupReply::Nodes)
                     }
                     DhtLookupType::Value => {
-                        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Querying node {} for value lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
+                        info!(target: "dht::lookup", "[DHT] [LOOKUP] Querying node {} for value lookup of key {}", H::key_to_string(&node.id()), H::key_to_string(key));
                         handler.find_value(channel.clone(), key).await
                     }
                 };
@@ -529,7 +529,7 @@ impl<H: DhtHandler> Dht<H> {
         // Process lookup responses
         while let Some((queried_node, res)) = futures.next().await {
             if let Err(e) = res {
-                warn!(target: "dht::lookup()", "[DHT] [LOOKUP] Error in lookup: {e}");
+                warn!(target: "dht::lookup", "[DHT] [LOOKUP] Error in lookup: {e}");
 
                 // Spawn next `alpha` futures if there are no more futures but
                 // we still have nodes to visit
@@ -548,7 +548,7 @@ impl<H: DhtHandler> Dht<H> {
 
             // Send the value we found to the publisher
             if let Some(value) = value {
-                info!(target: "dht::lookup()", "[DHT] [LOOKUP] Found value for {} from {}", H::key_to_string(&key), H::key_to_string(&queried_node.id()));
+                info!(target: "dht::lookup", "[DHT] [LOOKUP] Found value for {} from {}", H::key_to_string(&key), H::key_to_string(&queried_node.id()));
                 values.push(value.clone());
                 self.event_publisher.notify(DhtEvent::ValueFound { key, value }).await;
             }
@@ -556,7 +556,7 @@ impl<H: DhtHandler> Dht<H> {
             // Update nodes_to_visit
             if let Some(mut nodes) = nodes {
                 if !nodes.is_empty() {
-                    info!(target: "dht::lookup()", "[DHT] [LOOKUP] Found {} nodes from {}", nodes.len(), H::key_to_string(&queried_node.id()));
+                    info!(target: "dht::lookup", "[DHT] [LOOKUP] Found {} nodes from {}", nodes.len(), H::key_to_string(&queried_node.id()));
 
                     self.event_publisher
                         .notify(DhtEvent::NodesFound { key, nodes: nodes.clone() })
@@ -597,7 +597,7 @@ impl<H: DhtHandler> Dht<H> {
             spawn_futures(&mut nodes_to_visit, &mut futures).await;
         }
 
-        info!(target: "dht::lookup()", "[DHT] [LOOKUP] Lookup for {} completed", H::key_to_string(&key));
+        info!(target: "dht::lookup", "[DHT] [LOOKUP] Lookup for {} completed", H::key_to_string(&key));
 
         let nodes: Vec<_> = result.into_iter().take(k).collect();
         (nodes, values)
@@ -605,7 +605,7 @@ impl<H: DhtHandler> Dht<H> {
 
     /// Find `k` nodes closest to a key
     pub async fn lookup_nodes(&self, key: &blake3::Hash) -> Vec<H::Node> {
-        info!(target: "dht::lookup_nodes()", "[DHT] [LOOKUP] Starting node lookup for key {}", H::key_to_string(key));
+        info!(target: "dht::lookup_nodes", "[DHT] [LOOKUP] Starting node lookup for key {}", H::key_to_string(key));
 
         self.event_publisher.notify(DhtEvent::NodesLookupStarted { key: *key }).await;
 
@@ -620,7 +620,7 @@ impl<H: DhtHandler> Dht<H> {
 
     /// Find value for `key`
     pub async fn lookup_value(&self, key: &blake3::Hash) -> (Vec<H::Node>, Vec<H::Value>) {
-        info!(target: "dht::lookup_value()", "[DHT] [LOOKUP] Starting value lookup for key {}", H::key_to_string(key));
+        info!(target: "dht::lookup_value", "[DHT] [LOOKUP] Starting value lookup for key {}", H::key_to_string(key));
 
         self.event_publisher.notify(DhtEvent::ValueLookupStarted { key: *key }).await;
 

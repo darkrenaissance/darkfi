@@ -194,14 +194,14 @@ impl InboundSession {
                     stop_sub.receive().await;
 
                     debug!(
-                        target: "net::inbound_session::setup_channel()",
+                        target: "net::inbound_session::setup_channel",
                         "Received stop_sub, channel removed from P2P",
                     );
                 }
             }
             Err(e) => {
                 warn!(
-                    target: "net::inbound_session::setup_channel()",
+                    target: "net::inbound_session::setup_channel",
                     "Channel setup failed! Err={e}"
                 );
             }

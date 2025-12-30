@@ -79,7 +79,7 @@ impl ProtocolPing {
     /// waits for the pong reply and ensures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_ping::run_ping_pong()",
+            target: "net::protocol_ping::run_ping_pong",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -117,7 +117,7 @@ impl ProtocolPing {
                     // Pong timeout. We didn't receive any message back
                     // so close the connection.
                     warn!(
-                        target: "net::protocol_ping::run_ping_pong()",
+                        target: "net::protocol_ping::run_ping_pong",
                         "[P2P] Ping-Pong protocol timed out for {}", self.channel.display_address(),
                     );
                     self.channel.stop().await;
@@ -127,7 +127,7 @@ impl ProtocolPing {
 
             if pong_msg.nonce != nonce {
                 error!(
-                    target: "net::protocol_ping::run_ping_pong()",
+                    target: "net::protocol_ping::run_ping_pong",
                     "[P2P] Wrong nonce in pingpong, disconnecting {}",
                     self.channel.display_address(),
                 );
@@ -136,7 +136,7 @@ impl ProtocolPing {
             }
 
             debug!(
-                target: "net::protocol_ping::run_ping_pong()",
+                target: "net::protocol_ping::run_ping_pong",
                 "Received Pong from {}: {:?}",
                 self.channel.display_address(),
                 timer.elapsed(),
@@ -151,7 +151,7 @@ impl ProtocolPing {
     /// Copies ping's nonce into the pong reply.
     async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_ping::reply_to_ping()",
+            target: "net::protocol_ping::reply_to_ping",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -159,7 +159,7 @@ impl ProtocolPing {
             // Wait for ping, reply with pong that has a matching nonce.
             let ping = self.ping_sub.receive().await?;
             debug!(
-                target: "net::protocol_ping::reply_to_ping()",
+                target: "net::protocol_ping::reply_to_ping",
                 "Received Ping from {}", self.channel.display_address(),
             );
 
@@ -168,7 +168,7 @@ impl ProtocolPing {
             self.channel.send(&pong).await?;
 
             debug!(
-                target: "net::protocol_ping::reply_to_ping()",
+                target: "net::protocol_ping::reply_to_ping",
                 "Sent Pong reply to {}", self.channel.display_address(),
             );
         }
@@ -185,11 +185,11 @@ impl ProtocolBase for ProtocolPing {
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_ping::start()", "START => address={}", self.channel.display_address());
+        debug!(target: "net::protocol_ping::start", "START => address={}", self.channel.display_address());
         self.jobsman.clone().start(ex.clone());
         self.jobsman.clone().spawn(self.clone().run_ping_pong(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().reply_to_ping(), ex).await;
-        debug!(target: "net::protocol_ping::start()", "END => address={}", self.channel.display_address());
+        debug!(target: "net::protocol_ping::start", "END => address={}", self.channel.display_address());
         Ok(())
     }
 

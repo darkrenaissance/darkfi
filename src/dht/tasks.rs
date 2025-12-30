@@ -96,7 +96,7 @@ pub async fn channel_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
             let ping_res = dht.ping(channel.clone()).await;
 
             if let Err(e) = ping_res {
-                warn!(target: "dht::channel_task()", "Error while pinging manual connection (requesting node id) {}: {e}", channel.display_address());
+                warn!(target: "dht::channel_task", "Error while pinging manual connection (requesting node id) {}: {e}", channel.display_address());
                 continue;
             }
         }
@@ -157,7 +157,7 @@ pub async fn dht_refinery_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             if let Err(e) = hosts.whitelist_host(url, last_seen).await {
-                error!(target: "dht::tasks::whitelist_refinery_task()", "Could not send {url} to the whitelist: {e}");
+                error!(target: "dht::tasks::whitelist_refinery_task", "Could not send {url} to the whitelist: {e}");
             }
             break
         }
@@ -282,7 +282,7 @@ pub async fn disconnect_inbounds_task<H: DhtHandler>(handler: Arc<H>) -> Result<
             }
 
             // Now we can stop it and remove it from the channel cache
-            info!(target: "dht::disconnect_inbounds_task()", "Closing expired inbound channel [{}]", channel.display_address());
+            info!(target: "dht::disconnect_inbounds_task", "Closing expired inbound channel [{}]", channel.display_address());
             channel.stop().await;
             channel_cache.remove(&channel.info.id);
         }

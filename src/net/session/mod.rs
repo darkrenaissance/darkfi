@@ -69,14 +69,14 @@ pub async fn remove_sub_on_stop(
     type_id: SessionBitFlag,
     stop_sub: Subscription<Error>,
 ) {
-    debug!(target: "net::session::remove_sub_on_stop()", "[START]");
+    debug!(target: "net::session::remove_sub_on_stop", "[START]");
     let hosts = p2p.hosts();
     let addr = channel.address();
 
     stop_sub.receive().await;
 
     debug!(
-        target: "net::session::remove_sub_on_stop()",
+        target: "net::session::remove_sub_on_stop",
         "Received stop event. Removing channel {}",
         channel.display_address()
     );
@@ -84,7 +84,7 @@ pub async fn remove_sub_on_stop(
     // Downgrade to greylist if this is a outbound session.
     if type_id & (SESSION_OUTBOUND | SESSION_DIRECT) != 0 {
         debug!(
-            target: "net::session::remove_sub_on_stop()",
+            target: "net::session::remove_sub_on_stop",
             "Downgrading {}",
             channel.display_address()
         );
@@ -95,12 +95,12 @@ pub async fn remove_sub_on_stop(
         match hosts.fetch_last_seen(addr) {
             Some(last_seen) => {
                 if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey).await {
-                    error!(target: "net::session::remove_sub_on_stop()",
+                    error!(target: "net::session::remove_sub_on_stop",
             "Failed to move host {} to Greylist! Err={e}", channel.display_address());
                 }
             }
             None => {
-                error!(target: "net::session::remove_sub_on_stop()",
+                error!(target: "net::session::remove_sub_on_stop",
                "Failed to fetch last seen for {}", channel.display_address());
             }
         }
@@ -112,7 +112,7 @@ pub async fn remove_sub_on_stop(
     // happens in the refinery directly.
     if type_id & SESSION_REFINE == 0 {
         if let Err(e) = hosts.unregister(channel.address()) {
-            error!(target: "net::session::remove_sub_on_stop()", "Error while unregistering addr={}, err={e}", channel.display_address());
+            error!(target: "net::session::remove_sub_on_stop", "Error while unregistering addr={}, err={e}", channel.display_address());
         }
     }
 
@@ -131,7 +131,7 @@ pub async fn remove_sub_on_stop(
     if !p2p.is_connected() {
         hosts.disconnect_publisher.notify(Error::NetworkNotConnected).await;
     }
-    debug!(target: "net::session::remove_sub_on_stop()", "[END]");
+    debug!(target: "net::session::remove_sub_on_stop", "[END]");
 }
 
 /// Session trait. Defines methods that are used across sessions.
@@ -152,7 +152,7 @@ pub trait Session: Sync {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        trace!(target: "net::session::register_channel()", "[START]");
+        trace!(target: "net::session::register_channel", "[START]");
 
         // Protocols should all be initialized but not started.
         // We do this so that the protocols can begin receiving and buffering
@@ -165,7 +165,7 @@ pub trait Session: Sync {
         // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
         debug!(
-            target: "net::session::register_channel()",
+            target: "net::session::register_channel",
             "Performing handshake protocols {}", channel.clone().display_address(),
         );
 
@@ -178,11 +178,11 @@ pub trait Session: Sync {
         // Wait for handshake to finish.
         match handshake_task.await {
             Ok(()) => {
-                debug!(target: "net::session::register_channel()",
+                debug!(target: "net::session::register_channel",
                 "Handshake successful {}", channel.clone().display_address());
             }
             Err(e) => {
-                debug!(target: "net::session::register_channel()",
+                debug!(target: "net::session::register_channel",
                 "Handshake error {e} {}", channel.clone().display_address());
 
                 return Err(e)
@@ -190,8 +190,8 @@ pub trait Session: Sync {
         }
 
         // Now the channel is ready
-        debug!(target: "net::session::register_channel()", "Session handshake complete");
-        debug!(target: "net::session::register_channel()", "Activating remaining protocols");
+        debug!(target: "net::session::register_channel", "Session handshake complete");
+        debug!(target: "net::session::register_channel", "Activating remaining protocols");
 
         // Now start all the protocols. They are responsible for managing their own
         // lifetimes and correctly selfdestructing when the channel ends.
@@ -199,7 +199,7 @@ pub trait Session: Sync {
             protocol.start(executor.clone()).await?;
         }
 
-        trace!(target: "net::session::register_channel()", "[END]");
+        trace!(target: "net::session::register_channel", "[END]");
 
         Ok(())
     }
@@ -222,7 +222,7 @@ pub trait Session: Sync {
                 // Upgrade to goldlist if this is a outbound session.
                 if self.type_id() & (SESSION_OUTBOUND | SESSION_DIRECT) != 0 {
                     debug!(
-                        target: "net::session::perform_handshake_protocols()",
+                        target: "net::session::perform_handshake_protocols",
                         "Upgrading {}", channel.display_address(),
                     );
 

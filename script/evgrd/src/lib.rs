@@ -99,7 +99,7 @@ impl LocalEventGraph {
         // If not, we can prune the DAG and insert this new genesis event.
         if !dag.contains_key(current_genesis.id().as_bytes())? {
             info!(
-                target: "event_graph::new()",
+                target: "event_graph::new",
                 "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
             );
             self_.dag_prune(current_genesis).await?;
@@ -116,7 +116,7 @@ impl LocalEventGraph {
             prune_task.clone().start(
                 self_.clone().dag_prune_task(days_rotation),
                 |_| async move {
-                    info!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Prune task stopped, flushing sled")
+                    info!(target: "event_graph::_handle_stop", "[EVENTGRAPH] Prune task stopped, flushing sled")
                 },
                 Error::DetachedTaskStopped,
                 ex.clone(),
@@ -127,7 +127,7 @@ impl LocalEventGraph {
     }
 
     async fn dag_prune(&self, genesis_event: Event) -> Result<()> {
-        debug!(target: "event_graph::dag_prune()", "Pruning DAG...");
+        debug!(target: "event_graph::dag_prune", "Pruning DAG...");
 
         // Acquire exclusive locks to unreferenced_tips, broadcasted_ids and
         // current_genesis while this operation is happening. We do this to
@@ -145,7 +145,7 @@ impl LocalEventGraph {
         }
         batch.insert(genesis_event.id().as_bytes(), serialize_async(&genesis_event).await);
 
-        debug!(target: "event_graph::dag_prune()", "Applying batch...");
+        debug!(target: "event_graph::dag_prune", "Applying batch...");
         if let Err(e) = self.dag.apply_batch(batch) {
             panic!("Failed pruning DAG, sled apply_batch error: {}", e);
         }
@@ -159,7 +159,7 @@ impl LocalEventGraph {
         drop(broadcasted_ids);
         drop(current_genesis);
 
-        debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+        debug!(target: "event_graph::dag_prune", "DAG pruned successfully");
         Ok(())
     }
 
@@ -169,7 +169,7 @@ impl LocalEventGraph {
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        debug!(target: "event_graph::dag_prune_task()", "Spawned background DAG pruning task");
+        debug!(target: "event_graph::dag_prune_task", "Spawned background DAG pruning task");
 
         loop {
             // Find the next rotation timestamp:
@@ -186,9 +186,9 @@ impl LocalEventGraph {
             // Sleep until it's time to rotate.
             let s = millis_until_next_rotation(next_rotation);
 
-            debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
+            debug!(target: "event_graph::dag_prune_task", "Sleeping {}s until next DAG prune", s);
             msleep(s).await;
-            debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
+            debug!(target: "event_graph::dag_prune_task", "Rotation period reached");
 
             // Trigger DAG prune
             self.dag_prune(current_genesis).await?;
@@ -254,7 +254,7 @@ impl LocalEventGraph {
         for event in events {
             let event_id = event.id();
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Inserting event {} into the DAG", event_id,
             );
 
@@ -262,7 +262,7 @@ impl LocalEventGraph {
                 .validate(&self.dag, genesis_timestamp, self.days_rotation, Some(&overlay))
                 .await?
             {
-                error!(target: "event_graph::dag_insert()", "Event {} is invalid!", event_id);
+                error!(target: "event_graph::dag_insert", "Event {} is invalid!", event_id);
                 return Err(Error::EventIsInvalid)
             }
 
@@ -291,13 +291,13 @@ impl LocalEventGraph {
 
             // Update the unreferenced DAG tips set
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Event {} parents {:#?}", event_id, event.parents,
             );
             for parent_id in event.parents.iter() {
                 if parent_id != &NULL_ID {
                     debug!(
-                        target: "event_graph::dag_insert()",
+                        target: "event_graph::dag_insert",
                         "Removing {} from unreferenced_tips", parent_id,
                     );
 
@@ -317,7 +317,7 @@ impl LocalEventGraph {
             }
             unreferenced_tips.retain(|_, tips| !tips.is_empty());
             debug!(
-                target: "event_graph::dag_insert()",
+                target: "event_graph::dag_insert",
                 "Adding {} to unreferenced tips", event_id,
             );
 

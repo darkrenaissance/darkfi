@@ -68,7 +68,7 @@ impl ProtocolVersion {
     /// info and wait for version ack. Wait for version info and send
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.display_address());
+        debug!(target: "net::protocol_version::run", "START => address={}", self.channel.display_address());
         let channel_handshake_timeout =
             self.settings.read().await.channel_handshake_timeout(self.channel.address().scheme());
 
@@ -83,14 +83,14 @@ impl ProtocolVersion {
         // time out.
         match select(version, timeout).await {
             Either::Left((Ok(_), _)) => {
-                debug!(target: "net::protocol_version::run()", "END => address={}",
+                debug!(target: "net::protocol_version::run", "END => address={}",
                 self.channel.display_address());
 
                 Ok(())
             }
             Either::Left((Err(e), _)) => {
                 error!(
-                    target: "net::protocol_version::run()",
+                    target: "net::protocol_version::run",
                     "[P2P] Version Exchange failed [{}]: {e}",
                     self.channel.display_address()
                 );
@@ -101,7 +101,7 @@ impl ProtocolVersion {
 
             Either::Right((_, _)) => {
                 error!(
-                    target: "net::protocol_version::run()",
+                    target: "net::protocol_version::run",
                     "[P2P] Version Exchange timed out [{}]",
                     self.channel.display_address(),
                 );
@@ -115,7 +115,7 @@ impl ProtocolVersion {
     /// Send and receive version information
     async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(
-            target: "net::protocol_version::exchange_versions()",
+            target: "net::protocol_version::exchange_versions",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -125,7 +125,7 @@ impl ProtocolVersion {
         let rets = join_all(vec![send, recv]).await;
         if let Err(e) = &rets[0] {
             error!(
-                target: "net::protocol_version::exchange_versions()",
+                target: "net::protocol_version::exchange_versions",
                 "send_version() failed: {e}"
             );
             return Err(e.clone())
@@ -133,14 +133,14 @@ impl ProtocolVersion {
 
         if let Err(e) = &rets[1] {
             error!(
-                target: "net::protocol_version::exchange_versions()",
+                target: "net::protocol_version::exchange_versions",
                 "recv_version() failed: {e}"
             );
             return Err(e.clone())
         }
 
         debug!(
-            target: "net::protocol_version::exchange_versions()",
+            target: "net::protocol_version::exchange_versions",
             "END => address={}", self.channel.display_address(),
         );
         Ok(())
@@ -150,7 +150,7 @@ impl ProtocolVersion {
     /// Ensures that the app version is the same.
     async fn send_version(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_version::send_version()",
+            target: "net::protocol_version::send_version",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -182,7 +182,7 @@ impl ProtocolVersion {
 
         // Validate peer received version against our version.
         debug!(
-            target: "net::protocol_version::send_version()",
+            target: "net::protocol_version::send_version",
             "App version: {app_version}, Recv version: {}",
             verack_msg.app_version,
         );
@@ -193,7 +193,7 @@ impl ProtocolVersion {
             app_name != verack_msg.app_name
         {
             error!(
-                target: "net::protocol_version::send_version()",
+                target: "net::protocol_version::send_version",
                 "[P2P] Version mismatch from {}. Disconnecting...",
                 self.channel.display_address(),
             );
@@ -211,7 +211,7 @@ impl ProtocolVersion {
 
         // Versions are compatible
         debug!(
-            target: "net::protocol_version::send_version()",
+            target: "net::protocol_version::send_version",
             "END => address={}", self.channel.display_address(),
         );
         Ok(())
@@ -221,7 +221,7 @@ impl ProtocolVersion {
     /// with app version attached.
     async fn recv_version(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_version::recv_version()",
+            target: "net::protocol_version::recv_version",
             "START => address={}", self.channel.display_address(),
         );
 
@@ -243,7 +243,7 @@ impl ProtocolVersion {
         self.channel.send(&verack).await?;
 
         debug!(
-            target: "net::protocol_version::recv_version()",
+            target: "net::protocol_version::recv_version",
             "END => address={}", self.channel.display_address(),
         );
         Ok(())

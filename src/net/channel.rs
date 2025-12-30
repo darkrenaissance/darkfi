@@ -160,7 +160,7 @@ impl Channel {
     /// Starts the channel. Runs a receive loop to start receiving messages
     /// or handles a network failure.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "net::channel::start()", "START {self:?}");
+        debug!(target: "net::channel::start", "START {self:?}");
 
         let self_ = self.clone();
         self.receive_task.clone().start(
@@ -170,21 +170,21 @@ impl Channel {
             executor,
         );
 
-        debug!(target: "net::channel::start()", "END {self:?}");
+        debug!(target: "net::channel::start", "END {self:?}");
     }
 
     /// Stops the channel.
     /// Notifies all publishers that the channel has been closed in `handle_stop()`.
     pub async fn stop(&self) {
-        debug!(target: "net::channel::stop()", "START {self:?}");
+        debug!(target: "net::channel::stop", "START {self:?}");
         self.receive_task.stop().await;
-        debug!(target: "net::channel::stop()", "END {self:?}");
+        debug!(target: "net::channel::stop", "END {self:?}");
     }
 
     /// Creates a subscription to a stopped signal.
     /// If the channel is stopped then this will return a ChannelStopped error.
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
-        debug!(target: "net::channel::subscribe_stop()", "START {self:?}");
+        debug!(target: "net::channel::subscribe_stop", "START {self:?}");
 
         if self.is_stopped() {
             return Err(Error::ChannelStopped)
@@ -192,7 +192,7 @@ impl Channel {
 
         let sub = self.stop_publisher.clone().subscribe().await;
 
-        debug!(target: "net::channel::subscribe_stop()", "END {self:?}");
+        debug!(target: "net::channel::subscribe_stop", "END {self:?}");
 
         Ok(sub)
     }
@@ -228,7 +228,7 @@ impl Channel {
         metering_config: &MeteringConfiguration,
     ) -> Result<()> {
         debug!(
-             target: "net::channel::send()", "[START] command={} {self:?}",
+             target: "net::channel::send", "[START] command={} {self:?}",
              message.command,
         );
 
@@ -251,7 +251,7 @@ impl Channel {
         if let Some(sleep_time) = sleep_time {
             let sleep_time = 2 * sleep_time;
             debug!(
-                target: "net::channel::send()",
+                target: "net::channel::send",
                 "[P2P] Channel rate limit is active, sleeping before sending for: {sleep_time} (ms)"
             );
             msleep(sleep_time).await;
@@ -266,7 +266,7 @@ impl Channel {
         if let Err(e) = self.send_message(message).await {
             if self.session.upgrade().unwrap().type_id() & (SESSION_ALL & !SESSION_REFINE) != 0 {
                 error!(
-                    target: "net::channel::send()", "[P2P] Channel send error for [{self:?}]: {e}"
+                    target: "net::channel::send", "[P2P] Channel send error for [{self:?}]: {e}"
                 );
             }
             self.stop().await;
@@ -274,7 +274,7 @@ impl Channel {
         }
 
         debug!(
-            target: "net::channel::send()", "[END] command={} {self:?}",
+            target: "net::channel::send", "[END] command={} {self:?}",
             message.command
         );
 
@@ -295,23 +295,23 @@ impl Channel {
             time: NanoTimestamp::current_time(),
         });
 
-        trace!(target: "net::channel::send_message()", "Sending magic...");
+        trace!(target: "net::channel::send_message", "Sending magic...");
         let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
         written += magic_bytes.encode_async(stream).await?;
-        trace!(target: "net::channel::send_message()", "Sent magic");
+        trace!(target: "net::channel::send_message", "Sent magic");
 
-        trace!(target: "net::channel::send_message()", "Sending command...");
+        trace!(target: "net::channel::send_message", "Sending command...");
         written += message.command.encode_async(stream).await?;
-        trace!(target: "net::channel::send_message()", "Sent command: {}", message.command);
+        trace!(target: "net::channel::send_message", "Sent command: {}", message.command);
 
-        trace!(target: "net::channel::send_message()", "Sending payload...");
+        trace!(target: "net::channel::send_message", "Sending payload...");
         // First extract the length of the payload as a VarInt and write it to the stream.
         written += VarInt(message.payload.len() as u64).encode_async(stream).await?;
         // Then write the encoded payload itself to the stream.
         stream.write_all(&message.payload).await?;
         written += message.payload.len();
 
-        trace!(target: "net::channel::send_message()", "Sent payload {} bytes, total bytes {written}",
+        trace!(target: "net::channel::send_message", "Sent payload {} bytes, total bytes {written}",
             message.payload.len());
 
         stream.flush().await?;
@@ -331,10 +331,10 @@ impl Channel {
         // Messages should have a 4 byte header of magic digits.
         // This is used for network debugging.
         let mut magic = [0u8; 4];
-        trace!(target: "net::channel::read_command()", "Reading magic...");
+        trace!(target: "net::channel::read_command", "Reading magic...");
         stream.read_exact(&mut magic).await?;
 
-        trace!(target: "net::channel::read_command()", "Read magic {magic:?}");
+        trace!(target: "net::channel::read_command", "Read magic {magic:?}");
         let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
         if magic != magic_bytes {
             error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
@@ -372,14 +372,14 @@ impl Channel {
     /// Subscribe to a message on the message subsystem.
     pub async fn subscribe_msg<M: message::Message>(&self) -> Result<MessageSubscription<M>> {
         debug!(
-            target: "net::channel::subscribe_msg()", "[START] command={} {self:?}",
+            target: "net::channel::subscribe_msg", "[START] command={} {self:?}",
             M::NAME
         );
 
         let sub = self.message_subsystem.subscribe::<M>().await;
 
         debug!(
-            target: "net::channel::subscribe_msg()", "[END] command={} {self:?}",
+            target: "net::channel::subscribe_msg", "[END] command={} {self:?}",
             M::NAME
         );
 
@@ -389,7 +389,7 @@ impl Channel {
     /// Handle network errors. Panic if error passes silently, otherwise
     /// broadcast the error.
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
-        debug!(target: "net::channel::handle_stop()", "[START] {self:?}");
+        debug!(target: "net::channel::handle_stop", "[START] {self:?}");
 
         self.stopped.store(true, SeqCst);
 
@@ -402,12 +402,12 @@ impl Channel {
             }
         }
 
-        debug!(target: "net::channel::handle_stop()", "[END] {self:?}");
+        debug!(target: "net::channel::handle_stop", "[END] {self:?}");
     }
 
     /// Run the receive loop. Start receiving messages or handle network failure.
     async fn main_receive_loop(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::channel::main_receive_loop()", "[START] {self:?}");
+        debug!(target: "net::channel::main_receive_loop", "[START] {self:?}");
 
         // Acquire reader lock
         let reader = &mut *self.reader.lock().await;
@@ -419,7 +419,7 @@ impl Channel {
                 Err(err) => {
                     if Self::is_eof_error(&err) {
                         verbose!(
-                            target: "net::channel::main_receive_loop()",
+                            target: "net::channel::main_receive_loop",
                             "[P2P] Channel {} disconnected",
                             self.display_address()
                         );
@@ -433,14 +433,14 @@ impl Channel {
                         0
                     {
                         error!(
-                            target: "net::channel::main_receive_loop()",
+                            target: "net::channel::main_receive_loop",
                             "[P2P] Read error on channel {}: {err}",
                             self.display_address()
                         );
                     }
 
                     debug!(
-                        target: "net::channel::main_receive_loop()",
+                        target: "net::channel::main_receive_loop",
                         "Stopping channel {self:?}"
                     );
                     return Err(Error::ChannelStopped)
@@ -477,7 +477,7 @@ impl Channel {
                     // messages it does not have dispatchers for.
                     if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
                         warn!(
-                        target: "net::channel::main_receive_loop()",
+                        target: "net::channel::main_receive_loop",
                         "MissingDispatcher|MessageInvalid|MeteringLimitExceeded for command={command}, channel={self:?}"
                         );
 
@@ -495,8 +495,8 @@ impl Channel {
 
     /// Ban a malicious peer and stop the channel.
     pub async fn ban(&self) {
-        debug!(target: "net::channel::ban()", "START {self:?}");
-        debug!(target: "net::channel::ban()", "Peer: {:?}", self.display_address());
+        debug!(target: "net::channel::ban", "START {self:?}");
+        debug!(target: "net::channel::ban", "Peer: {:?}", self.display_address());
 
         // Just store the hostname if this is an inbound session.
         // This will block all ports from this peer by setting
@@ -536,17 +536,17 @@ impl Channel {
         };
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        verbose!(target: "net::channel::ban()", "Blacklisting peer={peer}");
+        verbose!(target: "net::channel::ban", "Blacklisting peer={peer}");
         match self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).await {
             Ok(()) => {
-                verbose!(target: "net::channel::ban()", "Peer={peer} blacklisted successfully");
+                verbose!(target: "net::channel::ban", "Peer={peer} blacklisted successfully");
             }
             Err(e) => {
-                warn!(target: "net::channel::ban()", "Could not blacklisted peer={peer}, err={e}");
+                warn!(target: "net::channel::ban", "Could not blacklisted peer={peer}, err={e}");
             }
         }
         self.stop().await;
-        debug!(target: "net::channel::ban()", "STOP {self:?}");
+        debug!(target: "net::channel::ban", "STOP {self:?}");
     }
 
     /// Returns the relevant socket address for this connection. If this is

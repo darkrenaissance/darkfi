@@ -141,7 +141,7 @@ impl Geode {
     /// This works for both file metadata and directory metadata.
     /// Returns (chunk hashes, [(file path, file size)]).
     async fn read_metadata(path: &PathBuf) -> Result<(Vec<blake3::Hash>, Vec<(PathBuf, u64)>)> {
-        debug!(target: "geode::read_dir_metadata()", "Reading chunks from {path:?} (dir)");
+        debug!(target: "geode::read_dir_metadata", "Reading chunks from {path:?} (dir)");
 
         let mut chunk_hashes = vec![];
         let mut files = vec![];
@@ -199,7 +199,7 @@ impl Geode {
     /// Perform garbage collection over the filesystem hierarchy.
     /// Returns a set representing deleted files.
     pub async fn garbage_collect(&self) -> Result<HashSet<blake3::Hash>> {
-        info!(target: "geode::garbage_collect()", "[Geode] Performing garbage collection");
+        info!(target: "geode::garbage_collect", "[Geode] Performing garbage collection");
         // We track corrupt files here.
         let mut deleted_files = HashSet::new();
 
@@ -234,7 +234,7 @@ impl Geode {
             if Self::read_metadata(&path).await.is_err() {
                 if let Err(e) = fs::remove_file(path).await {
                     warn!(
-                       target: "geode::garbage_collect()",
+                       target: "geode::garbage_collect",
                        "[Geode] Garbage collect failed to remove corrupted metadata: {e}"
                     );
                 }
@@ -244,7 +244,7 @@ impl Geode {
             }
         }
 
-        info!(target: "geode::garbage_collect()", "[Geode] Garbage collection finished");
+        info!(target: "geode::garbage_collect", "[Geode] Garbage collection finished");
         Ok(deleted_files)
     }
 
@@ -307,7 +307,7 @@ impl Geode {
         chunk_hashes: &[blake3::Hash],
         relative_files: &[(PathBuf, u64)],
     ) -> Result<()> {
-        info!(target: "geode::insert_metadata()", "[Geode] Inserting metadata");
+        info!(target: "geode::insert_metadata", "[Geode] Inserting metadata");
 
         // Verify the metadata
         if !self.verify_metadata(hash, chunk_hashes, relative_files) {
@@ -342,7 +342,7 @@ impl Geode {
         chunked: &mut ChunkedStorage,
         stream: impl AsRef<[u8]>,
     ) -> Result<(blake3::Hash, usize)> {
-        info!(target: "geode::write_chunk()", "[Geode] Writing single chunk");
+        info!(target: "geode::write_chunk", "[Geode] Writing single chunk");
 
         let mut cursor = Cursor::new(&stream);
         let mut chunk = vec![0u8; MAX_CHUNK_SIZE];
@@ -394,7 +394,7 @@ impl Geode {
     /// the read failed in any way (could also be the file does not exist).
     pub async fn get(&self, hash: &blake3::Hash, path: &Path) -> Result<ChunkedStorage> {
         let hash_str = hash_to_string(hash);
-        info!(target: "geode::get()", "[Geode] Getting chunks for {hash_str}...");
+        info!(target: "geode::get", "[Geode] Getting chunks for {hash_str}...");
 
         // Try to read the file or dir metadata. If it's corrupt, return an error signalling
         // that garbage collection needs to run.
@@ -453,7 +453,7 @@ impl Geode {
         chunked: &mut ChunkedStorage,
         chunk_hash: &blake3::Hash,
     ) -> Result<Vec<u8>> {
-        info!(target: "geode::get_chunk()", "[Geode] Getting chunk {}", hash_to_string(chunk_hash));
+        info!(target: "geode::get_chunk", "[Geode] Getting chunk {}", hash_to_string(chunk_hash));
 
         // Get the chunk index in the file from the chunk hash
         let chunk_index = match chunked.iter().position(|(h, _)| *h == *chunk_hash) {
@@ -488,7 +488,7 @@ impl Geode {
         chunk_hashes: &[blake3::Hash],
         files: &[(PathBuf, u64)],
     ) -> bool {
-        info!(target: "geode::verify_metadata()", "[Geode] Verifying metadata for {}", hash_to_string(hash));
+        info!(target: "geode::verify_metadata", "[Geode] Verifying metadata for {}", hash_to_string(hash));
         let mut hasher = blake3::Hasher::new();
         self.hash_chunks_metadata(&mut hasher, chunk_hashes);
         self.hash_files_metadata(&mut hasher, files);
@@ -497,7 +497,7 @@ impl Geode {
 
     /// Verifies that the chunk hash matches the content.
     pub fn verify_chunk(&self, chunk_hash: &blake3::Hash, chunk_slice: &[u8]) -> bool {
-        info!(target: "geode::verify_chunk()", "[Geode] Verifying chunk {}", hash_to_string(chunk_hash));
+        info!(target: "geode::verify_chunk", "[Geode] Verifying chunk {}", hash_to_string(chunk_hash));
         blake3::hash(chunk_slice) == *chunk_hash
     }
 }
