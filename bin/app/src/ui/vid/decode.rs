@@ -22,9 +22,12 @@ use rav1d::{
     Decoder as Rav1dDecoder, InloopFilterType, Picture as Rav1dPicture, PlanarImageComponent,
     Rav1dError, Settings as Rav1dSettings,
 };
-use std::sync::{
-    mpsc::{Receiver, Sender},
-    Arc,
+use std::{
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
+    time::Instant,
 };
 
 use crate::{
@@ -83,6 +86,7 @@ pub fn spawn_decoder_thread(
         }
     });
     let data = std::mem::take(&mut *data.lock()).unwrap();
+    d!("Decoding video file: {path}");
 
     let mut demuxer = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
     let num_frames = demuxer.header.num_frames as usize;
@@ -90,6 +94,7 @@ pub fn spawn_decoder_thread(
     *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
 
     spawn_thread("video-decoder", move || {
+        let now = Instant::now();
         let mut frame_idx = 0;
         loop {
             let Some(av1_frame) = demuxer.try_read_frame() else {
@@ -98,7 +103,7 @@ pub fn spawn_decoder_thread(
                     process(&mut frame_idx, &pic, &vid_data, &render_api);
                 }
 
-                d!("Finished decoding video: {path}");
+                d!("Finished decoding video: {path} in {:?}", now.elapsed());
                 assert_eq!(frame_idx, vid_data.lock().as_ref().unwrap().textures.len());
                 assert_eq!(frame_idx, num_frames);
                 {
@@ -208,7 +213,7 @@ fn process(
     };
     if (*frame_idx % 10) == 0 {
         let pct_loaded = 100. * *frame_idx as f32 / num_frames as f32;
-        d!("Loaded video frame {pct_loaded:.2}%%");
+        d!("Decoded video {pct_loaded:.2}%%");
     }
     *frame_idx += 1;
 }
