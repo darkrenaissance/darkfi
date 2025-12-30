@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use std::collections::HashMap;
 
 use structopt::StructOpt;
@@ -207,10 +208,8 @@ impl Default for MagicBytes {
     }
 }
 
-// The following is used so we can have P2P settings configurable
-// from TOML files.
-
-/// Defines the network settings.
+/// Defines the network settings so we can have P2P configurations in
+/// TOML files.
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 pub struct SettingsOpt {
@@ -376,7 +375,7 @@ impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
     type Error = Error;
     fn try_from(st: (&str, &str, SettingsOpt)) -> Result<Self> {
         let app_name = st.0.to_string();
-        let app_version = semver::Version::parse(&st.1)?;
+        let app_version = semver::Version::parse(st.1)?;
         let opt = st.2;
 
         let def = Settings::default();
