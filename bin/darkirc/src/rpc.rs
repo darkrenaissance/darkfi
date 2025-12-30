@@ -78,9 +78,7 @@ impl DarkIrc {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let Some(switch) = params[0].get::<bool>() else {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        };
+        let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
             self.p2p.dnet_enable();
@@ -107,9 +105,7 @@ impl DarkIrc {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let Some(n_f64) = params[0].get::<f64>() else {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        };
+        let n_f64 = params[0].get::<f64>().unwrap();
         let n = *n_f64 as u32;
 
         if *n_f64 != n as f64 || n == 0 {
@@ -174,9 +170,7 @@ impl DarkIrc {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let Some(switch) = params[0].get::<bool>() else {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        };
+        let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
             self.event_graph.deg_enable().await;
