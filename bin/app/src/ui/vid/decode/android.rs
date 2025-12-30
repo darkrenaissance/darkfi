@@ -62,7 +62,10 @@ pub fn spawn_decoder_thread(
 
         let mut frame_idx = 0;
         while let Ok(frame) = frame_rx.recv() {
-            process_frame(frame_idx, frame, &vid_data, &render_api);
+            if process_frame(frame_idx, frame, &vid_data, &render_api).is_err() {
+                d!("Video stopped, exiting decoder thread");
+                return;
+            }
             frame_idx += 1;
 
             if (frame_idx % 10) == 0 {
@@ -74,14 +77,6 @@ pub fn spawn_decoder_thread(
         d!("Finished decoding video: {path} in {:?}", now.elapsed());
 
         vid::unregister(decoder_id);
-
-        let vd_guard = vid_data.lock();
-        let vd = vd_guard.as_ref().unwrap();
-        for (i, tex) in vd.textures.iter().enumerate() {
-            if tex.is_none() {
-                panic!("Frame idx {i} / 150 is none for video: {path}");
-            }
-        }
     })
 }
 
@@ -90,7 +85,7 @@ fn process_frame(
     frame: DecodedFrame,
     vid_data: &SyncMutex<Option<Av1VideoData>>,
     render_api: &RenderApi,
-) {
+) -> Result<(), ()> {
     let uv_width = frame.width / 2;
     let uv_height = frame.height / 2;
 
@@ -121,7 +116,8 @@ fn process_frame(
     let yuv_texs = YuvTextures { y: tex_y, u: tex_u, v: tex_v };
 
     let mut vd_guard = vid_data.lock();
-    let vd = vd_guard.as_mut().unwrap();
+    let vd = vd_guard.as_mut().ok_or(())?;
     vd.textures[frame_idx] = Some(yuv_texs.clone());
     let _ = vd.textures_pub.try_broadcast((frame_idx, yuv_texs));
+    Ok(())
 }

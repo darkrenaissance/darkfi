@@ -93,23 +93,13 @@ pub fn spawn_decoder_thread(
             let Some(av1_frame) = demuxer.try_read_frame() else {
                 // Channel closed - drain decoder (like dav1dplay)
                 while let Ok(pic) = decoder.get_picture() {
-                    process(&mut frame_idx, &pic, &vid_data, &render_api);
+                    if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                        d!("Video stopped, exiting decoder thread");
+                        return;
+                    }
                 }
 
                 d!("Finished decoding video: {path} in {:?}", now.elapsed());
-                assert_eq!(frame_idx, vid_data.lock().as_ref().unwrap().textures.len());
-                assert_eq!(frame_idx, num_frames);
-                {
-                    let mut vd_guard = vid_data.lock();
-                    let vd = vd_guard.as_mut().unwrap();
-                    for (frame_idx, tex) in vd.textures.iter().enumerate() {
-                        if tex.is_none() {
-                            panic!(
-                                "Frame idx {frame_idx} / {num_frames} is none for video: {path}"
-                            );
-                        }
-                    }
-                }
                 return;
             };
 
@@ -122,7 +112,12 @@ pub fn spawn_decoder_thread(
             // Try to get decoded pictures
             loop {
                 match decoder.get_picture() {
-                    Ok(pic) => process(&mut frame_idx, &pic, &vid_data, &render_api),
+                    Ok(pic) => {
+                        if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                            d!("Video stopped, exiting decoder thread");
+                            return;
+                        }
+                    }
                     Err(Rav1dError::TryAgain) => {
                         try_again = true;
                         break
@@ -135,7 +130,10 @@ pub fn spawn_decoder_thread(
             if try_again {
                 while let Err(Rav1dError::TryAgain) = decoder.send_pending_data() {
                     let Ok(pic) = decoder.get_picture() else { continue };
-                    process(&mut frame_idx, &pic, &vid_data, &render_api);
+                    if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                        d!("Video stopped, exiting decoder thread");
+                        return;
+                    }
                 }
             }
         }
@@ -147,7 +145,7 @@ fn process(
     pic: &Rav1dPicture,
     vid_data: &SyncMutex<Option<Av1VideoData>>,
     render_api: &RenderApi,
-) {
+) -> Result<(), ()> {
     // rav1d stores data as planar GBR (Y=G, U=B, V=R)
     let y_plane = pic.plane(PlanarImageComponent::Y);
     let u_plane = pic.plane(PlanarImageComponent::U);
@@ -199,7 +197,7 @@ fn process(
     let num_frames = {
         // Store in vid_data
         let mut vd_guard = vid_data.lock();
-        let vd = vd_guard.as_mut().unwrap();
+        let vd = vd_guard.as_mut().ok_or(())?;
         vd.textures[*frame_idx] = Some(yuv_texs.clone());
         let _ = vd.textures_pub.try_broadcast((*frame_idx, yuv_texs));
         vd.textures.len()
@@ -209,6 +207,7 @@ fn process(
         d!("Decoded video {pct_loaded:.2}%%");
     }
     *frame_idx += 1;
+    Ok(())
 }
 
 /// Copy plane data row by row to handle stride padding.
