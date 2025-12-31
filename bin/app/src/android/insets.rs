@@ -63,6 +63,9 @@ pub unsafe extern "C" fn Java_darkfi_darkfi_1app_ResizingLayout_onApplyInsets(
     );
     let mut globals = GLOBALS.lock();
     globals.insets = [sys_left as f32, sys_top as f32, sys_right as f32, sys_bottom as f32];
+    if ime_bottom > 0 {
+        globals.insets[3] = ime_bottom as f32;
+    }
     if let Some(sender) = &globals.sender {
         let _ = sender.try_send(globals.insets.clone());
     } else {

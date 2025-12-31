@@ -96,9 +96,10 @@ impl App {
             sled_tree: settings_tree,
         });
 
-        #[cfg(target_os = "android")]
-        let window_scale = android::get_screen_density() / 2.625;
-        #[cfg(not(target_os = "android"))]
+        // TODO: apply this to insets otherwise its wrong
+        //#[cfg(target_os = "android")]
+        //let window_scale = android::get_screen_density() / 2.625;
+        //#[cfg(not(target_os = "android"))]
         let window_scale = 1.;
 
         d!("Setting window scale to {window_scale}");

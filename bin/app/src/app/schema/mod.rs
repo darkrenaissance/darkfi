@@ -325,9 +325,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let prop = content.get_property("rect").unwrap();
     prop.set_expr(atom, Role::App, 0, expr::load_var("insets_left")).unwrap();
     prop.set_expr(atom, Role::App, 1, expr::load_var("insets_top")).unwrap();
-    let code = cc.compile("w - insets_right").unwrap();
+    let code = cc.compile("w - insets_left - insets_right").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
-    let code = cc.compile("h - insets_bottom").unwrap();
+    let code = cc.compile("h - insets_top - insets_bottom").unwrap();
     prop.set_expr(atom, Role::App, 3, code).unwrap();
     let window_insets = window.get_property("insets").unwrap();
     prop.add_depend(&window_insets, 0, "insets_left");
