@@ -23,8 +23,33 @@ use crate::{
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app::node", $($arg)*); } }
 
+pub fn create_window(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::Window);
+
+    let mut prop = Property::new("locale", PropertyType::Str, PropertySubType::Locale);
+    prop.set_defaults_str(vec!["en-US".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("insets", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text(
+        "Window Insets",
+        "Window insets applied by the system (left, top, right, bottom)",
+    );
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0., 0., 0., 0.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    node.add_signal("start", "App UI started", vec![]).unwrap();
+    node.add_signal("stop", "App UI stopped", vec![]).unwrap();
+
+    node
+}
+
 pub fn create_layer(name: &str) -> SceneNode {
-    t!("create_layer({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Layer);
     let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
@@ -44,7 +69,6 @@ pub fn create_layer(name: &str) -> SceneNode {
 }
 
 pub fn create_vector_art(name: &str) -> SceneNode {
-    t!("create_vector_art({name})");
     let mut node = SceneNode::new(name, SceneNodeType::VectorArt);
 
     let mut prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
@@ -66,7 +90,6 @@ pub fn create_vector_art(name: &str) -> SceneNode {
 }
 
 pub fn create_button(name: &str) -> SceneNode {
-    t!("create_button({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Button);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
@@ -90,7 +113,6 @@ pub fn create_button(name: &str) -> SceneNode {
 }
 
 pub fn create_shortcut(name: &str) -> SceneNode {
-    t!("create_shortcut({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Shortcut);
 
     let mut prop = Property::new("key", PropertyType::Str, PropertySubType::Null);
@@ -107,7 +129,6 @@ pub fn create_shortcut(name: &str) -> SceneNode {
 
 #[allow(dead_code)]
 pub fn create_gesture(name: &str) -> SceneNode {
-    t!("create_gesture({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Gesture);
 
     let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
@@ -125,7 +146,6 @@ pub fn create_gesture(name: &str) -> SceneNode {
 
 #[allow(dead_code)]
 pub fn create_image(name: &str) -> SceneNode {
-    t!("create_image({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -153,7 +173,6 @@ pub fn create_image(name: &str) -> SceneNode {
 }
 
 pub fn create_video(name: &str) -> SceneNode {
-    t!("create_video({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -185,7 +204,6 @@ pub fn create_video(name: &str) -> SceneNode {
 }
 
 pub fn create_text(name: &str) -> SceneNode {
-    t!("create_text({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Text);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -379,7 +397,6 @@ pub fn create_multiline_edit(name: &str) -> SceneNode {
 }
 
 pub fn create_chatview(name: &str) -> SceneNode {
-    t!("create_chatview({name})");
     let mut node = SceneNode::new(name, SceneNodeType::ChatView);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -491,7 +508,6 @@ pub fn create_chatview(name: &str) -> SceneNode {
 }
 
 pub fn create_emoji_picker(name: &str) -> SceneNode {
-    t!("create_emoji_picker({name})");
     let mut node = SceneNode::new(name, SceneNodeType::EmojiPicker);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);

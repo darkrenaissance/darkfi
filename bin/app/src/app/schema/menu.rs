@@ -62,7 +62,7 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/setting/scale").unwrap(),
         Role::Internal,
@@ -82,7 +82,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.link(layer_node.clone());
+    content.link(layer_node.clone());
 
     // Channels label bg
     let node = create_vector_art("channels_label_bg");
@@ -248,7 +248,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let (slot, recvr) = Slot::new(channel.to_string() + "_clicked");
         node.register("click", slot).unwrap();
-        let chatview_path = "/window/".to_string() + channel + "_chat_layer";
+        let chatview_path = "/window/content/".to_string() + channel + "_chat_layer";
         let chatview_node = app.sg_root.lookup_node(chatview_path).unwrap();
         let chatview_is_visible =
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();

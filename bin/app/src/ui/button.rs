@@ -49,8 +49,6 @@ pub struct Button {
 
 impl Button {
     pub async fn new(node: SceneNodeWeak) -> Pimpl {
-        t!("Button::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();

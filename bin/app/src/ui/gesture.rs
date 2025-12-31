@@ -52,8 +52,6 @@ pub struct Gesture {
 
 impl Gesture {
     pub async fn new(node: SceneNodeWeak) -> Pimpl {
-        t!("Gesture::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 

@@ -314,7 +314,7 @@ async fn load_plugins(
             let nick = String::decode(&mut cur).unwrap();
             let msg = String::decode(&mut cur).unwrap();
 
-            let node_path = format!("/window/{channel}_chat_layer/content/chatty");
+            let node_path = format!("/window/content/{channel}_chat_layer/content/chatty");
             t!("Attempting to relay message to {node_path}");
             let Some(chatview) = sg_root2.lookup_node(&node_path) else {
                 d!("Ignoring message since {node_path} doesn't exist");
@@ -335,13 +335,13 @@ async fn load_plugins(
             }
 
             // Apply coloring when you get a message
-            let chat_path = format!("/window/{channel}_chat_layer");
+            let chat_path = format!("/window/content/{channel}_chat_layer");
             let chat_layer = sg_root2.lookup_node(chat_path).unwrap();
             if chat_layer.get_property_bool("is_visible").unwrap() {
                 continue
             }
 
-            let node_path = format!("/window/menu_layer/{channel}_channel_label");
+            let node_path = format!("/window/content/menu_layer/{channel}_channel_label");
             let menu_label = sg_root2.lookup_node(&node_path).unwrap();
             let prop = menu_label.get_property("text_color").unwrap();
             if msg.contains(&darkirc_nick.get()) {
@@ -364,10 +364,10 @@ async fn load_plugins(
     darkirc.register("connect", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let listen_connect = ex.spawn(async move {
-        let net0 = sg_root2.lookup_node("/window/netstatus_layer/net0").unwrap();
-        let net1 = sg_root2.lookup_node("/window/netstatus_layer/net1").unwrap();
-        let net2 = sg_root2.lookup_node("/window/netstatus_layer/net2").unwrap();
-        let net3 = sg_root2.lookup_node("/window/netstatus_layer/net3").unwrap();
+        let net0 = sg_root2.lookup_node("/window/content/netstatus_layer/net0").unwrap();
+        let net1 = sg_root2.lookup_node("/window/content/netstatus_layer/net1").unwrap();
+        let net2 = sg_root2.lookup_node("/window/content/netstatus_layer/net2").unwrap();
+        let net3 = sg_root2.lookup_node("/window/content/netstatus_layer/net3").unwrap();
 
         let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
         let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();

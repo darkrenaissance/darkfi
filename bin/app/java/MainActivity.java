@@ -18,6 +18,37 @@ import videodecode.VideoDecoder;
 
 //% END
 
+//% RESIZING_LAYOUT_BODY
+
+native static void onApplyInsets(
+    int sys_left, int sys_top, int sys_right, int sys_bottom,
+    int ime_left, int ime_top, int ime_right, int ime_bottom
+);
+
+//% END
+
+//% RESIZING_LAYOUT_ON_APPLY_WINDOW_INSETS
+
+{
+    Insets imeInsets = insets.getInsets(WindowInsets.Type.ime());
+    Insets sysInsets = insets.getInsets(WindowInsets.Type.systemBars());
+
+    // Screen: (1440, 3064)
+    // IME height: 1056
+    // Sys insets: (0, 152, 0, 135)
+
+    onApplyInsets(
+        sysInsets.left, sysInsets.top, sysInsets.right, sysInsets.bottom,
+        imeInsets.left, imeInsets.top, imeInsets.right, imeInsets.bottom
+    );
+}
+// Workaround for Java error due to remaining body.
+// We handle the insets in our app directly.
+if (true)
+    return insets;
+
+//% END
+
 //% MAIN_ACTIVITY_BODY
 
 private ViewGroup rootView;

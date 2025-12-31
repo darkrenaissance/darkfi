@@ -365,14 +365,14 @@ impl PropertyRect {
             self.prop.get_f32(3).ok()?,
         ]))
     }
+    */
 
     pub fn set(&self, atom: &mut PropertyAtomicGuard, rect: &Rectangle) {
         self.prop().set_f32(atom, self.role, 0, rect.x).unwrap();
         self.prop().set_f32(atom, self.role, 1, rect.y).unwrap();
-        self.prop().set_f32(atom, self.role, 2, rect.y).unwrap();
-        self.prop().set_f32(atom, self.role, 3, rect.y).unwrap();
+        self.prop().set_f32(atom, self.role, 2, rect.w).unwrap();
+        self.prop().set_f32(atom, self.role, 3, rect.h).unwrap();
     }
-    */
 
     #[inline]
     pub fn prop(&self) -> PropertyPtr {

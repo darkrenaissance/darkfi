@@ -56,8 +56,6 @@ pub struct VectorArt {
 
 impl VectorArt {
     pub async fn new(node: SceneNodeWeak, shape: VectorShape, render_api: RenderApi) -> Pimpl {
-        t!("VectorArt::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();

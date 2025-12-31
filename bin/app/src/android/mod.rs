@@ -22,6 +22,7 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use crate::AndroidSuggestEvent;
 
+pub mod insets;
 pub mod vid;
 
 macro_rules! call_mainactivity_int_method {

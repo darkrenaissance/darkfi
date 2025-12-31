@@ -69,8 +69,6 @@ impl Text {
         render_api: RenderApi,
         i18n_fish: I18nBabelFish,
     ) -> Pimpl {
-        t!("Text::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();

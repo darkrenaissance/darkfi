@@ -320,6 +320,52 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         window.link(node);
     }
 
+    // Root content layer
+    let content = create_layer("content");
+    let prop = content.get_property("rect").unwrap();
+    prop.set_expr(atom, Role::App, 0, expr::load_var("insets_left")).unwrap();
+    prop.set_expr(atom, Role::App, 1, expr::load_var("insets_top")).unwrap();
+    let code = cc.compile("w - insets_right").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    let code = cc.compile("h - insets_bottom").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    let window_insets = window.get_property("insets").unwrap();
+    prop.add_depend(&window_insets, 0, "insets_left");
+    prop.add_depend(&window_insets, 1, "insets_top");
+    prop.add_depend(&window_insets, 2, "insets_right");
+    prop.add_depend(&window_insets, 3, "insets_bottom");
+    content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let content = content.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    window.link(content.clone());
+
+    // Debug bg layer cos of content size issues
+    let node = create_vector_art("bgdbg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.8, 0., 0., 0.3],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        5.,
+        [0., 1., 0., 1.],
+    );
+    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    content.link(node);
+
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
@@ -332,7 +378,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.link(netlayer_node.clone());
+    content.link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
@@ -405,7 +451,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let settingslayer_node =
         settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.link(settingslayer_node.clone());
+    content.link(settingslayer_node.clone());
 
     // Background
     let node = create_vector_art("settings_btn_bg");
@@ -452,7 +498,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         //  router currently points to view1 and we call router.goto("./view2")).
         //
         //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
-        let windows = sg_root.lookup_node("/window").unwrap().get_children();
+        let windows = sg_root.lookup_node("/window/content").unwrap().get_children();
         let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
         for node in windows.iter() {
             if target_substrings.iter().any(|&s| node.name.contains(s)) {
@@ -463,7 +509,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         }
 
         // Show settings
-        let settings_node = sg_root.lookup_node("/window/settings_layer").unwrap();
+        let settings_node = sg_root.lookup_node("/window/content/settings_layer").unwrap();
         settings_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     };
 
@@ -511,7 +557,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     for channel in CHANNELS {
         chat::make(
             app,
-            window.clone(),
+            content.clone(),
             channel,
             &db,
             i18n_fish,
@@ -520,11 +566,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         )
         .await;
     }
-    menu::make(app, window.clone(), i18n_fish).await;
+    menu::make(app, content.clone(), i18n_fish).await;
 
     // @@@ Debug stuff @@@
-    //let chatview_node = app.sg_root.lookup_node("/window/dev_chat_layer").unwrap();
+    //let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
     //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    //let menu_node = app.sg_root.lookup_node("/window/menu_layer").unwrap();
+    //let menu_node = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
     //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }

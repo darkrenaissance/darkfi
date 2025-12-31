@@ -187,7 +187,7 @@ fn is_ime_visible() -> bool {
 
 pub async fn make(
     app: &App,
-    window: SceneNodePtr,
+    content: SceneNodePtr,
     channel: &str,
     db: &sled::Db,
     i18n_fish: &I18nBabelFish,
@@ -229,7 +229,7 @@ pub async fn make(
     layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.link(layer_node.clone());
+    content.link(layer_node.clone());
 
     // Create a bg mesh on top to fade the bg image
     let node = create_vector_art("bg");
@@ -326,7 +326,7 @@ pub async fn make(
         let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
 
-        let menu_node = sg_root.lookup_node("/window/menu_layer").unwrap();
+        let menu_node = sg_root.lookup_node("/window/content/menu_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
         chatview_is_visible.set(atom, false);

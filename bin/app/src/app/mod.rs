@@ -40,6 +40,7 @@ use crate::{
 pub mod locale;
 use locale::read_locale_ftl;
 mod node;
+use node::create_window;
 mod schema;
 use schema::get_settingsdb_path;
 
@@ -87,17 +88,6 @@ impl App {
             }
         };
 
-        let mut window = SceneNode::new("window", SceneNodeType::Window);
-
-        let i18n_fish = self.setup_locale(&mut window);
-
-        let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_array_len(2);
-        window.add_property(prop).unwrap();
-
-        window.add_signal("start", "App UI started", vec![]).unwrap();
-        window.add_signal("stop", "App UI stopped", vec![]).unwrap();
-
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree("settings").unwrap();
@@ -111,7 +101,7 @@ impl App {
         #[cfg(not(target_os = "android"))]
         let window_scale = 1.;
 
-        d!("Setting window_scale to {window_scale}");
+        d!("Setting window scale to {window_scale}");
 
         settings.add_setting("scale", PropertyValue::Float32(window_scale));
         //settings.load_settings();
@@ -128,6 +118,19 @@ impl App {
             self.tasks.lock().unwrap().push(setting_task);
         }
 
+        let i18n_fish = self.setup_locale();
+
+        let mut window = create_window("window");
+        #[cfg(target_os = "android")]
+        {
+            let insets = android::insets::get_insets();
+            d!("Setting window insets to {insets:?}");
+            let prop = window.get_property("insets").unwrap();
+            let atom = &mut PropertyAtomicGuard::none();
+            for i in 0..4 {
+                prop.set_f32(atom, Role::App, i, insets[i]).unwrap();
+            }
+        }
         let window = window
             .setup(|me| {
                 Window::new(me, self.render_api.clone(), i18n_fish.clone(), setting_root.clone())
@@ -146,7 +149,7 @@ impl App {
         Ok(None)
     }
 
-    fn setup_locale(&self, window: &mut SceneNode) -> I18nBabelFish {
+    fn setup_locale(&self) -> I18nBabelFish {
         /*
         let i18n_src = indoc::indoc! {"
             hello-world = Hello, world!
@@ -175,10 +178,6 @@ impl App {
         }
         info!(target: "app", "Locale: {:?}", locales);
         */
-
-        let mut prop = Property::new("locale", PropertyType::Str, PropertySubType::Locale);
-        prop.set_defaults_str(vec![locale.to_string()]).unwrap();
-        window.add_property(prop).unwrap();
 
         i18n_fish
     }

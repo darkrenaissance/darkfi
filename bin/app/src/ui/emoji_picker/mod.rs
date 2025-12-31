@@ -78,8 +78,6 @@ impl EmojiPicker {
         render_api: RenderApi,
         emoji_meshes: EmojiMeshesPtr,
     ) -> Pimpl {
-        t!("EmojiPicker::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();

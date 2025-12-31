@@ -56,7 +56,6 @@ pub struct Layer {
 impl Layer {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
-        t!("Layer::new({node_ref:?})");
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();

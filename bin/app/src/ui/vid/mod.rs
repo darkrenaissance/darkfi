@@ -92,8 +92,6 @@ pub struct Video {
 
 impl Video {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
-        t!("Video::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();

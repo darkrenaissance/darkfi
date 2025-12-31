@@ -57,8 +57,6 @@ pub struct Image {
 
 impl Image {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
-        t!("Image::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();

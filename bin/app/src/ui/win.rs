@@ -30,12 +30,16 @@ use crate::{
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
     prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
+        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyRect,
+        PropertyStr, Role,
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
+
+#[cfg(target_os = "android")]
+use crate::android;
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
@@ -60,6 +64,7 @@ pub struct Window {
     locale: PropertyStr,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
+    insets: PropertyRect,
 }
 
 impl Window {
@@ -69,8 +74,6 @@ impl Window {
         i18n_fish: I18nBabelFish,
         setting_root: SceneNodePtr,
     ) -> Pimpl {
-        t!("Window::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
@@ -82,6 +85,8 @@ impl Window {
         )
         .unwrap();
 
+        let insets = PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap();
+
         let self_ = Arc::new(Self {
             node,
             render_api,
@@ -91,6 +96,7 @@ impl Window {
             locale,
             screen_size,
             scale,
+            insets,
         });
 
         Pimpl::Window(self_)
@@ -171,6 +177,23 @@ impl Window {
         let me2 = me.clone();
         let touch_task = ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
+        #[cfg(target_os = "android")]
+        let insets_task = {
+            let (insets_tx, insets_rx) = async_channel::unbounded();
+            android::insets::set_sender(insets_tx);
+
+            let me = me.clone();
+            let insets = self.insets.clone();
+            ex.spawn(async move {
+                while let Ok(insets_val) = insets_rx.recv().await {
+                    let Some(self_) = me.upgrade() else { break };
+                    let atom = &mut self_.render_api.make_guard(gfxtag!("Window::insets_task"));
+                    insets.set(atom, &Rectangle::from(insets_val));
+                    self_.draw(atom).await;
+                }
+            })
+        };
+
         async fn reload_locale(self_: Arc<Window>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
             self_.reload_locale(atom).await;
@@ -196,6 +219,8 @@ impl Window {
             touch_task,
         ];
         tasks.append(&mut on_modify.tasks);
+        #[cfg(target_os = "android")]
+        tasks.push(insets_task);
         *self.tasks.lock() = tasks;
 
         for child in self.get_children() {

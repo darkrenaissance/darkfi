@@ -269,8 +269,6 @@ impl BaseEdit {
         render_api: RenderApi,
         edit_type: BaseEditType,
     ) -> Pimpl {
-        t!("BaseEdit::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();

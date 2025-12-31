@@ -199,8 +199,6 @@ impl ChatView {
         text_shaper: TextShaperPtr,
         sg_root: SceneNodePtr,
     ) -> Pimpl {
-        t!("ChatView::new()");
-
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
