@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use smol::{channel::Receiver, lock::RwLock};
 use tinyjson::JsonValue;
@@ -26,7 +29,7 @@ use darkfi::{
     blockchain::BlockDifficulty,
     net::{ChannelPtr, P2pPtr},
     rpc::jsonrpc::JsonSubscriber,
-    util::encoding::base64,
+    util::{encoding::base64, time::Timestamp},
     validator::{
         consensus::{Fork, Proposal},
         pow::PoWModule,
@@ -48,6 +51,7 @@ use crate::proto::{
 pub async fn handle_unknown_proposals(
     receiver: Receiver<(Proposal, u32)>,
     unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
+    unknown_proposals_channels: Arc<RwLock<HashMap<u32, (u8, u64)>>>,
     validator: ValidatorPtr,
     p2p: P2pPtr,
     proposals_sub: JsonSubscriber,
@@ -80,6 +84,18 @@ pub async fn handle_unknown_proposals(
             continue
         };
 
+        // Increase channel counter
+        let mut lock = unknown_proposals_channels.write().await;
+        let channel_counter = if let Some((counter, timestamp)) = lock.get_mut(&channel) {
+            *counter += 1;
+            *timestamp = Timestamp::current_time().inner();
+            *counter
+        } else {
+            lock.insert(channel, (1, Timestamp::current_time().inner()));
+            1
+        };
+        drop(lock);
+
         // Handle the unknown proposal
         if handle_unknown_proposal(
             &validator,
@@ -91,9 +107,12 @@ pub async fn handle_unknown_proposals(
         )
         .await
         {
-            // Ban channel if it exists
-            if let Some(channel) = p2p.get_channel(channel) {
-                channel.ban().await;
+            // Ban channel if it exceeds 5 consecutive unknown proposals
+            if channel_counter > 5 {
+                if let Some(channel) = p2p.get_channel(channel) {
+                    channel.ban().await;
+                }
+                unknown_proposals_channels.write().await.remove(&channel);
             }
         };
 

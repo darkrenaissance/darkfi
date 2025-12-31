@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use smol::{channel::Sender, lock::RwLock};
@@ -35,7 +38,10 @@ use darkfi::{
     },
     rpc::jsonrpc::JsonSubscriber,
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
-    util::{encoding::base64, time::NanoTimestamp},
+    util::{
+        encoding::base64,
+        time::{NanoTimestamp, Timestamp},
+    },
     validator::{consensus::Proposal, ValidatorPtr},
     Error, Result,
 };
@@ -66,12 +72,16 @@ impl_p2p_message!(
 /// Atomic pointer to the `ProtocolProposal` handler.
 pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;
 
-/// Handler managing [`Proposal`] messages, over a generic P2P protocol.
+/// Handler managing [`Proposal`] messages, over a generic P2P
+/// protocol.
 pub struct ProtocolProposalHandler {
     /// The generic handler for [`Proposal`] messages.
     proposals_handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
     /// Unknown proposals queue to be checked for reorg.
     unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
+    /// Unknown proposals channels to ban them after 5 consecutive
+    /// unknown proposals. Records expire after a 10 minutes timeframe.
+    unknown_proposals_channels: Arc<RwLock<HashMap<u32, (u8, u64)>>>,
     /// Handler background task to process unknown proposals queue.
     unknown_proposals_handler: StoppableTaskPtr,
 }
@@ -88,9 +98,15 @@ impl ProtocolProposalHandler {
         let proposals_handler =
             ProtocolGenericHandler::new(p2p, "ProtocolProposal", SESSION_DEFAULT).await;
         let unknown_proposals = Arc::new(RwLock::new(HashSet::new()));
+        let unknown_proposals_channels = Arc::new(RwLock::new(HashMap::new()));
         let unknown_proposals_handler = StoppableTask::new();
 
-        Arc::new(Self { proposals_handler, unknown_proposals, unknown_proposals_handler })
+        Arc::new(Self {
+            proposals_handler,
+            unknown_proposals,
+            unknown_proposals_channels,
+            unknown_proposals_handler,
+        })
     }
 
     /// Start the `ProtocolProposal` background task.
@@ -112,7 +128,7 @@ impl ProtocolProposalHandler {
 
         // Start the unkown proposals handler task
         self.unknown_proposals_handler.clone().start(
-            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub),
+            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -125,7 +141,7 @@ impl ProtocolProposalHandler {
 
         // Start the proposals handler task
         self.proposals_handler.task.clone().start(
-            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), validator.clone(), proposals_sub),
+            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), validator.clone(), proposals_sub),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -161,6 +177,7 @@ async fn handle_receive_proposal(
     handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
     sender: Sender<(Proposal, u32)>,
     unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
+    unknown_proposals_channels: Arc<RwLock<HashMap<u32, (u8, u64)>>>,
     validator: ValidatorPtr,
     proposals_sub: JsonSubscriber,
 ) -> Result<()> {
@@ -188,6 +205,23 @@ async fn handle_receive_proposal(
             continue
         }
 
+        // Cleanup expired unknown proposals channels records if queue
+        // is empty and we have records.
+        if unknown_proposals.read().await.is_empty() {
+            let mut unknown_proposals_channels = unknown_proposals_channels.write().await;
+            if !unknown_proposals_channels.is_empty() {
+                let now = Timestamp::current_time().inner();
+                let mut expired_channels = vec![];
+                for (channel, (_, timestamp)) in unknown_proposals_channels.iter() {
+                    if now - timestamp >= 600 {
+                        expired_channels.push(*channel);
+                    }
+                }
+                unknown_proposals_channels.retain(|channel, _| !expired_channels.contains(channel));
+            }
+            drop(unknown_proposals_channels);
+        }
+
         // Append proposal
         match validator.append_proposal(&proposal.0).await {
             Ok(()) => {
@@ -197,6 +231,9 @@ async fn handle_receive_proposal(
                 // Notify proposals subscriber
                 let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
                 proposals_sub.notify(vec![enc_prop].into()).await;
+
+                // Drop channel from unknown proposals channels records
+                unknown_proposals_channels.write().await.remove(&channel);
 
                 continue
             }
