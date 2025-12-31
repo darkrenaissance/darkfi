@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::{HashMap, HashSet},
     io::{stdin, Cursor, Read},
     slice,
     str::FromStr,
@@ -28,14 +29,17 @@ use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
 use darkfi::{
     cli_desc,
-    tx::Transaction,
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::{encoding::base64, parse::decode_base10},
+    zk::Proof,
     Error, Result,
 };
 use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::{
-    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId},
+    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId, SecretKey},
+    dark_tree::DarkTree,
     pasta::pallas,
+    ContractCallImport,
 };
 use darkfi_serial::deserialize_async;
 
@@ -49,6 +53,22 @@ pub async fn parse_tx_from_stdin() -> Result<Transaction> {
         Some(bytes) => Ok(deserialize_async(&bytes).await?),
         None => Err(Error::ParseFailed("Failed to decode transaction")),
     }
+}
+
+/// Auxiliary function to parse base64-encoded contract calls from stdin.
+pub async fn parse_calls_from_stdin() -> Result<Vec<ContractCallImport>> {
+    let lines = stdin().lines();
+
+    let mut calls = vec![];
+
+    for line in lines {
+        let Some(line) = base64::decode(&line?) else {
+            return Err(Error::ParseFailed("Failed to decode base64"))
+        };
+        calls.push(deserialize_async(&line).await?);
+    }
+
+    Ok(calls)
 }
 
 /// Auxiliary function to parse a base64 encoded transaction from
@@ -723,4 +743,210 @@ pub fn display_mining_config(
         None => String::from("-"),
     };
     output.push(format!("User data: {user_data}"));
+}
+
+/// Cast `ContractCallImport` to `ContractCallLeaf`
+fn to_leaf(call: &ContractCallImport) -> ContractCallLeaf {
+    ContractCallLeaf {
+        call: call.call().clone(),
+        proofs: call.proofs().iter().map(|p| Proof::new(p.clone())).collect(),
+    }
+}
+
+/// Recursively build subtree for a DarkTree
+fn build_subtree(
+    idx: usize,
+    calls: &[ContractCallImport],
+    children_map: &HashMap<usize, &Vec<usize>>,
+) -> DarkTree<ContractCallLeaf> {
+    let children_idx = children_map.get(&idx).map(|v| v.as_slice()).unwrap_or(&[]);
+
+    let children: Vec<DarkTree<ContractCallLeaf>> =
+        children_idx.iter().map(|&i| build_subtree(i, calls, children_map)).collect();
+
+    DarkTree::new(to_leaf(&calls[idx]), children, None, None)
+}
+
+/// Build a `Transaction` given a slice of calls and their mapping
+pub fn tx_from_calls_mapped(
+    calls: &[ContractCallImport],
+    map: &[(usize, Vec<usize>)],
+) -> Result<(TransactionBuilder, Vec<SecretKey>)> {
+    assert_eq!(calls.len(), map.len());
+
+    let signature_secrets: Vec<SecretKey> =
+        calls.iter().flat_map(|c| c.secrets().to_vec()).collect();
+
+    let children_map: HashMap<usize, &Vec<usize>> = map.iter().map(|(k, v)| (*k, v)).collect();
+
+    let (root_idx, root_children_idx) = &map[0];
+
+    let root_children: Vec<DarkTree<ContractCallLeaf>> =
+        root_children_idx.iter().map(|&i| build_subtree(i, calls, &children_map)).collect();
+
+    let tx_builder = TransactionBuilder::new(to_leaf(&calls[*root_idx]), root_children)?;
+
+    Ok((tx_builder, signature_secrets))
+}
+
+/// Auxiliary function to parse a contract call mapping.
+///
+/// The mapping is in the format of `{0: [1,2], 1: [], 2:[3], 3:[]}`.
+/// It supports nesting and this kind of logic as expected.
+///
+/// Errors out if there are non-unique keys or cyclic references.
+pub fn parse_tree(input: &str) -> std::result::Result<Vec<(usize, Vec<usize>)>, String> {
+    let s = input
+        .trim()
+        .strip_prefix('{')
+        .and_then(|s| s.strip_suffix('}'))
+        .ok_or("expected {}")?
+        .trim();
+
+    let mut entries = vec![];
+    let mut seen_keys = HashSet::new();
+
+    if s.is_empty() {
+        return Ok(entries)
+    }
+
+    let mut rest = s;
+    while !rest.is_empty() {
+        // Parse key
+        let (key_str, after_key) = rest.split_once(':').ok_or("expected ':'")?;
+        let key: usize = key_str.trim().parse().map_err(|_| "invalid key")?;
+
+        if !seen_keys.insert(key) {
+            return Err(format!("duplicate key: {}", key));
+        }
+
+        // Parse array
+        let after_key = after_key.trim();
+        let arr_start = after_key.strip_prefix('[').ok_or("expected '['")?;
+        let (arr_content, after_arr) = arr_start.split_once(']').ok_or("expected ']'")?;
+
+        let children: Vec<usize> = arr_content
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse().map_err(|_| "invalid child"))
+            .collect::<std::result::Result<_, _>>()?;
+
+        entries.push((key, children));
+
+        // Move to next entry
+        rest = after_arr.trim().strip_prefix(',').unwrap_or(after_arr).trim();
+    }
+
+    check_cycles(&entries)?;
+
+    Ok(entries)
+}
+
+fn check_cycles(entries: &[(usize, Vec<usize>)]) -> std::result::Result<(), String> {
+    let graph: HashMap<usize, &Vec<usize>> = entries.iter().map(|(k, v)| (*k, v)).collect();
+    let mut visited = HashSet::new();
+    let mut path = Vec::new();
+
+    fn dfs(
+        node: usize,
+        graph: &HashMap<usize, &Vec<usize>>,
+        visited: &mut HashSet<usize>,
+        path: &mut Vec<usize>,
+    ) -> std::result::Result<(), String> {
+        if let Some(pos) = path.iter().position(|&n| n == node) {
+            let cycle: Vec<_> = path[pos..].iter().chain(&[node]).map(|n| n.to_string()).collect();
+            return Err(format!("cycle detected: {}", cycle.join(" -> ")));
+        }
+
+        if visited.contains(&node) {
+            return Ok(());
+        }
+
+        path.push(node);
+        if let Some(children) = graph.get(&node) {
+            for &child in *children {
+                dfs(child, graph, visited, path)?;
+            }
+        }
+        path.pop();
+        visited.insert(node);
+
+        Ok(())
+    }
+
+    for &(key, _) in entries {
+        dfs(key, &graph, &mut visited, &mut path)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_tree() {
+        // Valid inputs
+        assert_eq!(parse_tree("{}").unwrap(), vec![]);
+        assert_eq!(parse_tree("{  }").unwrap(), vec![]);
+        assert_eq!(parse_tree("{ 0: [] }").unwrap(), vec![(0, vec![])]);
+        assert_eq!(parse_tree("{ 0: [1, 2, 3] }").unwrap(), vec![(0, vec![1, 2, 3])]);
+        assert_eq!(parse_tree("{0:[],1:[2]}").unwrap(), vec![(0, vec![]), (1, vec![2])]);
+        assert_eq!(parse_tree("{ 0: [], 1: [], }").unwrap(), vec![(0, vec![]), (1, vec![])]);
+        assert_eq!(parse_tree("{ 0: [1, 2,] }").unwrap(), vec![(0, vec![1, 2])]);
+
+        assert_eq!(
+            parse_tree("{ 0: [], 1: [2, 3], 2: [], 3: [4], 4: [] }").unwrap(),
+            vec![(0, vec![]), (1, vec![2, 3]), (2, vec![]), (3, vec![4]), (4, vec![])]
+        );
+
+        assert_eq!(
+            parse_tree("{   0  :  [  ]  ,   1  :  [  2  ,  3  ]   }").unwrap(),
+            vec![(0, vec![]), (1, vec![2, 3])]
+        );
+
+        assert_eq!(
+            parse_tree("{ 999: [1000, 1001], 1000: [], 1001: [] }").unwrap(),
+            vec![(999, vec![1000, 1001]), (1000, vec![]), (1001, vec![])]
+        );
+
+        // Order preservation
+        let keys: Vec<usize> =
+            parse_tree("{ 5: [], 2: [], 9: [], 0: [] }").unwrap().iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys, vec![5, 2, 9, 0]);
+
+        // Valid DAG (not a cycle)
+        assert!(parse_tree("{ 0: [1, 2], 1: [3], 2: [3], 3: [] }").is_ok());
+
+        // Syntax errors
+        assert!(parse_tree("0: [] }").is_err());
+        assert!(parse_tree("{ 0: []").is_err());
+        assert!(parse_tree("{ 0 [] }").is_err());
+        assert!(parse_tree("{ 0: ] }").is_err());
+        assert!(parse_tree("{ 0: [1, 2 }").is_err());
+        assert!(parse_tree("{ abc: [] }").is_err());
+        assert!(parse_tree("{ 0: [abc] }").is_err());
+        assert!(parse_tree("{ -1: [] }").is_err());
+
+        // Duplicate keys
+        assert!(parse_tree("{ 0: [], 0: [1] }").unwrap_err().contains("duplicate key: 0"));
+        assert!(parse_tree("{ 0: [], 1: [], 2: [], 1: [] }")
+            .unwrap_err()
+            .contains("duplicate key: 1"));
+
+        // Cycle detection
+        let err = parse_tree("{ 0: [0] }").unwrap_err();
+        assert!(err.contains("cycle detected") && err.contains("0 -> 0"));
+
+        let err = parse_tree("{ 0: [1], 1: [0] }").unwrap_err();
+        assert!(err.contains("cycle detected"));
+
+        let err = parse_tree("{ 0: [1], 1: [2], 2: [3], 3: [0] }").unwrap_err();
+        assert!(err.contains("cycle detected") && err.contains("0 -> 1 -> 2 -> 3 -> 0"));
+
+        let err = parse_tree("{ 0: [1], 1: [2], 2: [3], 3: [2] }").unwrap_err();
+        assert!(err.contains("cycle detected") && err.contains("2 -> 3 -> 2"));
+    }
 }

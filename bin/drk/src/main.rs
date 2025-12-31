@@ -57,8 +57,9 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use drk::{
     cli_util::{
-        display_mining_config, generate_completions, kaching, parse_mining_config_from_stdin,
-        parse_token_pair, parse_tx_from_stdin, parse_value_pair, print_output,
+        display_mining_config, generate_completions, kaching, parse_calls_from_stdin,
+        parse_mining_config_from_stdin, parse_token_pair, parse_tree, parse_tx_from_stdin,
+        parse_value_pair, print_output, tx_from_calls_mapped,
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
@@ -176,6 +177,13 @@ enum Subcmd {
 
     /// Attach the fee call to a transaction given from stdin
     AttachFee,
+
+    /// Create a transaction from newline-separated calls from stdin
+    TxFromCalls {
+        #[structopt(long = "map")]
+        /// The parent/children dependency map for the calls
+        calls_map: Option<String>,
+    },
 
     /// Inspect a transaction from stdin
     Inspect,
@@ -2013,6 +2021,47 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             println!("{}", base64::encode(&serialize_async(&tx).await));
 
             drk.stop_rpc_client().await
+        }
+
+        Subcmd::TxFromCalls { calls_map } => {
+            let calls = parse_calls_from_stdin().await?;
+            assert!(!calls.is_empty());
+
+            // If there is a given map, parse it, otherwise construct a
+            // linear map.
+            let calls_map = match calls_map {
+                Some(cmap) => match parse_tree(&cmap) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Failed parsing calls map: {}", e);
+                        exit(1);
+                    }
+                },
+                None => {
+                    let mut calls_map = Vec::with_capacity(calls.len());
+                    for (i, _) in calls.iter().enumerate() {
+                        calls_map.push((i, vec![]));
+                    }
+                    calls_map
+                }
+            };
+
+            if calls_map.len() != calls.len() {
+                eprintln!("Calls map size not equal to parsed calls");
+                exit(1);
+            }
+
+            // Create a transaction from the mapped calls.
+            let (mut tx_builder, signature_secrets) = tx_from_calls_mapped(&calls, &calls_map)?;
+
+            // Now build and sign the tx
+            let mut tx = tx_builder.build()?;
+            let sigs = tx.create_sigs(&signature_secrets)?;
+            tx.signatures.push(sigs);
+
+            println!("{}", base64::encode(&serialize_async(&tx).await));
+
+            Ok(())
         }
 
         Subcmd::Inspect => {
