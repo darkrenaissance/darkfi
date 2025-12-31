@@ -591,7 +591,8 @@ struct RenderContext<'a> {
 impl<'a> RenderContext<'a> {
     fn draw(&mut self) {
         if DEBUG_RENDER {
-            d!("RenderContext::draw()");
+            let screen_size = miniquad::window::screen_size();
+            d!("RenderContext::draw() [screen_size={screen_size:?}]");
         }
         if DEBUG_TRAX {
             get_trax().lock().set_curr(0);
@@ -687,7 +688,7 @@ impl<'a> RenderContext<'a> {
                 }
                 GfxDrawInstruction::ApplyView(view) => {
                     // Adjust view relative to cursor
-                    self.view = *view + self.cursor;
+                    self.view = *view + self.cursor + old_view.pos();
 
                     // We could just skip drawing when clipping rect isn't visible
                     // using an is_visible flag.

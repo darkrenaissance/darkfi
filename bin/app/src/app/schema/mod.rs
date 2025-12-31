@@ -136,6 +136,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let atom = &mut PropertyAtomicGuard::none();
 
+    /*
     let node = create_shortcut("zoom_out_shortcut");
     node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
     // Not sure what was eating my keys. This is a workaround.
@@ -192,6 +193,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Shortcut::new(me)).await;
     window.link(node);
+    */
 
     /*
     let node = create_gesture("zoom_gesture");
@@ -338,33 +340,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let content = content.setup(|me| Layer::new(me, app.render_api.clone())).await;
     window.link(content.clone());
-
-    // Debug bg layer cos of content size issues
-    let node = create_vector_art("bgdbg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0.8, 0., 0., 0.3],
-    );
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        5.,
-        [0., 1., 0., 1.],
-    );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
-    content.link(node);
 
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();

@@ -239,8 +239,6 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-
-    // Setup the pimpl
     let mut shape = VectorShape::new();
     shape.add_gradient_box(
         expr::const_f32(0.),

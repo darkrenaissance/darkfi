@@ -231,7 +231,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
 
         // Disable visilibity of all relevant window nodes
         // This is needed since for example all chats have a different node name.
-        let windows = sg_root.lookup_node("/window").unwrap().get_children();
+        let windows = sg_root.lookup_node("/window/content").unwrap().get_children();
         let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
 
         for node in windows.iter() {
@@ -244,7 +244,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
         }
 
         // Go back to the dev channel
-        let menu_node = sg_root.lookup_node("/window/dev_chat_layer").unwrap();
+        let menu_node = sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     };
 
@@ -421,11 +421,11 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
     let search = move || {
         let atom = &mut PropertyAtomicGuard::new();
 
-        let path = "/window/settings_layer/search_input";
+        let path = "/window/content/settings_layer/search_input";
         let node = sg_root3.lookup_node(path.to_string()).unwrap();
         let search_string = node.get_property_str("text").unwrap();
 
-        let path = "/window/settings_layer/search_label";
+        let path = "/window/content/settings_layer/search_label";
         let search_label_node = sg_root3.lookup_node(path.to_string()).unwrap();
 
         if search_string.len() > 0 {
@@ -434,7 +434,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
             let _ = search_label_node.set_property_f32(atom, Role::App, "font_size", 16.);
         }
 
-        let path = "/window/settings_layer/settings";
+        let path = "/window/content/settings_layer/settings";
         let node = sg_root3.lookup_node(path.to_string()).unwrap();
         let setting_nodes = node.get_children();
         let mut found_nodes = Vec::new();
@@ -462,7 +462,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
 
         // Update the counter
         let counter_text = found_nodes.len().to_string();
-        let path = "/window/settings_layer/search_count";
+        let path = "/window/content/settings_layer/search_count";
         let node = sg_root3.lookup_node(path.to_string()).unwrap();
         let _ = node.set_property_str(atom, Role::App, "text", &counter_text).unwrap();
     };
@@ -1186,13 +1186,13 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
                 let sg_root = sg_root2.clone();
                 let mut lock = cloned_active_setting.lock().unwrap();
 
-                let path = "/window/settings_layer/search_input";
+                let path = "/window/content/settings_layer/search_input";
                 let node = sg_root.lookup_node(path).unwrap();
                 //node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
                 node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
                 let was_active = if let Some(s) = lock.as_ref() {
-                    let path = format!("/window/settings_layer/settings/{}", &s.name);
+                    let path = format!("/window/content/settings_layer/settings/{}", &s.name);
                     let old_node = sg_root.lookup_node(&path).unwrap();
 
                     let _was_active = s.name == setting_clone2.clone().name;
@@ -1501,13 +1501,13 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
         }
     }
 
-    let settings_node = app.sg_root.lookup_node("/window/settings_layer").unwrap();
+    let settings_node = app.sg_root.lookup_node("/window/content/settings_layer").unwrap();
     settings_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 
     // Searchbar results count
-    let node = app.sg_root.lookup_node("/window/settings_layer/settings").unwrap();
+    let node = app.sg_root.lookup_node("/window/content/settings_layer/settings").unwrap();
     let counter_text = node.get_children().len().to_string();
-    let node = app.sg_root.lookup_node("/window/settings_layer/search_count").unwrap();
+    let node = app.sg_root.lookup_node("/window/content/settings_layer/search_count").unwrap();
     node.set_property_str(atom, Role::App, "text", &counter_text).unwrap();
 }
 
