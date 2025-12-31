@@ -179,6 +179,8 @@ impl Session for RefineSession {
     fn type_id(&self) -> SessionBitFlag {
         SESSION_REFINE
     }
+
+    async fn reload(self: Arc<Self>) {}
 }
 
 /// Periodically probes entries in the greylist.

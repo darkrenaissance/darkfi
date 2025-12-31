@@ -145,6 +145,8 @@ impl Session for SeedSyncSession {
     fn type_id(&self) -> SessionBitFlag {
         SESSION_SEED
     }
+
+    async fn reload(self: Arc<Self>) {}
 }
 
 struct Slot {

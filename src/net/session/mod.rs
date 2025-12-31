@@ -254,4 +254,7 @@ pub trait Session: Sync {
 
     /// Return the session bit flag for the session type
     fn type_id(&self) -> SessionBitFlag;
+
+    /// Reload settings for this session
+    async fn reload(self: Arc<Self>);
 }

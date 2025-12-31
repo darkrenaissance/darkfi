@@ -108,6 +108,8 @@ impl Session for ManualSession {
     fn type_id(&self) -> SessionBitFlag {
         SESSION_MANUAL
     }
+
+    async fn reload(self: Arc<Self>) {}
 }
 
 struct Slot {

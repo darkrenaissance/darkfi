@@ -223,4 +223,6 @@ impl Session for InboundSession {
     fn type_id(&self) -> SessionBitFlag {
         SESSION_INBOUND
     }
+
+    async fn reload(self: Arc<Self>) {}
 }

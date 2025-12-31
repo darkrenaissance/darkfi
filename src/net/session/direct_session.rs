@@ -430,6 +430,8 @@ impl Session for DirectSession {
     fn type_id(&self) -> SessionBitFlag {
         SESSION_DIRECT
     }
+
+    async fn reload(self: Arc<Self>) {}
 }
 
 struct ChannelTask {

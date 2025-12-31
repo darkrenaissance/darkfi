@@ -567,11 +567,8 @@ impl DarkIrc {
         let start_task = ex.spawn(async move {
             while let Ok(_) = start_recv.recv().await {
                 i!("App started: set outbound connections to {P2P_OUTBOUND_ACTIVE}");
-                if let Err(e) =
-                    p2p.session_outbound().set_outbound_connections(P2P_OUTBOUND_ACTIVE).await
-                {
-                    e!("Failed to set outbound connections: {e}");
-                }
+                p2p.settings().write().await.outbound_connections = P2P_OUTBOUND_ACTIVE;
+                p2p.clone().reload().await;
             }
         });
 
@@ -581,11 +578,8 @@ impl DarkIrc {
         let stop_task = ex.spawn(async move {
             while let Ok(_) = stop_recv.recv().await {
                 i!("App stopped: set outbound connections to {P2P_OUTBOUND_SLEEP}");
-                if let Err(e) =
-                    p2p.session_outbound().set_outbound_connections(P2P_OUTBOUND_SLEEP).await
-                {
-                    e!("Failed to set outbound connections: {e}");
-                }
+                p2p.settings().write().await.outbound_connections = P2P_OUTBOUND_SLEEP;
+                p2p.clone().reload().await;
             }
         });
 

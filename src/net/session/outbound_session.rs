@@ -140,7 +140,7 @@ impl OutboundSession {
 
     /// Sets the number of outbound connections.
     /// If the number is less than the current, then it will first drop empty slots.
-    pub async fn set_outbound_connections(self: Arc<Self>, n: usize) -> Result<()> {
+    async fn set_outbound_connections(self: Arc<Self>, n: usize) {
         // Guaranteed to be correct since slots is locked for the duration of this method.
         let mut slots = self.slots.lock().await;
         let slots_len = slots.len();
@@ -151,8 +151,6 @@ impl OutboundSession {
             self.remove_slots(&mut slots, n).await;
         }
         // Do nothing when n == current
-
-        Ok(())
     }
 
     async fn add_slots(self: Arc<Self>, slots: &mut Vec<Arc<Slot>>, target: usize) {
@@ -208,6 +206,11 @@ impl Session for OutboundSession {
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_OUTBOUND
+    }
+
+    async fn reload(self: Arc<Self>) {
+        let outbound_connections = self.p2p().settings().read().await.outbound_connections;
+        self.set_outbound_connections(outbound_connections).await;
     }
 }
 

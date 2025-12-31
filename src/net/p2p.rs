@@ -36,7 +36,7 @@ use super::{
     session::{
         DirectSession, DirectSessionPtr, InboundSession, InboundSessionPtr, ManualSession,
         ManualSessionPtr, OutboundSession, OutboundSessionPtr, RefineSession, RefineSessionPtr,
-        SeedSyncSession, SeedSyncSessionPtr,
+        SeedSyncSession, SeedSyncSessionPtr, Session,
     },
     settings::Settings,
 };
@@ -225,6 +225,27 @@ impl P2p {
     /// Return an atomic pointer to the set network settings
     pub fn settings(&self) -> Arc<AsyncRwLock<Settings>> {
         Arc::clone(&self.settings)
+    }
+
+    /// Reload settings and apply any changes to the running P2P subsystem.
+    ///
+    /// Users should modify settings through the settings lock, then call this
+    /// method to apply the changes:
+    /// ```rust
+    /// let mut settings = p2p.settings().write().await;
+    /// settings.outbound_connections = new_value;
+    /// drop(settings);
+    /// p2p.reload().await;
+    /// ```
+    pub async fn reload(self: Arc<Self>) {
+        self.session_manual().reload().await;
+        self.session_inbound().reload().await;
+        self.session_outbound().reload().await;
+        self.session_refine().reload().await;
+        self.session_seedsync().reload().await;
+        self.session_direct().reload().await;
+
+        debug!(target: "net::p2p::reload", "P2P settings reloaded successfully");
     }
 
     /// Return an atomic pointer to the list of hosts
