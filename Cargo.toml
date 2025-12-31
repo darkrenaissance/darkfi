@@ -135,8 +135,8 @@ tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
 
 [dev-dependencies]
 clap = {version = "4.4.11", features = ["derive"]}
-halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = "0.3.1"
+halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}
+halo2_gadgets = {version = "0.4.0", features = ["circuit-params", "test-dependencies"]}
 plotters = "0.3.7"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
@@ -300,7 +300,7 @@ zk = [
     "halo2_gadgets",
     "rand",
 
-    "async-sdk",
+    "darkfi-sdk",
     "zkas",
 ]
 

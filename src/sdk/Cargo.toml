@@ -49,8 +49,8 @@ hashbrown = "0.16.1"
 sled-overlay = "0.1.14"
 
 [dev-dependencies]
-halo2_proofs = {version = "0.3.2", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = {version = "0.4.0", features = ["test-dependencies"]}
+halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}
+halo2_gadgets = {version = "0.4.0", features = ["circuit-params", "test-dependencies"]}
 
 [lints]
 workspace = true

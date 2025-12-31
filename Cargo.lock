@@ -1815,8 +1815,7 @@ dependencies = [
  "ed25519-compact",
  "futures",
  "futures-rustls",
- "halo2_gadgets 0.3.1",
- "halo2_gadgets 0.4.0",
+ "halo2_gadgets",
  "halo2_proofs",
  "hex",
  "httparse",
@@ -1913,7 +1912,7 @@ dependencies = [
  "bs58",
  "chacha20poly1305",
  "darkfi-serial",
- "halo2_gadgets 0.4.0",
+ "halo2_gadgets",
  "halo2_proofs",
  "hashbrown 0.16.1",
  "lazy_static",
@@ -1939,7 +1938,7 @@ dependencies = [
  "darkfi_dao_contract",
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
- "halo2_gadgets 0.4.0",
+ "halo2_gadgets",
  "halo2_proofs",
  "plotters",
  "pyo3",
@@ -3470,26 +3469,6 @@ dependencies = [
 
 [[package]]
 name = "halo2_gadgets"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73a5e510d58a07d8ed238a5a8a436fe6c2c79e1bb2611f62688bc65007b4e6e7"
-dependencies = [
- "arrayvec",
- "bitvec",
- "ff",
- "group",
- "halo2_poseidon 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "halo2_proofs",
- "lazy_static",
- "pasta_curves",
- "rand 0.8.5",
- "sinsemilla",
- "subtle",
- "uint 0.9.5",
-]
-
-[[package]]
-name = "halo2_gadgets"
 version = "0.4.0"
 source = "git+https://github.com/parazyd/halo2?branch=v032#42365ace1a0c0a1f52bc099894367fddf2fd69de"
 dependencies = [
@@ -3497,7 +3476,7 @@ dependencies = [
  "bitvec",
  "ff",
  "group",
- "halo2_poseidon 0.1.0 (git+https://github.com/parazyd/halo2?branch=v032)",
+ "halo2_poseidon",
  "halo2_proofs",
  "lazy_static",
  "pasta_curves",
@@ -3506,18 +3485,6 @@ dependencies = [
  "sinsemilla",
  "subtle",
  "uint 0.9.5",
-]
-
-[[package]]
-name = "halo2_poseidon"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa3da60b81f02f9b33ebc6252d766f843291fb4d2247a07ae73d20b791fc56f"
-dependencies = [
- "bitvec",
- "ff",
- "group",
- "pasta_curves",
 ]
 
 [[package]]
