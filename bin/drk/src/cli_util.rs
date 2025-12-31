@@ -390,6 +390,10 @@ pub fn generate_completions(shell: &str) -> Result<String> {
     let attach_fee = SubCommand::with_name("attach-fee")
         .about("Attach the fee call to a transaction given from stdin");
 
+    // TxFromCalls
+    let tx_from_calls = SubCommand::with_name("tx-from-calls")
+        .about("Create a transaction from newline-separated calls from stdin");
+
     // Inspect
     let inspect = SubCommand::with_name("inspect").about("Inspect a transaction from stdin");
 
@@ -579,6 +583,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         transfer,
         otc,
         attach_fee,
+        tx_from_calls,
         inspect,
         broadcast,
         dao,
