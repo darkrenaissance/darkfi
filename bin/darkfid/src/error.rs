@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
+use std::collections::HashMap;
+
+use tinyjson::JsonValue;
+
+use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResponse, JsonResult};
 
 /// Custom RPC errors available for darkfid.
 /// Please sort them sensefully.
@@ -59,33 +63,32 @@ pub enum RpcError {
     MinerUnknownClient = -32317,
     MinerMissingJobId = -32318,
     MinerInvalidJobId = -32319,
-    MinerUnknownJob = -32320,
-    MinerMissingNonce = -32321,
-    MinerInvalidNonce = -32322,
-    MinerMissingResult = -32323,
-    MinerInvalidResult = -32324,
+    MinerMissingNonce = -32320,
+    MinerInvalidNonce = -32321,
+    MinerMissingResult = -32322,
+    MinerInvalidResult = -32323,
 
     // Merge mining errors
-    MinerMissingAddress = -32325,
-    MinerInvalidAddress = -32326,
-    MinerMissingAuxHash = -32327,
-    MinerInvalidAuxHash = -32328,
-    MinerMissingHeight = -32329,
-    MinerInvalidHeight = -32330,
-    MinerMissingPrevId = -32331,
-    MinerInvalidPrevId = -32332,
-    MinerMissingAuxBlob = -32333,
-    MinerInvalidAuxBlob = -32334,
-    MinerMissingBlob = -32335,
-    MinerInvalidBlob = -32336,
-    MinerMissingMerkleProof = -32337,
-    MinerInvalidMerkleProof = -32338,
-    MinerMissingPath = -32339,
-    MinerInvalidPath = -32340,
-    MinerMissingSeedHash = -32341,
-    MinerInvalidSeedHash = -32342,
-    MinerMerkleProofConstructionFailed = -32343,
-    MinerMoneroPowDataConstructionFailed = -32344,
+    MinerMissingAddress = -32324,
+    MinerInvalidAddress = -32325,
+    MinerMissingAuxHash = -32326,
+    MinerInvalidAuxHash = -32327,
+    MinerMissingHeight = -32328,
+    MinerInvalidHeight = -32329,
+    MinerMissingPrevId = -32330,
+    MinerInvalidPrevId = -32331,
+    MinerMissingAuxBlob = -32332,
+    MinerInvalidAuxBlob = -32333,
+    MinerMissingBlob = -32334,
+    MinerInvalidBlob = -32335,
+    MinerMissingMerkleProof = -32336,
+    MinerInvalidMerkleProof = -32337,
+    MinerMissingPath = -32338,
+    MinerInvalidPath = -32339,
+    MinerMissingSeedHash = -32340,
+    MinerInvalidSeedHash = -32341,
+    MinerMerkleProofConstructionFailed = -32342,
+    MinerMoneroPowDataConstructionFailed = -32343,
 }
 
 fn to_tuple(e: RpcError) -> (i32, String) {
@@ -130,7 +133,6 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         RpcError::MinerUnknownClient => "Request client is unknown",
         RpcError::MinerMissingJobId => "Request is missing the job ID",
         RpcError::MinerInvalidJobId => "Request job ID is invalid",
-        RpcError::MinerUnknownJob => "Request job is unknown",
         RpcError::MinerMissingNonce => "Request is missing the nonce",
         RpcError::MinerInvalidNonce => "Request nonce is invalid",
         RpcError::MinerMissingResult => "Request is missing the result",
@@ -176,4 +178,15 @@ pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
     }
 
     JsonError::new(ServerError(code), Some(default_msg), id).into()
+}
+
+pub fn miner_status_response(id: u16, status: &str) -> JsonResult {
+    JsonResponse::new(
+        JsonValue::from(HashMap::from([(
+            "status".to_string(),
+            JsonValue::from(String::from(status)),
+        )])),
+        id,
+    )
+    .into()
 }

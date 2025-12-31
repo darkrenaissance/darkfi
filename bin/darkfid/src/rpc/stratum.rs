@@ -33,7 +33,11 @@ use darkfi::{
     system::StoppableTaskPtr,
 };
 
-use crate::{registry::model::MinerRewardsRecipientConfig, server_error, DarkfiNode, RpcError};
+use crate::{
+    error::{miner_status_response, server_error, RpcError},
+    registry::model::MinerRewardsRecipientConfig,
+    DarkfiNode,
+};
 
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM.md
 // https://github.com/xmrig/xmrig-proxy/blob/master/doc/STRATUM_EXT.md
@@ -237,14 +241,7 @@ impl DarkfiNode {
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         if !*self.validator.synced.read().await {
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Grab registry submissions lock
@@ -266,7 +263,7 @@ impl DarkfiNode {
         // If we don't know about this client, we can just abort here
         let mut jobs = self.registry.jobs.write().await;
         let Some(client) = jobs.get(client_id) else {
-            return server_error(RpcError::MinerUnknownClient, id, None)
+            return miner_status_response(id, "rejected")
         };
 
         // Parse job id
@@ -280,27 +277,20 @@ impl DarkfiNode {
         // If this job doesn't match the client one, we can just abort
         // here.
         if &client.job != job_id {
-            return server_error(RpcError::MinerUnknownJob, id, None)
+            return miner_status_response(id, "rejected")
         }
 
         // If this client job wallet template doesn't exist, we can
         // just abort here.
         let mut block_templates = self.registry.block_templates.write().await;
         let Some(block_template) = block_templates.get_mut(&client.wallet) else {
-            return server_error(RpcError::MinerUnknownJob, id, None)
+            return miner_status_response(id, "rejected")
         };
 
         // If this template has been already submitted, reject this
         // submission.
         if block_template.submitted {
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Parse nonce
@@ -364,14 +354,7 @@ impl DarkfiNode {
             drop(mm_jobs);
             drop(submit_lock);
 
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Mark block as submitted
@@ -382,14 +365,7 @@ impl DarkfiNode {
         drop(jobs);
         drop(submit_lock);
 
-        JsonResponse::new(
-            JsonValue::from(HashMap::from([(
-                "status".to_string(),
-                JsonValue::from(String::from("OK")),
-            )])),
-            id,
-        )
-        .into()
+        miner_status_response(id, "OK")
     }
 
     // RPCAPI:
@@ -423,13 +399,6 @@ impl DarkfiNode {
         };
 
         // Respond with keepalived message
-        JsonResponse::new(
-            JsonValue::from(HashMap::from([(
-                "status".to_string(),
-                JsonValue::from(String::from("KEEPALIVED")),
-            )])),
-            id,
-        )
-        .into()
+        miner_status_response(id, "KEEPALIVED")
     }
 }

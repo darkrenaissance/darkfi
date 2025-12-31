@@ -46,7 +46,11 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::keypair::Network;
 
-use crate::{registry::model::MinerRewardsRecipientConfig, server_error, DarkfiNode, RpcError};
+use crate::{
+    error::{miner_status_response, server_error, RpcError},
+    registry::model::MinerRewardsRecipientConfig,
+    DarkfiNode,
+};
 
 // https://github.com/SChernykh/p2pool/blob/master/docs/MERGE_MINING.MD
 
@@ -282,14 +286,7 @@ impl DarkfiNode {
     pub async fn xmr_merge_mining_submit_solution(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         if !*self.validator.synced.read().await {
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Grab registry submissions lock
@@ -314,27 +311,20 @@ impl DarkfiNode {
         // If we don't know about this mm job, we can just abort here
         let mut mm_jobs = self.registry.mm_jobs.write().await;
         let Some(wallet) = mm_jobs.get(aux_hash) else {
-            return server_error(RpcError::MinerUnknownJob, id, None)
+            return miner_status_response(id, "rejected")
         };
 
         // If this job wallet template doesn't exist, we can just
         // abort here.
         let mut block_templates = self.registry.block_templates.write().await;
         let Some(block_template) = block_templates.get_mut(wallet) else {
-            return server_error(RpcError::MinerUnknownJob, id, None)
+            return miner_status_response(id, "rejected")
         };
 
         // If this template has been already submitted, reject this
         // submission.
         if block_template.submitted {
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Parse aux_blob
@@ -459,14 +449,7 @@ impl DarkfiNode {
             drop(mm_jobs);
             drop(submit_lock);
 
-            return JsonResponse::new(
-                JsonValue::from(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::from(String::from("rejected")),
-                )])),
-                id,
-            )
-            .into()
+            return miner_status_response(id, "rejected")
         }
 
         // Mark block as submitted
@@ -477,13 +460,6 @@ impl DarkfiNode {
         drop(mm_jobs);
         drop(submit_lock);
 
-        JsonResponse::new(
-            JsonValue::from(HashMap::from([(
-                "status".to_string(),
-                JsonValue::from(String::from("accepted")),
-            )])),
-            id,
-        )
-        .into()
+        miner_status_response(id, "accepted")
     }
 }
