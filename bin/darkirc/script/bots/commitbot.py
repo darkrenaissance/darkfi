@@ -89,7 +89,7 @@ def handle_forward_push(irc, data):
     branch = get_branch_name_from_push_event(data)
 
     commits = list(map(fmt_commit, data['commits']))
-    for commit in commits:
+    for commit in reversed(commits):
         print("Push event:")
         print(f"@{author} pushed {num_commits} to {branch}: {commit}")
         print("==============================================")
