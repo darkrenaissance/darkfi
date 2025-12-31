@@ -1268,34 +1268,36 @@ impl Stage {
             d!("Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
         }
     }
-    fn method_replace_draw_calls(&mut self, timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
+    fn method_replace_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
         if DEBUG_GFXAPI {
             d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
-        for (key, val) in dcs {
-            let val = val.compile(&self.textures, &self.buffers, timest);
-            //self.draw_calls.insert(key, val);
-            match self.draw_calls.get_mut(&key) {
-                Some(old_val) => {
-                    // Only replace the draw call if it is more recent
-                    if old_val.timest < timest {
-                        if DEBUG_TRAX {
-                            get_trax().lock().put_stat(0);
-                        }
-                        *old_val = val;
-                    } else {
-                        t!("Rejected stale draw_call {key}: {val:?}");
-                        if DEBUG_TRAX {
-                            get_trax().lock().put_stat(2);
-                        }
-                    }
-                }
-                None => {
-                    self.draw_calls.insert(key, val);
+
+        // Phase 1: Check for conflicts with newer batches
+        // If any draw call in this batch belongs to an older batch than the existing one,
+        // reject the entire batch to maintain atomicity
+        for (key, _) in &dcs {
+            if let Some(old_val) = self.draw_calls.get(key) {
+                if old_val.timest > batch_timest {
+                    // Entire batch is stale, reject all
+                    t!("Rejected stale batch {batch_timest}: conflict with newer batch {} on {key}", old_val.timest);
                     if DEBUG_TRAX {
-                        get_trax().lock().put_stat(1);
+                        get_trax().lock().put_stat(3); // New stat: rejected batch
                     }
+                    return;
                 }
+            }
+        }
+
+        // Phase 2: Apply entire batch atomically
+        for (key, val) in dcs {
+            let val = val.compile(&self.textures, &self.buffers, batch_timest);
+
+            // Insert/replace draw call
+            self.draw_calls.insert(key, val);
+
+            if DEBUG_TRAX {
+                get_trax().lock().put_stat(1); // Success
             }
         }
     }
