@@ -76,9 +76,6 @@ class JsonRpc:
     async def get_info(self):
         return await self._make_request("p2p.get_info", [])
 
-    async def set_outbound_connections(self, n):
-        return await self._make_request("p2p.set_outbound_connections", [n])
-
 async def main(argv):
     rpc = JsonRpc()
     while True:

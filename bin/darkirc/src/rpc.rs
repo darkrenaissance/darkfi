@@ -44,9 +44,6 @@ impl RequestHandler<()> for DarkIrc {
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
             "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
-            "p2p.set_outbound_connections" => {
-                self.p2p_set_outbound_connections(req.id, req.params).await
-            }
 
             "deg.switch" => self.deg_switch(req.id, req.params).await,
             "deg.subscribe_events" => self.deg_subscribe_events(req.id, req.params).await,
