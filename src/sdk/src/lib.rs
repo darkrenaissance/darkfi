@@ -35,7 +35,7 @@ pub mod deploy;
 
 /// Error handling
 pub mod error;
-pub use error::{ContractError, GenericResult};
+pub use error::{ContractError, ContractResult, GenericResult};
 
 /// Hex encoding/decoding from bytes
 pub mod hex;
@@ -49,7 +49,7 @@ pub mod crypto;
 
 /// Transaction structure
 pub mod tx;
-pub use tx::ContractCall;
+pub use tx::{ContractCall, ContractCallImport};
 
 /// Convenience utilities
 pub mod util;

@@ -25,7 +25,10 @@ use std::{
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::{crypto::ContractId, ContractError, GenericResult};
+use super::{
+    crypto::{ContractId, SecretKey},
+    ContractError, GenericResult,
+};
 use crate::crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
@@ -166,5 +169,41 @@ impl Debug for ContractCall {
             write!(f, ", function_code={}", calldata[0])?;
         }
         write!(f, ")")
+    }
+}
+
+/// This is a wrapper around [`ContractCall`] that also adds secret keys that
+/// should sign the entire transaction and any relevant ZK proofs.
+/// This is normally created by external smart contract clients, and used by
+/// the wallet when creating transactions.
+#[derive(Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct ContractCallImport {
+    /// Single contract call
+    call: ContractCall,
+    /// ZK proofs used for the call
+    proofs: Vec<Vec<u8>>,
+    /// Secret keys used to sign the tx
+    secrets: Vec<SecretKey>,
+}
+
+impl ContractCallImport {
+    /// Create a new `ContractCallImport` given a call and secret keys
+    pub fn new(call: ContractCall, proofs: Vec<Vec<u8>>, secrets: Vec<SecretKey>) -> Self {
+        Self { call, proofs, secrets }
+    }
+
+    /// Reference the inner `ContractCall`
+    pub fn call(&self) -> &ContractCall {
+        &self.call
+    }
+
+    /// Reference the inner ZK proofs
+    pub fn proofs(&self) -> &[Vec<u8>] {
+        &self.proofs
+    }
+
+    /// Reference the inner secret keys
+    pub fn secrets(&self) -> &[SecretKey] {
+        &self.secrets
     }
 }
