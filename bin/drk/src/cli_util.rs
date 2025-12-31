@@ -135,8 +135,7 @@ pub async fn kaching() {
 
     let Ok(source) = Decoder::new(cursor) else { return };
     sink.append(source);
-
-    sink.sleep_until_end();
+    sink.detach();
 }
 
 /// Auxiliary function to generate provided shell completions.
