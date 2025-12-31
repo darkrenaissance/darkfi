@@ -330,6 +330,12 @@ impl RenderApi {
     pub fn replace_draw_calls(&self, batch_id: BatchGuardId, dcs: Vec<(DcId, DrawCall)>) {
         let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
         self.send(method);
+
+        // I'm not sure whether we need this. Anyway its not fully reliable either since
+        // we have no guarantee that when `Stage::update()` whether this method is ready
+        // in the receiver.
+        #[cfg(target_os = "android")]
+        miniquad::window::schedule_update();
     }
 
     fn start_batch(&self, batch_id: BatchGuardId, tag: DebugTag) {
@@ -340,6 +346,10 @@ impl RenderApi {
         let timest = unixtime();
         let method = GraphicsMethod::EndBatch { batch_id, timest };
         self.send(method);
+
+        // Force an update
+        #[cfg(target_os = "android")]
+        miniquad::window::schedule_update();
     }
 
     pub fn make_guard(&self, debug_str: Option<&'static str>) -> PropertyAtomicGuard {
@@ -954,13 +964,11 @@ struct Stage {
     anims: Box<HashMap<AnimId, GfxSeqAnim>>,
 
     epoch: EpochIndex,
-    method_queue: Arc<SyncMutex<Vec<(EpochIndex, GraphicsMethod)>>>,
+    method_recv: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
 
     pruner: PruneMethodHeap,
     screen_state: ScreenState,
-    #[cfg(target_os = "android")]
-    ex: ExecutorPtr,
 }
 
 impl Stage {
@@ -978,24 +986,6 @@ impl Stage {
         god.start_app(epoch);
         let method_recv = god.method_recv.clone();
         let event_pub = god.event_pub.clone();
-
-        let ex = god.fg_ex.clone();
-        let method_queue = Arc::new(SyncMutex::new(vec![]));
-        let method_queue2 = method_queue.clone();
-        let sink_task = ex.spawn(async move {
-            // Pull from render_api
-            while let Ok((epoch, method)) = method_recv.recv().await {
-                let is_replace_dc = matches!(method, GraphicsMethod::ReplaceGfxDrawCalls { .. });
-                // Append to stage data
-                method_queue2.lock().push((epoch, method));
-                // If ReplaceGfxDrawCall then wake up miniquad
-                if is_replace_dc {
-                    #[cfg(target_os = "android")]
-                    miniquad::window::schedule_update();
-                }
-            }
-        });
-        god.fg_runtime.push_task(sink_task);
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -1025,13 +1015,11 @@ impl Stage {
             anims: Box::new(anims),
 
             epoch,
-            method_queue,
+            method_recv,
             event_pub,
 
             pruner: PruneMethodHeap::new(epoch),
             screen_state: ScreenState::On,
-            #[cfg(target_os = "android")]
-            ex: ex.clone(),
         };
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
@@ -1347,8 +1335,7 @@ impl Stage {
     #[instrument(skip_all, target = "gfx::process")]
     fn process_methods(&mut self) {
         // Process as many methods as we can
-        let methods = std::mem::take(&mut *self.method_queue.lock());
-        for (epoch, method) in methods {
+        while let Ok((epoch, method)) = self.method_recv.try_recv() {
             if DEBUG_TRAX {
                 self.trax_method(epoch, &method);
             }
@@ -1479,9 +1466,9 @@ impl PruneMethodHeap {
     }
 
     #[instrument(skip_all, target = "gfx::pruner")]
-    fn drain(&mut self, methods: Vec<(EpochIndex, GraphicsMethod)>) {
+    fn drain(&mut self, method_recv: &async_channel::Receiver<(EpochIndex, GraphicsMethod)>) {
         // Process as many methods as we can
-        for (epoch, method) in methods {
+        while let Ok((epoch, method)) = method_recv.try_recv() {
             if epoch < self.epoch {
                 // Discard old rubbish
                 t!(
@@ -1723,15 +1710,13 @@ impl EventHandler for Stage {
                 self.close_pending_batches();
 
                 // Screen is off so collect all methods into the pruner
-                let methods = std::mem::take(&mut *self.method_queue.lock());
-                self.pruner.drain(methods);
+                self.pruner.drain(&self.method_recv);
             }
             ScreenState::Off => {
                 assert!(self.pending_batches.is_empty());
 
                 // Screen is off so collect all methods into the pruner
-                let methods = std::mem::take(&mut *self.method_queue.lock());
-                self.pruner.drain(methods);
+                self.pruner.drain(&self.method_recv);
             }
             ScreenState::ReadyOn => {
                 // We actually want to skip draining the prune queue the first time so
