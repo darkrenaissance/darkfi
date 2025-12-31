@@ -961,8 +961,6 @@ struct Stage {
     screen_state: ScreenState,
     #[cfg(target_os = "android")]
     ex: ExecutorPtr,
-    #[cfg(target_os = "android")]
-    refresh_task: Option<smol::Task<()>>,
 }
 
 impl Stage {
@@ -1034,17 +1032,11 @@ impl Stage {
             screen_state: ScreenState::On,
             #[cfg(target_os = "android")]
             ex: ex.clone(),
-            #[cfg(target_os = "android")]
-            refresh_task: None,
         };
-
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
         self_.pruner.anims = &*self_.anims as *const _;
         self_.pruner.dropped_batches = &mut *self_.dropped_batches as *mut _;
-
-        self_.start_refresh_task();
-
         self_
     }
 
@@ -1437,20 +1429,6 @@ impl Stage {
         }
         assert!(self.pending_batches.is_empty());
     }
-
-    fn start_refresh_task(&mut self) {
-        #[cfg(target_os = "android")]
-        {
-            assert!(self.refresh_task.is_none());
-            // For animations do periodic refresh every 40 ms
-            self.refresh_task = Some(self.ex.spawn(async move {
-                loop {
-                    darkfi::system::msleep(40).await;
-                    miniquad::window::schedule_update();
-                }
-            }));
-        }
-    }
 }
 
 struct PendingAnim {
@@ -1742,11 +1720,6 @@ impl EventHandler for Stage {
 
         match self.screen_state {
             ScreenState::SwitchOff => {
-                #[cfg(target_os = "android")]
-                {
-                    self.refresh_task = None;
-                }
-
                 self.close_pending_batches();
 
                 // Screen is off so collect all methods into the pruner
@@ -1754,11 +1727,6 @@ impl EventHandler for Stage {
                 self.pruner.drain(methods);
             }
             ScreenState::Off => {
-                #[cfg(target_os = "android")]
-                {
-                    assert!(self.refresh_task.is_none());
-                }
-
                 assert!(self.pending_batches.is_empty());
 
                 // Screen is off so collect all methods into the pruner
@@ -1766,25 +1734,14 @@ impl EventHandler for Stage {
                 self.pruner.drain(methods);
             }
             ScreenState::ReadyOn => {
-                self.start_refresh_task();
                 // We actually want to skip draining the prune queue the first time so
                 // miniquad draw() actually gets a chance to be called first.
                 // Otherwise we will see a black screen for a sec or so while update() is running.
             }
             ScreenState::PrimedOn => {
-                #[cfg(target_os = "android")]
-                {
-                    assert!(self.refresh_task.is_some());
-                }
-
                 self.prime_screen();
             }
             ScreenState::SwitchOn => {
-                #[cfg(target_os = "android")]
-                {
-                    assert!(self.refresh_task.is_some());
-                }
-
                 // This should have been cleared in previous PrimedOn state
                 let methods = self.pruner.recv_all();
                 assert!(methods.is_empty());
@@ -1792,11 +1749,6 @@ impl EventHandler for Stage {
                 self.process_methods();
             }
             ScreenState::On => {
-                #[cfg(target_os = "android")]
-                {
-                    assert!(self.refresh_task.is_some());
-                }
-
                 self.process_methods();
             }
         }
@@ -1918,6 +1870,8 @@ pub fn run_gui(linux_backend: miniquad::conf::LinuxBackend) {
             linux_backend,
             #[cfg(target_os = "android")]
             blocking_event_loop: true,
+            #[cfg(target_os = "android")]
+            sleep_interval_ms: Some(40),
             android_panic_hook: false,
             ..Default::default()
         },
