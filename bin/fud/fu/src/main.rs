@@ -41,7 +41,7 @@ use darkfi::{
 
 use fud::{
     resource::{Resource, ResourceStatus, ResourceType},
-    util::hash_to_string,
+    util::{hash_to_string, FileSelection},
 };
 
 mod util;
@@ -409,19 +409,19 @@ impl Fu {
         let resources: Vec<Resource> = resources_json.into_iter().map(|v| v.into()).collect();
 
         for resource in resources.iter() {
-            let tree: Vec<TreeNode<&str>> = vec![
-                TreeNode::kv("ID", hash_to_string(&resource.hash)),
+            let mut tree: Vec<TreeNode<String>> = vec![
+                TreeNode::kv("ID".to_string(), hash_to_string(&resource.hash)),
                 TreeNode::kvc(
-                    "Type",
+                    "Type".to_string(),
                     resource.rtype.as_str().to_string(),
                     type_to_colorspec(&resource.rtype),
                 ),
                 TreeNode::kvc(
-                    "Status",
+                    "Status".to_string(),
                     resource.status.as_str().to_string(),
                     status_to_colorspec(&resource.status),
                 ),
-                TreeNode::kv("Chunks", {
+                TreeNode::kv("Chunks".to_string(), {
                     if let ResourceType::Directory = resource.rtype {
                         format!(
                             "{}/{} ({}/{})",
@@ -438,7 +438,7 @@ impl Fu {
                         )
                     }
                 }),
-                TreeNode::kv("Bytes", {
+                TreeNode::kv("Bytes".to_string(), {
                     if let ResourceType::Directory = resource.rtype {
                         format!(
                             "{} ({})",
@@ -457,6 +457,14 @@ impl Fu {
                     }
                 }),
             ];
+            if let FileSelection::Set(set) = &resource.file_selection {
+                tree.push(TreeNode::key("Selected files".to_string()));
+                tree.last_mut().unwrap().children = set
+                    .clone()
+                    .into_iter()
+                    .map(|path| TreeNode::key(path.to_string_lossy().to_string()))
+                    .collect();
+            }
             print_tree(&resource.path.to_string_lossy(), &tree);
         }
 
