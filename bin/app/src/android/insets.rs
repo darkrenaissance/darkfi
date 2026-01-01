@@ -20,8 +20,6 @@ use miniquad::native::android::{self, ndk_sys, ndk_utils};
 use parking_lot::Mutex as SyncMutex;
 use std::sync::LazyLock;
 
-use crate::gfx::Rectangle;
-
 type Insets = [f32; 4];
 type InsetsSender = async_channel::Sender<Insets>;
 
