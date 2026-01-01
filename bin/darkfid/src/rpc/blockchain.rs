@@ -48,7 +48,7 @@ impl DarkfiNode {
     // * `BlockInfo` serialized into base64.
     //
     // ```rust,no_run,noplayground
-    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}}
     // ```
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": [0], "id": 1}
@@ -222,7 +222,7 @@ impl DarkfiNode {
     // The notifications contain base64-encoded `BlockInfo` structs.
     //
     // ```rust,no_run,noplayground
-    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}}
     // ```
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
@@ -266,7 +266,7 @@ impl DarkfiNode {
     // The notifications contain base64-encoded `BlockInfo` structs.
     //
     // ```rust,no_run,noplayground
-    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}
+    // {{#include ../../../src/blockchain/block_store.rs:blockinfo}}
     // ```
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
