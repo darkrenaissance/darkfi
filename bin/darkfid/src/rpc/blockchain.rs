@@ -364,7 +364,7 @@ impl DarkfiNode {
     // * `String`: base64-encoded WASM binary
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_wasm", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
-    // <-- ["jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
     pub async fn blockchain_lookup_wasm(&self, id: u16, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
