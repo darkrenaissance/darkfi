@@ -55,22 +55,6 @@ pub async fn parse_tx_from_stdin() -> Result<Transaction> {
     }
 }
 
-/// Auxiliary function to parse base64-encoded contract calls from stdin.
-pub async fn parse_calls_from_stdin() -> Result<Vec<ContractCallImport>> {
-    let lines = stdin().lines();
-
-    let mut calls = vec![];
-
-    for line in lines {
-        let Some(line) = base64::decode(&line?) else {
-            return Err(Error::ParseFailed("Failed to decode base64"))
-        };
-        calls.push(deserialize_async(&line).await?);
-    }
-
-    Ok(calls)
-}
-
 /// Auxiliary function to parse a base64 encoded transaction from
 /// provided input or fallback to stdin if its empty.
 pub async fn parse_tx_from_input(input: &[String]) -> Result<Transaction> {
@@ -82,6 +66,36 @@ pub async fn parse_tx_from_input(input: &[String]) -> Result<Transaction> {
         },
         _ => Err(Error::ParseFailed("Multiline input provided")),
     }
+}
+
+/// Auxiliary function to parse base64 encoded contract calls from stdin.
+pub async fn parse_calls_from_stdin() -> Result<Vec<ContractCallImport>> {
+    let lines = stdin().lines();
+    let mut calls = vec![];
+    for line in lines {
+        let Some(line) = base64::decode(&line?) else {
+            return Err(Error::ParseFailed("Failed to decode base64"))
+        };
+        calls.push(deserialize_async(&line).await?);
+    }
+    Ok(calls)
+}
+
+/// Auxiliary function to parse base64 encoded contract calls from
+/// provided input or fallback to stdin if its empty.
+pub async fn parse_calls_from_input(input: &[String]) -> Result<Vec<ContractCallImport>> {
+    if input.is_empty() {
+        return parse_calls_from_stdin().await
+    }
+
+    let mut calls = vec![];
+    for line in input {
+        let Some(line) = base64::decode(line) else {
+            return Err(Error::ParseFailed("Failed to decode base64"))
+        };
+        calls.push(deserialize_async(&line).await?);
+    }
+    Ok(calls)
 }
 
 /// Auxiliary function to parse provided string into a values pair.
@@ -391,8 +405,12 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("Attach the fee call to a transaction given from stdin");
 
     // TxFromCalls
+    let calls_map =
+        Arg::with_name("calls-map").help("Optional parent/children dependency map for the calls");
+
     let tx_from_calls = SubCommand::with_name("tx-from-calls")
-        .about("Create a transaction from newline-separated calls from stdin");
+        .about("Create a transaction from newline-separated calls from stdin")
+        .args(&[calls_map]);
 
     // Inspect
     let inspect = SubCommand::with_name("inspect").about("Inspect a transaction from stdin");

@@ -180,8 +180,7 @@ enum Subcmd {
 
     /// Create a transaction from newline-separated calls from stdin
     TxFromCalls {
-        #[structopt(long = "map")]
-        /// The parent/children dependency map for the calls
+        /// Optional parent/children dependency map for the calls
         calls_map: Option<String>,
     },
 
@@ -2024,8 +2023,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         }
 
         Subcmd::TxFromCalls { calls_map } => {
+            // Parse calls
             let calls = parse_calls_from_stdin().await?;
-            assert!(!calls.is_empty());
+            if calls.is_empty() {
+                eprintln!("No calls were parsed");
+                exit(1);
+            }
 
             // If there is a given map, parse it, otherwise construct a
             // linear map.
@@ -2033,7 +2036,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 Some(cmap) => match parse_tree(&cmap) {
                     Ok(v) => v,
                     Err(e) => {
-                        eprintln!("Failed parsing calls map: {}", e);
+                        eprintln!("Failed parsing calls map: {e}");
                         exit(1);
                     }
                 },

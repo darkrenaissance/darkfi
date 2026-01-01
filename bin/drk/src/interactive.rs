@@ -60,8 +60,8 @@ use darkfi_serial::{deserialize_async, serialize_async};
 use crate::{
     cli_util::{
         append_or_print, display_mining_config, generate_completions, kaching,
-        parse_mining_config_from_input, parse_token_pair, parse_tx_from_input, parse_value_pair,
-        print_output,
+        parse_calls_from_input, parse_mining_config_from_input, parse_token_pair, parse_tree,
+        parse_tx_from_input, parse_value_pair, print_output, tx_from_calls_mapped,
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
@@ -94,6 +94,9 @@ fn help(output: &mut Vec<String>) {
     output.push(String::from("\tdao: DAO functionalities"));
     output
         .push(String::from("\tattach-fee: Attach the fee call to a transaction given from stdin"));
+    output.push(String::from(
+        "\ttx-from-calls: Create a transaction from newline-separated calls from stdin",
+    ));
     output.push(String::from("\tinspect: Inspect a transaction from stdin"));
     output.push(String::from("\tbroadcast: Read a transaction from stdin and broadcast it"));
     output.push(String::from(
@@ -204,6 +207,11 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
 
     if last.starts_with("at") {
         lc.push(prefix + "attach-fee");
+        return
+    }
+
+    if last.starts_with("tx") {
+        lc.push(prefix + "tx-from-calls");
         return
     }
 
@@ -378,6 +386,7 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "contract export-data " => Some(("<tx-hash>".to_string(), color, bold)),
         "contract deploy " => Some(("<deploy-auth> <wasm-path> [deploy-ix]".to_string(), color, bold)),
         "contract lock " => Some(("<deploy-auth>".to_string(), color, bold)),
+        "tx-from-calls " => Some(("[calls-map]".to_string(), color, bold)),
         _ => None,
     }
 }
@@ -536,6 +545,7 @@ pub async fn interactive(
                 "otc" => handle_otc(drk, &parts, &input, &mut output).await,
                 "dao" => handle_dao(drk, &parts, &input, &mut output).await,
                 "attach-fee" => handle_attach_fee(drk, &input, &mut output).await,
+                "tx-from-calls" => handle_tx_from_calls(&parts, &input, &mut output).await,
                 "inspect" => handle_inspect(&input, &mut output).await,
                 "broadcast" => handle_broadcast(drk, &input, &mut output).await,
                 "subscribe" => {
@@ -2339,6 +2349,79 @@ async fn handle_attach_fee(drk: &DrkPtr, input: &[String], output: &mut Vec<Stri
         Ok(_) => output.push(base64::encode(&serialize_async(&tx).await)),
         Err(e) => output.push(format!("Failed to attach the fee call to the transaction: {e}")),
     }
+}
+
+/// Auxiliary function to define the tx from calls command handling.
+async fn handle_tx_from_calls(parts: &[&str], input: &[String], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 1 && parts.len() != 2 {
+        output.push(String::from("Malformed `tx-from-calls` subcommand"));
+        output.push(String::from("Usage: tx-from-calls [calls-map]"));
+        return
+    }
+
+    // Parse calls
+    let calls = match parse_calls_from_input(input).await {
+        Ok(c) => c,
+        Err(e) => {
+            output.push(format!("Error while parsing transaction calls: {e}"));
+            return
+        }
+    };
+    if calls.is_empty() {
+        output.push(String::from("No calls were parsed"));
+        return
+    }
+
+    // If there is a given map, parse it, otherwise construct a
+    // linear map.
+    let calls_map = if parts.len() == 2 {
+        match parse_tree(parts[1]) {
+            Ok(m) => m,
+            Err(e) => {
+                output.push(format!("Failed parsing calls map: {e}"));
+                return
+            }
+        }
+    } else {
+        let mut calls_map = Vec::with_capacity(calls.len());
+        for (i, _) in calls.iter().enumerate() {
+            calls_map.push((i, vec![]));
+        }
+        calls_map
+    };
+    if calls_map.len() != calls.len() {
+        output.push(String::from("Calls map size not equal to parsed calls"));
+        return
+    }
+
+    // Create a transaction from the mapped calls.
+    let (mut tx_builder, signature_secrets) = match tx_from_calls_mapped(&calls, &calls_map) {
+        Ok(pair) => pair,
+        Err(e) => {
+            output.push(format!("Failed to create a transaction from the mapped calls: {e}"));
+            return
+        }
+    };
+
+    // Now build and sign the tx
+    let mut tx = match tx_builder.build() {
+        Ok(tx) => tx,
+        Err(e) => {
+            output.push(format!("Failed to build the transaction: {e}"));
+            return
+        }
+    };
+    let sigs = match tx.create_sigs(&signature_secrets) {
+        Ok(s) => s,
+        Err(e) => {
+            output.push(format!("Failed to create the transaction signatures: {e}"));
+            return
+        }
+    };
+    tx.signatures.push(sigs);
+
+    output.push(base64::encode(&serialize_async(&tx).await));
 }
 
 /// Auxiliary function to define the inspect command handling.
