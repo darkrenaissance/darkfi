@@ -26,9 +26,13 @@ podman build -t apk .
 make android
 ```
 
-To debug any issues, you can enter an interactive terminal using `make cli`.
+To debug any issues, you can enter an interactive terminal using `make podman-cli`.
 
 To delete everything, run `podman system reset`.
+
+Users who prefer to build locally can follow the commands in the `Dockerfile`.
+Note that the `build.rs` hardcodes the SDK/NDK paths so either you follow it
+exactly (recommended) or modify `build.rs`.
 
 # Useful Dev Commands
 

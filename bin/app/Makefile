@@ -86,8 +86,9 @@ dev: $(SRC) fonts assets/forest_1920x1080.ivf
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 
+# Users should use the android-release and android-debug targets instead.
 apk: $(SRC) fonts assets/forest_720x1280.mp4
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
+	cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 
 install-apk:
@@ -100,7 +101,7 @@ install-apk:
 	adb $(ADB_DEVICE) logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
 
 # Useful for dev
-cli:
+podman-cli:
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -it apk bash
 
 fmt:

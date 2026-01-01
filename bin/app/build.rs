@@ -53,7 +53,7 @@ fn main() {
 
     if target_os == "android" {
         // Since we run this inside a container, we can just hardcore the paths directly
-        println!("cargo:rustc-link-search=/usr/local/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.6/lib/linux/");
+        println!("cargo:rustc-link-search=/opt/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.6/lib/linux/");
         match target_arch.as_str() {
             "aarch64" => println!("cargo:rustc-link-lib=static=clang_rt.builtins-aarch64-android"),
             "arm" => println!("cargo:rustc-link-lib=static=clang_rt.builtins-arm-android"),

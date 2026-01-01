@@ -19,8 +19,8 @@ RUN rustup target add i686-linux-android
 RUN rustup target add x86_64-linux-android
 
 # Install Android SDK
-ENV ANDROID_HOME /opt/android-sdk-linux
-ENV JAVA_HOME /usr/lib/jvm/default
+ENV ANDROID_HOME /opt/android-sdk-linux/
+ENV JAVA_HOME /usr/lib/jvm/default/
 RUN mkdir ${ANDROID_HOME} && \
     cd ${ANDROID_HOME} && \
     wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip && \
@@ -37,11 +37,11 @@ RUN yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;36.0.
 RUN ${ANDROID_HOME}/tools/bin/sdkmanager --update | grep -v = || true
 
 # Install Android NDK
-RUN cd /usr/local && \
+RUN cd /opt/ && \
     wget -q http://dl.google.com/android/repository/android-ndk-r25-linux.zip && \
     unzip -q android-ndk-r25-linux.zip && \
     rm android-ndk-r25-linux.zip
-ENV NDK_HOME /usr/local/android-ndk-r25
+ENV NDK_HOME /opt/android-ndk-r25/
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
