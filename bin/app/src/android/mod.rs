@@ -20,9 +20,19 @@ use miniquad::native::android::{self, ndk_sys, ndk_utils};
 use parking_lot::Mutex as SyncMutex;
 use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
-use crate::AndroidSuggestEvent;
+// TODO: Remove this enum after migration to GameTextInput is complete
+#[derive(Debug)]
+pub enum AndroidSuggestEvent {
+    Init,
+    CreateInputConnect,
+    Compose { text: String, cursor_pos: i32, is_commit: bool },
+    ComposeRegion { start: usize, end: usize },
+    FinishCompose,
+    DeleteSurroundingText { left: usize, right: usize },
+}
 
 pub mod insets;
+pub mod textinput;
 pub mod vid;
 
 macro_rules! call_mainactivity_int_method {

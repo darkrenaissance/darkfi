@@ -17,12 +17,11 @@
  */
 
 use crate::{
-    android,
+    android::{self, AndroidSuggestEvent},
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, TEXT_CTX},
-    AndroidSuggestEvent,
 };
 use std::{
     cmp::{max, min},

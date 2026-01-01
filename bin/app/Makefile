@@ -45,10 +45,10 @@ win-release: $(SRC) fonts
 win-debug: $(SRC) fonts
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
-android-release: $(SRC) fonts assets/forest_720x1280.mp4
+android-release: $(SRC) fonts assets/forest_720x1280.mp4 gametextinput
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
-android-debug: $(SRC) fonts assets/forest_720x1280.mp4
+android-debug: $(SRC) fonts assets/forest_720x1280.mp4 gametextinput
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
@@ -69,6 +69,18 @@ ibm-plex-mono-regular.otf:
 NotoColorEmoji.ttf:
 	wget -c https://dark.fi/assets/NotoColorEmoji.ttf
 
+# Download Android GameTextInput library
+
+GAMETEXTINPUT_INCLUDE = src/android/textinput/include/game-text-input/game-text-input/gametextinput.h
+GAMETEXTINPUT_LIBS = pkg/android/libs/android.arm64-v8a/libgame-text-input.a
+
+gametextinput: $(GAMETEXTINPUT_INCLUDE) $(GAMETEXTINPUT_LIBS)
+
+$(GAMETEXTINPUT_INCLUDE):
+	pkg/android/dl-textinput-lib.sh
+$(GAMETEXTINPUT_LIBS):
+	pkg/android/dl-textinput-lib.sh
+
 # App data
 
 assets/forest_1920x1080.ivf:
@@ -87,7 +99,7 @@ dev: $(SRC) fonts assets/forest_1920x1080.ivf
 	./darkfi-app
 
 # Users should use the android-release and android-debug targets instead.
-apk: $(SRC) fonts assets/forest_720x1280.mp4
+apk: $(SRC) fonts assets/forest_720x1280.mp4 gametextinput
 	cargo quad-apk build $(DEV_FEATURES)
 	$(MAKE) install-apk
 

@@ -37,7 +37,7 @@ use std::{
 use tracing::instrument;
 
 #[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
+use crate::android::AndroidSuggestEvent;
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
     mesh::MeshBuilder,
