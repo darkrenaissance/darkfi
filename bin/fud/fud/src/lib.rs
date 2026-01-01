@@ -574,8 +574,6 @@ impl Fud {
 
     /// Start downloading a file or directory from the network to `path`.
     /// This creates a new task in `fetch_tasks` calling `fetch_resource()`.
-    /// `files` is the list of files (relative paths) you want to download
-    /// (if the resource is a directory), None means you want all files.
     pub async fn get(&self, hash: &blake3::Hash, path: &Path, files: FileSelection) -> Result<()> {
         let fetch_tasks = self.fetch_tasks.read().await;
         if fetch_tasks.contains_key(hash) {
