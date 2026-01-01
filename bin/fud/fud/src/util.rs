@@ -70,11 +70,55 @@ pub async fn create_all_files(files: &[PathBuf]) -> Result<()> {
 
 /// An enum to represent a set of files, where you can use `All` if you want
 /// all files without having to specify all of them.
-/// We could use an `Option<HashSet<PathBuf>>`, but this is more explicit.
 #[derive(Clone, Debug)]
 pub enum FileSelection {
     All,
     Set(HashSet<PathBuf>),
+}
+
+impl FileSelection {
+    pub fn get_set(&self) -> Option<HashSet<PathBuf>> {
+        match self {
+            FileSelection::Set(set) => Some(set.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        matches!(self, FileSelection::All)
+    }
+
+    pub fn is_subset(&self, other: &Self) -> bool {
+        match self {
+            FileSelection::All => other.is_all(),
+            FileSelection::Set(self_set) => match other {
+                FileSelection::All => true,
+                FileSelection::Set(other_set) => self_set.is_subset(other_set),
+            },
+        }
+    }
+
+    pub fn is_disjoint(&self, other: &Self) -> bool {
+        match self {
+            FileSelection::All => false,
+            FileSelection::Set(self_set) => match other {
+                FileSelection::All => false,
+                FileSelection::Set(other_set) => self_set.is_disjoint(other_set),
+            },
+        }
+    }
+
+    /// Merges two file selections: if any is [`FileSelection::All`] then
+    /// output is [`FileSelection::All`], if they are both
+    /// [`FileSelection::Set`] then the sets are merged.
+    pub fn merge(&self, other: &Self) -> Self {
+        if matches!(self, FileSelection::All) || matches!(other, FileSelection::All) {
+            return FileSelection::All
+        }
+        let files1 = self.get_set().unwrap();
+        let files2 = other.get_set().unwrap();
+        FileSelection::Set(files1.union(&files2).cloned().collect())
+    }
 }
 
 impl FromIterator<PathBuf> for FileSelection {
