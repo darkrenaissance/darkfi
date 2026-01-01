@@ -119,6 +119,8 @@ pub struct Fud {
     dht: Arc<Dht<Fud>>,
     /// Resources (current status of all downloads/seeds)
     resources: Arc<RwLock<HashMap<blake3::Hash, Resource>>>,
+    /// Chunked storages (represent files/directories)
+    chunked_storages: Arc<RwLock<HashMap<blake3::Hash, ChunkedStorage>>>,
     /// Sled tree containing "resource hash -> path on the filesystem"
     path_tree: sled::Tree,
     /// Sled tree containing "resource hash -> file selection". If the file
@@ -214,6 +216,7 @@ impl Fud {
             file_selection_tree: sled_db.open_tree(SLED_FILE_SELECTION_TREE)?,
             scrap_tree: sled_db.open_tree(SLED_SCRAP_TREE)?,
             resources: Arc::new(RwLock::new(HashMap::new())),
+            chunked_storages: Arc::new(RwLock::new(HashMap::new())),
             get_tx,
             get_rx,
             put_tx,
@@ -539,6 +542,10 @@ impl Fud {
             }
             let (total_bytes_downloaded, target_bytes_downloaded) = verify_res.unwrap();
 
+            let mut chunked_storages = self.chunked_storages.write().await;
+            chunked_storages.insert(resource.hash, chunked.clone());
+            drop(chunked_storages);
+
             if !chunked.is_complete() {
                 update_resource(
                     &mut resource,
@@ -745,6 +752,12 @@ impl Fud {
 
         // Mark locally available chunks as such
         let verify_res = self.verify_chunks(&resource, &mut chunked, files).await;
+
+        // Insert the chunked storage to fud's cache
+        let mut chunked_storages = self.chunked_storages.write().await;
+        chunked_storages.insert(*hash, chunked.clone());
+        drop(chunked_storages);
+
         if let Err(e) = verify_res {
             dht_sub.unsubscribe().await;
             error!(target: "fud::fetch_resource()", "Error while verifying chunks: {e}");

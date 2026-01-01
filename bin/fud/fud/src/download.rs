@@ -308,6 +308,13 @@ async fn handle_chunk_reply(
     let resource = resource.clone();
     drop(resources_write);
 
+    if let Some(chunk_index) = ctx.chunked.get_chunk_index(chunk_hash) {
+        ctx.chunked.get_chunk_mut(chunk_index).available = true;
+        let mut chunked_storages = ctx.fud.chunked_storages.write().await;
+        chunked_storages.insert(*ctx.hash, ctx.chunked.clone());
+        drop(chunked_storages);
+    }
+
     notify_event!(ctx.fud, ChunkDownloadCompleted, { hash: *ctx.hash, chunk_hash: *chunk_hash, resource });
     ctx.chunks.remove(chunk_hash);
     ChunkFetchControl::NextChunk
