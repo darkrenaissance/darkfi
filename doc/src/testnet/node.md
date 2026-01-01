@@ -167,7 +167,7 @@ $ ./drk wallet keygen
 
 Generating a new keypair
 New address:
-DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
+{YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 ```shell
@@ -181,7 +181,7 @@ retrieve your default address using:
 ```shell
 $ ./drk wallet address
 
-DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf
+{YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 ### Darkfid
@@ -270,14 +270,13 @@ To mine on DarkFI we need to add a recipient to `xmrig` that specifies
 where the mining rewards will be minted to. You now have to configure
 `xmrig` to use your wallet address as the rewards recipient, when it
 retrieves blocks from `darkfid` to mine. Make sure you have
-[initialized](#wallet-initialization) your wallet and grab your first
-address mining configuration:
+[initialized](#wallet-initialization) your wallet and grab your default
+address:
 
 ```shell
-./drk wallet mining-configuration 1
+./drk wallet address
 
-DarkFi mining configuration address:
-{YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+{YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 Refer to [xmrig optimizations guide][2] to fully configure your system
@@ -286,14 +285,14 @@ for maximum mining performance. Start `darkfid` as usual and then start
 which wallet:
 
 ```shell
-$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 In `darkfid`, you should see a notification like this:
 
 ```shell
 ...
-[INFO] [RPC-STRATUM] Got login from {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION} ({AGENT_INFO})
+[INFO] [RPC-STRATUM] Got login from {YOUR_DARKFI_WALLET_ADDRESS} ({AGENT_INFO})
 ...
 ```
 

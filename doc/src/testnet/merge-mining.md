@@ -174,13 +174,12 @@ Now that everything is in order, we can use `p2pool` with merge-mining
 enabled in order to merge mine DarkFi. For receiving mining rewards
 on DarkFi, we'll need a DarkFi wallet address so make sure you have
 [initialized](node.md#wallet-initialization) your wallet and grab your
-first address configuration:
+default address:
 
 ```shell
-drk> wallet mining-configuration 1
+drk> wallet address
 
-DarkFi mining configuration address:
-{YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+{YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 We will also need `darkfid` running. Make sure you enable the RPC
@@ -202,7 +201,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_WALLET_ADDRESS_MINING_CONFIGURATION}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 Now `p2pool` should communicate with both `monerod` and `darkfid` in

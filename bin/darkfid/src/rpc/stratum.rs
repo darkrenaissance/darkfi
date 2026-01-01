@@ -73,8 +73,8 @@ impl DarkfiNode {
     // job.
     //
     // **Request:**
-    // * `login` : A base-64 encoded wallet address mining configuration
-    // * `pass`  : Unused client password field. Expects default "x" value.
+    // * `login` : A wallet address or its base-64 encoded mining configuration
+    // * `pass`  : Unused client password field
     // * `agent` : Client agent description
     // * `algo`  : Client supported mining algorithms
     //
@@ -96,7 +96,7 @@ impl DarkfiNode {
     //       "jsonrpc": "2.0",
     //       "method": "login",
     //       "params": {
-    //         "login": "MINING_CONFIG",
+    //         "login": "WALLET_ADDRESS",
     //         "pass": "x",
     //         "agent": "XMRig",
     //         "algo": ["rx/0"]
@@ -131,7 +131,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        // Parse login mining configuration
+        // Parse login
         let Some(wallet) = params.get("login") else {
             return server_error(RpcError::MinerMissingLogin, id, None)
         };
@@ -139,7 +139,7 @@ impl DarkfiNode {
             return server_error(RpcError::MinerInvalidLogin, id, None)
         };
         let config =
-            match MinerRewardsRecipientConfig::from_base64(&self.registry.network, wallet).await {
+            match MinerRewardsRecipientConfig::from_str(&self.registry.network, wallet).await {
                 Ok(c) => c,
                 Err(e) => return server_error(e, id, None),
             };

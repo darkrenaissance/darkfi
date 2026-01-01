@@ -72,11 +72,22 @@ impl MinerRewardsRecipientConfig {
         Self { recipient, spend_hook, user_data }
     }
 
-    pub async fn from_base64(
-        network: &Network,
-        encoded_address: &str,
-    ) -> std::result::Result<Self, RpcError> {
-        let Some(address_bytes) = base64::decode(encoded_address) else {
+    /// Auxiliary function to convert provided string to its
+    /// `MinerRewardsRecipientConfig`. Supports parsing both a normal
+    /// `Address` and a `base64` encoded mining configuration. Also
+    /// verifies it corresponds to the provided `Network`.
+    pub async fn from_str(network: &Network, address: &str) -> std::result::Result<Self, RpcError> {
+        // Try to parse the string as an `Address`
+        if let Ok(recipient) = Address::from_str(address) {
+            if recipient.network() != *network {
+                return Err(RpcError::MinerInvalidRecipientPrefix)
+            }
+            return Ok(Self { recipient, spend_hook: None, user_data: None })
+        }
+
+        // Try to parse the string as a `base64` encoded mining
+        // configuration
+        let Some(address_bytes) = base64::decode(address) else {
             return Err(RpcError::MinerInvalidWalletConfig)
         };
         let Ok((recipient, spend_hook, user_data)) =

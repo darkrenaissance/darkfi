@@ -132,7 +132,7 @@ impl DarkfiNode {
     // merge mining.
     //
     // **Request:**
-    // * `address` : A base-64 encoded wallet address mining configuration on the merge mined chain
+    // * `address` : A wallet address or its base-64 encoded mining configuration on the merge mined chain
     // * `aux_hash`: Merge mining job that is currently being polled
     // * `height`  : Monero height
     // * `prev_id` : Hash of the previous Monero block
@@ -189,7 +189,7 @@ impl DarkfiNode {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
-        // Parse address mining configuration
+        // Parse address
         let Some(wallet) = params.get("address") else {
             return server_error(RpcError::MinerMissingAddress, id, None)
         };
@@ -197,7 +197,7 @@ impl DarkfiNode {
             return server_error(RpcError::MinerInvalidAddress, id, None)
         };
         let config =
-            match MinerRewardsRecipientConfig::from_base64(&self.registry.network, wallet).await {
+            match MinerRewardsRecipientConfig::from_str(&self.registry.network, wallet).await {
                 Ok(c) => c,
                 Err(e) => return server_error(e, id, None),
             };

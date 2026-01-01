@@ -7,8 +7,8 @@ set -e
 XMRIG="xmrig"
 DARKFID="LOG_TARGETS='!runtime,!sled' ../../../darkfid"
 
-# Dummy mining config wallet so mining daemons can start.
-XMRIG_USER="OERjbThtVW1VMkZIYmI2RlhucUx0OXByaFRSWmVWcE5hdTROWXQ3Szg1ZDVVWnA0RGpabmFKZVZEAAA"
+# Dummy mining wallet address so mining daemons can start
+XMRIG_USER="DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf"
 
 session=darkfid-five-nodes
 

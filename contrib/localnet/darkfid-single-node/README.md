@@ -5,10 +5,10 @@ This will start one `darkfid` node in localnet mode,
 along with an `xmrig` daemon to mine blocks.
 
 If we want to test wallet stuff, we must generate a testing wallet and
-pass its mining configuration to the `xmrig` daemon, so the wallet gets
-the block rewards the node produces. We generate a wallet, set it as
-the default and set its address as the `XMRIG_USER` field in
-`tmux_sessions.sh`, using provided automated script:
+pass its address to the `xmrig` daemon, so the wallet gets the block
+rewards the node produces. We generate a wallet, set it as the default
+and set its address as the `XMRIG_USER` field in `tmux_sessions.sh`,
+using provided automated script:
 ```shell
 % ./init-wallet.sh
 ```
