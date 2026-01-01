@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+# Distributed under the terms of the GNU General Public License v2
+
+description="darkfid daemon"
+
+command="/usr/bin/darkfid"
+command_background=true
+command_user="${USER}"
+pidfile="/run/darkfid.pid"
+
+depend() {
+	use net
+}

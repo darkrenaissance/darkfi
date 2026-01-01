@@ -62,4 +62,3 @@ the logger command. You can test logger output like this:
 ```bash
     $ vlogger -t darky -p daemon hello123
 ```
-
