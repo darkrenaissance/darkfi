@@ -1,8 +1,5 @@
 main_activity_inject = "java/MainActivity.java"
 java_files = [
-    "java/autosuggest/CustomInputConnection.java",
-    "java/autosuggest/InvisibleInputView.java",
-    #"java/autosuggest/InvisibleInputManager.java",
     "java/ForegroundService.java",
     "java/videodecode/VideoDecoder.java"
 ]
