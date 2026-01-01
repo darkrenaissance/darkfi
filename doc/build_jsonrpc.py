@@ -110,7 +110,7 @@ def main(path):
     for m in methods:
         anchor = m["method"].replace(".", "").replace("/", "").lower()
         ghlink = f"https://codeberg.org/darkrenaissance/darkfi/src/branch/master/{path.replace('../', '')}#L{m['line']}"
-        print(f"### `{m['method']}` <sup><a href=\"{ghlink}\">[source]</a></sup>\n")
+        print(f"### `{m['method']}` <sup><a href=\"{ghlink}\">[source]</a></sup> {{#{anchor}}}\n")
 
         if m["comment"]:
             print(f"{m['comment']}\n")
