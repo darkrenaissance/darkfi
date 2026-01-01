@@ -40,6 +40,7 @@ pub enum RpcError {
     ContractZkasDbNotFound = -32200,
     ContractStateNotFound = -32201,
     ContractStateKeyNotFound = -32202,
+    ContractWasmNotFound = -32203,
 
     // Miner configuration errors
     MinerInvalidWalletConfig = -32301,
@@ -108,6 +109,7 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
         RpcError::ContractStateNotFound => "Records not found for given contract state",
         RpcError::ContractStateKeyNotFound => "Value not found for given contract state key",
+        RpcError::ContractWasmNotFound => "wasm bincode not found for given contract",
 
         // Miner configuration errors
         RpcError::MinerInvalidWalletConfig => "Request wallet configuration is invalid",

@@ -41,7 +41,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "tx.simulate", "params": ["base64encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn tx_simulate(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -92,7 +94,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base64encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
     pub async fn tx_broadcast(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -142,7 +146,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "tx.pending", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["TxHash" , "..."], "id": 1}
     pub async fn tx_pending(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -173,7 +179,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "tx.clean_pending", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["TxHash", "..."], "id": 1}
     pub async fn tx_clean_pending(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -210,7 +218,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "tx.calculate_fee", "params": ["base64encodedTX", "include_fee"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn tx_calculate_fee(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 2 || !params[0].is_string() || !params[1].is_bool() {
             return JsonError::new(InvalidParams, None, id).into()
         }

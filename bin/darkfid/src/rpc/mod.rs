@@ -75,6 +75,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "blockchain.last_confirmed_block" => self.blockchain_last_confirmed_block(req.id, req.params).await,
             "blockchain.best_fork_next_block_height" => self.blockchain_best_fork_next_block_height(req.id, req.params).await,
             "blockchain.block_target" => self.blockchain_block_target(req.id, req.params).await,
+            "blockchain.lookup_wasm" => self.blockchain_lookup_wasm(req.id, req.params).await,
             "blockchain.lookup_zkas" => self.blockchain_lookup_zkas(req.id, req.params).await,
             "blockchain.get_contract_state" => self.blockchain_get_contract_state(req.id, req.params).await,
             "blockchain.get_contract_state_key" => self.blockchain_get_contract_state_key(req.id, req.params).await,
@@ -123,7 +124,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "dnet.switch", "params": [true], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
@@ -162,7 +165,9 @@ impl DarkfiNode {
     //       ]
     //     }
     pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }

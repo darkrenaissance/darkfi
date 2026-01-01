@@ -96,7 +96,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "base64encodedtx", "id": 1}
     pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -136,7 +138,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_confirmed_block", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [1234, "HeaderHash"], "id": 1}
     pub async fn blockchain_last_confirmed_block(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -171,7 +175,9 @@ impl DarkfiNode {
         id: u16,
         params: JsonValue,
     ) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -195,7 +201,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.block_target", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 120, "id": 1}
     pub async fn blockchain_block_target(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -220,7 +228,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": ["base64encodedblock"]}
     pub async fn blockchain_subscribe_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -239,7 +249,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": ["tx_hash"]}
     pub async fn blockchain_subscribe_txs(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -260,7 +272,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": ["base64encodedblock"]}
     pub async fn blockchain_subscribe_proposals(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -286,7 +300,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["Foo", "ABCD..."], ["Bar", "EFGH..."]], "id": 1}
     pub async fn blockchain_lookup_zkas(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -338,6 +354,39 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
+    // Perform a lookup of a WASM contract binary deployed on-chain and
+    // return the base64-encoded binary.
+    //
+    // **Params:**
+    // * `array[0]`: base58-encoded contract ID string
+    //
+    // **Returns:**
+    // * `String`: base64-encoded WASM binary
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_wasm", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
+    // <-- ["jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    pub async fn blockchain_lookup_wasm(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let contract_id = params[0].get::<String>().unwrap();
+        let Ok(contract_id) = ContractId::from_str(contract_id) else {
+            return server_error(RpcError::ParseError, id, None)
+        };
+
+        let Ok(bincode) = self.validator.blockchain.contracts.get(contract_id) else {
+            return server_error(RpcError::ContractWasmNotFound, id, None)
+        };
+
+        let encoded = base64::encode(&bincode);
+        JsonResponse::new(encoded.to_string().into(), id).into()
+    }
+
+    // RPCAPI:
     // Queries the blockchain database for a given contract state records.
     // Returns the records value raw bytes as a `BTreeMap`.
     //
@@ -351,7 +400,9 @@ impl DarkfiNode {
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_contract_state", "params": ["BZHK...", "tree"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
     pub async fn blockchain_get_contract_state(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -403,7 +454,9 @@ impl DarkfiNode {
         id: u16,
         params: JsonValue,
     ) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
         if params.len() != 3 ||
             !params[0].is_string() ||
             !params[1].is_string() ||
