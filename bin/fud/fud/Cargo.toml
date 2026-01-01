@@ -37,8 +37,8 @@ num-bigint = "0.4.6"
 # Daemon
 easy-parallel = "3.3.1"
 futures = "0.3.31"
-signal-hook-async-std = "0.3.0"
-signal-hook = "0.3.18"
+signal-hook-async-std = "0.4.0"
+signal-hook = "0.4.1"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
 tracing-appender = "0.2.4"
 smol = "2.0.2"
