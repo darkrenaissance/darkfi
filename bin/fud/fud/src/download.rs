@@ -289,7 +289,7 @@ async fn handle_chunk_reply(
 
     resource.total_bytes_downloaded += reply.chunk.len() as u64;
     resource.target_bytes_downloaded +=
-        resource.get_selected_bytes(ctx.chunked, &reply.chunk) as u64;
+        resource.get_selected_bytes(ctx.chunked, chunk_hash, reply.chunk.len()) as u64;
     resource.speeds.push(reply.chunk.len() as f64 / start_time.elapsed().as_secs_f64());
     if resource.speeds.len() > 12 {
         resource.speeds = resource.speeds.split_off(resource.speeds.len() - 12); // Only keep the last few speeds

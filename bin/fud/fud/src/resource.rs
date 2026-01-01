@@ -100,6 +100,8 @@ pub struct Resource {
     pub status: ResourceStatus,
     /// The files the user wants to download
     pub file_selection: FileSelection,
+    /// The last files the user wanted to download
+    pub last_file_selection: FileSelection,
 
     /// Total number of chunks
     pub total_chunks_count: u64,
@@ -138,7 +140,8 @@ impl Resource {
             rtype,
             path: path.to_path_buf(),
             status,
-            file_selection,
+            file_selection: file_selection.clone(),
+            last_file_selection: file_selection,
             total_chunks_count: 0,
             target_chunks_count: 0,
             total_chunks_downloaded: 0,
@@ -164,8 +167,12 @@ impl Resource {
     }
 
     /// Returns the list of selected files (absolute paths).
-    pub fn get_selected_files(&self, chunked: &ChunkedStorage) -> Vec<PathBuf> {
-        match &self.file_selection {
+    pub fn get_selected_files(
+        &self,
+        chunked: &ChunkedStorage,
+        file_selection: &FileSelection,
+    ) -> Vec<PathBuf> {
+        match &file_selection {
             FileSelection::Set(files) => files
                 .iter()
                 .map(|file| self.path.join(file))
@@ -175,9 +182,19 @@ impl Resource {
         }
     }
 
-    /// Returns the (sub)set of chunk hashes in a ChunkedStorage for a file selection.
+    /// Returns the (sub)set of chunk hashes in a ChunkedStorage for the
+    /// resource's file selection.
     pub fn get_selected_chunks(&self, chunked: &ChunkedStorage) -> HashSet<blake3::Hash> {
-        match &self.file_selection {
+        self.get_chunks_of_selection(chunked, &self.file_selection)
+    }
+
+    /// Returns the (sub)set of chunk hashes in a ChunkedStorage for a file selection.
+    pub fn get_chunks_of_selection(
+        &self,
+        chunked: &ChunkedStorage,
+        file_selection: &FileSelection,
+    ) -> HashSet<blake3::Hash> {
+        match &file_selection {
             FileSelection::Set(files) => {
                 let mut chunks = HashSet::new();
                 for file in files {
@@ -189,16 +206,32 @@ impl Resource {
         }
     }
 
-    /// Returns the number of bytes we want from a chunk (depends on the file selection).
-    pub fn get_selected_bytes(&self, chunked: &ChunkedStorage, chunk: &[u8]) -> usize {
+    /// Returns the number of bytes we want from a chunk (depends on the
+    /// resource's file selection).
+    pub fn get_selected_bytes(
+        &self,
+        chunked: &ChunkedStorage,
+        chunk_hash: &blake3::Hash,
+        chunk_size: usize,
+    ) -> usize {
+        self.get_bytes_of_selection(chunked, &self.file_selection, chunk_hash, chunk_size)
+    }
+
+    /// Returns the number of bytes we selected from a chunk.
+    pub fn get_bytes_of_selection(
+        &self,
+        chunked: &ChunkedStorage,
+        file_selection: &FileSelection,
+        chunk_hash: &blake3::Hash,
+        chunk_size: usize,
+    ) -> usize {
         // If `FileSelection` is not a set, we want all bytes from a chunk
-        let file_set = if let FileSelection::Set(files) = &self.file_selection {
+        let file_set = if let FileSelection::Set(files) = &file_selection {
             files
         } else {
-            return chunk.len();
+            return chunk_size;
         };
 
-        let chunk_hash = blake3::hash(chunk);
         let chunk_index = match chunked.iter().position(|c| c.hash == *chunk_hash) {
             Some(index) => index,
             None => {
@@ -207,7 +240,7 @@ impl Resource {
         };
 
         let files = chunked.get_files();
-        let chunk_length = chunk.len();
+        let chunk_length = chunk_size;
         let position = (chunk_index as u64) * (MAX_CHUNK_SIZE as u64);
         let mut total_selected_bytes = 0;
 
@@ -326,6 +359,7 @@ impl From<JsonValue> for Resource {
             path,
             status,
             file_selection: FileSelection::All, // TODO
+            last_file_selection: FileSelection::All, // TODO
             total_chunks_count,
             target_chunks_count,
             total_chunks_downloaded,

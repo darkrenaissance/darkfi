@@ -448,7 +448,7 @@ impl Fud {
                                      total_bytes_downloaded: u64,
                                      target_bytes_downloaded: u64| {
             let files = match chunked {
-                Some(chunked) => resource.get_selected_files(chunked),
+                Some(chunked) => resource.get_selected_files(chunked, &resource.file_selection),
                 None => vec![],
             };
             let chunk_hashes = match chunked {
@@ -530,7 +530,8 @@ impl Fud {
                     continue;
                 }
             };
-            let verify_res = self.verify_chunks(resource, &mut chunked).await;
+            let verify_res =
+                self.verify_chunks(resource, &mut chunked, &resource.file_selection).await;
             if let Err(e) = verify_res {
                 error!(target: "fud::verify_resources()", "Error while verifying chunks of {}: {e}", hash_to_string(&resource.hash));
                 update_resource(&mut resource, ResourceStatus::Incomplete, None, 0, 0).await;
@@ -712,7 +713,7 @@ impl Fud {
                 return Ok(())
             }
         };
-        let files_vec: Vec<PathBuf> = resource.get_selected_files(&chunked);
+        let files_vec: Vec<PathBuf> = resource.get_selected_files(&chunked, files);
         drop(resources_read);
 
         // Create all files (and all necessary directories)
@@ -734,7 +735,7 @@ impl Fud {
         notify_event!(self, MetadataDownloadCompleted, resource);
 
         // Set of all chunks we need locally (including the ones we already have)
-        let chunk_hashes = resource.get_selected_chunks(&chunked);
+        let chunk_hashes = resource.get_chunks_of_selection(&chunked, files);
 
         // Write all scraps to make sure the data on the filesystem is correct
         if let Err(e) = self.write_scraps(&mut chunked, &chunk_hashes).await {
@@ -743,7 +744,7 @@ impl Fud {
         }
 
         // Mark locally available chunks as such
-        let verify_res = self.verify_chunks(&resource, &mut chunked).await;
+        let verify_res = self.verify_chunks(&resource, &mut chunked, files).await;
         if let Err(e) = verify_res {
             dht_sub.unsubscribe().await;
             error!(target: "fud::fetch_resource()", "Error while verifying chunks: {e}");
@@ -856,7 +857,7 @@ impl Fud {
         notify_event!(self, ResourceUpdated, resource);
 
         // Verify all chunks
-        self.verify_chunks(&resource, &mut chunked).await?;
+        self.verify_chunks(&resource, &mut chunked, &resource.last_file_selection).await?;
 
         let is_complete =
             chunked.iter().filter(|c| chunk_hashes.contains(&c.hash)).all(|c| c.available);
@@ -938,14 +939,13 @@ impl Fud {
 
     /// Iterate over chunks and find which chunks are available locally,
     /// either in the filesystem (using geode::verify_chunks()) or in scraps.
-    /// `chunk_hashes` is the list of chunk hashes we want to take into account, `None` means to
-    /// take all chunks into account.
-    /// Return the scraps in a HashMap, and the size in bytes of locally available data
-    /// (downloaded and downloaded+targeted).
+    /// Return the size in bytes of locally available data (downloaded and
+    /// downloaded+targeted).
     pub async fn verify_chunks(
         &self,
         resource: &Resource,
         chunked: &mut ChunkedStorage,
+        file_selection: &FileSelection,
     ) -> Result<(u64, u64)> {
         let chunks = chunked.get_chunks().clone();
         let mut bytes: HashMap<blake3::Hash, (usize, usize)> = HashMap::new();
@@ -1025,8 +1025,16 @@ impl Fud {
 
             // Update the sums of locally available data
             bytes.insert(
-                *chunk_hash,
-                (scrap.chunk.len(), resource.get_selected_bytes(chunked, &scrap.chunk)),
+                chunk.hash,
+                (
+                    scrap.chunk.len(),
+                    resource.get_bytes_of_selection(
+                        chunked,
+                        file_selection,
+                        &chunk.hash,
+                        scrap.chunk.len(),
+                    ),
+                ),
             );
         }
 
@@ -1136,6 +1144,7 @@ impl Fud {
                 path: path.to_path_buf(),
                 status: ResourceStatus::Seeding,
                 file_selection: FileSelection::All,
+                last_file_selection: FileSelection::All,
                 total_chunks_count: chunk_hashes.len() as u64,
                 target_chunks_count: chunk_hashes.len() as u64,
                 total_chunks_downloaded: chunk_hashes.len() as u64,
