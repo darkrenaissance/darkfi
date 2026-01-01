@@ -627,6 +627,52 @@ impl Fud {
         }
     }
 
+    /// Returns true if all the files in the `FileSelection` are locally available
+    pub async fn get_progress(
+        &self,
+        hash: &blake3::Hash,
+        file_selection: &FileSelection,
+    ) -> (u64, u64) {
+        let mut resources = self.resources.write().await;
+        let resource = resources.get_mut(hash);
+        if resource.is_none() {
+            return (0, 0)
+        }
+        let resource = resource.unwrap();
+        match self.hash_to_path(&resource.hash) {
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => {
+                resource.status = ResourceStatus::Incomplete;
+                resource.total_bytes_downloaded = 0;
+                resource.target_bytes_downloaded = 0;
+                notify_event!(self, ResourceUpdated, resource);
+                return (0, 0)
+            }
+        }
+        let mut chunked_storages = self.chunked_storages.write().await;
+        let Some(chunked) = chunked_storages.get_mut(&resource.hash) else { return (0, 0) };
+
+        let files_vec: Vec<PathBuf> = resource.get_selected_files(chunked, file_selection);
+
+        let bytes_downloaded = {
+            let mut bytes = 0;
+            for chunk in chunked.iter() {
+                if chunk.available {
+                    bytes += resource.get_bytes_of_selection(
+                        chunked,
+                        file_selection,
+                        &chunk.hash,
+                        chunk.size,
+                    ) as u64;
+                }
+            }
+            bytes
+        };
+        let bytes_total = chunked.get_fileseq().subset_len(files_vec.into_iter().collect());
+
+        (bytes_downloaded, bytes_total)
+    }
+
     /// Download a file or directory from the network to `path`.
     /// Called when `get()` creates a new fetch task.
     pub async fn fetch_resource(
