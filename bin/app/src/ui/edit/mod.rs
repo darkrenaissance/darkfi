@@ -37,7 +37,7 @@ use std::{
 use tracing::instrument;
 
 #[cfg(target_os = "android")]
-use crate::android::AndroidSuggestEvent;
+use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
     mesh::MeshBuilder,
@@ -1296,48 +1296,25 @@ impl BaseEdit {
     }
 
     #[cfg(target_os = "android")]
-    async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
+    async fn handle_android_event(&self, state: AndroidTextInputState) {
         if !self.is_active.get() {
             return
         }
-        t!("handle_android_event({ev:?})");
+        t!("handle_android_event({state:?})");
 
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
-        match ev {
-            AndroidSuggestEvent::Init => {
-                let mut editor = self.lock_editor().await;
-                editor.init();
-                // For debugging select, enable these and set a selection in the editor.
-                //self.is_phone_select.store(true, Ordering::Relaxed);
-                //self.hide_cursor.store(true, Ordering::Relaxed);
 
-                // Debug code if we set text in editor.init()
-                //editor.on_buffer_changed(&mut PropertyAtomicGuard::none()).await;
-                return
-            }
-            AndroidSuggestEvent::CreateInputConnect => {
-                let mut editor = self.lock_editor().await;
-                editor.setup();
-            }
-            // Destructive text edits
-            AndroidSuggestEvent::ComposeRegion { .. } |
-            AndroidSuggestEvent::Compose { .. } |
-            AndroidSuggestEvent::DeleteSurroundingText { .. } => {
-                // Any editing will collapse selections
-                self.finish_select(atom);
-
-                let mut editor = self.lock_editor().await;
-                editor.on_buffer_changed(atom).await;
-                drop(editor);
-
-                self.eval_rect().await;
-                self.behave.apply_cursor_scroll().await;
-            }
-            AndroidSuggestEvent::FinishCompose => {
-                let mut editor = self.lock_editor().await;
-                editor.on_buffer_changed(atom).await;
-            }
+        // Text changed - finish any active selection
+        if state.text != self.text.get() {
+            self.finish_select(atom);
         }
+
+        let mut editor = self.lock_editor().await;
+        editor.on_buffer_changed(atom).await;
+
+        drop(editor);
+        self.eval_rect().await;
+        self.behave.apply_cursor_scroll().await;
 
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready

@@ -66,6 +66,12 @@ pub struct AndroidTextInput {
     state: *mut GameTextInput,
 }
 
+// SAFETY: GameTextInput is accessed synchronously through show_ime/hide_ime/set_state/get_state
+// The pointer is valid for the lifetime of the AndroidTextInput instance and is only
+// accessed from the thread that owns the AndroidTextInput.
+unsafe impl Send for AndroidTextInput {}
+unsafe impl Sync for AndroidTextInput {}
+
 impl AndroidTextInput {
     pub fn new(sender: async_channel::Sender<AndroidTextInputState>) -> Self {
         let id = {
