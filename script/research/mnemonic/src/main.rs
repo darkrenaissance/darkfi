@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2025 Dyne.org foundation
+ * Copyright (C) 2020-2026 Dyne.org foundation
  * Copyright (C) 2014 Thomas Voegtlin (MIT License)
  *
  * This program is free software: you can redistribute it and/or modify

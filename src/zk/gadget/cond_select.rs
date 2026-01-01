@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2025 Dyne.org foundation
+ * Copyright (C) 2020-2026 Dyne.org foundation
  *
  * Copyright (c) zkMove Authors
  * SPDX-License-Identifier: Apache-2.0

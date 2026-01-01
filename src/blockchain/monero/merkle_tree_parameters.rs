@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2025 Dyne.org foundation
+ * Copyright (C) 2020-2026 Dyne.org foundation
  * Copyright (C) 2021 The Tari Project (BSD-3)
  *
  * This program is free software: you can redistribute it and/or modify
