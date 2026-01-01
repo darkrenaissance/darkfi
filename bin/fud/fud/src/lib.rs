@@ -713,8 +713,15 @@ impl Fud {
         // Add path to the sled db
         self.path_tree.insert(hash_bytes, path_bytes)?;
 
-        // Add file selection to the sled db
-        if let FileSelection::Set(selected_files) = files {
+        let mut resources_write = self.resources.write().await;
+        let merged_files = if let Some(old_resource) = resources_write.get(hash) {
+            old_resource.file_selection.merge(files)
+        } else {
+            files.clone()
+        };
+
+        // Add merged file selection to the sled db
+        if let FileSelection::Set(selected_files) = &merged_files {
             let paths: Vec<Vec<u8>> = selected_files
                 .iter()
                 .map(|f| f.to_string_lossy().to_string().as_bytes().to_vec())
@@ -724,17 +731,22 @@ impl Fud {
             if let Err(e) = self.file_selection_tree.insert(hash_bytes, serialized_paths) {
                 return Err(Error::SledError(e))
             }
+        } else {
+            // Abort if the file selection cannot be removed from sled
+            if let Err(e) = self.file_selection_tree.remove(hash_bytes) {
+                return Err(Error::SledError(e))
+            }
         }
 
         // Add resource to `self.resources`
-        let resource = Resource::new(
+        let mut resource = Resource::new(
             *hash,
             ResourceType::Unknown,
             path,
             ResourceStatus::Discovering,
-            files.clone(),
+            merged_files.clone(),
         );
-        let mut resources_write = self.resources.write().await;
+        resource.last_file_selection = files.clone();
         resources_write.insert(*hash, resource.clone());
         drop(resources_write);
 
