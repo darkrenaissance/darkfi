@@ -439,7 +439,7 @@ pub async fn fetch_metadata(
 
     // We did not find the resource
     if result.is_none() {
-        return Err(Error::GeodeFileRouteNotFound)
+        return Err(Error::Custom("Metadata not found".to_string()))
     }
 
     // Insert metadata to geode using the reply
