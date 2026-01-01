@@ -106,7 +106,7 @@ def main(path):
             "response": json.dumps(parsed_res, indent=2),
             "line": start_line
         })
-    
+
     for m in methods:
         anchor = m["method"].replace(".", "").replace("/", "").lower()
         print(f"### `{m['method']}`\n")
