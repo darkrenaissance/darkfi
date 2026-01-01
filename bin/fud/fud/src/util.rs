@@ -16,10 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use smol::{
-    fs::{self, File},
-    stream::StreamExt,
-};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -27,9 +23,16 @@ use std::{
     time::Instant,
 };
 
+use smol::{
+    fs::{self, File},
+    stream::StreamExt,
+};
+use tinyjson::JsonValue;
+
 pub use darkfi::geode::hash_to_string;
 use darkfi::{
     net::{Message, MessageSubscription},
+    rpc::util::json_map,
     Error, Result,
 };
 
@@ -125,6 +128,50 @@ impl FromIterator<PathBuf> for FileSelection {
     fn from_iter<I: IntoIterator<Item = PathBuf>>(iter: I) -> Self {
         let paths: HashSet<PathBuf> = iter.into_iter().collect();
         FileSelection::Set(paths)
+    }
+}
+
+impl From<FileSelection> for JsonValue {
+    fn from(fs: FileSelection) -> JsonValue {
+        json_map([
+            (
+                "type",
+                JsonValue::String(
+                    match fs {
+                        FileSelection::All => "all",
+                        FileSelection::Set(_) => "set",
+                    }
+                    .to_string(),
+                ),
+            ),
+            (
+                "set",
+                JsonValue::Array(match fs {
+                    FileSelection::All => vec![],
+                    FileSelection::Set(set) => set
+                        .into_iter()
+                        .map(|path| JsonValue::String(path.to_string_lossy().to_string()))
+                        .collect(),
+                }),
+            ),
+        ])
+    }
+}
+
+impl From<JsonValue> for FileSelection {
+    fn from(value: JsonValue) -> Self {
+        match value["type"].get::<String>().unwrap().as_str() {
+            "set" => {
+                let set = value["set"]
+                    .get::<Vec<JsonValue>>()
+                    .unwrap()
+                    .iter()
+                    .map(|path| PathBuf::from(path.get::<String>().unwrap()))
+                    .collect::<HashSet<PathBuf>>();
+                FileSelection::Set(set)
+            }
+            _ => FileSelection::All,
+        }
     }
 }
 

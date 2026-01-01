@@ -309,6 +309,8 @@ impl From<Resource> for JsonValue {
                 }),
             ),
             ("status", JsonValue::String(rs.status.as_str().to_string())),
+            ("file_selection", rs.file_selection.into()),
+            ("last_file_selection", rs.last_file_selection.into()),
             ("total_chunks_count", JsonValue::Number(rs.total_chunks_count as f64)),
             ("target_chunks_count", JsonValue::Number(rs.target_chunks_count as f64)),
             ("total_chunks_downloaded", JsonValue::Number(rs.total_chunks_downloaded as f64)),
@@ -333,6 +335,8 @@ impl From<JsonValue> for Resource {
         let rtype = ResourceType::from_str(value["type"].get::<String>().unwrap()).unwrap();
         let path = PathBuf::from(value["path"].get::<String>().unwrap());
         let status = ResourceStatus::from_str(value["status"].get::<String>().unwrap()).unwrap();
+        let file_selection: FileSelection = value["file_selection"].clone().into();
+        let last_file_selection: FileSelection = value["last_file_selection"].clone().into();
 
         let total_chunks_count = *value["total_chunks_count"].get::<f64>().unwrap() as u64;
         let target_chunks_count = *value["target_chunks_count"].get::<f64>().unwrap() as u64;
@@ -358,8 +362,8 @@ impl From<JsonValue> for Resource {
             rtype,
             path,
             status,
-            file_selection: FileSelection::All, // TODO
-            last_file_selection: FileSelection::All, // TODO
+            file_selection,
+            last_file_selection,
             total_chunks_count,
             target_chunks_count,
             total_chunks_downloaded,
