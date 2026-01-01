@@ -26,16 +26,13 @@ use darkfi_sdk::{
 #[cfg(feature = "async-serial")]
 use darkfi_serial::{async_trait, FutAsyncWriteExt};
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
-use sled_overlay::{
-    serial::{parse_record, parse_u32_key_record},
-    sled,
-};
+use sled_overlay::sled;
 
 use crate::{util::time::Timestamp, Error, Result};
 
 use super::{
     monero::{extract_aux_merkle_root, MoneroPowData},
-    SledDbOverlayPtr,
+    parse_record, parse_u32_key_record, SledDbOverlayPtr,
 };
 
 /// Struct representing the Proof of Work used in a block.

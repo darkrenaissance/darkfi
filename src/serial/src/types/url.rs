@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 use url::Url;
 
 #[cfg(feature = "async")]
@@ -47,7 +47,7 @@ impl Decodable for Url {
         let s: String = Decodable::decode(d)?;
         match Url::parse(&s) {
             Ok(v) => Ok(v),
-            Err(e) => Err(Error::new(ErrorKind::Other, e)),
+            Err(e) => Err(Error::other(e)),
         }
     }
 }
@@ -59,7 +59,7 @@ impl AsyncDecodable for Url {
         let s: String = AsyncDecodable::decode_async(d).await?;
         match Url::parse(&s) {
             Ok(v) => Ok(v),
-            Err(e) => Err(Error::new(ErrorKind::Other, e)),
+            Err(e) => Err(Error::other(e)),
         }
     }
 }

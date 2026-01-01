@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 blake2b_simd = "1.0.3"
 bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
-darkfi-serial = { version = "0.5.0", features = ["derive", "crypto"] }
+darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 darkfi_money_contract = { path = "../money", features = ["no-entrypoint"] }
 thiserror = "2.0.17"
 

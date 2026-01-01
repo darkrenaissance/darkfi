@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 # ANCHOR: darkfi
 darkfi = {path = "../../../", features = ["toml", "async-daemonize", "rpc"]}
-darkfi-serial = "0.5.0"
+darkfi-serial = {path = "../../../src/serial"}
 # ANCHOR_END: darkfi
 
 # daemon

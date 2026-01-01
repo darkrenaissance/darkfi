@@ -13,11 +13,6 @@ name = "darkfi"
 doctest = false
 bench = false
 
-#[profile.release]
-#debug = true
-#lto = "fat"
-#codegen-units = 1
-
 [workspace]
 members = [
     "bin/zkas",
@@ -29,7 +24,6 @@ members = [
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
-    #"bin/darkwallet",
     "bin/tau/taud",
     "bin/vanityaddr",
     "bin/lilith",
@@ -37,9 +31,9 @@ members = [
     "src/sdk",
     "src/sdk/python",
 
-    #"src/serial",
-    #"src/serial/derive",
-    #"src/serial/derive-internal",
+    "src/serial",
+    "src/serial/derive",
+    "src/serial/derive-internal",
 
     "src/contract/test-harness",
     "src/contract/money",
@@ -56,7 +50,6 @@ thiserror = "2.0.17"
 tracing = "0.1.44"
 
 # async-runtime
-async-recursion = {version = "1.1.1", optional = true}
 async-trait = {version = "0.1.89", optional = true}
 futures = {version = "0.3.31", optional = true}
 smol = {version = "2.0.2", optional = true}
@@ -93,23 +86,16 @@ structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.9.8", optional = true}
 
 # Utilities
-#darkfi-serial = {path = "src/serial", optional = true}
-#darkfi-derive = {path = "src/serial/derive", optional = true}
-darkfi-serial = {version = "0.5.1", optional = true}
-darkfi-derive = {version = "0.5.1", optional = true}
+darkfi-serial = {path = "src/serial", optional = true}
 
-# TODO: check chrono usage and impl our own
-chrono = {version = "0.4.42", optional = true}
 lazy_static = {version = "1.5.0", optional = true}
 num-bigint = {version = "0.4.6", optional = true}
 url = {version = "2.5.7", features = ["serde"], optional = true}
 
 # Misc
-regex = {version = "1.12.2", optional = true}
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"], optional = true }
 tracing-appender = {version = "0.2.4", optional = true }
 nu-ansi-term = {version = "0.50.3", optional = true}
-
 
 # Crypto
 rand = {version = "0.8.5", optional = true}
@@ -126,10 +112,10 @@ wasmer-compiler-singlepass = {version = "6.1.0", optional = true}
 wasmer-middlewares = {version = "6.1.0", optional = true}
 
 # Blockchain store
-sled-overlay = {version = "0.1.14", optional = true}
+sled-overlay = {version = "0.1.15", optional = true}
 
 # Miner
-randomx = {git = "https://codeberg.org/darkrenaissance/RandomX", optional = true}
+randomx = {git = "https://codeberg.org/darkrenaissance/RandomX", rev = "0e31d5a", optional = true}
 monero = {version = "0.21.0", optional = true}
 tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
 
@@ -141,7 +127,7 @@ plotters = "0.3.7"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
 # Used for benchmarks
-criterion = { version = "0.8.1", features = ["html_reports"] }
+criterion = {version = "0.8.1", features = ["html_reports"]}
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -156,7 +142,7 @@ async-sdk = [
 ]
 
 blockchain = [
-    "sled-overlay/serial",
+    "sled-overlay",
     "monero",
     "num-bigint",
     "primitive-types",
@@ -164,6 +150,7 @@ blockchain = [
     "tiny-keccak",
 
     "darkfi-serial/num-bigint",
+    "darkfi-serial/sled-overlay",
 
     "tx",
     "util",
@@ -222,7 +209,6 @@ net-defaults = [
     "futures",
     "futures-rustls",
     "rcgen",
-    "regex",
     "semver",
     "serde",
     "socket2",
@@ -240,6 +226,8 @@ net-defaults = [
     "p2p-tor",
     #"p2p-nym",
     "p2p-i2p",
+    "p2p-socks5",
+    "p2p-unix",
 ]
 
 p2p-unix = []
@@ -268,7 +256,6 @@ system = [
 
 tx = [
     "blake3",
-    "rand",
 
     "async-sdk",
     "async-serial",
@@ -322,14 +309,6 @@ dht = [
     "darkfi-serial",
     "net",
 ]
-
-# Could not get this to work. Complains manifest-key is ignored.
-#[target.'cfg(target_family = "unix")'.features]
-#net = ["net-defaults", "p2p-unix"]
-#
-#[target.'cfg(target_family = "windows")'.features]
-#net = ["net-defaults"]
-
 # -----END LIBRARY FEATURES-----
 
 [patch.crates-io]

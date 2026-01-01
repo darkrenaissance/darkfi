@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 
 #[cfg(feature = "async")]
 use crate::{AsyncDecodable, AsyncEncodable};
@@ -47,7 +47,7 @@ impl Decodable for semver::Prerelease {
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "Failed deserializing semver::Prerelase")),
+            Err(_) => Err(Error::other("Failed deserializing semver::Prerelase")),
         }
     }
 }
@@ -60,7 +60,7 @@ impl AsyncDecodable for semver::Prerelease {
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "Failed deserializing semver::Prerelease")),
+            Err(_) => Err(Error::other("Failed deserializing semver::Prerelease")),
         }
     }
 }
@@ -85,9 +85,7 @@ impl Decodable for semver::BuildMetadata {
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_) => {
-                Err(Error::new(ErrorKind::Other, "Failed deserializing semver::BuildMetadata"))
-            }
+            Err(_) => Err(Error::other("Failed deserializing semver::BuildMetadata")),
         }
     }
 }
@@ -100,9 +98,7 @@ impl AsyncDecodable for semver::BuildMetadata {
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_) => {
-                Err(Error::new(ErrorKind::Other, "Failed deserializing semver::BuildMetadata"))
-            }
+            Err(_) => Err(Error::other("Failed deserializing semver::BuildMetadata")),
         }
     }
 }

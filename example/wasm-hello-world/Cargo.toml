@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 darkfi-sdk = { path = "../../src/sdk", features = ["wasm"] }
-darkfi-serial = { version = "0.5.0", features = ["derive", "crypto"] }
+darkfi-serial = { path = "../../src/serial", features = ["derive", "crypto"] }
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.

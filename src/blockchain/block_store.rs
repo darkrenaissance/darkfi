@@ -28,14 +28,11 @@ use darkfi_sdk::{
 use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
-use sled_overlay::{
-    serial::{parse_record, parse_u32_key_record},
-    sled, SledDbOverlayStateDiff,
-};
+use sled_overlay::{sled, SledDbOverlayStateDiff};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
-use super::{Header, HeaderHash, SledDbOverlayPtr};
+use super::{parse_record, parse_u32_key_record, Header, HeaderHash, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 ///

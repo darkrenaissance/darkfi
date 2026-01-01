@@ -484,17 +484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-recursion"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.111",
-]
-
-[[package]]
 name = "async-signal"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1800,15 +1789,12 @@ name = "darkfi"
 version = "0.5.0"
 dependencies = [
  "arti-client",
- "async-recursion",
  "async-trait",
  "blake3",
  "bs58",
- "chrono",
  "clap 4.5.53",
  "criterion 0.8.1",
  "crypto_api_chachapoly",
- "darkfi-derive",
  "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
@@ -1831,7 +1817,6 @@ dependencies = [
  "rand 0.8.5",
  "randomx",
  "rcgen",
- "regex",
  "semver",
  "serde",
  "sha2",
@@ -1881,8 +1866,6 @@ dependencies = [
 [[package]]
 name = "darkfi-derive"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8ae0dcfc7efc650d952d13559a549c93108a912a32e9242c1fe9527bb865429"
 dependencies = [
  "darkfi-derive-internal",
  "proc-macro-crate",
@@ -1894,8 +1877,6 @@ dependencies = [
 [[package]]
 name = "darkfi-derive-internal"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "024e68bb1f1a0363368ed824bd9dd8a67176d00b47ea5aafe1185a1fe4986110"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1948,8 +1929,6 @@ dependencies = [
 [[package]]
 name = "darkfi-serial"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf58eb094bebe226ea473d6d35d8af074a97f7a7eeb9e485b124638448a0ad05"
 dependencies = [
  "async-trait",
  "blake3",
@@ -1959,6 +1938,7 @@ dependencies = [
  "num-bigint",
  "pasta_curves",
  "semver",
+ "sled-overlay",
  "url",
 ]
 
@@ -5691,7 +5671,7 @@ dependencies = [
 [[package]]
 name = "randomx"
 version = "1.2.1"
-source = "git+https://codeberg.org/darkrenaissance/RandomX#0e31d5a23983164a171276dea7bea94dc58ca8ed"
+source = "git+https://codeberg.org/darkrenaissance/RandomX?rev=0e31d5a#0e31d5a23983164a171276dea7bea94dc58ca8ed"
 dependencies = [
  "bindgen 0.72.1",
  "bitflags 2.10.0",
@@ -6555,11 +6535,10 @@ dependencies = [
 
 [[package]]
 name = "sled-overlay"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd5d8153cababba322b8d9a3815c25b9f1e5cd78e72c81e8004a1ad78a69122c"
+checksum = "f84cfae62f52cad8adbf36565bd86225f8e432b2cb1be2db7cb21567b2063e01"
 dependencies = [
- "darkfi-serial",
  "sled",
 ]
 

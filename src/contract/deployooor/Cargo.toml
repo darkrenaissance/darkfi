@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
-darkfi-serial = { version = "0.5.0", features = ["derive", "crypto"] }
+darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 thiserror = "2.0.17"
 wasmparser = "0.243.0"
 

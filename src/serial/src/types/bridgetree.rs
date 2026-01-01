@@ -17,7 +17,7 @@
  */
 
 use core::fmt::Debug;
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 
 #[cfg(feature = "async")]
 use crate::{AsyncDecodable, AsyncEncodable};
@@ -128,7 +128,7 @@ impl<H: Decodable + Ord + Clone> Decodable for bridgetree::NonEmptyFrontier<H> {
 
         match Self::from_parts(position, leaf, ommers) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "FrontierError")),
+            Err(_) => Err(Error::other("FrontierError")),
         }
     }
 }
@@ -143,7 +143,7 @@ impl<H: AsyncDecodable + Send + Ord + Clone> AsyncDecodable for bridgetree::NonE
 
         match Self::from_parts(position, leaf, ommers) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "FrontierError")),
+            Err(_) => Err(Error::other("FrontierError")),
         }
     }
 }
@@ -287,7 +287,7 @@ impl<
         let max_checkpoints = Decodable::decode(d)?;
         match Self::from_parts(prior_bridges, current_bridge, saved, checkpoints, max_checkpoints) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "BridgeTreeError")),
+            Err(_) => Err(Error::other("BridgeTreeError")),
         }
     }
 }
@@ -308,7 +308,7 @@ impl<
         let max_checkpoints = AsyncDecodable::decode_async(d).await?;
         match Self::from_parts(prior_bridges, current_bridge, saved, checkpoints, max_checkpoints) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "BridgeTreeError")),
+            Err(_) => Err(Error::other("BridgeTreeError")),
         }
     }
 }

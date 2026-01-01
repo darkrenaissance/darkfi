@@ -18,7 +18,7 @@
 
 use std::{
     collections::VecDeque,
-    io::{Error, ErrorKind, Result},
+    io::{Error, Result},
 };
 
 pub use async_trait::async_trait;
@@ -69,7 +69,7 @@ pub async fn deserialize_async<T: AsyncDecodable>(data: &[u8]) -> Result<T> {
 
     // Fail if data is not consumed entirely.
     if consumed != data.len() {
-        return Err(Error::new(ErrorKind::Other, "Data not consumed fully on deserialization"))
+        return Err(Error::other("Data not consumed fully on deserialization"))
     }
 
     Ok(rv)
@@ -431,7 +431,7 @@ impl AsyncDecodable for VarInt {
             0xFF => {
                 let x = AsyncReadExt::read_u64_async(d).await?;
                 if x < 0x100000000 {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x))
             }
@@ -439,7 +439,7 @@ impl AsyncDecodable for VarInt {
             0xFE => {
                 let x = AsyncReadExt::read_u32_async(d).await?;
                 if x < 0x10000 {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x as u64))
             }
@@ -447,7 +447,7 @@ impl AsyncDecodable for VarInt {
             0xFD => {
                 let x = AsyncReadExt::read_u16_async(d).await?;
                 if x < 0xFD {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x as u64))
             }
@@ -665,7 +665,7 @@ impl AsyncDecodable for String {
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<String> {
         match String::from_utf8(AsyncDecodable::decode_async(d).await?) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "Invalid UTF-8 for string")),
+            Err(_) => Err(Error::other("Invalid UTF-8 for string")),
         }
     }
 }

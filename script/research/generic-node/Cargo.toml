@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 darkfi = {path = "../../../", features = ["async-daemonize", "net"]}
-darkfi-serial = {version = "0.5.0", features = ["async"]}
+darkfi-serial = {path = "../../../src/serial", features = ["async"]}
 rand = "0.8.5"
 
 # Daemon

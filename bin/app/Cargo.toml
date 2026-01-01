@@ -28,7 +28,7 @@ glam = "0.30.9"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
-darkfi-serial = {version = "0.5.0", features = ["async"]}
+darkfi-serial = {path = "../../src/serial", features = ["async"]}
 fud = { path = "../fud/fud/" }
 bs58 = "0.5.1"
 thiserror = "2.0.17"
@@ -43,7 +43,7 @@ futures = "0.3.31"
 async-recursion = "1.1.1"
 colored = "3.0.0"
 #rustpython-vm = "0.3.1"
-sled-overlay = "0.1.14"
+sled-overlay = "0.1.15"
 url = "2.5.7"
 semver = "1.0.27"
 chrono = "0.4.42"

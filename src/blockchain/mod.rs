@@ -25,8 +25,15 @@ use darkfi_sdk::{
     monotree::{self, Monotree},
     tx::TransactionHash,
 };
-use sled_overlay::{sled, sled::Transactional};
+use darkfi_serial::{deserialize, Decodable};
+use sled_overlay::{
+    sled,
+    sled::{IVec, Transactional},
+};
 use tracing::debug;
+
+#[cfg(feature = "async-serial")]
+use darkfi_serial::{deserialize_async, AsyncDecodable};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
@@ -702,6 +709,71 @@ impl BlockchainOverlay {
     pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
         self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
     }
+}
+
+/// Parse a sled record in the form of a tuple (`key`, `value`).
+pub fn parse_record<T1: Decodable, T2: Decodable>(record: (IVec, IVec)) -> Result<(T1, T2)> {
+    let key = deserialize(&record.0)?;
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
+}
+
+/// Parse a sled record with a u32 key, encoded in Big Endian bytes,
+/// in the form of a tuple (`key`, `value`).
+pub fn parse_u32_key_record<T: Decodable>(record: (IVec, IVec)) -> Result<(u32, T)> {
+    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
+    let key = u32::from_be_bytes(key_bytes);
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
+}
+
+/// Parse a sled record with a u64 key, encoded in Big Endian bytes,
+/// in the form of a tuple (`key`, `value`).
+pub fn parse_u64_key_record<T: Decodable>(record: (IVec, IVec)) -> Result<(u64, T)> {
+    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
+    let key = u64::from_be_bytes(key_bytes);
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
+}
+
+#[cfg(feature = "async-serial")]
+/// Parse a sled record in the form of a tuple (`key`, `value`).
+pub async fn parse_record_async<T1: AsyncDecodable, T2: AsyncDecodable>(
+    record: (IVec, IVec),
+) -> Result<(T1, T2)> {
+    let key = deserialize_async(&record.0).await?;
+    let value = deserialize_async(&record.1).await?;
+
+    Ok((key, value))
+}
+
+#[cfg(feature = "async-serial")]
+/// Parse a sled record with a u32 key, encoded in Big Endian bytes,
+/// in the form of a tuple (`key`, `value`).
+pub async fn parse_u32_key_record_async<T: AsyncDecodable>(
+    record: (IVec, IVec),
+) -> Result<(u32, T)> {
+    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
+    let key = u32::from_be_bytes(key_bytes);
+    let value = deserialize_async(&record.1).await?;
+
+    Ok((key, value))
+}
+
+#[cfg(feature = "async-serial")]
+/// Parse a sled record with a u64 key, encoded in Big Endian bytes,
+/// in the form of a tuple (`key`, `value`).
+pub async fn parse_u64_key_record_async<T: AsyncDecodable>(
+    record: (IVec, IVec),
+) -> Result<(u64, T)> {
+    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
+    let key = u64::from_be_bytes(key_bytes);
+    let value = deserialize_async(&record.1).await?;
+
+    Ok((key, value))
 }
 
 #[cfg(test)]

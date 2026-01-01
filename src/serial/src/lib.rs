@@ -18,7 +18,7 @@
 
 use std::{
     collections::VecDeque,
-    io::{Cursor, Error, ErrorKind, Read, Write},
+    io::{Cursor, Error, Read, Write},
 };
 
 #[cfg(feature = "derive")]
@@ -74,7 +74,7 @@ pub fn deserialize<T: Decodable>(data: &[u8]) -> Result<T, Error> {
 
     // Fail if data is not consumed entirely.
     if consumed != data.len() {
-        return Err(Error::new(ErrorKind::Other, "Data not consumed fully on deserialization"))
+        return Err(Error::other("Data not consumed fully on deserialization"))
     }
 
     Ok(rv)
@@ -341,7 +341,7 @@ impl Decodable for VarInt {
             0xFF => {
                 let x = ReadExt::read_u64(d)?;
                 if x < 0x100000000 {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x))
             }
@@ -349,7 +349,7 @@ impl Decodable for VarInt {
             0xFE => {
                 let x = ReadExt::read_u32(d)?;
                 if x < 0x10000 {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x as u64))
             }
@@ -357,7 +357,7 @@ impl Decodable for VarInt {
             0xFD => {
                 let x = ReadExt::read_u16(d)?;
                 if x < 0xFD {
-                    return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
+                    return Err(Error::other("Non-minimal VarInt"))
                 }
                 Ok(VarInt(x as u64))
             }
@@ -592,7 +592,7 @@ impl Decodable for String {
     fn decode<D: Read>(d: &mut D) -> Result<String, Error> {
         match String::from_utf8(Decodable::decode(d)?) {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::new(ErrorKind::Other, "Invalid UTF-8 for string")),
+            Err(_) => Err(Error::other("Invalid UTF-8 for string")),
         }
     }
 }
@@ -614,7 +614,7 @@ impl Decodable for Cow<'static, str> {
     fn decode<D: Read>(d: D) -> Result<Cow<'static, str>, Error> {
         match String::from_utf8(Decodable::decode(d)?) {
             Ok(v) => v.map(Cow::Owned),
-            Err(_) => Err(Error::new(ErrorKind::Other, "Invalid UTF-8 for string")),
+            Err(_) => Err(Error::other("Invalid UTF-8 for string")),
         }
     }
 }

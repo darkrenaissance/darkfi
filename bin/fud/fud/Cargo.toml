@@ -19,7 +19,7 @@ path = "src/main.rs"
 [dependencies]
 darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "sled-overlay"]}
 darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = {version = "0.5.0", features = ["hash"]}
+darkfi-serial = {path = "../../../src/serial", features = ["hash"]}
 
 # Encoding
 bs58 = "0.5.1"
@@ -48,7 +48,7 @@ blake2 = "0.10.6"
 equix = "0.5.1"
 
 # Database
-sled-overlay = "0.1.14"
+sled-overlay = "0.1.15"
 
 # Argument parsing
 serde = {version = "1.0.228", features = ["derive"]}

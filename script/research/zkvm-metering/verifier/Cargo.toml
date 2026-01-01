@@ -12,11 +12,11 @@ edition = "2024"
 [dependencies]
 darkfi-sdk = {path = "../../../../src/sdk"}
 darkfi = {path = "../../../../", features = ["zk"]}
-darkfi-serial = "0.5.0"
+darkfi-serial = {path = "../../../../src/serial"}
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v031"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v031"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
 
 [profile.release]
 debug = true

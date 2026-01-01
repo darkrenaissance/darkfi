@@ -23,10 +23,10 @@ path = "example/send.rs"
 
 [dependencies]
 darkfi = {path = "../../", features = ["event-graph"]}
-darkfi-serial = {version = "0.5.0", features = ["async"]}
+darkfi-serial = {path = "../../src/serial", features = ["async"]}
 
 # Event Graph DB
-sled-overlay = "0.1.14"
+sled-overlay = "0.1.15"
 
 # Crypto
 blake3 = "1.8.2"

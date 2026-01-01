@@ -21,7 +21,7 @@ wasm = []
 thiserror = "2.0.17"
 
 # Serialization
-darkfi-serial = {version = "0.5.1", features = ["crypto"]}
+darkfi-serial = {path = "../serial", features = ["crypto"]}
 
 # Encoding
 bs58 = {version = "0.5.1", features = ["check"]}
@@ -46,7 +46,7 @@ subtle = "2.6.1"
 hashbrown = "0.16.1"
 
 # Storage
-sled-overlay = "0.1.14"
+sled-overlay = "0.1.15"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}

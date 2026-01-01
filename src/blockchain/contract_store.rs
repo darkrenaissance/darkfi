@@ -26,7 +26,7 @@ use darkfi_sdk::{
     monotree::{MemoryDb, Monotree, SledOverlayDb, SledTreeDb, EMPTY_HASH},
 };
 use darkfi_serial::{deserialize, serialize};
-use sled_overlay::{serial::parse_record, sled, SledDbOverlayStateDiff};
+use sled_overlay::{sled, SledDbOverlayStateDiff};
 use tracing::{debug, error};
 
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
     Error, Result,
 };
 
-use super::SledDbOverlayPtr;
+use super::{parse_record, SledDbOverlayPtr};
 
 pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 pub const SLED_CONTRACTS_TREES_TREE: &[u8] = b"_contracts_trees";

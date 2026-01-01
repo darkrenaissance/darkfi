@@ -17,7 +17,7 @@
  */
 
 //! Implementations for pasta curves
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Error, Read, Result, Write};
 
 #[cfg(feature = "async")]
 use crate::{
@@ -58,7 +58,7 @@ impl Decodable for Fp {
         d.read_slice(&mut bytes)?;
         match Self::from_repr(bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Base")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Base")),
         }
     }
 }
@@ -70,7 +70,7 @@ impl AsyncDecodable for Fp {
         d.read_slice_async(&mut bytes).await?;
         match Self::from_repr(bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Base")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Base")),
         }
     }
 }
@@ -97,7 +97,7 @@ impl Decodable for Fq {
         d.read_slice(&mut bytes)?;
         match Self::from_repr(bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Scalar")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Scalar")),
         }
     }
 }
@@ -110,7 +110,7 @@ impl AsyncDecodable for Fq {
         d.read_slice_async(&mut bytes).await?;
         match Self::from_repr(bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Scalar")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Scalar")),
         }
     }
 }
@@ -137,7 +137,7 @@ impl Decodable for Ep {
         d.read_slice(&mut bytes)?;
         match Self::from_bytes(&bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Point")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Point")),
         }
     }
 }
@@ -150,7 +150,7 @@ impl AsyncDecodable for Ep {
         d.read_slice_async(&mut bytes).await?;
         match Self::from_bytes(&bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for pallas::Point")),
+            None => Err(Error::other("Noncanonical bytes for pallas::Point")),
         }
     }
 }
@@ -177,7 +177,7 @@ impl Decodable for Eq {
         d.read_slice(&mut bytes)?;
         match Self::from_bytes(&bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for vesta::Point")),
+            None => Err(Error::other("Noncanonical bytes for vesta::Point")),
         }
     }
 }
@@ -190,7 +190,7 @@ impl AsyncDecodable for Eq {
         d.read_slice_async(&mut bytes).await?;
         match Self::from_bytes(&bytes).into() {
             Some(v) => Ok(v),
-            None => Err(Error::new(ErrorKind::Other, "Noncanonical bytes for vesta::Point")),
+            None => Err(Error::other("Noncanonical bytes for vesta::Point")),
         }
     }
 }
