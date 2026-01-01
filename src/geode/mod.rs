@@ -95,7 +95,7 @@ use tracing::{debug, info, warn};
 use crate::{Error, Result};
 
 mod chunked_storage;
-pub use chunked_storage::ChunkedStorage;
+pub use chunked_storage::{Chunk, ChunkedStorage};
 
 mod file_sequence;
 pub use file_sequence::FileSequence;
@@ -354,7 +354,7 @@ impl Geode {
         let chunk_hash = blake3::hash(chunk_slice);
 
         // Get the chunk index in the file/directory from the chunk hash
-        let chunk_index = match chunked.iter().position(|(h, _)| *h == chunk_hash) {
+        let chunk_index = match chunked.iter().position(|c| c.hash == chunk_hash) {
             Some(index) => index,
             None => {
                 return Err(Error::GeodeNeedsGc);
@@ -382,7 +382,7 @@ impl Geode {
             let exact_file_size =
                 chunked.len() * MAX_CHUNK_SIZE - (MAX_CHUNK_SIZE - chunk_slice.len());
             if let Some(file) = &chunked.get_fileseq_mut().get_current_file() {
-                let _ = file.set_len(exact_file_size as u64).await;
+                let _ = file.set_len(exact_file_size as u64);
             }
             chunked.get_fileseq_mut().set_file_size(0, exact_file_size as u64);
         }
@@ -456,7 +456,7 @@ impl Geode {
         info!(target: "geode::get_chunk", "[Geode] Getting chunk {}", hash_to_string(chunk_hash));
 
         // Get the chunk index in the file from the chunk hash
-        let chunk_index = match chunked.iter().position(|(h, _)| *h == *chunk_hash) {
+        let chunk_index = match chunked.iter().position(|c| c.hash == *chunk_hash) {
             Some(index) => index,
             None => return Err(Error::GeodeChunkNotFound),
         };

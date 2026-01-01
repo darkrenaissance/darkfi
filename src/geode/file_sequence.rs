@@ -16,15 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    collections::HashSet,
+    fs::{File, OpenOptions},
+    io::{Read, Seek, Write},
+    path::PathBuf,
+    pin::Pin,
+};
+
 use futures::{
     task::{Context, Poll},
     AsyncRead, AsyncSeek, AsyncWrite,
 };
-use smol::{
-    fs::{File, OpenOptions},
-    io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
-};
-use std::{collections::HashSet, path::PathBuf, pin::Pin};
+use smol::io::{self, SeekFrom};
 
 /// `FileSequence` is an object that implements `AsyncRead`, `AsyncSeek`, and
 /// `AsyncWrite` for an ordered list of (file path, file size).
@@ -109,7 +113,7 @@ impl FileSequence {
     /// Open the file at (`current_file_index` + 1).
     /// If no file is currently open (`current_file_index` is None), it opens
     /// the first file.
-    async fn open_next_file(&mut self) -> io::Result<()> {
+    fn open_next_file(&mut self) -> io::Result<()> {
         self.current_file = None;
         self.current_file_index = match self.current_file_index {
             Some(i) => Some(i + 1),
@@ -122,22 +126,20 @@ impl FileSequence {
             .read(true)
             .write(true)
             .create(false)
-            .open(self.files[self.current_file_index.unwrap()].0.clone())
-            .await?;
+            .open(self.files[self.current_file_index.unwrap()].0.clone())?;
         self.current_file = Some(file);
         Ok(())
     }
 
     /// Open the file at `file_index`.
-    async fn open_file(&mut self, file_index: usize) -> io::Result<()> {
+    fn open_file(&mut self, file_index: usize) -> io::Result<()> {
         self.current_file = None;
         self.current_file_index = Some(file_index);
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(false)
-            .open(self.files[file_index].0.clone())
-            .await?;
+            .open(self.files[file_index].0.clone())?;
         self.current_file = Some(file);
         Ok(())
     }
@@ -169,7 +171,7 @@ impl AsyncRead for FileSequence {
                 }
 
                 // Open the next file
-                match smol::block_on(this.open_next_file()) {
+                match this.open_next_file() {
                     Ok(_) => {}
                     Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
                         return Poll::Ready(Ok(total_read));
@@ -184,7 +186,7 @@ impl AsyncRead for FileSequence {
 
             // Read from the current file
             let file = this.current_file.as_mut().unwrap();
-            match smol::block_on(file.read(&mut buf[total_read..])) {
+            match file.read(&mut buf[total_read..]) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
                         this.current_file = None; // Move to the next file
@@ -239,7 +241,7 @@ impl AsyncSeek for FileSequence {
         if this.current_file.is_none() ||
             this.current_file_index.is_some() && this.current_file_index.unwrap() != file_index
         {
-            match smol::block_on(this.open_file(file_index)) {
+            match this.open_file(file_index) {
                 Ok(_) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {
                     // If the file does not exist, return without actually seeking it
@@ -253,7 +255,7 @@ impl AsyncSeek for FileSequence {
         let file_pos = abs_pos - bytes_offset;
 
         // Seek in the current file
-        match smol::block_on(file.seek(SeekFrom::Start(file_pos))) {
+        match file.seek(SeekFrom::Start(file_pos)) {
             Ok(_) => Poll::Ready(Ok(this.position)),
             Err(e) => Poll::Ready(Err(e)),
         }
@@ -273,9 +275,9 @@ impl AsyncWrite for FileSequence {
 
         let finalize_current_file = |file: &mut File, max_size: u64| {
             if auto_set_len {
-                smol::block_on(file.set_len(max_size))?;
+                file.set_len(max_size)?;
             }
-            smol::block_on(file.flush())?;
+            file.flush()?;
             Ok(())
         };
 
@@ -299,7 +301,7 @@ impl AsyncWrite for FileSequence {
                 }
 
                 // Switch to the next file
-                match smol::block_on(this.open_next_file()) {
+                match this.open_next_file() {
                     Ok(_) => {}
                     Err(e) if e.kind() == io::ErrorKind::NotFound => {
                         this.current_file = None;
@@ -313,7 +315,7 @@ impl AsyncWrite for FileSequence {
             let max_size = this.files[this.current_file_index.unwrap()].1;
 
             // Check how much space is left in the current file
-            let current_position = smol::block_on(file.seek(io::SeekFrom::Current(0)))?;
+            let current_position = file.stream_position()?;
             let space_left = max_size - current_position;
             let bytes_to_write = remaining_buf.len().min(space_left as usize);
 
@@ -327,7 +329,7 @@ impl AsyncWrite for FileSequence {
             }
 
             // Write to the current file
-            match smol::block_on(file.write(&remaining_buf[..bytes_to_write])) {
+            match file.write(&remaining_buf[..bytes_to_write]) {
                 Ok(bytes_written) => {
                     total_bytes_written += bytes_written;
                     this.position += bytes_written as u64;
@@ -361,12 +363,24 @@ impl AsyncWrite for FileSequence {
     fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
         let this = self.get_mut();
         if let Some(file) = this.current_file.take() {
-            match smol::block_on(file.sync_all()) {
+            match file.sync_all() {
                 Ok(()) => Poll::Ready(Ok(())),
                 Err(e) => Poll::Ready(Err(e)),
             }
         } else {
             Poll::Ready(Ok(())) // No file to close
+        }
+    }
+}
+
+impl Clone for FileSequence {
+    fn clone(&self) -> Self {
+        Self {
+            files: self.files.clone(),
+            current_file: None,
+            current_file_index: None,
+            position: 0,
+            auto_set_len: self.auto_set_len,
         }
     }
 }

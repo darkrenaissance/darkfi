@@ -16,17 +16,39 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::{Path, PathBuf};
+use std::{
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+};
 
 use crate::geode::{file_sequence::FileSequence, MAX_CHUNK_SIZE};
 
+#[derive(Clone, Debug, Eq)]
+pub struct Chunk {
+    pub hash: blake3::Hash,
+    pub available: bool,
+    pub size: usize,
+}
+
+impl Hash for Chunk {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash.hash(state);
+    }
+}
+
+impl PartialEq for Chunk {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash
+    }
+}
+
 /// `ChunkedStorage` is a representation of a file or directory we're trying to
 /// retrieve from `Geode`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ChunkedStorage {
     /// Vector of chunk hashes and a bool which is `true` if the chunk is
     /// available locally.
-    chunks: Vec<(blake3::Hash, bool)>,
+    chunks: Vec<Chunk>,
     /// FileSequence containing the list of file paths and file sizes, it has
     /// a single item if this is not a directory but a single file.
     fileseq: FileSequence,
@@ -38,7 +60,10 @@ pub struct ChunkedStorage {
 impl ChunkedStorage {
     pub fn new(hashes: &[blake3::Hash], files: &[(PathBuf, u64)], is_dir: bool) -> Self {
         Self {
-            chunks: hashes.iter().map(|x| (*x, false)).collect(),
+            chunks: hashes
+                .iter()
+                .map(|x| Chunk { hash: *x, available: false, size: MAX_CHUNK_SIZE })
+                .collect(),
             fileseq: FileSequence::new(files, is_dir),
             is_dir,
         }
@@ -46,16 +71,16 @@ impl ChunkedStorage {
 
     /// Check whether we have all the chunks available locally.
     pub fn is_complete(&self) -> bool {
-        !self.chunks.iter().any(|(_, available)| !available)
+        !self.chunks.iter().any(|c| !c.available)
     }
 
     /// Return an iterator over the chunks and their availability.
-    pub fn iter(&self) -> core::slice::Iter<'_, (blake3::Hash, bool)> {
+    pub fn iter(&self) -> core::slice::Iter<'_, Chunk> {
         self.chunks.iter()
     }
 
     /// Return an mutable iterator over the chunks and their availability.
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, (blake3::Hash, bool)> {
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, Chunk> {
         self.chunks.iter_mut()
     }
 
@@ -71,17 +96,26 @@ impl ChunkedStorage {
 
     /// Return the number of chunks available locally.
     pub fn local_chunks(&self) -> usize {
-        self.chunks.iter().filter(|(_, p)| *p).count()
+        self.chunks.iter().filter(|c| c.available).count()
     }
 
     /// Return `chunks`.
-    pub fn get_chunks(&self) -> &Vec<(blake3::Hash, bool)> {
+    pub fn get_chunks(&self) -> &Vec<Chunk> {
         &self.chunks
     }
 
     /// Return a mutable chunk from `chunks`.
-    pub fn get_chunk_mut(&mut self, index: usize) -> &mut (blake3::Hash, bool) {
+    pub fn get_chunk_mut(&mut self, index: usize) -> &mut Chunk {
         &mut self.chunks[index]
+    }
+
+    pub fn get_chunk_index(&self, hash: &blake3::Hash) -> Option<usize> {
+        for (i, chunk) in self.chunks.iter().enumerate() {
+            if chunk.hash == *hash {
+                return Some(i)
+            }
+        }
+        None
     }
 
     /// Return the list of files from the `reader`.
@@ -125,7 +159,7 @@ impl ChunkedStorage {
         chunk_indexes
             .iter()
             .filter_map(|&index| self.chunks.get(index))
-            .map(|(hash, _)| hash)
+            .map(|c| &c.hash)
             .cloned()
             .collect()
     }

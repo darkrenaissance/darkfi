@@ -299,8 +299,8 @@ async fn handle_chunk_reply(
     // `total_bytes_size` (and `target_bytes_size`) again,
     // as `geode.write_chunk()` updated the FileSequence
     // to the exact file size.
-    if let Some((last_chunk_hash, _)) = ctx.chunked.iter().last() {
-        if matches!(resource.rtype, ResourceType::File) && *last_chunk_hash == *chunk_hash {
+    if let Some(last_chunk) = ctx.chunked.iter().last() {
+        if matches!(resource.rtype, ResourceType::File) && last_chunk.hash == *chunk_hash {
             resource.total_bytes_size = ctx.chunked.get_fileseq().len();
             resource.target_bytes_size = resource.total_bytes_size;
         }

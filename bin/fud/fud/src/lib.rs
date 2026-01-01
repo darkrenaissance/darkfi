@@ -33,7 +33,7 @@ use tracing::{error, info, warn};
 
 use darkfi::{
     dht::{tasks as dht_tasks, Dht, DhtHandler, DhtSettings},
-    geode::{hash_to_string, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
+    geode::{hash_to_string, Chunk, ChunkedStorage, FileSequence, Geode, MAX_CHUNK_SIZE},
     net::P2pPtr,
     system::{ExecutorPtr, PublisherPtr, StoppableTask},
     util::{path::expand_path, time::Timestamp},
@@ -476,7 +476,7 @@ impl Fud {
             resource.target_chunks_downloaded = match chunked {
                 Some(chunked) => chunked
                     .iter()
-                    .filter(|(hash, available)| chunk_hashes.contains(hash) && *available)
+                    .filter(|chunk| chunk_hashes.contains(&chunk.hash) && chunk.available)
                     .count() as u64,
                 None => 0,
             };
@@ -775,12 +775,12 @@ impl Fud {
         }
 
         // Set of all chunks we need locally and their current availability
-        let chunks: HashSet<(blake3::Hash, bool)> =
-            chunked.iter().filter(|(hash, _)| chunk_hashes.contains(hash)).cloned().collect();
+        let chunks: HashSet<Chunk> =
+            chunked.iter().filter(|c| chunk_hashes.contains(&c.hash)).cloned().collect();
 
         // Set of the chunks we need to download
         let mut missing_chunks: HashSet<blake3::Hash> =
-            chunks.iter().filter(|&(_, available)| !available).map(|(chunk, _)| *chunk).collect();
+            chunks.iter().filter(|&c| !c.available).map(|c| c.hash).collect();
 
         // Update the resource with the chunks/bytes counts
         update_resource!(hash, {
@@ -858,10 +858,8 @@ impl Fud {
         // Verify all chunks
         self.verify_chunks(&resource, &mut chunked).await?;
 
-        let is_complete = chunked
-            .iter()
-            .filter(|(hash, _)| chunk_hashes.contains(hash))
-            .all(|(_, available)| *available);
+        let is_complete =
+            chunked.iter().filter(|c| chunk_hashes.contains(&c.hash)).all(|c| c.available);
 
         // We fetched all chunks, but the resource is not complete
         // (some chunks were missing from all seeders)
@@ -953,9 +951,9 @@ impl Fud {
         let mut bytes: HashMap<blake3::Hash, (usize, usize)> = HashMap::new();
 
         // Gather all available chunks
-        for (chunk_index, (chunk_hash, _)) in chunks.iter().enumerate() {
+        for (chunk_index, chunk) in chunks.iter().enumerate() {
             // Read the chunk using the `FileSequence`
-            let chunk =
+            let chunk_data =
                 match self.geode.read_chunk(&mut chunked.get_fileseq_mut(), &chunk_index).await {
                     Ok(c) => c,
                     Err(Error::Io(ErrorKind::NotFound)) => continue,
@@ -966,23 +964,34 @@ impl Fud {
                 };
 
             // Perform chunk consistency check
-            if self.geode.verify_chunk(chunk_hash, &chunk) {
-                chunked.get_chunk_mut(chunk_index).1 = true;
+            if self.geode.verify_chunk(&chunk.hash, &chunk_data) {
+                chunked.get_chunk_mut(chunk_index).available = true;
+                chunked.get_chunk_mut(chunk_index).size = chunk_data.len();
                 bytes.insert(
-                    *chunk_hash,
-                    (chunk.len(), resource.get_selected_bytes(chunked, &chunk)),
+                    chunk.hash,
+                    (
+                        chunk_data.len(),
+                        resource.get_bytes_of_selection(
+                            chunked,
+                            file_selection,
+                            &chunk.hash,
+                            chunk_data.len(),
+                        ),
+                    ),
                 );
+            } else {
+                chunked.get_chunk_mut(chunk_index).available = false;
             }
         }
 
         // Look for the chunks that are not on the filesystem
         let chunks = chunked.get_chunks().clone();
         let missing_on_fs: Vec<_> =
-            chunks.iter().enumerate().filter(|(_, (_, available))| !available).collect();
+            chunks.iter().enumerate().filter(|(_, c)| !c.available).collect();
 
         // Look for scraps
-        for (chunk_index, (chunk_hash, _)) in missing_on_fs {
-            let scrap = self.scrap_tree.get(chunk_hash.as_bytes())?;
+        for (chunk_index, chunk) in missing_on_fs {
+            let scrap = self.scrap_tree.get(chunk.hash.as_bytes())?;
             if scrap.is_none() {
                 continue;
             }
@@ -993,7 +1002,7 @@ impl Fud {
                 continue;
             }
             let scrap: Scrap = scrap.unwrap();
-            if blake3::hash(&scrap.chunk) != *chunk_hash {
+            if blake3::hash(&scrap.chunk) != chunk.hash {
                 continue;
             }
 
@@ -1011,7 +1020,8 @@ impl Fud {
             }
 
             // Mark the chunk as available
-            chunked.get_chunk_mut(chunk_index).1 = true;
+            chunked.get_chunk_mut(chunk_index).available = true;
+            chunked.get_chunk_mut(chunk_index).size = scrap.chunk.len();
 
             // Update the sums of locally available data
             bytes.insert(
@@ -1023,9 +1033,11 @@ impl Fud {
         // If the resource is a file: make the `FileSequence`'s file the
         // exact file size if we know the last chunk's size. This is not
         // needed for directories.
-        if let Some((last_chunk_hash, last_chunk_available)) = chunked.iter().last() {
-            if !chunked.is_dir() && *last_chunk_available {
-                if let Some((last_chunk_size, _)) = bytes.get(last_chunk_hash) {
+        let is_dir = chunked.is_dir();
+        if let Some(last_chunk) = chunked.iter_mut().last() {
+            if !is_dir && last_chunk.available {
+                if let Some((last_chunk_size, _)) = bytes.get(&last_chunk.hash) {
+                    last_chunk.size = *last_chunk_size;
                     let exact_file_size =
                         chunked.len() * MAX_CHUNK_SIZE - (MAX_CHUNK_SIZE - last_chunk_size);
                     chunked.get_fileseq_mut().set_file_size(0, exact_file_size as u64);
@@ -1172,8 +1184,8 @@ impl Fud {
             let chunked = self.geode.get(hash, &path).await;
 
             if let Ok(chunked) = chunked {
-                for (chunk_hash, _) in chunked.iter() {
-                    let _ = self.scrap_tree.remove(chunk_hash.as_bytes());
+                for chunk in chunked.iter() {
+                    let _ = self.scrap_tree.remove(chunk.hash.as_bytes());
                 }
             }
         }

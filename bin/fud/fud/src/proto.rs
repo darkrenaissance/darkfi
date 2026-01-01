@@ -321,7 +321,7 @@ impl ProtocolFud {
 
             // If it's a file with a single chunk, just reply with the chunk
             if chunked_file.len() == 1 && !chunked_file.is_dir() {
-                let chunk_hash = chunked_file.get_chunks()[0].0;
+                let chunk_hash = chunked_file.get_chunks()[0].hash;
                 let chunk = self.fud.geode.get_chunk(&mut chunked_file, &chunk_hash).await;
                 if let Ok(chunk) = chunk {
                     if blake3::hash(blake3::hash(&chunk).as_bytes()) != request.resource {
@@ -342,11 +342,7 @@ impl ProtocolFud {
                 false => {
                     let reply = FudFileReply {
                         resource: request.resource,
-                        chunk_hashes: chunked_file
-                            .get_chunks()
-                            .iter()
-                            .map(|(chunk, _)| *chunk)
-                            .collect(),
+                        chunk_hashes: chunked_file.get_chunks().iter().map(|c| c.hash).collect(),
                     };
                     info!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Sending file metadata {}", hash_to_string(&request.resource));
                     let _ = self.channel.send(&reply).await;
@@ -367,11 +363,7 @@ impl ProtocolFud {
                     }
                     let reply = FudDirectoryReply {
                         resource: request.resource,
-                        chunk_hashes: chunked_file
-                            .get_chunks()
-                            .iter()
-                            .map(|(chunk, _)| *chunk)
-                            .collect(),
+                        chunk_hashes: chunked_file.get_chunks().iter().map(|c| c.hash).collect(),
                         files: files.unwrap(),
                     };
                     info!(target: "fud::ProtocolFud::handle_fud_metadata_request()", "Sending directory metadata {}", hash_to_string(&request.resource));

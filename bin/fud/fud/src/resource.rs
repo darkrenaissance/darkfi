@@ -185,7 +185,7 @@ impl Resource {
                 }
                 chunks
             }
-            FileSelection::All => chunked.iter().cloned().map(|(hash, _)| hash).collect(),
+            FileSelection::All => chunked.iter().cloned().map(|c| c.hash).collect(),
         }
     }
 
@@ -199,7 +199,7 @@ impl Resource {
         };
 
         let chunk_hash = blake3::hash(chunk);
-        let chunk_index = match chunked.iter().position(|(h, _)| *h == chunk_hash) {
+        let chunk_index = match chunked.iter().position(|c| c.hash == *chunk_hash) {
             Some(index) => index,
             None => {
                 return 0;
