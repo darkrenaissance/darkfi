@@ -202,7 +202,7 @@ impl Resource {
                 }
                 chunks
             }
-            FileSelection::All => chunked.iter().cloned().map(|c| c.hash).collect(),
+            FileSelection::All => chunked.iter().map(|c| c.hash).collect(),
         }
     }
 
