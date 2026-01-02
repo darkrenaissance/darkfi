@@ -22,6 +22,7 @@ MainActivity main = (MainActivity)getContext();
 if (main.inpcon == null) {
     EditorInfo editorInfo = new EditorInfo();
     editorInfo.inputType = InputType.TYPE_CLASS_TEXT |
+                           InputType.TYPE_TEXT_FLAG_MULTI_LINE |
                            InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
     editorInfo.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
 
