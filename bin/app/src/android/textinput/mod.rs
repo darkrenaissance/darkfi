@@ -16,20 +16,36 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::native::android::{self, ndk_sys};
-use parking_lot::Mutex as SyncMutex;
-use std::{
-    collections::HashMap,
-    ffi::{c_char, c_void, CString},
-    sync::LazyLock,
-};
+use async_channel::Sender as AsyncSender;
+use miniquad::native::android::attach_jni_env;
+use parking_lot::RwLock;
+use std::sync::LazyLock;
 
-mod ffi;
-use ffi::{
-    GameTextInput, GameTextInputSpan, GameTextInputState, GameTextInput_destroy,
-    GameTextInput_getState, GameTextInput_hideIme, GameTextInput_init,
-    GameTextInput_setEventCallback, GameTextInput_setState, GameTextInput_showIme,
-};
+mod jni;
+mod state;
+
+use state::GameTextInput;
+
+/// Global GameTextInput instance for JNI bridge
+///
+/// Single global instance since only ONE editor is active at a time.
+pub(self) static GAME_TEXT_INPUT: LazyLock<RwLock<Option<GameTextInput>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+pub(self) fn init_game_text_input() {
+    debug!("AndroidTextInput: Initializing GameTextInput");
+
+    let env = unsafe { attach_jni_env() };
+    let mut gti = GameTextInput::new(env, 0);
+    // Store globally for JNI bridge access
+    *GAME_TEXT_INPUT.write() = Some(gti);
+
+    debug!("AndroidTextInput: GameTextInput initialized");
+}
+
+fn is_init() -> bool {
+    GAME_TEXT_INPUT.read().is_some()
+}
 
 // Text input state exposed to the rest of the app
 #[derive(Debug, Clone)]
@@ -39,127 +55,54 @@ pub struct AndroidTextInputState {
     pub compose: Option<(usize, usize)>,
 }
 
-struct Globals {
-    next_id: usize,
-    senders: HashMap<usize, async_channel::Sender<AndroidTextInputState>>,
-}
-
-static GLOBALS: LazyLock<SyncMutex<Globals>> =
-    LazyLock::new(|| SyncMutex::new(Globals { next_id: 0, senders: HashMap::new() }));
-
-// Callback implementation - sends state update event
-extern "C" fn game_text_input_callback(ctx: *mut c_void, state: *const GameTextInputState) {
-    // Ensures we can use the void* pointer to store a usize
-    assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<*mut c_void>());
-    // ctx is the usize id we passed as void* pointer
-    let id = ctx as usize;
-    let text_state = unsafe { &(*state) }.to_owned();
-
-    let globals = GLOBALS.lock();
-    if let Some(sender) = globals.senders.get(&id) {
-        let _ = sender.try_send(text_state);
+impl AndroidTextInputState {
+    fn new() -> Self {
+        Self { text: String::new(), select: (0, 0), compose: None }
     }
 }
 
 pub struct AndroidTextInput {
-    id: usize,
-    state: *mut GameTextInput,
+    state: AndroidTextInputState,
+    sender: async_channel::Sender<AndroidTextInputState>,
+    is_focus: bool,
 }
-
-// SAFETY: GameTextInput is accessed synchronously through show_ime/hide_ime/set_state/get_state
-// The pointer is valid for the lifetime of the AndroidTextInput instance and is only
-// accessed from the thread that owns the AndroidTextInput.
-unsafe impl Send for AndroidTextInput {}
-unsafe impl Sync for AndroidTextInput {}
 
 impl AndroidTextInput {
     pub fn new(sender: async_channel::Sender<AndroidTextInputState>) -> Self {
-        let id = {
-            let mut globals = GLOBALS.lock();
-            let id = globals.next_id;
-            globals.next_id += 1;
-            globals.senders.insert(id, sender);
-            id
-        };
-
-        let state = unsafe {
-            let env = android::attach_jni_env();
-            let state = GameTextInput_init(env, 0);
-            // Ensures we can use the void* pointer to store a usize
-            assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<*mut c_void>());
-            GameTextInput_setEventCallback(
-                state,
-                Some(game_text_input_callback),
-                id as *mut c_void,
-            );
-            state
-        };
-
-        Self { id, state }
+        Self { state: AndroidTextInputState::new(), sender, is_focus: false }
     }
 
-    pub fn show_ime(&self) {
-        unsafe {
-            GameTextInput_showIme(self.state, 0);
+    pub fn show(&mut self) {
+        if !is_init() {
+            return;
         }
+        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
+            gti.event_sender = Some(self.sender.clone());
+            gti.set_state(&self.state);
+            gti.show_ime(0);
+        }
+        self.is_focus = true;
     }
 
-    pub fn hide_ime(&self) {
-        unsafe {
-            GameTextInput_hideIme(self.state, 0);
+    pub fn hide(&mut self) {
+        if !is_init() {
+            return;
+        }
+        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
+            gti.event_sender = None;
+            gti.hide_ime(0);
+        }
+        self.is_focus = false;
+    }
+
+    pub fn set_state(&mut self, state: AndroidTextInputState) {
+        self.state = state;
+        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
+            gti.set_state(&self.state);
         }
     }
 
-    pub fn set_state(&self, state: &AndroidTextInputState) {
-        let ctext = CString::new(state.text.as_str()).unwrap();
-
-        let select = GameTextInputSpan { start: state.select.0 as i32, end: state.select.1 as i32 };
-
-        let compose = match state.compose {
-            Some((start, end)) => GameTextInputSpan { start: start as i32, end: end as i32 },
-            None => GameTextInputSpan { start: -1, end: -1 },
-        };
-
-        let gt_state = GameTextInputState {
-            text_utf8: ctext.as_ptr(),
-            text_length: state.text.len() as i32,
-            select,
-            compose,
-        };
-
-        unsafe {
-            GameTextInput_setState(self.state, &gt_state);
-        }
-    }
-
-    pub fn get_state(&self) -> AndroidTextInputState {
-        let mut state =
-            AndroidTextInputState { text: String::new(), select: (0, 0), compose: None };
-
-        // This is guaranteed by GameTextInput_getState() to be called sync
-        // so what we are doing is legit here.
-        extern "C" fn callback(ctx: *mut c_void, game_state: *const GameTextInputState) {
-            let state = unsafe { &mut *(ctx as *mut AndroidTextInputState) };
-            *state = unsafe { &(*game_state) }.to_owned();
-        }
-
-        unsafe {
-            GameTextInput_getState(
-                self.state,
-                callback,
-                &mut state as *mut AndroidTextInputState as *mut c_void,
-            );
-        }
-
-        state
-    }
-}
-
-impl Drop for AndroidTextInput {
-    fn drop(&mut self) {
-        unsafe {
-            GameTextInput_destroy(self.state);
-        }
-        GLOBALS.lock().senders.remove(&self.id);
+    pub fn get_state(&self) -> &AndroidTextInputState {
+        &self.state
     }
 }

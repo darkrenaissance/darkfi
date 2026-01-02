@@ -1,6 +1,18 @@
 main_activity_inject = "java/MainActivity.java"
 java_files = [
     "java/ForegroundService.java",
-    "java/videodecode/VideoDecoder.java"
+    "java/videodecode/VideoDecoder.java",
+    "java/textinput/InputConnection.java",
+    "java/textinput/State.java",
+    "java/textinput/Listener.java",
+    "java/textinput/Settings.java",
+    "java/textinput/GameTextInput.java",
+    "java/textinput/Pair.java"
+]
+comptime_jar_files = [
+    "android-libs/androidx/core-1.9.0.jar"
+]
+runtime_jar_files = [
+    "android-libs/androidx/core-1.9.0.jar"
 ]
 

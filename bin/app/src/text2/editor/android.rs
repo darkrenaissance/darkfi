@@ -53,8 +53,10 @@ impl Editor {
         lineheight: PropertyFloat32,
     ) -> Self {
         let (sender, recvr) = async_channel::unbounded();
+        let input = AndroidTextInput::new(sender);
+
         Self {
-            input: AndroidTextInput::new(sender),
+            input,
             recvr,
 
             layout: Default::default(),
@@ -70,8 +72,11 @@ impl Editor {
 
     pub async fn on_text_prop_changed(&mut self) {
         // Update GameTextInput state
-        let state = AndroidTextInputState { text: self.text.get(), select: (0, 0), compose: None };
-        self.input.set_state(&state);
+        let mut state = self.input.get_state().clone();
+        state.text = self.text.get();
+        state.select = (0, 0);
+        state.compose = None;
+        self.input.set_state(state);
         // Refresh our layout
         self.refresh().await;
     }
@@ -84,11 +89,11 @@ impl Editor {
         self.text.set(atom, &state.text);
     }
 
-    pub fn focus(&self) {
-        self.input.show_ime();
+    pub fn focus(&mut self) {
+        self.input.show();
     }
-    pub fn unfocus(&self) {
-        self.input.hide_ime();
+    pub fn unfocus(&mut self) {
+        self.input.hide();
     }
 
     pub async fn refresh(&mut self) {
@@ -120,16 +125,15 @@ impl Editor {
         &self.layout
     }
 
-    pub fn move_to_pos(&self, pos: Point) {
+    pub fn move_to_pos(&mut self, pos: Point) {
         let cursor = parley::Cursor::from_point(&self.layout, pos.x, pos.y);
         let cursor_idx = cursor.index();
         t!("  move_to_pos: {cursor_idx}");
-        let state = AndroidTextInputState {
-            text: self.text.get(),
-            select: (cursor_idx, cursor_idx),
-            compose: None,
-        };
-        self.input.set_state(&state);
+        let mut state = self.input.get_state().clone();
+        state.text = self.text.get();
+        state.select = (cursor_idx, cursor_idx);
+        state.compose = None;
+        self.input.set_state(state);
     }
 
     pub async fn select_word_at_point(&mut self, pos: Point) {
@@ -161,11 +165,11 @@ impl Editor {
     pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
         // TODO: need to verify this is correct
         // Insert text by updating the state
-        let mut current_state = self.input.get_state();
+        let mut current_state = self.input.get_state().clone();
         current_state.text.push_str(txt);
         current_state.select = (current_state.text.len(), current_state.text.len());
         current_state.compose = None;
-        self.input.set_state(&current_state);
+        self.input.set_state(current_state);
         self.on_buffer_changed(atom).await;
     }
 
@@ -213,16 +217,15 @@ impl Editor {
         parley::Selection::new(anchor, focus)
     }
     pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        let state = AndroidTextInputState {
-            text: self.text.get(),
-            select: (select_start, select_end),
-            compose: None,
-        };
-        self.input.set_state(&state);
+        let mut state = self.input.get_state().clone();
+        state.text = self.text.get();
+        state.select = (select_start, select_end);
+        state.compose = None;
+        self.input.set_state(state);
     }
 
     #[allow(dead_code)]
     pub fn buffer(&self) -> String {
-        self.input.get_state().text
+        self.input.get_state().text.clone()
     }
 }

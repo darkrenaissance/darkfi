@@ -1271,7 +1271,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let editor = self_.lock_editor().await;
+        let mut editor = self_.lock_editor().await;
         editor.focus();
         true
     }
@@ -1290,7 +1290,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let editor = self_.lock_editor().await;
+        let mut editor = self_.lock_editor().await;
         editor.unfocus();
         true
     }

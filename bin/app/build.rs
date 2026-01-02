@@ -64,22 +64,5 @@ fn main() {
                 "cargo:warning='leaving linker args for {target_os}:{target_arch} unchanged"
             ),
         }
-
-        // Link GameTextInput static library
-        let gametextinput_lib_dir = match target_arch.as_str() {
-            "aarch64" => "pkg/android/libs/android.arm64-v8a",
-            "arm" => "pkg/android/libs/android.armeabi-v7a",
-            "i686" => "pkg/android/libs/android.x86",
-            "x86_64" => "pkg/android/libs/android.x86_64",
-            _ => {
-                println!("cargo:warning=Unknown target arch for GameTextInput: {target_arch}");
-                "pkg/android/libs"
-            }
-        };
-        println!("cargo:rustc-link-search=native={gametextinput_lib_dir}");
-        println!("cargo:rustc-link-lib=static=game-text-input");
-
-        // Rebuild if headers change
-        println!("cargo:rerun-if-changed=src/android/textinput/include");
     }
 }
