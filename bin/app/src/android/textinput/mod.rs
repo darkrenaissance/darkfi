@@ -85,8 +85,4 @@ impl AndroidTextInput {
             gti.push_update(&state);
         }
     }
-
-    pub fn get_state(&self) -> AndroidTextInputState {
-        self.state.lock().state.clone()
-    }
 }

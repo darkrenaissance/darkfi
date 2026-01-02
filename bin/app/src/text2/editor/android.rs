@@ -32,6 +32,7 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($a
 
 pub struct Editor {
     input: AndroidTextInput,
+    pub state: AndroidTextInputState,
     pub recvr: async_channel::Receiver<AndroidTextInputState>,
 
     layout: parley::Layout<Color>,
@@ -54,9 +55,9 @@ impl Editor {
     ) -> Self {
         let (sender, recvr) = async_channel::unbounded();
         let input = AndroidTextInput::new(sender);
-
         Self {
             input,
+            state: Default::default(),
             recvr,
 
             layout: Default::default(),
@@ -72,11 +73,10 @@ impl Editor {
 
     pub async fn on_text_prop_changed(&mut self) {
         // Update GameTextInput state
-        let mut state = self.input.get_state().clone();
-        state.text = self.text.get();
-        state.select = (0, 0);
-        state.compose = None;
-        self.input.set_state(state);
+        self.state.text = self.text.get();
+        self.state.select = (0, 0);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
         // Refresh our layout
         self.refresh().await;
     }
@@ -85,8 +85,7 @@ impl Editor {
         self.refresh().await;
 
         // Update the text attribute
-        let state = self.input.get_state();
-        self.text.set(atom, &state.text);
+        self.text.set(atom, &self.state.text);
     }
 
     pub fn focus(&mut self) {
@@ -102,16 +101,14 @@ impl Editor {
         let window_scale = self.window_scale.get();
         let lineheight = self.lineheight.get();
 
-        let state = self.input.get_state();
-
         let mut underlines = vec![];
-        if let Some((compose_start, compose_end)) = state.compose {
+        if let Some((compose_start, compose_end)) = self.state.compose {
             underlines.push(compose_start..compose_end);
         }
 
         let mut txt_ctx = TEXT_CTX.get().await;
         self.layout = txt_ctx.make_layout(
-            &state.text,
+            &self.state.text,
             text_color,
             font_size,
             lineheight,
@@ -129,11 +126,10 @@ impl Editor {
         let cursor = parley::Cursor::from_point(&self.layout, pos.x, pos.y);
         let cursor_idx = cursor.index();
         t!("  move_to_pos: {cursor_idx}");
-        let mut state = self.input.get_state().clone();
-        state.text = self.text.get();
-        state.select = (cursor_idx, cursor_idx);
-        state.compose = None;
-        self.input.set_state(state);
+        self.state.text = self.text.get();
+        self.state.select = (cursor_idx, cursor_idx);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
     }
 
     pub async fn select_word_at_point(&mut self, pos: Point) {
@@ -145,14 +141,12 @@ impl Editor {
 
     pub fn get_cursor_pos(&self) -> Point {
         let lineheight = self.lineheight.get();
-        let state = self.input.get_state();
+        let cursor_idx = self.state.select.0;
 
-        let cursor_idx = state.select.0;
-
-        let cursor = if cursor_idx >= state.text.len() {
+        let cursor = if cursor_idx >= self.state.text.len() {
             parley::Cursor::from_byte_index(
                 &self.layout,
-                state.text.len(),
+                self.state.text.len(),
                 parley::Affinity::Upstream,
             )
         } else {
@@ -165,11 +159,11 @@ impl Editor {
     pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
         // TODO: need to verify this is correct
         // Insert text by updating the state
-        let mut current_state = self.input.get_state().clone();
-        current_state.text.push_str(txt);
-        current_state.select = (current_state.text.len(), current_state.text.len());
-        current_state.compose = None;
-        self.input.set_state(current_state);
+        self.state.text.push_str(txt);
+        let cursor_idx = self.state.text.len();
+        self.state.select = (cursor_idx, cursor_idx);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
         self.on_buffer_changed(atom).await;
     }
 
@@ -191,21 +185,21 @@ impl Editor {
     }
 
     pub fn selected_text(&self) -> Option<String> {
-        let state = self.input.get_state();
-        if state.select.0 == state.select.1 {
+        let (start, end) = (self.state.select.0, self.state.select.1);
+        if start == end {
             return None
         }
-        let (start, end) =
-            (min(state.select.0, state.select.1), max(state.select.0, state.select.1));
-        Some(state.text[start..end].to_string())
+        let (start, end) = (min(start, end), max(start, end));
+        Some(self.state.text[start..end].to_string())
     }
     pub fn selection(&self, side: isize) -> parley::Selection {
         assert!(side.abs() == 1);
-        let state = self.input.get_state();
+        t!("selection({side}) [state={:?}]", self.state);
 
+        let (start, end) = (self.state.select.0, self.state.select.1);
         let (anchor, focus) = match side {
-            -1 => (state.select.1, state.select.0),
-            1 => (state.select.0, state.select.1),
+            -1 => (end, start),
+            1 => (start, end),
             _ => panic!(),
         };
 
@@ -217,15 +211,14 @@ impl Editor {
         parley::Selection::new(anchor, focus)
     }
     pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        let mut state = self.input.get_state().clone();
-        state.text = self.text.get();
-        state.select = (select_start, select_end);
-        state.compose = None;
-        self.input.set_state(state);
+        self.state.text = self.text.get();
+        self.state.select = (select_start, select_end);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
     }
 
     #[allow(dead_code)]
     pub fn buffer(&self) -> String {
-        self.input.get_state().text.clone()
+        self.state.text.clone()
     }
 }

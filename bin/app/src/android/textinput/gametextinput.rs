@@ -25,6 +25,7 @@ use std::{
 
 use super::{AndroidTextInputState, SharedStatePtr};
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "android::textinput::gametextinput", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "android::textinput::gametextinput", $($arg)*); } }
 
 pub const SPAN_UNDEFINED: i32 = -1;
@@ -213,6 +214,7 @@ impl GameTextInput {
 
     pub fn process_event(&self, event_state: ndk_sys::jobject) {
         let state = self.state_from_java(event_state);
+        t!("IME event: {state:?}");
 
         let Some(shared) = &*self.state.lock() else {
             w!("process_event() - no shared state set");

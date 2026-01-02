@@ -1300,16 +1300,19 @@ impl BaseEdit {
         if !self.is_active.get() {
             return
         }
-        t!("handle_android_event({state:?})");
 
+        t!("handle_android_event({state:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
         // Text changed - finish any active selection
-        if state.text != self.text.get() {
+        if state.text != self.text.get() || state.select.0 == state.select.1 {
+            // Safe to call before we update the editor.
+            // I just wanna avoid cloning state since we move it into editor.
             self.finish_select(atom);
         }
 
         let mut editor = self.lock_editor().await;
+        editor.state = state;
         editor.on_buffer_changed(atom).await;
         drop(editor);
 
