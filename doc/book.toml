@@ -9,7 +9,7 @@ text-direction = "ltr"
 [output.html]
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
-theme = "theme"
+#theme = "theme"
 additional-css = ["theme/tabs.css"]
 additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js", "theme/zkas-highlight.js", "theme/tabs.js"]
 
