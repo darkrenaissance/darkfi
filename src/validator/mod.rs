@@ -414,7 +414,7 @@ impl Validator {
     }
 
     /// Apply provided set of [`BlockInfo`] without doing formal verification.
-    /// A set of ['HeaderHash`] is also provided, to verify that the provided
+    /// A set of [`HeaderHash`] is also provided, to verify that the provided
     /// block hash matches the expected header one.
     /// Note: this function should only be used for blocks received using a
     /// checkpoint, since in that case we enforce the node to follow the sequence,

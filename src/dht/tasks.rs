@@ -173,9 +173,9 @@ pub async fn dht_refinery_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
 /// If the bucket is already full, we ping the least recently seen node in the
 /// bucket: if successful it becomes the most recently seen node, if the ping
 /// fails we remove it and add the new node.
-/// [`Dht::update_node()`] increments a channel's usage count (in the direct
-/// session) and triggers this task. This task decrements the usage count
-/// using [`Dht::cleanup_channel()`].
+/// [`crate::dht::Dht::update_node()`] increments a channel's usage count
+/// (in the direct session) and triggers this task. This task decrements the
+/// usage count using [`crate::dht::Dht::cleanup_channel()`].
 pub async fn add_node_task<H: DhtHandler>(handler: Arc<H>) -> Result<()> {
     let dht = handler.dht();
     loop {

@@ -62,7 +62,7 @@ pub struct ContractMetaStore {
     /// Pointer to the underlying sled database used by the store and its associated overlay.
     pub sled_db: sled::Db,
 
-    /// Primary sled tree for storing contract metadata, utilizing [`ContractId::to_string`] as keys
+    /// Primary sled tree for storing contract metadata, utilizing [`ContractId`] as keys
     /// and serialized [`ContractMetaData`] as values.
     pub main: sled::Tree,
 

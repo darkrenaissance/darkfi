@@ -105,8 +105,8 @@ pub struct Channel {
     pub version: OnceCell<Arc<VersionMessage>>,
     /// Channel debug info
     pub info: ChannelInfo,
-    /// Map holding a `MeteringQueue` for each [`Message`] to perform
-    /// rate limiting of propagation towards the stream.
+    /// Map holding a `MeteringQueue` for each [`crate::net::Message`]
+    /// to perform rate limiting of propagation towards the stream.
     metering_map: AsyncMutex<HashMap<String, MeteringQueue>>,
 }
 

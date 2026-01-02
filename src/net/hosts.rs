@@ -63,30 +63,30 @@ use crate::{
 ///  utilities.
 ///
 /// `HostColor`:
-///     White: Hosts that have passed the `GreylistRefinery` successfully.
+/// > `White`: Hosts that have passed the `GreylistRefinery` successfully.
 ///
-///     Gold: Hosts we have been able to establish a connection to in `OutboundSession`.
+/// > `Gold`: Hosts we have been able to establish a connection to in `OutboundSession`.
 ///
-///     Grey: Recently received hosts that are checked by the `GreylistRefinery` and
-///           upgraded to the whitelist if valid. If they're inaccessible by the Refinery
-///           they will be deleted.
+/// > `Grey`: Recently received hosts that are checked by the `GreylistRefinery` and
+/// > upgraded to the whitelist if valid. If they're inaccessible by the Refinery
+/// > they will be deleted.
 ///
-///     Black: hostile hosts that are strictly avoided for the duration of the program.
+/// > `Black`: hostile hosts that are strictly avoided for the duration of the program.
 ///
-///     Dark: hosts that do not match our transports, but that we continue to share with
-///           other peers. We do not keep darklist entries that are older than one day.
-///           This is to avoid peers propagating nodes that may be faulty. We assume that
-///           within the one day period, the nodes will be picked up by peers that accept
-///           the transports and can refine them to remove inactive peers. Dark list hosts
-///           are otherwise ignored.
+/// > `Dark`: hosts that do not match our transports, but that we continue to share with
+/// > other peers. We do not keep darklist entries that are older than one day.
+/// > This is to avoid peers propagating nodes that may be faulty. We assume that
+/// > within the one day period, the nodes will be picked up by peers that accept
+/// > the transports and can refine them to remove inactive peers. Dark list hosts
+/// > are otherwise ignored.
 ///
 /// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
 ///  or Connected. The state is `None` when the corresponding host has been removed from the
 ///  HostRegistry.
 ///
-///  TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
-///  the registry once they have bypassed a certain age threshold.
-///
+//TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
+//the registry once they have bypassed a certain age threshold.
+
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
 pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];

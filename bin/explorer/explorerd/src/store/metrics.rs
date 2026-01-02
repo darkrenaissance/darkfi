@@ -247,7 +247,8 @@ pub struct MetricsStore {
 // Temporarily disable unused warnings until the store is integrated with the explorer
 #[allow(dead_code)]
 impl MetricsStore {
-    /// Creates a [`MetricsStore`] instance by opening the necessary trees in the provided sled database [`Db`]
+    /// Creates a [`MetricsStore`] instance by opening the necessary
+    /// trees in the provided sled database [`sled::Db`]
     pub fn new(db: &sled::Db) -> Result<Self> {
         let main = db.open_tree(SLED_GAS_METRICS_TREE)?;
         let tx_gas_data = db.open_tree(SLED_TX_GAS_DATA_TREE)?;
@@ -406,7 +407,8 @@ struct MetricsStoreOverlay {
 }
 
 impl MetricsStoreOverlay {
-    /// Instantiate a [`MetricsStoreOverlay`] over the provided [`SledDbPtr`] instance.
+    /// Instantiate a [`MetricsStoreOverlay`] over the provided
+    /// [`sled::Db`] instance.
     pub fn new(db: sled::Db) -> Result<Self> {
         // Create overlay pointer
         let overlay = Arc::new(Mutex::new(SledDbOverlay::new(&db, vec![])));

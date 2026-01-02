@@ -94,7 +94,8 @@ impl Default for ExplorerConfig {
     }
 }
 
-/// Attempts to convert a [`PathBuff`] to an [`ExplorerConfig`] by loading and parsing from specified file path.
+/// Attempts to convert a [`PathBuf`] to an [`ExplorerConfig`] by
+/// loading and parsing from specified file path.
 impl TryFrom<&PathBuf> for ExplorerConfig {
     type Error = Error;
     fn try_from(path: &PathBuf) -> Result<Self> {

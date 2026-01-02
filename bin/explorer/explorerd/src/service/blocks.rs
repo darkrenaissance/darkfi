@@ -118,9 +118,10 @@ impl ExplorerService {
 
     /// Adds the provided [`BlockInfo`] to the block explorer database.
     ///
-    /// This function processes each transaction in the block, calculating and updating the
-    /// latest [`GasMetrics`] for non-genesis blocks and for transactions that are not
-    /// PoW rewards. PoW reward transactions update the contract runtime state as required.
+    /// This function processes each transaction in the block, calculating
+    /// and updating the latest [`crate::store::metrics::GasMetrics`] for
+    /// non-genesis blocks and for transactions that are not PoW rewards.
+    /// PoW reward transactions update the contract runtime state as required.
     /// After processing all transactions, the block is permanently persisted to
     /// the explorer database.
     pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
@@ -295,17 +296,19 @@ impl ExplorerService {
         Ok(block_records)
     }
 
-    /// Resets the [`ExplorerDb::blockchain::blocks`] and [`ExplorerDb::blockchain::transactions`]
-    /// trees to a specified height by removing entries above the `reset_height`, returning a result
-    /// that indicates success or failure.
+    /// Resets the `blocks` and `transactions` trees to a specified
+    /// height by removing entries above the `reset_height`,
+    /// returning a result that indicates success or failure.
     ///
-    /// The function retrieves the last explorer block and iteratively rolls back entries
-    /// in the [`BlockStore::main`], [`BlockStore::order`], and [`BlockStore::difficulty`] trees
-    /// to the specified `reset_height`. It also resets the [`TxStore::main`] and
-    /// [`TxStore::location`] trees to reflect the transaction state at the given height.
+    /// The function retrieves the last explorer block and iteratively
+    /// rolls back entries in the `main`, `order`, and `difficulty`
+    /// trees to the specified `reset_height`. It also resets the `main`
+    /// and `location` trees to reflect the transaction state at
+    /// the given height.
     ///
-    /// This operation is performed atomically using a sled transaction applied across the affected sled
-    /// trees, ensuring consistency and avoiding partial updates.
+    /// This operation is performed atomically using a sled transaction
+    /// applied across the affected sled trees, ensuring consistency and
+    /// avoiding partial updates.
     pub fn reset_to_height(&self, reset_height: u32) -> Result<()> {
         let block_store = &self.db.blockchain.blocks;
         let tx_store = &self.db.blockchain.transactions;

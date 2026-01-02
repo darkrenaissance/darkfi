@@ -54,7 +54,7 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 /// The data will be read from `ptr` at a memory offset specified by `len`.
 ///
 /// Returns `SUCCESS` on success, otherwise returns an error code corresponding
-/// to a [`ContractError`].
+/// to a [`darkfi_sdk::error::ContractError`].
 ///
 /// Permissions: metadata, exec
 pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {

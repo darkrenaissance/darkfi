@@ -52,14 +52,15 @@ impl From<ExplorerdError> for Error {
     }
 }
 
-/// Conversion from [`ExplorerdRpcError`] to [`RpcError`]
+/// Conversion from [`ExplorerdError`] to [`RpcError`]
 impl From<ExplorerdError> for RpcError {
     fn from(err: ExplorerdError) -> Self {
         RpcError::ServerError(Arc::new(err))
     }
 }
 
-/// Helper function to convert `ExplorerdRpcError` into error code with corresponding error message.
+/// Helper function to convert `ExplorerdError` into error code with
+/// corresponding error message.
 pub fn to_error_code_message(e: &ExplorerdError) -> (i32, String) {
     match e {
         ExplorerdError::PingDarkfidFailed(_) => (ERROR_CODE_PING_DARKFID_FAILED, e.to_string()),

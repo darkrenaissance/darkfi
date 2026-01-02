@@ -33,7 +33,7 @@ use crate::runtime::vm_runtime::{ContractSection, Env};
 /// Adds data to merkle tree. The tree, database connection, and new data to add is
 /// read from `ptr` at offset specified by `len`.
 /// Returns `0` on success; otherwise, returns an error-code corresponding to a
-/// [`ContractError`] (defined in the SDK).
+/// [`darkfi_sdk::error::ContractError`] (defined in the SDK).
 /// See also the method `merkle_add` in `sdk/src/merkle.rs`.
 ///
 /// Permissions: update
