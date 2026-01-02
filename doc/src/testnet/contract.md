@@ -1,55 +1,44 @@
 # Custom Smart Contracts
 
 Users can deploy their own zero-knowledge contracts, written for the
-DarkFi [zkVM](../zkas/index.md), becoming anonymous engineers
-themselves!
+DarkFi [zkVM][1], becoming anonymous engineers themselves!
 
 More information about the smart contracts architecture can be found
-[here](../arch/sc/sc.md).
+[here][2].
 
 ## Hello World
 
-For the porpuses of this guide, an example smart contract is provided,
-which users can deploy to the testnet and interact with. This is a very
-simple smart contract simulating a registration ledger, where users can
-register or remove themselves from it, and each user is represented as
-the [poseidon hash](../spec/crypto-schemes.md#poseidonhash-function) of their
-public key.
+For the porpuses of this guide we are going to use the smart contract
+template found [here][3]. Its a very simple smart contract simulating a
+registration ledger, where users can create their membership keys and
+register or remove themselves from it. Each user is represented as the
+[poseidon hash][4] of their membership public key.
 
-First, open another terminal and navigate (from repo root) to the
-example:
+First, open another terminal, clone the template repository and enter
+its directory:
 
 ```shell
-$ cd example/wasm-hello-world
+$ git clone https://codeberg.org/darkrenaissance/smart-contract
+$ cd smart-contract
 ```
 
-Here, generate the contract `WASM` bincode by executing:
+Here, generate the contract `WASM` bincode and its client by executing:
 
 ```shell
 $ make
 
-"../../zkas" proof/secret_commitment.zk -o proof/secret_commitment.zk.bin
-Wrote output to proof/secret_commitment.zk.bin
-RUSTFLAGS="" cargo build --target=wasm32-unknown-unknown \
-        --release --package wasm_hello_world
+../darkfi/zkas proof/membership_proof.zk -o proof/membership_proof.zk.bin
+Wrote output to proof/membership_proof.zk.bin
+cargo build --target=wasm32-unknown-unknown --release --lib
 ...
-    Compiling wasm_hello_world v0.0.1 (/home/anon/darkfi/example/wasm-hello-world)
-    Finished `release` profile [optimized] target(s) in 15.90s
-cp -f target/wasm32-unknown-unknown/release/wasm_hello_world.wasm wasm_hello_world.wasm
-```
-
-Apart from the contract, an example client to interact with it is
-provided, which we also need to compile:
-
-```shell
-$ cd client
-$ make
-
-RUSTFLAGS="" cargo build --target=x86_64-unknown-linux-gnu --release --package client
+    Compiling membership v0.0.1 (/home/anon/smart-contract)
+    Finished `release` profile [optimized] target(s) in 14.45s
+cp -f target/wasm32-unknown-unknown/release/membership.wasm membership.wasm
+cargo build --release --features=client --bin membership
 ...
-   Compiling client v0.0.1 (/home/anon/darkfi/example/wasm-hello-world/client)
-    Finished `release` profile [optimized] target(s) in 2m 29s
-cp -f target/x86_64-unknown-linux-gnu/release/client client
+Compiling membership v0.0.1 (/home/anon/smart-contract)
+    Finished `release` profile [optimized] target(s) in 30.78s
+cp -f target/release/membership membership
 ```
 
 Now both the contract and its client are ready to use. Leave this
@@ -90,7 +79,7 @@ Now that we have a contract authority, we can deploy the example
 contract we compiled earlier using it:
 
 ```shell
-drk> contract deploy {CONTRACT_ID} example/wasm-hello-world/wasm_hello_world.wasm | broadcast
+drk> contract deploy {CONTRACT_ID} ../smart-contract/membership.wasm | broadcast
 
 [mark_tx_spend] Processing transaction: d0824bb0ecb9b12af69579c01c570c0275e399b80ef10f0a9c645af65bdd0415
 [mark_tx_spend] Found Money contract in call 1
@@ -114,7 +103,7 @@ not locked. Each redeployment will show a new record in the contract
 history. We can also export the deployed data by executing:
 
 ```shell
-drk> contract export-data {TX_HASH} > wasm_hello_world.dat
+drk> contract export-data {TX_HASH} > membership.dat
 ```
 
 The exported files contains the `WASM` bincode and instruction data
@@ -164,61 +153,35 @@ drk> contract list {CONTRACT_ID}
 Now that the contract code is set on-chain and cannot be modified
 further, let's interact with it using its client!
 
+### Registration
+
+Let's go to the contract client terminal, and create our membership
+keys:
+
+```shell
+$ ./membership generate
+Secret key: {IDENTITY_SECRET_KEY}
+Public key: {IDENTITY_PUBLIC_KEY}
+```
+
 > NOTE: This is a very basic example client so secrets keys are used
 > as plainext for simplicity. Do not run this in a machine with
 > commands history or in a hostile environment where your secret key
 > can be exposed.
 
-First lets generate a new throwaway address to register:
+Now we can can create our `register` call using our membership secret
+key:
 
 ```shell
-drk> wallet keygen
-
-Generating a new keypair
-New address:
-{DUMMY_ADDRESS}
+$ ./membership register {CONTRACT_ID} {IDENTITY_SECRET_KEY} > register.call
 ```
 
-Set it as the default one in the wallet and grab its secret key:
+Now we need to go back to our `drk` interactive shell, to generate the
+actual registration transaction, attach a fee to it and broadcast it to
+the network:
 
 ```shell
-drk> wallet addresses
-
- Key ID                | Address          | Public Key                  | Secret Key                  | Is Default
------------------------+------------------+-----------------------------+-----------------------------+------------
- 1                     | {NORMAL_ADDRESS} | {NORMAL_ADDRESS_PUBLIC_KEY} | {NORMAL_ADDRESS_SECRET_KEY} | *
- ...
- {DUMMY_ADDRESS_INDEX} | {DUMMY_ADDRESS}  | {DUMMY_ADDRESS_PUBLIC_KEY}  | {DUMMY_ADDRESS_SECRET_KEY}  |
-
-drk> wallet default-address {DUMMY_ADDRESS_INDEX}
-```
-
-### List members
-
-Let's go to the contract client terminal, and check current members:
-
-```shell
-$ ./client -c {CONTRACT_ID} list
-
-{CONTRACT_ID} members:
-No members found
-```
-
-No one has registered yet, so let's change that!
-
-### Registration
-
-Let's go to the contract client terminal, and register ourselves:
-
-```shell
-$ ./client -c {CONTRACT_ID} register {DUMMY_ADDRESS_SECRET_KEY} > register.tx
-```
-
-The produced transaction doesn't contain a fee, so we need to attach it
-in our `drk` interactive shell:
-
-```shell
-drk> attach-fee < example/wasm-hello-world/client/register.tx | broadcast
+drk> tx-from-calls < ../smart-contract/register.call | attach-fee | broadcast
 
 [mark_tx_spend] Processing transaction: 23ea7d01ae16389e71d73fa27748ce1633d39c6b55a4aa31d8f5ba1017a4f840
 [mark_tx_spend] Found Money contract in call 1
@@ -226,28 +189,23 @@ Broadcasting transaction...
 Transaction ID: 23ea7d01ae16389e71d73fa27748ce1633d39c6b55a4aa31d8f5ba1017a4f840
 ```
 
-After a while, we will see a new member in our contract registry:
-
-```shell
-$ ./client -c {CONTRACT_ID} list
-
-{CONTRACT_ID} members:
-1. 0x242d4a0dc358e0b61053c28352f666bace79889559b65e91efd1c83c7c817fdd
-```
+After the transaction has been confirmed, our membership commitment
+will exist in our contract registry.
 
 ### Deregistration
 
-To remove ourselves from the registry, we create a deregister
-transaction with the contract client:
+To remove ourselves from the registry, we create a `deregister` call
+with the contract client:
 
 ```shell
-$ ./client -c {CONTRACT_ID} deregister {DUMMY_ADDRESS_SECRET_KEY} > deregister.tx
+$ ./membership deregister {CONTRACT_ID} {IDENTITY_SECRET_KEY} > deregister.call
 ```
 
-Then, we attach the fee again and broadcast it to the network:
+Then, we build the actual deregistration transaction again, attach its
+fee and broadcast it to the network:
 
 ```shell
-drk> attach-fee < example/wasm-hello-world/client/deregister.tx | broadcast
+drk> tx-from-calls < ../smart-contract/deregister.call | attach-fee | broadcast
 
 [mark_tx_spend] Processing transaction: f3304e6f5673d9ece211af6dd85c70ec8c8e85e91439b8cffbcf5387b11de1d0
 [mark_tx_spend] Found Money contract in call 1
@@ -255,12 +213,64 @@ Broadcasting transaction...
 Transaction ID: f3304e6f5673d9ece211af6dd85c70ec8c8e85e91439b8cffbcf5387b11de1d0
 ```
 
-When the transaction gets confirmed, our registry will not have members
-again:
+When the transaction gets confirmed, our membership commitment will
+will not exist in our contract registry.
 
-```shell
-$ ./client -c {CONTRACT_ID} list
+### Extending the smart contract client
 
-{CONTRACT_ID} members:
-No members found
+The template client is barebones and doesn't provide us with a way to
+view the on chain records of our registry. For that porpuse we can
+create a new small program, or extend the client to support this
+functionality. Following you will find examplatory code for retrieving
+a smart contract records from `darkfid` [JSON-RPC][5], which we can use
+to list our registry records:
+
+{{#tabs }}
+{{#tab name="Rust" }}
+```rust
+// Parse Contract ID
+let contract_id = match ContractId::from_str(&args.contract_id)?;
+
+// Initialize an rpc client
+let rpc_client = RpcClient::new(args.endpoint, executor.clone()).await?;
+
+// Create the request params
+let params = JsonValue::Array(vec![
+    JsonValue::String(contract_id.to_string()),
+    JsonValue::String(String::from("smart-contract-members")),
+]);
+
+// Execute the request
+let req = JsonRequest::new("blockchain.get_contract_state", params);
+let rep = rpc_client.request(req).await?;
+
+// Parse response
+let bytes = base64::decode(rep.get::<String>().unwrap()).unwrap();
+let members: BTreeMap<Vec<u8>, Vec<u8>> = deserialize(&bytes)?;
+
+// Print records
+println!("{contract_id} members:");
+if members.is_empty() {
+    println!("No members found");
+} else {
+    let mut index = 1;
+    for member in members.keys() {
+        let member: pallas::Base = deserialize(member)?;
+        println!("{index}. {member:?}");
+        index += 1;
+    }
+}
 ```
+{{#endtab }}
+{{#tab name="Python" }}
+```python
+print("TODO")
+```
+{{#endtab }}
+{{#endtabs }}
+
+[1]: ../zkas/index.md
+[2]: ../arch/sc/sc.md
+[3]: https://codeberg.org/darkrenaissance/smart-contract
+[4]: ../spec/crypto-schemes.md#poseidonhash-function
+[5]: ../clients/darkfid_jsonrpc.md
