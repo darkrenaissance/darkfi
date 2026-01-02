@@ -31,6 +31,6 @@ For the plugin mdbook backends run:
 ```
 cargo install --git "https://github.com/lzanini/mdbook-katex"
 cargo install --git "https://github.com/badboy/mdbook-toc"
-cargo install --git "https://github.com/badboy/mdbook-mermaid"
+cargo install --git "https://github.com/badboy/mdbook-mermaid" mdbook-mermaid
 cargo install --git "https://github.com/rustforweb/mdbook-plugins" mdbook-tabs
 ```
