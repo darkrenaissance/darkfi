@@ -27,7 +27,7 @@ use pyo3::{
     basic::CompareOp,
     pyclass, pyfunction, pymethods,
     types::{PyAnyMethods, PyModule, PyModuleMethods, PyStringMethods, PyTypeMethods},
-    wrap_pyfunction, Bound, PyResult,
+    wrap_pyfunction, Bound, PyErr, PyResult,
 };
 use rand::rngs::OsRng;
 
@@ -97,6 +97,17 @@ macro_rules! impl_elem {
 
             fn square(&self) -> Self {
                 Self(self.0.square())
+            }
+
+            fn serialize(&self) -> Vec<u8> {
+                darkfi_serial::serialize(&self.0)
+            }
+
+            #[staticmethod]
+            fn deserialize(data: &[u8]) -> PyResult<Self> {
+                darkfi_serial::deserialize(data)
+                    .map(Self)
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
             }
 
             fn __str__(&self) -> PyResult<String> {
@@ -204,6 +215,17 @@ macro_rules! impl_point {
             #[staticmethod]
             fn from_affine(p: $affine) -> Self {
                 Self(<$inner>::from(p.0))
+            }
+
+            fn serialize(&self) -> Vec<u8> {
+                darkfi_serial::serialize(&self.0)
+            }
+
+            #[staticmethod]
+            fn deserialize(data: &[u8]) -> PyResult<Self> {
+                darkfi_serial::deserialize(data)
+                    .map(Self)
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
             }
 
             fn __str__(slf: &Bound<Self>) -> PyResult<String> {
