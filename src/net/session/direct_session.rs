@@ -24,10 +24,8 @@
 //! do not loop continually, once stopped the session will not try to reopen
 //! a connection.
 //!
-//! [`ChannelBuilder`] is used to create new direct connections.
-//!
 //! If there is no slots in the outbound session, the direct session can
-//! optionnally handle peer discovery.
+//! optionally handle peer discovery.
 
 use std::{
     collections::HashMap,
