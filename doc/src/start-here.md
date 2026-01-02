@@ -74,7 +74,7 @@ Source code is under `src/` subdirectory. Main interesting modules are:
   in the `exec()` phase, you can only read, whereas writes must occur
   in the `apply(update)` phase.
 * `blockchain/` and `validator/` is the blockchain and consensus algos.
-* `zk/` is the ZK VM, which is simply loads bytecode which is used to
+* `zk/` is the ZK VM, which simply loads bytecode which is used to
   build the circuits. It's a very simple model rather than the TinyRAM
   computation models. We opted for this because we prefer simplicity in
   systems design.
