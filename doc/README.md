@@ -26,10 +26,11 @@ utility which may be installed via:
 cargo install mdbook
 ```
 
-For the mdbook-katex backend run:
+For the plugin mdbook backends run:
 
 ```
 cargo install --git "https://github.com/lzanini/mdbook-katex"
 cargo install --git "https://github.com/badboy/mdbook-toc"
 cargo install --git "https://github.com/badboy/mdbook-mermaid"
+cargo install --git "https://github.com/rustforweb/mdbook-plugins" mdbook-tabs
 ```
