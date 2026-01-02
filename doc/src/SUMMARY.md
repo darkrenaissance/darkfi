@@ -19,12 +19,12 @@
 - [Contracts](testnet/contract.md)
 - [Merge Mining](testnet/merge-mining.md)
 - [DarkIRC](misc/darkirc/darkirc.md)
-	- [Private Message](misc/darkirc/private_message.md)
+  - [Private Message](misc/darkirc/private_message.md)
 - [Node Configurations](misc/nodes/node-configurations.md)
-    - [Public Node Configurations](misc/nodes/public-guide.md)
-    - [Tor Nodes](misc/nodes/tor-guide.md)
-    - [I2p Nodes](misc/nodes/i2p-guide.md)
-    - [Nym Nodes](misc/nodes/nym-guide.md)
+  - [Public Node Configurations](misc/nodes/public-guide.md)
+  - [Tor Nodes](misc/nodes/tor-guide.md)
+  - [I2p Nodes](misc/nodes/i2p-guide.md)
+  - [Nym Nodes](misc/nodes/nym-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
 
 # Developer Doc
@@ -59,7 +59,7 @@
   - [Examples](zkas/examples.md)
     - [Anonymous voting](zkas/examples/voting.md)
     - [Anonymous payments](zkas/examples/sapling.md)
-- [Client](clients/clients.md)
+- [JSON-RPC API Reference]()
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
 
 # Crypto
@@ -82,7 +82,7 @@
 - [DEP 0003: Token Mint Authorization (accepted)](dep/0003.md)
 - [DEP 0004: Client wallet WASM modules (draft)](dep/0004.md)
 - [DEP 0006: App Identifier for Version and Verack Messages (draft)](dep/0006.md)
-- [DEP 0007: Network profiles (draft)](dep/0007.md)
+- [DEP 0007: Network profiles (accepted)](dep/0007.md)
 
 # Specs
 
