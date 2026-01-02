@@ -97,7 +97,7 @@ def print_table():
     print("[therapy](https://github.com/narodnik/therapy) that we made.")
     print("The canvas will also be shared on Jitsi calls.\n")
     print("Videos will be uploaded online and linked here.")
-    print("Join [our chat](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html)")
+    print("Join [our chat](https://dark.fi/book/misc/darkirc/darkirc.html)")
     print("for more info. Links and text chat will happen there during the calls.")
 
 

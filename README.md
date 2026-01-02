@@ -3,7 +3,7 @@
 ![Build Status](https://img.shields.io/github/actions/workflow/status/darkrenaissance/darkfi/ci.yml?branch=master&style=flat-square)
 [![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-white?logo=firefox&logoColor=white&style=flat-square)](https://dark.fi)
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
-[![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
+[![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://dark.fi/book/)
 
 We aim to proliferate [anonymous digital
 markets](https://dark.fi/manifesto.html) by means of strong cryptography
@@ -49,14 +49,14 @@ over its `Stratum` RPC, and requests new block headers to mine.
 
 To connect to the alpha testnet, [follow the tutorial][tutorial].
 
-[tutorial]: https://darkrenaissance.github.io/darkfi/testnet/node.html
+[tutorial]: https://dark.fi/book/testnet/node.html
 
 ## Connect to DarkFi IRC
 
 Follow the [installation instructions][darkirc-instructions] for the
 P2P IRC daemon.
 
-[darkirc-instructions]: https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html#installation
+[darkirc-instructions]: https://dark.fi/book/misc/darkirc/darkirc.html#installation
 
 ## Build
 
@@ -132,7 +132,7 @@ everything, and use their specific targets instead.
 
 If you want to hack on the source code, make sure to read some
 introductory advice in the
-[DarkFi book](https://darkrenaissance.github.io/darkfi/dev/dev.html).
+[DarkFi book](https://dark.fi/book/dev/dev.html).
 
 ## Installation (Optional)
 
@@ -147,7 +147,7 @@ in order for them to spawn a config file, which you can then review.
 
 ### Examples and usage
 
-See the [DarkFi book](https://darkrenaissance.github.io/darkfi)
+See the [DarkFi book](https://dark.fi/book/)
 
 ## Go Dark
 

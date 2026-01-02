@@ -2,7 +2,7 @@
 
 A simple chat program to document DarkFi net
 code. Tutorial can be found in the [DarkFi
-book](https://darkrenaissance.github.io/darkfi/learn/writing-a-p2p-app.html).
+book](https://dark.fi/book/learn/writing-a-p2p-app.html).
 
 ## Step 1: Spin a seed node
 

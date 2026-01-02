@@ -9,7 +9,7 @@ Collateral backed stablecoin with low volatility redemption price (based-off Dai
 
 ## Governance Dao
 
-In order for the Nun governing Dao community to vote on proposals using [Darkfi dao](https://darkrenaissance.github.io/darkfi/spec/dao/index.html), it's needed to commit to protocol proposal statements hash, or collateral vault contract call data, otherwise passed proposals could be faked.
+In order for the Nun governing Dao community to vote on proposals using [Darkfi dao](https://dark.fi/book/spec/dao/index.html), it's needed to commit to protocol proposal statements hash, or collateral vault contract call data, otherwise passed proposals could be faked.
 
 ## Blind auction
 
