@@ -22,6 +22,7 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 pub mod insets;
 pub mod textinput;
+mod util;
 pub mod vid;
 
 macro_rules! call_mainactivity_int_method {

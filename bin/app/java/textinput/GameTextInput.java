@@ -48,5 +48,14 @@ public final class GameTextInput {
     to.initialSelEnd = from.initialSelEnd;
   }
 
+  public static final class Pair {
+    int first, second;
+
+    Pair(int f, int s) {
+      first = f;
+      second = s;
+    }
+  }
+
   private GameTextInput() {}
 }

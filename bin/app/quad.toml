@@ -6,8 +6,7 @@ java_files = [
     "java/textinput/State.java",
     "java/textinput/Listener.java",
     "java/textinput/Settings.java",
-    "java/textinput/GameTextInput.java",
-    "java/textinput/Pair.java"
+    "java/textinput/GameTextInput.java"
 ]
 comptime_jar_files = [
     "android-libs/androidx/core-1.9.0.jar"

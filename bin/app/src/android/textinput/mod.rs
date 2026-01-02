@@ -17,92 +17,76 @@
  */
 
 use async_channel::Sender as AsyncSender;
-use miniquad::native::android::attach_jni_env;
-use parking_lot::RwLock;
-use std::sync::LazyLock;
+use parking_lot::Mutex as SyncMutex;
+use std::sync::Arc;
 
+mod gametextinput;
 mod jni;
-mod state;
 
-use state::GameTextInput;
+use gametextinput::{GameTextInput, GAME_TEXT_INPUT};
 
-/// Global GameTextInput instance for JNI bridge
-///
-/// Single global instance since only ONE editor is active at a time.
-pub(self) static GAME_TEXT_INPUT: LazyLock<RwLock<Option<GameTextInput>>> =
-    LazyLock::new(|| RwLock::new(None));
-
-pub(self) fn init_game_text_input() {
-    debug!("AndroidTextInput: Initializing GameTextInput");
-
-    let env = unsafe { attach_jni_env() };
-    let mut gti = GameTextInput::new(env, 0);
-    // Store globally for JNI bridge access
-    *GAME_TEXT_INPUT.write() = Some(gti);
-
-    debug!("AndroidTextInput: GameTextInput initialized");
-}
-
-fn is_init() -> bool {
-    GAME_TEXT_INPUT.read().is_some()
-}
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "android::textinput", $($arg)*); } }
 
 // Text input state exposed to the rest of the app
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AndroidTextInputState {
     pub text: String,
     pub select: (usize, usize),
     pub compose: Option<(usize, usize)>,
 }
 
-impl AndroidTextInputState {
-    fn new() -> Self {
-        Self { text: String::new(), select: (0, 0), compose: None }
+struct SharedState {
+    state: AndroidTextInputState,
+    /// Used so we know whether to also update the GameTextInput in Android.
+    /// We should only do so when active.
+    is_active: bool,
+    sender: AsyncSender<AndroidTextInputState>,
+}
+
+impl SharedState {
+    fn new(sender: AsyncSender<AndroidTextInputState>) -> Self {
+        Self { state: Default::default(), is_active: false, sender }
     }
 }
 
+pub(self) type SharedStatePtr = Arc<SyncMutex<SharedState>>;
+
 pub struct AndroidTextInput {
-    state: AndroidTextInputState,
-    sender: async_channel::Sender<AndroidTextInputState>,
-    is_focus: bool,
+    state: SharedStatePtr,
 }
 
 impl AndroidTextInput {
-    pub fn new(sender: async_channel::Sender<AndroidTextInputState>) -> Self {
-        Self { state: AndroidTextInputState::new(), sender, is_focus: false }
+    pub fn new(sender: AsyncSender<AndroidTextInputState>) -> Self {
+        Self { state: Arc::new(SyncMutex::new(SharedState::new(sender))) }
     }
 
-    pub fn show(&mut self) {
-        if !is_init() {
-            return;
-        }
-        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
-            gti.event_sender = Some(self.sender.clone());
-            gti.set_state(&self.state);
-            gti.show_ime(0);
-        }
-        self.is_focus = true;
+    pub fn show(&self) {
+        t!("show IME");
+        let gti = GAME_TEXT_INPUT.get().unwrap();
+        gti.focus(self.state.clone());
+        gti.show_ime(0);
     }
 
-    pub fn hide(&mut self) {
-        if !is_init() {
-            return;
-        }
-        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
-            gti.event_sender = None;
-            gti.hide_ime(0);
-        }
-        self.is_focus = false;
+    pub fn hide(&self) {
+        t!("hide IME");
+        let gti = GAME_TEXT_INPUT.get().unwrap();
+        gti.hide_ime(0);
     }
 
-    pub fn set_state(&mut self, state: AndroidTextInputState) {
-        self.state = state;
-        if let Some(gti) = &mut *GAME_TEXT_INPUT.write() {
-            gti.set_state(&self.state);
+    pub fn set_state(&self, state: AndroidTextInputState) {
+        t!("set_state({state:?})");
+        // Always update our own state.
+        let mut ours = self.state.lock();
+        ours.state = state.clone();
+
+        // Only update java state when this input is active
+        if ours.is_active {
+            let gti = GAME_TEXT_INPUT.get().unwrap();
+            gti.push_update(&state);
         }
     }
 
-    pub fn get_state(&self) -> &AndroidTextInputState {
-        &self.state
+    pub fn get_state(&self) -> AndroidTextInputState {
+        self.state.lock().state.clone()
     }
 }

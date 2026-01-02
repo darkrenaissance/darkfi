@@ -1311,8 +1311,8 @@ impl BaseEdit {
 
         let mut editor = self.lock_editor().await;
         editor.on_buffer_changed(atom).await;
-
         drop(editor);
+
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
 

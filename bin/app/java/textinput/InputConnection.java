@@ -42,6 +42,8 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import textinput.GameTextInput.Pair;
+
 public class InputConnection extends BaseInputConnection implements View.OnKeyListener {
   private static final String TAG = "gti.InputConnection";
   private final InputMethodManager imm;
