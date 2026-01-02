@@ -45,7 +45,7 @@ use error::{server_error, RpcError};
 
 /// JSON-RPC requests handler and methods
 mod rpc;
-use rpc::DefaultRpcHandler;
+use rpc::{management::ManagementRpcHandler, DefaultRpcHandler};
 
 /// Validator async tasks
 pub mod task;
@@ -76,6 +76,8 @@ pub struct DarkfiNode {
     subscribers: HashMap<&'static str, JsonSubscriber>,
     /// Main JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// Management JSON-RPC connection tracker
+    management_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 impl DarkfiNode {
@@ -93,6 +95,7 @@ impl DarkfiNode {
             txs_batch_size,
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
+            management_rpc_connections: Mutex::new(HashSet::new()),
         }))
     }
 }
@@ -108,6 +111,8 @@ pub struct Darkfid {
     dnet_task: StoppableTaskPtr,
     /// Main JSON-RPC background task
     rpc_task: StoppableTaskPtr,
+    /// Management JSON-RPC background task
+    management_rpc_task: StoppableTaskPtr,
     /// Consensus protocol background task
     consensus_task: StoppableTaskPtr,
 }
@@ -161,19 +166,22 @@ impl Darkfid {
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
         let rpc_task = StoppableTask::new();
+        let management_rpc_task = StoppableTask::new();
         let consensus_task = StoppableTask::new();
 
         info!(target: "darkfid::Darkfid::init", "Darkfi daemon initialized successfully!");
 
-        Ok(Arc::new(Self { node, dnet_task, rpc_task, consensus_task }))
+        Ok(Arc::new(Self { node, dnet_task, rpc_task, management_rpc_task, consensus_task }))
     }
 
-    /// Start the DarkFi daemon in the given executor, using the provided JSON-RPC listen url
-    /// and consensus initialization configuration.
+    /// Start the DarkFi daemon in the given executor, using the
+    /// provided JSON-RPC settings and consensus initialization
+    /// configuration.
     pub async fn start(
         &self,
         executor: &ExecutorPtr,
         rpc_settings: &RpcSettings,
+        management_rpc_settings: &RpcSettings,
         stratum_rpc_settings: &Option<RpcSettings>,
         mm_rpc_settings: &Option<RpcSettings>,
         config: &ConsensusInitTaskConfig,
@@ -212,6 +220,21 @@ impl Darkfid {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::stop_connections(&node_).await,
                     Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting main JSON-RPC server: {e}"),
+                }
+            },
+            Error::RpcServerStopped,
+            executor.clone(),
+        );
+
+        // Start the management JSON-RPC task
+        info!(target: "darkfid::Darkfid::start", "Starting management JSON-RPC server");
+        let node_ = self.node.clone();
+        self.management_rpc_task.clone().start(
+            listen_and_serve::<ManagementRpcHandler>(management_rpc_settings.clone(), self.node.clone(), None, executor.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<ManagementRpcHandler>>::stop_connections(&node_).await,
+                    Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting management JSON-RPC server: {e}"),
                 }
             },
             Error::RpcServerStopped,
@@ -259,6 +282,10 @@ impl Darkfid {
         // Stop the main JSON-RPC task
         info!(target: "darkfid::Darkfid::stop", "Stopping main JSON-RPC server...");
         self.rpc_task.stop().await;
+
+        // Stop the management JSON-RPC task
+        info!(target: "darkfid::Darkfid::stop", "Stopping management JSON-RPC server...");
+        self.management_rpc_task.stop().await;
 
         // Stop the miners registry
         info!(target: "darkfid::Darkfid::stop", "Stopping miners registry...");

@@ -7,7 +7,7 @@
 ## uncommenting, or by using the command-line.
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8340"
+endpoint = "tcp://127.0.0.1:28345"
 
 # Block height to measure until
 height = 0

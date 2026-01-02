@@ -38,7 +38,7 @@ skip_fees = false
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:48240"
+rpc_listen = "tcp://127.0.0.1:48345"
 
 # Disabled RPC methods
 #rpc_disabled_methods = ["p2p.get_info"]
@@ -46,7 +46,7 @@ rpc_listen = "tcp://127.0.0.1:48240"
 ## Localnet JSON-RPC settings for stratum mining requests (optional)
 [network_config."localnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-rpc_listen = "tcp://127.0.0.1:48241"
+rpc_listen = "tcp://127.0.0.1:48346"
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
@@ -58,4 +58,4 @@ active_profiles = ["tcp+tls"]
 
 [network_config."localnet".net.profiles."tcp+tls"]
 # P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:48242"]
+inbound = ["tcp+tls://0.0.0.0:48340"]

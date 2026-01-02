@@ -23,10 +23,8 @@ use smol::lock::MutexGuard;
 use tracing::debug;
 
 use darkfi::{
-    net::P2pPtr,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
-        p2p_method::HandlerP2p,
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
@@ -49,6 +47,9 @@ pub mod xmr;
 /// Misc JSON-RPC methods
 pub mod misc;
 
+/// Node management JSON-RPC methods
+pub mod management;
+
 /// Default JSON-RPC `RequestHandler`
 pub struct DefaultRpcHandler;
 
@@ -64,9 +65,6 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             // =====================
             "ping" => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::pong(self, req.id, req.params).await,
             "clock" => self.clock(req.id, req.params).await,
-            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
-            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
 
             // ==================
             // Blockchain methods
@@ -102,11 +100,5 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
-    }
-}
-
-impl HandlerP2p for DarkfiNode {
-    fn p2p(&self) -> P2pPtr {
-        self.p2p_handler.p2p.clone()
     }
 }

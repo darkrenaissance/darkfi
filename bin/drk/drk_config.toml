@@ -24,7 +24,7 @@ wallet_path = "~/.local/share/darkfi/drk/localnet/wallet.db"
 wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8240"
+endpoint = "tcp://127.0.0.1:28345"
 
 # Path to interactive shell history file
 history_path = "~/.local/share/darkfi/drk/localnet/history.txt"
@@ -41,7 +41,7 @@ wallet_path = "~/.local/share/darkfi/drk/testnet/wallet.db"
 wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8340"
+endpoint = "tcp://127.0.0.1:18345"
 
 # Path to interactive shell history file
 history_path = "~/.local/share/darkfi/drk/testnet/history.txt"
@@ -58,7 +58,7 @@ wallet_path = "~/.local/share/darkfi/drk/mainnet/wallet.db"
 wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8440"
+endpoint = "tcp://127.0.0.1:8345"
 
 # Path to interactive shell history file
 history_path = "~/.local/share/darkfi/drk/mainnet/history.txt"

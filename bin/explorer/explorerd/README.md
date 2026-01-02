@@ -72,19 +72,19 @@ make stop
 When a DarkFi Explorer Node successfully starts, users should a startup banner displaying the node's configuration details and current sync status. Here is a successful localnet node startup example:
 
 ```
-03:31:37 [INFO] ========================================================================================
-03:31:37 [INFO]                    Started DarkFi Explorer Node                                        
-03:31:37 [INFO] ========================================================================================
-03:31:37 [INFO]   - Network: localnet
-03:31:37 [INFO]   - JSON-RPC Endpoint: tcp://127.0.0.1:14567
-03:31:37 [INFO]   - Database: ~/.local/share/darkfi/explorerd/localnet
-03:31:37 [INFO]   - Configuration: ./explorerd_config.toml
-03:31:37 [INFO]   - Reset Blocks: No
-03:31:37 [INFO] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-03:31:37 [INFO]   - Synced Blocks: 8
-03:31:37 [INFO]   - Synced Transactions: 8
-03:31:37 [INFO]   - Connected Darkfi Node: tcp://127.0.0.1:8240
-03:31:37 [INFO] ========================================================================================
+[INFO] ========================================================================================
+[INFO]                    Started DarkFi Explorer Node
+[INFO] ========================================================================================
+[INFO]   - Network: localnet
+[INFO]   - JSON-RPC Endpoint: tcp://127.0.0.1:14567
+[INFO]   - Database: ~/.local/share/darkfi/explorerd/localnet
+[INFO]   - Configuration: ./explorerd_config.toml
+[INFO]   - Reset Blocks: No
+[INFO] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[INFO]   - Synced Blocks: 8
+[INFO]   - Synced Transactions: 8
+[INFO]   - Connected Darkfi Node: tcp://127.0.0.1:28345
+[INFO] ========================================================================================
 ```
 > **Note** In no-sync mode, you will see “Started DarkFi Explorer Node (No-Sync Mode)” in the banner header, and the “Connected Darkfi Node:” line will show “Not connected”.
 
@@ -113,7 +113,7 @@ Below is an example of a localnet configuration for `explorerd` (`~/.config/dark
 database = "~/.local/share/darkfi/explorerd/localnet"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8240"
+endpoint = "tcp://127.0.0.1:28345"
 
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
@@ -147,14 +147,14 @@ To create a custom explorerd configuration, use [Explorerd Configuration](../exp
 
   ```toml
   [network_config."localnet".rpc]
-  rpc_listen = "tcp://127.0.0.1:8240"
+  rpc_listen = "tcp://127.0.0.1:28345"
   ```
 
 - `explorerd_config.toml`:
 
   ```toml
   [network_config."localnet"]
-  endpoint = "tcp://127.0.0.1:8240"
+  endpoint = "tcp://127.0.0.1:28345"
   ```
 
 ### Installation

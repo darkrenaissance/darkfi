@@ -61,7 +61,7 @@ pub struct MmRpcHandler;
 #[rustfmt::skip]
 impl RequestHandler<MmRpcHandler> for DarkfiNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        debug!(target: "darkfid::mm_rpc", "--> {}", req.stringify().unwrap());
+        debug!(target: "darkfid::rpc::rpc_xmr", "--> {}", req.stringify().unwrap());
 
         match req.method.as_str() {
             // ================================================

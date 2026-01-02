@@ -38,7 +38,7 @@ skip_fees = false
 # Localnet JSON-RPC settings
 [network_config."localnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:48440"
+rpc_listen = "tcp://127.0.0.1:48545"
 
 # Disabled RPC methods
 #rpc_disabled_methods = ["p2p.get_info"]
@@ -53,7 +53,7 @@ active_profiles = ["tcp+tls"]
 
 [network_config."localnet".net.profiles."tcp+tls"]
 # P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:48442"]
+inbound = ["tcp+tls://0.0.0.0:48540"]
 
 # Peer nodes to manually connect to
-peers = ["tcp+tls://0.0.0.0:48242", "tcp+tls://0.0.0.0:48342"]
+peers = ["tcp+tls://0.0.0.0:48340", "tcp+tls://0.0.0.0:48440"]

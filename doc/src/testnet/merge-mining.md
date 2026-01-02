@@ -187,13 +187,8 @@ endpoint that will be used by `p2pool` in `darkfid` config:
 
 ```toml
 [network_config."testnet".mm_rpc]
-rpc_listen = "http+tcp://127.0.0.1:8341"
+rpc_listen = "http+tcp://127.0.0.1:18348"
 ```
-
-> Note:
->
-> If you are also using a `Stratum` RPC endpoint make sure the two
-> ports are different.
 
 Then start `darkfid` as usual.
 
@@ -201,7 +196,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DARKFI_WALLET_ADDRESS}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:18348 {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 Now `p2pool` should communicate with both `monerod` and `darkfid` in
@@ -229,7 +224,7 @@ Stop `p2pool` if it's running, and re-run it with the merge-mining
 parameters appended:
 
 ```shell
-$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_DAO_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:8341 {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_DAO_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:18348 {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 After your miners have successfully mined confirmed blocks, you will

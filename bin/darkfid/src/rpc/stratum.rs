@@ -49,7 +49,7 @@ pub struct StratumRpcHandler;
 #[rustfmt::skip]
 impl RequestHandler<StratumRpcHandler> for DarkfiNode {
 	async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-		debug!(target: "darkfid::stratum_rpc", "--> {}", req.stringify().unwrap());
+		debug!(target: "darkfid::rpc::stratum_rpc", "--> {}", req.stringify().unwrap());
 
 		match req.method.as_str() {
 			// ======================

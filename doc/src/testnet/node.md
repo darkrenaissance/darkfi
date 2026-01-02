@@ -256,7 +256,7 @@ config:
 
 ```toml
 [network_config."testnet".stratum_rpc]
-rpc_listen = "tcp://127.0.0.1:8341"
+rpc_listen = "tcp://127.0.0.1:18347"
 ```
 
 > Note:
@@ -285,7 +285,7 @@ for maximum mining performance. Start `darkfid` as usual and then start
 which wallet:
 
 ```shell
-$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
+$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:18347 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 In `darkfid`, you should see a notification like this:

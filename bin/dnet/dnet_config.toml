@@ -19,19 +19,19 @@
 #[[nodes]]
 #name = "darkfid-testnet"
 #host = "localhost"
-#port = 8340
+#port = 18346
 #type = "NORMAL"
 
 #[[nodes]]
 #name = "darkfid-mainnet"
 #host = "localhost"
-#port = 8440
+#port = 8346
 #type = "NORMAL"
 
 #[[nodes]]
 #name = "darkfid-localnet"
 #host = "localhost"
-#port = 8240
+#port = 28346
 #type = "NORMAL"
 
 #[[nodes]]

@@ -66,7 +66,7 @@ pub fn setup() -> Arc<Explorerd> {
         let db_path_buf = temp_dir.path().join("explorerd_0");
         let db_path =
             db_path_buf.to_str().expect("Failed to convert db_path to string").to_string();
-        let darkfid_endpoint = Url::parse("http://127.0.0.1:8240").expect("Invalid URL");
+        let darkfid_endpoint = Url::parse("http://127.0.0.1:28345").expect("Invalid URL");
         let executor = Arc::new(Executor::new());
 
         // Block on the async function to resolve Explorerd::new

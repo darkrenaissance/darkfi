@@ -16,7 +16,7 @@ rpc_listen = "tcp://127.0.0.1:18927"
 
 ## Per-network settings
 #[network."darkfid_testnet_v5"]
-#accept_addrs = ["tcp+tls://0.0.0.0:8342"]
+#accept_addrs = ["tcp+tls://0.0.0.0:18345"]
 #seeds = []
 #peers = []
 #version = "0.5.0"

@@ -162,7 +162,7 @@ pub struct ExplorerNetworkConfig {
     /// Path to the explorer's database.
     pub database: String,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:28345")]
     /// Endpoint of the DarkFi node JSON-RPC server to sync with.
     pub endpoint: Url,
 }
@@ -238,19 +238,19 @@ mod tests {
             (
                 "localnet",
                 "~/.local/share/darkfi/explorerd/localnet",
-                "tcp://127.0.0.1:8240/",
+                "tcp://127.0.0.1:28345/",
                 "tcp://127.0.0.1:14567/",
             ),
             (
                 "testnet",
                 "~/.local/share/darkfi/explorerd/testnet",
-                "tcp://127.0.0.1:8340/",
+                "tcp://127.0.0.1:18345/",
                 "tcp://127.0.0.1:14667/",
             ),
             (
                 "mainnet",
                 "~/.local/share/darkfi/explorerd/mainnet",
-                "tcp://127.0.0.1:8440/",
+                "tcp://127.0.0.1:8345/",
                 "tcp://127.0.0.1:14767/",
             ),
         ];

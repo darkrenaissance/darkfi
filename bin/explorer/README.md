@@ -98,7 +98,7 @@ Upon successful initialization of the Explorer environment, confirmation message
 [INFO] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 [INFO]   - Synced Blocks: 9
 [INFO]   - Synced Transactions: 9
-[INFO]   - Connected Darkfi Node: tcp://127.0.0.1:8240
+[INFO]   - Connected Darkfi Node: tcp://127.0.0.1:28345
 [INFO] ========================================================================================
 [INFO] All is good. Waiting for block notifications...
 Started explorer site on localnet network (PID=31911)

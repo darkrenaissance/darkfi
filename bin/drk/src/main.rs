@@ -596,7 +596,7 @@ struct BlockchainNetwork {
     /// Password for the wallet database
     wallet_pass: String,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:28345")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
 

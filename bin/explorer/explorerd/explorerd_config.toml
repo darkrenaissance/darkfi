@@ -18,7 +18,7 @@ network = "testnet"
 database = "~/.local/share/darkfi/explorerd/localnet"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8240"
+endpoint = "tcp://127.0.0.1:28345"
 
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
@@ -37,7 +37,7 @@ rpc_listen = "tcp://127.0.0.1:14567"
 database = "~/.local/share/darkfi/explorerd/testnet"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8340"
+endpoint = "tcp://127.0.0.1:18345"
 
 ## Localnet JSON-RPC settings
 [network_config."testnet".rpc]
@@ -55,7 +55,7 @@ rpc_listen = "tcp://127.0.0.1:14667"
 database = "~/.local/share/darkfi/explorerd/mainnet"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8440"
+endpoint = "tcp://127.0.0.1:8345"
 
 ## Localnet JSON-RPC settings
 [network_config."mainnet".rpc]

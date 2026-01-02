@@ -731,7 +731,7 @@ DarkFi DAO mining configuration address:
 Then start an `xmrig` instance to mine for the DAO:
 
 ```shell
-$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:8341 -t {XMRIG_THREADS} -u {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
+$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:18347 -t {XMRIG_THREADS} -u {YOUR_DAO_WALLET_ADDRESS_MINING_CONFIGURATION}
 ```
 
 After your miners have successfully mined confirmed blocks, you will

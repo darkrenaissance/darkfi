@@ -9,6 +9,9 @@
 # Blockchain network to use
 network = "testnet"
 
+## =====================
+## TESTNET CONFIGURATION
+## =====================
 # Testnet blockchain network configuration
 [network_config."testnet"]
 # Path to the blockchain database directory
@@ -38,15 +41,23 @@ txs_batch_size = 50
 ## Testnet JSON-RPC settings
 [network_config."testnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8340"
+rpc_listen = "tcp://127.0.0.1:18345"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = []
+
+## Testnet management JSON-RPC settings
+[network_config."testnet".management_rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:18346"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
 
 ## Testnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."testnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:8341"
+#rpc_listen = "tcp://127.0.0.1:18347"
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -54,7 +65,7 @@ rpc_disabled_methods = ["p2p.get_info"]
 ## Testnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."testnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8341"
+#rpc_listen = "http+tcp://127.0.0.1:18348"
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
@@ -109,41 +120,41 @@ active_profiles = ["tor"]
 [network_config."testnet".net.profiles."tcp+tls"]
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
+seeds = ["tcp+tls://lilith0.dark.fi:18340", "tcp+tls://lilith1.dark.fi:18340"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-#inbound = ["tcp+tls://0.0.0.0:8342"]
+#inbound = ["tcp+tls://0.0.0.0:18340"]
 # IPv6 version:
-#inbound = ["tcp+tls://[::]:8342"]
+#inbound = ["tcp+tls://[::]:18340"]
 # Combined:
-#inbound = ["tcp+tls://0.0.0.0:8342", "tcp+tls://[::]:8342"]
+#inbound = ["tcp+tls://0.0.0.0:18340", "tcp+tls://[::]:18340"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:18340"]
 # IPv6 version:
-#external_addrs = ["tcp+tls://[ipv6 address here]:8342"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:18340"]
 # Combined:
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342", "tcp+tls://[ipv6 address here]:8342"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:18340", "tcp+tls://[ipv6 address here]:18340"]
 
 [network_config."testnet".net.profiles."tor"]
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:8343",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:8343",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:18341",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:18341",
 ]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tor://127.0.0.1:8342"]
+#inbound = ["tor://127.0.0.1:18341"]
 
 [network_config."testnet".net.profiles."i2p"]
 # Seed nodes to connect to for peer discovery and/or adversising our
@@ -154,18 +165,18 @@ seeds = [
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp://127.0.0.1:25551"]
+#inbound = ["tcp://127.0.0.1:18342"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
-#external_addrs = ["i2p://youraddress.b32.i2p:25551"]
+#external_addrs = ["i2p://youraddress.b32.i2p:18342"]
 
 [network_config."testnet".net.profiles."socks5"]
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:8343",
-    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:8343",
+    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:18341",
+    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:18341",
 ]
 
 # Peer nodes to manually connect to
@@ -175,8 +186,8 @@ seeds = [
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    #"socks5+tls://127.0.0.1:9050/lilith0.dark.fi:8342",
-    #"socks5+tls://127.0.0.1:1080/lilith1.dark.fi:8342"
+    #"socks5+tls://127.0.0.1:9050/lilith0.dark.fi:18340",
+    #"socks5+tls://127.0.0.1:1080/lilith1.dark.fi:18340"
 ]
 
 # Peer nodes to manually connect to
@@ -186,13 +197,16 @@ seeds = [
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    "tor+tls://lilith0.dark.fi:8342",
-    "tor+tls://lilith1.dark.fi:8342"
+    "tor+tls://lilith0.dark.fi:18340",
+    "tor+tls://lilith1.dark.fi:18340"
 ]
 
 # Peer nodes to manually connect to
 #peers = []
 
+## =====================
+## MAINNET CONFIGURATION
+## =====================
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
 # Path to the blockchain database directory
@@ -222,15 +236,23 @@ txs_batch_size = 50
 ## Mainnet JSON-RPC settings
 [network_config."mainnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8440"
+rpc_listen = "tcp://127.0.0.1:8345"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = []
+
+## Mainnet management JSON-RPC settings
+[network_config."mainnet".management_rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8346"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
 
 ## Mainnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."mainnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:8441"
+#rpc_listen = "tcp://127.0.0.1:8347"
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -238,7 +260,7 @@ rpc_disabled_methods = ["p2p.get_info"]
 ## Mainnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."mainnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8441"
+#rpc_listen = "http+tcp://127.0.0.1:8348"
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
@@ -299,27 +321,27 @@ active_profiles = ["tor"]
 [network_config."mainnet".net.profiles."tcp+tls"]
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
+seeds = ["tcp+tls://lilith0.dark.fi:8340", "tcp+tls://lilith1.dark.fi:8340"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-#inbound = ["tcp+tls://0.0.0.0:8442"]
+#inbound = ["tcp+tls://0.0.0.0:8340"]
 # IPv6 version:
-#inbound = ["tcp+tls://[::]:8442"]
+#inbound = ["tcp+tls://[::]:8340"]
 # Combined:
-#inbound = ["tcp+tls://0.0.0.0:8442", "tcp+tls://[::]:8442"]
+#inbound = ["tcp+tls://0.0.0.0:8340", "tcp+tls://[::]:8340"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8340"]
 # IPv6 version:
-#external_addrs = ["tcp+tls://[ipv6 address here]:8442"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:8340"]
 # Combined:
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442", "tcp+tls://[ipv6 address here]:8442"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8340", "tcp+tls://[ipv6 address here]:8340"]
 
 [network_config."mainnet".net.profiles."tor"]
 # Seed nodes to connect to for peer discovery and/or adversising our
@@ -330,7 +352,7 @@ seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tor://127.0.0.1:8442"]
+#inbound = ["tor://127.0.0.1:8341"]
 
 [network_config."mainnet".net.profiles."i2p"]
 # Seed nodes to connect to for peer discovery and/or adversising our
@@ -341,11 +363,11 @@ seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
 #peers = []
 
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp://127.0.0.1:8442"]
+#inbound = ["tcp://127.0.0.1:8342"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
-#external_addrs = ["i2p://youraddress.b32.i2p:8442"]
+#external_addrs = ["i2p://youraddress.b32.i2p:8342"]
 
 [network_config."mainnet".net.profiles."socks5"]
 # Seed nodes to connect to for peer discovery and/or adversising our
@@ -371,8 +393,9 @@ seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
 # Peer nodes to manually connect to
 #peers = []
 
-
-
+## ======================
+## LOCALNET CONFIGURATION
+## ======================
 # Localnet blockchain network configuration
 [network_config."localnet"]
 # Path to the blockchain database directory
@@ -405,15 +428,23 @@ txs_batch_size = 50
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8240"
+rpc_listen = "tcp://127.0.0.1:28345"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = []
+
+## Localnet management JSON-RPC settings
+[network_config."localnet".management_rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:28346"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
 
 ## Localnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."localnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:8241"
+#rpc_listen = "tcp://127.0.0.1:28347"
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -421,7 +452,7 @@ rpc_disabled_methods = ["p2p.get_info"]
 ## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."localnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8241"
+#rpc_listen = "http+tcp://127.0.0.1:28348"
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
@@ -481,7 +512,7 @@ localnet = true
 
 [net.profiles."tcp+tls"]
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp+tls://0.0.0.0:8242"]
+#inbound = ["tcp+tls://0.0.0.0:28340"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
@@ -496,7 +527,7 @@ localnet = true
 
 [net.profiles."tcp"]
 # P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp://0.0.0.0:8242"]
+#inbound = ["tcp://0.0.0.0:28340"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.

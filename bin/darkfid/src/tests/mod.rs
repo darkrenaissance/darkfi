@@ -281,7 +281,11 @@ fn darkfid_programmatic_control() -> Result<()> {
                     checkpoint: None,
                 };
                 let rpc_settings = RpcSettings {
-                    listen: Url::parse("tcp://127.0.0.1:8240").unwrap(),
+                    listen: Url::parse("tcp://127.0.0.1:18245").unwrap(),
+                    ..RpcSettings::default()
+                };
+                let management_rpc_settings = RpcSettings {
+                    listen: Url::parse("tcp://127.0.0.1:18246").unwrap(),
                     ..RpcSettings::default()
                 };
 
@@ -298,13 +302,33 @@ fn darkfid_programmatic_control() -> Result<()> {
                 .unwrap();
 
                 // Start it
-                daemon.start(&ex, &rpc_settings, &None, &None, &consensus_config).await.unwrap();
+                daemon
+                    .start(
+                        &ex,
+                        &rpc_settings,
+                        &management_rpc_settings,
+                        &None,
+                        &None,
+                        &consensus_config,
+                    )
+                    .await
+                    .unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();
 
                 // Start it again
-                daemon.start(&ex, &rpc_settings, &None, &None, &consensus_config).await.unwrap();
+                daemon
+                    .start(
+                        &ex,
+                        &rpc_settings,
+                        &management_rpc_settings,
+                        &None,
+                        &None,
+                        &consensus_config,
+                    )
+                    .await
+                    .unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();
