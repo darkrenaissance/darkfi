@@ -85,6 +85,25 @@ where
     }
 }
 
+// Valid witness types
+impl TryFrom<&Token> for VarType {
+    type Error = String;
+
+    fn try_from(token: &Token) -> std::result::Result<Self, String> {
+        match token.token.as_str() {
+            "EcPoint" => Ok(Self::EcPoint),
+            "EcNiPoint" => Ok(Self::EcNiPoint),
+            "Base" => Ok(Self::Base),
+            "Scalar" => Ok(Self::Scalar),
+            "MerklePath" => Ok(Self::MerklePath),
+            "SparseMerklePath" => Ok(Self::SparseMerklePath),
+            "Uint32" => Ok(Self::Uint32),
+            "Uint64" => Ok(Self::Uint64),
+            x => Err(format!("{x} is an unsupported witness type")),
+        }
+    }
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     error: ErrorEmitter,
@@ -679,88 +698,16 @@ impl Parser {
                 ))
             }
 
-            // Valid witness types
-            // TODO: change to TryFrom impl for VarType
-            match v.1.token.as_str() {
-                "EcPoint" => {
+            match VarType::try_from(&v.1) {
+                Ok(typ) => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: VarType::EcPoint,
+                        typ,
                         line: v.0.line,
                         column: v.0.column,
                     });
                 }
-
-                "EcNiPoint" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::EcNiPoint,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "Base" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::Base,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "Scalar" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::Scalar,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "MerklePath" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::MerklePath,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "SparseMerklePath" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::SparseMerklePath,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "Uint32" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::Uint32,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                "Uint64" => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ: VarType::Uint64,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-
-                x => {
-                    return Err(self.error.abort(
-                        &format!("`{x}` is an unsupported witness type."),
-                        v.1.line,
-                        v.1.column,
-                    ))
-                }
+                Err(e) => return Err(self.error.abort(&e, v.1.line, v.1.column)),
             }
         }
 
