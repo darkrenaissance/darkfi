@@ -1313,20 +1313,28 @@ impl BaseEdit {
         editor.on_buffer_changed(atom).await;
         drop(editor);
 
+        // Nothing changed. Just return.
+        if !is_text_changed && !is_select_changed && !is_compose_changed {
+            t!("Skipping update since nothing changed");
+            return
+        }
+
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
+
+        //t!("is_text_changed={is_text_changed}, is_select_changed={is_select_changed}, is_compose_changed={is_compose_changed}");
+        // Only redraw once we have the parent_rect
+        // Can happen when we receive an Android event before the canvas is ready
+        if self.parent_rect.lock().is_none() {
+            return
+        }
 
         // Text changed - finish any active selection
         if is_text_changed || is_compose_changed {
             self.pause_blinking();
             //assert!(state.text != self.text.get());
             self.finish_select(atom);
-
-            // Only redraw once we have the parent_rect
-            // Can happen when we receive an Android event before the canvas is ready
-            if self.parent_rect.lock().is_some() {
-                self.redraw(atom).await;
-            }
+            self.redraw(atom).await;
         } else if is_select_changed {
             // Redrawing the entire text just for select changes is expensive
             self.redraw_cursor(atom.batch_id).await;
