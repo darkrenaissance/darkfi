@@ -64,3 +64,22 @@ Once the `heaptrack` report is generated you can view it using `heaptrack_gui`.
 | 21 | range_check           | 2.4 MB    | 145.6 kB           | 7.6 kB     |
 | 22 | witness_base          | 2.4 MB    | 145.6 kB           | 7.6 kB     |
 | 23 | debug                 | 2.4 MB    | 145.6 kB           | 7.6 kB     |
+
+#### Native Contracts' Proofs
+| #  | Proof                            | RAM Usage | Verifying Key Size | Proof Size |
+|----|----------------------------------|-----------|--------------------|------------|
+| 0  | money_mint_v1                    | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+| 1  | money_burn_v1                    | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+| 2  | money_fee_v1                     | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+| 3  | money_token_mint_v1              | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+| 4  | money_auth_token_mint_v1         | 2.4 MB    | 145.6 kB           | 7.6 kB     |
+| 5  | dao_mint                         | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+| 6  | dao_propose_input                | 17.2 MB   | 1.2 MB             | 7.7 kB     |
+| 7  | dao_propose_main                 | 2.6 MB    | 145.6 kB           | 7.6 kB     |
+| 8  | dao_vote_input                   | 17.2 MB   | 1.2 MB             | 7.7 kB     |
+| 9  | dao_vote_main                    | 2.6 MB    | 145.6 kB           | 7.6 kB     |
+| 10 | dao_exec                         | 2.6 MB    | 145.6 kB           | 7.6 kB     |
+| 11 | dao_early_exec                   | 2.6 MB    | 145.6 kB           | 7.6 kB     |
+| 12 | dao_auth_money_transfer          | 2.6 MB    | 145.6 kB           | 7.6 kB     |
+| 13 | dao_auth_money_transfer_enc_coin | 2.5 MB    | 145.6 kB           | 7.6 kB     |
+

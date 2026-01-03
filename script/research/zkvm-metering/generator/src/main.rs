@@ -31,6 +31,11 @@ use darkfi_serial::serialize;
 use halo2_proofs::dev::CircuitCost;
 use rand::rngs::OsRng;
 
+/// Dao contract zk proofs witness and public input generator.
+mod dao;
+
+/// Money contract zk proofs witness and public input generator.
+mod money;
 
 /// Opcode zk proofs witness and public input generator.
 mod opcodes;
@@ -135,6 +140,20 @@ fn retrieve_proof_inputs(name: &str) -> (Vec<Witness>, Vec<Base>) {
         "zero_cond" => opcodes::zero_cond(),
         "range_check" => opcodes::range_check(),
         "debug" => opcodes::debug(),
+        "money_mint_v1" => money::mint_v1(),
+        "money_burn_v1" => money::burn_v1(),
+        "money_fee_v1" => money::fee_v1(),
+        "money_token_mint_v1" => money::token_mint_v1(),
+        "money_auth_token_mint_v1" => money::auth_token_mint_v1(),
+        "dao_mint" => dao::mint(),
+        "dao_propose_input" => dao::propose_input(),
+        "dao_propose_main" => dao::propose_main(),
+        "dao_vote_input" => dao::vote_input(),
+        "dao_vote_main" => dao::vote_main(),
+        "dao_exec" => dao::exec(),
+        "dao_early_exec" => dao::early_exec(),
+        "dao_auth_money_transfer" => dao::auth_money_transfer(),
+        "dao_auth_money_transfer_enc_coin" => dao::auth_money_transfer_enc_coin(),
         _ => panic!("unsupported Zk script"),
     }
 }
