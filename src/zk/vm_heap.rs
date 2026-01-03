@@ -41,7 +41,7 @@ use crate::{
 
 /// These represent the witness types outside of the circuit
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Witness {
     EcPoint(Value<pallas::Point>),
     EcNiPoint(Value<pallas::Point>),

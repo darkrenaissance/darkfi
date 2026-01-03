@@ -278,7 +278,7 @@ pub struct ZkParams {
     init_zerocond: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ZkCircuit {
     constants: Vec<String>,
     pub(super) witnesses: Vec<Witness>,
@@ -320,8 +320,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
         }
     }
 
-    fn configure(_meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-        unreachable!();
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+        Self::configure_with_params(meta, ZkParams::default())
     }
 
     fn params(&self) -> Self::Params {

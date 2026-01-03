@@ -29,7 +29,7 @@ pub enum DebugOpValue {
     Void,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ZkTracer {
     pub opvalues: Arc<Mutex<Option<Vec<DebugOpValue>>>>,
     init_allowed: bool,
