@@ -111,6 +111,10 @@ fn main() {
         let public_inputs_export = serialize(&public_inputs);
         let mut f = File::create(&public_inputs_file).unwrap();
         f.write_all(&public_inputs_export).unwrap();
+
+        // Show circuit cost
+        let circuit_cost = CircuitCost::<Eq, ZkCircuit>::measure(zkbin.k, &circuit);
+        println!("{:#?}", circuit_cost);
     }
 }
 
