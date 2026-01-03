@@ -173,8 +173,11 @@ impl GameTextInput {
         let mut new_focus = state.lock();
         // Mark new state as active
         new_focus.is_active = true;
+        let new_state = new_focus.state.clone();
+        drop(new_focus);
+
         // Push changes to the Java side
-        self.push_update(&new_focus.state);
+        self.push_update(&new_state);
     }
 
     pub fn push_update(&self, state: &AndroidTextInputState) {
@@ -190,6 +193,21 @@ impl GameTextInput {
             let delete_local_ref = (**env).DeleteLocalRef.unwrap();
             delete_local_ref(env, jstate);
         }
+    }
+
+    pub fn set_select(&self, start: i32, end: i32) -> Result<(), ()> {
+        let Some(input_connection) = *self.input_connection.read() else {
+            w!("push_update() - no input_connection set");
+            return Err(())
+        };
+        let is_success = unsafe {
+            let env = android::attach_jni_env();
+            call_bool_method!(env, input_connection, "setSelection", "(II)Z", start, end)
+        };
+        if is_success == 0u8 {
+            return Err(())
+        }
+        Ok(())
     }
 
     pub fn set_input_connection(&self, input_connection: ndk_sys::jobject) {

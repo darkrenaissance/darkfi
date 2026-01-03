@@ -45,13 +45,16 @@ import androidx.core.view.WindowInsetsCompat;
 import textinput.GameTextInput.Pair;
 
 public class InputConnection extends BaseInputConnection implements View.OnKeyListener {
-  private static final String TAG = "gti.InputConnection";
   private final InputMethodManager imm;
   private final View targetView;
   private final Settings settings;
   private final Editable mEditable;
   private Listener listener;
   private boolean mSoftKeyboardActive;
+
+  private void log(String text) {
+    //Log.d("darkfi", text);
+  }
 
   /*
    * This class filters EOL characters from the input. For details of how InputFilter.filter
@@ -100,7 +103,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    */
   public InputConnection(Context ctx, View targetView, Settings settings) {
     super(targetView, settings.mEditorInfo.inputType != 0);
-    Log.d(TAG, "InputConnection created");
+    log("InputConnection created");
 
     this.targetView = targetView;
     this.settings = settings;
@@ -143,7 +146,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    *     https://developer.android.com/reference/android/view/inputmethod/InputMethodManager#showSoftInput(android.view.View,%20int)
    */
   public final void setSoftKeyboardActive(boolean active, int flags) {
-    Log.d(TAG, "setSoftKeyboardActive, active: " + active);
+    log("setSoftKeyboardActive, active: " + active);
 
     this.mSoftKeyboardActive = active;
     if (active) {
@@ -171,7 +174,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    * @param editorInfo The EditorInfo to use
    */
   public final void setEditorInfo(EditorInfo editorInfo) {
-    Log.d(TAG, "setEditorInfo");
+    log("setEditorInfo");
     settings.mEditorInfo = editorInfo;
 
     // Depending on the multiline state, we might need a different set of filters.
@@ -195,7 +198,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   public final void setState(State state) {
     if (state == null)
       return;
-    Log.d(TAG,
+    log(
         "setState: '" + state.text + "', selection=(" + state.selectionStart + ","
             + state.selectionEnd + "), composing region=(" + state.composingRegionStart + ","
             + state.composingRegionEnd + ")");
@@ -232,7 +235,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   // From View.OnKeyListener
   @Override
   public boolean onKey(View view, int i, KeyEvent keyEvent) {
-    Log.d(TAG, "onKey: " + keyEvent);
+    log("onKey: " + keyEvent);
     if (!getSoftKeyboardActive()) {
       return false;
     }
@@ -251,22 +254,22 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   // From BaseInputConnection
   @Override
   public Editable getEditable() {
-    Log.d(TAG, "getEditable");
+    log("getEditable");
     return mEditable;
   }
 
   // From BaseInputConnection
   @Override
   public boolean setSelection(int start, int end) {
-    Log.d(TAG, "setSelection: " + start + ":" + end);
+    log("setSelection: " + start + ":" + end);
     return super.setSelection(start, end);
   }
 
   // From BaseInputConnection
   @Override
   public boolean setComposingText(CharSequence text, int newCursorPosition) {
-    Log.d(
-        TAG, String.format("setComposingText='%s' newCursorPosition=%d", text, newCursorPosition));
+    log(
+        "setComposingText='" + text + "' newCursorPosition=" + newCursorPosition);
     if (text == null) {
       return false;
     }
@@ -275,40 +278,40 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
 
   @Override
   public boolean setComposingRegion(int start, int end) {
-    Log.d(TAG, "setComposingRegion: " + start + ":" + end);
+    log("setComposingRegion: " + start + ":" + end);
     return super.setComposingRegion(start, end);
   }
 
   // From BaseInputConnection
   @Override
   public boolean finishComposingText() {
-    Log.d(TAG, "finishComposingText");
+    log("finishComposingText");
     return super.finishComposingText();
   }
 
   @Override
   public boolean endBatchEdit() {
-    Log.d(TAG, "endBatchEdit");
+    log("endBatchEdit");
     stateUpdated();
     return super.endBatchEdit();
   }
 
   @Override
   public boolean commitCompletion(CompletionInfo text) {
-    Log.d(TAG, "commitCompletion");
+    log("commitCompletion");
     return super.commitCompletion(text);
   }
 
   @Override
   public boolean commitCorrection(CorrectionInfo text) {
-    Log.d(TAG, "commitCompletion");
+    log("commitCompletion");
     return super.commitCorrection(text);
   }
 
   // From BaseInputConnection
   @Override
   public boolean commitText(CharSequence text, int newCursorPosition) {
-    Log.d(TAG,
+      log(
         (new StringBuilder())
             .append("commitText: ")
             .append(text)
@@ -321,21 +324,21 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   // From BaseInputConnection
   @Override
   public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-    Log.d(TAG, "deleteSurroundingText: " + beforeLength + ":" + afterLength);
+    log("deleteSurroundingText: " + beforeLength + ":" + afterLength);
     return super.deleteSurroundingText(beforeLength, afterLength);
   }
 
   // From BaseInputConnection
   @Override
   public boolean deleteSurroundingTextInCodePoints(int beforeLength, int afterLength) {
-    Log.d(TAG, "deleteSurroundingTextInCodePoints: " + beforeLength + ":" + afterLength);
+    log("deleteSurroundingTextInCodePoints: " + beforeLength + ":" + afterLength);
     return super.deleteSurroundingTextInCodePoints(beforeLength, afterLength);
   }
 
   // From BaseInputConnection
   @Override
   public boolean sendKeyEvent(KeyEvent event) {
-    Log.d(TAG, "sendKeyEvent: " + event);
+    log("sendKeyEvent: " + event);
     return super.sendKeyEvent(event);
   }
 
@@ -346,16 +349,16 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     if (result == null) {
       result = "";
     }
-    Log.d(TAG, "getSelectedText: " + flags + ", result: " + result);
+    log("getSelectedText: " + flags + ", result: " + result);
     return result;
   }
 
   // From BaseInputConnection
   @Override
   public CharSequence getTextAfterCursor(int length, int flags) {
-    Log.d(TAG, "getTextAfterCursor: " + length + ":" + flags);
+    log("getTextAfterCursor: " + length + ":" + flags);
     if (length < 0) {
-      Log.i(TAG, "getTextAfterCursor: returning null to due to an invalid length=" + length);
+      Log.i("darkfi", "getTextAfterCursor: returning null to due to an invalid length=" + length);
       return null;
     }
     return super.getTextAfterCursor(length, flags);
@@ -364,9 +367,9 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   // From BaseInputConnection
   @Override
   public CharSequence getTextBeforeCursor(int length, int flags) {
-    Log.d(TAG, "getTextBeforeCursor: " + length + ", flags=" + flags);
+    log("getTextBeforeCursor: " + length + ", flags=" + flags);
     if (length < 0) {
-      Log.i(TAG, "getTextBeforeCursor: returning null to due to an invalid length=" + length);
+      Log.i("darkfi", "getTextBeforeCursor: returning null to due to an invalid length=" + length);
       return null;
     }
     return super.getTextBeforeCursor(length, flags);
@@ -375,39 +378,39 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   // From BaseInputConnection
   @Override
   public boolean requestCursorUpdates(int cursorUpdateMode) {
-    Log.d(TAG, "Request cursor updates: " + cursorUpdateMode);
+    log("Request cursor updates: " + cursorUpdateMode);
     return super.requestCursorUpdates(cursorUpdateMode);
   }
 
   // From BaseInputConnection
   @Override
   public void closeConnection() {
-    Log.d(TAG, "closeConnection");
+    log("closeConnection");
     super.closeConnection();
   }
 
   @Override
   public boolean setImeConsumesInput(boolean imeConsumesInput) {
-    Log.d(TAG, "setImeConsumesInput: " + imeConsumesInput);
+    log("setImeConsumesInput: " + imeConsumesInput);
     return super.setImeConsumesInput(imeConsumesInput);
   }
 
   @Override
   public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
-    Log.d(TAG, "getExtractedText");
+    log("getExtractedText");
     return super.getExtractedText(request, flags);
   }
 
   @Override
   public boolean performPrivateCommand(String action, Bundle data) {
-    Log.d(TAG, "performPrivateCommand");
+    log("performPrivateCommand");
     return super.performPrivateCommand(action, data);
   }
 
   private void immUpdateSelection() {
     Pair selection = this.getSelection();
     Pair cr = this.getComposingRegion();
-    Log.d(TAG,
+    log(
         "immUpdateSelection: " + selection.first + "," + selection.second + ". " + cr.first + ","
             + cr.second);
     settings.mEditorInfo.initialSelStart = selection.first;
@@ -428,8 +431,8 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
       return false;
     }
     int keyCode = event.getKeyCode();
-    Log.d(
-        TAG, String.format("processKeyEvent(key=%d) text=%s", keyCode, this.mEditable.toString()));
+    log(
+        "processKeyEvent(key=" + keyCode + ") text=" + this.mEditable.toString());
     // Filter out Enter keys if multi-line mode is disabled.
     if ((settings.mEditorInfo.inputType & EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) == 0
         && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)
@@ -503,7 +506,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     }
 
     if (selection.first != selection.second) {
-      Log.d(TAG, String.format("processKeyEvent: deleting selection"));
+      log("processKeyEvent: deleting selection");
       this.mEditable.delete(selection.first, selection.second);
     }
 
@@ -525,7 +528,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     this.setComposingRegion(composingRegion.first, composingRegion.second);
     int new_cursor = selection.first + charsToInsert.length();
     setSelection(new_cursor, new_cursor);
-    Log.d(TAG, String.format("processKeyEvent: exit, text=%s", this.mEditable.toString()));
+    log("processKeyEvent: exit, text=" + this.mEditable.toString());
     return true;
   }
 
@@ -594,7 +597,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    */
   @Override
   public boolean performEditorAction(int action) {
-    Log.d(TAG, "performEditorAction, action=" + action);
+    log("performEditorAction, action=" + action);
     if (action == IME_ACTION_UNSPECIFIED) {
       // Super emulates Enter key press/release
       return super.performEditorAction(action);

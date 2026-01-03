@@ -529,15 +529,23 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
-    //for channel in CHANNELS {
-    chat::make(app, content.clone(), "dev", &db, i18n_fish, emoji_meshes.clone(), is_first_time)
+    for channel in CHANNELS {
+        chat::make(
+            app,
+            content.clone(),
+            channel,
+            &db,
+            i18n_fish,
+            emoji_meshes.clone(),
+            is_first_time,
+        )
         .await;
-    //}
-    //menu::make(app, content.clone(), i18n_fish).await;
+    }
+    menu::make(app, content.clone(), i18n_fish).await;
 
     // @@@ Debug stuff @@@
-    let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
-    chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    //let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
+    //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     //let menu_node = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
     //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }

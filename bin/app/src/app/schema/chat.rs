@@ -1559,13 +1559,19 @@ pub async fn make(
                 let atom = &mut render_api.make_guard(gfxtag!("edit select task"));
                 if editz_select_text.is_null(0).unwrap() {
                     info!(target: "app::chat", "selection changed: null");
-                    actions_is_visible.set(atom, false);
-                    pasta_is_visible2.set(atom, false);
+                    // Avoid triggering unecessary redraws
+                    if actions_is_visible.get() {
+                        actions_is_visible.set(atom, false);
+                        pasta_is_visible2.set(atom, false);
+                    }
                 } else {
                     let select_text = editz_select_text.get_str(0).unwrap();
                     info!(target: "app::chat", "selection changed: {select_text}");
-                    actions_is_visible.set(atom, true);
-                    pasta_is_visible2.set(atom, false);
+                    // Avoid triggering unecessary redraws
+                    if !actions_is_visible.get() {
+                        actions_is_visible.set(atom, true);
+                        pasta_is_visible2.set(atom, false);
+                    }
                 }
             }
         });

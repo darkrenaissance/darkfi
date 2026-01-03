@@ -132,9 +132,10 @@ impl Editor {
         let cursor_idx = cursor.index();
         t!("  move_to_pos: {cursor_idx}");
         assert!(cursor_idx <= self.state.text.len());
+        assert_eq!(self.state.text, self.text.get());
         self.state.select = (cursor_idx, cursor_idx);
         self.state.compose = None;
-        self.input.set_state(self.state.clone());
+        self.input.set_select(cursor_idx, cursor_idx);
     }
 
     pub async fn select_word_at_point(&mut self, pos: Point) {
@@ -216,10 +217,12 @@ impl Editor {
         parley::Selection::new(anchor, focus)
     }
     pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        self.state.text = self.text.get();
+        assert!(select_start <= self.state.text.len());
+        assert!(select_end <= self.state.text.len());
+        assert_eq!(self.state.text, self.text.get());
         self.state.select = (select_start, select_end);
         self.state.compose = None;
-        self.input.set_state(self.state.clone());
+        self.input.set_select(select_start, select_end);
     }
 
     #[allow(dead_code)]

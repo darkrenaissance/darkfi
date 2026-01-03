@@ -1363,16 +1363,17 @@ impl UIObject for BaseEdit {
     fn init(&self) {
         let mut guard = self.editor.lock_blocking();
         assert!(guard.is_none());
-        let mut editor = Editor::new(
+        let editor = Editor::new(
             self.text.clone(),
             self.font_size.clone(),
             self.text_color.clone(),
             self.window_scale.clone(),
             self.lineheight.clone(),
         );
-        let atom = &mut PropertyAtomicGuard::none();
-        self.text.set(atom, "the quick brown fox jumped over the");
-        smol::block_on(editor.on_text_prop_changed());
+        // For Android you can do this:
+        //let atom = &mut PropertyAtomicGuard::none();
+        //self.text.set(atom, "the quick brown fox jumped over the");
+        //smol::block_on(editor.on_text_prop_changed());
         *guard = Some(editor);
     }
 
