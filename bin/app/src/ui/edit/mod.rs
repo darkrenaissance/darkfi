@@ -1304,14 +1304,11 @@ impl BaseEdit {
         t!("handle_android_event({state:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
-        // Text changed - finish any active selection
-        if state.text != self.text.get() || state.select.0 == state.select.1 {
-            // Safe to call before we update the editor.
-            // I just wanna avoid cloning state since we move it into editor.
-            self.finish_select(atom);
-        }
-
         let mut editor = self.lock_editor().await;
+        // Diff old and new state so we know what changed
+        let is_text_changed = editor.state.text != state.text;
+        let is_select_changed = editor.state.select != state.select;
+        let is_compose_changed = editor.state.compose != state.compose;
         editor.state = state;
         editor.on_buffer_changed(atom).await;
         drop(editor);
@@ -1319,10 +1316,21 @@ impl BaseEdit {
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
 
-        // Only redraw once we have the parent_rect
-        // Can happen when we receive an Android event before the canvas is ready
-        if self.parent_rect.lock().is_some() {
-            self.redraw(atom).await;
+        // Text changed - finish any active selection
+        if is_text_changed || is_compose_changed {
+            self.pause_blinking();
+            //assert!(state.text != self.text.get());
+            self.finish_select(atom);
+
+            // Only redraw once we have the parent_rect
+            // Can happen when we receive an Android event before the canvas is ready
+            if self.parent_rect.lock().is_some() {
+                self.redraw(atom).await;
+            }
+        } else if is_select_changed {
+            // Redrawing the entire text just for select changes is expensive
+            self.redraw_cursor(atom.batch_id).await;
+            self.redraw_select(atom.batch_id).await;
         }
     }
 }

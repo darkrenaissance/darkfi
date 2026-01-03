@@ -81,9 +81,14 @@ impl Editor {
         self.refresh().await;
     }
     pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
-        // Refresh the layout using the Android buffer
-        self.refresh().await;
+        // Only refresh layout if text content actually changed
+        // Avoid triggering expensive recomputes of layout and property tree.
+        let old_text = self.text.get();
+        if old_text == self.state.text {
+            return
+        }
 
+        self.refresh().await;
         // Update the text attribute
         self.text.set(atom, &self.state.text);
     }
@@ -126,7 +131,7 @@ impl Editor {
         let cursor = parley::Cursor::from_point(&self.layout, pos.x, pos.y);
         let cursor_idx = cursor.index();
         t!("  move_to_pos: {cursor_idx}");
-        self.state.text = self.text.get();
+        assert!(cursor_idx <= self.state.text.len());
         self.state.select = (cursor_idx, cursor_idx);
         self.state.compose = None;
         self.input.set_state(self.state.clone());

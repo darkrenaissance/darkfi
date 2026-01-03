@@ -182,21 +182,19 @@ impl GameTextInput {
             w!("push_update() - no input_connection set");
             return
         };
-        if let Some(input_connection) = *self.input_connection.read() {
-            unsafe {
-                let env = android::attach_jni_env();
-                let jstate = self.state_to_java(state);
-                call_void_method!(
-                    env,
-                    input_connection,
-                    "setState",
-                    "(Ltextinput/State;)V",
-                    jstate
-                );
+        unsafe {
+            let env = android::attach_jni_env();
+            let jstate = self.state_to_java(state);
+            call_void_method!(
+                env,
+                input_connection,
+                "setState",
+                "(Ltextinput/State;)V",
+                jstate
+            );
 
-                let delete_local_ref = (**env).DeleteLocalRef.unwrap();
-                delete_local_ref(env, jstate);
-            }
+            let delete_local_ref = (**env).DeleteLocalRef.unwrap();
+            delete_local_ref(env, jstate);
         }
     }
 

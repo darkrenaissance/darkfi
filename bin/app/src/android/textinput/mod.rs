@@ -78,9 +78,11 @@ impl AndroidTextInput {
         // Always update our own state.
         let mut ours = self.state.lock();
         ours.state = state.clone();
+        let is_active = ours.is_active;
+        drop(ours);
 
         // Only update java state when this input is active
-        if ours.is_active {
+        if is_active {
             let gti = GAME_TEXT_INPUT.get().unwrap();
             gti.push_update(&state);
         }
