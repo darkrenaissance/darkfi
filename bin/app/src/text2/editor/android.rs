@@ -199,7 +199,7 @@ impl Editor {
     }
     pub fn selection(&self, side: isize) -> parley::Selection {
         assert!(side.abs() == 1);
-        t!("selection({side}) [state={:?}]", self.state);
+        //t!("selection({side}) [state={:?}]", self.state);
 
         let (start, end) = (self.state.select.0, self.state.select.1);
         let (anchor, focus) = match side {

@@ -65,8 +65,10 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*)
 pub trait UIObject: Sync {
     fn priority(&self) -> u32;
 
+    /// Called after schema and scenegraph is init but before miniquad starts.
     fn init(&self) {}
 
+    /// Done after miniquad has started and the first window draw has been done.
     async fn start(self: Arc<Self>, _ex: ExecutorPtr) {}
 
     /// Clear all buffers and caches

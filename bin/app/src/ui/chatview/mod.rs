@@ -1003,7 +1003,7 @@ impl UIObject for ChatView {
         }
 
         let rect = self.rect.get();
-        t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
+        //t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::handle_touch"));
 
         let touch_y = touch_pos.y;

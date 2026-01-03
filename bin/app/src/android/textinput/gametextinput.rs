@@ -185,13 +185,7 @@ impl GameTextInput {
         unsafe {
             let env = android::attach_jni_env();
             let jstate = self.state_to_java(state);
-            call_void_method!(
-                env,
-                input_connection,
-                "setState",
-                "(Ltextinput/State;)V",
-                jstate
-            );
+            call_void_method!(env, input_connection, "setState", "(Ltextinput/State;)V", jstate);
 
             let delete_local_ref = (**env).DeleteLocalRef.unwrap();
             delete_local_ref(env, jstate);

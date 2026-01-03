@@ -32,5 +32,7 @@ unsafe fn check_except(env: *mut ndk_sys::JNIEnv, context: &str) {
 
         let exception_clear = (**env).ExceptionClear.unwrap();
         exception_clear(env);
+
+        panic!("Java exception detected in {context}");
     }
 }
