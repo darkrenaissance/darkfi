@@ -20,6 +20,7 @@ use std::{
     env,
     fs::File,
     io::{Cursor, Read},
+    path::Path,
 };
 
 use darkfi::{
@@ -33,27 +34,34 @@ use darkfi_serial::deserialize;
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        println!("Usage: ./verifier opcode_name");
+        println!("Usage: ./verifier [ZK_BIN_FILE_PATH]");
         return Ok(())
     }
 
-    let file_name = &args[1];
+    let zk_bin_path = Path::new(&args[1]);
 
-    let name = file_name.split(".").next().unwrap();
+    if !zk_bin_path.is_file() || !zk_bin_path.exists() || !&args[1].ends_with(".zk.bin") {
+        println!("Zk bin file path does not exist or is invalid");
+        return Ok(())
+    }
+
     //Load zkbin, proof, verifying key, public inputs from file
-    let mut file = File::open(format!("../generator/proof/{name}.zk.bin"))?;
+    let mut file = File::open(zk_bin_path)?;
     let mut bincode = vec![];
     file.read_to_end(&mut bincode)?;
 
-    let mut file = File::open(format!("../generator/proof/{name}.proof.bin"))?;
+    let proof_path = zk_bin_path.to_str().unwrap().replace(".zk.bin", ".proof.bin");
+    let mut file = File::open(proof_path)?;
     let mut proof_bin = vec![];
     file.read_to_end(&mut proof_bin)?;
 
-    let mut file = File::open(format!("../generator/proof/{name}.vks.bin"))?;
+    let vks_path = zk_bin_path.to_str().unwrap().replace(".zk.bin", ".vks.bin");
+    let mut file = File::open(vks_path)?;
     let mut vkbin = vec![];
     file.read_to_end(&mut vkbin)?;
 
-    let mut file = File::open(format!("../generator/proof/{name}.pi.bin"))?;
+    let pi_path = zk_bin_path.to_str().unwrap().replace(".zk.bin", ".pi.bin");
+    let mut file = File::open(pi_path)?;
     let mut public_inputs_bin = vec![];
     file.read_to_end(&mut public_inputs_bin)?;
 

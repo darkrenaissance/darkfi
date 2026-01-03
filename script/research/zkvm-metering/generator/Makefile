@@ -15,7 +15,7 @@ RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 ZKAS = ../../../../zkas
 
 # zkas circuits
-PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_SRC = $(shell find -L src/*/proof -type f -name '*.zk')
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 SRC = \
@@ -43,6 +43,6 @@ clippy:
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
 	rm -f $(BIN)
-	rm -f proof/*.bin
+	rm -f src/*/proof/*.bin
 
 .PHONY: all fmt clippy clean

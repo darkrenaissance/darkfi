@@ -27,12 +27,14 @@ second command.
 % ./run_heaptrack.sh
 ```
 `run_heaptrack.sh` will generate `heaptrack` report for all the opcodes
-in `output` directory. If you prover to analyze a single opcode run 
+in `output` directory. If you want to analyze a single opcode, run
 the following.
 ```
 % heaptrack ./verifer [OPCODE_NAME]
 ```
 Once the `heaptrack` report is generated you can view it using `heaptrack_gui`. 
+
+**Note:** This tool can also be used to generate and verify any ZkVM proof.
 
 #### Analysis Results
 
