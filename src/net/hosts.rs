@@ -16,6 +16,44 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! The main interface for interacting with the hostlist. Contains the following:
+//!
+//! `Hosts`: the main parent class that manages HostRegistry and HostContainer. It is also
+//!  responsible for filtering addresses before writing to the hostlist.
+//!
+//! `HostRegistry`: A locked HashMap that maps peer addresses onto mutually exclusive
+//!  states (`HostState`). Prevents race conditions by dictating a strict flow of logically
+//!  acceptable states.
+//!
+//! `HostContainer`: A wrapper for the hostlists. Each hostlist is represented by a `HostColor`,
+//!  which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
+//!  utilities.
+//!
+//! `HostColor`:
+//! > `White`: Hosts that have passed the `GreylistRefinery` successfully.
+//!
+//! > `Gold`: Hosts we have been able to establish a connection to in `OutboundSession`.
+//!
+//! > `Grey`: Recently received hosts that are checked by the `GreylistRefinery` and
+//! > upgraded to the whitelist if valid. If they're inaccessible by the Refinery
+//! > they will be deleted.
+//!
+//! > `Black`: hostile hosts that are strictly avoided for the duration of the program.
+//!
+//! > `Dark`: hosts that do not match our transports, but that we continue to share with
+//! > other peers. We do not keep darklist entries that are older than one day.
+//! > This is to avoid peers propagating nodes that may be faulty. We assume that
+//! > within the one day period, the nodes will be picked up by peers that accept
+//! > the transports and can refine them to remove inactive peers. Dark list hosts
+//! > are otherwise ignored.
+//!
+//! `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
+//!  or Connected. The state is `None` when the corresponding host has been removed from the
+//!  HostRegistry.
+
+//TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
+//the registry once they have bypassed a certain age threshold.
+
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
 use std::{
@@ -48,44 +86,6 @@ use crate::{
     },
     Error, Result,
 };
-
-/// The main interface for interacting with the hostlist. Contains the following:
-///
-/// `Hosts`: the main parent class that manages HostRegistry and HostContainer. It is also
-///  responsible for filtering addresses before writing to the hostlist.
-///
-/// `HostRegistry`: A locked HashMap that maps peer addresses onto mutually exclusive
-///  states (`HostState`). Prevents race conditions by dictating a strict flow of logically
-///  acceptable states.
-///
-/// `HostContainer`: A wrapper for the hostlists. Each hostlist is represented by a `HostColor`,
-///  which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
-///  utilities.
-///
-/// `HostColor`:
-/// > `White`: Hosts that have passed the `GreylistRefinery` successfully.
-///
-/// > `Gold`: Hosts we have been able to establish a connection to in `OutboundSession`.
-///
-/// > `Grey`: Recently received hosts that are checked by the `GreylistRefinery` and
-/// > upgraded to the whitelist if valid. If they're inaccessible by the Refinery
-/// > they will be deleted.
-///
-/// > `Black`: hostile hosts that are strictly avoided for the duration of the program.
-///
-/// > `Dark`: hosts that do not match our transports, but that we continue to share with
-/// > other peers. We do not keep darklist entries that are older than one day.
-/// > This is to avoid peers propagating nodes that may be faulty. We assume that
-/// > within the one day period, the nodes will be picked up by peers that accept
-/// > the transports and can refine them to remove inactive peers. Dark list hosts
-/// > are otherwise ignored.
-///
-/// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
-///  or Connected. The state is `None` when the corresponding host has been removed from the
-///  HostRegistry.
-///
-//TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
-//the registry once they have bypassed a certain age threshold.
 
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
