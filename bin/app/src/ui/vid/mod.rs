@@ -250,7 +250,7 @@ impl Video {
                     vec![
                         DrawInstruction::SetPipeline(GraphicPipeline::YUV),
                         DrawInstruction::Move(rect.pos()),
-                        DrawInstruction::Animation(vid_data.anim.id),
+                        DrawInstruction::Animation(vid_data.anim.clone()),
                     ],
                     vec![],
                     self.z_index.get(),

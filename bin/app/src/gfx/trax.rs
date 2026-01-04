@@ -57,7 +57,7 @@ impl Trax {
         0u8.encode(&mut self.buf).unwrap();
         epoch.encode(&mut self.buf).unwrap();
         batch_id.encode(&mut self.buf).unwrap();
-        dcs.encode(&mut self.buf).unwrap();
+        //dcs.encode(&mut self.buf).unwrap();
     }
 
     pub fn put_start_batch(

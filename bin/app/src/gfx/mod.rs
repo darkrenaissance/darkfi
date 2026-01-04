@@ -472,14 +472,14 @@ impl AsyncEncodable for DrawMesh {
     }
 }
 
-#[derive(Debug, Clone, SerialEncodable)]
+#[derive(Debug, Clone)]
 pub enum DrawInstruction {
     SetScale(f32),
     Move(Point),
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(DrawMesh),
-    Animation(AnimId),
+    Animation(ManagedSeqAnimPtr),
     EnableDebug,
     SetPipeline(GraphicPipeline),
 }
@@ -506,7 +506,7 @@ impl DrawInstruction {
     }
 }
 
-#[derive(Clone, Debug, Default, SerialEncodable)]
+#[derive(Clone, Debug, Default)]
 pub struct DrawCall {
     pub instrs: Vec<DrawInstruction>,
     pub dcs: Vec<DcId>,
@@ -560,7 +560,7 @@ enum GfxDrawInstruction {
     SetPos(Point),
     ApplyView(Rectangle),
     Draw(GfxDrawMesh),
-    Animation(AnimId),
+    Animation(ManagedSeqAnimPtr),
     EnableDebug,
     SetPipeline(GraphicPipeline),
 }
@@ -721,10 +721,10 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
-                GfxDrawInstruction::Animation(anim_id) => {
-                    let anim = self.anims.get_mut(&anim_id).unwrap();
-                    anim.is_visible = true;
-                    if let Some(dc) = anim.tick() {
+                GfxDrawInstruction::Animation(anim) => {
+                    let gfx_anim = self.anims.get_mut(&anim.id).unwrap();
+                    gfx_anim.is_visible = true;
+                    if let Some(dc) = gfx_anim.tick() {
                         self.draw_call(&dc, indent + 1, is_debug);
                     }
                 }
