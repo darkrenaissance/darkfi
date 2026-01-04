@@ -287,7 +287,7 @@ zk = [
     "halo2_gadgets",
     "rand",
 
-    "darkfi-sdk",
+    "async-sdk",
     "zkas",
 ]
 
