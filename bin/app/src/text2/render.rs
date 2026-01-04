@@ -21,7 +21,7 @@ use crate::{
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
-use super::atlas::{Atlas, RenderedAtlas};
+use super::atlas::{Atlas, RenderedAtlas, RunIdx};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DebugRenderOptions(u32);
@@ -63,15 +63,40 @@ pub fn render_layout_with_opts(
     render_api: &RenderApi,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
-    let mut scale_cx = swash::scale::ScaleContext::new();
+    // First pass to create atlas
+    let mut scale_ctx = swash::scale::ScaleContext::new();
+    let mut atlas = Atlas::new(render_api, tag);
+    let mut run_idx = 0;
+    for line in layout.lines() {
+        for item in line.items() {
+            match item {
+                parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
+                    push_glyphs(&mut atlas, &glyph_run, run_idx, &mut scale_ctx, render_api, tag);
+                    run_idx += 1;
+                }
+                parley::PositionedLayoutItem::InlineBox(_) => {}
+            }
+        }
+    }
+    // Render the atlas
+    let atlas = atlas.make();
+
+    // Second pass to draw glyphs
     let mut run_idx = 0;
     let mut instrs = vec![];
     for line in layout.lines() {
         for item in line.items() {
             match item {
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    let mesh =
-                        render_glyph_run(&mut scale_cx, &glyph_run, run_idx, opts, render_api, tag);
+                    let mesh = render_glyph_run(
+                        &mut scale_ctx,
+                        &glyph_run,
+                        run_idx,
+                        opts,
+                        &atlas,
+                        render_api,
+                        tag,
+                    );
                     instrs.push(DrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
@@ -82,11 +107,38 @@ pub fn render_layout_with_opts(
     instrs
 }
 
+fn push_glyphs(
+    atlas: &mut Atlas,
+    glyph_run: &parley::GlyphRun<'_, Color>,
+    run_idx: RunIdx,
+    scale_ctx: &mut swash::scale::ScaleContext,
+    render_api: &RenderApi,
+    tag: DebugTag,
+) {
+    let run = glyph_run.run();
+    let font = run.font();
+    let font_size = run.font_size();
+    let normalized_coords = run.normalized_coords();
+    let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
+
+    let mut scaler = scale_ctx
+        .builder(font_ref)
+        .size(font_size)
+        .hint(true)
+        .normalized_coords(normalized_coords)
+        .build();
+
+    for glyph in glyph_run.glyphs() {
+        atlas.push_glyph(glyph.id as u16, run_idx, &mut scaler);
+    }
+}
+
 fn render_glyph_run(
     scale_ctx: &mut swash::scale::ScaleContext,
     glyph_run: &parley::GlyphRun<'_, Color>,
-    _run_idx: usize,
+    run_idx: usize,
     opts: DebugRenderOptions,
+    atlas: &RenderedAtlas,
     render_api: &RenderApi,
     tag: DebugTag,
 ) -> DrawMesh {
@@ -96,8 +148,6 @@ fn render_glyph_run(
     let color = style.brush;
     //trace!(target: "text::render", "render_glyph_run run_idx={run_idx} baseline={run_y}");
 
-    let atlas = create_atlas(scale_ctx, glyph_run, render_api, tag);
-
     let mut mesh = MeshBuilder::new(tag);
 
     if let Some(underline) = &style.underline {
@@ -105,7 +155,7 @@ fn render_glyph_run(
     }
 
     for glyph in glyph_run.glyphs() {
-        let glyph_inf = atlas.fetch_uv(glyph.id as u16).expect("missing glyph UV rect");
+        let glyph_inf = atlas.fetch_uv(glyph.id as u16, run_idx).expect("missing glyph UV rect");
 
         let glyph_x = run_x + glyph.x;
         let glyph_y = run_y - glyph.y;
@@ -133,7 +183,7 @@ fn render_glyph_run(
         );
     }
 
-    mesh.alloc(render_api).draw_with_textures(vec![atlas.texture])
+    mesh.alloc(render_api).draw_with_textures(vec![atlas.texture.clone()])
 }
 
 fn render_underline(
@@ -170,6 +220,7 @@ fn render_underline(
 fn create_atlas(
     scale_ctx: &mut swash::scale::ScaleContext,
     glyph_run: &parley::GlyphRun<'_, Color>,
+    run_idx: usize,
     render_api: &RenderApi,
     tag: DebugTag,
 ) -> RenderedAtlas {
@@ -179,16 +230,16 @@ fn create_atlas(
     let normalized_coords = run.normalized_coords();
     let font_ref = swash::FontRef::from_index(font.data.as_ref(), font.index as usize).unwrap();
 
-    let scaler = scale_ctx
+    let mut scaler = scale_ctx
         .builder(font_ref)
         .size(font_size)
         .hint(true)
         .normalized_coords(normalized_coords)
         .build();
 
-    let mut atlas = Atlas::new(scaler, render_api, tag);
+    let mut atlas = Atlas::new(render_api, tag);
     for glyph in glyph_run.glyphs() {
-        atlas.push_glyph(glyph.id as u16);
+        atlas.push_glyph(glyph.id as u16, run_idx, &mut scaler);
     }
     //atlas.dump(&format!("/tmp/atlas_{run_idx}.png"));
     atlas.make()

@@ -34,7 +34,8 @@ pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> Render
 }
 */
 
-//pub struct Sprite(swash::scale::image::Image);
+pub(super) type RunIdx = usize;
+type GlyphKey = (swash::GlyphId, RunIdx);
 
 /// Responsible for aggregating glyphs, and then producing a single software
 /// blitted texture usable in a single draw call.
@@ -42,14 +43,13 @@ pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> Render
 ///
 /// ```rust
 ///     let mut atlas = Atlas::new(&render_api);
-///     atlas.push(&glyphs);    // repeat as needed for shaped lines
+///     atlas.push_glyph(glyph, run_idx, &mut scaler);
 ///     let atlas = atlas.make().unwrap();
-///     let uv = atlas.fetch_uv(glyph_id).unwrap();
+///     let uv = atlas.fetch_uv(glyph_id, run_idx).unwrap();
 ///     let atlas_texture_id = atlas.texture_id;
 /// ```
 pub struct Atlas<'a> {
-    scaler: swash::scale::Scaler<'a>,
-    glyph_ids: Vec<swash::GlyphId>,
+    glyph_keys: Vec<GlyphKey>,
     sprites: Vec<swash::scale::image::Image>,
     // LHS x pos of glyph
     x_pos: Vec<usize>,
@@ -62,10 +62,9 @@ pub struct Atlas<'a> {
 }
 
 impl<'a> Atlas<'a> {
-    pub fn new(scaler: swash::scale::Scaler<'a>, render_api: &'a RenderApi, tag: DebugTag) -> Self {
+    pub fn new(render_api: &'a RenderApi, tag: DebugTag) -> Self {
         Self {
-            scaler,
-            glyph_ids: vec![],
+            glyph_keys: vec![],
             sprites: vec![],
             x_pos: vec![],
 
@@ -80,12 +79,18 @@ impl<'a> Atlas<'a> {
         }
     }
 
-    pub fn push_glyph(&mut self, glyph_id: swash::GlyphId) {
-        if self.glyph_ids.contains(&glyph_id) {
+    pub fn push_glyph(
+        &mut self,
+        glyph_id: swash::GlyphId,
+        run_idx: RunIdx,
+        scaler: &mut swash::scale::Scaler,
+    ) {
+        let glyph_key = (glyph_id, run_idx);
+        if self.glyph_keys.contains(&glyph_key) {
             return
         }
 
-        self.glyph_ids.push(glyph_id);
+        self.glyph_keys.push(glyph_key);
 
         let rendered_glyph = swash::scale::Render::new(
             // Select our source order
@@ -97,7 +102,7 @@ impl<'a> Atlas<'a> {
         )
         // Select the simple alpha (non-subpixel) format
         .format(zeno::Format::Alpha)
-        .render(&mut self.scaler, glyph_id)
+        .render(scaler, glyph_id)
         .unwrap();
 
         let glyph_width = rendered_glyph.placement.width as usize;
@@ -171,12 +176,12 @@ impl<'a> Atlas<'a> {
     /// `rendered_atlas.fetch_uv(my_glyph_id)`.
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
     pub fn make(self) -> RenderedAtlas {
-        //if self.glyph_ids.is_empty() {
+        //if self.glyph_keys.is_empty() {
         //    return Err(Error::AtlasIsEmpty)
         //}
 
-        assert_eq!(self.glyph_ids.len(), self.sprites.len());
-        assert_eq!(self.glyph_ids.len(), self.x_pos.len());
+        assert_eq!(self.glyph_keys.len(), self.sprites.len());
+        assert_eq!(self.glyph_keys.len(), self.x_pos.len());
 
         let atlas = self.render();
         let texture = self.render_api.new_texture(
@@ -188,7 +193,7 @@ impl<'a> Atlas<'a> {
         );
 
         let uv_rects = self.compute_uvs();
-        let glyph_ids = self.glyph_ids;
+        let glyph_keys = self.glyph_keys;
 
         let mut infos = Vec::with_capacity(self.sprites.len());
         for (uv_rect, sprite) in uv_rects.into_iter().zip(self.sprites.into_iter()) {
@@ -200,7 +205,7 @@ impl<'a> Atlas<'a> {
             infos.push(GlyphInfo { uv_rect, place: sprite.placement, is_color });
         }
 
-        RenderedAtlas { glyph_ids, infos, texture }
+        RenderedAtlas { glyph_keys, infos, texture }
     }
 }
 
@@ -269,7 +274,7 @@ pub struct GlyphInfo {
 /// Final result computed from `Atlas::make()`.
 #[derive(Clone)]
 pub struct RenderedAtlas {
-    glyph_ids: Vec<swash::GlyphId>,
+    glyph_keys: Vec<GlyphKey>,
     infos: Vec<GlyphInfo>,
     /// Allocated atlas texture.
     pub texture: ManagedTexturePtr,
@@ -277,12 +282,13 @@ pub struct RenderedAtlas {
 
 impl RenderedAtlas {
     /// Get UV coords for a glyph within the rendered atlas.
-    pub fn fetch_uv(&self, glyph_id: swash::GlyphId) -> Option<&GlyphInfo> {
-        let glyphs_len = self.glyph_ids.len();
+    pub fn fetch_uv(&self, glyph_id: swash::GlyphId, run_idx: RunIdx) -> Option<&GlyphInfo> {
+        let glyphs_len = self.glyph_keys.len();
         assert_eq!(glyphs_len, self.infos.len());
 
+        let glyph_key = (glyph_id, run_idx);
         for i in 0..glyphs_len {
-            if self.glyph_ids[i] == glyph_id {
+            if self.glyph_keys[i] == glyph_key {
                 return Some(&self.infos[i])
             }
         }
