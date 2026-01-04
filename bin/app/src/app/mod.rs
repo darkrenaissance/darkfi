@@ -260,37 +260,3 @@ impl App {
         });
     }
 }
-
-// Just for testing
-#[allow(dead_code)]
-fn populate_tree(tree: &sled::Tree) {
-    let chat_txt = include_str!("../../data/chat.txt");
-    for line in chat_txt.lines() {
-        let parts: Vec<&str> = line.splitn(3, ' ').collect();
-        assert_eq!(parts.len(), 3);
-        let time_parts: Vec<&str> = parts[0].splitn(2, ':').collect();
-        let (hour, min) = (time_parts[0], time_parts[1]);
-        let hour = hour.parse::<u32>().unwrap();
-        let min = min.parse::<u32>().unwrap();
-        let dt: NaiveDateTime =
-            NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
-        let timest = dt.and_utc().timestamp_millis() as u64;
-
-        let nick = parts[1].to_string();
-        let text = parts[2].to_string();
-
-        // serial order is important here
-        let timest = timest.to_be_bytes();
-        assert_eq!(timest.len(), 8);
-        let mut key = [0u8; 8 + 32];
-        key[..8].clone_from_slice(&timest);
-
-        let msg = chatview::ChatMsg { nick, text };
-        let mut val = vec![];
-        msg.encode(&mut val).unwrap();
-
-        tree.insert(&key, val).unwrap();
-    }
-    // O(n)
-    d!("populated db with {} lines", tree.len());
-}

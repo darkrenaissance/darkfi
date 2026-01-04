@@ -460,22 +460,24 @@ impl ChatView {
                 return
             }
 
+            #[cfg(feature = "enable-plugins")]
             if let Some(url) = get_file_url(&text) {
-                if let Some(fud) = self.sg_root.lookup_node("/plugin/fud") {
-                    msgbuf.insert_filemsg(
-                        timest,
-                        msg_id,
-                        FileMessageStatus::Initializing,
-                        nick,
-                        url.clone(),
-                    );
+                // This is incorrect. Scenegraph paths should not be hardcoded in widgets
+                // nor should there be dependencies on other widgets.
+                // Instead use signals and slots through app layer. See how focus is done with
+                // the edit widgets.
+                let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
+                msgbuf.insert_filemsg(
+                    timest,
+                    msg_id,
+                    FileMessageStatus::Initializing,
+                    nick,
+                    url.clone(),
+                );
 
-                    let mut data = vec![];
-                    url.encode(&mut data).unwrap();
-                    fud.call_method("get", data).await.unwrap();
-                }
-            } else {
-                error!(target: "ui::chatview", "Fud plugin has not been loaded");
+                let mut data = vec![];
+                url.encode(&mut data).unwrap();
+                fud.call_method("get", data).await.unwrap();
             }
         }
 
@@ -587,11 +589,6 @@ impl ChatView {
             }
         };
 
-        let Some(fud) = self.sg_root.lookup_node("/plugin/fud") else {
-            error!(target: "ui::chatview", "Fud plugin has not been loaded");
-            return
-        };
-
         let mut do_redraw = false;
         for entry in iter {
             let Ok((k, v)) = entry else { break };
@@ -609,7 +606,10 @@ impl ChatView {
                 chatmsg.text.clone(),
             );
 
+            // See comment in handle_insert_line()
+            #[cfg(feature = "enable-plugins")]
             if let Some(url) = get_file_url(&chatmsg.text) {
+                let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
                 msgbuf.insert_filemsg(
                     timest,
                     msg_id,
@@ -634,7 +634,6 @@ impl ChatView {
             }
             remaining_visible -= msg_height;
         }
-        //t!("do_redraw = {do_redraw} [trace_id={trace_id}]");
         if do_redraw {
             let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_bgload"));
             self.redraw_cached(atom.batch_id, &mut msgbuf).await;
@@ -710,7 +709,7 @@ impl ChatView {
 
         let meshes = msgbuf.gen_meshes(rect, scroll).await;
 
-        for (y_pos, mesh) in meshes {
+        for (y_pos, mut minstrs) in meshes {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
@@ -720,7 +719,7 @@ impl ChatView {
             let pos = Point::from([off_x, off_y]);
 
             instrs.push(DrawInstruction::SetPos(pos));
-            instrs.push(DrawInstruction::Draw(mesh));
+            instrs.append(&mut minstrs);
         }
 
         instrs

@@ -22,7 +22,7 @@ DEBUG_FEATURES = --features=enable-filelog,enable-plugins
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --features=enable-plugins
+DEV_FEATURES = --features=schema-test
 
 default: build-release
 	./darkfi-app
@@ -82,7 +82,7 @@ assets/forest_720x1280.mp4:
 # Developer targets
 
 dev: $(SRC) fonts assets/forest_1920x1080.ivf
-	$(CARGO) lbuild $(DEV_FEATURES)
+	$(CARGO) lbuild --no-default-features $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 

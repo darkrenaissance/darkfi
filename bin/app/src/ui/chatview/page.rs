@@ -35,12 +35,13 @@ use url::Url;
 
 use super::{max, MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawInstruction, DrawMesh, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{
         Color, MeshBuilder, COLOR_BLUE, COLOR_CYAN, COLOR_GREEN, COLOR_PINK, COLOR_RED, COLOR_WHITE,
     },
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
     text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
+    text2,
     util::enumerate_mut,
 };
 
@@ -379,34 +380,19 @@ impl std::fmt::Debug for PrivMessage {
 pub struct DateMessage {
     font_size: f32,
     window_scale: f32,
-
     timestamp: Timestamp,
-    glyphs: Vec<Glyph>,
-
-    atlas: text::RenderedAtlas,
-    mesh_cache: Option<DrawMesh>,
+    mesh_cache: Option<Vec<DrawInstruction>>,
 }
 
 impl DateMessage {
     pub fn new(
         font_size: f32,
         window_scale: f32,
-
         timestamp: Timestamp,
-
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
+        _render_api: &RenderApi,
     ) -> Message {
-        let datestr = Self::datestr(timestamp);
         let timestamp = Self::timest_to_midnight(timestamp);
-
-        let glyphs = text_shaper.shape(datestr, font_size, window_scale);
-
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_datemsg"));
-        atlas.push(&glyphs);
-        let atlas = atlas.make();
-
-        Message::Date(Self { font_size, window_scale, timestamp, glyphs, atlas, mesh_cache: None })
+        Message::Date(Self { font_size, window_scale, timestamp, mesh_cache: None })
     }
 
     fn datestr(timestamp: Timestamp) -> String {
@@ -423,66 +409,60 @@ impl DateMessage {
         timestamp
     }
 
-    /// clear_mesh() must be called after this.
     fn adjust_params(
         &mut self,
         font_size: f32,
         window_scale: f32,
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
+        _text_shaper: &TextShaper,
+        _render_api: &RenderApi,
     ) {
         self.font_size = font_size;
         self.window_scale = window_scale;
-
-        let datestr = Self::datestr(self.timestamp);
-        self.glyphs = text_shaper.shape(datestr, font_size, window_scale);
-
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_datemsg"));
-        atlas.push(&self.glyphs);
-        self.atlas = atlas.make();
-    }
-
-    //fn adjust_width(&mut self, line_width: f32) { }
-
-    fn clear_mesh(&mut self) {
-        // Auto-deletes when refs are dropped
         self.mesh_cache = None;
     }
 
-    fn gen_mesh(
+    fn clear_mesh(&mut self) {
+        self.mesh_cache = None;
+    }
+
+    async fn gen_mesh(
         &mut self,
-        clip: &Rectangle,
+        _clip: &Rectangle,
         line_height: f32,
-        baseline: f32,
+        _baseline: f32,
         _nick_colors: &[Color],
         timestamp_color: Color,
         _text_color: Color,
-        debug_render: bool,
+        _debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
-        let mut mesh = MeshBuilder::new(gfxtag!("chatview_datemsg"));
-
-        let glyph_pos_iter =
-            GlyphPositionIter::new(self.font_size, self.window_scale, &self.glyphs, baseline);
-        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(self.glyphs.iter()) {
-            let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-            glyph_rect.y -= line_height;
-            mesh.draw_box(&glyph_rect, timestamp_color, uv_rect);
+    ) -> Vec<DrawInstruction> {
+        // Return cached mesh if available
+        if let Some(cache) = &self.mesh_cache {
+            return cache.clone()
         }
 
-        if debug_render {
-            mesh.draw_outline(
-                &Rectangle { x: 0., y: -line_height, w: clip.w, h: line_height },
-                COLOR_PINK,
-                1.,
-            );
-        }
+        let datestr = Self::datestr(self.timestamp);
 
-        let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
-        self.mesh_cache = Some(mesh.clone());
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let layout = txt_ctx.make_layout(
+            &datestr,
+            timestamp_color,
+            self.font_size,
+            line_height / self.font_size,
+            self.window_scale,
+            None,
+            &[],
+        );
+        drop(txt_ctx);
 
-        mesh
+        let mut txt_instrs = text2::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
+        let mut instrs = Vec::with_capacity(1 + txt_instrs.len());
+        instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
+        instrs.append(&mut txt_instrs);
+
+        // Cache the instructions
+        self.mesh_cache = Some(instrs.clone());
+        instrs
     }
 }
 
@@ -854,7 +834,7 @@ impl Message {
         }
     }
 
-    fn gen_mesh(
+    async fn gen_mesh(
         &mut self,
         clip: &Rectangle,
         line_height: f32,
@@ -867,44 +847,51 @@ impl Message {
         hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> Vec<DrawMesh> {
+    ) -> Vec<DrawInstruction> {
         match self {
-            Self::Priv(m) => vec![m.gen_mesh(
-                clip,
-                line_height,
-                msg_spacing,
-                baseline,
-                timestamp_width,
-                nick_colors,
-                timestamp_color,
-                text_color,
-                hi_bg_color,
-                debug_render,
-                render_api,
-            )],
-            Self::Date(m) => vec![m.gen_mesh(
-                clip,
-                line_height,
-                baseline,
-                // No timestamp_width
-                nick_colors,
-                timestamp_color,
-                text_color,
-                // No hi_bg_color since dates can't be highlighted
-                debug_render,
-                render_api,
-            )],
-            Self::File(m) => m.gen_mesh(
-                clip,
-                line_height,
-                baseline,
-                timestamp_width,
-                nick_colors,
-                timestamp_color,
-                text_color,
-                debug_render,
-                render_api,
-            ),
+            Self::Priv(m) => {
+                let mesh = m.gen_mesh(
+                    clip,
+                    line_height,
+                    msg_spacing,
+                    baseline,
+                    timestamp_width,
+                    nick_colors,
+                    timestamp_color,
+                    text_color,
+                    hi_bg_color,
+                    debug_render,
+                    render_api,
+                );
+                vec![DrawInstruction::Draw(mesh)]
+            }
+            Self::Date(m) => {
+                m.gen_mesh(
+                    clip,
+                    line_height,
+                    baseline,
+                    nick_colors,
+                    timestamp_color,
+                    text_color,
+                    debug_render,
+                    render_api,
+                )
+                .await
+            }
+            Self::File(m) => {
+                let meshes = m.gen_mesh(
+                    clip,
+                    line_height,
+                    baseline,
+                    timestamp_width,
+                    nick_colors,
+                    timestamp_color,
+                    text_color,
+                    debug_render,
+                    render_api,
+                );
+                meshes.into_iter().map(DrawInstruction::Draw).collect()
+            }
         }
     }
 
@@ -1221,8 +1208,12 @@ impl MessageBuffer {
         msg_height
     }
 
-    /// Generate caches and return meshes
-    pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, DrawMesh)> {
+    /// Generate caches and return draw instructions
+    pub async fn gen_meshes(
+        &mut self,
+        rect: &Rectangle,
+        scroll: f32,
+    ) -> Vec<(f32, Vec<DrawInstruction>)> {
         let line_height = self.line_height.get();
         let msg_spacing = self.msg_spacing.get();
         let baseline = self.baseline.get();
@@ -1255,27 +1246,27 @@ impl MessageBuffer {
                 continue
             }
 
-            for mesh in msg.gen_mesh(
-                rect,
-                line_height,
-                msg_spacing,
-                baseline,
-                timestamp_width,
-                &nick_colors,
-                timest_color,
-                text_color,
-                hi_bg_color,
-                debug_render,
-                &render_api,
-            ) {
-                meshes.push((current_pos, mesh));
-            }
+            let instrs = msg
+                .gen_mesh(
+                    rect,
+                    line_height,
+                    msg_spacing,
+                    baseline,
+                    timestamp_width,
+                    &nick_colors,
+                    timest_color,
+                    text_color,
+                    hi_bg_color,
+                    debug_render,
+                    &render_api,
+                )
+                .await;
+
+            meshes.push((current_pos, instrs));
 
             current_pos += msg_spacing;
             current_pos += mesh_height;
         }
-
-        //t!("gen_meshes() returning {} meshes", meshes.len());
         meshes
     }
 
@@ -1364,13 +1355,7 @@ impl MessageBuffer {
         let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
 
         if !self.date_msgs.contains_key(&date) {
-            let datemsg = DateMessage::new(
-                font_size,
-                window_scale,
-                timest,
-                &self.text_shaper,
-                &self.render_api,
-            );
+            let datemsg = DateMessage::new(font_size, window_scale, timest, &self.render_api);
             self.date_msgs.insert(date, datemsg);
         }
 

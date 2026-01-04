@@ -16,33 +16,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use sled_overlay::sled;
+
 use crate::{
     app::{
         node::{
-            create_layer, create_singleline_edit, create_text, create_vector_art, create_video,
+            create_chatview, create_layer, create_singleline_edit, create_text, create_vector_art,
+            create_video,
         },
         App,
     },
-    expr,
+    expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{BaseEdit, BaseEditType, Layer, Text, VectorArt, VectorShape, Video},
+    ui::{BaseEdit, BaseEditType, ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
+use super::chat::populate_tree;
 
 const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    //pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
     //pub const KING_PATH: &str = "king.png";
     pub const VID_PATH: &str = "forest_720x1280.mp4";
 }
 
 #[cfg(not(target_os = "android"))]
 mod ui_consts {
-    //pub const CHATDB_PATH: &str = "chatdb";
+    pub const CHATDB_PATH: &str = "chatdb";
     //pub const KING_PATH: &str = "assets/king.png";
     pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
 }
@@ -60,6 +64,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         0,
     )
     .unwrap();
+
+    let mut cc = Compiler::new();
 
     // Create a layer called view
     let layer_node = create_layer("view");
@@ -226,6 +232,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     */
 
     // Create KING GNU!
+    /*
     let node = create_video("king");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 80.).unwrap();
@@ -236,6 +243,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.link(node);
+    */
 
     // Create some text
     let node = create_text("label");
@@ -261,13 +269,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let node = node
         .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
         .await;
     layer_node.link(node);
 
-    /*
     // ChatView
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
@@ -318,7 +326,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         1.00, 0.30, 0.00, 1.
     ];
     for c in nick_colors {
-        prop.push_f32(Role::App, c).unwrap();
+        prop.push_f32(atom, Role::App, c).unwrap();
     }
 
     let prop = node.get_property("hi_bg_color").unwrap();
@@ -348,13 +356,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 window_scale.clone(),
                 app.render_api.clone(),
                 app.text_shaper.clone(),
-                app.ex.clone(),
+                app.sg_root.clone(),
             )
         })
         .await;
     layer_node.link(node);
-    */
 
+    /*
     // Text edit
     let node = create_singleline_edit("editz");
     //let node = create_multiline_edit("editz");
@@ -449,4 +457,5 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.call_method("focus", vec![]).await.unwrap();
     });
     app.tasks.lock().unwrap().push(focus_task);
+    */
 }

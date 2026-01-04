@@ -78,6 +78,7 @@ pub fn render_layout_with_opts(
             }
         }
     }
+
     // Render the atlas
     let atlas = atlas.make();
 

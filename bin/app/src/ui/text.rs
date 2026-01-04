@@ -24,6 +24,7 @@ use tracing::instrument;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi},
+    mesh::MeshBuilder,
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyStr, PropertyUint32, Role,
@@ -157,6 +158,14 @@ impl Text {
 
         let mut instrs = vec![DrawInstruction::Move(rect.pos())];
         instrs.append(&mut self.regen_mesh().await);
+
+        if self.debug.get() {
+            let rect = self.rect.get().with_zero_pos();
+            let mut mesh = MeshBuilder::new(gfxtag!("text_debug-rect"));
+            mesh.draw_outline(&rect, [0., 1., 0., 0.7], 1.);
+            let mesh = mesh.alloc(&self.render_api).draw_untextured();
+            instrs.push(DrawInstruction::Draw(mesh));
+        }
 
         Some(DrawUpdate {
             key: self.dc_key,

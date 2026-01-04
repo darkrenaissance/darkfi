@@ -115,7 +115,7 @@ pub fn setup_logging() -> Option<WorkerGuard> {
     #[cfg(not(target_os = "android"))]
     {
         let terminal_layer = tracing_subscriber::fmt::Layer::new()
-            .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
+            //.with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
             .event_format(EventFormatter::new(true, true))
             .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
                 darkfi::util::logger::terminal_field_formatter,
