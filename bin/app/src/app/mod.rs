@@ -141,7 +141,14 @@ impl App {
         self.sg_root.link(window.clone());
         self.sg_root.link(setting_root.clone());
 
+        #[cfg(feature = "schema-app")]
         schema::make(&self, window.clone(), &i18n_fish).await;
+
+        #[cfg(feature = "schema-test")]
+        schema::test::make(&self, window.clone(), &i18n_fish).await;
+
+        #[cfg(all(feature = "schema-app", feature = "schema-test"))]
+        compile_error!("Only one schema can be selected");
 
         //settings::make(&self, window, self.ex.clone()).await;
 

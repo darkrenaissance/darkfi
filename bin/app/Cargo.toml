@@ -71,11 +71,17 @@ indoc = "2.0.7"
 opt-level = 3
 
 [features]
+default = ["enable-plugins", "schema-app"]
 emulate-android = []
 enable-plugins = []
 enable-filelog = []
 # Network debugging. Should be disabled in release.
 enable-netdebug = []
+
+# Main app schema layout
+schema-app = []
+# Dev schema for testing
+schema-test = []
 
 [patch.crates-io]
 # We can remove these patches. But unfortunately harfbuzz-sys is still linking
