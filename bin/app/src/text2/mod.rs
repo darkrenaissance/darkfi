@@ -106,6 +106,29 @@ impl TextContext {
         width: Option<f32>,
         underlines: &[Range<usize>],
     ) -> parley::Layout<Color> {
+        self.make_layout2(
+            text,
+            text_color,
+            font_size,
+            lineheight,
+            window_scale,
+            width,
+            underlines,
+            &[],
+        )
+    }
+
+    pub fn make_layout2(
+        &mut self,
+        text: &str,
+        text_color: Color,
+        font_size: f32,
+        lineheight: f32,
+        window_scale: f32,
+        width: Option<f32>,
+        underlines: &[Range<usize>],
+        foreground_colors: &[(Range<usize>, Color)],
+    ) -> parley::Layout<Color> {
         let mut builder =
             self.layout_ctx.ranged_builder(&mut self.font_ctx, &text, window_scale, false);
         builder.push_default(parley::LineHeight::FontSizeRelative(lineheight));
@@ -118,6 +141,10 @@ impl TextContext {
 
         for underline in underlines {
             builder.push(parley::StyleProperty::Underline(true), underline.clone());
+        }
+
+        for (range, color) in foreground_colors {
+            builder.push(parley::StyleProperty::Brush(*color), range.clone());
         }
 
         let mut layout: parley::Layout<Color> = builder.build(&text);

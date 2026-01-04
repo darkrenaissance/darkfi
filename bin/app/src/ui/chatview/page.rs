@@ -70,12 +70,7 @@ pub struct PrivMessage {
 
     is_selected: bool,
 
-    time_glyphs: Vec<Glyph>,
-    unwrapped_glyphs: Vec<Glyph>,
-    wrapped_lines: Vec<Vec<Glyph>>,
-
-    atlas: text::RenderedAtlas,
-    mesh_cache: Option<DrawMesh>,
+    mesh_cache: Option<Vec<DrawInstruction>>,
 }
 
 impl PrivMessage {
@@ -89,27 +84,17 @@ impl PrivMessage {
         nick: String,
         text: String,
 
-        line_width: f32,
-        timestamp_width: f32,
+        _line_width: f32,
+        _timestamp_width: f32,
 
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
+        _text_shaper: &TextShaper,
+        _render_api: &RenderApi,
     ) -> Message {
-        let timestr = Self::gen_timestr(timestamp);
-        let time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
-
-        let linetext = if nick == "NOTICE" { text.clone() } else { format!("{nick} {text}") };
         if nick == "NOTICE" {
             font_size *= 0.8;
         }
-        let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_privmsg"));
-        atlas.push(&time_glyphs);
-        atlas.push(&unwrapped_glyphs);
-        let atlas = atlas.make();
-
-        let mut self_ = Self {
+        Message::Priv(Self {
             font_size,
             timestamp_font_size,
             window_scale,
@@ -119,14 +104,8 @@ impl PrivMessage {
             text,
             confirmed: true,
             is_selected: false,
-            time_glyphs,
-            unwrapped_glyphs,
-            wrapped_lines: vec![],
-            atlas,
             mesh_cache: None,
-        };
-        self_.adjust_width(line_width, timestamp_width);
-        Message::Priv(self_)
+        })
     }
 
     fn gen_timestr(timestamp: Timestamp) -> String {
@@ -136,226 +115,125 @@ impl PrivMessage {
     }
 
     fn height(&self, line_height: f32) -> f32 {
-        self.wrapped_lines.len() as f32 * line_height
+        // TODO: calculate based on actual layout height
+        // For now, assume a single line
+        line_height
     }
 
-    fn gen_mesh(
+    async fn gen_mesh(
         &mut self,
         clip: &Rectangle,
         line_height: f32,
         msg_spacing: f32,
-        baseline: f32,
+        _baseline: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
         hi_bg_color: Color,
-        debug_render: bool,
+        _debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
-        if let Some(mesh) = &self.mesh_cache {
-            return mesh.clone()
+    ) -> Vec<DrawInstruction> {
+        if let Some(instrs) = &self.mesh_cache {
+            return instrs.clone()
         }
 
-        //t!("gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
-        let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg"));
+        let mut all_instrs = vec![DrawInstruction::Move(Point::new(0., -line_height))];
 
+        // Draw selection background if selected
         if self.is_selected {
             let height = self.height(line_height) + msg_spacing;
+            let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg_sel"));
             mesh.draw_filled_box(
                 &Rectangle { x: 0., y: -height, w: clip.w, h: height },
                 hi_bg_color,
             );
+            all_instrs
+                .push(DrawInstruction::Draw(mesh.alloc(render_api).draw_with_textures(vec![])));
         }
 
-        self.render_timestamp(&mut mesh, baseline, line_height, timestamp_color);
-        let off_x = timestamp_width;
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
 
-        let nick_color = select_nick_color(&self.nick, nick_colors);
-
-        let last_idx = self.wrapped_lines.len() - 1;
-        for (i, line) in self.wrapped_lines.iter().rev().enumerate() {
-            let off_y = (i + 1) as f32 * line_height;
-            let is_last_line = i == last_idx;
-
-            // debug draw baseline
-            if debug_render {
-                let y = baseline - off_y;
-                mesh.draw_filled_box(&Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. }, COLOR_BLUE);
-            }
-
-            self.render_line(
-                &mut mesh,
-                line,
-                off_x,
-                off_y,
-                is_last_line,
-                baseline,
-                nick_color,
-                text_color,
-                debug_render,
-            );
-        }
-
-        if debug_render {
-            let height = self.height(line_height);
-            mesh.draw_outline(
-                &Rectangle { x: 0., y: -height, w: clip.w, h: height },
-                COLOR_PINK,
-                1.,
-            );
-        }
-
-        let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
-        self.mesh_cache = Some(mesh.clone());
-
-        mesh
-    }
-
-    fn render_timestamp(
-        &self,
-        mesh: &mut MeshBuilder,
-        baseline: f32,
-        line_height: f32,
-        timestamp_color: Color,
-    ) {
-        let off_y = self.wrapped_lines.len() as f32 * line_height;
-
-        let glyph_pos_iter = GlyphPositionIter::new(
-            self.timestamp_font_size,
-            self.window_scale,
-            &self.time_glyphs,
-            baseline,
-        );
-        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(self.time_glyphs.iter()) {
-            let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-            glyph_rect.y -= off_y;
-
-            mesh.draw_box(&glyph_rect, timestamp_color, uv_rect);
-        }
-    }
-
-    fn render_line(
-        &self,
-        mesh: &mut MeshBuilder,
-        line: &Vec<Glyph>,
-        off_x: f32,
-        off_y: f32,
-        is_last: bool,
-        baseline: f32,
-        nick_color: Color,
-        mut text_color: Color,
-        _debug_render: bool,
-    ) {
-        //debug!(target: "ui::chatview", "render_line({})", glyph_str(line));
-        // Keep track of the 'section'
-        // Section 0   is the nickname (colorized)
-        // Section >=1 is just the message itself
-        let mut section = 1;
-        if is_last && self.nick != "NOTICE" {
-            section = 0;
-        }
-
-        if self.nick == "NOTICE" {
-            text_color[0] = 0.35;
-            text_color[1] = 0.81;
-            text_color[2] = 0.89;
-        }
-
-        let glyph_pos_iter =
-            GlyphPositionIter::new(self.font_size, self.window_scale, line, baseline);
-        let Some(last_rect) = glyph_pos_iter.last() else { return };
-        let rhs = last_rect.rhs();
-        if self.nick == "NOTICE" {
-            mesh.draw_box(
-                &Rectangle::new(off_x, -off_y, rhs, baseline),
-                [0., 0.14, 0.16, 1.],
-                &Rectangle::zero(),
-            );
-        }
-
-        let glyph_pos_iter =
-            GlyphPositionIter::new(self.font_size, self.window_scale, line, baseline);
-        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
-            let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-
-            glyph_rect.x += off_x;
-            glyph_rect.y -= off_y;
-
-            let mut color = match section {
-                0 => nick_color,
-                _ => {
-                    if self.confirmed {
-                        text_color
-                    } else {
-                        UNCONF_COLOR
-                    }
-                }
-            };
-
-            //if debug_render {
-            //    mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            //}
-
-            if glyph.sprite.has_color {
-                color = COLOR_WHITE;
-            }
-
-            mesh.draw_box(&glyph_rect, color, uv_rect);
-
-            if is_last && section < 1 && is_whitespace(&glyph.substr) {
-                section += 1;
-            }
-        }
-    }
-
-    /// clear_mesh() must be called after this.
-    fn adjust_params(
-        &mut self,
-        mut font_size: f32,
-        timestamp_font_size: f32,
-        window_scale: f32,
-        line_width: f32,
-        timestamp_width: f32,
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
-    ) {
-        if self.nick == "NOTICE" {
-            font_size *= 0.8;
-        }
-        self.font_size = font_size;
-        self.timestamp_font_size = timestamp_font_size;
-        self.window_scale = window_scale;
-
+        // Timestamp layout
         let timestr = Self::gen_timestr(self.timestamp);
-        self.time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
+        let timestamp_layout = txt_ctx.make_layout(
+            &timestr,
+            timestamp_color,
+            self.timestamp_font_size,
+            line_height / self.timestamp_font_size,
+            self.window_scale,
+            None,
+            &[],
+        );
 
+        // Message text layout
         let linetext = if self.nick == "NOTICE" {
             self.text.clone()
         } else {
             format!("{} {}", self.nick, self.text)
         };
-        self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_privmsg"));
-        atlas.push(&self.time_glyphs);
-        atlas.push(&self.unwrapped_glyphs);
-        self.atlas = atlas.make();
+        let nick_color = select_nick_color(&self.nick, nick_colors);
 
-        // We need to rewrap the glyphs since they've been reloaded
-        self.adjust_width(line_width, timestamp_width);
+        let text_layout = if self.nick == "NOTICE" {
+            txt_ctx.make_layout(
+                &linetext,
+                text_color,
+                self.font_size,
+                line_height / self.font_size,
+                self.window_scale,
+                Some(clip.w - timestamp_width),
+                &[],
+            )
+        } else {
+            let body_color = if self.confirmed { text_color } else { UNCONF_COLOR };
+            let nick_end = self.nick.len() + 1;
+            txt_ctx.make_layout2(
+                &linetext,
+                body_color,
+                self.font_size,
+                line_height / self.font_size,
+                self.window_scale,
+                Some(clip.w - timestamp_width),
+                &[],
+                &[(0..nick_end, nick_color)],
+            )
+        };
+
+        // Render timestamp
+        let timestamp_instrs =
+            text2::render_layout(&timestamp_layout, render_api, gfxtag!("chatview_privmsg_ts"));
+        all_instrs.extend(timestamp_instrs);
+
+        // Render message text offset by timestamp_width
+        all_instrs.push(DrawInstruction::Move(Point::new(timestamp_width, 0.)));
+        let text_instrs =
+            text2::render_layout(&text_layout, render_api, gfxtag!("chatview_privmsg_text"));
+        all_instrs.extend(text_instrs);
+
+        self.mesh_cache = Some(all_instrs.clone());
+        all_instrs
     }
 
-    /// clear_mesh() must be called after this.
-    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
-        let width = line_width - timestamp_width;
-        // clamp to > 0
-        let width = max(width, 0.);
+    fn adjust_params(
+        &mut self,
+        font_size: f32,
+        timestamp_font_size: f32,
+        window_scale: f32,
+        _line_width: f32,
+        _timestamp_width: f32,
+        _text_shaper: &TextShaper,
+        _render_api: &RenderApi,
+    ) {
+        let font_size = if self.nick == "NOTICE" { font_size * 0.8 } else { font_size };
+        self.font_size = font_size;
+        self.timestamp_font_size = timestamp_font_size;
+        self.window_scale = window_scale;
+    }
 
-        // Invalidate wrapped_glyphs and recalc
-        self.wrapped_lines =
-            text::wrap(width, self.font_size, self.window_scale, &self.unwrapped_glyphs);
+    fn adjust_width(&mut self, _line_width: f32, _timestamp_width: f32) {
+        // Width changes affect wrapping, so clear the mesh cache
+        self.mesh_cache = None;
     }
 
     fn clear_mesh(&mut self) {
@@ -850,7 +728,7 @@ impl Message {
     ) -> Vec<DrawInstruction> {
         match self {
             Self::Priv(m) => {
-                let mesh = m.gen_mesh(
+                m.gen_mesh(
                     clip,
                     line_height,
                     msg_spacing,
@@ -862,8 +740,8 @@ impl Message {
                     hi_bg_color,
                     debug_render,
                     render_api,
-                );
-                vec![DrawInstruction::Draw(mesh)]
+                )
+                .await
             }
             Self::Date(m) => {
                 m.gen_mesh(
