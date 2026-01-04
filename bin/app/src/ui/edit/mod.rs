@@ -1328,8 +1328,11 @@ impl BaseEdit {
             return
         }
 
+        // Not sure what to do if only compose changes lol
+        // For now just ignore it.
+
         // Text changed - finish any active selection
-        if is_text_changed || is_compose_changed {
+        if is_text_changed {
             self.eval_rect().await;
             self.behave.apply_cursor_scroll().await;
 
