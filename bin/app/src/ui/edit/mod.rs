@@ -37,7 +37,7 @@ use std::{
 use tracing::instrument;
 
 #[cfg(target_os = "android")]
-use crate::AndroidSuggestEvent;
+use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
     mesh::MeshBuilder,
@@ -857,7 +857,7 @@ impl BaseEdit {
         }
         true
     }
-    async fn handle_touch_end(&self, atom: &mut PropertyAtomicGuard, mut touch_pos: Point) -> bool {
+    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_end({touch_pos:?})");
         self.abs_to_local(&mut touch_pos);
 
@@ -865,6 +865,7 @@ impl BaseEdit {
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
+                let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
                 self.touch_set_cursor_pos(atom, touch_pos).await;
                 self.redraw(atom).await;
             }
@@ -980,7 +981,7 @@ impl BaseEdit {
 
             editor.selected_text()
         };
-        //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?}) to ({sel_start}, {sel_end})");
+        //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?})");
 
         // Android editor impl detail: selection disappears when anchor == index
         // But we disallow this so it should never happen. Just making a note of it here.
@@ -1047,6 +1048,7 @@ impl BaseEdit {
     }
 
     async fn redraw_select(&self, batch_id: BatchGuardId) {
+        //t!("redraw_select");
         let sel_instrs = self.regen_select_mesh().await;
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
         let draw_calls = vec![
@@ -1271,7 +1273,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let editor = self_.lock_editor().await;
+        let mut editor = self_.lock_editor().await;
         editor.focus();
         true
     }
@@ -1290,59 +1292,59 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let editor = self_.lock_editor().await;
+        let mut editor = self_.lock_editor().await;
         editor.unfocus();
         true
     }
 
     #[cfg(target_os = "android")]
-    async fn handle_android_event(&self, ev: AndroidSuggestEvent) {
+    async fn handle_android_event(&self, state: AndroidTextInputState) {
         if !self.is_active.get() {
             return
         }
-        t!("handle_android_event({ev:?})");
 
+        t!("handle_android_event({state:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
-        match ev {
-            AndroidSuggestEvent::Init => {
-                let mut editor = self.lock_editor().await;
-                editor.init();
-                // For debugging select, enable these and set a selection in the editor.
-                //self.is_phone_select.store(true, Ordering::Relaxed);
-                //self.hide_cursor.store(true, Ordering::Relaxed);
 
-                // Debug code if we set text in editor.init()
-                //editor.on_buffer_changed(&mut PropertyAtomicGuard::none()).await;
-                return
-            }
-            AndroidSuggestEvent::CreateInputConnect => {
-                let mut editor = self.lock_editor().await;
-                editor.setup();
-            }
-            // Destructive text edits
-            AndroidSuggestEvent::ComposeRegion { .. } |
-            AndroidSuggestEvent::Compose { .. } |
-            AndroidSuggestEvent::DeleteSurroundingText { .. } => {
-                // Any editing will collapse selections
-                self.finish_select(atom);
+        let mut editor = self.lock_editor().await;
+        // Diff old and new state so we know what changed
+        let is_text_changed = editor.state.text != state.text;
+        let is_select_changed = editor.state.select != state.select;
+        let is_compose_changed = editor.state.compose != state.compose;
+        editor.state = state;
+        editor.on_buffer_changed(atom).await;
+        drop(editor);
 
-                let mut editor = self.lock_editor().await;
-                editor.on_buffer_changed(atom).await;
-                drop(editor);
-
-                self.eval_rect().await;
-                self.behave.apply_cursor_scroll().await;
-            }
-            AndroidSuggestEvent::FinishCompose => {
-                let mut editor = self.lock_editor().await;
-                editor.on_buffer_changed(atom).await;
-            }
+        // Nothing changed. Just return.
+        if !is_text_changed && !is_select_changed && !is_compose_changed {
+            //t!("Skipping update since nothing changed");
+            return
         }
 
+        //t!("is_text_changed={is_text_changed}, is_select_changed={is_select_changed}, is_compose_changed={is_compose_changed}");
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready
-        if self.parent_rect.lock().is_some() {
+        if self.parent_rect.lock().is_none() {
+            return
+        }
+
+        // Not sure what to do if only compose changes lol
+        // For now just ignore it.
+
+        // Text changed - finish any active selection
+        if is_text_changed {
+            self.eval_rect().await;
+            self.behave.apply_cursor_scroll().await;
+
+            self.pause_blinking();
+            //assert!(state.text != self.text.get());
+            self.finish_select(atom);
             self.redraw(atom).await;
+        } else if is_select_changed {
+            // Redrawing the entire text just for select changes is expensive
+            self.redraw_cursor(atom.batch_id).await;
+            //t!("handle_android_event calling redraw_select");
+            self.redraw_select(atom.batch_id).await;
         }
     }
 }
@@ -1364,13 +1366,18 @@ impl UIObject for BaseEdit {
     fn init(&self) {
         let mut guard = self.editor.lock_blocking();
         assert!(guard.is_none());
-        *guard = Some(Editor::new(
+        let editor = Editor::new(
             self.text.clone(),
             self.font_size.clone(),
             self.text_color.clone(),
             self.window_scale.clone(),
             self.lineheight.clone(),
-        ));
+        );
+        // For Android you can do this:
+        //let atom = &mut PropertyAtomicGuard::none();
+        //self.text.set(atom, "the quick brown fox jumped over the");
+        //smol::block_on(editor.on_text_prop_changed());
+        *guard = Some(editor);
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
@@ -1762,12 +1769,10 @@ impl UIObject for BaseEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch"));
-
         match phase {
             TouchPhase::Started => self.handle_touch_start(touch_pos).await,
             TouchPhase::Moved => self.handle_touch_move(touch_pos).await,
-            TouchPhase::Ended => self.handle_touch_end(atom, touch_pos).await,
+            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
             TouchPhase::Cancelled => false,
         }
     }

@@ -17,41 +17,23 @@
  */
 
 use crate::{
-    android,
+    android::{
+        self,
+        textinput::{AndroidTextInput, AndroidTextInputState},
+    },
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text2::{TextContext, TEXT_CTX},
-    AndroidSuggestEvent,
 };
-use std::{
-    cmp::{max, min},
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::cmp::{max, min};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 
-// You must be careful working with string indexes in Java. They are UTF16 string indexs, not UTF8
-fn char16_to_byte_index(s: &str, char_idx: usize) -> Option<usize> {
-    let utf16_data: Vec<_> = s.encode_utf16().take(char_idx).collect();
-    let prestr = String::from_utf16(&utf16_data).ok()?;
-    Some(prestr.len())
-}
-fn byte_to_char16_index(s: &str, byte_idx: usize) -> Option<usize> {
-    if byte_idx > s.len() || !s.is_char_boundary(byte_idx) {
-        return None
-    }
-    Some(s[..byte_idx].encode_utf16().count())
-}
-
 pub struct Editor {
-    pub composer_id: usize,
-    pub recvr: async_channel::Receiver<AndroidSuggestEvent>,
-    is_init: bool,
-    is_setup: bool,
-    /// We cannot receive focus until `AndroidSuggestEvent::Init` has finished.
-    /// We use this flag to delay calling `android::focus()` until the init has completed.
-    is_focus_req: AtomicBool,
+    input: AndroidTextInput,
+    pub state: AndroidTextInputState,
+    pub recvr: async_channel::Receiver<AndroidTextInputState>,
 
     layout: parley::Layout<Color>,
     width: Option<f32>,
@@ -72,15 +54,11 @@ impl Editor {
         lineheight: PropertyFloat32,
     ) -> Self {
         let (sender, recvr) = async_channel::unbounded();
-        let composer_id = android::create_composer(sender);
-        t!("Created composer [{composer_id}]");
-
+        let input = AndroidTextInput::new(sender);
         Self {
-            composer_id,
+            input,
+            state: Default::default(),
             recvr,
-            is_init: false,
-            is_setup: false,
-            is_focus_req: AtomicBool::new(false),
 
             layout: Default::default(),
             width: None,
@@ -93,65 +71,33 @@ impl Editor {
         }
     }
 
-    /// Called on `AndroidSuggestEvent::Init` after the View has been added to the main hierarchy
-    /// and is ready to receive commands such as focus.
-    pub fn init(&mut self) {
-        self.is_init = true;
-
-        // Perform any focus requests.
-        let is_focus_req = self.is_focus_req.swap(false, Ordering::SeqCst);
-        if is_focus_req {
-            android::focus(self.composer_id).unwrap();
-        }
-
-        //android::focus(self.composer_id).unwrap();
-        //let atxt = "A berry is small juicy 😊 pulpy and edible.";
-        //let atxt = "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.";
-        //let atxt = "small berry terry";
-        //android::set_text(self.composer_id, atxt);
-        //self.set_selection(2, 7);
-        // Call this after:
-        //self.on_buffer_changed(&mut PropertyAtomicGuard::none()).await;
-    }
-    /// Called on `AndroidSuggestEvent::CreateInputConnect`, which only happens after the View
-    /// is focused for the first time.
-    pub fn setup(&mut self) {
-        assert!(self.is_init);
-        self.is_setup = true;
-
-        assert!(self.composer_id != usize::MAX);
-        t!("Initialized composer [{}]", self.composer_id);
-    }
-
     pub async fn on_text_prop_changed(&mut self) {
-        // Get modified text property
-        let txt = self.text.get();
-        // Update Android text buffer
-        android::set_text(self.composer_id, &txt);
-        assert_eq!(android::get_editable(self.composer_id).unwrap().buffer, txt);
+        // Update GameTextInput state
+        self.state.text = self.text.get();
+        self.state.select = (0, 0);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
         // Refresh our layout
         self.refresh().await;
     }
     pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
-        // Refresh the layout using the Android buffer
-        self.refresh().await;
-
-        // Update the text attribute
-        let edit = android::get_editable(self.composer_id).unwrap();
-        self.text.set(atom, &edit.buffer);
-    }
-
-    /// Can only be called after AndroidSuggestEvent::Init.
-    pub fn focus(&self) {
-        // We're not yet ready to receive focus
-        if !self.is_init {
-            self.is_focus_req.store(true, Ordering::SeqCst);
+        // Only refresh layout if text content actually changed
+        // Avoid triggering expensive recomputes of layout and property tree.
+        let old_text = self.text.get();
+        if old_text == self.state.text {
             return
         }
-        android::focus(self.composer_id).unwrap();
+
+        self.refresh().await;
+        // Update the text attribute
+        self.text.set(atom, &self.state.text);
     }
-    pub fn unfocus(&self) {
-        android::unfocus(self.composer_id).unwrap();
+
+    pub fn focus(&mut self) {
+        self.input.show();
+    }
+    pub fn unfocus(&mut self) {
+        self.input.hide();
     }
 
     pub async fn refresh(&mut self) {
@@ -160,20 +106,14 @@ impl Editor {
         let window_scale = self.window_scale.get();
         let lineheight = self.lineheight.get();
 
-        let edit = android::get_editable(self.composer_id).unwrap();
-
         let mut underlines = vec![];
-        if let Some(compose_start) = edit.compose_start {
-            let compose_end = edit.compose_end.unwrap();
-
-            let compose_start = char16_to_byte_index(&edit.buffer, compose_start).unwrap();
-            let compose_end = char16_to_byte_index(&edit.buffer, compose_end).unwrap();
+        if let Some((compose_start, compose_end)) = self.state.compose {
             underlines.push(compose_start..compose_end);
         }
 
         let mut txt_ctx = TEXT_CTX.get().await;
         self.layout = txt_ctx.make_layout(
-            &edit.buffer,
+            &self.state.text,
             text_color,
             font_size,
             lineheight,
@@ -187,14 +127,15 @@ impl Editor {
         &self.layout
     }
 
-    pub fn move_to_pos(&self, pos: Point) {
+    pub fn move_to_pos(&mut self, pos: Point) {
         let cursor = parley::Cursor::from_point(&self.layout, pos.x, pos.y);
-
-        let edit = android::get_editable(self.composer_id).unwrap();
         let cursor_idx = cursor.index();
-        let pos = byte_to_char16_index(&edit.buffer, cursor_idx).unwrap();
-        t!("  {cursor_idx} => {pos}");
-        android::set_selection(self.composer_id, pos, pos);
+        t!("  move_to_pos: {cursor_idx}");
+        assert!(cursor_idx <= self.state.text.len());
+        assert_eq!(self.state.text, self.text.get());
+        self.state.select = (cursor_idx, cursor_idx);
+        self.state.compose = None;
+        self.input.set_select(cursor_idx, cursor_idx);
     }
 
     pub async fn select_word_at_point(&mut self, pos: Point) {
@@ -206,29 +147,29 @@ impl Editor {
 
     pub fn get_cursor_pos(&self) -> Point {
         let lineheight = self.lineheight.get();
-        let edit = android::get_editable(self.composer_id).unwrap();
+        let cursor_idx = self.state.select.0;
 
-        let cursor_byte_idx = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-
-        let cursor = if cursor_byte_idx >= edit.buffer.len() {
+        let cursor = if cursor_idx >= self.state.text.len() {
             parley::Cursor::from_byte_index(
                 &self.layout,
-                edit.buffer.len(),
+                self.state.text.len(),
                 parley::Affinity::Upstream,
             )
         } else {
-            parley::Cursor::from_byte_index(
-                &self.layout,
-                cursor_byte_idx,
-                parley::Affinity::Downstream,
-            )
+            parley::Cursor::from_byte_index(&self.layout, cursor_idx, parley::Affinity::Downstream)
         };
         let cursor_rect = cursor.geometry(&self.layout, lineheight);
         Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32)
     }
 
     pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
-        android::commit_text(self.composer_id, txt);
+        // TODO: need to verify this is correct
+        // Insert text by updating the state
+        self.state.text.push_str(txt);
+        let cursor_idx = self.state.text.len();
+        self.state.select = (cursor_idx, cursor_idx);
+        self.state.compose = None;
+        self.input.set_state(self.state.clone());
         self.on_buffer_changed(atom).await;
     }
 
@@ -250,26 +191,21 @@ impl Editor {
     }
 
     pub fn selected_text(&self) -> Option<String> {
-        let edit = android::get_editable(self.composer_id).unwrap();
-        if edit.select_start == edit.select_end {
+        let (start, end) = (self.state.select.0, self.state.select.1);
+        if start == end {
             return None
         }
-        let anchor = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-        let index = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
-        let (start, end) = (min(anchor, index), max(anchor, index));
-        Some(edit.buffer[start..end].to_string())
+        let (start, end) = (min(start, end), max(start, end));
+        Some(self.state.text[start..end].to_string())
     }
     pub fn selection(&self, side: isize) -> parley::Selection {
         assert!(side.abs() == 1);
-        let edit = android::get_editable(self.composer_id).unwrap();
+        //t!("selection({side}) [state={:?}]", self.state);
 
-        let select_start = char16_to_byte_index(&edit.buffer, edit.select_start).unwrap();
-        let select_end = char16_to_byte_index(&edit.buffer, edit.select_end).unwrap();
-        //t!("selection() -> ({select_start}, {select_end})");
-
+        let (start, end) = (self.state.select.0, self.state.select.1);
         let (anchor, focus) = match side {
-            -1 => (select_end, select_start),
-            1 => (select_start, select_end),
+            -1 => (end, start),
+            1 => (start, end),
             _ => panic!(),
         };
 
@@ -281,16 +217,16 @@ impl Editor {
         parley::Selection::new(anchor, focus)
     }
     pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        //t!("set_selection({select_start}, {select_end})");
-        let edit = android::get_editable(self.composer_id).unwrap();
-        let select_start = byte_to_char16_index(&edit.buffer, select_start).unwrap();
-        let select_end = byte_to_char16_index(&edit.buffer, select_end).unwrap();
-        android::set_selection(self.composer_id, select_start, select_end);
+        assert!(select_start <= self.state.text.len());
+        assert!(select_end <= self.state.text.len());
+        assert_eq!(self.state.text, self.text.get());
+        self.state.select = (select_start, select_end);
+        self.state.compose = None;
+        self.input.set_select(select_start, select_end);
     }
 
     #[allow(dead_code)]
     pub fn buffer(&self) -> String {
-        let edit = android::get_editable(self.composer_id).unwrap();
-        edit.buffer
+        self.state.text.clone()
     }
 }

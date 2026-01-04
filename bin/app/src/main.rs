@@ -27,16 +27,6 @@ use std::sync::{Arc, OnceLock};
 #[macro_use]
 extern crate tracing;
 
-#[derive(Debug)]
-pub enum AndroidSuggestEvent {
-    Init,
-    CreateInputConnect,
-    Compose { text: String, cursor_pos: i32, is_commit: bool },
-    ComposeRegion { start: usize, end: usize },
-    FinishCompose,
-    DeleteSurroundingText { left: usize, right: usize },
-}
-
 #[cfg(target_os = "android")]
 mod android;
 mod app;

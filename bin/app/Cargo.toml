@@ -9,8 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-#miniquad = { git = "https://github.com/not-fl3/miniquad" }
-miniquad = { git = "https://github.com/narodnik/miniquad" }
+miniquad = { git = "https://github.com/not-fl3/miniquad" }
 
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6.1"

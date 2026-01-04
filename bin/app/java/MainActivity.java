@@ -1,20 +1,79 @@
 //% IMPORTS
 
 import android.view.ViewGroup;
-import android.text.Editable;
-import android.text.Spannable;
-import android.text.SpanWatcher;
-import android.text.Spanned;
-import android.text.TextWatcher;
-import android.widget.EditText;
-import android.widget.TextView;
-import android.view.inputmethod.BaseInputConnection;
 import android.view.WindowInsets.Type;
+import android.view.inputmethod.EditorInfo;
+import android.text.InputType;
+import android.util.Log;
 import java.util.HashMap;
 
-import autosuggest.InvisibleInputView;
-import autosuggest.CustomInputConnection;
 import videodecode.VideoDecoder;
+import textinput.Settings;
+import textinput.Listener;
+import textinput.State;
+import textinput.GameTextInput;
+
+//% END
+
+//% QUAD_SURFACE_ON_CREATE_INPUT_CONNECTION
+
+MainActivity main = (MainActivity)getContext();
+// Create InputConnection if it doesn't exist yet
+if (main.inpcon == null) {
+    EditorInfo editorInfo = new EditorInfo();
+    editorInfo.inputType = InputType.TYPE_CLASS_TEXT |
+                           InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+                           InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
+    editorInfo.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
+
+    main.inpcon = new textinput.InputConnection(
+        getContext(),
+        this,
+        new Settings(editorInfo, true)
+    );
+
+    // Pass the InputConnection to native GameTextInput library
+    main.setInputConnectionNative(main.inpcon);
+}
+
+// Set the listener to receive IME state changes
+main.inpcon.setListener(new Listener() {
+    @Override
+    public void stateChanged(State newState, boolean dismissed) {
+        // Called when the IME sends new text state
+        // Forward to native code which triggers Rust callback
+        Log.d("darkfi", "stateChanged: text=" + newState.toString());
+        main.onTextInputEventNative(newState);
+    }
+
+    @Override
+    public void onImeInsetsChanged(androidx.core.graphics.Insets insets) {
+        // Called when IME insets change (e.g., keyboard height changes)
+        // Optional: can be used for dynamic layout adjustment
+    }
+
+    @Override
+    public void onSoftwareKeyboardVisibilityChanged(boolean visible) {
+        // Called when keyboard is shown or hidden
+    }
+
+    @Override
+    public void onEditorAction(int actionCode) {
+        // Called when user presses action button (Done, Next, etc.)
+        // Optional: handle specific editor actions
+    }
+});
+
+// Copy EditorInfo from GameTextInput to configure IME
+if (outAttrs != null) {
+    GameTextInput.copyEditorInfo(
+        main.inpcon.getEditorInfo(),
+        outAttrs
+    );
+}
+
+// Return the GameTextInput InputConnection to IME
+if (true) return main.inpcon;
 
 //% END
 
@@ -51,146 +110,12 @@ if (true)
 
 //% MAIN_ACTIVITY_BODY
 
-private ViewGroup rootView;
+// GameTextInput native bridge functions (following official Android pattern)
+native void setInputConnectionNative(textinput.InputConnection c);
+native void onTextInputEventNative(textinput.State softKeyboardEvent);
 
-private HashMap<Integer, InvisibleInputView> editors;
-
-native static void onInitEdit(int id);
-
-public void createComposer(final int id) {
-    Log.d("darkfi", "createComposer() -> " + id);
-
-    final InvisibleInputView iv = new InvisibleInputView(this, id);
-    editors.put(id, iv);
-
-    runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-            rootView.addView(iv);
-            iv.clearFocus();
-            onInitEdit(id);
-        }
-    });
-}
-
-private InputMethodManager getIMM() {
-    return (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-}
-public boolean focus(final int id) {
-    final InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return false;
-    }
-
-    runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-            boolean isFocused = iv.requestFocus();
-            // Just Android things ;)
-            if (!isFocused) {
-                Log.w("darkfi", "error requesting focus for id=" + id + ": " + iv);
-            }
-
-            getIMM().showSoftInput(iv, InputMethodManager.SHOW_IMPLICIT);
-        }
-    });
-
-    return true;
-}
-public boolean unfocus(final int id) {
-    final InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return false;
-    }
-
-    runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-            iv.clearFocus();
-            getIMM().hideSoftInputFromWindow(iv.getWindowToken(), 0);
-        }
-    });
-
-    return true;
-}
-
-/*
-public CustomInputConnection getInputConnect(int id) {
-    InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return null;
-    }
-    return iv.inputConnection;
-}
-*/
-public InvisibleInputView getInputView(int id) {
-    return editors.get(id);
-}
-
-public boolean setText(int id, String txt) {
-    //Log.d("darkfi", "setText(" + id + ", " + txt + ")");
-    InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return false;
-    }
-
-    // If inputConnection is not yet ready, then setup the editable directly.
-    if (iv.inputConnection == null) {
-        iv.setEditableText(txt);
-        return true;
-    }
-
-    // Maybe do this on the UI thread?
-    iv.inputConnection.setEditableText(txt, txt.length(), txt.length(), 0, 0);
-    return true;
-}
-public boolean setSelection(int id, int start, int end) {
-    InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return false;
-    }
-
-    // If inputConnection is not yet ready, then setup the sel directly.
-    if (iv.inputConnection == null) {
-        iv.setSelection(start, end);
-        return true;
-    }
-
-    iv.inputConnection.beginBatchEdit();
-    // Not sure if this is needed
-    //if (start != end)
-    //  iv.inputConnection.finishComposingText();
-    iv.inputConnection.setSelection(start, end);
-    iv.inputConnection.endBatchEdit();
-
-    return true;
-}
-public boolean commitText(int id, String txt) {
-    //Log.d("darkfi", "setText(" + id + ", " + txt + ")");
-    InvisibleInputView iv = editors.get(id);
-    if (iv == null) {
-        return false;
-    }
-
-    if (iv.inputConnection == null) {
-        return false;
-    }
-
-    iv.inputConnection.beginBatchEdit();
-    iv.inputConnection.finishComposingText();
-    iv.inputConnection.commitText(txt, 1);
-    iv.inputConnection.endBatchEdit();
-    return true;
-}
-
-/*
-// Editable string with the spans displayed inline
-public String getDebugEditableStr() {
-    String edit = view.inputConnection.debugEditableStr();
-    Log.d("darkfi", "getDebugEditableStr() -> " + edit);
-    return edit;
-}
-*/
+// GameTextInput InputConnection reference (public for QuadSurface access)
+public textinput.InputConnection inpcon;
 
 public String getAppDataPath() {
     return getApplicationContext().getDataDir().getAbsolutePath();
@@ -231,13 +156,6 @@ public VideoDecoder createVideoDecoder() {
 //% END
 
 //% MAIN_ACTIVITY_ON_CREATE
-
-rootView = layout;
-editors = new HashMap<>();
-
-view.setFocusable(false);
-view.setFocusableInTouchMode(false);
-view.clearFocus();
 
 // Start a foreground service so the app stays awake
 Intent serviceIntent = new Intent(this, ForegroundService.class);

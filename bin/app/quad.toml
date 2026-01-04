@@ -1,9 +1,17 @@
 main_activity_inject = "java/MainActivity.java"
 java_files = [
-    "java/autosuggest/CustomInputConnection.java",
-    "java/autosuggest/InvisibleInputView.java",
-    #"java/autosuggest/InvisibleInputManager.java",
     "java/ForegroundService.java",
-    "java/videodecode/VideoDecoder.java"
+    "java/videodecode/VideoDecoder.java",
+    "java/textinput/InputConnection.java",
+    "java/textinput/State.java",
+    "java/textinput/Listener.java",
+    "java/textinput/Settings.java",
+    "java/textinput/GameTextInput.java"
+]
+comptime_jar_files = [
+    "android-libs/androidx/core-1.9.0.jar"
+]
+runtime_jar_files = [
+    "android-libs/androidx/core-1.9.0.jar"
 ]
 

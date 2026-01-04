@@ -95,6 +95,9 @@ install-apk:
 	-mv $(DEBUG_APK) .
 	-adb $(ADB_DEVICE) uninstall darkfi.darkfi_app
 	adb $(ADB_DEVICE) install -r darkfi-app.apk
+	$(MAKE) log-apk
+
+log-apk:
 	reset
 	adb $(ADB_DEVICE) logcat -c
 	adb $(ADB_DEVICE) shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
