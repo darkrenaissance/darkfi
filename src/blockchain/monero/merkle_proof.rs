@@ -66,8 +66,8 @@ impl AsyncEncodable for MerkleProof {
         n += len.encode_async(s).await?;
 
         for hash in &self.branch {
-            let mut buf = vec![];
-            (*hash).consensus_encode(&mut buf)?;
+            let mut buf = [0u8; 32];
+            (*hash).consensus_encode(&mut &mut buf[..])?;
             n += buf.encode_async(s).await?;
         }
 
@@ -100,7 +100,7 @@ impl AsyncDecodable for MerkleProof {
         let mut branch = Vec::with_capacity(len as usize);
 
         for _ in 0..len {
-            let buf: Vec<u8> = AsyncDecodable::decode_async(d).await?;
+            let buf: [u8; 32] = AsyncDecodable::decode_async(d).await?;
             let mut buf = Cursor::new(buf);
             branch.push(
                 Hash::consensus_decode(&mut buf).map_err(|_| Error::other("Invalid XMR hash"))?,
@@ -371,5 +371,39 @@ mod tests {
 
         assert!(!proof.branch().contains(hash));
         assert!(!proof.branch().contains(&expected_root));
+    }
+
+    // Test that both sync and async serialization formats match.
+    // We do some hacks because Monero lib doesn't do async.
+    #[test]
+    fn test_monero_merkleproof_serde() {
+        let tx_hashes = &[
+            "d96756959949db23764592fea0bfe88c790e1fd131dabb676948b343aa9ecc24",
+            "77d1a87df131c36da4832a7ec382db9b8fe947576a60ec82cc1c66a220f6ee42",
+        ]
+        .iter()
+        .map(|hash| Hash::from_str(hash).unwrap())
+        .collect::<Vec<_>>();
+
+        let proof = create_merkle_proof(tx_hashes, &tx_hashes[0]).unwrap();
+
+        let local_ex = smol::LocalExecutor::new();
+
+        let ser_sync = darkfi_serial::serialize(&proof);
+        let ser_async = smol::future::block_on(
+            local_ex.run(async { darkfi_serial::serialize_async(&proof).await }),
+        );
+
+        assert_eq!(ser_sync, ser_async);
+
+        let de_sync: MerkleProof = darkfi_serial::deserialize(&ser_async).unwrap();
+        let de_async: MerkleProof = smol::future::block_on(
+            local_ex.run(async { darkfi_serial::deserialize_async(&ser_sync).await.unwrap() }),
+        );
+
+        assert_eq!(de_sync.branch, proof.branch);
+        assert_eq!(de_async.branch, proof.branch);
+        assert_eq!(de_sync.path_bitmap, proof.path_bitmap);
+        assert_eq!(de_async.path_bitmap, proof.path_bitmap);
     }
 }

@@ -182,10 +182,21 @@ impl Encodable for MoneroPowData {
     fn encode<S: Write>(&self, s: &mut S) -> io::Result<usize> {
         let mut n = 0;
 
-        n += self.header.consensus_encode(s)?;
+        // Monero library encoding doesn't do async, so in order to
+        // match our AsyncEncodable implementation, we will write
+        // to an intermediate buffer here, as well as for any other
+        // fields that use Monero consensus encoding.
+        let mut buf = vec![];
+        self.header.consensus_encode(&mut buf)?;
+        n += buf.encode(s)?;
+
         n += self.randomx_key.encode(s)?;
         n += self.transaction_count.encode(s)?;
-        n += self.merkle_root.consensus_encode(s)?;
+
+        let mut buf = vec![];
+        self.merkle_root.consensus_encode(&mut buf)?;
+        n += buf.encode(s)?;
+
         n += self.coinbase_merkle_proof.encode(s)?;
 
         // This is an incomplete hasher. Dump it from memory
@@ -206,6 +217,8 @@ impl AsyncEncodable for MoneroPowData {
     async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> io::Result<usize> {
         let mut n = 0;
 
+        // We write to an intermediate buffer since the Monero
+        // consensus encoding library doesn't do async writing.
         let mut buf = vec![];
         self.header.consensus_encode(&mut buf)?;
         n += buf.encode_async(s).await?;
@@ -233,14 +246,18 @@ impl AsyncEncodable for MoneroPowData {
 
 impl Decodable for MoneroPowData {
     fn decode<D: Read>(d: &mut D) -> io::Result<Self> {
-        let header =
-            BlockHeader::consensus_decode(d).map_err(|_| Error::other("Invalid XMR header"))?;
+        let buf: Vec<u8> = Decodable::decode(d)?;
+        let mut buf = Cursor::new(buf);
+        let header = BlockHeader::consensus_decode(&mut buf)
+            .map_err(|_| Error::other("Invalid XMR header"))?;
 
         let randomx_key: FixedByteArray = Decodable::decode(d)?;
         let transaction_count: u16 = Decodable::decode(d)?;
 
-        let merkle_root =
-            monero::Hash::consensus_decode(d).map_err(|_| Error::other("Invalid XMR hash"))?;
+        let buf: Vec<u8> = Decodable::decode(d)?;
+        let mut buf = Cursor::new(buf);
+        let merkle_root = monero::Hash::consensus_decode(&mut buf)
+            .map_err(|_| Error::other("Invalid XMR hash"))?;
 
         let coinbase_merkle_proof: MerkleProof = Decodable::decode(d)?;
 
@@ -456,5 +473,93 @@ pub fn extract_aux_merkle_root(extra_field: &RawExtraField) -> Result<Option<mon
         Ok(Some(merge_mining_hash))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    // Blob from Monero testnet, height 2912484, mergemined DarkFi.
+    const XMR_BLOCK: &str = "1010f881efca0644a1185eeccb2629b316ec0d41659111299ad1b736a3b0d8eac8bbc6384dc5c84bb6010002a0e2b10101ffe4e1b1010180e0a596bb1103f1d23951bd28ce2bfad791f2350e2ac348e4620e19af3418653a1839cc5c8f2be14a010b204d874ed5087b649c711dd4479434a85dbf7e9bdfae26f5bc785964d4b45c0204751b43e10321082d5f403be836d45d026fbaa2a8e4b4a9d0d821f29d709321f8d764f32d446fa80000";
+    const SEED_HASH: &str = "f1d23951bd28ce2bfad791f2350e2ac348e4620e19af3418653a1839cc5c8f2b";
+
+    // Test that both sync and async serialization formats match.
+    // We do some hacks because Monero lib doesn't do async.
+    #[test]
+    fn test_monero_powdata_serde() {
+        let block = monero_block_deserialize(XMR_BLOCK).unwrap();
+        let seed = FixedByteArray::from_bytes(&hex::decode(SEED_HASH).unwrap()).unwrap();
+
+        // The Merkle proof is fake to keep it simple.
+        let tx_hashes = &[
+            "d96756959949db23764592fea0bfe88c790e1fd131dabb676948b343aa9ecc24",
+            "77d1a87df131c36da4832a7ec382db9b8fe947576a60ec82cc1c66a220f6ee42",
+        ]
+        .iter()
+        .map(|hash| monero::Hash::from_str(hash).unwrap())
+        .collect::<Vec<_>>();
+
+        let aux_chain_merkle_proof = create_merkle_proof(tx_hashes, &tx_hashes[0]).unwrap();
+
+        // Construct PowData
+        let mut powdata = MoneroPowData::new(block, seed, aux_chain_merkle_proof).unwrap();
+
+        let local_ex = smol::LocalExecutor::new();
+
+        let ser_sync = darkfi_serial::serialize(&powdata);
+        let ser_async = smol::future::block_on(
+            local_ex.run(async { darkfi_serial::serialize_async(&powdata).await }),
+        );
+
+        assert_eq!(ser_sync, ser_async);
+
+        let mut de_sync: MoneroPowData = darkfi_serial::deserialize(&ser_async).unwrap();
+        let mut de_async: MoneroPowData = smol::future::block_on(
+            local_ex.run(async { darkfi_serial::deserialize_async(&ser_async).await.unwrap() }),
+        );
+
+        assert_eq!(de_sync.header, powdata.header);
+        assert_eq!(de_sync.randomx_key, powdata.randomx_key);
+        assert_eq!(de_sync.transaction_count, powdata.transaction_count);
+        assert_eq!(de_sync.merkle_root, powdata.merkle_root);
+        assert_eq!(de_sync.coinbase_merkle_proof.branch(), powdata.coinbase_merkle_proof.branch());
+        assert_eq!(de_sync.coinbase_merkle_proof.path(), powdata.coinbase_merkle_proof.path());
+        assert_eq!(de_sync.coinbase_tx_extra, powdata.coinbase_tx_extra);
+        assert_eq!(
+            de_sync.aux_chain_merkle_proof.branch(),
+            powdata.aux_chain_merkle_proof.branch()
+        );
+        assert_eq!(de_sync.aux_chain_merkle_proof.path(), powdata.aux_chain_merkle_proof.path());
+
+        assert_eq!(de_async.header, powdata.header);
+        assert_eq!(de_async.randomx_key, powdata.randomx_key);
+        assert_eq!(de_async.transaction_count, powdata.transaction_count);
+        assert_eq!(de_async.merkle_root, powdata.merkle_root);
+        assert_eq!(de_async.coinbase_merkle_proof.branch(), powdata.coinbase_merkle_proof.branch());
+        assert_eq!(de_async.coinbase_merkle_proof.path(), powdata.coinbase_merkle_proof.path());
+        assert_eq!(de_async.coinbase_tx_extra, powdata.coinbase_tx_extra);
+        assert_eq!(
+            de_async.aux_chain_merkle_proof.branch(),
+            powdata.aux_chain_merkle_proof.branch()
+        );
+        assert_eq!(de_async.aux_chain_merkle_proof.path(), powdata.aux_chain_merkle_proof.path());
+
+        // Keccak state
+        powdata.coinbase_tx_hasher.update(b"hi");
+        let mut powdata_digest = vec![];
+        powdata.coinbase_tx_hasher.finalize(&mut powdata_digest);
+
+        de_sync.coinbase_tx_hasher.update(b"hi");
+        let mut de_sync_digest = vec![];
+        de_sync.coinbase_tx_hasher.finalize(&mut de_sync_digest);
+
+        de_async.coinbase_tx_hasher.update(b"hi");
+        let mut de_async_digest = vec![];
+        de_async.coinbase_tx_hasher.finalize(&mut de_async_digest);
+
+        assert_eq!(de_sync_digest, powdata_digest);
+        assert_eq!(de_async_digest, powdata_digest);
     }
 }
