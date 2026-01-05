@@ -126,10 +126,6 @@ file.
 
 For detailed instructions and configuration options on how to do this,
 follow the [Tor Guide](../misc/nodes/tor-guide.md#configure-network-settings).
-The guide is using `darkirc` port `25552` for seeds and `25551` for
-`torrc` configuration, so in your actual configuration replace them
-with `darkfid` ones, where seeds use port `8343` and `torrc` should
-use port `8342`.
 
 ### Wallet initialization
 
