@@ -15,7 +15,7 @@
  */
 package textinput;
 
-import androidx.core.graphics.Insets;
+import android.graphics.Insets;
 
 /**
  * Listener interface for text, selection and composing region changes.

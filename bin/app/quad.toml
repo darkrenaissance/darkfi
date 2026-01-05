@@ -8,10 +8,3 @@ java_files = [
     "java/textinput/Settings.java",
     "java/textinput/GameTextInput.java"
 ]
-comptime_jar_files = [
-    "android-libs/androidx/core-1.9.0.jar"
-]
-runtime_jar_files = [
-    "android-libs/androidx/core-1.9.0.jar"
-]
-

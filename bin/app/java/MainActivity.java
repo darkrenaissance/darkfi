@@ -47,7 +47,7 @@ main.inpcon.setListener(new Listener() {
     }
 
     @Override
-    public void onImeInsetsChanged(androidx.core.graphics.Insets insets) {
+    public void onImeInsetsChanged(android.graphics.Insets insets) {
         // Called when IME insets change (e.g., keyboard height changes)
         // Optional: can be used for dynamic layout adjustment
     }

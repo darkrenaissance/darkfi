@@ -37,10 +37,8 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputMethodManager;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
+import android.graphics.Insets;
+import android.view.WindowInsets;
 
 import textinput.GameTextInput.Pair;
 
@@ -115,7 +113,6 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
       this.mEditable = (Editable) (new SpannableStringBuilder());
     }
     // Listen for insets changes
-    WindowCompat.setDecorFitsSystemWindows(((Activity) targetView.getContext()).getWindow(), false);
     targetView.setOnKeyListener(this);
     // Apply EditorInfo settings
     this.setEditorInfo(settings.mEditorInfo);
@@ -560,13 +557,13 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
       return Insets.NONE;
     }
 
-    WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this.targetView);
+    WindowInsets insets = this.targetView.getRootWindowInsets();
 
     if (insets == null) {
       return Insets.NONE;
     }
 
-    return insets.getInsets(WindowInsetsCompat.Type.ime());
+    return insets.getInsets(WindowInsets.Type.ime());
   }
 
   /**
@@ -579,13 +576,13 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
       return false;
     }
 
-    WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this.targetView);
+    WindowInsets insets = this.targetView.getRootWindowInsets();
 
     if (insets == null) {
       return false;
     }
 
-    return insets.isVisible(WindowInsetsCompat.Type.ime());
+    return insets.isVisible(WindowInsets.Type.ime());
   }
 
   /**
