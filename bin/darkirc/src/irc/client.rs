@@ -29,14 +29,11 @@ use std::{
 use darkfi::{
     event_graph::{proto::EventPut, Event, NULL_ID},
     system::Subscription,
-    zk::{empty_witnesses, Proof, ProvingKey, VerifyingKey, ZkCircuit},
+    zk::{empty_witnesses, Proof, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::{
-    crypto::util::FieldElemAsStr,
-    pasta::{pallas, Fp},
-};
+use darkfi_sdk::pasta::{pallas, Fp};
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
 use sled_overlay::sled;
@@ -226,49 +223,17 @@ impl Client {
 
                                         rln_identity.message_id += 1;
 
-                                        let (proof, public_inputs) = match self.create_rln_signal_proof(&rln_identity, &event).await {
+                                        let (proof, y, internal_nullifier, identity_root) = match self.create_rln_signal_proof(&rln_identity, &event).await {
                                             Ok(v) => v,
                                             Err(e) => {
                                                 // TODO: Send a message to the IRC client telling that sending went wrong
                                                 error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
                                                 // Just use an empty "proof"
-                                                (Proof::new(vec![]), vec![])
+                                                (Proof::new(vec![]), pallas::Base::from(0), pallas::Base::from(0), pallas::Base::from(0))
                                             }
                                         };
 
-                                        ///////// Temporary /////////
-                                        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-                                        let signal_circuit = ZkCircuit::new(empty_witnesses(&signal_zkbin)?, &signal_zkbin);
-                                        let Some(signal_vk) = self.server.server_store.get("rlnv2-diff-signal-vk")? else {
-                                            return Err(Error::DatabaseError(
-                                                "RLN signal verifying key not found in server store".to_string(),
-                                            ))
-                                        };
-                                        let mut reader = Cursor::new(signal_vk);
-                                        let signal_vk = VerifyingKey::read(&mut reader, signal_circuit)?;
-
-                                        // let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
-                                        // let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
-                                        // let x = hash_event(&event);
-                                        // let y = public_inputs[0];
-                                        // let internal_nullifier = public_inputs[1];
-
-                                        // // Fetch SMT root
-                                        // let identity_tree = self.server.rln_identity_tree.read().await;
-                                        // let identity_root = identity_tree.root();
-
-                                        // let public_inputs =
-                                        //     vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root];
-
-                                        // Ok(proof.verify(&self.server.rln_signal_vk, &public_inputs)?
-
-                                        match proof.verify(&signal_vk, &public_inputs) {
-                                            Ok(_) => info!("it works"),
-                                            Err(e) => panic!("it doesn't work because {e}")
-                                        }
-                                        /////////////////////////////
-
-                                        let blob = serialize_async(&(proof, public_inputs)).await;
+                                        let blob = serialize_async(&(proof, y, internal_nullifier, identity_root)).await;
 
                                         self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
                                     } else {
@@ -409,57 +374,9 @@ impl Client {
                             continue
                         }
                     };
-
-                    info!("multiplex commitment: {}",fetched_rln_commitment.to_string());
-
                     let commitment = vec![fetched_rln_commitment];
                     let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
                     identities_tree.insert_batch(commitment)?;
-                    info!("multiplex root: {}",identities_tree.root().to_string());
-
-                    // Mark the message as seen for this USER
-                    if let Err(e) = self.mark_seen(&event_id).await {
-                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
-                        return Err(e)
-                    }
-                }
-
-                // Process message from the network. These should only be RLN identities.
-                r = self.incoming_st.receive().fuse() => {
-
-                    // We will skip this if it's our own message.
-                    let event_id = r.header.id();
-                    if *self.last_sent.read().await == event_id {
-                        continue
-                    }
-
-                    // If this event was seen, skip it
-                    match self.is_seen(&event_id).await {
-                        Ok(true) => continue,
-                        Ok(false) => {},
-                        Err(e) => {
-                            error!("[IRC CLIENT] (multiplex_connection) self.is_seen({}) failed: {}", event_id, e);
-                            return Err(e)
-                        }
-                    }
-
-                    // Update SMT
-                    let mut identities_tree = self.server.rln_identity_tree.write().await;
-                    let fetched_rln_commitment: Fp = match deserialize_async_partial(r.content()).await
-                    {
-                        Ok((v, _)) => v,
-                        Err(e) => {
-                            error!(target: "irc::server", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
-                            continue
-                        }
-                    };
-
-                    info!("multiplex commitment: {}",fetched_rln_commitment.to_string());
-
-                    let commitment = vec![fetched_rln_commitment];
-                    let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
-                    identities_tree.insert_batch(commitment)?;
-                    info!("multiplex root: {}",identities_tree.root().to_string());
 
                     // Mark the message as seen for this USER
                     if let Err(e) = self.mark_seen(&event_id).await {
@@ -666,45 +583,12 @@ impl Client {
         Ok(db.contains_key(event_id.as_bytes())?)
     }
 
-    /// Abstraction for RLN register proof creation
-    // async fn _create_rln_register_proof(
-    //     &self,
-    //     rln_identity: &RlnIdentity,
-    //     event: &Event,
-    // ) -> Result<Proof> {
-    //     let mut identity_tree = self.server.rln_identity_tree.write().await;
-
-    //     // Retrieve the ZK proving key from the db
-    //     let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
-    //     let register_circuit = ZkCircuit::new(empty_witnesses(&register_zkbin)?, &register_zkbin);
-    //     let Some(register_pk) = self.server.server_store.get("rlnv2-diff-register-pk")? else {
-    //         return Err(Error::DatabaseError(
-    //             "RLN register proving key not found in server store".to_string(),
-    //         ))
-    //     };
-    //     let mut reader = Cursor::new(register_pk);
-    //     let register_pk = ProvingKey::read(&mut reader, register_circuit)?;
-
-    //     rln_identity._create_register_proof(event, &mut identity_tree, &register_pk)
-    // }
-
-    // /// Abstraction for RLN register proof verification
-    // async fn _verify_rln_register_proof(
-    //     &self,
-    //     _event: &Event,
-    //     proof: Proof,
-    //     public_inputs: [pallas::Base; 2],
-    //     register_vk: VerifyingKey,
-    // ) -> Result<()> {
-    //     Ok(proof.verify(&register_vk, &public_inputs)?)
-    // }
-
     /// Abstraction for RLN signal proof creation
     async fn create_rln_signal_proof(
         &self,
         rln_identity: &RlnIdentity,
         event: &Event,
-    ) -> Result<(Proof, Vec<pallas::Base>)> {
+    ) -> Result<(Proof, pallas::Base, pallas::Base, pallas::Base)> {
         let identity_tree = self.server.rln_identity_tree.read().await;
 
         // Retrieve the ZK proving key from the db
@@ -720,32 +604,4 @@ impl Client {
 
         rln_identity.create_signal_proof(event, &identity_tree, &proving_key)
     }
-
-    // /// Abstraction for RLN signal proof verification
-    // async fn _verify_rln_signal_proof(
-    //     &self,
-    //     event: &Event,
-    //     proof: Proof,
-    //     public_inputs: [pallas::Base; 2],
-    // ) -> Result<()> {
-    //     let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
-    //     let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
-    //     let x = hash_event(event);
-    //     let y = public_inputs[0];
-    //     let internal_nullifier = public_inputs[1];
-
-    //     // Fetch the latest commitment Merkle tree
-    //     let Some(identity_tree) = self.server.server_store.get("rln_identity_tree")? else {
-    //         return Err(Error::DatabaseError(
-    //             "RLN Identity tree not found in server store".to_string(),
-    //         ))
-    //     };
-    //     let identity_tree: MerkleTree = deserialize_async(&identity_tree).await?;
-    //     let identity_root = identity_tree.root(0).unwrap();
-
-    //     let public_inputs =
-    //         vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
-
-    //     Ok(proof.verify(&self.server.rln_signal_vk, &public_inputs)?)
-    // }
 }

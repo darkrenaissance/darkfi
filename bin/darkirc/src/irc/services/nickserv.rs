@@ -206,12 +206,10 @@ impl NickServ {
         // Update SMT, DAG and broadcast
         let mut identities_tree = self.server.rln_identity_tree.write().await;
         let rln_commitment = new_rln_identity.commitment();
-        // info!("register commitment: {}", rln_commitment.to_string());
 
         let commitment = vec![rln_commitment];
         let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
         identities_tree.insert_batch(commitment)?;
-        // info!("root: {}", identities_tree.root().to_string());
 
         let evgr = &self.server.darkirc.event_graph;
         let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;

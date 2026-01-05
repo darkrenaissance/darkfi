@@ -17,11 +17,19 @@
  */
 
 use std::{
+    collections::{BTreeMap, HashMap},
     fs::{self, File, OpenOptions},
     io::Write,
     path::Path,
     time::UNIX_EPOCH,
 };
+
+use darkfi_sdk::{crypto::pasta_prelude::FromUniformBytes, pasta::pallas};
+use darkfi_serial::{deserialize, deserialize_async, serialize};
+use halo2_proofs::arithmetic::Field;
+use sled_overlay::sled;
+use tinyjson::JsonValue;
+use tracing::error;
 
 use crate::{
     event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS},
@@ -30,22 +38,20 @@ use crate::{
 };
 
 #[cfg(feature = "rpc")]
-use {
-    crate::{
-        rpc::{
-            jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
-            util::json_map,
-        },
-        util::file::load_file,
+use crate::{
+    rpc::{
+        jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
+        util::json_map,
     },
-    darkfi_serial::{deserialize, deserialize_async, serialize},
-    sled_overlay::sled,
-    std::collections::HashMap,
-    tinyjson::JsonValue,
-    tracing::error,
+    util::file::load_file,
 };
 
 use super::event::Header;
+
+/// RLN epoch genesis in millis
+pub const RLN_GENESIS: u64 = 1_738_688_400_000;
+/// RLN epoch length in millis
+pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
 
 /// MilliSeconds in an hour
 pub(super) const HOUR: i64 = 3_600_000;
@@ -201,6 +207,128 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
     let result = JsonValue::Object(HashMap::from([("eventgraph_info".to_string(), values)]));
 
     JsonResponse::new(result, 1).into()
+}
+
+/// Hash message/event modulo `Fp`
+pub fn hash_event(event: &Event) -> pallas::Base {
+    let mut buf = [0u8; 64];
+    buf[..blake3::OUT_LEN].copy_from_slice(event.header.id().as_bytes());
+    pallas::Base::from_uniform_bytes(&buf)
+}
+
+/// Find closest epoch to given timestamp
+pub fn closest_epoch(timestamp: u64) -> u64 {
+    let time_diff = timestamp - RLN_GENESIS;
+    let epoch_idx = time_diff as f64 / RLN_EPOCH_LEN as f64;
+    let rounded = epoch_idx.round() as i64;
+    RLN_GENESIS + (rounded * RLN_EPOCH_LEN as i64) as u64
+}
+
+#[derive(Debug, Clone)]
+struct ShareData {
+    pub x_shares: Vec<pallas::Base>,
+    pub y_shares: Vec<pallas::Base>,
+}
+
+impl ShareData {
+    fn new() -> Self {
+        Self { x_shares: vec![], y_shares: vec![] }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct MessageMetadata {
+    data: BTreeMap<pallas::Base, BTreeMap<pallas::Base, ShareData>>,
+}
+
+impl MessageMetadata {
+    pub fn new() -> Self {
+        Self { data: BTreeMap::new() }
+    }
+
+    pub fn add_share(
+        &mut self,
+        external_nullifier: pallas::Base,
+        internal_nullifier: pallas::Base,
+        x: pallas::Base,
+        y: pallas::Base,
+    ) -> Result<()> {
+        let inner_map = self.data.entry(external_nullifier).or_insert_with(BTreeMap::new);
+        let share_data = inner_map.entry(internal_nullifier).or_insert_with(ShareData::new);
+
+        share_data.x_shares.push(x);
+        share_data.y_shares.push(y);
+
+        Ok(())
+    }
+
+    pub fn get_shares(
+        &self,
+        external_nullifier: &pallas::Base,
+        internal_nullifier: &pallas::Base,
+    ) -> Vec<(pallas::Base, pallas::Base)> {
+        if let Some(inner_map) = self.data.get(external_nullifier) {
+            if let Some(share_data) = inner_map.get(internal_nullifier) {
+                return share_data
+                    .x_shares
+                    .iter()
+                    .cloned()
+                    .zip(share_data.y_shares.iter().cloned())
+                    .collect()
+            }
+        }
+
+        vec![]
+    }
+
+    /// Check if the recieved message and its metadata are duplicated
+    pub fn is_duplicate(
+        &self,
+        external_nullifier: &pallas::Base,
+        internal_nullifier: &pallas::Base,
+        x: &pallas::Base,
+        y: &pallas::Base,
+    ) -> bool {
+        if let Some(inner_map) = self.data.get(external_nullifier) {
+            if let Some(share_data) = inner_map.get(internal_nullifier) {
+                return share_data.x_shares.contains(x) && share_data.y_shares.contains(y);
+            }
+        }
+
+        false
+    }
+
+    /// Check if the message has reused the nullifiers
+    pub fn is_reused(
+        &self,
+        external_nullifier: &pallas::Base,
+        internal_nullifier: &pallas::Base,
+    ) -> bool {
+        let inner_map = self.data.get(external_nullifier);
+        if inner_map.is_some() {
+            return inner_map.unwrap().get(internal_nullifier).is_some()
+        }
+
+        false
+    }
+}
+
+/// Recover secret using Shamir's secret sharing scheme
+pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
+    let mut secret = pallas::Base::zero();
+    for (j, share_j) in shares.iter().enumerate() {
+        let mut prod = pallas::Base::one();
+        for (i, share_i) in shares.iter().enumerate() {
+            if i != j {
+                prod *= share_i.0 * (share_i.0 - share_j.0).invert().unwrap();
+            }
+        }
+
+        prod *= share_j.1;
+        secret += prod;
+    }
+
+    secret
 }
 
 #[cfg(test)]

@@ -15,7 +15,7 @@ RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 ZKAS = ../../zkas
 
 # zkas circuits
-PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_SRC = $(shell find ../../src/event_graph -type f -name '*.zk')
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 SRC = \

@@ -35,17 +35,18 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use tracing::info;
 
-pub const RLN_APP_IDENTIFIER: pallas::Base = pallas::Base::from_raw([4242, 0, 0, 0]);
 pub const RLN_TRAPDOOR_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4211, 0, 0, 0]);
 pub const RLN_NULLIFIER_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4212, 0, 0, 0]);
 
-/// RLN epoch genesis
-pub const RLN_GENESIS: u64 = 1738688400;
-/// RLN epoch length in seconds
-pub const RLN_EPOCH_LEN: u64 = 600; // 10 min
+/// RLN epoch genesis in millis
+pub const RLN_GENESIS: u64 = 1_738_688_400_000;
+/// RLN epoch length in millis
+pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
 
-pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("../../proof/rlnv2-diff-signal.zk.bin");
-pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("../../proof/rlnv2-diff-slash.zk.bin");
+pub const RLN2_SIGNAL_ZKBIN: &[u8] =
+    include_bytes!("../../../../src/event_graph/proofs/rlnv2-diff-signal.zk.bin");
+pub const RLN2_SLASH_ZKBIN: &[u8] =
+    include_bytes!("../../../../src/event_graph/proofs/rlnv2-diff-slash.zk.bin");
 
 /// TODO: this should be configurable
 pub const USER_MSG_LIMIT: u64 = 6;
@@ -86,7 +87,7 @@ impl RlnIdentity {
             trapdoor: poseidon_hash([RLN_TRAPDOOR_DERIVATION_PATH, pallas::Base::random(&mut rng)]),
             user_message_limit: USER_MSG_LIMIT,
             message_id: 1,
-            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
+            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_millis() as u64),
         }
     }
 
@@ -97,44 +98,17 @@ impl RlnIdentity {
         poseidon_hash([identity_secret_hash])
     }
 
-    // pub fn _create_register_proof(
-    //     &self,
-    //     event: &Event,
-    //     identity_tree: &mut SmtMemoryFp,
-    //     register_pk: &ProvingKey,
-    // ) -> Result<Proof> {
-    //     let witnesses = vec![
-    //         Witness::Base(Value::known(self.nullifier)),
-    //         Witness::Base(Value::known(self.trapdoor)),
-    //         Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
-    //     ];
-
-    //     let public_inputs = vec![self.commitment(), pallas::Base::from(self.user_message_limit)];
-
-    //     info!(target: "crypto::rln::create_register_proof", "[RLN] Creating register proof for event {}", event.header.id());
-    //     let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
-    //     let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
-
-    //     let proof =
-    //         Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng).unwrap();
-
-    //     let leaf = vec![self.commitment()];
-    //     let leaf: Vec<_> = leaf.into_iter().map(|l| (l, l)).collect();
-    //     // TODO: Recipients should verify that identity doesn't exist already before insert.
-    //     identity_tree.insert_batch(leaf.clone()).unwrap(); // leaf == pos
-    //     Ok(proof)
-    // }
-
     pub fn create_signal_proof(
         &self,
         event: &Event,
         identity_tree: &SmtMemoryFp,
         signal_pk: &ProvingKey,
-    ) -> Result<(Proof, Vec<pallas::Base>)> {
+    ) -> Result<(Proof, pallas::Base, pallas::Base, pallas::Base)> {
         // 1. Construct share
+        let rln_app_identifier = pallas::Base::from(1000);
         let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
         let message_id = pallas::Base::from(self.message_id);
-        let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
+        let external_nullifier = poseidon_hash([epoch, rln_app_identifier]);
         let a_0 = poseidon_hash([self.nullifier, self.trapdoor]);
         let a_1 = poseidon_hash([a_0, external_nullifier, message_id]);
         let x = hash_event(event);
@@ -163,29 +137,10 @@ impl RlnIdentity {
 
         info!(target: "crypto::rln::create_signal_proof", "[RLN] Creating signal proof for event {}", event.header.id());
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-        let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
+        let signal_circuit = ZkCircuit::new(witnesses.clone(), &signal_zkbin);
 
         let proof = Proof::create(signal_pk, &[signal_circuit], &public_inputs, &mut OsRng)?;
-        // Ok((proof, vec![y, internal_nullifier]))
-        Ok((proof, public_inputs))
+        Ok((proof, y, internal_nullifier, identity_root))
+        // Ok((proof, public_inputs))
     }
-}
-
-/// Recover a secret from given secret shares
-#[allow(dead_code)]
-pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
-    let mut secret = pallas::Base::zero();
-    for (j, share_j) in shares.iter().enumerate() {
-        let mut prod = pallas::Base::one();
-        for (i, share_i) in shares.iter().enumerate() {
-            if i != j {
-                prod *= share_i.0 * (share_i.0 - share_j.0).invert().unwrap();
-            }
-        }
-
-        prod *= share_j.1;
-        secret += prod;
-    }
-
-    secret
 }

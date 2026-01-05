@@ -26,7 +26,7 @@ use std::{
     },
 };
 
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
 use darkfi_serial::{
     async_trait, deserialize_async, deserialize_async_partial, SerialDecodable, SerialEncodable,
 };
@@ -35,6 +35,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS};
 use crate::{
+    event_graph::util::{closest_epoch, hash_event, sss_recover, MessageMetadata},
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -273,6 +274,8 @@ impl ProtocolEventGraph {
     async fn handle_event_put(self: Arc<Self>) -> Result<()> {
         // Rolling window of event timestamps on this channel
         let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
+        let mut metadata = MessageMetadata::new();
+        let mut current_epoch = 0;
 
         loop {
             let (event, blob) = match self.ev_put_sub.receive().await {
@@ -293,52 +296,67 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            ////////////////////
             let mut verification_failed = false;
             #[allow(clippy::never_loop)]
             loop {
-                let (proof, public_inputs): (Proof, Vec<pallas::Base>) =
-                    match deserialize_async_partial(&blob).await {
-                        Ok((v, _)) => v,
-                        Err(e) => {
-                            error!(target: "event_graph::protocol::handle_event_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
-                            break
-                        }
-                    };
+                let (proof, y, internal_nullifier, identity_root): (
+                    Proof,
+                    pallas::Base,
+                    pallas::Base,
+                    pallas::Base,
+                ) = match deserialize_async_partial(&blob).await {
+                    Ok((v, _)) => v,
+                    Err(e) => {
+                        error!(target: "event_graph::protocol::handle_event_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
+                        break
+                    }
+                };
 
-                if public_inputs.len() != 2 {
-                    error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Received event has the wrong number of public inputs");
+                // If the current epoch is different, we reset the stored shares
+                if current_epoch != closest_epoch(event.header.timestamp) {
+                    metadata = MessageMetadata::new()
+                }
+
+                let rln_app_identifier = pallas::Base::from(1000);
+                current_epoch = closest_epoch(event.header.timestamp);
+                let epoch = pallas::Base::from(current_epoch);
+                let external_nullifier = poseidon_hash([epoch, rln_app_identifier]);
+                let x = hash_event(&event);
+                let public_inputs =
+                    vec![identity_root, external_nullifier, x, y, internal_nullifier];
+
+                metadata.add_share(external_nullifier, internal_nullifier, x, y)?;
+
+                if metadata.is_duplicate(&external_nullifier, &internal_nullifier, &x, &y) {
+                    error!("[Signal] Duplicate Message!");
                     verification_failed = true;
                     break
                 }
 
-                // info!("public_inputs: {:?}", public_inputs);
+                if metadata.is_reused(&external_nullifier, &internal_nullifier) {
+                    let shares = metadata.get_shares(&external_nullifier, &internal_nullifier);
+                    let _secret = sss_recover(&shares);
+
+                    // TODO: broadcast slashing event
+                    // let evgr = &self.event_graph;
+                    // let st_event = Event::new_static(serialize_async(&secret).await, evgr).await;
+                    // evgr.static_insert(&st_event).await?;
+                    // evgr.static_broadcast(st_event);
+                    verification_failed = true;
+                    break
+                }
 
                 info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Verifying incoming Event RLN proof");
-                // let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
-                // let external_nullifier = poseidon_hash([epoch, RLN_APP_IDENTIFIER]);
-                // let x = hash_event(event);
-                // let y = public_inputs[0];
-                // let internal_nullifier = public_inputs[1];
-
-                // verification_failed =
-                //     proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
                 verification_failed =
-                    match proof.verify(&self.event_graph.signal_vk, &public_inputs) {
-                        Ok(()) => false,
-                        Err(e) => {
-                            error!("error: {e}");
-                            true
-                        }
-                    };
+                    proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
+
                 break
             }
 
             if verification_failed {
-                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event proof verification failed");
+                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event RLN proof verification failed");
                 continue
             }
-            ////////////////////
 
             // If we have already seen the event, we'll stay quiet.
             let current_genesis = self.event_graph.current_genesis.read().await;
