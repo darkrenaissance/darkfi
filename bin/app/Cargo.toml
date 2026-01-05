@@ -11,12 +11,6 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 [dependencies]
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
 
-# Currently latest version links to freetype-sys 0.19 but we use 0.21
-#harfbuzz-sys = "0.6.1"
-#harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }
-harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = ["bundled"] }
-freetype-rs = { version = "0.37.0", features = ["bundled"] }
-
 image = "0.25.9"
 qoi = "0.4.1"
 
@@ -84,12 +78,6 @@ schema-app = []
 schema-test = []
 
 [patch.crates-io]
-# We can remove these patches. But unfortunately harfbuzz-sys is still linking
-# the old freetype libs so we need to fix that first.
-# Fucking servo rust-harfbuzz
-freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
-freetype-sys = { git = "https://github.com/narodnik/freetype-sys2" }
-
 halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v032" }
 halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v032" }
 # This patch didn't work for me

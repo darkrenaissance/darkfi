@@ -45,7 +45,6 @@ mod pubsub;
 //mod ringbuf;
 mod scene;
 mod shape;
-mod text;
 mod text2;
 mod ui;
 mod util;
@@ -55,7 +54,6 @@ use crate::{
     gfx::EpochIndex,
     prop::{Property, PropertySubType, PropertyType},
     scene::{CallArgType, SceneNode, SceneNodeType},
-    text::TextShaper,
     util::AsyncRuntime,
 };
 #[cfg(feature = "enable-netdebug")]
@@ -152,9 +150,7 @@ impl God {
         let render_api = gfx::RenderApi::new(method_send);
         let event_pub = gfx::GraphicsEventPublisher::new();
 
-        let text_shaper = TextShaper::new();
-
-        let app = App::new(sg_root.clone(), render_api.clone(), text_shaper, fg_ex.clone());
+        let app = App::new(sg_root.clone(), render_api.clone(), fg_ex.clone());
 
         let app2 = app.clone();
         let cv_app_is_setup = Arc::new(CondVar::new());
@@ -482,7 +478,7 @@ fn main() {
 
     GOD.get_or_init(God::new);
 
-    // Reuse render_api, event_pub and text_shaper
+    // Reuse render_api and event_pub
     // No need for setup(), just wait for gfx start then call .start()
     // ZMQ, darkirc stay running
 

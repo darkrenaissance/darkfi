@@ -31,7 +31,6 @@ use crate::{
     plugin::PluginSettings,
     prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
-    text::TextShaperPtr,
     ui::{chatview, Window},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -59,7 +58,6 @@ pub type AppPtr = Arc<App>;
 pub struct App {
     pub sg_root: SceneNodePtr,
     pub render_api: RenderApi,
-    pub text_shaper: TextShaperPtr,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
 }
@@ -68,10 +66,9 @@ impl App {
     pub fn new(
         sg_root: SceneNodePtr,
         render_api: RenderApi,
-        text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Arc<Self> {
-        Arc::new(Self { sg_root, ex, render_api, text_shaper, tasks: SyncMutex::new(vec![]) })
+        Arc::new(Self { sg_root, ex, render_api, tasks: SyncMutex::new(vec![]) })
     }
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all

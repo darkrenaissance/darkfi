@@ -26,6 +26,7 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{Button, EditBox, Layer, ShapeVertex, Text, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
 
@@ -134,7 +135,7 @@ impl Setting {
     }
 }
 
-pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = Compiler::new();
     cc.add_const_f32("BORDER_RIGHT_SCALE", BORDER_RIGHT_SCALE);
     cc.add_const_f32("SEARCH_PADDING_X", SEARCH_PADDING_X);
@@ -281,8 +282,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
+                i18n_fish.clone(),
             )
         })
         .await;
@@ -383,8 +383,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
+                i18n_fish.clone(),
             )
         })
         .await;
@@ -410,8 +409,7 @@ pub async fn make(app: &App, window: SceneNodePtr, _ex: ExecutorPtr) {
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
+                i18n_fish.clone(),
             )
         })
         .await;
