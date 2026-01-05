@@ -32,7 +32,7 @@ circuit "Rlnv2Diff_Signal" {
 	constrain_instance(external_nullifier);
 
 	# Calculating internal nullifier
-	# a_0 = identity_secret_hash
+	# a_0 = identity_secret
 	a_0 = poseidon_hash(identity_nullifier, identity_trapdoor);
 	a_1 = poseidon_hash(a_0, external_nullifier, message_id);
 	x_a_1  = base_mul(x, a_1);
