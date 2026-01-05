@@ -20,7 +20,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
-    text2::{TextContext, FONT_STACK, TEXT_CTX},
+    text::{TextContext, FONT_STACK, TEXT_CTX},
 };
 
 pub struct Editor {

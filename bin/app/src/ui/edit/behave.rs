@@ -24,7 +24,7 @@ use std::sync::{atomic::Ordering, Arc};
 use crate::{
     gfx::{Point, Rectangle},
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, Role},
-    text2::Editor,
+    text::Editor,
 };
 
 use super::EditorHandle;

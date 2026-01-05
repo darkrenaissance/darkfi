@@ -30,7 +30,7 @@ use crate::{
         PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
-    text2::{self, TEXT_CTX},
+    text::{self, TEXT_CTX},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
@@ -128,12 +128,12 @@ impl Text {
             txt_ctx.make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[])
         };
 
-        let mut debug_opts = text2::DebugRenderOptions::OFF;
+        let mut debug_opts = text::DebugRenderOptions::OFF;
         if self.debug.get() {
-            debug_opts |= text2::DebugRenderOptions::BASELINE;
+            debug_opts |= text::DebugRenderOptions::BASELINE;
         }
 
-        text2::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
+        text::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
     }
 
     #[instrument(target = "ui::text")]

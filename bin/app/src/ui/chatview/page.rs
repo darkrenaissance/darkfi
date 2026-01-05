@@ -38,7 +38,7 @@ use crate::{
     gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
-    text2,
+    text,
     util::enumerate_mut,
 };
 
@@ -137,7 +137,7 @@ impl PrivMessage {
                 .push(DrawInstruction::Draw(mesh.alloc(render_api).draw_with_textures(vec![])));
         }
 
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut txt_ctx = text::TEXT_CTX.get().await;
 
         // Timestamp layout
         let timestr = Self::gen_timestr(self.timestamp);
@@ -187,13 +187,13 @@ impl PrivMessage {
 
         // Render timestamp
         let timestamp_instrs =
-            text2::render_layout(&timestamp_layout, render_api, gfxtag!("chatview_privmsg_ts"));
+            text::render_layout(&timestamp_layout, render_api, gfxtag!("chatview_privmsg_ts"));
         all_instrs.extend(timestamp_instrs);
 
         // Render message text offset by timestamp_width
         all_instrs.push(DrawInstruction::Move(Point::new(timestamp_width, 0.)));
         let text_instrs =
-            text2::render_layout(&text_layout, render_api, gfxtag!("chatview_privmsg_text"));
+            text::render_layout(&text_layout, render_api, gfxtag!("chatview_privmsg_text"));
         all_instrs.extend(text_instrs);
 
         self.mesh_cache = Some(all_instrs.clone());
@@ -276,7 +276,7 @@ impl DateMessage {
 
         let datestr = Self::datestr(self.timestamp);
 
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut txt_ctx = text::TEXT_CTX.get().await;
         let layout = txt_ctx.make_layout(
             &datestr,
             timestamp_color,
@@ -288,7 +288,7 @@ impl DateMessage {
         );
         drop(txt_ctx);
 
-        let mut txt_instrs = text2::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
+        let mut txt_instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
         let mut instrs = Vec::with_capacity(1 + txt_instrs.len());
         instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
         instrs.append(&mut txt_instrs);
@@ -492,7 +492,7 @@ impl FileMessage {
         let file_strs = Self::filestr(&self.file_url, &self.status);
 
         let mut layouts = Vec::with_capacity(file_strs.len());
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut txt_ctx = text::TEXT_CTX.get().await;
         for file_str in &file_strs {
             let layout = txt_ctx.make_layout(
                 file_str,
@@ -513,7 +513,7 @@ impl FileMessage {
             all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
 
             let instrs =
-                text2::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
+                text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
             all_instrs.extend(instrs);
         }
 

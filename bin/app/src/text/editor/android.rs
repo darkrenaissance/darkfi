@@ -24,7 +24,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
-    text2::{TextContext, TEXT_CTX},
+    text::{TextContext, TEXT_CTX},
 };
 use std::cmp::{max, min};
 

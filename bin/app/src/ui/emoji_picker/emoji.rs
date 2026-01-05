@@ -27,7 +27,7 @@ use std::{
 use crate::{
     gfx::{gfxtag, DrawInstruction, DrawMesh, Rectangle, RenderApi},
     mesh::{MeshBuilder, COLOR_WHITE},
-    text2,
+    text,
 };
 
 use super::default;
@@ -85,13 +85,13 @@ impl EmojiMeshes {
     /// Make mesh for this emoji centered at (0, 0)
     async fn gen_emoji_mesh(&self, emoji: &str) -> DrawMesh {
         //d!("rendering emoji: '{emoji}'");
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut txt_ctx = text::TEXT_CTX.get().await;
 
         // The params here don't actually matter since we're talking about BMP fixed sizes
         let layout = txt_ctx.make_layout(emoji, COLOR_WHITE, self.emoji_size, 1., 1., None, &[]);
         drop(txt_ctx);
 
-        let instrs = text2::render_layout(&layout, &self.render_api, gfxtag!("emoji_mesh"));
+        let instrs = text::render_layout(&layout, &self.render_api, gfxtag!("emoji_mesh"));
 
         // Extract the mesh from the draw instructions
         // For a single emoji, we should get exactly one Draw instruction with a mesh

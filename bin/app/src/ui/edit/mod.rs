@@ -46,7 +46,7 @@ use crate::{
         PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    text2::{self, Editor},
+    text::{self, Editor},
     ExecutorPtr,
 };
 
@@ -516,7 +516,7 @@ impl BaseEdit {
         match key {
             'a' => {
                 if action_mod {
-                    let mut txt_ctx = text2::TEXT_CTX.get().await;
+                    let mut txt_ctx = text::TEXT_CTX.get().await;
                     let mut editor = self.lock_editor().await;
                     let mut drv = editor.driver(&mut txt_ctx).unwrap();
 
@@ -565,7 +565,7 @@ impl BaseEdit {
 
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
 
-        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        let mut txt_ctx = text::TEXT_CTX.get().await;
         let mut editor = self.lock_editor().await;
         let mut drv = editor.driver(&mut txt_ctx).unwrap();
 
@@ -935,7 +935,7 @@ impl BaseEdit {
             let mut editor = self.lock_editor().await;
 
             // The below lines rely on parley driver which android does not use
-            //let mut txt_ctx = text2::TEXT_CTX.get().await;
+            //let mut txt_ctx = text::TEXT_CTX.get().await;
             //let mut drv = editor.driver(&mut txt_ctx).unwrap();
             //drv.extend_selection_to_point(clip_mouse_pos.x, clip_mouse_pos.y);
             let layout = editor.layout();
@@ -1106,7 +1106,7 @@ impl BaseEdit {
         let layout = editor.layout();
 
         let mut render_instrs =
-            text2::render_layout(layout, &self.render_api, gfxtag!("chatedit_txt_mesh"));
+            text::render_layout(layout, &self.render_api, gfxtag!("chatedit_txt_mesh"));
         instrs.append(&mut render_instrs);
 
         instrs
@@ -1681,7 +1681,7 @@ impl UIObject for BaseEdit {
         self.abs_to_local(&mut mouse_pos);
 
         {
-            let mut txt_ctx = text2::TEXT_CTX.get().await;
+            let mut txt_ctx = text::TEXT_CTX.get().await;
             let mut editor = self.lock_editor().await;
             let mut drv = editor.driver(&mut txt_ctx).unwrap();
             drv.move_to_point(mouse_pos.x, mouse_pos.y);
