@@ -47,7 +47,6 @@ use crate::{
         PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    text::TextShaperPtr,
     ExecutorPtr,
 };
 
@@ -196,7 +195,6 @@ impl ChatView {
         tree: sled::Tree,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
-        text_shaper: TextShaperPtr,
         sg_root: SceneNodePtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -254,7 +252,6 @@ impl ChatView {
                 debug,
                 window_scale,
                 render_api,
-                text_shaper,
             )),
             dc_key: OsRng.gen(),
 

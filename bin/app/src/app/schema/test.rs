@@ -364,7 +364,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 chat_tree,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
                 app.sg_root.clone(),
             )
         })

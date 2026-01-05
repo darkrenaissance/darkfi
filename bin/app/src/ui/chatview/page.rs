@@ -38,7 +38,6 @@ use crate::{
     gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
-    text::{TextShaper, TextShaperPtr},
     text2,
     util::enumerate_mut,
 };
@@ -725,7 +724,6 @@ pub struct MessageBuffer {
     old_window_scale: f32,
 
     render_api: RenderApi,
-    text_shaper: TextShaperPtr,
 }
 
 impl MessageBuffer {
@@ -743,7 +741,6 @@ impl MessageBuffer {
         debug: PropertyBool,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
-        text_shaper: TextShaperPtr,
     ) -> Self {
         let old_window_scale = window_scale.get();
         Self {
@@ -767,7 +764,6 @@ impl MessageBuffer {
             old_window_scale,
 
             render_api,
-            text_shaper,
         }
     }
 
