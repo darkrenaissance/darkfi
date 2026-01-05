@@ -23,7 +23,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use super::{AndroidTextInputState, SharedStatePtr};
+use super::{super::util::get_jni_env, AndroidTextInputState, SharedStatePtr};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "android::textinput::gametextinput", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "android::textinput::gametextinput", $($arg)*); } }
@@ -57,7 +57,7 @@ pub struct GameTextInput {
 impl GameTextInput {
     pub fn new() -> Self {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
 
             let find_class = (**env).FindClass.unwrap();
 
@@ -186,7 +186,7 @@ impl GameTextInput {
             return
         };
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let jstate = self.state_to_java(state);
             call_void_method!(env, input_connection, "setState", "(Ltextinput/State;)V", jstate);
 
@@ -201,7 +201,7 @@ impl GameTextInput {
             return Err(())
         };
         let is_success = unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             call_bool_method!(env, input_connection, "setSelection", "(II)Z", start, end)
         };
         if is_success == 0u8 {
@@ -212,7 +212,7 @@ impl GameTextInput {
 
     pub fn set_input_connection(&self, input_connection: ndk_sys::jobject) {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let mut ic = self.input_connection.write();
             if let Some(old_ref) = *ic {
                 let delete_global_ref = (**env).DeleteGlobalRef.unwrap();
@@ -242,7 +242,7 @@ impl GameTextInput {
             return
         };
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let call_void_method = (**env).CallVoidMethod.unwrap();
             call_void_method(
                 env,
@@ -260,7 +260,7 @@ impl GameTextInput {
             return
         };
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let call_void_method = (**env).CallVoidMethod.unwrap();
             call_void_method(
                 env,
@@ -278,7 +278,7 @@ impl GameTextInput {
             return
         };
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let call_void_method = (**env).CallVoidMethod.unwrap();
             call_void_method(env, input_connection, self.restart_input_method);
         }
@@ -286,7 +286,7 @@ impl GameTextInput {
 
     fn state_to_java(&self, state: &AndroidTextInputState) -> ndk_sys::jobject {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let new_string_utf = (**env).NewStringUTF.unwrap();
             let text_str = CString::new(state.text.as_str()).unwrap();
             let jtext = new_string_utf(env, text_str.as_ptr());
@@ -317,7 +317,7 @@ impl GameTextInput {
 
     fn state_from_java(&self, event_state: ndk_sys::jobject) -> AndroidTextInputState {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let get_object_field = (**env).GetObjectField.unwrap();
             let jtext =
                 get_object_field(env, event_state, self.state_class_info.text) as ndk_sys::jstring;
@@ -355,7 +355,7 @@ impl GameTextInput {
 impl Drop for GameTextInput {
     fn drop(&mut self) {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let delete_global_ref = (**env).DeleteGlobalRef.unwrap();
             if self.input_connection_class != std::ptr::null_mut() {
                 delete_global_ref(env, self.input_connection_class);

@@ -22,13 +22,15 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 pub mod insets;
 pub mod textinput;
-mod util;
+pub(self) mod util;
 pub mod vid;
+
+use util::get_jni_env;
 
 macro_rules! call_mainactivity_int_method {
     ($method:expr, $sig:expr $(, $args:expr)*) => {{
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             ndk_utils::call_int_method!(env, android::ACTIVITY, $method, $sig $(, $args)*)
         }
     }};
@@ -36,7 +38,7 @@ macro_rules! call_mainactivity_int_method {
 macro_rules! call_mainactivity_str_method {
     ($method:expr) => {{
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let text = ndk_utils::call_object_method!(
                 env,
                 android::ACTIVITY,
@@ -50,7 +52,7 @@ macro_rules! call_mainactivity_str_method {
 macro_rules! call_mainactivity_float_method {
     ($method:expr) => {{
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             ndk_utils::call_method!(CallFloatMethod, env, android::ACTIVITY, $method, "()F")
         }
     }};
@@ -58,7 +60,7 @@ macro_rules! call_mainactivity_float_method {
 macro_rules! call_mainactivity_bool_method {
     ($method:expr) => {{
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             ndk_utils::call_method!(CallBooleanMethod, env, android::ACTIVITY, $method, "()Z") !=
                 0u8
         }

@@ -25,6 +25,8 @@ use std::{
     sync::{mpsc, LazyLock},
 };
 
+use super::util::get_jni_env;
+
 pub struct DecodedFrame {
     pub width: usize,
     pub height: usize,
@@ -113,7 +115,7 @@ pub struct VideoDecoderHandle {
 impl Drop for VideoDecoderHandle {
     fn drop(&mut self) {
         unsafe {
-            let env = android::attach_jni_env();
+            let env = get_jni_env();
             let delete_local_ref = (**env).DeleteLocalRef.unwrap();
             delete_local_ref(env, self.obj);
         }
@@ -122,7 +124,7 @@ impl Drop for VideoDecoderHandle {
 
 pub fn videodecoder_init(path: &str) -> Option<VideoDecoderHandle> {
     unsafe {
-        let env = android::attach_jni_env();
+        let env = get_jni_env();
 
         let decoder_obj = ndk_utils::call_object_method!(
             env,
@@ -156,14 +158,14 @@ pub fn videodecoder_init(path: &str) -> Option<VideoDecoderHandle> {
 
 pub fn videodecoder_set_id(decoder_obj: ndk_sys::jobject, id: usize) {
     unsafe {
-        let env = android::attach_jni_env();
+        let env = get_jni_env();
         ndk_utils::call_void_method!(env, decoder_obj, "setDecoderId", "(I)V", id as i32);
     }
 }
 
 pub fn videodecoder_decode_all(decoder_obj: ndk_sys::jobject) -> i32 {
     unsafe {
-        let env = android::attach_jni_env();
+        let env = get_jni_env();
         ndk_utils::call_int_method!(env, decoder_obj, "decodeAll", "()I")
     }
 }

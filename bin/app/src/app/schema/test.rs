@@ -18,6 +18,7 @@
 
 use sled_overlay::sled;
 
+use super::chat::populate_tree;
 use crate::{
     app::{
         node::{
@@ -33,20 +34,28 @@ use crate::{
     ui::{BaseEdit, BaseEditType, ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
-use super::chat::populate_tree;
 
 const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
+    use crate::android::get_appdata_path;
+    use std::path::PathBuf;
+
+    pub fn get_chatdb_path() -> PathBuf {
+        get_appdata_path().join("chatdb")
+    }
     //pub const KING_PATH: &str = "king.png";
     pub const VID_PATH: &str = "forest_720x1280.mp4";
 }
 
 #[cfg(not(target_os = "android"))]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "chatdb";
+    use std::path::PathBuf;
+
+    pub fn get_chatdb_path() -> PathBuf {
+        "chatdb"
+    }
     //pub const KING_PATH: &str = "assets/king.png";
     pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
 }
@@ -342,7 +351,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
+    let db = sled::open(get_chatdb_path()).expect("cannot open sleddb");
     let chat_tree = db.open_tree(b"chat").unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);

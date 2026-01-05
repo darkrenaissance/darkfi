@@ -16,7 +16,57 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::native::android::ndk_sys;
+use miniquad::native::android::{self, ndk_sys};
+use std::cell::RefCell;
+
+thread_local! {
+    static JNI_ENV: RefCell<JniEnvHolder> = RefCell::new(JniEnvHolder {
+        env: std::ptr::null_mut(),
+        vm: std::ptr::null_mut(),
+    });
+}
+
+struct JniEnvHolder {
+    env: *mut ndk_sys::JNIEnv,
+    vm: *mut ndk_sys::JavaVM,
+}
+
+impl Drop for JniEnvHolder {
+    fn drop(&mut self) {
+        assert!(!self.env.is_null());
+        unsafe {
+            let detach_current_thread = (**self.vm).DetachCurrentThread.unwrap();
+            let _ = detach_current_thread(self.vm);
+        }
+    }
+}
+
+/// Get the JNIEnv for the current thread, attaching if necessary.
+/// The returned pointer is cached per-thread and automatically detached
+/// when the thread exits.
+pub unsafe fn get_jni_env() -> *mut ndk_sys::JNIEnv {
+    JNI_ENV.with(|holder| {
+        let mut holder = holder.borrow_mut();
+        if !holder.env.is_null() {
+            return holder.env;
+        }
+
+        // Call miniquad's attach_jni_env to get the env
+        let env = android::attach_jni_env();
+        assert!(!env.is_null());
+
+        // Retrieve the JavaVM from the JNIEnv
+        let get_java_vm = (**env).GetJavaVM.unwrap();
+        let mut vm: *mut ndk_sys::JavaVM = std::ptr::null_mut();
+        let res = get_java_vm(env, &mut vm);
+        assert!(res == 0);
+        assert!(!vm.is_null());
+
+        holder.env = env;
+        holder.vm = vm;
+        env
+    })
+}
 
 /// Check for pending Java exceptions and log them
 ///
