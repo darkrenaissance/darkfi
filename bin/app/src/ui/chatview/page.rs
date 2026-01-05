@@ -33,7 +33,7 @@ use std::{
 };
 use url::Url;
 
-use super::{max, MessageId, Timestamp};
+use super::{MessageId, Timestamp};
 use crate::{
     gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
@@ -49,10 +49,6 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview::message_buffer
 //const PRELOAD_PAGES: usize = 10;
 
 const UNCONF_COLOR: [f32; 4] = [0.4, 0.4, 0.4, 1.];
-
-fn is_whitespace(s: &str) -> bool {
-    s.chars().all(char::is_whitespace)
-}
 
 #[derive(Clone)]
 pub struct PrivMessage {
@@ -81,12 +77,6 @@ impl PrivMessage {
         id: MessageId,
         nick: String,
         text: String,
-
-        _line_width: f32,
-        _timestamp_width: f32,
-
-        _text_shaper: &TextShaper,
-        _render_api: &RenderApi,
     ) -> Message {
         if nick == "NOTICE" {
             font_size *= 0.8;
@@ -123,13 +113,11 @@ impl PrivMessage {
         clip: &Rectangle,
         line_height: f32,
         msg_spacing: f32,
-        _baseline: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
         hi_bg_color: Color,
-        _debug_render: bool,
         render_api: &RenderApi,
     ) -> Vec<DrawInstruction> {
         if let Some(instrs) = &self.mesh_cache {
@@ -213,25 +201,11 @@ impl PrivMessage {
         all_instrs
     }
 
-    fn adjust_params(
-        &mut self,
-        font_size: f32,
-        timestamp_font_size: f32,
-        window_scale: f32,
-        _line_width: f32,
-        _timestamp_width: f32,
-        _text_shaper: &TextShaper,
-        _render_api: &RenderApi,
-    ) {
+    fn adjust_params(&mut self, font_size: f32, timestamp_font_size: f32, window_scale: f32) {
         let font_size = if self.nick == "NOTICE" { font_size * 0.8 } else { font_size };
         self.font_size = font_size;
         self.timestamp_font_size = timestamp_font_size;
         self.window_scale = window_scale;
-    }
-
-    fn adjust_width(&mut self, _line_width: f32, _timestamp_width: f32) {
-        // Width changes affect wrapping, so clear the mesh cache
-        self.mesh_cache = None;
     }
 
     fn clear_mesh(&mut self) {
@@ -261,12 +235,7 @@ pub struct DateMessage {
 }
 
 impl DateMessage {
-    pub fn new(
-        font_size: f32,
-        window_scale: f32,
-        timestamp: Timestamp,
-        _render_api: &RenderApi,
-    ) -> Message {
+    pub fn new(font_size: f32, window_scale: f32, timestamp: Timestamp) -> Message {
         let timestamp = Self::timest_to_midnight(timestamp);
         Message::Date(Self { font_size, window_scale, timestamp, mesh_cache: None })
     }
@@ -285,13 +254,7 @@ impl DateMessage {
         timestamp
     }
 
-    fn adjust_params(
-        &mut self,
-        font_size: f32,
-        window_scale: f32,
-        _text_shaper: &TextShaper,
-        _render_api: &RenderApi,
-    ) {
+    fn adjust_params(&mut self, font_size: f32, window_scale: f32) {
         self.font_size = font_size;
         self.window_scale = window_scale;
         self.mesh_cache = None;
@@ -303,13 +266,8 @@ impl DateMessage {
 
     async fn gen_mesh(
         &mut self,
-        _clip: &Rectangle,
         line_height: f32,
-        _baseline: f32,
-        _nick_colors: &[Color],
         timestamp_color: Color,
-        _text_color: Color,
-        _debug_render: bool,
         render_api: &RenderApi,
     ) -> Vec<DrawInstruction> {
         // Return cached mesh if available
@@ -391,10 +349,6 @@ impl FileMessage {
         file_url: Url,
         status: FileMessageStatus,
         timestamp: Timestamp,
-        _nick: String,
-
-        _text_shaper: &TextShaper,
-        _render_api: &RenderApi,
     ) -> Message {
         Message::File(Self {
             font_size,
@@ -442,19 +396,11 @@ impl FileMessage {
         }
     }
 
-    fn adjust_params(
-        &mut self,
-        font_size: f32,
-        window_scale: f32,
-        _text_shaper: &TextShaper,
-        _render_api: &RenderApi,
-    ) {
+    fn adjust_params(&mut self, font_size: f32, window_scale: f32) {
         self.font_size = font_size;
         self.window_scale = window_scale;
         self.mesh_cache = None;
     }
-
-    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {}
 
     fn clear_mesh(&mut self) {
         self.mesh_cache = None;
@@ -475,14 +421,8 @@ impl FileMessage {
         &mut self,
         clip: &Rectangle,
         line_height: f32,
-        msg_spacing: f32,
-        baseline: f32,
         timestamp_width: f32,
-        _nick_colors: &[Color],
         timestamp_color: Color,
-        _text_color: Color,
-        _hi_bg_color: Color,
-        _debug_render: bool,
         render_api: &RenderApi,
     ) -> Vec<DrawInstruction> {
         if let Some(instrs) = &self.mesh_cache {
@@ -554,7 +494,7 @@ impl FileMessage {
 
         let mut layouts = Vec::with_capacity(file_strs.len());
         let mut txt_ctx = text2::TEXT_CTX.get().await;
-        for (i, file_str) in file_strs.iter().enumerate() {
+        for file_str in &file_strs {
             let layout = txt_ctx.make_layout(
                 file_str,
                 color,
@@ -570,8 +510,7 @@ impl FileMessage {
 
         all_instrs
             .push(DrawInstruction::Move(Point::new(timestamp_width + Self::BOX_PADDING_X, 0.)));
-        let mut text_y_offset = 0.;
-        for (i, (file_str, layout)) in file_strs.iter().zip(layouts.into_iter()).enumerate() {
+        for layout in layouts {
             all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
 
             let instrs =
@@ -636,11 +575,7 @@ impl FileMessage {
 
         // No image yet, so calculate height for text box
         // filestr() always returns 2 lines: [file_hash, status_string]
-        let text_height = 2. * line_height;
-        let box_padding = Self::BOX_PADDING_TOP + Self::BOX_PADDING_BOTTOM;
-        let margins = Self::MARGIN_TOP + Self::MARGIN_BOTTOM;
-
-        text_height //+ box_padding + margins
+        2. * line_height
     }
 
     fn select(&mut self) {}
@@ -677,36 +612,11 @@ impl Message {
         }
     }
 
-    fn adjust_params(
-        &mut self,
-        font_size: f32,
-        timestamp_font_size: f32,
-        window_scale: f32,
-        line_width: f32,
-        timestamp_width: f32,
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
-    ) {
+    fn adjust_params(&mut self, font_size: f32, timestamp_font_size: f32, window_scale: f32) {
         match self {
-            Self::Priv(m) => m.adjust_params(
-                font_size,
-                timestamp_font_size,
-                window_scale,
-                line_width,
-                timestamp_width,
-                text_shaper,
-                render_api,
-            ),
-            Self::Date(m) => m.adjust_params(font_size, window_scale, text_shaper, render_api),
-            Self::File(m) => m.adjust_params(font_size, window_scale, text_shaper, render_api),
-        }
-    }
-
-    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
-        match self {
-            Self::Priv(m) => m.adjust_width(line_width, timestamp_width),
-            Self::Date(_) => {}
-            Self::File(m) => m.adjust_width(line_width, timestamp_width),
+            Self::Priv(m) => m.adjust_params(font_size, timestamp_font_size, window_scale),
+            Self::Date(m) => m.adjust_params(font_size, window_scale),
+            Self::File(m) => m.adjust_params(font_size, window_scale),
         }
     }
 
@@ -723,13 +633,11 @@ impl Message {
         clip: &Rectangle,
         line_height: f32,
         msg_spacing: f32,
-        baseline: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
         hi_bg_color: Color,
-        debug_render: bool,
         render_api: &RenderApi,
     ) -> Vec<DrawInstruction> {
         match self {
@@ -738,45 +646,18 @@ impl Message {
                     clip,
                     line_height,
                     msg_spacing,
-                    baseline,
                     timestamp_width,
                     nick_colors,
                     timestamp_color,
                     text_color,
                     hi_bg_color,
-                    debug_render,
                     render_api,
                 )
                 .await
             }
-            Self::Date(m) => {
-                m.gen_mesh(
-                    clip,
-                    line_height,
-                    baseline,
-                    nick_colors,
-                    timestamp_color,
-                    text_color,
-                    debug_render,
-                    render_api,
-                )
-                .await
-            }
+            Self::Date(m) => m.gen_mesh(line_height, timestamp_color, render_api).await,
             Self::File(m) => {
-                m.gen_mesh(
-                    clip,
-                    line_height,
-                    msg_spacing,
-                    baseline,
-                    timestamp_width,
-                    nick_colors,
-                    timestamp_color,
-                    text_color,
-                    hi_bg_color,
-                    debug_render,
-                    render_api,
-                )
-                .await
+                m.gen_mesh(clip, line_height, timestamp_width, timestamp_color, render_api).await
             }
         }
     }
@@ -912,30 +793,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
 
         for msg in &mut self.msgs {
-            msg.adjust_params(
-                font_size,
-                timestamp_font_size,
-                window_scale,
-                self.line_width,
-                timestamp_width,
-                &self.text_shaper,
-                &self.render_api,
-            );
-        }
-    }
-
-    /// For scrolling we want to be able to adjust and measure without
-    /// explicitly rendering since it may be off screen.
-    pub fn adjust_width(&mut self, line_width: f32) {
-        if (line_width - self.line_width).abs() < f32::EPSILON {
-            return
-        }
-        self.line_width = line_width;
-
-        let timestamp_width = self.timestamp_width.get();
-
-        for msg in &mut self.msgs {
-            msg.adjust_width(line_width, timestamp_width);
+            msg.adjust_params(font_size, timestamp_font_size, window_scale);
         }
     }
 
@@ -1015,10 +873,6 @@ impl MessageBuffer {
             msg_id,
             nick,
             text,
-            self.line_width,
-            timestamp_width,
-            &self.text_shaper,
-            &self.render_api,
         );
 
         if self.msgs.is_empty() {
@@ -1077,10 +931,6 @@ impl MessageBuffer {
             msg_id,
             nick,
             text,
-            self.line_width,
-            timestamp_width,
-            &self.text_shaper,
-            &self.render_api,
         );
 
         let msg_height = msg.height(self.line_height.get());
@@ -1137,13 +987,11 @@ impl MessageBuffer {
                     rect,
                     line_height,
                     msg_spacing,
-                    baseline,
                     timestamp_width,
                     &nick_colors,
                     timest_color,
                     text_color,
                     hi_bg_color,
-                    debug_render,
                     &render_api,
                 )
                 .await;
@@ -1168,16 +1016,7 @@ impl MessageBuffer {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
 
-        let msg = FileMessage::new(
-            font_size,
-            window_scale,
-            file_url,
-            status,
-            timest,
-            nick,
-            &self.text_shaper,
-            &self.render_api,
-        );
+        let msg = FileMessage::new(font_size, window_scale, file_url, status, timest);
 
         // Timestamps go from most recent backwards
         let mut idx = None;
@@ -1241,7 +1080,7 @@ impl MessageBuffer {
         let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
 
         if !self.date_msgs.contains_key(&date) {
-            let datemsg = DateMessage::new(font_size, window_scale, timest, &self.render_api);
+            let datemsg = DateMessage::new(font_size, window_scale, timest);
             self.date_msgs.insert(date, datemsg);
         }
 
@@ -1323,7 +1162,6 @@ impl MessageBuffer {
             if let Some(filemsg) = msg.get_filemsg_mut() {
                 if filemsg.file_url.host_str() == Some(&hash) {
                     filemsg.set_status(&status);
-                    filemsg.adjust_width(self.line_width, self.timestamp_width.get());
                     filemsg.clear_mesh();
                 }
             }

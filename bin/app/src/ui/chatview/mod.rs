@@ -885,7 +885,6 @@ impl UIObject for ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.adjust_window_scale();
-        msgbuf.adjust_width(rect.w);
         msgbuf.clear_meshes();
 
         let scroll = self.scroll.get();
