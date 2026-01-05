@@ -35,12 +35,10 @@ use url::Url;
 
 use super::{max, MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawInstruction, DrawMesh, ManagedTexturePtr, Point, Rectangle, RenderApi},
-    mesh::{
-        Color, MeshBuilder, COLOR_BLUE, COLOR_CYAN, COLOR_GREEN, COLOR_PINK, COLOR_RED, COLOR_WHITE,
-    },
+    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
+    mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
-    text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
+    text::{TextShaper, TextShaperPtr},
     text2,
     util::enumerate_mut,
 };
@@ -372,12 +370,12 @@ pub struct FileMessage {
     status: FileMessageStatus,
     imgbuf: Arc<SyncMutex<Option<GenericImageBuffer>>>,
     timestamp: Timestamp,
-    glyphs: Vec<Vec<Glyph>>,
 
-    atlas: text::RenderedAtlas,
+    mesh_cache: Option<Vec<DrawInstruction>>,
 }
 
 impl FileMessage {
+    // This is not portable across devices and will break
     const GLOW_SIZE: f32 = 20.;
     const MARGIN_TOP: f32 = 4.;
     const MARGIN_BOTTOM: f32 = 10.;
@@ -395,20 +393,9 @@ impl FileMessage {
         timestamp: Timestamp,
         _nick: String,
 
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
+        _text_shaper: &TextShaper,
+        _render_api: &RenderApi,
     ) -> Message {
-        let mut glyphs = Vec::new();
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_filemsg"));
-
-        for str in Self::filestr(&file_url, &status) {
-            let glyphs_ = text_shaper.shape(str, font_size, window_scale);
-            atlas.push(&glyphs_);
-            glyphs.push(glyphs_);
-        }
-
-        let atlas = atlas.make();
-
         Message::File(Self {
             font_size,
             window_scale,
@@ -417,8 +404,7 @@ impl FileMessage {
             status,
             imgbuf: Arc::new(SyncMutex::new(None)),
             timestamp,
-            glyphs,
-            atlas,
+            mesh_cache: None,
         })
     }
 
@@ -460,31 +446,19 @@ impl FileMessage {
         &mut self,
         font_size: f32,
         window_scale: f32,
-        text_shaper: &TextShaper,
-        render_api: &RenderApi,
+        _text_shaper: &TextShaper,
+        _render_api: &RenderApi,
     ) {
         self.font_size = font_size;
         self.window_scale = window_scale;
-
-        self.glyphs = Vec::new();
-        let mut atlas = text::Atlas::new(render_api, gfxtag!("chatview_filemsg"));
-
-        for str in Self::filestr(&self.file_url, &self.status) {
-            let glyphs = text_shaper.shape(str, font_size, window_scale);
-            atlas.push(&glyphs);
-            self.glyphs.push(glyphs);
-        }
-
-        self.atlas = atlas.make();
+        self.mesh_cache = None;
     }
 
-    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
-        let width = line_width - timestamp_width;
-        // clamp to > 0
-        self.max_width = max(width, 0.);
-    }
+    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {}
 
-    fn clear_mesh(&mut self) {}
+    fn clear_mesh(&mut self) {
+        self.mesh_cache = None;
+    }
 
     fn get_img_size(&self, imgbuf: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> (f32, f32) {
         let img_w = imgbuf.width() as f32;
@@ -497,25 +471,34 @@ impl FileMessage {
         (img_w * scale, img_h * scale)
     }
 
-    fn gen_mesh(
+    async fn gen_mesh(
         &mut self,
-        _clip: &Rectangle,
+        clip: &Rectangle,
         line_height: f32,
+        msg_spacing: f32,
         baseline: f32,
         timestamp_width: f32,
         _nick_colors: &[Color],
         timestamp_color: Color,
         _text_color: Color,
+        _hi_bg_color: Color,
         _debug_render: bool,
         render_api: &RenderApi,
-    ) -> Vec<DrawMesh> {
-        let uv_rect = Rectangle::from([0., 0., 1., 1.]);
+    ) -> Vec<DrawInstruction> {
+        if let Some(instrs) = &self.mesh_cache {
+            return instrs.clone()
+        }
 
-        let imgbuf_ = self.imgbuf.lock();
-        if let Some(ref imgbuf) = *imgbuf_ {
-            let (img_w, img_h) = self.get_img_size(imgbuf);
-            drop(imgbuf_);
+        self.max_width = clip.w - timestamp_width;
 
+        // Extract image size while holding lock, then drop it
+        let mut img_size = None;
+        if let Some(img) = &*self.imgbuf.lock() {
+            img_size = Some(self.get_img_size(img));
+        }
+
+        // Lock is dropped here, safe to await now
+        if let Some((img_w, img_h)) = img_size {
             let mesh_rect =
                 Rectangle::from([timestamp_width, -img_h - Self::MARGIN_BOTTOM, img_w, img_h]);
             let texture = self.load_texture(render_api);
@@ -524,17 +507,24 @@ impl FileMessage {
             mesh_gradient.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
 
             let mesh_gradient = mesh_gradient.alloc(render_api);
-            let mesh_gradient = mesh_gradient.draw_untextured();
+            let mut instrs = vec![DrawInstruction::Draw(mesh_gradient.draw_untextured())];
 
             let mut mesh_img = MeshBuilder::new(gfxtag!("file_img"));
+            let uv_rect = Rectangle::from([0., 0., 1., 1.]);
             mesh_img.draw_box(&mesh_rect, COLOR_WHITE, &uv_rect);
             let mesh_img = mesh_img.alloc(render_api);
-            let mesh_img = mesh_img.draw_with_textures(vec![texture]);
-            return vec![mesh_img, mesh_gradient];
-        }
-        drop(imgbuf_);
+            instrs.push(DrawInstruction::Draw(mesh_img.draw_with_textures(vec![texture])));
 
-        let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg"));
+            self.mesh_cache = Some(instrs.clone());
+            // Image is downloaded so return
+            return instrs;
+        }
+
+        // Image is not downloaded yet
+
+        let mut all_instrs = vec![];
+
+        // Draw background box
 
         let color = match self.status {
             FileMessageStatus::Initializing => timestamp_color,
@@ -542,43 +532,55 @@ impl FileMessage {
             FileMessageStatus::Downloaded { .. } => COLOR_GREEN,
             FileMessageStatus::Error { .. } => COLOR_RED,
         };
+        let box_height = 2. * line_height + Self::BOX_PADDING_TOP + Self::BOX_PADDING_BOTTOM;
 
-        let mut text_width = 0.;
-        for (i, glyphs) in self.glyphs.iter().enumerate() {
-            let glyph_pos_iter =
-                GlyphPositionIter::new(self.font_size, self.window_scale, &glyphs, baseline);
-            for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
-                let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-                if glyph_rect.x + glyph_rect.w > text_width {
-                    text_width = glyph_rect.x + glyph_rect.w;
-                }
-                glyph_rect.x += timestamp_width + Self::BOX_PADDING_X;
-                glyph_rect.y -= line_height * (self.glyphs.len() - i) as f32 +
-                    Self::BOX_PADDING_BOTTOM +
-                    Self::MARGIN_BOTTOM;
-                mesh.draw_box(&glyph_rect, color, uv_rect);
-            }
-        }
-
-        let box_width = text_width + Self::BOX_PADDING_X * 2.;
-        let box_height = self.glyphs.len() as f32 * line_height +
-            Self::BOX_PADDING_TOP +
-            Self::BOX_PADDING_BOTTOM;
-        let mesh_rect = Rectangle::from([
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg_box"));
+        let box_width = self.max_width + Self::BOX_PADDING_X * 2.;
+        let mesh_rect = Rectangle::new(
             timestamp_width,
-            -box_height - Self::MARGIN_BOTTOM,
+            -box_height + Self::MARGIN_BOTTOM,
             box_width,
             box_height,
-        ]);
+        );
         mesh.draw_outline(&mesh_rect, color, 1.);
 
         let glow_color = [color[0], color[1], color[2], 0.3];
         mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
-
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_textures(vec![self.atlas.texture.clone()]);
 
-        vec![mesh]
+        all_instrs.push(DrawInstruction::Draw(mesh.draw_untextured()));
+
+        let file_strs = Self::filestr(&self.file_url, &self.status);
+
+        let mut layouts = Vec::with_capacity(file_strs.len());
+        let mut txt_ctx = text2::TEXT_CTX.get().await;
+        for (i, file_str) in file_strs.iter().enumerate() {
+            let layout = txt_ctx.make_layout(
+                file_str,
+                color,
+                self.font_size,
+                line_height / self.font_size,
+                self.window_scale,
+                Some(self.max_width),
+                &[],
+            );
+            layouts.push(layout);
+        }
+        drop(txt_ctx);
+
+        all_instrs
+            .push(DrawInstruction::Move(Point::new(timestamp_width + Self::BOX_PADDING_X, 0.)));
+        let mut text_y_offset = 0.;
+        for (i, (file_str, layout)) in file_strs.iter().zip(layouts.into_iter()).enumerate() {
+            all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
+
+            let instrs =
+                text2::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
+            all_instrs.extend(instrs);
+        }
+
+        self.mesh_cache = Some(all_instrs.clone());
+        all_instrs
     }
 
     fn load_img(&self) -> Option<ImageBuffer<Rgba<u8>, Vec<u8>>> {
@@ -625,16 +627,20 @@ impl FileMessage {
 
     pub fn height(&self, line_height: f32) -> f32 {
         let imgbuf = self.imgbuf.lock();
-        imgbuf
-            .as_ref()
-            .map(|buf| self.get_img_size(buf).1 as f32 + Self::MARGIN_TOP + Self::MARGIN_BOTTOM)
-            .unwrap_or(
-                line_height * self.glyphs.len() as f32 +
-                    Self::BOX_PADDING_TOP +
-                    Self::BOX_PADDING_BOTTOM +
-                    Self::MARGIN_TOP +
-                    Self::MARGIN_BOTTOM,
-            )
+        // If image is downloaded, return image height plus margins
+        if let Some(buf) = &*imgbuf {
+            let img_height = self.get_img_size(buf).1;
+            return img_height + Self::MARGIN_TOP + Self::MARGIN_BOTTOM;
+        }
+        drop(imgbuf);
+
+        // No image yet, so calculate height for text box
+        // filestr() always returns 2 lines: [file_hash, status_string]
+        let text_height = 2. * line_height;
+        let box_padding = Self::BOX_PADDING_TOP + Self::BOX_PADDING_BOTTOM;
+        let margins = Self::MARGIN_TOP + Self::MARGIN_BOTTOM;
+
+        text_height //+ box_padding + margins
     }
 
     fn select(&mut self) {}
@@ -757,18 +763,20 @@ impl Message {
                 .await
             }
             Self::File(m) => {
-                let meshes = m.gen_mesh(
+                m.gen_mesh(
                     clip,
                     line_height,
+                    msg_spacing,
                     baseline,
                     timestamp_width,
                     nick_colors,
                     timestamp_color,
                     text_color,
+                    hi_bg_color,
                     debug_render,
                     render_api,
-                );
-                meshes.into_iter().map(DrawInstruction::Draw).collect()
+                )
+                .await
             }
         }
     }
@@ -1279,7 +1287,6 @@ impl MessageBuffer {
                 }
 
                 msg.select();
-
                 msg.clear_mesh();
                 break
             }

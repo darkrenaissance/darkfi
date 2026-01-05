@@ -54,7 +54,7 @@ mod ui_consts {
     use std::path::PathBuf;
 
     pub fn get_chatdb_path() -> PathBuf {
-        "chatdb"
+        "chatdb".into()
     }
     //pub const KING_PATH: &str = "assets/king.png";
     pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";

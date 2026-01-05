@@ -460,13 +460,7 @@ impl ChatView {
                 return
             }
 
-            #[cfg(feature = "enable-plugins")]
             if let Some(url) = get_file_url(&text) {
-                // This is incorrect. Scenegraph paths should not be hardcoded in widgets
-                // nor should there be dependencies on other widgets.
-                // Instead use signals and slots through app layer. See how focus is done with
-                // the edit widgets.
-                let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
                 msgbuf.insert_filemsg(
                     timest,
                     msg_id,
@@ -475,9 +469,17 @@ impl ChatView {
                     url.clone(),
                 );
 
-                let mut data = vec![];
-                url.encode(&mut data).unwrap();
-                fud.call_method("get", data).await.unwrap();
+                // This is incorrect. Scenegraph paths should not be hardcoded in widgets
+                // nor should there be dependencies on other widgets.
+                // Instead use signals and slots through app layer. See how focus is done with
+                // the edit widgets.
+                #[cfg(feature = "enable-plugins")]
+                {
+                    let mut data = vec![];
+                    url.encode(&mut data).unwrap();
+                    let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
+                    fud.call_method("get", data).await.unwrap();
+                }
             }
         }
 
@@ -606,10 +608,7 @@ impl ChatView {
                 chatmsg.text.clone(),
             );
 
-            // See comment in handle_insert_line()
-            #[cfg(feature = "enable-plugins")]
             if let Some(url) = get_file_url(&chatmsg.text) {
-                let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
                 msgbuf.insert_filemsg(
                     timest,
                     msg_id,
@@ -618,9 +617,14 @@ impl ChatView {
                     url.clone(),
                 );
 
-                let mut data = vec![];
-                url.encode(&mut data).unwrap();
-                fud.call_method("get", data).await.unwrap();
+                // See comment in handle_insert_line()
+                #[cfg(feature = "enable-plugins")]
+                {
+                    let mut data = vec![];
+                    url.encode(&mut data).unwrap();
+                    let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
+                    fud.call_method("get", data).await.unwrap();
+                }
             }
 
             remaining_load_height -= msg_height;

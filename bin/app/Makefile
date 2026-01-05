@@ -22,7 +22,7 @@ DEBUG_FEATURES = --features=enable-filelog,enable-plugins
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --no-default-features --features=schema-app
+DEV_FEATURES = --features=schema-app
 
 default: build-release
 	./darkfi-app
@@ -88,7 +88,7 @@ dev: $(SRC) fonts assets/forest_1920x1080.ivf
 
 # Users should use the android-release and android-debug targets instead.
 apk: $(SRC) fonts assets/forest_720x1280.mp4
-	cargo quad-apk build $(DEV_FEATURES)
+	cargo quad-apk build --no-default-features $(DEV_FEATURES)
 	$(MAKE) install-apk
 
 install-apk:

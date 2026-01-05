@@ -76,7 +76,7 @@ mod android_ui_consts {
     pub const SENDARROW_NEG_X: f32 = 80.;
     pub const SENDARROW_NEG_Y: f32 = 80.;
     pub const SENDBTN_BOX: [f32; 4] = [116., 120., 80., 70.];
-    pub const FONTSIZE: f32 = 40.;
+    pub const FONTSIZE: f32 = 50.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
     pub const MESSAGE_SPACING: f32 = 15.;
@@ -143,7 +143,7 @@ mod ui_consts {
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 32.;
     pub const SENDBTN_BOX: [f32; 4] = [72., 50., 45., 34.];
-    pub const FONTSIZE: f32 = 20.;
+    pub const FONTSIZE: f32 = 25.;
     pub const TIMESTAMP_FONTSIZE: f32 = 12.;
     pub const TIMESTAMP_WIDTH: f32 = 60.;
     pub const MESSAGE_SPACING: f32 = 5.;
@@ -373,7 +373,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", &("#".to_string() + channel)).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
@@ -719,7 +719,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
 
     node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.2).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::PaperLight {
@@ -1325,7 +1325,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, ACTION_LABEL_POS.y).unwrap();
     prop.set_f32(atom, Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
     prop.set_f32(atom, Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 1.24).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "copy   paste   select all").unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
