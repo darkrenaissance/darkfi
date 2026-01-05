@@ -48,7 +48,7 @@ mod android_ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
 }
 
 #[cfg(target_os = "android")]
@@ -114,7 +114,7 @@ mod ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 50.;
     pub use super::desktop_paths::*;
 }
 
@@ -502,18 +502,14 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     settingslayer_node.link(node);
     */
 
-    let emoji_meshes = emoji_picker::EmojiMeshes::new(
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-        EMOJI_PICKER_ICON_SIZE,
-    );
+    let emoji_meshes =
+        emoji_picker::EmojiMeshes::new(app.render_api.clone(), EMOJI_PICKER_ICON_SIZE);
 
     let emoji_meshes2 = emoji_meshes.clone();
-    spawn_thread("load-emojis", move || {
+    app.ex.spawn(async move {
         for i in (0..500).step_by(20) {
-            let mut emoji = emoji_meshes2.lock();
             for j in i..(i + 20) {
-                emoji.get(j);
+                emoji_meshes2.lock().await.get(j).await;
             }
         }
     });

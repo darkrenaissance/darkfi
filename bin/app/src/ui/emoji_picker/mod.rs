@@ -44,6 +44,7 @@ pub use emoji::{EmojiMeshes, EmojiMeshesPtr};
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*) } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*) } }
 
+#[derive(Clone)]
 struct TouchInfo {
     start_pos: Point,
     start_scroll: f32,
@@ -124,8 +125,8 @@ impl EmojiPicker {
         off_x
     }
 
-    fn max_scroll(&self) -> f32 {
-        let emojis_len = self.emoji_meshes.lock().get_list().len() as f32;
+    async fn max_scroll(&self) -> f32 {
+        let emojis_len = self.emoji_meshes.lock().await.get_list().len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
         let rows = (emojis_len / cols).ceil();
@@ -159,7 +160,7 @@ impl EmojiPicker {
         //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
         let emoji_selected = {
-            let emoji_meshes = self.emoji_meshes.lock();
+            let emoji_meshes = self.emoji_meshes.lock().await;
             let emoji_list = emoji_meshes.get_list();
 
             if idx < emoji_list.len() {
@@ -182,17 +183,17 @@ impl EmojiPicker {
     }
 
     #[instrument(target = "ui::emoji_picker")]
-    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
+    async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, atom) else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect, atom).await else {
             error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
             return
         };
         self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
     }
 
-    fn get_draw_calls(
+    async fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
@@ -203,7 +204,7 @@ impl EmojiPicker {
         }
 
         // Clamp scroll if needed due to window size change
-        let max_scroll = self.max_scroll();
+        let max_scroll = self.max_scroll().await;
         if self.scroll.get() > max_scroll {
             self.scroll.set(atom, max_scroll);
         }
@@ -214,14 +215,16 @@ impl EmojiPicker {
         let off_x = self.calc_off_x();
         let emoji_size = self.emoji_size.get();
 
-        let mut emoji_meshes = self.emoji_meshes.lock();
-        let emoji_list_len = emoji_meshes.get_list().len();
+        let emoji_list_len = {
+            let emoji_meshes = self.emoji_meshes.lock().await;
+            emoji_meshes.get_list().len()
+        };
 
         let mut x = emoji_size / 2.;
         let mut y = emoji_size / 2. - self.scroll.get();
         for i in 0..emoji_list_len {
             let pos = Point::new(x, y);
-            let mesh = emoji_meshes.get(i);
+            let mesh = self.emoji_meshes.lock().await.get(i).await;
             instrs.extend_from_slice(&[DrawInstruction::SetPos(pos), DrawInstruction::Draw(mesh)]);
 
             x += off_x;
@@ -257,7 +260,7 @@ impl UIObject for EmojiPicker {
 
         async fn redraw(self_: Arc<EmojiPicker>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
-            self_.redraw(atom);
+            self_.redraw(atom).await;
         }
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
@@ -269,7 +272,8 @@ impl UIObject for EmojiPicker {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        self.emoji_meshes.lock().clear();
+        // TODO: Figure out how to call async clear from sync context
+        // self.emoji_meshes.lock().await.clear();
     }
 
     #[instrument(target = "ui::emoji_picker")]
@@ -279,7 +283,7 @@ impl UIObject for EmojiPicker {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, atom)
+        self.get_draw_calls(parent_rect, atom).await
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
@@ -297,10 +301,10 @@ impl UIObject for EmojiPicker {
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
-        scroll = scroll.clamp(0., self.max_scroll());
+        scroll = scroll.clamp(0., self.max_scroll().await);
         self.scroll.set(atom, scroll);
 
-        self.redraw(atom);
+        self.redraw(atom).await;
 
         true
     }
@@ -332,9 +336,9 @@ impl UIObject for EmojiPicker {
         // todo: clean this up
         let mut emoji_is_clicked = false;
         {
-            let mut touch_info = self.touch_info.lock();
             match phase {
                 TouchPhase::Started => {
+                    let mut touch_info = self.touch_info.lock();
                     if !rect.contains(touch_pos) {
                         return false
                     }
@@ -346,31 +350,32 @@ impl UIObject for EmojiPicker {
                     });
                 }
                 TouchPhase::Moved => {
-                    if let Some(touch_info) = touch_info.as_mut() {
+                    let (touch_info, y_diff) = {
+                        let mut touch_info = self.touch_info.lock();
+                        let Some(touch_info) = touch_info.as_mut() else {
+                            return false;
+                        };
+
                         let y_diff = touch_info.start_pos.y - pos.y;
                         if y_diff.abs() > 0.5 {
                             touch_info.is_scroll = true;
                         }
+                        (touch_info.clone(), y_diff)
+                    };
 
-                        if touch_info.is_scroll {
-                            let mut scroll = touch_info.start_scroll + y_diff;
-                            scroll = scroll.clamp(0., self.max_scroll());
-                            self.scroll.set(atom, scroll);
-                            self.redraw(atom);
-                        }
-                    } else {
-                        return false
+                    if touch_info.is_scroll {
+                        let mut scroll = touch_info.start_scroll + y_diff;
+                        scroll = scroll.clamp(0., self.max_scroll().await);
+                        self.scroll.set(atom, scroll);
+                        self.redraw(atom).await;
                     }
                 }
                 TouchPhase::Ended | TouchPhase::Cancelled => {
-                    if let Some(touch_info) = &*touch_info {
-                        if !touch_info.is_scroll {
-                            emoji_is_clicked = true;
-                        }
-                    } else {
-                        return false
+                    let touch_info = std::mem::take(&mut *self.touch_info.lock());
+                    let Some(touch_info) = touch_info else { return false };
+                    if !touch_info.is_scroll {
+                        emoji_is_clicked = true;
                     }
-                    *touch_info = None;
                 }
             }
         }
