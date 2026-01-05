@@ -33,7 +33,7 @@ use super::{
 pub struct Header {
     /// Event version
     // pub version: u8,
-    /// Timestamp of the event in whole seconds
+    /// Timestamp of the event in milliseconds
     pub timestamp: u64,
     /// Parent nodes in the event DAG
     pub parents: [blake3::Hash; N_EVENT_PARENTS],

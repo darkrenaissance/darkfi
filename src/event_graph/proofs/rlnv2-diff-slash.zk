@@ -1,0 +1,18 @@
+k = 14;
+field = "pallas";
+
+constant "Rlnv2Diff_Slash" {}
+
+witness "Rlnv2Diff_Slash" {
+	Base secret_key,
+	Base user_message_limit,
+	# Inclusion proof, the leaf is the identity_commitment
+	SparseMerklePath path,
+}
+
+circuit "Rlnv2Diff_Slash" {
+	identity_secret_hash = poseidon_hash(secret_key, user_message_limit);
+	identity_commitment = poseidon_hash(identity_secret_hash);
+	root = sparse_merkle_root(identity_commitment, path, identity_commitment);
+	constrain_instance(root);
+}
