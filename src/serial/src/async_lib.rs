@@ -52,6 +52,24 @@ pub async fn serialize_async<T: AsyncEncodable + ?Sized>(data: &T) -> Vec<u8> {
     encoder
 }
 
+/// Asynchronously deserialize a variable-length object from a vector, enforce
+/// a maximum size limit, but do not error if the entire vector is not consumed.
+///
+/// Expects objects with VarInt length encoding.
+pub async fn deserialize_async_limited_partial<T: AsyncDecodable>(
+    data: &[u8],
+    max_len: usize,
+) -> Result<(T, usize)> {
+    let (len, _) = deserialize_async_partial::<VarInt>(data).await?;
+    let obj_len = len.0 as usize;
+
+    if obj_len > max_len {
+        return Err(Error::other("Data size exceeds set `max_len`"))
+    }
+
+    deserialize_async_partial(data).await
+}
+
 /// Asynchronously deserialize an object from a vector, but do not error if the
 /// entire vector is not consumed.
 pub async fn deserialize_async_partial<T: AsyncDecodable>(data: &[u8]) -> Result<(T, usize)> {
@@ -60,6 +78,24 @@ pub async fn deserialize_async_partial<T: AsyncDecodable>(data: &[u8]) -> Result
     let consumed = decoder.position() as usize;
 
     Ok((rv, consumed))
+}
+
+/// Asynchronously deserialize a variable-length object from a vector, but
+/// enforce a maximum size limit.
+///
+/// Expects objects with VarInt length encoding.
+pub async fn deserialize_async_limited<T: AsyncDecodable>(
+    data: &[u8],
+    max_len: usize,
+) -> Result<T> {
+    let (len, _) = deserialize_async_partial::<VarInt>(data).await?;
+    let obj_len = len.0 as usize;
+
+    if obj_len > max_len {
+        return Err(Error::other("Data size exceeds set `max_len`"))
+    }
+
+    deserialize_async(data).await
 }
 
 /// Asynchronously deserialize an object from a vector.

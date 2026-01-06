@@ -28,9 +28,9 @@ pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 mod async_lib;
 #[cfg(feature = "async")]
 pub use async_lib::{
-    async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
-    AsyncEncodable, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, FutAsyncReadExt,
-    FutAsyncWriteExt,
+    async_trait, deserialize_async, deserialize_async_limited, deserialize_async_limited_partial,
+    deserialize_async_partial, serialize_async, AsyncDecodable, AsyncEncodable, AsyncRead,
+    AsyncReadExt, AsyncWrite, AsyncWriteExt, FutAsyncReadExt, FutAsyncWriteExt,
 };
 
 mod endian;
@@ -57,6 +57,24 @@ pub fn serialize<T: Encodable + ?Sized>(data: &T) -> Vec<u8> {
     encoder
 }
 
+/// Deserialize a variable-length object from a vector, enforce a maximum
+/// size limit, but do not error if the entire vector is not consumed.
+///
+/// Expects objects with VarInt length encoding.
+pub fn deserialize_limited_partial<T: Decodable>(
+    data: &[u8],
+    max_len: usize,
+) -> Result<(T, usize), Error> {
+    let (len, _) = deserialize_partial::<VarInt>(data)?;
+    let obj_len = len.0 as usize;
+
+    if obj_len > max_len {
+        return Err(Error::other("Data size exceeds set `max_len`"))
+    }
+
+    deserialize_partial(data)
+}
+
 /// Deserialize an object from a vector, but do not error if the entire
 /// vector is not consumed.
 pub fn deserialize_partial<T: Decodable>(data: &[u8]) -> Result<(T, usize), Error> {
@@ -65,6 +83,21 @@ pub fn deserialize_partial<T: Decodable>(data: &[u8]) -> Result<(T, usize), Erro
     let consumed = decoder.position() as usize;
 
     Ok((rv, consumed))
+}
+
+/// Deserialize a variable-length object from a vector, but enforce a
+/// maximum size limit.
+///
+/// Expects objects with VarInt length encoding.
+pub fn deserialize_limited<T: Decodable>(data: &[u8], max_len: usize) -> Result<T, Error> {
+    let (len, _) = deserialize_partial::<VarInt>(data)?;
+    let obj_len = len.0 as usize;
+
+    if obj_len > max_len {
+        return Err(Error::other("Data size exceeds set `max_len`"))
+    }
+
+    deserialize(data)
 }
 
 /// Deserialize an object from a vector.
