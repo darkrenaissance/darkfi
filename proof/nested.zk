@@ -1,0 +1,13 @@
+k = 11;
+field = "pallas";
+
+constant "Nested" {}
+
+witness "Nested" {
+    Base a,
+}
+
+circuit "Nested" {
+	triple_hash = poseidon_hash(poseidon_hash(poseidon_hash(a)));
+	constrain_instance(triple_hash);
+}

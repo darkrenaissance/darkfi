@@ -23,6 +23,7 @@ use std::{
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Var, Variable, Witness},
+    constants::MAX_RECURSION_DEPTH,
     error::ErrorEmitter,
     Opcode, VarType,
 };
@@ -59,7 +60,8 @@ impl Analyzer {
         let mut statements = vec![];
         let mut heap = vec![];
 
-        for statement in &self.statements {
+        let input_statements = self.statements.clone();
+        for statement in &input_statements {
             //println!("{statement:?}");
             let mut stmt = statement.clone();
 
@@ -122,141 +124,21 @@ impl Analyzer {
                 // opcode has a return value. When executed we will push
                 // this value onto the heap and use it as a reference to
                 // the actual statement we're parsing at this moment.
-                // TODO: This needs a recursive algorithm, as this only
-                //       allows a single nested function.
+                // This uses a recursive algorithm to handle arbitrarily
+                // nested functions up to MAX_RECURSION_DEPTH.
                 if let Arg::Func(func) = arg {
-                    let (f_return_types, f_arg_types) = func.opcode.arg_types();
-                    if f_return_types.is_empty() {
-                        return Err(self.error.abort(
-                            &format!(
-                                "Used a function argument which doesn't have a return value: {:?}",
-                                func.opcode
-                            ),
-                            statement.line,
-                            1,
-                        ))
-                    }
+                    let (result_var, nested_statements) = self.process_nested_func(
+                        func, &arg_types, idx, &mut heap, 1, // Start at depth 1
+                    )?;
 
-                    let v = Variable {
-                        name: func.lhs.clone().unwrap().name,
-                        typ: f_return_types[0],
-                        line: func.lhs.clone().unwrap().line,
-                        column: func.lhs.clone().unwrap().column,
-                    };
+                    // Add all nested statements to our statement list
+                    statements.extend(nested_statements);
 
-                    if arg_types[0] == VarType::BaseArray {
-                        if f_return_types[0] != VarType::Base {
-                            return Err(self.error.abort(
-                                &format!(
-                                    "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
-                                    VarType::Base,
-                                    f_return_types[0],
-                                ),
-                                v.line,
-                                v.column,
-                            ))
-                        }
-                    } else if arg_types[0] == VarType::ScalarArray {
-                        if f_return_types[0] != VarType::Scalar {
-                            return Err(self.error.abort(
-                                &format!(
-                                    "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
-                                    VarType::Scalar,
-                                    f_return_types[0],
-                                ),
-                                v.line,
-                                v.column,
-                            ));
-                        }
-                    } else if f_return_types[0] != arg_types[idx] {
-                        return Err(self.error.abort(
-                            &format!(
-                                "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
-                                arg_types[idx],
-                                f_return_types[0],
-                            ),
-                            v.line,
-                            v.column,
-                        ))
-                    }
+                    // Replace the statement function call with the variable
+                    // from the innermost statement we created.
+                    stmt.rhs[idx] = Arg::Var(result_var.clone());
+                    rhs.push(Arg::Var(result_var));
 
-                    // Replace the statement function call with the variable from
-                    // the statement we just created to represent this nest.
-                    stmt.rhs[idx] = Arg::Var(v.clone());
-
-                    let mut rhs_inner = vec![];
-                    for (inner_idx, i) in func.rhs.iter().enumerate() {
-                        // TODO: Implement cases where `i` is type Arg::Literal
-                        // TODO: Implement cases where `i` is type Arg::Func
-                        if let Arg::Var(v) = i {
-                            if let Some(var_ref) = self.lookup_var(&v.name) {
-                                let (var_type, ln, col) = match var_ref {
-                                    Var::Constant(c) => (c.typ, c.line, c.column),
-                                    Var::Witness(c) => (c.typ, c.line, c.column),
-                                    Var::Variable(c) => (c.typ, c.line, c.column),
-                                };
-
-                                if var_type != f_arg_types[inner_idx] {
-                                    return Err(self.error.abort(
-                                        &format!(
-                                            "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
-                                            f_arg_types[inner_idx]
-                                        ),
-                                        ln,
-                                        col,
-                                    ))
-                                }
-
-                                // Apply the proper type.
-                                let mut v_new = v.clone();
-                                v_new.typ = var_type;
-                                rhs_inner.push(Arg::Var(v_new));
-
-                                continue
-                            }
-
-                            return Err(self.error.abort(
-                                &format!("Unknown variable reference `{}`.", v.name),
-                                v.line,
-                                v.column,
-                            ))
-                        } else if let Arg::Lit(l) = i {
-                            return Err(self.error.abort(
-                                &format!("Expected argument `{}` to be of type Variable. Literals are not yet supported in nested function calls.", l.name),
-                                l.line,
-                                l.column,
-                            ))
-                        } else if let Arg::Func(f) = i {
-                            return Err(self.error.abort(
-                                &format!("Expected argument `{}` to be of type Variable. Nested function calls are not yet supported beyond a depth of 1.", Opcode::name(&f.opcode)),
-                                f.line,
-                                0,
-                            ))
-                        } else {
-                            unreachable!();
-                        }
-                    }
-
-                    let s = Statement {
-                        typ: func.typ,
-                        opcode: func.opcode,
-                        lhs: Some(v.clone()),
-                        rhs: rhs_inner,
-                        line: func.line,
-                    };
-
-                    // The lhs of the inner function call becomes rhs of the outer one.
-                    rhs.push(Arg::Var(v.clone()));
-
-                    // Add this to the list of statements.
-                    statements.push(s);
-
-                    // We replace self.heap here so we can do proper heap lookups.
-                    heap.push(v.clone());
-                    self.heap.clone_from(&heap);
-
-                    //println!("{heap:#?}");
-                    //println!("{statements:#?}");
                     continue
                 } // <-- Arg::Func
 
@@ -269,8 +151,6 @@ impl Analyzer {
                     // type checking.
 
                     let var_type = v.typ.to_vartype();
-                    // TODO: Refactor the Array type checks here and in the Arg::Var
-                    // section so that there is less repetition.
                     // Validation for Array types
                     if arg_types[0] == VarType::BaseArray {
                         if var_type != VarType::Base {
@@ -404,6 +284,227 @@ impl Analyzer {
         //println!("==================LITERALS================\n{:#?}", self.literals);
 
         Ok(())
+    }
+
+    /// Recursively process a nested function call.
+    /// Returns the result Variable and a Vec of Statements that need to be executed.
+    fn process_nested_func(
+        &mut self,
+        func: &Statement,
+        parent_arg_types: &[VarType],
+        parent_arg_idx: usize,
+        heap: &mut Vec<Variable>,
+        depth: usize,
+    ) -> Result<(Variable, Vec<Statement>)> {
+        if depth > MAX_RECURSION_DEPTH {
+            return Err(self.error.abort(
+                &format!(
+                    "Maximum recursion depth of {} exceeded for nested function calls.",
+                    MAX_RECURSION_DEPTH
+                ),
+                func.line,
+                0,
+            ))
+        }
+
+        let (f_return_types, f_arg_types) = func.opcode.arg_types();
+
+        if f_return_types.is_empty() {
+            return Err(self.error.abort(
+                &format!(
+                    "Used a function argument which doesn't have a return value: {:?}",
+                    func.opcode
+                ),
+                func.line,
+                1,
+            ))
+        }
+
+        // Create the result variable for this function call
+        let result_var = Variable {
+            name: func.lhs.clone().unwrap().name,
+            typ: f_return_types[0],
+            line: func.lhs.clone().unwrap().line,
+            column: func.lhs.clone().unwrap().column,
+        };
+
+        // Validate return type against parent's expected type
+        if parent_arg_types[0] == VarType::BaseArray {
+            if f_return_types[0] != VarType::Base {
+                return Err(self.error.abort(
+                    &format!(
+                        "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
+                        VarType::Base,
+                        f_return_types[0],
+                    ),
+                    result_var.line,
+                    result_var.column,
+                ))
+            }
+        } else if parent_arg_types[0] == VarType::ScalarArray {
+            if f_return_types[0] != VarType::Scalar {
+                return Err(self.error.abort(
+                    &format!(
+                        "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
+                        VarType::Scalar,
+                        f_return_types[0],
+                    ),
+                    result_var.line,
+                    result_var.column,
+                ))
+            }
+        } else if f_return_types[0] != parent_arg_types[parent_arg_idx] {
+            return Err(self.error.abort(
+                &format!(
+                    "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
+                    parent_arg_types[parent_arg_idx], f_return_types[0],
+                ),
+                result_var.line,
+                result_var.column,
+            ))
+        }
+
+        // Collect all statements that need to be generated
+        let mut nested_statements = vec![];
+        let mut rhs_inner = vec![];
+
+        // Process each argument of this nested function
+        for (inner_idx, arg) in func.rhs.iter().enumerate() {
+            match arg {
+                Arg::Var(v) => {
+                    if let Some(var_ref) = self.lookup_var(&v.name) {
+                        let (var_type, ln, col) = match var_ref {
+                            Var::Constant(c) => (c.typ, c.line, c.column),
+                            Var::Witness(c) => (c.typ, c.line, c.column),
+                            Var::Variable(c) => (c.typ, c.line, c.column),
+                        };
+
+                        // Type checking for array types
+                        if f_arg_types[0] == VarType::BaseArray {
+                            if var_type != VarType::Base {
+                                return Err(self.error.abort(
+                                    &format!(
+                                        "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                        VarType::Base
+                                    ),
+                                    ln,
+                                    col,
+                                ))
+                            }
+                        } else if f_arg_types[0] == VarType::ScalarArray {
+                            if var_type != VarType::Scalar {
+                                return Err(self.error.abort(
+                                    &format!(
+                                        "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                        VarType::Scalar
+                                    ),
+                                    ln,
+                                    col,
+                                ))
+                            }
+                        } else if var_type != f_arg_types[inner_idx] &&
+                            f_arg_types[inner_idx] != VarType::Any
+                        {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                    f_arg_types[inner_idx]
+                                ),
+                                ln,
+                                col,
+                            ))
+                        }
+
+                        // Apply the proper type
+                        let mut v_new = v.clone();
+                        v_new.typ = var_type;
+                        rhs_inner.push(Arg::Var(v_new));
+                    } else {
+                        return Err(self.error.abort(
+                            &format!("Unknown variable reference `{}`.", v.name),
+                            v.line,
+                            v.column,
+                        ))
+                    }
+                }
+
+                Arg::Lit(lit) => {
+                    let var_type = lit.typ.to_vartype();
+
+                    // Type checking for array types
+                    if f_arg_types[0] == VarType::BaseArray {
+                        if var_type != VarType::Base {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                    VarType::Base
+                                ),
+                                lit.line,
+                                lit.column,
+                            ))
+                        }
+                    } else if f_arg_types[0] == VarType::ScalarArray {
+                        if var_type != VarType::Scalar {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                    VarType::Scalar
+                                ),
+                                lit.line,
+                                lit.column,
+                            ))
+                        }
+                    } else if var_type != f_arg_types[inner_idx] {
+                        return Err(self.error.abort(
+                            &format!(
+                                "Incorrect argument type. Expected `{:?}`, got `{var_type:?}`.",
+                                f_arg_types[inner_idx]
+                            ),
+                            lit.line,
+                            lit.column,
+                        ))
+                    }
+
+                    self.literals.push(lit.clone());
+                    rhs_inner.push(Arg::Lit(lit.clone()));
+                }
+
+                Arg::Func(inner_func) => {
+                    // Recursively process the inner function
+                    let (inner_result_var, inner_statements) = self.process_nested_func(
+                        inner_func,
+                        &f_arg_types,
+                        inner_idx,
+                        heap,
+                        depth + 1,
+                    )?;
+
+                    // Add inner statements first (they need to execute before this one)
+                    nested_statements.extend(inner_statements);
+
+                    // Use the result variable as an argument
+                    rhs_inner.push(Arg::Var(inner_result_var));
+                }
+            }
+        }
+
+        // Create the statement for this function call
+        let stmt = Statement {
+            typ: func.typ,
+            opcode: func.opcode,
+            lhs: Some(result_var.clone()),
+            rhs: rhs_inner,
+            line: func.line,
+        };
+
+        // Add this statement to the list
+        nested_statements.push(stmt);
+
+        // Push the result variable onto the heap
+        heap.push(result_var.clone());
+        self.heap.clone_from(heap);
+
+        Ok((result_var, nested_statements))
     }
 
     fn lookup_var(&self, name: &str) -> Option<Var> {

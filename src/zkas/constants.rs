@@ -30,3 +30,6 @@ pub const MIN_BIN_SIZE: usize = 10;
 
 /// Allowed fields for proofs
 pub const ALLOWED_FIELDS: [&str; 1] = ["pallas"];
+
+/// Maximum recursion depth for nested function calls
+pub const MAX_RECURSION_DEPTH: usize = 16;
