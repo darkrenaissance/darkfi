@@ -64,6 +64,7 @@ pub struct PrivMessage {
     is_selected: bool,
 
     mesh_cache: Option<Vec<DrawInstruction>>,
+    txt_layout: Option<parley::Layout<Color>>,
 }
 
 impl PrivMessage {
@@ -92,6 +93,7 @@ impl PrivMessage {
             confirmed: true,
             is_selected: false,
             mesh_cache: None,
+            txt_layout: None,
         })
     }
 
@@ -102,54 +104,21 @@ impl PrivMessage {
     }
 
     fn height(&self, line_height: f32) -> f32 {
-        // TODO: calculate based on actual layout height
-        // For now, assume a single line
-        line_height
+        self.txt_layout.as_ref().unwrap().len() as f32 * line_height
     }
 
-    async fn gen_mesh(
+    fn cache_txt_layout(
         &mut self,
+        txt_ctx: &mut text::TextContext,
         clip: &Rectangle,
         line_height: f32,
-        msg_spacing: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
-        timestamp_color: Color,
         text_color: Color,
-        hi_bg_color: Color,
-        render_api: &RenderApi,
-    ) -> Vec<DrawInstruction> {
-        if let Some(instrs) = &self.mesh_cache {
-            return instrs.clone()
+    ) {
+        if self.txt_layout.is_some() {
+            return
         }
-
-        let mut all_instrs = vec![DrawInstruction::Move(Point::new(0., -line_height))];
-
-        // Draw selection background if selected
-        if self.is_selected {
-            let height = self.height(line_height) + msg_spacing;
-            let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg_sel"));
-            mesh.draw_filled_box(
-                &Rectangle { x: 0., y: -height, w: clip.w, h: height },
-                hi_bg_color,
-            );
-            all_instrs
-                .push(DrawInstruction::Draw(mesh.alloc(render_api).draw_with_textures(vec![])));
-        }
-
-        let mut txt_ctx = text::TEXT_CTX.get().await;
-
-        // Timestamp layout
-        let timestr = Self::gen_timestr(self.timestamp);
-        let timestamp_layout = txt_ctx.make_layout(
-            &timestr,
-            timestamp_color,
-            self.timestamp_font_size,
-            line_height / self.timestamp_font_size,
-            self.window_scale,
-            None,
-            &[],
-        );
 
         // Message text layout
         let linetext = if self.nick == "NOTICE" {
@@ -160,7 +129,7 @@ impl PrivMessage {
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
-        let text_layout = if self.nick == "NOTICE" {
+        let txt_layout = if self.nick == "NOTICE" {
             txt_ctx.make_layout(
                 &linetext,
                 text_color,
@@ -184,6 +153,64 @@ impl PrivMessage {
                 &[(0..nick_end, nick_color)],
             )
         };
+        self.txt_layout = Some(txt_layout);
+    }
+
+    async fn gen_mesh(
+        &mut self,
+        clip: &Rectangle,
+        line_height: f32,
+        msg_spacing: f32,
+        timestamp_width: f32,
+        nick_colors: &[Color],
+        timestamp_color: Color,
+        text_color: Color,
+        hi_bg_color: Color,
+        render_api: &RenderApi,
+    ) -> Vec<DrawInstruction> {
+        if let Some(instrs) = &self.mesh_cache {
+            assert!(self.txt_layout.is_some());
+            return instrs.clone()
+        }
+
+        let mut txt_ctx = text::TEXT_CTX.get().await;
+
+        // Timestamp layout
+        let timestr = Self::gen_timestr(self.timestamp);
+        let timestamp_layout = txt_ctx.make_layout(
+            &timestr,
+            timestamp_color,
+            self.timestamp_font_size,
+            line_height / self.timestamp_font_size,
+            self.window_scale,
+            None,
+            &[],
+        );
+
+        self.cache_txt_layout(
+            &mut txt_ctx,
+            clip,
+            line_height,
+            timestamp_width,
+            nick_colors,
+            text_color,
+        );
+
+        drop(txt_ctx);
+
+        let mut all_instrs = vec![];
+
+        // Draw selection background if selected
+        if self.is_selected {
+            let height = self.height(line_height) + msg_spacing;
+            let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg_sel"));
+            mesh.draw_filled_box(
+                &Rectangle { x: 0., y: -height, w: clip.w, h: height },
+                hi_bg_color,
+            );
+            all_instrs
+                .push(DrawInstruction::Draw(mesh.alloc(render_api).draw_with_textures(vec![])));
+        }
 
         // Render timestamp
         let timestamp_instrs =
@@ -192,8 +219,11 @@ impl PrivMessage {
 
         // Render message text offset by timestamp_width
         all_instrs.push(DrawInstruction::Move(Point::new(timestamp_width, 0.)));
-        let text_instrs =
-            text::render_layout(&text_layout, render_api, gfxtag!("chatview_privmsg_text"));
+        let text_instrs = text::render_layout(
+            self.txt_layout.as_ref().unwrap(),
+            render_api,
+            gfxtag!("chatview_privmsg_text"),
+        );
         all_instrs.extend(text_instrs);
 
         self.mesh_cache = Some(all_instrs.clone());
@@ -210,6 +240,7 @@ impl PrivMessage {
     fn clear_mesh(&mut self) {
         // Auto-deletes when refs are dropped
         self.mesh_cache = None;
+        self.txt_layout = None;
     }
 
     fn select(&mut self) {
@@ -288,11 +319,7 @@ impl DateMessage {
         );
         drop(txt_ctx);
 
-        let mut txt_instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
-        let mut instrs = Vec::with_capacity(1 + txt_instrs.len());
-        instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
-        instrs.append(&mut txt_instrs);
-
+        let mut instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
         // Cache the instructions
         self.mesh_cache = Some(instrs.clone());
         instrs
@@ -510,10 +537,9 @@ impl FileMessage {
         all_instrs
             .push(DrawInstruction::Move(Point::new(timestamp_width + Self::BOX_PADDING_X, 0.)));
         for layout in layouts {
-            all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
-
             let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
             all_instrs.extend(instrs);
+            all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
         }
 
         self.mesh_cache = Some(all_instrs.clone());
@@ -623,6 +649,31 @@ impl Message {
             Self::Priv(m) => m.clear_mesh(),
             Self::Date(m) => m.clear_mesh(),
             Self::File(m) => m.clear_mesh(),
+        }
+    }
+
+    fn cache_txt_layout(
+        &mut self,
+        txt_ctx: &mut text::TextContext,
+        clip: &Rectangle,
+        line_height: f32,
+        timestamp_width: f32,
+        nick_colors: &[Color],
+        text_color: Color,
+    ) {
+        match self {
+            Self::Priv(m) => {
+                m.cache_txt_layout(
+                    txt_ctx,
+                    clip,
+                    line_height,
+                    timestamp_width,
+                    nick_colors,
+                    text_color,
+                );
+            }
+            Self::Date(_) => {}
+            Self::File(_) => {}
         }
     }
 
@@ -799,10 +850,13 @@ impl MessageBuffer {
         }
     }
 
-    pub async fn calc_total_height(&mut self) -> f32 {
+    pub async fn calc_total_height(&mut self, rect: &Rectangle) -> f32 {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let timestamp_width = self.timestamp_width.get();
         let msg_spacing = self.msg_spacing.get();
+        let text_color = self.text_color.get();
+        let nick_colors = self.read_nick_colors();
         let mut height = 0.;
 
         let msgs = self.msgs_with_date();
@@ -816,6 +870,17 @@ impl MessageBuffer {
             } else {
                 height += msg_spacing;
             }
+
+            let mut txt_ctx = text::TEXT_CTX.get().await;
+            msg.cache_txt_layout(
+                &mut txt_ctx,
+                &rect,
+                line_height,
+                timestamp_width,
+                &nick_colors,
+                text_color,
+            );
+            drop(txt_ctx);
 
             height += msg.height(line_height);
         }
@@ -847,20 +912,24 @@ impl MessageBuffer {
         return true
     }
 
-    pub fn insert_privmsg(
+    pub async fn insert_privmsg(
         &mut self,
         timest: Timestamp,
         msg_id: MessageId,
         nick: String,
         text: String,
+        rect: Rectangle,
     ) -> Option<&mut PrivMessage> {
         t!("insert_privmsg({timest}, {msg_id}, {nick}, {text})");
+        let line_height = self.line_height.get();
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
+        let text_color = self.text_color.get();
+        let nick_colors = self.read_nick_colors();
 
-        let msg = PrivMessage::new(
+        let mut msg = PrivMessage::new(
             font_size,
             timestamp_font_size,
             window_scale,
@@ -869,6 +938,17 @@ impl MessageBuffer {
             nick,
             text,
         );
+
+        let mut txt_ctx = text::TEXT_CTX.get().await;
+        msg.cache_txt_layout(
+            &mut txt_ctx,
+            &rect,
+            line_height,
+            timestamp_width,
+            &nick_colors,
+            text_color,
+        );
+        drop(txt_ctx);
 
         if self.msgs.is_empty() {
             self.msgs.push(msg);
@@ -905,20 +985,24 @@ impl MessageBuffer {
         return self.msgs[idx].get_privmsg_mut()
     }
 
-    pub fn push_privmsg(
+    pub async fn push_privmsg(
         &mut self,
         timest: Timestamp,
         msg_id: MessageId,
         nick: String,
         text: String,
+        rect: &Rectangle,
     ) -> f32 {
         //t!("push_privmsg({timest}, {msg_id}, {nick}, {text})");
+        let line_height = self.line_height.get();
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
+        let text_color = self.text_color.get();
+        let nick_colors = self.read_nick_colors();
 
-        let msg = PrivMessage::new(
+        let mut msg = PrivMessage::new(
             font_size,
             timestamp_font_size,
             window_scale,
@@ -928,13 +1012,18 @@ impl MessageBuffer {
             text,
         );
 
+        let mut txt_ctx = text::TEXT_CTX.get().await;
+        msg.cache_txt_layout(
+            &mut txt_ctx,
+            rect,
+            line_height,
+            timestamp_width,
+            &nick_colors,
+            text_color,
+        );
+        drop(txt_ctx);
+
         let msg_height = msg.height(self.line_height.get());
-
-        if self.msgs.is_empty() {
-            self.msgs.push(msg);
-            return msg_height
-        }
-
         self.msgs.push(msg);
         msg_height
     }
@@ -964,19 +1053,6 @@ impl MessageBuffer {
         let mut meshes = vec![];
         let mut current_pos = 0.;
         while let Some(msg) = msgs.next().await {
-            let mesh_height = msg.height(line_height);
-            let msg_bottom = current_pos;
-            let msg_top = current_pos + mesh_height;
-
-            if msg_bottom > scroll + rect.h {
-                break
-            }
-            if msg_top < scroll {
-                current_pos += msg_spacing;
-                current_pos += mesh_height;
-                continue
-            }
-
             let instrs = msg
                 .gen_mesh(
                     rect,
@@ -991,10 +1067,20 @@ impl MessageBuffer {
                 )
                 .await;
 
-            meshes.push((current_pos, instrs));
+            let mesh_height = msg.height(line_height);
+            current_pos += msg_spacing + mesh_height;
 
-            current_pos += msg_spacing;
-            current_pos += mesh_height;
+            let msg_top = current_pos;
+            let msg_bottom = current_pos - mesh_height;
+
+            if msg_bottom > scroll + rect.h {
+                break
+            }
+            if msg_top < scroll {
+                continue
+            }
+
+            meshes.push((current_pos, instrs));
         }
         meshes
     }

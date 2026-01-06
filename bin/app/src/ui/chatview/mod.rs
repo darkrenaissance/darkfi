@@ -451,7 +451,9 @@ impl ChatView {
             t!("Inserting new message");
 
             // Insert the privmsg since it doesn't already exist
-            let privmsg = msgbuf.insert_privmsg(timest, msg_id.clone(), nick.clone(), text.clone());
+            let privmsg = msgbuf
+                .insert_privmsg(timest, msg_id.clone(), nick.clone(), text.clone(), self.rect.get())
+                .await;
             if privmsg.is_none() {
                 // Not visible so no need to redraw
                 return
@@ -496,7 +498,11 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text) else { return };
+        let Some(privmsg) =
+            msgbuf.insert_privmsg(timest, msg_id, nick, text, self.rect.get()).await
+        else {
+            return
+        };
         privmsg.confirmed = false;
         let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_insert_unconf_line"));
         self.redraw_cached(atom.batch_id, &mut msgbuf).await;
@@ -558,7 +564,7 @@ impl ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
 
-        let total_height = msgbuf.calc_total_height().await;
+        let total_height = msgbuf.calc_total_height(&rect).await;
         if total_height > top + preload_height {
             // Nothing to do here
             //t!("bgloader: buffer is sufficient [trace_id={trace_id}]");
@@ -598,12 +604,15 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
 
             //t!("{timest:?} {chatmsg:?} [trace_id={trace_id}]");
-            let msg_height = msgbuf.push_privmsg(
-                timest,
-                msg_id.clone(),
-                chatmsg.nick.clone(),
-                chatmsg.text.clone(),
-            );
+            let msg_height = msgbuf
+                .push_privmsg(
+                    timest,
+                    msg_id.clone(),
+                    chatmsg.nick.clone(),
+                    chatmsg.text.clone(),
+                    &rect,
+                )
+                .await;
 
             if let Some(url) = get_file_url(&chatmsg.text) {
                 msgbuf.insert_filemsg(
@@ -678,7 +687,7 @@ impl ChatView {
             return Some(0.)
         }
 
-        let total_height = msgbuf.calc_total_height().await;
+        let total_height = msgbuf.calc_total_height(&self.rect.get()).await;
         let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
 
         if scroll > max_allowed_scroll {
