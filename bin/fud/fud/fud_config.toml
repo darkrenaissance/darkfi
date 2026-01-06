@@ -60,10 +60,18 @@ btc_electrum_nodes = [
 # JSON-RPC settings
 [rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:13336"
+rpc_listen = "tcp://127.0.0.1:9705"
 
 # Disabled RPC methods
-rpc_disabled_methods = ["p2p.get_info"]
+#rpc_disabled_methods = []
+
+# Management JSON-RPC settings
+[management_rpc]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:9706"
+
+# Disabled RPC methods
+#rpc_disabled_methods = []
 
 # P2P network settings
 [net]
@@ -92,7 +100,7 @@ hostlist = "~/.local/share/darkfi/fud/p2p_hostlist.tsv"
 # format ["host", ["scheme", "scheme"], [port, port]].
 # If scheme is left empty it will default to "tcp+tls".
 # If ports are left empty all ports from this peer will be blocked.
-#blacklist = [["example.com", ["tcp"], [8551, 23331]]]
+#blacklist = [["example.com", ["tcp"], [8551, 9700]]]
 
 # Whitelisted transports for outbound connections
 active_profiles = ["tor"]
@@ -115,36 +123,36 @@ active_profiles = ["tor"]
 [net.profiles."tcp+tls"]
 ## Seed nodes to connect to
 seeds = [
-    "tcp+tls://lilith0.dark.fi:24441",
-    "tcp+tls://lilith1.dark.fi:24441",
+    "tcp+tls://lilith0.dark.fi:9700",
+    "tcp+tls://lilith1.dark.fi:9700",
 ]
 
 ## Manual peers to connect to
 #peers = []
 
 ## P2P accept addresses
-#inbound = ["tcp+tls://0.0.0.0:24441", "tcp+tls://[::]:24441"]
+#inbound = ["tcp+tls://0.0.0.0:9700", "tcp+tls://[::]:9700"]
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
-#external_addrs = ["tcp+tls://my.resolveable.address:24441"]
+#external_addrs = ["tcp+tls://my.resolveable.address:9700"]
 
 [net.profiles."tor"]
 ## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9701",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9701",
 ]
 
 ## Manual peers to connect to
 #peers = []
 
 ## P2P accept addresses
-#inbound = ["tcp://127.0.0.1:24441"]
+#inbound = ["tcp://127.0.0.1:9701"]
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
-#external_addrs = ["tor://youraddress.onion:24441"]
+#external_addrs = ["tor://youraddress.onion:9701"]
 
 [net.profiles."i2p"]
 ## Seed nodes to connect to
@@ -154,17 +162,17 @@ seeds = [
 #peers = []
 
 ## P2P accept addresses
-#inbound = ["tcp://127.0.0.1:24441"]
+#inbound = ["tcp://127.0.0.1:9702"]
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
-#external_addrs = ["i2p://youraddress.b32.i2p:24441"]
+#external_addrs = ["i2p://youraddress.b32.i2p:9702"]
 
 [net.profiles."socks5"]
 ## Seed nodes to connect to
 seeds = [
-    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
-    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
+    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9701",
+    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9701",
 ]
 
 ## Manual peers to connect to
@@ -173,8 +181,8 @@ seeds = [
 [net.profiles."socks5+tls"]
 ## Seed nodes to connect to
 seeds = [
-    #"socks5+tls://127.0.0.1:9050/lilith0.dark.fi:24441",
-    #"socks5+tls://127.0.0.1:1080/lilith1.dark.fi:24441"
+    #"socks5+tls://127.0.0.1:9050/lilith0.dark.fi:9700",
+    #"socks5+tls://127.0.0.1:1080/lilith1.dark.fi:9700"
 ]
 
 ## Manual peers to connect to
@@ -183,8 +191,8 @@ seeds = [
 [net.profiles."tor+tls"]
 ## Seed nodes to connect to
 seeds = [
-    "tor+tls://lilith0.dark.fi:24441",
-    "tor+tls://lilith1.dark.fi:24441"
+    "tor+tls://lilith0.dark.fi:9700",
+    "tor+tls://lilith1.dark.fi:9700"
 ]
 
 ## Manual peers to connect to
@@ -192,13 +200,13 @@ seeds = [
 
 [net.profiles."tcp"]
 ## Seed nodes to connect to
-#seeds = ["tcp://127.0.0.1:24442"]
+#seeds = ["tcp://127.0.0.1:9700"]
 
 ## Manual peers to connect to
 #peers = []
 
 ## P2P accept addresses
-#inbound = ["tcp://127.0.0.1:24441"]
+#inbound = ["tcp://127.0.0.1:9700"]
 
 ## Addresses we want to advertise to peers
-#external_addrs = ["tcp://127.0.0.1:24441"]
+#external_addrs = ["tcp://127.0.0.1:9700"]

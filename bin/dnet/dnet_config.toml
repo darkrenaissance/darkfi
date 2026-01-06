@@ -13,7 +13,7 @@
 #[[nodes]]
 #name = "fud"
 #host = "localhost"
-#port = 13336
+#port = 9706
 #type = "NORMAL"
 
 #[[nodes]]

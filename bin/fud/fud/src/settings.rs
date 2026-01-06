@@ -61,8 +61,12 @@ pub struct Args {
     pub net: SettingsOpt,
 
     #[structopt(flatten)]
-    /// JSON-RPC settings
+    /// Main JSON-RPC settings
     pub rpc: RpcSettingsOpt,
+
+    #[structopt(flatten)]
+    /// Management JSON-RPC settings
+    pub management_rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
     /// DHT settings

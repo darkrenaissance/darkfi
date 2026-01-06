@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
-use smol::lock::{Mutex, MutexGuard};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
+
+use async_trait::async_trait;
+use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 use tracing::error;
 
@@ -42,15 +43,17 @@ use darkfi::{
 
 use crate::{util::FileSelection, Fud};
 
-pub struct JsonRpcInterface {
+/// Management JSON-RPC
+pub mod management;
+
+pub struct DefaultRpcInterface {
     fud: Arc<Fud>,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    dnet_sub: JsonSubscriber,
     event_sub: JsonSubscriber,
 }
 
 #[async_trait]
-impl RequestHandler<()> for JsonRpcInterface {
+impl RequestHandler<()> for DefaultRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         return match req.method.as_str() {
             "ping" => self.pong(req.id, req.params).await,
@@ -65,9 +68,6 @@ impl RequestHandler<()> for JsonRpcInterface {
             "verify" => self.verify(req.id, req.params).await,
             "lookup" => self.lookup(req.id, req.params).await,
 
-            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
-            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -77,16 +77,16 @@ impl RequestHandler<()> for JsonRpcInterface {
     }
 }
 
-impl HandlerP2p for JsonRpcInterface {
+impl HandlerP2p for DefaultRpcInterface {
     fn p2p(&self) -> P2pPtr {
         self.fud.p2p.clone()
     }
 }
 
 /// Fud RPC methods
-impl JsonRpcInterface {
-    pub fn new(fud: Arc<Fud>, dnet_sub: JsonSubscriber, event_sub: JsonSubscriber) -> Self {
-        Self { fud, rpc_connections: Mutex::new(HashSet::new()), dnet_sub, event_sub }
+impl DefaultRpcInterface {
+    pub fn new(fud: Arc<Fud>, event_sub: JsonSubscriber) -> Self {
+        Self { fud, rpc_connections: Mutex::new(HashSet::new()), event_sub }
     }
 
     // RPCAPI:
@@ -193,50 +193,10 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Activate or deactivate dnet in the P2P stack.
-    // By sending `true`, dnet will be activated, and by sending `false` dnet
-    // will be deactivated. Returns `true` on success.
-    //
-    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_bool() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        let switch = params[0].get::<bool>().unwrap();
-
-        if *switch {
-            self.fud.p2p.dnet_enable();
-        } else {
-            self.fud.p2p.dnet_disable();
-        }
-
-        JsonResponse::new(JsonValue::Boolean(true), id).into()
-    }
-
-    // RPCAPI:
-    // Initializes a subscription to p2p dnet events.
-    // Once a subscription is established, `fud` will send JSON-RPC notifications of
-    // new network events to the subscriber.
-    //
-    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
-    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if !params.is_empty() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        self.dnet_sub.clone().into()
-    }
-
-    // RPCAPI:
     // Returns resources.
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:13337"]]]], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:9700"]]]], "id": 1}
     pub async fn list_resources(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -256,7 +216,7 @@ impl JsonRpcInterface {
     // Returns the current buckets.
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [["abcdef", ["tcp://127.0.0.1:13337"]]], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [["abcdef", ["tcp://127.0.0.1:9700"]]], "id": 1}
     pub async fn list_buckets(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -285,7 +245,7 @@ impl JsonRpcInterface {
     // Returns the content of the seeders router.
     //
     // --> {"jsonrpc": "2.0", "method": "list_seeders", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:13337"]]]}}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:9700"]]]}}, "id": 1}
     pub async fn list_seeders(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -376,7 +336,7 @@ impl JsonRpcInterface {
     // Lookup a resource's seeders.
     //
     // --> {"jsonrpc": "2.0", "method": "lookup", "params": ["1211...abfd"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:13337"]]]}}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:9701"]]]}}, "id": 1}
     pub async fn lookup(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
