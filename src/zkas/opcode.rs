@@ -18,244 +18,183 @@
 
 use super::VarType;
 
-/// Opcodes supported by the zkas VM
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
-#[repr(u8)]
-pub enum Opcode {
-    /// Intermediate opcode for the compiler, should never appear in the result
-    Noop = 0x00,
+/// Macro to define all opcodes in a single place.
+/// This generates the enum definition, `from_name`, `from_repr`, `name`, and `arg_types` methods.
+///
+/// Format for each opcode:
+/// ```text
+/// [doc_comments]
+/// VariantName = 0xNN, "string_name", (return_types), (arg_types)
+/// ```
+///
+/// Note: Noop is handled specially - it's excluded from `from_repr` and `from_name`
+/// as it should never appear in compiled binaries or source code.
+macro_rules! define_opcodes {
+    (
+        // Special case for Noop which shouldn't be in from_repr/from_name
+        $(#[doc = $noop_doc:literal])*
+        Noop = $noop_value:literal, $noop_name:literal,
+            ($($noop_ret:expr),*), ($($noop_arg:expr),*);
 
-    /// Elliptic curve addition
-    EcAdd = 0x01,
+        // All other opcodes
+        $(
+            $(#[doc = $doc:literal])*
+            $variant:ident = $value:literal, $name:literal,
+            ($($ret:expr),*), ($($arg:expr),*)
+        );* $(;)?
+    ) => {
+        /// Opcodes supported by the zkas VM
+        #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+        #[repr(u8)]
+        pub enum Opcode {
+            $(#[doc = $noop_doc])*
+            Noop = $noop_value,
 
-    /// Elliptic curve multiplication
-    EcMul = 0x02,
+            $(
+                $(#[doc = $doc])*
+                $variant = $value,
+            )*
+        }
 
-    /// Elliptic curve multiplication with a Base field element
-    EcMulBase = 0x03,
+        impl Opcode {
+            /// Look up an opcode by its string name (used in source code).
+            /// Note: Noop cannot be looked up by name as it's an internal compiler opcode.
+            pub fn from_name(n: &str) -> Option<Self> {
+                match n {
+                    $($name => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
 
-    /// Elliptic curve multiplication with a Base field element of 64bit width
-    EcMulShort = 0x04,
+            /// Look up an opcode by its binary representation.
+            /// Note: Noop (0x00) is not valid in binary as it should never be compiled.
+            pub fn from_repr(b: u8) -> Option<Self> {
+                match b {
+                    $($value => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
 
-    /// Variable Elliptic curve multiplication with a Base field element
-    EcMulVarBase = 0x05,
+            /// Get the string name of an opcode.
+            pub fn name(&self) -> &'static str {
+                match self {
+                    Self::Noop => $noop_name,
+                    $(Self::$variant => $name,)*
+                }
+            }
 
-    /// Get the x coordinate of an elliptic curve point
-    EcGetX = 0x08,
-
-    /// Get the y coordinate of an elliptic curve point
-    EcGetY = 0x09,
-
-    /// Poseidon hash of N Base field elements
-    PoseidonHash = 0x10,
-
-    /// Calculate Merkle root, given a position, Merkle path, and an element
-    MerkleRoot = 0x20,
-
-    /// Calculate sparse Merkle root, given the position, path and a member
-    SparseMerkleRoot = 0x21,
-
-    /// Base field element addition
-    BaseAdd = 0x30,
-
-    /// Base field element multiplication
-    BaseMul = 0x31,
-
-    /// Base field element subtraction
-    BaseSub = 0x32,
-
-    /// Witness an unsigned integer into a Base field element
-    WitnessBase = 0x40,
-
-    /// Range check a Base field element, given bit-width (up to 253)
-    RangeCheck = 0x50,
-
-    /// Strictly compare two Base field elements and see if a is less than b
-    /// This enforces the sum of remaining bits to be zero.
-    LessThanStrict = 0x51,
-
-    /// Loosely two Base field elements and see if a is less than b
-    /// This does not enforce the sum of remaining bits to be zero.
-    LessThanLoose = 0x52,
-
-    /// Check if a field element fits in a boolean (Either 0 or 1)
-    BoolCheck = 0x53,
-
-    /// Conditionally select between two base field elements given a boolean
-    CondSelect = 0x60,
-
-    /// Conditionally select between a and b (return a if a is zero, and b if a is nonzero)
-    ZeroCondSelect = 0x61,
-
-    /// Constrain equality of two Base field elements inside the circuit
-    ConstrainEqualBase = 0xe0,
-
-    /// Constrain equality of two EcPoint elements inside the circuit
-    ConstrainEqualPoint = 0xe1,
-
-    /// Constrain a Base field element to a circuit's public input
-    ConstrainInstance = 0xf0,
-
-    /// Debug a variable's value in the ZK circuit table.
-    DebugPrint = 0xff,
+            /// Return a tuple of vectors of types that are accepted by a specific opcode.
+            /// `r.0` is the return type(s), and `r.1` is the argument type(s).
+            pub fn arg_types(&self) -> (Vec<VarType>, Vec<VarType>) {
+                match self {
+                    Self::Noop => (vec![$($noop_ret),*], vec![$($noop_arg),*]),
+                    $(Self::$variant => (vec![$($ret),*], vec![$($arg),*]),)*
+                }
+            }
+        }
+    };
 }
 
-impl Opcode {
-    pub fn from_name(n: &str) -> Option<Self> {
-        match n {
-            "ec_add" => Some(Self::EcAdd),
-            "ec_mul" => Some(Self::EcMul),
-            "ec_mul_base" => Some(Self::EcMulBase),
-            "ec_mul_short" => Some(Self::EcMulShort),
-            "ec_mul_var_base" => Some(Self::EcMulVarBase),
-            "ec_get_x" => Some(Self::EcGetX),
-            "ec_get_y" => Some(Self::EcGetY),
-            "poseidon_hash" => Some(Self::PoseidonHash),
-            "merkle_root" => Some(Self::MerkleRoot),
-            "sparse_merkle_root" => Some(Self::SparseMerkleRoot),
-            "base_add" => Some(Self::BaseAdd),
-            "base_mul" => Some(Self::BaseMul),
-            "base_sub" => Some(Self::BaseSub),
-            "witness_base" => Some(Self::WitnessBase),
-            "range_check" => Some(Self::RangeCheck),
-            "less_than_strict" => Some(Self::LessThanStrict),
-            "less_than_loose" => Some(Self::LessThanLoose),
-            "bool_check" => Some(Self::BoolCheck),
-            "cond_select" => Some(Self::CondSelect),
-            "zero_cond" => Some(Self::ZeroCondSelect),
-            "constrain_equal_base" => Some(Self::ConstrainEqualBase),
-            "constrain_equal_point" => Some(Self::ConstrainEqualPoint),
-            "constrain_instance" => Some(Self::ConstrainInstance),
-            "debug" => Some(Self::DebugPrint),
-            _ => None,
-        }
-    }
+define_opcodes! {
+    /// Intermediate opcode for the compiler, should never appear in the result
+    Noop = 0x00, "noop",
+        (), ();
 
-    pub fn from_repr(b: u8) -> Option<Self> {
-        match b {
-            0x01 => Some(Self::EcAdd),
-            0x02 => Some(Self::EcMul),
-            0x03 => Some(Self::EcMulBase),
-            0x04 => Some(Self::EcMulShort),
-            0x05 => Some(Self::EcMulVarBase),
-            0x08 => Some(Self::EcGetX),
-            0x09 => Some(Self::EcGetY),
-            0x10 => Some(Self::PoseidonHash),
-            0x20 => Some(Self::MerkleRoot),
-            0x21 => Some(Self::SparseMerkleRoot),
-            0x30 => Some(Self::BaseAdd),
-            0x31 => Some(Self::BaseMul),
-            0x32 => Some(Self::BaseSub),
-            0x40 => Some(Self::WitnessBase),
-            0x50 => Some(Self::RangeCheck),
-            0x51 => Some(Self::LessThanStrict),
-            0x52 => Some(Self::LessThanLoose),
-            0x53 => Some(Self::BoolCheck),
-            0x60 => Some(Self::CondSelect),
-            0x61 => Some(Self::ZeroCondSelect),
-            0xe0 => Some(Self::ConstrainEqualBase),
-            0xe1 => Some(Self::ConstrainEqualPoint),
-            0xf0 => Some(Self::ConstrainInstance),
-            0xff => Some(Self::DebugPrint),
-            _ => None,
-        }
-    }
+    /// Elliptic curve addition
+    EcAdd = 0x01, "ec_add",
+        (VarType::EcPoint), (VarType::EcPoint, VarType::EcPoint);
 
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Noop => "noop",
-            Self::EcAdd => "ec_add",
-            Self::EcMul => "ec_mul",
-            Self::EcMulBase => "ec_mul_base",
-            Self::EcMulShort => "ec_mul_short",
-            Self::EcMulVarBase => "ec_mul_var_base",
-            Self::EcGetX => "ec_get_x",
-            Self::EcGetY => "ec_get_y",
-            Self::PoseidonHash => "poseidon_hash",
-            Self::MerkleRoot => "merkle_root",
-            Self::SparseMerkleRoot => "sparse_merkle_root",
-            Self::BaseAdd => "base_add",
-            Self::BaseMul => "base_mul",
-            Self::BaseSub => "base_sub",
-            Self::WitnessBase => "witness_base",
-            Self::RangeCheck => "range_check",
-            Self::LessThanStrict => "less_than_strict",
-            Self::LessThanLoose => "less_than_loose",
-            Self::BoolCheck => "bool_check",
-            Self::CondSelect => "cond_select",
-            Self::ZeroCondSelect => "zero_cond",
-            Self::ConstrainEqualBase => "constrain_equal_base",
-            Self::ConstrainEqualPoint => "constrain_equal_point",
-            Self::ConstrainInstance => "constrain_instance",
-            Self::DebugPrint => "debug",
-        }
-    }
+    /// Elliptic curve multiplication
+    EcMul = 0x02, "ec_mul",
+        (VarType::EcPoint), (VarType::Scalar, VarType::EcFixedPoint);
 
-    /// Return a tuple of vectors of types that are accepted by a specific opcode.
-    /// `r.0` is the return type(s), and `r.1` is the argument type(s).
-    pub fn arg_types(&self) -> (Vec<VarType>, Vec<VarType>) {
-        match self {
-            Opcode::Noop => (vec![], vec![]),
+    /// Elliptic curve multiplication with a Base field element
+    EcMulBase = 0x03, "ec_mul_base",
+        (VarType::EcPoint), (VarType::Base, VarType::EcFixedPointBase);
 
-            Opcode::EcAdd => (vec![VarType::EcPoint], vec![VarType::EcPoint, VarType::EcPoint]),
+    /// Elliptic curve multiplication with a Base field element of 64bit width
+    EcMulShort = 0x04, "ec_mul_short",
+        (VarType::EcPoint), (VarType::Base, VarType::EcFixedPointShort);
 
-            Opcode::EcMul => (vec![VarType::EcPoint], vec![VarType::Scalar, VarType::EcFixedPoint]),
+    /// Variable Elliptic curve multiplication with a Base field element
+    EcMulVarBase = 0x05, "ec_mul_var_base",
+        (VarType::EcPoint), (VarType::Base, VarType::EcNiPoint);
 
-            Opcode::EcMulBase => {
-                (vec![VarType::EcPoint], vec![VarType::Base, VarType::EcFixedPointBase])
-            }
+    /// Get the x coordinate of an elliptic curve point
+    EcGetX = 0x08, "ec_get_x",
+        (VarType::Base), (VarType::EcPoint);
 
-            Opcode::EcMulShort => {
-                (vec![VarType::EcPoint], vec![VarType::Base, VarType::EcFixedPointShort])
-            }
+    /// Get the y coordinate of an elliptic curve point
+    EcGetY = 0x09, "ec_get_y",
+        (VarType::Base), (VarType::EcPoint);
 
-            Opcode::EcMulVarBase => {
-                (vec![VarType::EcPoint], vec![VarType::Base, VarType::EcNiPoint])
-            }
+    /// Poseidon hash of N Base field elements
+    PoseidonHash = 0x10, "poseidon_hash",
+        (VarType::Base), (VarType::BaseArray);
 
-            Opcode::EcGetX => (vec![VarType::Base], vec![VarType::EcPoint]),
+    /// Calculate Merkle root, given a position, Merkle path, and an element
+    MerkleRoot = 0x20, "merkle_root",
+        (VarType::Base), (VarType::Uint32, VarType::MerklePath, VarType::Base);
 
-            Opcode::EcGetY => (vec![VarType::Base], vec![VarType::EcPoint]),
+    /// Calculate sparse Merkle root, given the position, path and a member
+    SparseMerkleRoot = 0x21, "sparse_merkle_root",
+        (VarType::Base), (VarType::Base, VarType::SparseMerklePath, VarType::Base);
 
-            Opcode::PoseidonHash => (vec![VarType::Base], vec![VarType::BaseArray]),
+    /// Base field element addition
+    BaseAdd = 0x30, "base_add",
+        (VarType::Base), (VarType::Base, VarType::Base);
 
-            Opcode::MerkleRoot => {
-                (vec![VarType::Base], vec![VarType::Uint32, VarType::MerklePath, VarType::Base])
-            }
+    /// Base field element multiplication
+    BaseMul = 0x31, "base_mul",
+        (VarType::Base), (VarType::Base, VarType::Base);
 
-            Opcode::SparseMerkleRoot => {
-                (vec![VarType::Base], vec![VarType::Base, VarType::SparseMerklePath, VarType::Base])
-            }
+    /// Base field element subtraction
+    BaseSub = 0x32, "base_sub",
+        (VarType::Base), (VarType::Base, VarType::Base);
 
-            Opcode::BaseAdd => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
+    /// Witness an unsigned integer into a Base field element
+    WitnessBase = 0x40, "witness_base",
+        (VarType::Base), (VarType::Uint64);
 
-            Opcode::BaseMul => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
+    /// Range check a Base field element, given bit-width (up to 253)
+    RangeCheck = 0x50, "range_check",
+        (), (VarType::Uint64, VarType::Base);
 
-            Opcode::BaseSub => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
+    /// Strictly compare two Base field elements and see if a is less than b.
+    /// This enforces the sum of remaining bits to be zero.
+    LessThanStrict = 0x51, "less_than_strict",
+        (), (VarType::Base, VarType::Base);
 
-            Opcode::WitnessBase => (vec![VarType::Base], vec![VarType::Uint64]),
+    /// Loosely compare two Base field elements and see if a is less than b.
+    /// This does not enforce the sum of remaining bits to be zero.
+    LessThanLoose = 0x52, "less_than_loose",
+        (), (VarType::Base, VarType::Base);
 
-            Opcode::RangeCheck => (vec![], vec![VarType::Uint64, VarType::Base]),
+    /// Check if a field element fits in a boolean (Either 0 or 1)
+    BoolCheck = 0x53, "bool_check",
+        (), (VarType::Base);
 
-            Opcode::LessThanStrict => (vec![], vec![VarType::Base, VarType::Base]),
+    /// Conditionally select between two base field elements given a boolean
+    CondSelect = 0x60, "cond_select",
+        (VarType::Base), (VarType::Base, VarType::Base, VarType::Base);
 
-            Opcode::LessThanLoose => (vec![], vec![VarType::Base, VarType::Base]),
+    /// Conditionally select between a and b (return a if a is zero, and b if a is nonzero)
+    ZeroCondSelect = 0x61, "zero_cond",
+        (VarType::Base), (VarType::Base, VarType::Base);
 
-            Opcode::BoolCheck => (vec![], vec![VarType::Base]),
+    /// Constrain equality of two Base field elements inside the circuit
+    ConstrainEqualBase = 0xe0, "constrain_equal_base",
+        (), (VarType::Base, VarType::Base);
 
-            Opcode::CondSelect => {
-                (vec![VarType::Base], vec![VarType::Base, VarType::Base, VarType::Base])
-            }
+    /// Constrain equality of two EcPoint elements inside the circuit
+    ConstrainEqualPoint = 0xe1, "constrain_equal_point",
+        (), (VarType::EcPoint, VarType::EcPoint);
 
-            Opcode::ZeroCondSelect => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
+    /// Constrain a Base field element to a circuit's public input
+    ConstrainInstance = 0xf0, "constrain_instance",
+        (), (VarType::Base);
 
-            Opcode::ConstrainEqualBase => (vec![], vec![VarType::Base, VarType::Base]),
-
-            Opcode::ConstrainEqualPoint => (vec![], vec![VarType::EcPoint, VarType::EcPoint]),
-
-            Opcode::ConstrainInstance => (vec![], vec![VarType::Base]),
-
-            Opcode::DebugPrint => (vec![], vec![VarType::Any]),
-        }
-    }
+    /// Debug a variable's value in the ZK circuit table
+    DebugPrint = 0xff, "debug",
+        (), (VarType::Any);
 }
