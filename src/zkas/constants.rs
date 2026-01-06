@@ -17,22 +17,46 @@
  */
 
 /// Maximum allowed k param (circuit rows = 2^k)
-pub const MAX_K: u32 = 16;
+pub(super) const MAX_K: u32 = 16;
 
 /// Maximum allowed namespace length in bytes
-pub const MAX_NS_LEN: usize = 32;
+pub(super) const MAX_NS_LEN: usize = 32;
 
 /// Minimum size allowed for a syntactically valid ZkBinary
 /// MAGIC_BYTES.length = 4;
 /// `k = ##;` = 6 (because the current upper-limit for k is a two-digit number
 /// Therefore 4 + 6 = 10 is the minimum size
-pub const MIN_BIN_SIZE: usize = 10;
+pub(super) const MIN_BIN_SIZE: usize = 10;
+
+/// Maximum allowed binary size (1M)
+pub(super) const MAX_BIN_SIZE: usize = 1024 * 1024;
+
+/// Maximum number of constants allowed
+pub(super) const MAX_CONSTANTS: usize = 1024;
+
+/// Maximum number of literals allowed
+pub(super) const MAX_LITERALS: usize = 4096;
+
+/// Maximum number of witnesses allowed
+pub(super) const MAX_WITNESSES: usize = 4096;
+
+/// Maximum number of opcodes allowed
+pub(super) const MAX_OPCODES: usize = 4096;
+
+/// Maximum number of arguments per opcode
+pub(super) const MAX_ARGS_PER_OPCODE: usize = 256;
+
+/// Maximum total heap size (constants + witnesses + assigned variables)
+pub(super) const MAX_HEAP_SIZE: usize = MAX_CONSTANTS + MAX_WITNESSES + MAX_OPCODES;
+
+/// Maximum string length for names
+pub(super) const MAX_STRING_LEN: usize = 1024;
 
 /// Allowed fields for proofs
-pub const ALLOWED_FIELDS: [&str; 1] = ["pallas"];
+pub(super) const ALLOWED_FIELDS: [&str; 1] = ["pallas"];
 
 /// Maximum recursion depth for nested function calls
-pub const MAX_RECURSION_DEPTH: usize = 16;
+pub(super) const MAX_RECURSION_DEPTH: usize = 16;
 
 // Section markers in the binary format
 pub(super) const SECTION_CONSTANT: &[u8] = b".constant";
