@@ -115,7 +115,6 @@ impl God {
         // Abort the application on panic right away
         std::panic::set_hook(Box::new(panic_hook));
 
-        text::init_txt_ctx();
         let file_logging_guard = logger::setup_logging();
 
         info!(target: "main", "Creating the app");

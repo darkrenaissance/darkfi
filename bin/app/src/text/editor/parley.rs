@@ -20,7 +20,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
-    text::{TextContext, FONT_STACK, TEXT_CTX},
+    text::{self, FONT_STACK},
 };
 
 pub struct Editor {
@@ -83,9 +83,11 @@ impl Editor {
         styles.insert(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
         *self.editor.edit_styles() = styles;
 
-        let mut txt_ctx = TEXT_CTX.get().await;
-        let (font_ctx, layout_ctx) = txt_ctx.borrow();
-        self.editor.refresh_layout(font_ctx, layout_ctx);
+        let mut font_ctx = text::GLOBAL_FONT_CTX.clone();
+        text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+            let mut layout_ctx = layout_ctx.borrow_mut();
+            self.editor.refresh_layout(&mut font_ctx, &mut layout_ctx);
+        });
     }
 
     pub fn layout(&self) -> &parley::Layout<Color> {
@@ -106,19 +108,20 @@ impl Editor {
     }
 
     pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
-        let mut txt_ctx = TEXT_CTX.get().await;
-        let (font_ctx, layout_ctx) = txt_ctx.borrow();
-        let mut drv = self.editor.driver(font_ctx, layout_ctx);
-        drv.insert_or_replace_selection(&txt);
-        self.on_buffer_changed(atom).await;
+        text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+            let mut layout_ctx = layout_ctx.borrow_mut();
+            let mut drv = self.driver(&mut layout_ctx);
+            drv.insert_or_replace_selection(&txt);
+            self.on_buffer_changed(atom).await;
+        });
     }
 
     pub fn driver<'a>(
         &'a mut self,
-        txt_ctx: &'a mut TextContext,
+        layout_ctx: &'a mut parley::LayoutContext<Color>,
     ) -> Option<parley::PlainEditorDriver<'a, Color>> {
-        let (font_ctx, layout_ctx) = txt_ctx.borrow();
-        Some(self.editor.driver(font_ctx, layout_ctx))
+        let mut font_ctx = text::GLOBAL_FONT_CTX.clone();
+        Some(self.editor.driver(&mut font_ctx, layout_ctx))
     }
 
     pub fn set_width(&mut self, w: f32) {
@@ -141,10 +144,11 @@ impl Editor {
     /// Android uses byte indexes whereas parley has its own things. So this API is a compromise
     /// between them both.
     pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
-        let mut txt_ctx = TEXT_CTX.get().await;
-        let (font_ctx, layout_ctx) = txt_ctx.borrow();
-        let mut drv = self.editor.driver(font_ctx, layout_ctx);
-        drv.select_byte_range(select_start, select_end);
+        text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+            let mut layout_ctx = layout_ctx.borrow_mut();
+            let mut drv = self.driver(&mut layout_ctx);
+            drv.select_byte_range(select_start, select_end);
+        });
     }
 
     #[allow(dead_code)]

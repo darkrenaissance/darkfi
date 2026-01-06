@@ -24,7 +24,7 @@ use crate::{
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
-    text::{TextContext, TEXT_CTX},
+    text,
 };
 use std::cmp::{max, min};
 
@@ -111,8 +111,7 @@ impl Editor {
             underlines.push(compose_start..compose_end);
         }
 
-        let mut txt_ctx = TEXT_CTX.get().await;
-        self.layout = txt_ctx.make_layout(
+        self.layout = text::make_layout(
             &self.state.text,
             text_color,
             font_size,
@@ -175,7 +174,7 @@ impl Editor {
 
     pub fn driver<'a>(
         &'a mut self,
-        _txt_ctx: &'a mut TextContext,
+        _layout_ctx: &'a mut parley::LayoutContext<Color>,
     ) -> Option<parley::PlainEditorDriver<'a, Color>> {
         None
     }
