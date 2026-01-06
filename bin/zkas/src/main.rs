@@ -164,7 +164,7 @@ fn main() -> ExitCode {
     println!("Wrote output to {}", &output);
 
     if eflag {
-        let zkbin = ZkBinary::decode(&bincode).unwrap();
+        let zkbin = ZkBinary::decode(&bincode, true).unwrap();
         println!("{zkbin:#?}");
     }
 

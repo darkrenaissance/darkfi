@@ -2126,7 +2126,7 @@ impl Drk {
             return Err(Error::Custom("Fee circuit not found".to_string()))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
@@ -2141,7 +2141,7 @@ impl Drk {
             return Err(Error::DatabaseError("[dao_mint] DAO Mint circuit not found".to_string()))
         };
 
-        let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
+        let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1, false)?;
 
         let dao_mint_circuit = ZkCircuit::new(empty_witnesses(&dao_mint_zkbin)?, &dao_mint_zkbin);
 
@@ -2464,7 +2464,7 @@ impl Drk {
             ))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
@@ -2490,8 +2490,8 @@ impl Drk {
             ))
         };
 
-        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
-        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
+        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1, false)?;
+        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1, false)?;
 
         let propose_burn_circuit =
             ZkCircuit::new(empty_witnesses(&propose_burn_zkbin)?, &propose_burn_zkbin);
@@ -2644,7 +2644,7 @@ impl Drk {
             return Err(Error::Custom("[dao_generic_proposal_tx] Fee circuit not found".to_string()))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
@@ -2670,8 +2670,8 @@ impl Drk {
             ))
         };
 
-        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
-        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
+        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1, false)?;
+        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1, false)?;
 
         let propose_burn_circuit =
             ZkCircuit::new(empty_witnesses(&propose_burn_zkbin)?, &propose_burn_zkbin);
@@ -2848,7 +2848,7 @@ impl Drk {
             return Err(Error::Custom("[dao_vote] Fee circuit not found".to_string()))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
@@ -2870,8 +2870,8 @@ impl Drk {
             return Err(Error::Custom("[dao_vote] DAO Vote Main circuit not found".to_string()))
         };
 
-        let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin.1)?;
-        let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin.1)?;
+        let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin.1, false)?;
+        let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin.1, false)?;
 
         let dao_vote_burn_circuit =
             ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin)?, &dao_vote_burn_zkbin);
@@ -3110,9 +3110,9 @@ impl Drk {
             return Err(Error::Custom("[dao_exec_transfer] Fee circuit not found".to_string()))
         };
 
-        let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
-        let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let mint_zkbin = ZkBinary::decode(&mint_zkbin.1, false)?;
+        let burn_zkbin = ZkBinary::decode(&burn_zkbin.1, false)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
@@ -3155,10 +3155,10 @@ impl Drk {
             ))
         };
 
-        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1)?;
-        let dao_auth_transfer_zkbin = ZkBinary::decode(&dao_auth_transfer_zkbin.1)?;
+        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1, false)?;
+        let dao_auth_transfer_zkbin = ZkBinary::decode(&dao_auth_transfer_zkbin.1, false)?;
         let dao_auth_transfer_enc_coin_zkbin =
-            ZkBinary::decode(&dao_auth_transfer_enc_coin_zkbin.1)?;
+            ZkBinary::decode(&dao_auth_transfer_enc_coin_zkbin.1, false)?;
 
         let dao_exec_circuit = ZkCircuit::new(empty_witnesses(&dao_exec_zkbin)?, &dao_exec_zkbin);
         let dao_auth_transfer_circuit =
@@ -3403,7 +3403,7 @@ impl Drk {
         else {
             return Err(Error::Custom("[dao_exec_generic] Fee circuit not found".to_string()))
         };
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
         let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
 
@@ -3422,7 +3422,7 @@ impl Drk {
                 "[dao_exec_generic] DAO {namespace} circuit not found"
             )))
         };
-        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1)?;
+        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1, false)?;
         let dao_exec_circuit = ZkCircuit::new(empty_witnesses(&dao_exec_zkbin)?, &dao_exec_zkbin);
         let dao_exec_pk = ProvingKey::build(dao_exec_zkbin.k, &dao_exec_circuit);
 

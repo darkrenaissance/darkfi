@@ -188,7 +188,7 @@ impl ContractStore {
         let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
 
         // The first vec is the compiled zkas binary
-        let zkbin = ZkBinary::decode(&zkbin).unwrap();
+        let zkbin = ZkBinary::decode(&zkbin, false).unwrap();
 
         // Construct the circuit to be able to read the VerifyingKey
         let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
@@ -484,7 +484,7 @@ impl ContractStoreOverlay {
         let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
 
         // The first vec is the compiled zkas binary
-        let zkbin = ZkBinary::decode(&zkbin).unwrap();
+        let zkbin = ZkBinary::decode(&zkbin, false).unwrap();
 
         // Construct the circuit to be able to read the VerifyingKey
         let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);

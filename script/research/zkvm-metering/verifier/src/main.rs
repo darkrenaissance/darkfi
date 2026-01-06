@@ -24,9 +24,9 @@ use std::{
 };
 
 use darkfi::{
-    Result,
-    zk::{Proof, VerifyingKey, ZkCircuit, empty_witnesses},
+    zk::{empty_witnesses, Proof, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
+    Result,
 };
 use darkfi_sdk::pasta::pallas::Base;
 use darkfi_serial::deserialize;
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     file.read_to_end(&mut public_inputs_bin)?;
 
     // Deserialize and Verify
-    let zkbin = ZkBinary::decode(&bincode)?;
+    let zkbin = ZkBinary::decode(&bincode, false)?;
     let verifier_witnesses = empty_witnesses(&zkbin)?;
 
     // Create the circuit

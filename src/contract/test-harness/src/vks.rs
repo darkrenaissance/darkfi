@@ -143,7 +143,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
     let mut vks = vec![];
 
     for bincode in bins.iter() {
-        let zkbin = ZkBinary::decode(bincode)?;
+        let zkbin = ZkBinary::decode(bincode, false)?;
         debug!("Building PK for {}", zkbin.namespace);
         let witnesses = empty_witnesses(&zkbin)?;
         let circuit = ZkCircuit::new(witnesses, &zkbin);

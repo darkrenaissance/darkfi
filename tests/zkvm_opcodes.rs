@@ -46,7 +46,7 @@ use darkfi::{
 #[test]
 fn zkvm_opcodes() -> Result<()> {
     let bincode = include_bytes!("../proof/opcodes.zk.bin");
-    let zkbin = ZkBinary::decode(bincode)?;
+    let zkbin = ZkBinary::decode(bincode, false)?;
 
     // Values for the proof
     let value = 666_u64;

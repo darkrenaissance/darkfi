@@ -46,7 +46,7 @@ use darkfi::{
 #[test]
 fn halo2_vk_ser() -> Result<()> {
     let bincode = include_bytes!("../proof/opcodes.zk.bin");
-    let zkbin = ZkBinary::decode(bincode)?;
+    let zkbin = ZkBinary::decode(bincode, false)?;
 
     let verifier_witnesses = empty_witnesses(&zkbin)?;
 

@@ -34,7 +34,7 @@ use darkfi::{
 #[test]
 fn zkvm_smt() -> Result<()> {
     let bincode = include_bytes!("../proof/smt.zk.bin");
-    let zkbin = ZkBinary::decode(bincode)?;
+    let zkbin = ZkBinary::decode(bincode, false)?;
 
     let hasher = PoseidonFp::new();
     let store = MemoryStorageFp::new();

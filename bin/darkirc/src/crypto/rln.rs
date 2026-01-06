@@ -133,7 +133,7 @@ impl RlnIdentity {
             vec![epoch, external_nullifier, x, y, internal_nullifier, identity_root.inner()];
 
         info!(target: "crypto::rln::create_proof", "[RLN] Creating proof for event {}", event.id());
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
 
         let proof = Proof::create(proving_key, &[signal_circuit], &public_inputs, &mut OsRng)?;

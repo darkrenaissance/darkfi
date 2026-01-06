@@ -890,7 +890,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     };
 
     // Validate the bytes by decoding them into the ZkBinary format
-    let zkbin = match ZkBinary::decode(&zkbin_bytes) {
+    let zkbin = match ZkBinary::decode(&zkbin_bytes, false) {
         Ok(zkbin) => zkbin,
         Err(e) => {
             error!(

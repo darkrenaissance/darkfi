@@ -603,7 +603,7 @@ impl Client {
         let identity_tree: MerkleTree = deserialize_async(&identity_tree).await?;
 
         // Retrieve the ZK proving key from the db
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let signal_circuit = ZkCircuit::new(empty_witnesses(&signal_zkbin)?, &signal_zkbin);
         let Some(proving_key) = self.server.server_store.get("rlnv2-diff-signal-pk")? else {
             return Err(Error::DatabaseError(

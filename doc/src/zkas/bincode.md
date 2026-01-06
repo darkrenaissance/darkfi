@@ -25,8 +25,8 @@ CONSTANT_TYPE CONSTANT_NAME
 CONSTANT_TYPE CONSTANT_NAME 
 ...
 .literal
-LITERAL
-LITERAL
+LITERAL_TYPE LITERAL_VALUE
+LITERAL_TYPE LITERAL_VALUE
 ...
 .witness
 WITNESS_TYPE
@@ -36,8 +36,10 @@ WITNESS_TYPE
 OPCODE ARG_NUM HEAP_TYPE HEAP_INDEX ... HEAP_TYPE HEAP_INDEX
 OPCODE ARG_NUM HEAP_TYPE HEAP_INDEX ... HEAP_TYPE HEAP_INDEX
 ...
-.debug
-TBD
+.debug (optional)
+NUM_OPCODES [LINE COLUMN] ...
+HEAP_SIZE [HEAP_NAME] ...
+NUM_LITERALS [LITERAL_NAME] ...
 ```
 
 Integers in the binary are encoded using variable-integer encoding.
@@ -129,7 +131,40 @@ the heap and become available for later references.
 
 ### `.debug`
 
-TBD
+The `.debug` section is optional and contains debug information that
+maps the compiled binary back to the original source code. This is
+useful for debugging circuit failures when only the compiled binary
+is available.
+
+> `NUM_OPCODES [LINE COLUMN] ... HEAP_SIZE [HEAP_NAME] ... NUM_LITERALS [LITERAL_NAME] ...`
+
+where:
+
+|    Element      |                            Description                           |
+|-----------------|------------------------------------------------------------------|
+| `NUM_OPCODES`   | Number of opcodes in the `.circuit` section (VarInt)             |
+| `LINE`          | Source line number for this opcode (VarInt)                      |
+| `COLUMN`        | Source column number for this opcode (VarInt)                    |
+| `HEAP_SIZE`     | Total number of entries on the heap (VarInt)                     |
+| `HEAP_NAME`     | Variable name for this heap entry (String)                       |
+| `NUM_LITERALS`  | Number of literals in the `.literal` section (VarInt)            |
+| `LITERAL_NAME`  | The literal value as a string, e.g., "42" (String)               |
+
+The heap names are serialized in heap order: constants first, then
+witnesses, then assigned variables from circuit statements. This
+ordering matches the order in which items are pushed onto the heap
+during compilation.
+
+Using the debug info, a debugger or tracing tool can display output
+such as:
+
+```
+Line   Source       Opcode                 Variable             Value
+0      L23:C5       EcMulShort             token_commit         [0x3a2f..., 0x91bc...]
+1      L24:C5       EcMulBase              rcpt_commit          [0x7d1e..., 0x44fa...]
+2      L25:C5       EcAdd                  commitment           [0x8b3c..., 0x22de...]
+3      L26:C5       ConstrainInstance      -                    -
+```
 
 ## Syntax Reference
 

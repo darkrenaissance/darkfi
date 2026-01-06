@@ -28,17 +28,18 @@ from darkfi_sdk.zkas import (MockProver, ZkBinary, ZkCircuit, ProvingKey,
 def eprint(fstr, *args):
     print("error: " + fstr, *args, file=sys.stderr)
 
-def show_trace(opcodes, trace):
-    print(f"{'Line':<4} {'Opcode':<22} {'Type':<10} {'Values'}")
+def show_trace(zkbin, opcodes, trace):
+    print(f"{'Line':<6} {'Source':<12} {'Opcode':<22} {'Result':<20} {'Values'}")
     for i, (opcode, (optype, args)) in enumerate(zip(opcodes, trace)):
-        if args:
-            args = ", ".join([str(arg) for arg in args])
-            args = f"[{args}]"
-        else:
-            args = ""
-        opcode = str(opcode)
-        optype = str(optype)
-        print(f"{i:<4} {opcode:<22} {optype:<10} {args}")
+        # Get source location from debug info
+        loc = zkbin.opcode_location(i)
+        source = f"L{loc[0]}:C{loc[1]}" if loc else "-"
+
+        # Get result variable name for assignments
+        result = zkbin.heap_name(i) or "-"  # Simplified - would need proper heap tracking
+
+        args_str = f"[{', '.join(str(a) for a in args)}]" if args else ""
+        print(f"{i:<6} {source:<12} {str(opcode):<22} {result:<20} {args_str}")
 
 def load_circuit_witness(circuit, witness_file):
     # We attempt to decode the witnesses from the JSON file.
@@ -147,7 +148,7 @@ def main(witness_file, source_file, mock=False, trace=False):
             return -3
 
         if trace:
-            show_trace(zkbin.opcodes(), circuit.opvalues())
+            show_trace(zkbin, zkbin.opcodes(), circuit.opvalues())
 
         print("Verifying ZK proof...")
         verify_status = proof.verify(verifying_key, instances)

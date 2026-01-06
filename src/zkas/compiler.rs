@@ -22,6 +22,9 @@ use darkfi_serial::{serialize, VarInt};
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Witness},
+    constants::{
+        SECTION_CIRCUIT, SECTION_CONSTANT, SECTION_DEBUG, SECTION_LITERAL, SECTION_WITNESS,
+    },
     error::ErrorEmitter,
     types::HeapType,
 };
@@ -81,7 +84,7 @@ impl Compiler {
 
         // In the .constant section of the binary, we write the constant's type,
         // and the name so the VM can look it up from `src/crypto/constants/`.
-        bincode.extend_from_slice(b".constant");
+        bincode.extend_from_slice(SECTION_CONSTANT);
         for i in &self.constants {
             tmp_heap.push(i.name.as_str());
             bincode.push(i.typ as u8);
@@ -91,7 +94,7 @@ impl Compiler {
         // Currently, our literals are only Uint64 types, in the binary we'll
         // add them here in the .literal section. In the VM, they will be on
         // their own heap, used for reference by opcodes.
-        bincode.extend_from_slice(b".literal");
+        bincode.extend_from_slice(SECTION_LITERAL);
         for i in &self.literals {
             bincode.push(i.typ as u8);
             bincode.extend_from_slice(&serialize(&i.name));
@@ -99,13 +102,13 @@ impl Compiler {
 
         // In the .witness section, we write all our witness types, on the heap
         // they're in order of appearance.
-        bincode.extend_from_slice(b".witness");
+        bincode.extend_from_slice(SECTION_WITNESS);
         for i in &self.witnesses {
             tmp_heap.push(i.name.as_str());
             bincode.push(i.typ as u8);
         }
 
-        bincode.extend_from_slice(b".circuit");
+        bincode.extend_from_slice(SECTION_CIRCUIT);
         for i in &self.statements {
             match i.typ {
                 StatementType::Assign => tmp_heap.push(&i.lhs.as_ref().unwrap().name),
@@ -155,7 +158,46 @@ impl Compiler {
             return Ok(bincode)
         }
 
-        // TODO: Otherwise, we proceed appending debug info.
+        // Otherwise, we proceed appending debug info.
+        bincode.extend_from_slice(SECTION_DEBUG);
+
+        // Write source locations for each opcode.
+        // This allows mapping runtime errors back to source lines.
+        bincode.extend_from_slice(&serialize(&VarInt(self.statements.len() as u64)));
+        for stmt in &self.statements {
+            bincode.extend_from_slice(&serialize(&VarInt(stmt.line as u64)));
+            // For column, use the lhs variable's column if available
+            let column = stmt.lhs.as_ref().map(|v| v.column).unwrap_or(0);
+            bincode.extend_from_slice(&serialize(&VarInt(column as u64)));
+        }
+
+        // Write heap variable names.
+        // The heap contains constants, witnesses, assigned variables (in order).
+        // This allows showing meaningful names instead of heap indices.
+        let heap_size = self.constants.len() +
+            self.witnesses.len() +
+            self.statements.iter().filter(|s| s.typ == StatementType::Assign).count();
+        bincode.extend_from_slice(&serialize(&VarInt(heap_size as u64)));
+
+        for constant in &self.constants {
+            bincode.extend_from_slice(&serialize(&constant.name));
+        }
+
+        for witness in &self.witnesses {
+            bincode.extend_from_slice(&serialize(&witness.name));
+        }
+
+        for stmt in &self.statements {
+            if stmt.typ == StatementType::Assign {
+                bincode.extend_from_slice(&serialize(&stmt.lhs.as_ref().unwrap().name));
+            }
+        }
+
+        // Write literal names (the literal values as strings, e.g. "42")
+        bincode.extend_from_slice(&serialize(&VarInt(self.literals.len() as u64)));
+        for literal in &self.literals {
+            bincode.extend_from_slice(&serialize(&literal.name));
+        }
 
         Ok(bincode)
     }

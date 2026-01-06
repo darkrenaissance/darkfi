@@ -17,16 +17,16 @@
  */
 
 use std::{
-    fs::{File, read_dir},
+    fs::{read_dir, File},
     io::{Read, Write},
     path::Path,
 };
 
 use darkfi::{
-    zk::{Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit, empty_witnesses},
+    zk::{empty_witnesses, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
 };
-use darkfi_sdk::pasta::{Eq, Fp, pallas::Base};
+use darkfi_sdk::pasta::{pallas::Base, Eq, Fp};
 use darkfi_serial::serialize;
 use halo2_proofs::dev::CircuitCost;
 use rand::rngs::OsRng;
@@ -83,7 +83,7 @@ fn main() {
         let mut file = File::open(&path).unwrap();
         let mut buf = vec![];
         file.read_to_end(&mut buf).unwrap();
-        let zkbin = ZkBinary::decode(&buf).unwrap();
+        let zkbin = ZkBinary::decode(&buf, false).unwrap();
 
         // Get witnesses and public inputs for that particular zk file
         let (witnesses, public_inputs) = retrieve_proof_inputs(name);

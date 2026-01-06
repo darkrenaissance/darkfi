@@ -95,9 +95,9 @@ impl Drk {
             return Err(Error::Custom("Fee circuit not found".to_string()))
         };
 
-        let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
-        let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let mint_zkbin = ZkBinary::decode(&mint_zkbin.1, false)?;
+        let burn_zkbin = ZkBinary::decode(&burn_zkbin.1, false)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);

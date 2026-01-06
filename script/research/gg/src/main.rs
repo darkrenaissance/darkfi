@@ -267,7 +267,7 @@ fn main() -> Result<()> {
                         continue
                     }
                     let mut reader = Cursor::new(pk);
-                    let zkbin = ZkBinary::decode(&bincode)?;
+                    let zkbin = ZkBinary::decode(&bincode, false)?;
                     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
                     let proving_key = ProvingKey::read(&mut reader, circuit)?;
                     mint = Some((proving_key, zkbin));

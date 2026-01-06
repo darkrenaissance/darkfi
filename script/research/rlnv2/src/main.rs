@@ -97,7 +97,7 @@ fn main() {
     // Signalling
     // ==========
     let signal_zkbin = include_bytes!("../signal.zk.bin");
-    let signal_zkbin = ZkBinary::decode(signal_zkbin).unwrap();
+    let signal_zkbin = ZkBinary::decode(signal_zkbin, false).unwrap();
     let signal_empty_circuit =
         ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
 

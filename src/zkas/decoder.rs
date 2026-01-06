@@ -20,23 +20,19 @@ use darkfi_serial::{deserialize_partial, VarInt};
 
 use super::{
     compiler::MAGIC_BYTES,
-    constants::{MAX_K, MAX_NS_LEN, MIN_BIN_SIZE},
+    constants::{
+        MAX_K, MAX_NS_LEN, MIN_BIN_SIZE, SECTION_CIRCUIT, SECTION_CONSTANT, SECTION_DEBUG,
+        SECTION_LITERAL, SECTION_WITNESS,
+    },
     types::HeapType,
     LitType, Opcode, VarType,
 };
 use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 
-// Section markers in the binary format
-const SECTION_CONSTANT: &[u8] = b".constant";
-const SECTION_LITERAL: &[u8] = b".literal";
-const SECTION_WITNESS: &[u8] = b".witness";
-const SECTION_CIRCUIT: &[u8] = b".circuit";
-const SECTION_DEBUG: &[u8] = b".debug";
-
 /// A ZkBinary decoded from compiled zkas code.
 /// This is used by the zkvm.
 ///
-/// The binary format consits of:
+/// The binary format consists of:
 /// - Header: magic bytes, version, k param, namespace
 /// - `.constant` section: constant types and names
 /// - `.literal` section: literal types and values
@@ -52,8 +48,21 @@ pub struct ZkBinary {
     pub literals: Vec<(LitType, String)>,
     pub witnesses: Vec<VarType>,
     pub opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
+    pub debug_info: Option<DebugInfo>,
 }
 // ANCHOR_END: zkbinary-struct
+
+/// Debug information decoded from the optional .debug section
+/// Contains source mappings to help debug circuit failures.
+#[derive(Clone, Debug, Default)]
+pub struct DebugInfo {
+    /// Source locations (line, col) for each opcode
+    pub opcode_locations: Vec<(usize, usize)>,
+    /// Variable names for each heap entry (constants, witnesses, assigned vars in order)
+    pub heap_names: Vec<String>,
+    /// Literal values as strings
+    pub literal_names: Vec<String>,
+}
 
 // https://stackoverflow.com/questions/35901547/how-can-i-find-a-subsequence-in-a-u8-slice
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
@@ -125,11 +134,20 @@ impl SectionOffsets {
     fn circuit_bytes<'a>(&self, bytes: &'a [u8]) -> &'a [u8] {
         &bytes[self.circuit + SECTION_CIRCUIT.len()..self.debug]
     }
+
+    /// Extract the bytes for the debug section if present
+    fn debug_bytes<'a>(&self, bytes: &'a [u8]) -> Option<&'a [u8]> {
+        if self.debug < bytes.len() {
+            Some(&bytes[self.debug + SECTION_DEBUG.len()..])
+        } else {
+            None
+        }
+    }
 }
 
 impl ZkBinary {
     /// Decode a ZkBinary from compiled bytes
-    pub fn decode(bytes: &[u8]) -> Result<Self> {
+    pub fn decode(bytes: &[u8], decode_debug_symbols: bool) -> Result<Self> {
         // Ensure that bytes is a certain minimum length. Otherwise the code
         // below will panic due to an index out of bounds error.
         if bytes.len() < MIN_BIN_SIZE {
@@ -168,9 +186,15 @@ impl ZkBinary {
         let witnesses = Self::parse_witnesses(offsets.witness_bytes(bytes))?;
         let opcodes = Self::parse_circuit(offsets.circuit_bytes(bytes))?;
 
-        // TODO: Debug info
+        let mut debug_info = None;
+        if decode_debug_symbols {
+            debug_info = match offsets.debug_bytes(bytes) {
+                Some(debug_bytes) => Some(Self::parse_debug(debug_bytes)?),
+                None => None,
+            };
+        }
 
-        Ok(Self { namespace, k, constants, literals, witnesses, opcodes })
+        Ok(Self { namespace, k, constants, literals, witnesses, opcodes, debug_info })
     }
 
     fn parse_constants(bytes: &[u8]) -> Result<Vec<(VarType, String)>> {
@@ -280,6 +304,70 @@ impl ZkBinary {
 
         Ok(opcodes)
     }
+
+    fn parse_debug(bytes: &[u8]) -> Result<DebugInfo> {
+        let mut offset = 0;
+
+        // Parse opcode source locations
+        let (num_opcodes, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+        offset += len;
+
+        let mut opcode_locations = Vec::with_capacity(num_opcodes.0 as usize);
+        for _ in 0..num_opcodes.0 {
+            let (line, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+            offset += len;
+            let (column, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+            offset += len;
+            opcode_locations.push((line.0 as usize, column.0 as usize));
+        }
+
+        // Parse heap var names
+        let (heap_size, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+        offset += len;
+
+        let mut heap_names = Vec::with_capacity(heap_size.0 as usize);
+        for _ in 0..heap_size.0 {
+            let (name, len) = deserialize_partial::<String>(&bytes[offset..])?;
+            offset += len;
+            heap_names.push(name);
+        }
+
+        // Parse literal names
+        let (num_literals, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+        offset += len;
+
+        let mut literal_names = Vec::with_capacity(num_literals.0 as usize);
+        for _ in 0..num_literals.0 {
+            let (name, len) = deserialize_partial::<String>(&bytes[offset..])?;
+            offset += len;
+            literal_names.push(name);
+        }
+
+        Ok(DebugInfo { opcode_locations, heap_names, literal_names })
+    }
+
+    /// Get the source location (line, column) for a given opcode index.
+    /// Returns `None` if debug info is not present or index is OOB.
+    pub fn opcode_location(&self, opcode_idx: usize) -> Option<(usize, usize)> {
+        self.debug_info.as_ref()?.opcode_locations.get(opcode_idx).copied()
+    }
+
+    /// Get the variable name for a given heap index.
+    /// Returns `None` if debug info is not present or index is OOB.
+    pub fn heap_name(&self, heap_idx: usize) -> Option<&str> {
+        self.debug_info.as_ref()?.heap_names.get(heap_idx).map(|s| s.as_str())
+    }
+
+    /// Get the literal name/value for a given literal index.
+    /// Returns `None` if debug info is not present or index is OOB.
+    pub fn literal_name(&self, literal_idx: usize) -> Option<&str> {
+        self.debug_info.as_ref()?.literal_names.get(literal_idx).map(|s| s.as_str())
+    }
+
+    /// Check if debug info is present
+    pub fn has_debug_info(&self) -> bool {
+        self.debug_info.is_some()
+    }
 }
 
 #[cfg(test)]
@@ -291,7 +379,7 @@ mod tests {
         // Out-of-memory panic from string deserialization.
         // Read `doc/src/zkas/bincode.md` to understand the input.
         let data = vec![11u8, 1, 177, 53, 1, 0, 0, 0, 0, 255, 0, 204, 200, 72, 72, 72, 72, 1];
-        let _dec = ZkBinary::decode(&data);
+        let _dec = ZkBinary::decode(&data, true);
     }
 
     #[test]
@@ -307,6 +395,6 @@ mod tests {
             116, 4, 2, 0, 2, 0, 0, 2, 2, 0, 3, 0, 1, 8, 2, 0, 4, 0, 5, 8, 1, 0, 6, 9, 1, 0, 6, 240,
             1, 0, 7, 240, 41, 0, 0, 0, 1, 0, 8,
         ];
-        let _dec = ZkBinary::decode(&data);
+        let _dec = ZkBinary::decode(&data, true);
     }
 }

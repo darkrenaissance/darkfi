@@ -540,7 +540,7 @@ impl Drk {
             return Err(Error::Custom("[deploy_contract] Fee circuit not found".to_string()))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
@@ -603,7 +603,7 @@ impl Drk {
             return Err(Error::Custom("[lock_contract] Fee circuit not found".to_string()))
         };
 
-        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 

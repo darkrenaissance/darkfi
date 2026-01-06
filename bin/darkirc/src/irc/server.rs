@@ -155,7 +155,7 @@ impl IrcServer {
         let rln_identity_store = darkirc.sled.open_tree("rln_identity_store")?;
 
         // Generate RLN proving and verifying keys, if needed
-        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let rln_signal_circuit =
             ZkCircuit::new(empty_witnesses(&rln_signal_zkbin)?, &rln_signal_zkbin);
 
@@ -184,7 +184,7 @@ impl IrcServer {
 
         if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
-            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN)?;
+            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
             let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
             let provingkey = ProvingKey::build(zkbin.k, &circuit);
             let mut buf = vec![];
@@ -194,7 +194,7 @@ impl IrcServer {
 
         if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
             let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
             let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
             let mut buf = vec![];

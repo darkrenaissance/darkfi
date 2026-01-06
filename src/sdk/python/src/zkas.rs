@@ -67,7 +67,7 @@ impl ZkBinary {
             analyzer.witnesses,
             analyzer.statements,
             analyzer.literals,
-            true,
+            false,
         );
 
         let bincode = compiler.compile().unwrap();
@@ -77,7 +77,7 @@ impl ZkBinary {
 
     #[staticmethod]
     fn decode(bytes: Vec<u8>) -> Self {
-        let bincode = decoder::ZkBinary::decode(bytes.as_slice()).unwrap();
+        let bincode = decoder::ZkBinary::decode(bytes.as_slice(), true).unwrap();
         Self(bincode)
     }
 
@@ -87,6 +87,18 @@ impl ZkBinary {
 
     fn opcodes(&self) -> Vec<ZkOpcode> {
         self.0.opcodes.iter().map(|op| ZkOpcode(op.0)).collect()
+    }
+
+    fn opcode_location(&self, opcode_idx: usize) -> Option<(usize, usize)> {
+        self.0.opcode_location(opcode_idx)
+    }
+
+    fn heap_name(&self, heap_idx: usize) -> Option<&str> {
+        self.0.heap_name(heap_idx)
+    }
+
+    fn literal_name(&self, literal_idx: usize) -> Option<&str> {
+        self.0.literal_name(literal_idx)
     }
 }
 
@@ -285,6 +297,7 @@ impl Proof {
             literals: Vec::new(),
             witnesses: Vec::new(),
             opcodes: Vec::new(),
+            debug_info: None,
         };
         let empty_circuit = zk::vm::ZkCircuit::new(Vec::new(), &zkbin);
         let empty_py_circuit = ZkCircuit(empty_circuit, Vec::new(), zkbin);

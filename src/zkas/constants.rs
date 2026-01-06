@@ -33,3 +33,10 @@ pub const ALLOWED_FIELDS: [&str; 1] = ["pallas"];
 
 /// Maximum recursion depth for nested function calls
 pub const MAX_RECURSION_DEPTH: usize = 16;
+
+// Section markers in the binary format
+pub(super) const SECTION_CONSTANT: &[u8] = b".constant";
+pub(super) const SECTION_LITERAL: &[u8] = b".literal";
+pub(super) const SECTION_WITNESS: &[u8] = b".witness";
+pub(super) const SECTION_CIRCUIT: &[u8] = b".circuit";
+pub(super) const SECTION_DEBUG: &[u8] = b".debug";
