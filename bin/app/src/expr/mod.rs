@@ -28,6 +28,9 @@ use std::io::{Read, Write};
 mod compile;
 pub use compile::Compiler;
 
+pub type MachineGlobals = Vec<(String, SExprVal)>;
+pub type NativeFnCallback = fn(&mut MachineGlobals) -> Result<SExprVal>;
+
 pub fn const_f32(x: f32) -> SExprCode {
     vec![Op::ConstFloat32(x)]
 }
@@ -151,6 +154,7 @@ pub enum Op {
     LessThan((Box<Op>, Box<Op>)),
     Float32ToUint32(Box<Op>),
     IfElse((Box<Op>, SExprCode, SExprCode)),
+    NativeFn(NativeFnCallback),
 }
 
 impl<'a> SExprMachine<'a> {
@@ -183,6 +187,7 @@ impl<'a> SExprMachine<'a> {
             Op::LessThan((lhs, rhs)) => self.less_than(lhs, rhs),
             Op::Float32ToUint32(val) => self.float32_to_uint32(val),
             Op::IfElse((cond, if_val, else_val)) => self.if_else(cond, if_val, else_val),
+            Op::NativeFn(f) => (*f)(&mut self.globals),
         }
     }
 
@@ -413,6 +418,9 @@ impl Encodable for Op {
                 len += if_val.encode(s)?;
                 len += else_val.encode(s)?;
             }
+            Self::NativeFn(_) => {
+                len += 17u8.encode(s)?;
+            }
         }
         Ok(len)
     }
@@ -443,6 +451,7 @@ impl Decodable for Op {
                 Decodable::decode(d)?,
                 Decodable::decode(d)?,
             )),
+            17 => Self::NativeFn(|_| Ok(SExprVal::Null)),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid Op type")),
         };
         Ok(self_)
