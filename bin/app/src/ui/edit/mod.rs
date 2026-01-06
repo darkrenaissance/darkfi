@@ -408,7 +408,7 @@ impl BaseEdit {
     }
 
     /// Gets the real cursor pos within the rect.
-    async fn get_cursor_pos(&self) -> Point {
+    fn get_cursor_pos(&self) -> Point {
         // This is the position within the content.
         let cursor_pos = self.editor.lock().get_cursor_pos();
         // Apply the inner padding
@@ -521,14 +521,14 @@ impl BaseEdit {
                     if let Some(txt) = miniquad::window::clipboard_get() {
                         self.editor.lock().insert(&txt, atom);
                         // Maybe insert should call this?
-                        self.behave.apply_cursor_scroll().await;
+                        self.behave.apply_cursor_scroll();
                     }
                 }
             }
             _ => return false,
         }
 
-        self.eval_rect().await;
+        self.eval_rect();
         self.redraw(atom).await;
         true
     }
@@ -652,8 +652,8 @@ impl BaseEdit {
             }
         }
 
-        self.eval_rect().await;
-        self.behave.apply_cursor_scroll().await;
+        self.eval_rect();
+        self.behave.apply_cursor_scroll();
         self.pause_blinking();
         self.redraw(atom).await;
 
@@ -690,7 +690,7 @@ impl BaseEdit {
             return false
         }
 
-        if self.try_handle_drag(touch_pos).await {
+        if self.try_handle_drag(touch_pos) {
             return true
         }
 
@@ -713,7 +713,7 @@ impl BaseEdit {
         Some((first, last))
     }
 
-    async fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
+    fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
         let editor = self.editor.lock();
         let Some((mut first, mut last)) = self.get_select_handles(&editor) else { return false };
 
@@ -815,7 +815,7 @@ impl BaseEdit {
             TouchStateAction::ScrollVert { start_pos, scroll_start } => {
                 let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
                 let mut scroll = scroll_start + travel_dist;
-                scroll = scroll.clamp(0., self.behave.max_scroll().await);
+                scroll = scroll.clamp(0., self.behave.max_scroll());
                 if (self.scroll.load(Ordering::Relaxed) - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
                 }
@@ -840,7 +840,7 @@ impl BaseEdit {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
                 let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
-                self.touch_set_cursor_pos(atom, touch_pos).await;
+                self.touch_set_cursor_pos(atom, touch_pos);
                 self.redraw(atom).await;
             }
             _ => {}
@@ -855,7 +855,7 @@ impl BaseEdit {
         true
     }
 
-    async fn touch_set_cursor_pos(&self, atom: &mut PropertyAtomicGuard, touch_pos: Point) {
+    fn touch_set_cursor_pos(&self, atom: &mut PropertyAtomicGuard, touch_pos: Point) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
         let mut editor = self.editor.lock();
@@ -889,7 +889,7 @@ impl BaseEdit {
             let travel = scroll_ctrl.travel(mouse_pos, clip_mouse_pos);
             //t!("select autoscroll travel={travel}");
 
-            let max_scroll = self.behave.max_scroll().await;
+            let max_scroll = self.behave.max_scroll();
             let delta = travel * SELECT_SCROLL_TRAVEL_SPEED;
             let scroll = (self.scroll.load(Ordering::Relaxed) + delta).clamp(0., max_scroll);
             self.scroll.store(scroll, Ordering::Release);
@@ -973,7 +973,7 @@ impl BaseEdit {
         }
 
         self.pause_blinking();
-        //self.behave.apply_cursor_scroll().await;
+        //self.behave.apply_cursor_scroll();
         self.redraw_cursor(atom.batch_id).await;
         self.redraw_select(atom.batch_id).await;
     }
@@ -1023,7 +1023,7 @@ impl BaseEdit {
 
     async fn redraw_select(&self, batch_id: BatchGuardId) {
         //t!("redraw_select");
-        let sel_instrs = self.regen_select_mesh().await;
+        let sel_instrs = self.regen_select_mesh();
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
         let draw_calls = vec![
             (self.select_dc_key, DrawCall::new(sel_instrs, vec![], 0, "chatedit_sel")),
@@ -1046,7 +1046,7 @@ impl BaseEdit {
         let cursor_mesh =
             self.cursor_mesh.lock().get_or_insert_with(|| self.regen_cursor_mesh()).clone();
 
-        vec![DrawInstruction::Move(self.get_cursor_pos().await), DrawInstruction::Draw(cursor_mesh)]
+        vec![DrawInstruction::Move(self.get_cursor_pos()), DrawInstruction::Draw(cursor_mesh)]
     }
 
     fn regen_bg_mesh(&self) -> Vec<DrawInstruction> {
@@ -1073,7 +1073,7 @@ impl BaseEdit {
         vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
     }
 
-    async fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
+    fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
         let editor = self.editor.lock();
@@ -1086,7 +1086,7 @@ impl BaseEdit {
         instrs
     }
 
-    async fn regen_select_mesh(&self) -> Vec<DrawInstruction> {
+    fn regen_select_mesh(&self) -> Vec<DrawInstruction> {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
         let editor = self.editor.lock();
@@ -1127,17 +1127,17 @@ impl BaseEdit {
     /// This does not make use of an atom since we want to de-atomize updating this widget from
     /// its dependencies so theres zero latency when typing.
     /// Should be called when text contents changes.
-    async fn eval_rect(&self) {
+    fn eval_rect(&self) {
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
-        self.behave.eval_rect(atom).await;
+        self.behave.eval_rect(atom);
     }
 
     async fn make_draw_calls(&self) -> DrawUpdate {
         let rect = self.rect.get();
 
         let cursor_instrs = self.get_cursor_instrs().await;
-        let txt_instrs = self.regen_txt_mesh().await;
-        let sel_instrs = self.regen_select_mesh().await;
+        let txt_instrs = self.regen_txt_mesh();
+        let sel_instrs = self.regen_select_mesh();
         let phone_sel_instrs = self.regen_phone_select_handle_mesh().await;
 
         let mut content_instrs = vec![DrawInstruction::ApplyView(rect.with_zero_pos())];
@@ -1222,7 +1222,7 @@ impl BaseEdit {
         let atom =
             &mut self_.render_api.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
         self_.editor.lock().insert(&text, atom);
-        self_.eval_rect().await;
+        self_.eval_rect();
         self_.redraw(atom).await;
         true
     }
@@ -1300,8 +1300,8 @@ impl BaseEdit {
 
         // Text changed - finish any active selection
         if is_text_changed {
-            self.eval_rect().await;
-            self.behave.apply_cursor_scroll().await;
+            self.eval_rect();
+            self.behave.apply_cursor_scroll();
 
             self.pause_blinking();
             //assert!(state.text != self.text.get());
@@ -1363,18 +1363,18 @@ impl UIObject for BaseEdit {
             let atom = &mut batch.spawn();
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
             self_.scroll.store(0., Ordering::Release);
-            self_.eval_rect().await;
+            self_.eval_rect();
             self_.redraw(atom).await;
         }
         async fn redraw(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
-            self_.eval_rect().await;
+            self_.eval_rect();
             self_.redraw(atom).await;
         }
         async fn set_text(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
             self_.editor.lock().on_text_prop_changed();
             let atom = &mut batch.spawn();
-            self_.eval_rect().await;
+            self_.eval_rect();
             self_.redraw(atom).await;
         }
 
@@ -1516,7 +1516,7 @@ impl UIObject for BaseEdit {
         _atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.eval_rect().await;
+        self.eval_rect();
         Some(self.make_draw_calls().await)
     }
 
@@ -1556,8 +1556,8 @@ impl UIObject for BaseEdit {
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
         self.editor.lock().insert(&key_str, atom);
-        self.eval_rect().await;
-        self.behave.apply_cursor_scroll().await;
+        self.eval_rect();
+        self.behave.apply_cursor_scroll();
         self.redraw(atom).await;
         true
     }
@@ -1638,7 +1638,7 @@ impl UIObject for BaseEdit {
         self.mouse_btn_held.store(true, Ordering::Relaxed);
 
         self.pause_blinking();
-        self.eval_rect().await;
+        self.eval_rect();
         self.redraw(atom).await;
         true
     }
@@ -1695,7 +1695,7 @@ impl UIObject for BaseEdit {
 
         let mut scroll =
             self.scroll.load(Ordering::Relaxed) - wheel_pos.y * self.scroll_speed.get();
-        scroll = scroll.clamp(0., self.behave.max_scroll().await);
+        scroll = scroll.clamp(0., self.behave.max_scroll());
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.store(scroll, Ordering::Release);
         self.redraw_scroll(atom.batch_id).await;

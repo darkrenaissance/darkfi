@@ -33,19 +33,18 @@ pub enum BaseEditType {
     MultiLine,
 }
 
-#[async_trait]
 pub(super) trait EditorBehavior: Send + Sync {
-    async fn eval_rect(&self, atom: &mut PropertyAtomicGuard);
+    fn eval_rect(&self, atom: &mut PropertyAtomicGuard);
 
     /// Whenever the cursor is modified this MUST be called
     /// to recalculate the scroll value.
     /// Must call redraw after this.
-    async fn apply_cursor_scroll(&self);
+    fn apply_cursor_scroll(&self);
 
     fn scroll(&self) -> Point;
 
     /// Maximum allowed scroll value
-    async fn max_scroll(&self) -> f32;
+    fn max_scroll(&self) -> f32;
 
     /// Inner position used for rendering
     fn inner_pos(&self) -> Point;
@@ -102,7 +101,7 @@ impl MultiLine {
     }
 
     /// Gets the real cursor pos within the rect.
-    async fn get_cursor_pos(&self) -> Point {
+    fn get_cursor_pos(&self) -> Point {
         // This is the position within the content.
         let cursor_pos = self.editor.lock().get_cursor_pos();
         // Apply the inner padding
@@ -110,9 +109,8 @@ impl MultiLine {
     }
 }
 
-#[async_trait]
 impl EditorBehavior for MultiLine {
-    async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
+    fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
         let parent_rect = self.parent_rect.lock().clone().unwrap();
         // First we evaluate the width based off the parent dimensions
         self.rect
@@ -157,20 +155,20 @@ impl EditorBehavior for MultiLine {
             .unwrap();
     }
 
-    async fn apply_cursor_scroll(&self) {
+    fn apply_cursor_scroll(&self) {
         //let pad_top = self.padding_top();
         let pad_bot = self.padding_bottom();
 
         let mut scroll = self.scroll.load(Ordering::Relaxed);
         let rect_h = self.max_height.get() - pad_bot;
-        let cursor_y0 = self.get_cursor_pos().await.y;
+        let cursor_y0 = self.get_cursor_pos().y;
         let cursor_h = self.baseline.get() + self.cursor_descent.get();
         // The bottom
         let cursor_y1 = cursor_y0 + cursor_h;
         //t!("apply_cursor_scrolling() cursor = [{cursor_y0}, {cursor_y1}] rect_h={rect_h} scroll={scroll}");
 
         if cursor_y1 > rect_h + scroll {
-            let max_scroll = self.max_scroll().await;
+            let max_scroll = self.max_scroll();
             //t!("  cursor bottom below rect");
             // We want cursor_y1 = rect_h + scroll by adjusting scroll
             scroll = (cursor_y1 - rect_h).clamp(0., max_scroll);
@@ -192,7 +190,7 @@ impl EditorBehavior for MultiLine {
     /// * `outer_height` applies the inner padding.
     /// * `rect_h` then clips the `outer_height` to min/max values.
     /// We only allow scrolling when max clipping has been applied.
-    async fn max_scroll(&self) -> f32 {
+    fn max_scroll(&self) -> f32 {
         let content_height = self.content_height.load(Ordering::Relaxed);
         let outer_height = content_height + self.padding_top() + self.padding_bottom();
         let rect_h = self.rect.get_height();
@@ -239,9 +237,8 @@ pub(super) struct SingleLine {
     pub scroll: Arc<AtomicF32>,
 }
 
-#[async_trait]
 impl EditorBehavior for SingleLine {
-    async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
+    fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
         let content_height = {
             let mut editor = self.editor.lock();
             editor.refresh();
@@ -263,7 +260,7 @@ impl EditorBehavior for SingleLine {
             .unwrap();
     }
 
-    async fn apply_cursor_scroll(&self) {
+    fn apply_cursor_scroll(&self) {
         let pad_right = self.padding.get_f32(1).unwrap();
         let pad_left = self.padding.get_f32(3).unwrap();
         let scroll = self.scroll.load(Ordering::Relaxed);
@@ -275,7 +272,7 @@ impl EditorBehavior for SingleLine {
             assert!(cursor_x0 >= 0.);
             self.scroll.store(cursor_x0, Ordering::Release);
         } else if cursor_x1 > rect_w + scroll {
-            let max_scroll = self.max_scroll().await;
+            let max_scroll = self.max_scroll();
             let scroll = (cursor_x1 - rect_w).clamp(0., max_scroll);
             self.scroll.store(scroll, Ordering::Release);
         }
@@ -285,7 +282,7 @@ impl EditorBehavior for SingleLine {
         Point::new(-self.scroll.load(Ordering::Relaxed), 0.)
     }
 
-    async fn max_scroll(&self) -> f32 {
+    fn max_scroll(&self) -> f32 {
         let pad_right = self.padding.get_f32(1).unwrap();
         let pad_left = self.padding.get_f32(3).unwrap();
         let rect_w = self.rect.get_width();
