@@ -73,16 +73,16 @@ impl Editor {
         }
     }
 
-    pub async fn on_text_prop_changed(&mut self) {
+    pub fn on_text_prop_changed(&mut self) {
         // Update GameTextInput state
         self.state.text = self.text.get();
         self.state.select = (0, 0);
         self.state.compose = None;
         self.input.set_state(self.state.clone());
         // Refresh our layout
-        self.refresh().await;
+        self.refresh();
     }
-    pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
+    pub fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
         // Only refresh layout if text content actually changed
         // Avoid triggering expensive recomputes of layout and property tree.
         let old_text = self.text.get();
@@ -90,7 +90,7 @@ impl Editor {
             return
         }
 
-        self.refresh().await;
+        self.refresh();
         // Update the text attribute
         self.text.set(atom, &self.state.text);
     }
@@ -102,7 +102,7 @@ impl Editor {
         self.input.hide();
     }
 
-    pub async fn refresh(&mut self) {
+    pub fn refresh(&mut self) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -139,7 +139,7 @@ impl Editor {
         self.input.set_select(cursor_idx, cursor_idx);
     }
 
-    pub async fn select_word_at_point(&mut self, pos: Point) {
+    pub fn select_word_at_point(&mut self, pos: Point) {
         let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
         assert!(!select.is_collapsed());
         let select = select.text_range();
@@ -163,7 +163,7 @@ impl Editor {
         Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32)
     }
 
-    pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
+    pub fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
         // TODO: need to verify this is correct
         // Insert text by updating the state
         self.state.text.push_str(txt);
@@ -214,7 +214,7 @@ impl Editor {
 
         parley::Selection::new(anchor, focus)
     }
-    pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
+    pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
         assert!(select_start <= self.state.text.len());
         assert!(select_end <= self.state.text.len());
         assert_eq!(self.state.text, self.text.get());

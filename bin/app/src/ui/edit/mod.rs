@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
@@ -179,23 +178,6 @@ impl std::fmt::Debug for Editor {
 }
 */
 
-struct EditorHandle<'a> {
-    guard: async_lock::MutexGuard<'a, Option<Editor>>,
-}
-
-impl<'a> Deref for EditorHandle<'a> {
-    type Target = Editor;
-
-    fn deref(&self) -> &Self::Target {
-        self.guard.as_ref().unwrap()
-    }
-}
-impl<'a> DerefMut for EditorHandle<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.guard.as_mut().unwrap()
-    }
-}
-
 pub type BaseEditPtr = Arc<BaseEdit>;
 
 pub struct BaseEdit {
@@ -258,7 +240,7 @@ pub struct BaseEdit {
     parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     is_mouse_hover: AtomicBool,
 
-    editor: Arc<AsyncMutex<Option<Editor>>>,
+    editor: Arc<SyncMutex<Editor>>,
     behave: Box<dyn EditorBehavior>,
 }
 
@@ -309,8 +291,16 @@ impl BaseEdit {
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let parent_rect = Arc::new(SyncMutex::new(None));
-        let editor = Arc::new(AsyncMutex::new(None));
         let scroll = Arc::new(AtomicF32::new(0.));
+
+        let editor = Arc::new(SyncMutex::new(Editor::new(
+            text.clone(),
+            font_size.clone(),
+            text_color.clone(),
+            window_scale.clone(),
+            lineheight.clone(),
+        )));
+
         let behave: Box<dyn EditorBehavior> = match edit_type {
             BaseEditType::SingleLine => Box::new(SingleLine {
                 rect: rect.clone(),
@@ -420,14 +410,9 @@ impl BaseEdit {
     /// Gets the real cursor pos within the rect.
     async fn get_cursor_pos(&self) -> Point {
         // This is the position within the content.
-        let cursor_pos = self.lock_editor().await.get_cursor_pos();
+        let cursor_pos = self.editor.lock().get_cursor_pos();
         // Apply the inner padding
         cursor_pos + self.behave.inner_pos()
-    }
-
-    /// Lazy-initializes the editor and returns a handle to it
-    async fn lock_editor<'a>(&'a self) -> EditorHandle<'a> {
-        EditorHandle { guard: self.editor.lock().await }
     }
 
     fn regen_cursor_mesh(&self) -> DrawMesh {
@@ -516,7 +501,7 @@ impl BaseEdit {
         match key {
             'a' => {
                 if action_mod {
-                    let mut editor = self.lock_editor().await;
+                    let mut editor = self.editor.lock();
                     editor.driver().select_all();
                     if let Some(seltext) = editor.selected_text() {
                         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
@@ -525,7 +510,7 @@ impl BaseEdit {
             }
             'c' => {
                 if action_mod {
-                    let editor = self.lock_editor().await;
+                    let editor = self.editor.lock();
                     if let Some(txt) = editor.selected_text() {
                         miniquad::window::clipboard_set(&txt);
                     }
@@ -534,7 +519,7 @@ impl BaseEdit {
             'v' => {
                 if action_mod {
                     if let Some(txt) = miniquad::window::clipboard_get() {
-                        self.insert(&txt, atom).await;
+                        self.editor.lock().insert(&txt, atom);
                         // Maybe insert should call this?
                         self.behave.apply_cursor_scroll().await;
                     }
@@ -556,135 +541,132 @@ impl BaseEdit {
     ) -> bool {
         #[cfg(not(target_os = "macos"))]
         let action_mod = mods.ctrl;
-
         #[cfg(target_os = "macos")]
         let action_mod = mods.logo;
 
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
+        {
+            let mut editor = self.editor.lock();
+            match key {
+                KeyCode::Left => {
+                    if action_mod {
+                        if mods.shift {
+                            editor.driver().select_word_left();
+                        } else {
+                            editor.driver().move_word_left();
+                        }
+                    } else if mods.shift {
+                        editor.driver().select_left();
+                    } else {
+                        editor.driver().move_left();
+                    }
+                }
+                KeyCode::Right => {
+                    if action_mod {
+                        if mods.shift {
+                            editor.driver().select_word_right();
+                        } else {
+                            editor.driver().move_word_right();
+                        }
+                    } else if mods.shift {
+                        editor.driver().select_right();
+                    } else {
+                        editor.driver().move_right();
+                    }
+                }
+                KeyCode::Up => {
+                    if mods.shift {
+                        editor.driver().select_up();
+                    } else {
+                        editor.driver().move_up();
+                    }
+                }
+                KeyCode::Down => {
+                    if mods.shift {
+                        editor.driver().select_down();
+                    } else {
+                        editor.driver().move_down();
+                    }
+                }
+                KeyCode::Enter | KeyCode::KpEnter => {
+                    if mods.shift {
+                        if self.behave.allow_endl() {
+                            editor.driver().insert_or_replace_selection("\n");
+                            editor.on_buffer_changed(atom);
+                        }
+                    } else {
+                        //let node = self.node.upgrade().unwrap();
+                        //node.trigger("enter_pressed", vec![]).await.unwrap();
+                        return false;
+                    }
+                }
+                KeyCode::Delete => {
+                    if action_mod {
+                        editor.driver().delete_word();
+                    } else {
+                        editor.driver().delete();
+                    }
+                    editor.on_buffer_changed(atom);
+                }
+                KeyCode::Backspace => {
+                    if action_mod {
+                        editor.driver().backdelete_word();
+                    } else {
+                        editor.driver().backdelete();
+                    }
+                    editor.on_buffer_changed(atom);
+                }
+                KeyCode::Home => {
+                    if action_mod {
+                        if mods.shift {
+                            editor.driver().select_to_text_start();
+                        } else {
+                            editor.driver().move_to_text_start();
+                        }
+                    } else if mods.shift {
+                        editor.driver().select_to_line_start();
+                    } else {
+                        editor.driver().move_to_line_start();
+                    }
+                }
+                KeyCode::End => {
+                    if action_mod {
+                        if mods.shift {
+                            editor.driver().select_to_text_end();
+                        } else {
+                            editor.driver().move_to_text_end();
+                        }
+                    } else if mods.shift {
+                        editor.driver().select_to_line_end();
+                    } else {
+                        editor.driver().move_to_line_end();
+                    }
+                }
+                _ => return false,
+            }
 
-        let mut editor = self.lock_editor().await;
-
-        match key {
-            KeyCode::Left => {
-                if action_mod {
-                    if mods.shift {
-                        editor.driver().select_word_left();
-                    } else {
-                        editor.driver().move_word_left();
-                    }
-                } else if mods.shift {
-                    editor.driver().select_left();
-                } else {
-                    editor.driver().move_left();
-                }
+            if let Some(seltext) = editor.selected_text() {
+                self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+            } else {
+                self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
             }
-            KeyCode::Right => {
-                if action_mod {
-                    if mods.shift {
-                        editor.driver().select_word_right();
-                    } else {
-                        editor.driver().move_word_right();
-                    }
-                } else if mods.shift {
-                    editor.driver().select_right();
-                } else {
-                    editor.driver().move_right();
-                }
-            }
-            KeyCode::Up => {
-                if mods.shift {
-                    editor.driver().select_up();
-                } else {
-                    editor.driver().move_up();
-                }
-            }
-            KeyCode::Down => {
-                if mods.shift {
-                    editor.driver().select_down();
-                } else {
-                    editor.driver().move_down();
-                }
-            }
-            KeyCode::Enter | KeyCode::KpEnter => {
-                if mods.shift {
-                    if self.behave.allow_endl() {
-                        editor.driver().insert_or_replace_selection("\n");
-                        editor.on_buffer_changed(atom).await;
-                    }
-                } else {
-                    //let node = self.node.upgrade().unwrap();
-                    //node.trigger("enter_pressed", vec![]).await.unwrap();
-                    return false;
-                }
-            }
-            KeyCode::Delete => {
-                if action_mod {
-                    editor.driver().delete_word();
-                } else {
-                    editor.driver().delete();
-                }
-                editor.on_buffer_changed(atom).await;
-            }
-            KeyCode::Backspace => {
-                if action_mod {
-                    editor.driver().backdelete_word();
-                } else {
-                    editor.driver().backdelete();
-                }
-                editor.on_buffer_changed(atom).await;
-            }
-            KeyCode::Home => {
-                if action_mod {
-                    if mods.shift {
-                        editor.driver().select_to_text_start();
-                    } else {
-                        editor.driver().move_to_text_start();
-                    }
-                } else if mods.shift {
-                    editor.driver().select_to_line_start();
-                } else {
-                    editor.driver().move_to_line_start();
-                }
-            }
-            KeyCode::End => {
-                if action_mod {
-                    if mods.shift {
-                        editor.driver().select_to_text_end();
-                    } else {
-                        editor.driver().move_to_text_end();
-                    }
-                } else if mods.shift {
-                    editor.driver().select_to_line_end();
-                } else {
-                    editor.driver().move_to_line_end();
-                }
-            }
-            _ => return false,
         }
-
-        if let Some(seltext) = editor.selected_text() {
-            self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
-        } else {
-            self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
-        }
-
-        drop(editor);
 
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
         self.pause_blinking();
         self.redraw(atom).await;
 
-        return true
+        true
     }
 
     /// This will select the entire word rather than move the cursor to that location
     async fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         t!("start_touch_select({touch_pos:?})");
 
-        let mut editor = self.lock_editor().await;
-        editor.select_word_at_point(touch_pos).await;
-        editor.refresh().await;
+        let mut editor = self.editor.lock();
+        editor.select_word_at_point(touch_pos);
+        editor.refresh();
 
         let seltext = editor.selected_text().unwrap();
         d!("Selected {seltext:?} from {touch_pos:?}");
@@ -717,7 +699,7 @@ impl BaseEdit {
         true
     }
 
-    async fn get_select_handles(&self, editor: &Editor) -> Option<(Point, Point)> {
+    fn get_select_handles(&self, editor: &Editor) -> Option<(Point, Point)> {
         let layout = editor.layout();
 
         let sel = editor.selection(1);
@@ -732,10 +714,8 @@ impl BaseEdit {
     }
 
     async fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
-        let editor = self.lock_editor().await;
-        let Some((mut first, mut last)) = self.get_select_handles(&editor).await else {
-            return false
-        };
+        let editor = self.editor.lock();
+        let Some((mut first, mut last)) = self.get_select_handles(&editor) else { return false };
 
         self.abs_to_local(&mut touch_pos);
         t!("localize touch_pos = {touch_pos:?}");
@@ -878,9 +858,9 @@ impl BaseEdit {
     async fn touch_set_cursor_pos(&self, atom: &mut PropertyAtomicGuard, touch_pos: Point) {
         t!("touch_set_cursor_pos({touch_pos:?})");
 
-        let mut editor = self.lock_editor().await;
+        let mut editor = self.editor.lock();
         editor.move_to_pos(touch_pos);
-        editor.refresh().await;
+        editor.refresh();
         drop(editor);
 
         self.pause_blinking();
@@ -926,7 +906,7 @@ impl BaseEdit {
         }
 
         let seltext = {
-            let mut editor = self.lock_editor().await;
+            let mut editor = self.editor.lock();
 
             // The below lines rely on parley driver which android does not use
             //let mut txt_ctx = text::TEXT_CTX.get().await;
@@ -970,8 +950,8 @@ impl BaseEdit {
             assert!(start < end);
 
             //t!("handle_select(): set_selection({start}, {end})");
-            editor.set_selection(start, end).await;
-            editor.refresh().await;
+            editor.set_selection(start, end);
+            editor.refresh();
 
             editor.selected_text()
         };
@@ -1096,7 +1076,7 @@ impl BaseEdit {
     async fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
-        let editor = self.lock_editor().await;
+        let editor = self.editor.lock();
         let layout = editor.layout();
 
         let mut render_instrs =
@@ -1109,7 +1089,7 @@ impl BaseEdit {
     async fn regen_select_mesh(&self) -> Vec<DrawInstruction> {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
-        let editor = self.lock_editor().await;
+        let editor = self.editor.lock();
         let layout = editor.layout();
 
         let sel = editor.selection(1);
@@ -1131,8 +1111,8 @@ impl BaseEdit {
             //t!("regen_phone_select_handle_mesh() [DISABLED]");
             return vec![]
         }
-        let editor = self.lock_editor().await;
-        let (first, last) = self.get_select_handles(&editor).await.unwrap();
+        let editor = self.editor.lock();
+        let (first, last) = self.get_select_handles(&editor).unwrap();
 
         let sel = editor.selection(1);
         assert!(!sel.is_collapsed());
@@ -1214,11 +1194,6 @@ impl BaseEdit {
         }
     }
 
-    async fn insert(&self, txt: &str, atom: &mut PropertyAtomicGuard) {
-        let mut editor = self.lock_editor().await;
-        editor.insert(txt, atom).await;
-    }
-
     async fn process_insert_text_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
             debug!(target: "ui::chatedit", "Event relayer closed");
@@ -1246,7 +1221,7 @@ impl BaseEdit {
 
         let atom =
             &mut self_.render_api.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
-        self_.insert(&text, atom).await;
+        self_.editor.lock().insert(&text, atom);
         self_.eval_rect().await;
         self_.redraw(atom).await;
         true
@@ -1267,8 +1242,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.lock_editor().await;
-        editor.focus();
+        self_.editor.lock().focus();
         true
     }
     async fn process_unfocus_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -1286,8 +1260,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let mut editor = self_.lock_editor().await;
-        editor.unfocus();
+        self_.editor.lock().unfocus();
         true
     }
 
@@ -1300,7 +1273,7 @@ impl BaseEdit {
         t!("handle_android_event({state:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
-        let mut editor = self.lock_editor().await;
+        let mut editor = self.editor.lock();
         // Diff old and new state so we know what changed
         let is_text_changed = editor.state.text != state.text;
         let is_select_changed = editor.state.select != state.select;
@@ -1357,22 +1330,7 @@ impl UIObject for BaseEdit {
         self.priority.get()
     }
 
-    fn init(&self) {
-        let mut guard = self.editor.lock_blocking();
-        assert!(guard.is_none());
-        let editor = Editor::new(
-            self.text.clone(),
-            self.font_size.clone(),
-            self.text_color.clone(),
-            self.window_scale.clone(),
-            self.lineheight.clone(),
-        );
-        // For Android you can do this:
-        //let atom = &mut PropertyAtomicGuard::none();
-        //self.text.set(atom, "the quick brown fox jumped over the");
-        //smol::block_on(editor.on_text_prop_changed());
-        *guard = Some(editor);
-    }
+    fn init(&self) {}
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
@@ -1414,7 +1372,7 @@ impl UIObject for BaseEdit {
             self_.redraw(atom).await;
         }
         async fn set_text(self_: Arc<BaseEdit>, batch: BatchGuardPtr) {
-            self_.lock_editor().await.on_text_prop_changed().await;
+            self_.editor.lock().on_text_prop_changed();
             let atom = &mut batch.spawn();
             self_.eval_rect().await;
             self_.redraw(atom).await;
@@ -1549,7 +1507,6 @@ impl UIObject for BaseEdit {
         *self.parent_rect.lock() = None;
         self.key_repeat.lock().clear();
         *self.cursor_mesh.lock() = None;
-        *self.editor.lock_blocking() = None;
     }
 
     #[instrument(target = "ui::edit")]
@@ -1598,7 +1555,7 @@ impl UIObject for BaseEdit {
 
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
-        self.insert(&key_str, atom).await;
+        self.editor.lock().insert(&key_str, atom);
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
         self.redraw(atom).await;
@@ -1672,10 +1629,7 @@ impl UIObject for BaseEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
-        {
-            let mut editor = self.lock_editor().await;
-            editor.driver().move_to_point(mouse_pos.x, mouse_pos.y);
-        }
+        self.editor.lock().driver().move_to_point(mouse_pos.x, mouse_pos.y);
 
         if !self.select_text.is_null(0).unwrap() {
             self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();

@@ -57,19 +57,19 @@ impl Editor {
     pub fn focus(&self) {}
     pub fn unfocus(&self) {}
 
-    pub async fn on_text_prop_changed(&mut self) {
+    pub fn on_text_prop_changed(&mut self) {
         // Get modified text property
         let txt = self.text.get();
         // Update Parley text buffer
         self.editor.set_text(&txt);
         // Refresh our layout
-        self.refresh().await;
+        self.refresh();
     }
-    pub async fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
+    pub fn on_buffer_changed(&mut self, atom: &mut PropertyAtomicGuard) {
         self.text.set(atom, self.editor.raw_text());
     }
 
-    pub async fn refresh(&mut self) {
+    pub fn refresh(&mut self) {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
@@ -99,7 +99,7 @@ impl Editor {
     pub fn move_to_pos(&self, _pos: Point) {
         unimplemented!()
     }
-    pub async fn select_word_at_point(&mut self, _pos: Point) {
+    pub fn select_word_at_point(&mut self, _pos: Point) {
         unimplemented!()
     }
 
@@ -109,9 +109,9 @@ impl Editor {
         cursor_pos
     }
 
-    pub async fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
+    pub fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
         self.driver().insert_or_replace_selection(&txt);
-        self.on_buffer_changed(atom).await;
+        self.on_buffer_changed(atom);
     }
 
     pub fn driver(&mut self) -> ParleyDriverWrapper {
@@ -137,7 +137,7 @@ impl Editor {
     }
     /// Android uses byte indexes whereas parley has its own things. So this API is a compromise
     /// between them both.
-    pub async fn set_selection(&mut self, select_start: usize, select_end: usize) {
+    pub fn set_selection(&mut self, select_start: usize, select_end: usize) {
         self.driver().select_byte_range(select_start, select_end);
     }
 

@@ -16,14 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cell::RefCell, ops::Range, sync::{Arc, LazyLock}};
 use parley::fontique::{Collection, CollectionOptions, SourceCache, SourceCacheOptions};
+use std::{
+    cell::RefCell,
+    ops::Range,
+    sync::{Arc, LazyLock},
+};
 
 use crate::{mesh::Color, util::spawn_thread};
 
 pub mod atlas;
 mod editor;
-pub use editor::Editor;
+pub use editor::{Editor, ParleyDriverWrapper};
 mod render;
 pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 

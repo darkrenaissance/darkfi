@@ -15,7 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use parking_lot::Mutex as SyncMutex;
@@ -26,8 +25,6 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, Role},
     text::Editor,
 };
-
-use super::EditorHandle;
 
 //macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit::behave", $($arg)*); } }
 
@@ -87,17 +84,12 @@ pub(super) struct MultiLine {
     pub padding: PropertyPtr,
     pub cursor_descent: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
-    pub editor: Arc<AsyncMutex<Option<Editor>>>,
+    pub editor: Arc<SyncMutex<Editor>>,
     pub content_height: AtomicF32,
     pub scroll: Arc<AtomicF32>,
 }
 
 impl MultiLine {
-    /// Lazy-initializes the editor and returns a handle to it
-    async fn lock_editor<'a>(&'a self) -> EditorHandle<'a> {
-        EditorHandle { guard: self.editor.lock().await }
-    }
-
     fn bounded_height(&self, height: f32) -> f32 {
         height.clamp(self.min_height.get(), self.max_height.get())
     }
@@ -112,7 +104,7 @@ impl MultiLine {
     /// Gets the real cursor pos within the rect.
     async fn get_cursor_pos(&self) -> Point {
         // This is the position within the content.
-        let cursor_pos = self.lock_editor().await.get_cursor_pos();
+        let cursor_pos = self.editor.lock().get_cursor_pos();
         // Apply the inner padding
         cursor_pos + self.inner_pos()
     }
@@ -140,9 +132,9 @@ impl EditorBehavior for MultiLine {
         // Use the width to adjust the height calcs
         let rect_w = self.rect.get_width() - pad_left - pad_right;
         let content_height = {
-            let mut editor = self.lock_editor().await;
+            let mut editor = self.editor.lock();
             editor.set_width(rect_w);
-            editor.refresh().await;
+            editor.refresh();
             editor.height()
         };
         self.content_height.store(content_height, Ordering::Relaxed);
@@ -242,24 +234,17 @@ pub(super) struct SingleLine {
     pub padding: PropertyPtr,
     pub cursor_width: PropertyFloat32,
     pub parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
-    pub editor: Arc<AsyncMutex<Option<Editor>>>,
+    pub editor: Arc<SyncMutex<Editor>>,
     pub content_height: AtomicF32,
     pub scroll: Arc<AtomicF32>,
-}
-
-impl SingleLine {
-    /// Lazy-initializes the editor and returns a handle to it
-    async fn lock_editor<'a>(&'a self) -> EditorHandle<'a> {
-        EditorHandle { guard: self.editor.lock().await }
-    }
 }
 
 #[async_trait]
 impl EditorBehavior for SingleLine {
     async fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
         let content_height = {
-            let mut editor = self.lock_editor().await;
-            editor.refresh().await;
+            let mut editor = self.editor.lock();
+            editor.refresh();
             editor.height()
         };
         self.content_height.store(content_height, Ordering::Relaxed);
@@ -283,7 +268,7 @@ impl EditorBehavior for SingleLine {
         let pad_left = self.padding.get_f32(3).unwrap();
         let scroll = self.scroll.load(Ordering::Relaxed);
         let rect_w = self.rect.get_width() - pad_right;
-        let cursor_x0 = self.lock_editor().await.get_cursor_pos().x + pad_left;
+        let cursor_x0 = self.editor.lock().get_cursor_pos().x + pad_left;
         let cursor_x1 = cursor_x0 + self.cursor_width.get();
 
         if cursor_x0 < scroll {
@@ -304,7 +289,7 @@ impl EditorBehavior for SingleLine {
         let pad_right = self.padding.get_f32(1).unwrap();
         let pad_left = self.padding.get_f32(3).unwrap();
         let rect_w = self.rect.get_width();
-        let content_w = self.lock_editor().await.width() + self.cursor_width.get();
+        let content_w = self.editor.lock().width() + self.cursor_width.get();
         (pad_left + pad_right + content_w - rect_w).max(0.)
     }
 
