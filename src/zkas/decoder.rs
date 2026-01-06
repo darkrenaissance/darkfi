@@ -26,8 +26,23 @@ use super::{
 };
 use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 
+// Section markers in the binary format
+const SECTION_CONSTANT: &[u8] = b".constant";
+const SECTION_LITERAL: &[u8] = b".literal";
+const SECTION_WITNESS: &[u8] = b".witness";
+const SECTION_CIRCUIT: &[u8] = b".circuit";
+const SECTION_DEBUG: &[u8] = b".debug";
+
 /// A ZkBinary decoded from compiled zkas code.
 /// This is used by the zkvm.
+///
+/// The binary format consits of:
+/// - Header: magic bytes, version, k param, namespace
+/// - `.constant` section: constant types and names
+/// - `.literal` section: literal types and values
+/// - `.witness` section: witness types
+/// - `.circuit` section: opcoddes and their arguments
+/// - `.debug` section (optional): debug informatioon
 #[derive(Clone, Debug)]
 // ANCHOR: zkbinary-struct
 pub struct ZkBinary {
@@ -45,7 +60,75 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)
 }
 
+fn find_section(bytes: &[u8], section: &[u8]) -> Result<usize> {
+    find_subslice(bytes, section).ok_or_else(|| {
+        ZkasErr(format!("Could not find {} section", String::from_utf8_lossy(section)))
+    })
+}
+
+struct SectionOffsets {
+    constant: usize,
+    literal: usize,
+    witness: usize,
+    circuit: usize,
+    debug: usize,
+}
+
+impl SectionOffsets {
+    /// Find all section offsets in the binary and validate their order
+    fn find(bytes: &[u8]) -> Result<Self> {
+        let constant = find_section(bytes, SECTION_CONSTANT)?;
+        let literal = find_section(bytes, SECTION_LITERAL)?;
+        let witness = find_section(bytes, SECTION_WITNESS)?;
+        let circuit = find_section(bytes, SECTION_CIRCUIT)?;
+        // Debug section is optional, so use end of bytes if not present
+        let debug = find_subslice(bytes, SECTION_DEBUG).unwrap_or(bytes.len());
+
+        // Validate section order
+        let sections = [
+            (constant, ".constant"),
+            (literal, ".literal"),
+            (witness, ".witness"),
+            (circuit, ".circuit"),
+            (debug, "debug/EOF"),
+        ];
+
+        for i in 0..sections.len() - 1 {
+            if sections[i].0 > sections[i + 1].0 {
+                return Err(ZkasErr(format!(
+                    "{} section appeared before {}",
+                    sections[i + 1].1,
+                    sections[i].1
+                )));
+            }
+        }
+
+        Ok(Self { constant, literal, witness, circuit, debug })
+    }
+
+    /// Extract the bytes for the constant section
+    fn constant_bytes<'a>(&self, bytes: &'a [u8]) -> &'a [u8] {
+        &bytes[self.constant + SECTION_CONSTANT.len()..self.literal]
+    }
+
+    /// Extract the bytes for the literal section
+    fn literal_bytes<'a>(&self, bytes: &'a [u8]) -> &'a [u8] {
+        &bytes[self.literal + SECTION_LITERAL.len()..self.witness]
+    }
+
+    /// Extract the bytes for the witness section
+    fn witness_bytes<'a>(&self, bytes: &'a [u8]) -> &'a [u8] {
+        &bytes[self.witness + SECTION_WITNESS.len()..self.circuit]
+    }
+
+    /// Extract the bytes for the circuit section
+    fn circuit_bytes<'a>(&self, bytes: &'a [u8]) -> &'a [u8] {
+        &bytes[self.circuit + SECTION_CIRCUIT.len()..self.debug]
+    }
+}
+
 impl ZkBinary {
+    /// Decode a ZkBinary from compiled bytes
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         // Ensure that bytes is a certain minimum length. Otherwise the code
         // below will panic due to an index out of bounds error.
@@ -64,7 +147,7 @@ impl ZkBinary {
 
         // For now, we'll limit k.
         if k > MAX_K {
-            return Err(ZkasErr("k param is too high, max allowed is 16".to_string()))
+            return Err(ZkasErr(format!("k param is too high, max allowed is {MAX_K}")))
         }
 
         // After the binary version and k, we're supposed to have the witness namespace
@@ -75,56 +158,15 @@ impl ZkBinary {
             return Err(ZkasErr("Namespace too long".to_string()))
         }
 
-        let constants_offset = match find_subslice(bytes, b".constant") {
-            Some(v) => v,
-            None => return Err(ZkasErr("Could not find .constant section".to_string())),
-        };
+        // ===============
+        // Section parsing
+        // ===============
+        let offsets = SectionOffsets::find(bytes)?;
 
-        let literals_offset = match find_subslice(bytes, b".literal") {
-            Some(v) => v,
-            None => return Err(ZkasErr("Could not find .literal section".to_string())),
-        };
-
-        let witness_offset = match find_subslice(bytes, b".witness") {
-            Some(v) => v,
-            None => return Err(ZkasErr("Could not find .witness section".to_string())),
-        };
-
-        let circuit_offset = match find_subslice(bytes, b".circuit") {
-            Some(v) => v,
-            None => return Err(ZkasErr("Could not find .circuit section".to_string())),
-        };
-
-        let debug_offset = match find_subslice(bytes, b".debug") {
-            Some(v) => v,
-            None => bytes.len(),
-        };
-
-        if constants_offset > literals_offset {
-            return Err(ZkasErr(".literal section appeared before .constant".to_string()))
-        }
-
-        if literals_offset > witness_offset {
-            return Err(ZkasErr(".witness section appeared before .literal".to_string()))
-        }
-
-        if witness_offset > circuit_offset {
-            return Err(ZkasErr(".circuit section appeared before .witness".to_string()))
-        }
-
-        if circuit_offset > debug_offset {
-            return Err(ZkasErr(".debug section appeared before .circuit or EOF".to_string()))
-        }
-
-        let constants_section = &bytes[constants_offset + b".constant".len()..literals_offset];
-        let literals_section = &bytes[literals_offset + b".literal".len()..witness_offset];
-        let witness_section = &bytes[witness_offset + b".witness".len()..circuit_offset];
-        let circuit_section = &bytes[circuit_offset + b".circuit".len()..debug_offset];
-
-        let constants = ZkBinary::parse_constants(constants_section)?;
-        let literals = ZkBinary::parse_literals(literals_section)?;
-        let witnesses = ZkBinary::parse_witness(witness_section)?;
-        let opcodes = ZkBinary::parse_circuit(circuit_section)?;
+        let constants = Self::parse_constants(offsets.constant_bytes(bytes))?;
+        let literals = Self::parse_literals(offsets.literal_bytes(bytes))?;
+        let witnesses = Self::parse_witnesses(offsets.witness_bytes(bytes))?;
+        let opcodes = Self::parse_circuit(offsets.circuit_bytes(bytes))?;
 
         // TODO: Debug info
 
@@ -133,21 +175,16 @@ impl ZkBinary {
 
     fn parse_constants(bytes: &[u8]) -> Result<Vec<(VarType, String)>> {
         let mut constants = vec![];
+        let mut offset = 0;
 
-        let mut iter_offset = 0;
-        while iter_offset < bytes.len() {
-            let c_type = match VarType::from_repr(bytes[iter_offset]) {
-                Some(v) => v,
-                None => {
-                    return Err(ZkasErr(format!(
-                        "Could not decode constant VarType from {}",
-                        bytes[iter_offset],
-                    )))
-                }
-            };
-            iter_offset += 1;
-            let (name, offset) = deserialize_partial::<String>(&bytes[iter_offset..])?;
-            iter_offset += offset;
+        while offset < bytes.len() {
+            let c_type = VarType::from_repr(bytes[offset]).ok_or_else(|| {
+                ZkasErr(format!("Could not decode constant VarType from {}", bytes[offset]))
+            })?;
+            offset += 1;
+
+            let (name, len) = deserialize_partial::<String>(&bytes[offset..])?;
+            offset += len;
 
             constants.push((c_type, name));
         }
@@ -157,21 +194,16 @@ impl ZkBinary {
 
     fn parse_literals(bytes: &[u8]) -> Result<Vec<(LitType, String)>> {
         let mut literals = vec![];
+        let mut offset = 0;
 
-        let mut iter_offset = 0;
-        while iter_offset < bytes.len() {
-            let l_type = match LitType::from_repr(bytes[iter_offset]) {
-                Some(v) => v,
-                None => {
-                    return Err(ZkasErr(format!(
-                        "Could not decode literal LitType from {}",
-                        bytes[iter_offset],
-                    )))
-                }
-            };
-            iter_offset += 1;
-            let (name, offset) = deserialize_partial::<String>(&bytes[iter_offset..])?;
-            iter_offset += offset;
+        while offset < bytes.len() {
+            let l_type = LitType::from_repr(bytes[offset]).ok_or_else(|| {
+                ZkasErr(format!("Could not decode literal LitType from {}", bytes[offset]))
+            })?;
+            offset += 1;
+
+            let (name, len) = deserialize_partial::<String>(&bytes[offset..])?;
+            offset += len;
 
             literals.push((l_type, name));
         }
@@ -179,22 +211,13 @@ impl ZkBinary {
         Ok(literals)
     }
 
-    fn parse_witness(bytes: &[u8]) -> Result<Vec<VarType>> {
+    fn parse_witnesses(bytes: &[u8]) -> Result<Vec<VarType>> {
         let mut witnesses = vec![];
 
-        let mut iter_offset = 0;
-        while iter_offset < bytes.len() {
-            let w_type = match VarType::from_repr(bytes[iter_offset]) {
-                Some(v) => v,
-                None => {
-                    return Err(ZkasErr(format!(
-                        "Could not decode witness VarType from {}",
-                        bytes[iter_offset],
-                    )))
-                }
-            };
-
-            iter_offset += 1;
+        for &byte in bytes {
+            let w_type = VarType::from_repr(byte).ok_or_else(|| {
+                ZkasErr(format!("Could not decode witness VarType from {}", byte))
+            })?;
 
             witnesses.push(w_type);
         }
@@ -205,53 +228,50 @@ impl ZkBinary {
     #[allow(clippy::type_complexity)]
     fn parse_circuit(bytes: &[u8]) -> Result<Vec<(Opcode, Vec<(HeapType, usize)>)>> {
         let mut opcodes = vec![];
+        let mut offset = 0;
 
-        let mut iter_offset = 0;
-        while iter_offset < bytes.len() {
-            let opcode = match Opcode::from_repr(bytes[iter_offset]) {
-                Some(v) => v,
-                None => {
-                    return Err(ZkasErr(format!(
-                        "Could not decode Opcode from {}",
-                        bytes[iter_offset]
-                    )))
-                }
-            };
-            iter_offset += 1;
+        while offset < bytes.len() {
+            let opcode = Opcode::from_repr(bytes[offset]).ok_or_else(|| {
+                ZkasErr(format!("Could not decode Opcode from {}", bytes[offset]))
+            })?;
+            offset += 1;
 
             // TODO: Check that the types and arg number are correct
 
-            let (arg_num, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
-            iter_offset += offset;
+            // Parse argument count
+            let (arg_count, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+            offset += len;
 
+            // Parse arguments
             let mut args = vec![];
-            for _ in 0..arg_num.0 {
-                // Check bounds each time bytes[iter_offset] is accessed to prevent panics.
-                if iter_offset >= bytes.len() {
+            for _ in 0..arg_count.0 {
+                // Check bounds to prevent panics
+                if offset >= bytes.len() {
                     return Err(ZkasErr(format!(
-                        "Bad offset for circuit: offset {} is >= circuit length {}",
-                        iter_offset,
+                        "Bad offset for circuit: offset {} is >= circuit len {}",
+                        offset,
                         bytes.len()
-                    )))
+                    )));
                 }
-                let heap_type = bytes[iter_offset];
-                iter_offset += 1;
 
-                if iter_offset >= bytes.len() {
+                let heap_type_byte = bytes[offset];
+                offset += 1;
+
+                if offset >= bytes.len() {
                     return Err(ZkasErr(format!(
-                        "Bad offset for circuit: offset {} is >= circuit length {}",
-                        iter_offset,
+                        "Bad offset for circuit: offset {} is >= circuit len {}",
+                        offset,
                         bytes.len()
-                    )))
+                    )));
                 }
-                let (heap_index, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
-                iter_offset += offset;
-                let heap_type = match HeapType::from_repr(heap_type) {
-                    Some(v) => v,
-                    None => {
-                        return Err(ZkasErr(format!("Could not decode HeapType from {heap_type}")))
-                    }
-                };
+
+                let (heap_index, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
+                offset += len;
+
+                let heap_type = HeapType::from_repr(heap_type_byte).ok_or_else(|| {
+                    ZkasErr(format!("Could not decode HeapType from {}", heap_type_byte))
+                })?;
+
                 args.push((heap_type, heap_index.0 as usize));
             }
 
