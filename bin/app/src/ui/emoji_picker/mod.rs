@@ -38,6 +38,7 @@ use crate::{
 use super::{DrawUpdate, OnModify, UIObject};
 
 mod default;
+use default::DEFAULT_EMOJI_LIST;
 mod emoji;
 pub use emoji::{EmojiMeshes, EmojiMeshesPtr};
 
@@ -126,7 +127,7 @@ impl EmojiPicker {
     }
 
     async fn max_scroll(&self) -> f32 {
-        let emojis_len = self.emoji_meshes.lock().await.get_list().len() as f32;
+        let emojis_len = DEFAULT_EMOJI_LIST.len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
         let rows = (emojis_len / cols).ceil();
@@ -161,10 +162,8 @@ impl EmojiPicker {
 
         let emoji_selected = {
             let emoji_meshes = self.emoji_meshes.lock().await;
-            let emoji_list = emoji_meshes.get_list();
-
-            if idx < emoji_list.len() {
-                let emoji = emoji_list[idx].clone();
+            if idx < DEFAULT_EMOJI_LIST.len() {
+                let emoji = DEFAULT_EMOJI_LIST[idx].to_string();
                 Some(emoji)
             } else {
                 None
@@ -215,21 +214,16 @@ impl EmojiPicker {
         let off_x = self.calc_off_x();
         let emoji_size = self.emoji_size.get();
 
-        let emoji_list_len = {
-            let emoji_meshes = self.emoji_meshes.lock().await;
-            emoji_meshes.get_list().len()
-        };
-
-        let mut x = emoji_size / 2.;
-        let mut y = emoji_size / 2. - self.scroll.get();
-        for i in 0..emoji_list_len {
+        let mut x = 0.;
+        let mut y = -self.scroll.get();
+        for i in 0..DEFAULT_EMOJI_LIST.len() {
             let pos = Point::new(x, y);
             let mesh = self.emoji_meshes.lock().await.get(i).await;
             instrs.extend_from_slice(&[DrawInstruction::SetPos(pos), DrawInstruction::Draw(mesh)]);
 
             x += off_x;
             if x > rect.w {
-                x = emoji_size / 2.;
+                x = 0.;
                 y += emoji_size;
                 //d!("Line break after idx={i}");
             }

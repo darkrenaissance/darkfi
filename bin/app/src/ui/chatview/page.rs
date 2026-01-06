@@ -512,8 +512,7 @@ impl FileMessage {
         for layout in layouts {
             all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
 
-            let instrs =
-                text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
+            let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
             all_instrs.extend(instrs);
         }
 

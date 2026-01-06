@@ -63,11 +63,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(
-        sg_root: SceneNodePtr,
-        render_api: RenderApi,
-        ex: ExecutorPtr,
-    ) -> Arc<Self> {
+    pub fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
         Arc::new(Self { sg_root, ex, render_api, tasks: SyncMutex::new(vec![]) })
     }
 
