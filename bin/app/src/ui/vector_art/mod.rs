@@ -86,7 +86,7 @@ impl VectorArt {
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
             error!(target: "ui:vector_art", "Mesh failed to draw");
             return
         };
@@ -112,7 +112,7 @@ impl VectorArt {
         vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
     }
 
-    async fn get_draw_calls(
+    fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
@@ -161,7 +161,7 @@ impl UIObject for VectorArt {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect).await
+        self.get_draw_calls(atom, parent_rect)
     }
 }
 

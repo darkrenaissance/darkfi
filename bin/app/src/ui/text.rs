@@ -105,7 +105,7 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    async fn regen_mesh(&self) -> Vec<DrawInstruction> {
+    fn regen_mesh(&self) -> Vec<DrawInstruction> {
         let text = self.text.get();
         let font_size = self.font_size.get();
         let lineheight = self.lineheight.get();
@@ -155,7 +155,7 @@ impl Text {
         let rect = self.rect.get();
 
         let mut instrs = vec![DrawInstruction::Move(rect.pos())];
-        instrs.append(&mut self.regen_mesh().await);
+        instrs.append(&mut self.regen_mesh());
 
         if self.debug.get() {
             let rect = self.rect.get().with_zero_pos();

@@ -123,7 +123,7 @@ impl Image {
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
             error!(target: "ui::image", "Image failed to draw");
             return
         };
@@ -140,7 +140,7 @@ impl Image {
         mesh.alloc(&self.render_api)
     }
 
-    async fn get_draw_calls(
+    fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
@@ -209,7 +209,7 @@ impl UIObject for Image {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect).await
+        self.get_draw_calls(atom, parent_rect)
     }
 }
 

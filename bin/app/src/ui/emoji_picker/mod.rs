@@ -126,7 +126,7 @@ impl EmojiPicker {
         off_x
     }
 
-    async fn max_scroll(&self) -> f32 {
+    fn max_scroll(&self) -> f32 {
         let emojis_len = DEFAULT_EMOJI_LIST.len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
@@ -203,7 +203,7 @@ impl EmojiPicker {
         }
 
         // Clamp scroll if needed due to window size change
-        let max_scroll = self.max_scroll().await;
+        let max_scroll = self.max_scroll();
         if self.scroll.get() > max_scroll {
             self.scroll.set(atom, max_scroll);
         }
@@ -295,7 +295,7 @@ impl UIObject for EmojiPicker {
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
-        scroll = scroll.clamp(0., self.max_scroll().await);
+        scroll = scroll.clamp(0., self.max_scroll());
         self.scroll.set(atom, scroll);
 
         self.redraw(atom).await;
@@ -359,7 +359,7 @@ impl UIObject for EmojiPicker {
 
                     if touch_info.is_scroll {
                         let mut scroll = touch_info.start_scroll + y_diff;
-                        scroll = scroll.clamp(0., self.max_scroll().await);
+                        scroll = scroll.clamp(0., self.max_scroll());
                         self.scroll.set(atom, scroll);
                         self.redraw(atom).await;
                     }
