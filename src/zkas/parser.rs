@@ -35,14 +35,12 @@ const KEYWORDS: [&str; 5] = ["k", "field", "constant", "witness", "circuit"];
 /// Forbidden namespaces
 const NOPE_NS: [&str; 4] = [".constant", ".literal", ".witness", ".circuit"];
 
-/// Valid EcFixedPoint constant names supported by the VM.
-const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
-
-/// Valid EcFixedPointShort constant names supported by the VM.
-const VALID_ECFIXEDPOINTSHORT: [&str; 1] = ["VALUE_COMMIT_VALUE"];
-
-/// Valid EcFixedPointBase constant names supported by the VM.
-const VALID_ECFIXEDPOINTBASE: [&str; 2] = ["VALUE_COMMIT_RANDOM_BASE", "NULLIFIER_K"];
+/// Valid constant types and their allowed names.
+const CONSTANT_TYPES: &[(&str, VarType, &[&str])] = &[
+    ("EcFixedPoint", VarType::EcFixedPoint, &["VALUE_COMMIT_RANDOM"]),
+    ("EcFixedPointShort", VarType::EcFixedPointShort, &["VALUE_COMMIT_VALUE"]),
+    ("EcFixedPointBase", VarType::EcFixedPointBase, &["VALUE_COMMIT_RANDOM_BASE", "NULLIFIER_K"]),
+];
 
 #[derive(Clone)]
 struct IndexMap<K, V> {
@@ -111,6 +109,21 @@ pub struct Parser {
 
 type Parsed = (String, u32, Vec<Constant>, Vec<Witness>, Vec<Statement>);
 
+/// Intermediate structure to hold parsed section tokens.
+/// The tokens gathered from each of the sections are stored here
+/// before being converted into AST nodes.
+struct SectionTokens {
+    constant: Vec<Token>,
+    witness: Vec<Token>,
+    circuit: Vec<Token>,
+}
+
+impl SectionTokens {
+    fn new() -> Self {
+        Self { constant: vec![], witness: vec![], circuit: vec![] }
+    }
+}
+
 impl Parser {
     pub fn new(filename: &str, source: Chars, tokens: Vec<Token>) -> Self {
         // For nice error reporting, we'll load everything into a string
@@ -122,25 +135,6 @@ impl Parser {
     }
 
     pub fn parse(&self) -> Result<Parsed> {
-        // We use these to keep state while parsing.
-        let mut namespace = None;
-        let (mut declaring_constant, mut declared_constant) = (false, false);
-        let (mut declaring_witness, mut declared_witness) = (false, false);
-        let (mut declaring_circuit, mut declared_circuit) = (false, false);
-
-        // The tokens gathered from each of the sections
-        let mut constant_tokens = vec![];
-        let mut witness_tokens = vec![];
-        let mut circuit_tokens = vec![];
-
-        // Tokens belonging to the current statement
-        let mut circuit_stmt = vec![];
-        // All completed statements are pushed here
-        let mut circuit_stmts = vec![];
-        // Contains constant and witness sections
-        let mut ast_inner = IndexMap::new();
-        let mut ast = IndexMap::new();
-
         if self.tokens.is_empty() {
             return Err(self.error.abort("Source file does not contain any valid tokens.", 0, 0))
         }
@@ -155,38 +149,53 @@ impl Parser {
 
         let mut iter = self.tokens.iter();
 
-        // The first thing that has to be declared in the source
-        // code is the constant "k" which defines 2^k rows that
-        // the circuit needs to successfully execute.
-        let Some((k, equal, number, semicolon)) = NextTuple4::next_tuple(&mut iter) else {
+        // Parse header (k and field declarations)
+        let declared_k = self.parse_header(&mut iter)?;
+
+        // Parse all sections and collect their tokens
+        let (namespace, section_tokens) = self.parse_sections(&mut iter)?;
+
+        // Build AST from section tokens
+        let constants = self.build_constants(&section_tokens.constant)?;
+        let witnesses = self.build_witnesses(&section_tokens.witness)?;
+        let statements = self.parse_ast_circuit(&section_tokens.circuit)?;
+
+        if statements.is_empty() {
+            return Err(self.error.abort("Circuit section is empty.", 0, 0))
+        }
+
+        Ok((namespace, declared_k, constants, witnesses, statements))
+    }
+
+    /// Parse the file header: k=N; field="...";
+    ///
+    /// The first thing that has to be declared in the source code is the
+    /// constant "k" which defines 2^k rows that the circuit needs to
+    /// successfully execute.
+    ///
+    /// Then we declare the field we're working in.
+    fn parse_header<'a>(&self, iter: &mut impl Iterator<Item = &'a Token>) -> Result<u32> {
+        let Some((k, equal, number, semicolon)) = Self::next_tuple4(iter) else {
             return Err(self.error.abort("Source file does not start with k=n;", 0, 0))
         };
 
-        if k.token_type != TokenType::Symbol ||
-            equal.token_type != TokenType::Assign ||
-            number.token_type != TokenType::Number ||
-            semicolon.token_type != TokenType::Semicolon
-        {
-            return Err(self.error.abort("Source file does not start with k=n;", k.line, k.column))
-        }
+        self.expect_token_type(k, TokenType::Symbol)?;
+        self.expect_token_type(equal, TokenType::Assign)?;
+        self.expect_token_type(number, TokenType::Number)?;
+        self.expect_token_type(semicolon, TokenType::Semicolon)?;
 
         if k.token != "k" {
             return Err(self.error.abort("Source file does not start with k=n;", k.line, k.column))
         }
 
         // Ensure that the value for k can be parsed correctly into the token type.
-        // The below code catches cases where a large k value exceeding the bounds of the target
-        // type is supplied by the user. Without this check an integer overflow can occur.
-        let declared_k = match number.token.parse() {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(self.error.abort(
-                    &format!("k param is invalid, max allowed is {MAX_K}. Error: {e}"),
-                    number.line,
-                    number.column,
-                ))
-            }
-        };
+        let declared_k: u32 = number.token.parse().map_err(|e| {
+            self.error.abort(
+                &format!("k param is invalid, max allowed is {MAX_K}. Error: {e}"),
+                number.line,
+                number.column,
+            )
+        })?;
 
         if declared_k > MAX_K {
             return Err(self.error.abort(
@@ -196,26 +205,15 @@ impl Parser {
             ))
         }
 
-        // Then we declare the field we're working in.
-        let Some((field, equal, field_name, semicolon)) = NextTuple4::next_tuple(&mut iter) else {
-            return Err(self.error.abort(
-                "Source file does not declare field after k",
-                k.line,
-                k.column,
-            ))
+        // Parse field declaration
+        let Some((field, equal, field_name, semicolon)) = Self::next_tuple4(iter) else {
+            return Err(self.error.abort("Source file does not declare field after k", 0, 0))
         };
 
-        if field.token_type != TokenType::Symbol ||
-            equal.token_type != TokenType::Assign ||
-            field_name.token_type != TokenType::String ||
-            semicolon.token_type != TokenType::Semicolon
-        {
-            return Err(self.error.abort(
-                "Source file does not declare field after k",
-                field.line,
-                field.column,
-            ))
-        }
+        self.expect_token_type(field, TokenType::Symbol)?;
+        self.expect_token_type(equal, TokenType::Assign)?;
+        self.expect_token_type(field_name, TokenType::String)?;
+        self.expect_token_type(semicolon, TokenType::Semicolon)?;
 
         if field.token != "field" {
             return Err(self.error.abort(
@@ -236,270 +234,325 @@ impl Parser {
             ))
         }
 
+        Ok(declared_k)
+    }
+
+    /// Parse all sections (constant, witness, circuit) and return their tokens.
+    ///
+    /// Sections "constant", "witness", and "circuit" are the sections we must
+    /// be declaring in our source code. When we find one, we'll take all the
+    /// tokens found in the section and place them in their respective vec.
+    ///
+    /// NOTE: Currently this logic depends on the fact that the sections are
+    /// closed off with braces. This should be revisited later when we decide
+    /// to add other lang functionality that also depends on using braces.
+    fn parse_sections<'a>(
+        &self,
+        iter: &mut impl Iterator<Item = &'a Token>,
+    ) -> Result<(String, SectionTokens)> {
+        let mut sections = SectionTokens::new();
+        let mut namespace: Option<String> = None;
+        let mut declared = (false, false, false); // constant, witness, circuit
+
         while let Some(t) = iter.next() {
-            // Sections "constant", "witness", and "circuit" are
-            // the sections we must be declaring in our source code.
-            // When we find one, we'll take all the tokens found in
-            // the section and place them in their respective vec.
-            // NOTE: Currently this logic depends on the fact that
-            // the sections are closed off with braces. This should
-            // be revisited later when we decide to add other lang
-            // functionality that also depends on using braces.
-            if !declaring_constant && !declaring_witness && !declaring_circuit {
-                //
-                // We use this macro to avoid code repetition in the following
-                // match statement for soaking up the section tokens.
-                macro_rules! absorb_inner_tokens {
-                    ($v:ident) => {
-                        for inner in iter.by_ref() {
-                            if KEYWORDS.contains(&inner.token.as_str()) &&
-                                inner.token_type == TokenType::Symbol
-                            {
-                                return Err(self.error.abort(
-                                    &format!("Keyword '{}' used in improper place.", inner.token),
-                                    inner.line,
-                                    inner.column,
-                                ))
-                            }
-
-                            $v.push(inner.clone());
-                            if inner.token_type == TokenType::RightBrace {
-                                break
-                            }
-                        }
-                    };
-                }
-
-                match t.token.as_str() {
-                    "constant" => {
-                        declaring_constant = true;
-                        absorb_inner_tokens!(constant_tokens);
-                    }
-                    "witness" => {
-                        declaring_witness = true;
-                        absorb_inner_tokens!(witness_tokens);
-                    }
-                    "circuit" => {
-                        declaring_circuit = true;
-                        absorb_inner_tokens!(circuit_tokens);
-                    }
-
-                    x => {
+            let section_tokens = match t.token.as_str() {
+                "constant" => {
+                    if declared.0 {
                         return Err(self.error.abort(
-                            &format!("Section `{x}` is not a valid section"),
+                            "Duplicate `constant` section found.",
                             t.line,
                             t.column,
                         ))
                     }
+                    declared.0 = true;
+                    &mut sections.constant
                 }
-            }
-
-            // We use this macro to set or check that the namespace of all sections
-            // is the same and no stray strings appeared.
-            macro_rules! check_namespace {
-                ($t:ident) => {
-                    if let Some(ns) = namespace.clone() {
-                        if ns != $t[0].token {
-                            return Err(self.error.abort(
-                                &format!("Found '{}' namespace, expected '{ns}'.", $t[0].token),
-                                $t[0].line,
-                                $t[0].column,
-                            ))
-                        }
-                    } else {
-                        if NOPE_NS.contains(&$t[0].token.as_str()) {
-                            return Err(self.error.abort(
-                                &format!("'{}' cannot be a namespace.", $t[0].token),
-                                $t[0].line,
-                                $t[0].column,
-                            ))
-                        }
-
-                        namespace = Some($t[0].token.clone());
-                        if namespace.as_ref().unwrap().as_bytes().len() > MAX_NS_LEN {
-                            return Err(self.error.abort(
-                                &format!("Namespace too long, max {MAX_NS_LEN} bytes"),
-                                $t[0].line,
-                                $t[0].column,
-                            ))
-                        }
+                "witness" => {
+                    if declared.1 {
+                        return Err(self.error.abort(
+                            "Duplicate `witness` section found.",
+                            t.line,
+                            t.column,
+                        ))
                     }
-                };
-            }
-
-            // Parse the constant section into the AST.
-            if declaring_constant {
-                if declared_constant {
+                    declared.1 = true;
+                    &mut sections.witness
+                }
+                "circuit" => {
+                    if declared.2 {
+                        return Err(self.error.abort(
+                            "Duplicate `circuit` section found.",
+                            t.line,
+                            t.column,
+                        ))
+                    }
+                    declared.2 = true;
+                    &mut sections.circuit
+                }
+                x => {
                     return Err(self.error.abort(
-                        "Duplicate `constant` section found.",
+                        &format!("Section `{x}` is not a valid section"),
                         t.line,
                         t.column,
                     ))
-                }
-
-                self.check_section_structure("constant", constant_tokens.clone())?;
-                check_namespace!(constant_tokens);
-
-                let mut constants_map = IndexMap::new();
-                // This is everything between the braces: { ... }
-                let mut constant_inner = constant_tokens[2..constant_tokens.len() - 1].iter();
-                while let Some((typ, name, comma)) = NextTuple3::next_tuple(&mut constant_inner) {
-                    if comma.token_type != TokenType::Comma {
-                        return Err(self.error.abort(
-                            "Separator is not a comma.",
-                            comma.line,
-                            comma.column,
-                        ))
-                    }
-
-                    // No variable shadowing
-                    if constants_map.contains_key(name.token.as_str()) {
-                        return Err(self.error.abort(
-                            &format!(
-                                "Section `constant` already contains the token `{}`.",
-                                &name.token
-                            ),
-                            name.line,
-                            name.column,
-                        ))
-                    }
-
-                    constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
-                }
-
-                if constant_inner.next().is_some() {
-                    return Err(self.error.abort(
-                        "Internal error, leftovers in 'constant' iterator",
-                        0,
-                        0,
-                    ))
-                }
-
-                ast_inner.insert("constant".to_string(), constants_map);
-                declaring_constant = false;
-                declared_constant = true;
-            }
-
-            // Parse the witness section into the AST.
-            if declaring_witness {
-                if declared_witness {
-                    return Err(self.error.abort(
-                        "Duplicate `witness` section found.",
-                        t.line,
-                        t.column,
-                    ))
-                }
-
-                self.check_section_structure("witness", witness_tokens.clone())?;
-                check_namespace!(witness_tokens);
-
-                let mut witnesses_map = IndexMap::new();
-                // This is everything between the braces: { ... }
-                let mut witness_inner = witness_tokens[2..witness_tokens.len() - 1].iter();
-                while let Some((typ, name, comma)) = NextTuple3::next_tuple(&mut witness_inner) {
-                    if comma.token_type != TokenType::Comma {
-                        return Err(self.error.abort(
-                            "Separator is not a comma.",
-                            comma.line,
-                            comma.column,
-                        ))
-                    }
-
-                    // No variable shadowing
-                    if witnesses_map.contains_key(name.token.as_str()) {
-                        return Err(self.error.abort(
-                            &format!(
-                                "Section `witness` already contains the token `{}`.",
-                                &name.token
-                            ),
-                            name.line,
-                            name.column,
-                        ))
-                    }
-
-                    witnesses_map.insert(name.token.clone(), (name.clone(), typ.clone()));
-                }
-
-                if witness_inner.next().is_some() {
-                    return Err(self.error.abort(
-                        "Internal error, leftovers in 'witness' iterator",
-                        0,
-                        0,
-                    ))
-                }
-
-                ast_inner.insert("witness".to_string(), witnesses_map);
-                declaring_witness = false;
-                declared_witness = true;
-            }
-
-            // Parse the circuit section into the AST.
-            if declaring_circuit {
-                if declared_circuit {
-                    return Err(self.error.abort(
-                        "Duplicate `circuit` section found.",
-                        t.line,
-                        t.column,
-                    ))
-                }
-
-                self.check_section_structure("circuit", circuit_tokens.clone())?;
-                check_namespace!(circuit_tokens);
-
-                // Grab tokens for each statement
-                for i in circuit_tokens[2..circuit_tokens.len() - 1].iter() {
-                    if i.token_type == TokenType::Semicolon {
-                        // Push completed statement to the heap
-                        circuit_stmts.push(circuit_stmt.clone());
-                        circuit_stmt = vec![];
-                        continue
-                    }
-                    circuit_stmt.push(i.clone());
-                }
-
-                declaring_circuit = false;
-                declared_circuit = true;
-            }
-        }
-
-        // Tokens have been processed and ast is complete
-
-        let ns = match namespace {
-            Some(v) => v,
-            None => return Err(self.error.abort("Missing namespace in .zk source.", 0, 0)),
-        };
-        ast.insert(ns.clone(), ast_inner);
-
-        let constants = {
-            let c = match ast.get(&ns).unwrap().get("constant") {
-                Some(c) => c,
-                None => {
-                    return Err(self.error.abort("Missing `constant` section in .zk source.", 0, 0))
                 }
             };
-            self.parse_ast_constants(c)?
-        };
 
-        let witnesses = {
-            let c = match ast.get(&ns).unwrap().get("witness") {
-                Some(c) => c,
-                None => {
-                    return Err(self.error.abort("Missing `witness` section in .zk source.", 0, 0))
-                }
-            };
-            self.parse_ast_witness(c)?
-        };
+            // Absorb all tokens until closing brace
+            self.absorb_section_tokens(iter, section_tokens)?;
 
-        let statements = self.parse_ast_circuit(circuit_stmts)?;
-        if statements.is_empty() {
-            return Err(self.error.abort("Circuit section is empty.", 0, 0))
+            // Validate and extract namespace
+            namespace =
+                Some(self.validate_section_namespace(&t.token, section_tokens, namespace)?);
         }
 
-        Ok((ns, declared_k, constants, witnesses, statements))
+        let ns =
+            namespace.ok_or_else(|| self.error.abort("Missing namespace in .zk source.", 0, 0))?;
+
+        if !declared.0 {
+            return Err(self.error.abort("Missing `constant` section in .zk source.", 0, 0))
+        }
+        if !declared.1 {
+            return Err(self.error.abort("Missing `witness` section in .zk source.", 0, 0))
+        }
+        if !declared.2 {
+            return Err(self.error.abort("Missing `circuit` section in .zk source.", 0, 0))
+        }
+
+        Ok((ns, sections))
     }
 
-    /// Routine checks on section structure
-    fn check_section_structure(&self, section: &str, tokens: Vec<Token>) -> Result<()> {
+    /// Absorb tokens from iterator until a closing brace is found.
+    /// Validates that no keywords are used in improper places.
+    fn absorb_section_tokens<'a>(
+        &self,
+        iter: &mut impl Iterator<Item = &'a Token>,
+        dest: &mut Vec<Token>,
+    ) -> Result<()> {
+        for inner in iter {
+            if KEYWORDS.contains(&inner.token.as_str()) && inner.token_type == TokenType::Symbol {
+                return Err(self.error.abort(
+                    &format!("Keyword '{}' used in improper place.", inner.token),
+                    inner.line,
+                    inner.column,
+                ))
+            }
+
+            dest.push(inner.clone());
+            if inner.token_type == TokenType::RightBrace {
+                break
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate namespace consistency across sections.
+    /// All sections must use the same namespace, and it must not be a reserved name.
+    fn validate_section_namespace(
+        &self,
+        section_name: &str,
+        tokens: &[Token],
+        existing_ns: Option<String>,
+    ) -> Result<String> {
+        if tokens.is_empty() {
+            return Err(self.error.abort(&format!("Section `{section_name}` has no tokens"), 0, 0))
+        }
+
+        let ns_token = &tokens[0];
+
+        if let Some(ns) = existing_ns {
+            if ns != ns_token.token {
+                return Err(self.error.abort(
+                    &format!("Found '{}' namespace, expected '{ns}'.", ns_token.token),
+                    ns_token.line,
+                    ns_token.column,
+                ))
+            }
+            return Ok(ns)
+        }
+
+        if NOPE_NS.contains(&ns_token.token.as_str()) {
+            return Err(self.error.abort(
+                &format!("'{}' cannot be a namespace.", ns_token.token),
+                ns_token.line,
+                ns_token.column,
+            ))
+        }
+
+        if ns_token.token.len() > MAX_NS_LEN {
+            return Err(self.error.abort(
+                &format!("Namespace too long, max {MAX_NS_LEN} bytes"),
+                ns_token.line,
+                ns_token.column,
+            ))
+        }
+
+        Ok(ns_token.token.clone())
+    }
+
+    /// Build constants from section tokens.
+    /// Validates constant types against the CONSTANT_TYPES table.
+    fn build_constants(&self, tokens: &[Token]) -> Result<Vec<Constant>> {
+        self.check_section_structure("constant", tokens)?;
+
+        let parsed = self.parse_typed_section("constant", tokens)?;
+        let mut ret = vec![];
+
+        // name = constant name
+        for (name, (name_token, type_token)) in parsed.scam_iter() {
+            self.validate_section_entry("Constant", &name, &name_token, &type_token)?;
+
+            // Look up the constant type in our table
+            let type_name = type_token.token.as_str();
+            let constant_def = CONSTANT_TYPES.iter().find(|(t, _, _)| *t == type_name);
+
+            match constant_def {
+                Some((_, var_type, valid_names)) => {
+                    if !valid_names.contains(&name_token.token.as_str()) {
+                        return Err(self.error.abort(
+                            &format!(
+                                "`{}` is not a valid {type_name} constant. Supported: {valid_names:?}",
+                                name_token.token
+                            ),
+                            name_token.line,
+                            name_token.column,
+                        ))
+                    }
+
+                    ret.push(Constant {
+                        name: name.to_string(),
+                        typ: *var_type,
+                        line: type_token.line,
+                        column: type_token.column,
+                    });
+                }
+                None => {
+                    return Err(self.error.abort(
+                        &format!("`{type_name}` is an unsupported constant type."),
+                        type_token.line,
+                        type_token.column,
+                    ))
+                }
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Build witnesses from section tokens.
+    fn build_witnesses(&self, tokens: &[Token]) -> Result<Vec<Witness>> {
+        self.check_section_structure("witness", tokens)?;
+
+        let parsed = self.parse_typed_section("witness", tokens)?;
+        let mut ret = vec![];
+
+        // name = witness name
+        for (name, (name_token, type_token)) in parsed.scam_iter() {
+            self.validate_section_entry("Witness", &name, &name_token, &type_token)?;
+
+            match VarType::try_from(&type_token) {
+                Ok(typ) => {
+                    ret.push(Witness {
+                        name: name.to_string(),
+                        typ,
+                        line: name_token.line,
+                        column: name_token.column,
+                    });
+                }
+                Err(e) => return Err(self.error.abort(&e, type_token.line, type_token.column)),
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Parse a typed section (constant or witness) into an IndexMap.
+    /// Both sections have the same structure: pairs of '<Type> <n>' separated by commas.
+    fn parse_typed_section(
+        &self,
+        section_name: &str,
+        tokens: &[Token],
+    ) -> Result<IndexMap<String, (Token, Token)>> {
+        let mut result = IndexMap::new();
+
+        // Skip namespace and braces: tokens[0] is namespace, tokens[1] is {, last is }
+        // This is everything between the braces: { ... }
+        let inner_tokens = &tokens[2..tokens.len() - 1];
+        let mut iter = inner_tokens.iter();
+
+        while let Some((typ, name, comma)) = Self::next_tuple3(&mut iter) {
+            if comma.token_type != TokenType::Comma {
+                return Err(self.error.abort("Separator is not a comma.", comma.line, comma.column))
+            }
+
+            // No variable shadowing
+            if result.contains_key(name.token.as_str()) {
+                return Err(self.error.abort(
+                    &format!(
+                        "Section `{section_name}` already contains the token `{}`.",
+                        &name.token
+                    ),
+                    name.line,
+                    name.column,
+                ))
+            }
+
+            result.insert(name.token.clone(), (name.clone(), typ.clone()));
+        }
+
+        if iter.next().is_some() {
+            return Err(self.error.abort(
+                &format!("Internal error, leftovers in '{section_name}' iterator"),
+                0,
+                0,
+            ))
+        }
+
+        Ok(result)
+    }
+
+    /// Common validation for constant/witness entries.
+    /// Ensures name and type tokens are symbols and match expected values.
+    fn validate_section_entry(
+        &self,
+        section_type: &str,
+        name: &str,
+        name_token: &Token,
+        type_token: &Token,
+    ) -> Result<()> {
+        if name_token.token != name {
+            return Err(self.error.abort(
+                &format!(
+                    "{section_type} name `{}` doesn't match token `{name}`.",
+                    name_token.token
+                ),
+                name_token.line,
+                name_token.column,
+            ))
+        }
+
+        if name_token.token_type != TokenType::Symbol {
+            return Err(self.error.abort(
+                &format!("{section_type} name `{}` is not a symbol.", name_token.token),
+                name_token.line,
+                name_token.column,
+            ))
+        }
+
+        if type_token.token_type != TokenType::Symbol {
+            return Err(self.error.abort(
+                &format!("{section_type} type `{}` is not a symbol.", type_token.token),
+                type_token.line,
+                type_token.column,
+            ))
+        }
+
+        Ok(())
+    }
+
+    /// Routine checks on section structure.
+    /// Validates that sections have proper opening/closing braces and correct element counts.
+    fn check_section_structure(&self, section: &str, tokens: &[Token]) -> Result<()> {
         // Offsets 0 and 1 are accessed directly below, so we need a length of at
         // least 2 in order to avoid an index-out-of-bounds panic.
         if tokens.len() < 2 {
@@ -537,7 +590,7 @@ impl Parser {
 
                 if !tokens[2..tokens.len() - 1].len().is_multiple_of(3) {
                     return Err(self.error.abort(
-                        &format!("Invalid number of elements in '{section}' section. Must be pairs of '<Type> <name>' separated with a comma ','."),
+                        &format!("Invalid number of elements in '{section}' section. Must be pairs of '<Type> <n>' separated with a comma ','."),
                         tokens[0].line,
                         tokens[0].column
                     ))
@@ -562,397 +615,261 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_ast_constants(&self, ast: &IndexMap<String, (Token, Token)>) -> Result<Vec<Constant>> {
-        let mut ret = vec![];
+    /// Parse the circuit section into statements.
+    ///
+    /// The statement layouts/syntax in the language are as follows:
+    ///
+    /// ```text
+    /// C = poseidon_hash(pub_x, pub_y, value, token, serial);
+    /// | |          |                   |       |
+    /// V V          V                   V       V
+    /// variable    opcode              arg     arg
+    /// assign
+    ///
+    ///                    constrain_instance(C);
+    ///                       |               |
+    ///                       V               V
+    ///                     opcode           arg
+    ///
+    ///                                              inner opcode arg
+    ///                                               |
+    ///                  constrain_instance(ec_get_x(foo));
+    ///                        |                 |
+    ///                        V                 V
+    ///                     opcode          arg as opcode
+    /// ```
+    ///
+    /// In the latter, we want to support nested function calls, e.g.:
+    ///
+    /// ```text
+    /// constrain_instance(ec_get_x(token_commit));
+    /// ```
+    ///
+    /// The inner call's result would still get pushed on the heap,
+    /// but it will not be accessible in any other scope.
+    ///
+    /// In certain opcodes, we also support literal types, and the
+    /// opcodes can return a variable type after running the operation.
+    /// e.g.
+    /// ```text
+    /// one = witness_base(1);
+    /// zero = witness_base(0);
+    /// ```
+    ///
+    /// The literal type is used only in the function call's scope, but
+    /// the result is then accessible on the heap to be used by further
+    /// computation.
+    ///
+    /// Regarding multiple return values from opcodes, this is perhaps
+    /// not necessary for the current language scope, as this is a low
+    /// level representation. Note that it could be relatively easy to
+    /// modify the parsing logic to support that here. For now we'll
+    /// defer it, and if at some point we decide that the language is
+    /// too expressive and noisy, we'll consider having multiple return
+    /// types. It also very much depends on the type of functions/opcodes
+    /// that we want to support.
+    fn parse_ast_circuit(&self, tokens: &[Token]) -> Result<Vec<Statement>> {
+        self.check_section_structure("circuit", tokens)?;
 
-        // k = name
-        // v = (name, type)
-        for (k, v) in ast.scam_iter() {
-            if v.0.token != k {
-                return Err(self.error.abort(
-                    &format!("Constant name `{}` doesn't match token `{k}`.", v.0.token),
-                    v.0.line,
-                    v.0.column,
-                ))
-            }
-
-            if v.0.token_type != TokenType::Symbol {
-                return Err(self.error.abort(
-                    &format!("Constant name `{}` is not a symbol.", v.0.token),
-                    v.0.line,
-                    v.0.column,
-                ))
-            }
-
-            if v.1.token_type != TokenType::Symbol {
-                return Err(self.error.abort(
-                    &format!("Constant type `{}` is not a symbol.", v.1.token),
-                    v.1.line,
-                    v.1.column,
-                ))
-            }
-
-            // Valid constant types, these are the constants/generators supported
-            // in `src/crypto/constants.rs` and `src/crypto/constants/`.
-            match v.1.token.as_str() {
-                "EcFixedPoint" => {
-                    if !VALID_ECFIXEDPOINT.contains(&v.0.token.as_str()) {
-                        return Err(self.error.abort(
-                            &format!(
-                                "`{}` is not a valid EcFixedPoint constant. Supported: {VALID_ECFIXEDPOINT:?}",
-                                v.0.token.as_str()
-                            ),
-                            v.0.line,
-                            v.0.column,
-                        ))
-                    }
-
-                    ret.push(Constant {
-                        name: k.to_string(),
-                        typ: VarType::EcFixedPoint,
-                        line: v.1.line,
-                        column: v.1.column,
-                    });
-                }
-
-                "EcFixedPointShort" => {
-                    if !VALID_ECFIXEDPOINTSHORT.contains(&v.0.token.as_str()) {
-                        return Err(self.error.abort(
-                            &format!(
-                                "`{}` is not a valid EcFixedPointShort constant. Supported: {VALID_ECFIXEDPOINTSHORT:?}",
-                                v.0.token.as_str()
-                            ),
-                            v.0.line,
-                            v.0.column,
-                        ))
-                    }
-
-                    ret.push(Constant {
-                        name: k.to_string(),
-                        typ: VarType::EcFixedPointShort,
-                        line: v.1.line,
-                        column: v.1.column,
-                    });
-                }
-
-                "EcFixedPointBase" => {
-                    if !VALID_ECFIXEDPOINTBASE.contains(&v.0.token.as_str()) {
-                        return Err(self.error.abort(
-                            &format!(
-                                "`{}` is not a valid EcFixedPointBase constant. Supported: {VALID_ECFIXEDPOINTBASE:?}",
-                                v.0.token.as_str()
-                            ),
-                            v.0.line,
-                            v.0.column,
-                        ))
-                    }
-
-                    ret.push(Constant {
-                        name: k.to_string(),
-                        typ: VarType::EcFixedPointBase,
-                        line: v.1.line,
-                        column: v.1.column,
-                    });
-                }
-
-                x => {
-                    return Err(self.error.abort(
-                        &format!("`{x}` is an unsupported constant type."),
-                        v.1.line,
-                        v.1.column,
-                    ))
-                }
-            }
-        }
-
-        Ok(ret)
-    }
-
-    fn parse_ast_witness(&self, ast: &IndexMap<String, (Token, Token)>) -> Result<Vec<Witness>> {
-        let mut ret = vec![];
-
-        // k = name
-        // v = (name, type)
-        for (k, v) in ast.scam_iter() {
-            if v.0.token != k {
-                return Err(self.error.abort(
-                    &format!("Witness name `{}` doesn't match token `{k}`.", v.0.token),
-                    v.0.line,
-                    v.0.column,
-                ))
-            }
-
-            if v.0.token_type != TokenType::Symbol {
-                return Err(self.error.abort(
-                    &format!("Witness name `{}` is not a symbol.", v.0.token),
-                    v.0.line,
-                    v.0.column,
-                ))
-            }
-
-            if v.1.token_type != TokenType::Symbol {
-                return Err(self.error.abort(
-                    &format!("Witness type `{}` is not a symbol.", v.1.token),
-                    v.1.line,
-                    v.1.column,
-                ))
-            }
-
-            match VarType::try_from(&v.1) {
-                Ok(typ) => {
-                    ret.push(Witness {
-                        name: k.to_string(),
-                        typ,
-                        line: v.0.line,
-                        column: v.0.column,
-                    });
-                }
-                Err(e) => return Err(self.error.abort(&e, v.1.line, v.1.column)),
-            }
-        }
-
-        Ok(ret)
-    }
-
-    fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Result<Vec<Statement>> {
-        // The statement layouts/syntax in the language are as follows:
-        //
-        // C = poseidon_hash(pub_x, pub_y, value, token, serial);
-        // | |          |                   |       |
-        // V V          V                   V       V
-        // variable    opcode              arg     arg
-        // assign
-        //
-        //                    constrain_instance(C);
-        //                       |               |
-        //                       V               V
-        //                     opcode           arg
-        //
-        //                                              inner opcode arg
-        //                                               |
-        //                  constrain_instance(ec_get_x(foo));
-        //                        |                 |
-        //                        V                 V
-        //                     opcode          arg as opcode
-        //
-        // In the latter, we want to support nested function calls, e.g.:
-        //
-        //          constrain_instance(ec_get_x(token_commit));
-        //
-        // The inner call's result would still get pushed on the heap,
-        // but it will not be accessible in any other scope.
-        //
-        // In certain opcodes, we also support literal types, and the
-        // opcodes can return a variable type after running the operation.
-        // e.g.
-        //            one = witness_base(1);
-        //           zero = witness_base(0);
-        //
-        // The literal type is used only in the function call's scope, but
-        // the result is then accessible on the heap to be used by further
-        // computation.
-        //
-        // Regarding multiple return values from opcodes, this is perhaps
-        // not necessary for the current language scope, as this is a low
-        // level representation. Note that it could be relatively easy to
-        // modify the parsing logic to support that here. For now we'll
-        // defer it, and if at some point we decide that the language is
-        // too expressive and noisy, we'll consider having multiple return
-        // types. It also very much depends on the type of functions/opcodes
-        // that we want to support.
-
-        // Vec of statements to return from this entire parsing operation.
-        let mut ret = vec![];
-
+        // Split circuit tokens into statements (delimited by semicolons).
         // Here, our statements tokens have been parsed and delimited by
         // semicolons (;) in the source file. This iterator contains each
         // of those statements as an array of tokens we then consume and
         // build the AST further.
-        for statement in statements {
+        let mut circuit_stmts: Vec<Vec<Token>> = vec![];
+        let mut current_stmt: Vec<Token> = vec![];
+
+        for token in tokens[2..tokens.len() - 1].iter() {
+            if token.token_type == TokenType::Semicolon {
+                // Push completed statement to the heap
+                circuit_stmts.push(current_stmt);
+                current_stmt = vec![];
+                continue
+            }
+            current_stmt.push(token.clone());
+        }
+
+        // Vec of statements to return from this entire parsing operation.
+        let mut ret = vec![];
+
+        for statement in circuit_stmts {
             if statement.is_empty() {
                 continue
             }
 
-            let (mut left_paren, mut right_paren, mut left_bracket, mut right_bracket) =
-                (0, 0, 0, 0);
-            for i in &statement {
-                match i.token.as_str() {
-                    "(" => left_paren += 1,
-                    ")" => right_paren += 1,
-                    "[" => left_bracket += 1,
-                    "]" => right_bracket += 1,
-                    _ => {}
-                }
-            }
-
-            if (left_paren == 0 && right_paren == 0) && (left_bracket == 0 && right_bracket == 0) {
-                return Err(self.error.abort(
-                    "Statement must include a function call or array initialization. No parentheses or square brackets present.",
-                    statement[0].line,
-                    statement[0].column,
-                ))
-            }
-
-            if (left_bracket != right_bracket) || (left_paren != right_paren) {
-                return Err(self.error.abort(
-                    "Parentheses or brackets are not matched.",
-                    statement[0].line,
-                    statement[0].column,
-                ))
-            }
-
-            // Is there a valid use-case for defining nested arrays? For now,
-            // if square brackets are present, raise an error unless there is
-            // exactly one pair.
-            if left_bracket > 1 {
-                return Err(self.error.abort(
-                    "Only one pair of brackets allowed for array declaration",
-                    statement[0].line,
-                    statement[0].column,
-                ))
-            }
+            self.validate_statement_brackets(&statement)?;
 
             // Peekable iterator so we can see tokens in advance
             // without consuming the iterator.
             let mut iter = statement.iter().peekable();
-
-            // Dummy statement that we'll hopefully fill now.
-            let mut stmt = Statement::default();
-
-            let mut parsing = false;
-            while let Some(token) = iter.next() {
-                if !parsing {
-                    // TODO: MAKE SURE IT'S A SYMBOL
-
-                    // This logic must be changed if we want to support
-                    // multiple return values.
-                    if let Some(next_token) = iter.peek() {
-                        if next_token.token_type == TokenType::Assign {
-                            stmt.line = token.line;
-                            stmt.typ = StatementType::Assign;
-                            stmt.rhs = vec![];
-                            stmt.lhs = Some(Variable {
-                                name: token.token.clone(),
-                                typ: VarType::Dummy,
-                                line: token.line,
-                                column: token.column,
-                            });
-
-                            // Skip over the `=` token.
-                            iter.next();
-                            parsing = true;
-                            continue
-                        }
-
-                        if next_token.token_type == TokenType::LeftParen {
-                            stmt.line = token.line;
-                            stmt.typ = StatementType::Call;
-                            stmt.rhs = vec![];
-                            stmt.lhs = None;
-                            parsing = true;
-                        }
-
-                        if !parsing {
-                            return Err(self.error.abort(
-                                &format!("Illegal token `{}`.", next_token.token),
-                                next_token.line,
-                                next_token.column,
-                            ))
-                        }
-                    }
-                }
-
-                // If parsing == true, we now know if we're making a variable
-                // assignment or a function call without a return value.
-                // Let's dig deeper to see what the statement's call is, and
-                // what it contains as arguments. With this we'll fill `rhs`.
-                // The arguments could be literal types, other variables, an
-                // array declaration, or even nested function calls.
-                // For now, we don't care if the params are valid, as this is
-                // the job of the semantic analyzer which comes after the
-                // parsing module.
-
-                // Array declaration.
-                // TODO: Support function calls in array declarations. Currently
-                // only literals can be used to construct an array.
-                // Check only left_bracket. Validation to check that the brackets
-                // are matched has already been performed above.
-                if left_bracket > 0 {
-                    return Err(self.error.abort(
-                        "Arrays are not implemented yet.",
-                        token.line,
-                        token.column,
-                    ))
-                    //let rhs = self.parse_array_assignment(&mut iter);
-                }
-
-                // The assumption here is that the current token is a function
-                // call, so we check if it's legit and start digging.
-                let func_name = token.token.as_str();
-
-                // Ensure the current function is a symbol
-                if token.token_type != TokenType::Symbol {
-                    return Err(self.error.abort(
-                        "This token is not a symbol.",
-                        token.line,
-                        token.column,
-                    ))
-                }
-
-                if let Some(op) = Opcode::from_name(func_name) {
-                    let rhs = self.parse_function_call(token, &mut iter)?;
-                    stmt.opcode = op;
-                    stmt.rhs = rhs;
-                } else {
-                    return Err(self.error.abort(
-                        &format!("Unimplemented opcode `{func_name}`."),
-                        token.line,
-                        token.column,
-                    ))
-                }
-
-                // At this stage of parsing, we should have assigned `stmt` a StatementType that is
-                // not a Noop. If we have failed to do so, we cannot proceed because Nooops must
-                // never be pased to the compiler. This can occur when multiple independent
-                // statements are passed on one line, or if a statement is not terminated by a
-                // semicolon.
-                if stmt.typ == StatementType::Noop {
-                    return Err(self.error.abort(
-                        "Statement is a NOOP; not allowed. (Did you miss a semicolon?)",
-                        token.line,
-                        token.column,
-                    ))
-                }
-
-                ret.push(stmt);
-                stmt = Statement::default();
-            }
+            let stmt = self.parse_statement(&mut iter)?;
+            ret.push(stmt);
         }
 
         Ok(ret)
     }
 
-    // fn parse_array_assignment(
-    //     &self,
-    //     iter: &mut Peekable<std::slice::Iter<'_, Token>>,
-    // ) -> Result<Vec<Arg>> {
-    //     if let Some(next_token) = iter.peek() {
-    //         if next_token.token_type != TokenType::LeftBracket {
-    //             return Err(self.error.abort(
-    //                 "Invalid array assignment opening. Must start with a '['.",
-    //                 next_token.line,
-    //                 next_token.column,
-    //             ))
-    //         }
-    //         // Skip the opening parenthesis
-    //         iter.next();
-    //     } else {
-    //         // TODO: Use token line number and column
-    //         return Err(self.error.abort("Premature ending of statement.", 0, 0))
-    //     }
-    //     todo!();
-    // }
+    /// Validate matching brackets in a statement.
+    /// Ensures parentheses and brackets are balanced and properly nested.
+    fn validate_statement_brackets(&self, statement: &[Token]) -> Result<()> {
+        let (mut left_paren, mut right_paren, mut left_bracket, mut right_bracket) = (0, 0, 0, 0);
 
+        for token in statement {
+            match token.token.as_str() {
+                "(" => left_paren += 1,
+                ")" => right_paren += 1,
+                "[" => left_bracket += 1,
+                "]" => right_bracket += 1,
+                _ => {}
+            }
+        }
+
+        if (left_paren == 0 && right_paren == 0) && (left_bracket == 0 && right_bracket == 0) {
+            return Err(self.error.abort(
+                "Statement must include a function call or array initialization. No parentheses or square brackets present.",
+                statement[0].line,
+                statement[0].column,
+            ))
+        }
+
+        if (left_bracket != right_bracket) || (left_paren != right_paren) {
+            return Err(self.error.abort(
+                "Parentheses or brackets are not matched.",
+                statement[0].line,
+                statement[0].column,
+            ))
+        }
+
+        // Is there a valid use-case for defining nested arrays? For now,
+        // if square brackets are present, raise an error unless there is
+        // exactly one pair.
+        if left_bracket > 1 {
+            return Err(self.error.abort(
+                "Only one pair of brackets allowed for array declaration",
+                statement[0].line,
+                statement[0].column,
+            ))
+        }
+
+        Ok(())
+    }
+
+    /// Parse a single statement from tokens.
+    /// Determines if this is an assignment (var = ...) or a direct call (opcode(...)).
+    fn parse_statement(
+        &self,
+        iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+    ) -> Result<Statement> {
+        // Dummy statement that we'll hopefully fill now.
+        let mut stmt = Statement::default();
+
+        let Some(token) = iter.next() else {
+            return Err(self.error.abort("Empty statement", 0, 0))
+        };
+
+        // TODO: MAKE SURE IT'S A SYMBOL
+
+        // Check if this is an assignment (var = ...) or a direct call (opcode(...))
+        // This logic must be changed if we want to support multiple return values.
+        if let Some(next_token) = iter.peek() {
+            if next_token.token_type == TokenType::Assign {
+                // Assignment statement
+                stmt.line = token.line;
+                stmt.typ = StatementType::Assign;
+                stmt.lhs = Some(Variable {
+                    name: token.token.clone(),
+                    typ: VarType::Dummy,
+                    line: token.line,
+                    column: token.column,
+                });
+
+                // Skip over the `=` token.
+                iter.next();
+
+                // Get the opcode token
+                let Some(opcode_token) = iter.next() else {
+                    return Err(self.error.abort(
+                        "Expected opcode after assignment",
+                        token.line,
+                        token.column,
+                    ))
+                };
+
+                self.parse_opcode_call(opcode_token, iter, &mut stmt)?;
+            } else if next_token.token_type == TokenType::LeftParen {
+                // Direct call statement
+                stmt.line = token.line;
+                stmt.typ = StatementType::Call;
+                stmt.lhs = None;
+
+                self.parse_opcode_call(token, iter, &mut stmt)?;
+            } else if next_token.token_type == TokenType::LeftBracket {
+                // Array declaration.
+                // TODO: Support function calls in array declarations.
+                // Currently only literals can be used to construct an array.
+                return Err(self.error.abort(
+                    "Arrays are not implemented yet.",
+                    token.line,
+                    token.column,
+                ))
+            } else {
+                return Err(self.error.abort(
+                    &format!("Illegal token `{}`.", next_token.token),
+                    next_token.line,
+                    next_token.column,
+                ))
+            }
+        }
+
+        // At this stage of parsing, we should have assigned `stmt` a
+        // StatementType that is not a Noop. If we have failed to do so, we
+        // cannot proceed because Noops must never be passed to the compiler.
+        // This can occur when multiple independent statements are passed on
+        // one line, or if a statement is not terminated by a semicolon.
+        if stmt.typ == StatementType::Noop {
+            return Err(self.error.abort(
+                "Statement is a NOOP; not allowed. (Did you miss a semicolon?)",
+                token.line,
+                token.column,
+            ))
+        }
+
+        Ok(stmt)
+    }
+
+    /// Parse an opcode call and fill in the statement.
+    /// The assumption here is that the current token is a function call,
+    /// so we check if it's legit and start digging.
+    fn parse_opcode_call(
+        &self,
+        token: &Token,
+        iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+        stmt: &mut Statement,
+    ) -> Result<()> {
+        let func_name = token.token.as_str();
+
+        // Ensure the current function is a symbol
+        if token.token_type != TokenType::Symbol {
+            return Err(self.error.abort("This token is not a symbol.", token.line, token.column))
+        }
+
+        if let Some(op) = Opcode::from_name(func_name) {
+            let rhs = self.parse_function_call(token, iter)?;
+            stmt.opcode = op;
+            stmt.rhs = rhs;
+            Ok(())
+        } else {
+            Err(self.error.abort(
+                &format!("Unimplemented opcode `{func_name}`."),
+                token.line,
+                token.column,
+            ))
+        }
+    }
+
+    /// Parse a function call and its arguments.
+    /// Handles nested function calls recursively, creating intermediate
+    /// variables for inner call results.
     fn parse_function_call(
         &self,
         token: &Token,
@@ -1038,16 +955,13 @@ impl Parser {
 
                     TokenType::Number => {
                         // Check if we can actually convert this into a number.
-                        match arg.token.parse::<u64>() {
-                            Ok(_) => {}
-                            Err(e) => {
-                                return Err(self.error.abort(
-                                    &format!("Failed to convert literal into u64: {e}"),
-                                    arg.line,
-                                    arg.column,
-                                ))
-                            }
-                        };
+                        arg.token.parse::<u64>().map_err(|e| {
+                            self.error.abort(
+                                &format!("Failed to convert literal into u64: {e}"),
+                                arg.line,
+                                arg.column,
+                            )
+                        })?;
 
                         ret.push(Arg::Lit(Literal {
                             name: arg.token.clone(),
@@ -1070,7 +984,6 @@ impl Parser {
                     // This assists with fuzz testing as existing features can still be tested
                     // without causing the fuzzer to choke due to the panic created
                     // by unimplmented!().
-                    // x => unimplemented!("{x:#?}"),
                     _ => {
                         return Err(self.error.abort(
                             "Character is illegal/unimplemented in this context",
@@ -1102,31 +1015,39 @@ impl Parser {
 
         Ok(ret)
     }
-}
 
-trait NextTuple3<I>: Iterator<Item = I> {
-    fn next_tuple(&mut self) -> Option<(I, I, I)>;
-}
+    /// Check that a token has the expected type.
+    fn expect_token_type(&self, token: &Token, expected: TokenType) -> Result<()> {
+        if token.token_type != expected {
+            return Err(self.error.abort(
+                &format!("Expected {:?}, got {:?}", expected, token.token_type),
+                token.line,
+                token.column,
+            ))
+        }
+        Ok(())
+    }
 
-impl<I: Iterator<Item = T>, T> NextTuple3<T> for I {
-    fn next_tuple(&mut self) -> Option<(T, T, T)> {
-        let a = self.next()?;
-        let b = self.next()?;
-        let c = self.next()?;
+    /// Get next 3 items from an iterator as a tuple.
+    fn next_tuple3<I, T>(iter: &mut I) -> Option<(T, T, T)>
+    where
+        I: Iterator<Item = T>,
+    {
+        let a = iter.next()?;
+        let b = iter.next()?;
+        let c = iter.next()?;
         Some((a, b, c))
     }
-}
 
-trait NextTuple4<I>: Iterator<Item = I> {
-    fn next_tuple(&mut self) -> Option<(I, I, I, I)>;
-}
-
-impl<I: Iterator<Item = T>, T> NextTuple4<T> for I {
-    fn next_tuple(&mut self) -> Option<(T, T, T, T)> {
-        let a = self.next()?;
-        let b = self.next()?;
-        let c = self.next()?;
-        let d = self.next()?;
+    /// Get next 4 items from an iterator as a tuple.
+    fn next_tuple4<I, T>(iter: &mut I) -> Option<(T, T, T, T)>
+    where
+        I: Iterator<Item = T>,
+    {
+        let a = iter.next()?;
+        let b = iter.next()?;
+        let c = iter.next()?;
+        let d = iter.next()?;
         Some((a, b, c, d))
     }
 }
