@@ -120,30 +120,30 @@ impl Compiler {
             for arg in &i.rhs {
                 match arg {
                     Arg::Var(arg) => {
-                        if let Some(found) = Compiler::lookup_heap(&tmp_heap, &arg.name) {
-                            bincode.push(HeapType::Var as u8);
-                            bincode.extend_from_slice(&serialize(&VarInt(found as u64)));
-                            continue
-                        }
+                        let heap_idx =
+                            Compiler::lookup_heap(&tmp_heap, &arg.name).ok_or_else(|| {
+                                self.error.abort(
+                                    &format!("Failed finding a heap reference for `{}`", arg.name),
+                                    arg.line,
+                                    arg.column,
+                                )
+                            })?;
 
-                        return Err(self.error.abort(
-                            &format!("Failed finding a heap reference for `{}`", arg.name),
-                            arg.line,
-                            arg.column,
-                        ))
+                        bincode.push(HeapType::Var as u8);
+                        bincode.extend_from_slice(&serialize(&VarInt(heap_idx as u64)));
                     }
                     Arg::Lit(lit) => {
-                        if let Some(found) = Compiler::lookup_literal(&self.literals, &lit.name) {
-                            bincode.push(HeapType::Lit as u8);
-                            bincode.extend_from_slice(&serialize(&VarInt(found as u64)));
-                            continue
-                        }
+                        let lit_idx = Compiler::lookup_literal(&self.literals, &lit.name)
+                            .ok_or_else(|| {
+                                self.error.abort(
+                                    &format!("Failed finding literal `{}`", lit.name),
+                                    lit.line,
+                                    lit.column,
+                                )
+                            })?;
 
-                        return Err(self.error.abort(
-                            &format!("Failed finding literal `{}`", lit.name),
-                            lit.line,
-                            lit.column,
-                        ))
+                        bincode.push(HeapType::Lit as u8);
+                        bincode.extend_from_slice(&serialize(&VarInt(lit_idx as u64)));
                     }
                     _ => unreachable!(),
                 };
@@ -161,22 +161,10 @@ impl Compiler {
     }
 
     fn lookup_heap(heap: &[&str], name: &str) -> Option<usize> {
-        for (idx, n) in heap.iter().enumerate() {
-            if n == &name {
-                return Some(idx)
-            }
-        }
-
-        None
+        heap.iter().position(|&n| n == name)
     }
 
     fn lookup_literal(literals: &[Literal], name: &str) -> Option<usize> {
-        for (idx, n) in literals.iter().enumerate() {
-            if n.name == name {
-                return Some(idx)
-            }
-        }
-
-        None
+        literals.iter().position(|n| n.name == name)
     }
 }

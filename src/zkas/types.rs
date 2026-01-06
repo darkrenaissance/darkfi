@@ -34,7 +34,7 @@ impl HeapType {
     }
 }
 
-/// Varable types supported by the zkas VM
+/// Variable types supported by the zkas VM
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum VarType {
@@ -105,7 +105,7 @@ impl VarType {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'static str {
         match self {
             Self::Dummy => "Dummy",
             Self::EcPoint => "EcPoint",

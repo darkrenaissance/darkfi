@@ -94,21 +94,21 @@ impl<'a> Lexer<'a> {
             () => {
                 tokens.push(Token::new(&buf, TokenType::Symbol, lineno, column - buf.len()));
                 in_symbol = false;
-                buf = String::new();
+                buf.clear();
             };
         }
         macro_rules! new_string {
             () => {
                 tokens.push(Token::new(&buf, TokenType::String, lineno, column - buf.len()));
                 in_string = false;
-                buf = String::new();
+                buf.clear();
             };
         }
         macro_rules! new_number {
             () => {
                 tokens.push(Token::new(&buf, TokenType::Number, lineno, column - buf.len()));
                 in_number = false;
-                buf = String::new();
+                buf.clear();
             };
         }
 
