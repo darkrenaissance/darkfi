@@ -501,6 +501,7 @@ impl BaseEdit {
 
     async fn handle_shortcut(
         &self,
+        layout_ctx: &mut parley::LayoutContext<Color>,
         key: char,
         mods: &KeyMods,
         atom: &mut PropertyAtomicGuard,
@@ -516,9 +517,8 @@ impl BaseEdit {
         match key {
             'a' => {
                 if action_mod {
-                    let mut txt_ctx = text::TEXT_CTX.get().await;
                     let mut editor = self.lock_editor().await;
-                    let mut drv = editor.driver(&mut txt_ctx).unwrap();
+                    let mut drv = editor.driver(layout_ctx);
 
                     drv.select_all();
                     if let Some(seltext) = editor.selected_text() {
@@ -553,6 +553,7 @@ impl BaseEdit {
 
     async fn handle_key(
         &self,
+        layout_ctx: &mut parley::LayoutContext<Color>,
         key: &KeyCode,
         mods: &KeyMods,
         atom: &mut PropertyAtomicGuard,
@@ -565,9 +566,8 @@ impl BaseEdit {
 
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
 
-        let mut txt_ctx = text::TEXT_CTX.get().await;
         let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(&mut txt_ctx).unwrap();
+        let mut drv = editor.driver(layout_ctx);
 
         match key {
             KeyCode::Left => {
@@ -1594,7 +1594,10 @@ impl UIObject for BaseEdit {
             if repeat {
                 return false
             }
-            return self.handle_shortcut(key, &mods, atom).await
+            return text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+                let mut layout_ctx = layout_ctx.borrow_mut();
+                self.handle_shortcut(&mut layout_ctx, key, &mods, atom).await
+            })
         }
 
         // Do nothing
@@ -1637,9 +1640,10 @@ impl UIObject for BaseEdit {
 
         let mut is_handled = false;
         for _ in 0..actions {
-            if self.handle_key(&key, &mods, atom).await {
-                is_handled = true;
-            }
+            is_handled = text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+                let mut layout_ctx = layout_ctx.borrow_mut();
+                self.handle_key(&mut layout_ctx, &key, &mods, atom).await
+            });
         }
         is_handled
     }
@@ -1680,12 +1684,12 @@ impl UIObject for BaseEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
-        {
-            let mut txt_ctx = text::TEXT_CTX.get().await;
+        text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
+            let mut layout_ctx = layout_ctx.borrow_mut();
             let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut txt_ctx).unwrap();
+            let mut drv = editor.driver(&mut layout_ctx);
             drv.move_to_point(mouse_pos.x, mouse_pos.y);
-        }
+        });
 
         if !self.select_text.is_null(0).unwrap() {
             self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();

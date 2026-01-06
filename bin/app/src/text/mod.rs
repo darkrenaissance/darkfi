@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_lock::Mutex as AsyncMutex;
 use std::{
+    cell::RefCell,
     ops::Range,
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
+
+use fontique::{Collection, CollectionOptions, SourceCache, SourceCacheOptions};
+use once_cell::sync::Lazy;
 
 use crate::{mesh::Color, util::spawn_thread};
 
@@ -30,107 +33,84 @@ pub use editor::Editor;
 mod render;
 pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 
-use darkfi::system::CondVar;
-
-pub struct AsyncGlobal<T> {
-    cv: CondVar,
-    val: OnceLock<AsyncMutex<T>>,
-}
-
-impl<T> AsyncGlobal<T> {
-    const fn new() -> Self {
-        Self { cv: CondVar::new(), val: OnceLock::new() }
-    }
-
-    fn set(&self, val: T) {
-        self.val.set(AsyncMutex::new(val)).ok().unwrap();
-        self.cv.notify();
-    }
-
-    pub async fn get<'a>(&'a self) -> async_lock::MutexGuard<'a, T> {
-        self.cv.wait().await;
-        self.val.get().unwrap().lock().await
-    }
-}
-
-pub static TEXT_CTX: AsyncGlobal<TextContext> = AsyncGlobal::new();
-
-pub fn init_txt_ctx() {
-    spawn_thread("init_txt_ctx", || {
-        // This is quite slow. It takes 300ms
-        let txt_ctx = TextContext::new();
-        TEXT_CTX.set(txt_ctx);
+// Global shared FontContext (thread-safe via internal Arc<Mutex<>>)
+pub static GLOBAL_FONT_CTX: Lazy<parley::FontContext> = Lazy::new(|| {
+    let collection = Collection::new(CollectionOptions {
+        shared: true,
+        system_fonts: false,
     });
+
+    let source_cache = SourceCache::new(SourceCacheOptions {
+        shared: true,
+    });
+
+    let mut font_ctx = parley::FontContext { collection, source_cache };
+
+    let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
+    font_ctx.collection.register_fonts(
+        peniko::Blob::new(Arc::new(font_data)),
+        None
+    );
+
+    let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
+    font_ctx.collection.register_fonts(
+        peniko::Blob::new(Arc::new(font_data)),
+        None
+    );
+
+    font_ctx
+});
+
+// Thread-local LayoutContext
+thread_local! {
+    pub static THREAD_LAYOUT_CTX: RefCell<parley::LayoutContext<'static, Color>> =
+        RefCell::new(parley::LayoutContext::new());
 }
 
-/// Initializing this is expensive ~300ms, but storage is ~2kb.
-/// It has to be created once and reused. Currently we use thread local storage.
-pub struct TextContext {
-    font_ctx: parley::FontContext,
-    layout_ctx: parley::LayoutContext<Color>,
+// Public constants
+pub const FONT_STACK: &[parley::FontFamily<'_>] = &[
+    parley::FontFamily::Named(std::borrow::Cow::Borrowed("IBM Plex Mono")),
+    parley::FontFamily::Named(std::borrow::Cow::Borrowed("Noto Color Emoji")),
+];
+
+// FREE FUNCTIONS (no TextContext wrapper!)
+pub fn make_layout(
+    text: &str,
+    text_color: Color,
+    font_size: f32,
+    lineheight: f32,
+    window_scale: f32,
+    width: Option<f32>,
+    underlines: &[Range<usize>],
+) -> parley::Layout<Color> {
+    make_layout2(
+        text,
+        text_color,
+        font_size,
+        lineheight,
+        window_scale,
+        width,
+        underlines,
+        &[],
+    )
 }
 
-impl TextContext {
-    fn new() -> Self {
-        let layout_ctx = parley::LayoutContext::new();
-        let mut font_ctx = parley::FontContext::new();
+pub fn make_layout2(
+    text: &str,
+    text_color: Color,
+    font_size: f32,
+    lineheight: f32,
+    window_scale: f32,
+    width: Option<f32>,
+    underlines: &[Range<usize>],
+    foreground_colors: &[(Range<usize>, Color)],
+) -> parley::Layout<Color> {
+    THREAD_LAYOUT_CTX.with(|layout_ctx| {
+        let mut layout_ctx = layout_ctx.borrow_mut();
+        let mut font_ctx = GLOBAL_FONT_CTX.clone();
 
-        let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
-        let _font_inf =
-            font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
-
-        let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
-        let _font_inf =
-            font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
-
-        //for (family_id, _) in font_inf {
-        //    let family_name = font_ctx.collection.family_name(family_id).unwrap();
-        //    trace!(target: "text", "Loaded font: {family_name}");
-        //}
-
-        Self { font_ctx, layout_ctx }
-    }
-
-    #[cfg(not(target_os = "android"))]
-    pub fn borrow(&mut self) -> (&mut parley::FontContext, &mut parley::LayoutContext<Color>) {
-        (&mut self.font_ctx, &mut self.layout_ctx)
-    }
-
-    pub fn make_layout(
-        &mut self,
-        text: &str,
-        text_color: Color,
-        font_size: f32,
-        lineheight: f32,
-        window_scale: f32,
-        width: Option<f32>,
-        underlines: &[Range<usize>],
-    ) -> parley::Layout<Color> {
-        self.make_layout2(
-            text,
-            text_color,
-            font_size,
-            lineheight,
-            window_scale,
-            width,
-            underlines,
-            &[],
-        )
-    }
-
-    pub fn make_layout2(
-        &mut self,
-        text: &str,
-        text_color: Color,
-        font_size: f32,
-        lineheight: f32,
-        window_scale: f32,
-        width: Option<f32>,
-        underlines: &[Range<usize>],
-        foreground_colors: &[(Range<usize>, Color)],
-    ) -> parley::Layout<Color> {
         let mut builder =
-            self.layout_ctx.ranged_builder(&mut self.font_ctx, &text, window_scale, false);
+            layout_ctx.ranged_builder(&mut font_ctx, text, window_scale, false);
         builder.push_default(parley::LineHeight::FontSizeRelative(lineheight));
         builder.push_default(parley::StyleProperty::FontSize(font_size));
         builder.push_default(parley::StyleProperty::FontStack(parley::FontStack::List(
@@ -147,14 +127,9 @@ impl TextContext {
             builder.push(parley::StyleProperty::Brush(*color), range.clone());
         }
 
-        let mut layout: parley::Layout<Color> = builder.build(&text);
+        let mut layout: parley::Layout<Color> = builder.build(text);
         layout.break_all_lines(width);
         layout.align(width, parley::Alignment::Start, parley::AlignmentOptions::default());
         layout
-    }
+    })
 }
-
-pub const FONT_STACK: &[parley::FontFamily<'_>] = &[
-    parley::FontFamily::Named(std::borrow::Cow::Borrowed("IBM Plex Mono")),
-    parley::FontFamily::Named(std::borrow::Cow::Borrowed("Noto Color Emoji")),
-];

@@ -109,7 +109,6 @@ impl PrivMessage {
 
     fn cache_txt_layout(
         &mut self,
-        txt_ctx: &mut text::TextContext,
         clip: &Rectangle,
         line_height: f32,
         timestamp_width: f32,
@@ -130,7 +129,7 @@ impl PrivMessage {
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
         let txt_layout = if self.nick == "NOTICE" {
-            txt_ctx.make_layout(
+            text::make_layout(
                 &linetext,
                 text_color,
                 self.font_size,
@@ -142,7 +141,7 @@ impl PrivMessage {
         } else {
             let body_color = if self.confirmed { text_color } else { UNCONF_COLOR };
             let nick_end = self.nick.len() + 1;
-            txt_ctx.make_layout2(
+            text::make_layout2(
                 &linetext,
                 body_color,
                 self.font_size,
@@ -173,11 +172,9 @@ impl PrivMessage {
             return instrs.clone()
         }
 
-        let mut txt_ctx = text::TEXT_CTX.get().await;
-
         // Timestamp layout
         let timestr = Self::gen_timestr(self.timestamp);
-        let timestamp_layout = txt_ctx.make_layout(
+        let timestamp_layout = text::make_layout(
             &timestr,
             timestamp_color,
             self.timestamp_font_size,
@@ -188,15 +185,12 @@ impl PrivMessage {
         );
 
         self.cache_txt_layout(
-            &mut txt_ctx,
             clip,
             line_height,
             timestamp_width,
             nick_colors,
             text_color,
         );
-
-        drop(txt_ctx);
 
         let mut all_instrs = vec![];
 
@@ -307,8 +301,7 @@ impl DateMessage {
 
         let datestr = Self::datestr(self.timestamp);
 
-        let mut txt_ctx = text::TEXT_CTX.get().await;
-        let layout = txt_ctx.make_layout(
+        let layout = text::make_layout(
             &datestr,
             timestamp_color,
             self.font_size,
@@ -317,7 +310,6 @@ impl DateMessage {
             None,
             &[],
         );
-        drop(txt_ctx);
 
         let mut instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
         // Cache the instructions
@@ -519,9 +511,8 @@ impl FileMessage {
         let file_strs = Self::filestr(&self.file_url, &self.status);
 
         let mut layouts = Vec::with_capacity(file_strs.len());
-        let mut txt_ctx = text::TEXT_CTX.get().await;
         for file_str in &file_strs {
-            let layout = txt_ctx.make_layout(
+            let layout = text::make_layout(
                 file_str,
                 color,
                 self.font_size,
@@ -532,7 +523,6 @@ impl FileMessage {
             );
             layouts.push(layout);
         }
-        drop(txt_ctx);
 
         all_instrs
             .push(DrawInstruction::Move(Point::new(timestamp_width + Self::BOX_PADDING_X, 0.)));
@@ -654,7 +644,6 @@ impl Message {
 
     fn cache_txt_layout(
         &mut self,
-        txt_ctx: &mut text::TextContext,
         clip: &Rectangle,
         line_height: f32,
         timestamp_width: f32,
@@ -664,7 +653,6 @@ impl Message {
         match self {
             Self::Priv(m) => {
                 m.cache_txt_layout(
-                    txt_ctx,
                     clip,
                     line_height,
                     timestamp_width,
@@ -871,16 +859,13 @@ impl MessageBuffer {
                 height += msg_spacing;
             }
 
-            let mut txt_ctx = text::TEXT_CTX.get().await;
             msg.cache_txt_layout(
-                &mut txt_ctx,
                 &rect,
                 line_height,
                 timestamp_width,
                 &nick_colors,
                 text_color,
             );
-            drop(txt_ctx);
 
             height += msg.height(line_height);
         }
@@ -939,16 +924,13 @@ impl MessageBuffer {
             text,
         );
 
-        let mut txt_ctx = text::TEXT_CTX.get().await;
         msg.cache_txt_layout(
-            &mut txt_ctx,
             &rect,
             line_height,
             timestamp_width,
             &nick_colors,
             text_color,
         );
-        drop(txt_ctx);
 
         if self.msgs.is_empty() {
             self.msgs.push(msg);
@@ -1012,16 +994,13 @@ impl MessageBuffer {
             text,
         );
 
-        let mut txt_ctx = text::TEXT_CTX.get().await;
         msg.cache_txt_layout(
-            &mut txt_ctx,
             rect,
             line_height,
             timestamp_width,
             &nick_colors,
             text_color,
         );
-        drop(txt_ctx);
 
         let msg_height = msg.height(self.line_height.get());
         self.msgs.push(msg);

@@ -30,7 +30,7 @@ use crate::{
         PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
-    text::{self, TEXT_CTX},
+    text,
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
@@ -123,10 +123,7 @@ impl Text {
             text
         };
 
-        let layout = {
-            let mut txt_ctx = TEXT_CTX.get().await;
-            txt_ctx.make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[])
-        };
+        let layout = text::make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[]);
 
         let mut debug_opts = text::DebugRenderOptions::OFF;
         if self.debug.get() {
