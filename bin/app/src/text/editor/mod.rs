@@ -18,6 +18,7 @@
 
 #[cfg(target_os = "android")]
 mod android;
+mod driver;
 #[cfg(target_os = "android")]
 pub use android::Editor;
 

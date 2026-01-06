@@ -16,14 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    cell::RefCell,
-    ops::Range,
-    sync::Arc,
-};
-
-use fontique::{Collection, CollectionOptions, SourceCache, SourceCacheOptions};
-use once_cell::sync::Lazy;
+use std::{cell::RefCell, ops::Range, sync::{Arc, LazyLock}};
+use parley::fontique::{Collection, CollectionOptions, SourceCache, SourceCacheOptions};
 
 use crate::{mesh::Color, util::spawn_thread};
 
@@ -34,36 +28,25 @@ mod render;
 pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 
 // Global shared FontContext (thread-safe via internal Arc<Mutex<>>)
-pub static GLOBAL_FONT_CTX: Lazy<parley::FontContext> = Lazy::new(|| {
-    let collection = Collection::new(CollectionOptions {
-        shared: true,
-        system_fonts: false,
-    });
+pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
+    let collection = Collection::new(CollectionOptions { shared: true, system_fonts: false });
 
-    let source_cache = SourceCache::new(SourceCacheOptions {
-        shared: true,
-    });
+    let source_cache = SourceCache::new(SourceCacheOptions { shared: true });
 
     let mut font_ctx = parley::FontContext { collection, source_cache };
 
     let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
-    font_ctx.collection.register_fonts(
-        peniko::Blob::new(Arc::new(font_data)),
-        None
-    );
+    font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
 
     let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
-    font_ctx.collection.register_fonts(
-        peniko::Blob::new(Arc::new(font_data)),
-        None
-    );
+    font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
 
     font_ctx
 });
 
 // Thread-local LayoutContext
 thread_local! {
-    pub static THREAD_LAYOUT_CTX: RefCell<parley::LayoutContext<'static, Color>> =
+    pub static THREAD_LAYOUT_CTX: RefCell<parley::LayoutContext<Color>> =
         RefCell::new(parley::LayoutContext::new());
 }
 
@@ -83,16 +66,7 @@ pub fn make_layout(
     width: Option<f32>,
     underlines: &[Range<usize>],
 ) -> parley::Layout<Color> {
-    make_layout2(
-        text,
-        text_color,
-        font_size,
-        lineheight,
-        window_scale,
-        width,
-        underlines,
-        &[],
-    )
+    make_layout2(text, text_color, font_size, lineheight, window_scale, width, underlines, &[])
 }
 
 pub fn make_layout2(
@@ -109,8 +83,7 @@ pub fn make_layout2(
         let mut layout_ctx = layout_ctx.borrow_mut();
         let mut font_ctx = GLOBAL_FONT_CTX.clone();
 
-        let mut builder =
-            layout_ctx.ranged_builder(&mut font_ctx, text, window_scale, false);
+        let mut builder = layout_ctx.ranged_builder(&mut font_ctx, text, window_scale, false);
         builder.push_default(parley::LineHeight::FontSizeRelative(lineheight));
         builder.push_default(parley::StyleProperty::FontSize(font_size));
         builder.push_default(parley::StyleProperty::FontStack(parley::FontStack::List(

@@ -40,7 +40,7 @@ use tracing::instrument;
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
-    mesh::MeshBuilder,
+    mesh::{Color, MeshBuilder},
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
         PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role,
@@ -501,7 +501,6 @@ impl BaseEdit {
 
     async fn handle_shortcut(
         &self,
-        layout_ctx: &mut parley::LayoutContext<Color>,
         key: char,
         mods: &KeyMods,
         atom: &mut PropertyAtomicGuard,
@@ -518,9 +517,7 @@ impl BaseEdit {
             'a' => {
                 if action_mod {
                     let mut editor = self.lock_editor().await;
-                    let mut drv = editor.driver(layout_ctx);
-
-                    drv.select_all();
+                    editor.driver().select_all();
                     if let Some(seltext) = editor.selected_text() {
                         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
                     }
@@ -553,7 +550,6 @@ impl BaseEdit {
 
     async fn handle_key(
         &self,
-        layout_ctx: &mut parley::LayoutContext<Color>,
         key: &KeyCode,
         mods: &KeyMods,
         atom: &mut PropertyAtomicGuard,
@@ -567,53 +563,52 @@ impl BaseEdit {
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
 
         let mut editor = self.lock_editor().await;
-        let mut drv = editor.driver(layout_ctx);
 
         match key {
             KeyCode::Left => {
                 if action_mod {
                     if mods.shift {
-                        drv.select_word_left();
+                        editor.driver().select_word_left();
                     } else {
-                        drv.move_word_left();
+                        editor.driver().move_word_left();
                     }
                 } else if mods.shift {
-                    drv.select_left();
+                    editor.driver().select_left();
                 } else {
-                    drv.move_left();
+                    editor.driver().move_left();
                 }
             }
             KeyCode::Right => {
                 if action_mod {
                     if mods.shift {
-                        drv.select_word_right();
+                        editor.driver().select_word_right();
                     } else {
-                        drv.move_word_right();
+                        editor.driver().move_word_right();
                     }
                 } else if mods.shift {
-                    drv.select_right();
+                    editor.driver().select_right();
                 } else {
-                    drv.move_right();
+                    editor.driver().move_right();
                 }
             }
             KeyCode::Up => {
                 if mods.shift {
-                    drv.select_up();
+                    editor.driver().select_up();
                 } else {
-                    drv.move_up();
+                    editor.driver().move_up();
                 }
             }
             KeyCode::Down => {
                 if mods.shift {
-                    drv.select_down();
+                    editor.driver().select_down();
                 } else {
-                    drv.move_down();
+                    editor.driver().move_down();
                 }
             }
             KeyCode::Enter | KeyCode::KpEnter => {
                 if mods.shift {
                     if self.behave.allow_endl() {
-                        drv.insert_or_replace_selection("\n");
+                        editor.driver().insert_or_replace_selection("\n");
                         editor.on_buffer_changed(atom).await;
                     }
                 } else {
@@ -624,44 +619,44 @@ impl BaseEdit {
             }
             KeyCode::Delete => {
                 if action_mod {
-                    drv.delete_word();
+                    editor.driver().delete_word();
                 } else {
-                    drv.delete();
+                    editor.driver().delete();
                 }
                 editor.on_buffer_changed(atom).await;
             }
             KeyCode::Backspace => {
                 if action_mod {
-                    drv.backdelete_word();
+                    editor.driver().backdelete_word();
                 } else {
-                    drv.backdelete();
+                    editor.driver().backdelete();
                 }
                 editor.on_buffer_changed(atom).await;
             }
             KeyCode::Home => {
                 if action_mod {
                     if mods.shift {
-                        drv.select_to_text_start();
+                        editor.driver().select_to_text_start();
                     } else {
-                        drv.move_to_text_start();
+                        editor.driver().move_to_text_start();
                     }
                 } else if mods.shift {
-                    drv.select_to_line_start();
+                    editor.driver().select_to_line_start();
                 } else {
-                    drv.move_to_line_start();
+                    editor.driver().move_to_line_start();
                 }
             }
             KeyCode::End => {
                 if action_mod {
                     if mods.shift {
-                        drv.select_to_text_end();
+                        editor.driver().select_to_text_end();
                     } else {
-                        drv.move_to_text_end();
+                        editor.driver().move_to_text_end();
                     }
                 } else if mods.shift {
-                    drv.select_to_line_end();
+                    editor.driver().select_to_line_end();
                 } else {
-                    drv.move_to_line_end();
+                    editor.driver().move_to_line_end();
                 }
             }
             _ => return false,
@@ -674,7 +669,6 @@ impl BaseEdit {
         }
 
         drop(editor);
-        drop(txt_ctx);
 
         self.eval_rect().await;
         self.behave.apply_cursor_scroll().await;
@@ -1594,10 +1588,7 @@ impl UIObject for BaseEdit {
             if repeat {
                 return false
             }
-            return text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
-                let mut layout_ctx = layout_ctx.borrow_mut();
-                self.handle_shortcut(&mut layout_ctx, key, &mods, atom).await
-            })
+            return self.handle_shortcut(key, &mods, atom).await
         }
 
         // Do nothing
@@ -1640,10 +1631,7 @@ impl UIObject for BaseEdit {
 
         let mut is_handled = false;
         for _ in 0..actions {
-            is_handled = text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
-                let mut layout_ctx = layout_ctx.borrow_mut();
-                self.handle_key(&mut layout_ctx, &key, &mods, atom).await
-            });
+            is_handled = self.handle_key(&key, &mods, atom).await;
         }
         is_handled
     }
@@ -1684,12 +1672,10 @@ impl UIObject for BaseEdit {
         // Move mouse pos within this widget
         self.abs_to_local(&mut mouse_pos);
 
-        text::THREAD_LAYOUT_CTX.with(|layout_ctx| {
-            let mut layout_ctx = layout_ctx.borrow_mut();
+        {
             let mut editor = self.lock_editor().await;
-            let mut drv = editor.driver(&mut layout_ctx);
-            drv.move_to_point(mouse_pos.x, mouse_pos.y);
-        });
+            editor.driver().move_to_point(mouse_pos.x, mouse_pos.y);
+        }
 
         if !self.select_text.is_null(0).unwrap() {
             self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();

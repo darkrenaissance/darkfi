@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::cmp::{max, min};
+
+use super::driver::ParleyDriverWrapper;
 use crate::{
     android::{
         self,
@@ -26,7 +29,6 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text,
 };
-use std::cmp::{max, min};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "text::editor::android", $($arg)*); } }
 
@@ -172,11 +174,8 @@ impl Editor {
         self.on_buffer_changed(atom).await;
     }
 
-    pub fn driver<'a>(
-        &'a mut self,
-        _layout_ctx: &'a mut parley::LayoutContext<Color>,
-    ) -> Option<parley::PlainEditorDriver<'a, Color>> {
-        None
+    pub fn driver(&mut self) -> ParleyDriverWrapper {
+        ParleyDriverWrapper::new(&mut self.layout)
     }
 
     pub fn set_width(&mut self, w: f32) {

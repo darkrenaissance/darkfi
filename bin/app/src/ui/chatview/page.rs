@@ -184,13 +184,7 @@ impl PrivMessage {
             &[],
         );
 
-        self.cache_txt_layout(
-            clip,
-            line_height,
-            timestamp_width,
-            nick_colors,
-            text_color,
-        );
+        self.cache_txt_layout(clip, line_height, timestamp_width, nick_colors, text_color);
 
         let mut all_instrs = vec![];
 
@@ -652,13 +646,7 @@ impl Message {
     ) {
         match self {
             Self::Priv(m) => {
-                m.cache_txt_layout(
-                    clip,
-                    line_height,
-                    timestamp_width,
-                    nick_colors,
-                    text_color,
-                );
+                m.cache_txt_layout(clip, line_height, timestamp_width, nick_colors, text_color);
             }
             Self::Date(_) => {}
             Self::File(_) => {}
@@ -859,13 +847,7 @@ impl MessageBuffer {
                 height += msg_spacing;
             }
 
-            msg.cache_txt_layout(
-                &rect,
-                line_height,
-                timestamp_width,
-                &nick_colors,
-                text_color,
-            );
+            msg.cache_txt_layout(&rect, line_height, timestamp_width, &nick_colors, text_color);
 
             height += msg.height(line_height);
         }
@@ -924,13 +906,7 @@ impl MessageBuffer {
             text,
         );
 
-        msg.cache_txt_layout(
-            &rect,
-            line_height,
-            timestamp_width,
-            &nick_colors,
-            text_color,
-        );
+        msg.cache_txt_layout(&rect, line_height, timestamp_width, &nick_colors, text_color);
 
         if self.msgs.is_empty() {
             self.msgs.push(msg);
@@ -994,13 +970,7 @@ impl MessageBuffer {
             text,
         );
 
-        msg.cache_txt_layout(
-            rect,
-            line_height,
-            timestamp_width,
-            &nick_colors,
-            text_color,
-        );
+        msg.cache_txt_layout(rect, line_height, timestamp_width, &nick_colors, text_color);
 
         let msg_height = msg.height(self.line_height.get());
         self.msgs.push(msg);

@@ -123,7 +123,8 @@ impl Text {
             text
         };
 
-        let layout = text::make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[]);
+        let layout =
+            text::make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[]);
 
         let mut debug_opts = text::DebugRenderOptions::OFF;
         if self.debug.get() {
