@@ -91,7 +91,7 @@ struct God {
     _bg_ex: ExecutorPtr,
 
     pub fg_runtime: AsyncRuntime,
-    pub fg_ex: ExecutorPtr,
+    _fg_ex: ExecutorPtr,
 
     /// App must fully finish setup() before start() is allowed to begin.
     cv_app_is_setup: Arc<CondVar>,
@@ -191,7 +191,7 @@ impl God {
             _bg_ex: bg_ex,
 
             fg_runtime,
-            fg_ex,
+            _fg_ex: fg_ex,
             cv_app_is_setup,
             app,
 

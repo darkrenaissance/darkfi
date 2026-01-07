@@ -37,7 +37,7 @@ use super::{MessageId, Timestamp};
 use crate::{
     gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
-    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr},
+    prop::{PropertyColor, PropertyFloat32, PropertyPtr},
     text,
     util::enumerate_mut,
 };
@@ -305,7 +305,7 @@ impl DateMessage {
             &[],
         );
 
-        let mut instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
+        let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
         // Cache the instructions
         self.mesh_cache = Some(instrs.clone());
         instrs
@@ -730,7 +730,6 @@ pub struct MessageBuffer {
     /// From most recent to older
     msgs: Vec<Message>,
     date_msgs: HashMap<NaiveDate, Message>,
-    pub line_width: f32,
 
     font_size: PropertyFloat32,
     timestamp_font_size: PropertyFloat32,
@@ -742,7 +741,6 @@ pub struct MessageBuffer {
     text_color: PropertyColor,
     nick_colors: PropertyPtr,
     hi_bg_color: PropertyColor,
-    debug: PropertyBool,
 
     window_scale: PropertyFloat32,
     /// Used to detect if the window scale was changed when drawing.
@@ -764,7 +762,6 @@ impl MessageBuffer {
         text_color: PropertyColor,
         nick_colors: PropertyPtr,
         hi_bg_color: PropertyColor,
-        debug: PropertyBool,
         window_scale: PropertyFloat32,
         render_api: RenderApi,
     ) -> Self {
@@ -772,7 +769,6 @@ impl MessageBuffer {
         Self {
             msgs: vec![],
             date_msgs: HashMap::new(),
-            line_width: 0.,
 
             font_size,
             timestamp_font_size,
@@ -784,7 +780,6 @@ impl MessageBuffer {
             text_color,
             nick_colors,
             hi_bg_color,
-            debug,
 
             window_scale,
             old_window_scale,
@@ -812,7 +807,6 @@ impl MessageBuffer {
         let window_scale = self.window_scale.get();
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
-        let timestamp_width = self.timestamp_width.get();
 
         for msg in &mut self.msgs {
             msg.adjust_params(font_size, timestamp_font_size, window_scale);
@@ -985,9 +979,7 @@ impl MessageBuffer {
     ) -> Vec<(f32, Vec<DrawInstruction>)> {
         let line_height = self.line_height.get();
         let msg_spacing = self.msg_spacing.get();
-        let baseline = self.baseline.get();
         let timestamp_width = self.timestamp_width.get();
-        let debug_render = self.debug.get();
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();

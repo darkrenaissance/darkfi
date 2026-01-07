@@ -36,11 +36,10 @@ use crate::{
 use super::{DrawUpdate, OnModify, UIObject};
 
 mod decode;
+#[allow(dead_code)]
 mod ivf;
 
 use decode::spawn_decoder_thread;
-
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:video", $($arg)*); } }
 
 pub type VideoPtr = Arc<Video>;
 

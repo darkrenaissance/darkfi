@@ -29,7 +29,7 @@ use tracing_subscriber::filter::{LevelFilter, Targets};
 #[cfg(any(not(target_os = "android"), feature = "enable-filelog"))]
 use {
     darkfi::util::logger::{EventFormatter, Level, TargetFilter},
-    tracing_subscriber::fmt::format::FmtSpan,
+    //tracing_subscriber::fmt::format::FmtSpan,
 };
 
 // Measured in bytes

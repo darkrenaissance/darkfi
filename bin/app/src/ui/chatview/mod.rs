@@ -43,8 +43,8 @@ use page::{FileMessageStatus, MessageBuffer};
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     prop::{
-        BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
-        PropertyFloat32, PropertyRect, PropertyUint32, Role,
+        BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyColor, PropertyFloat32,
+        PropertyRect, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
@@ -66,6 +66,7 @@ fn is_zero(x: f32) -> bool {
 }
 
 /// std::cmp::max() doesn't work on f32
+#[allow(dead_code)]
 fn max(a: f32, b: f32) -> f32 {
     if a > b {
         a
@@ -217,7 +218,8 @@ impl ChatView {
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
-        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
+        // Unused currently
+        //let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let scroll_start_accel =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
@@ -249,7 +251,6 @@ impl ChatView {
                 text_color,
                 nick_colors,
                 hi_bg_color,
-                debug,
                 window_scale,
                 render_api,
             )),

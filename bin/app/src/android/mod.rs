@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::native::android::{self, ndk_sys, ndk_utils};
-use parking_lot::Mutex as SyncMutex;
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use miniquad::native::android::{self, ndk_utils};
+use std::path::PathBuf;
 
 pub mod insets;
 pub mod textinput;

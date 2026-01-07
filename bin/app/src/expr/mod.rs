@@ -29,7 +29,14 @@ mod compile;
 pub use compile::Compiler;
 
 pub type MachineGlobals = Vec<(String, SExprVal)>;
-pub type NativeFnCallback = fn(&mut MachineGlobals) -> Result<SExprVal>;
+#[derive(Debug, Clone)]
+pub struct NativeFnCallback(fn(&mut MachineGlobals) -> Result<SExprVal>);
+
+impl PartialEq for NativeFnCallback {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
 
 pub fn const_f32(x: f32) -> SExprCode {
     vec![Op::ConstFloat32(x)]
@@ -187,7 +194,7 @@ impl<'a> SExprMachine<'a> {
             Op::LessThan((lhs, rhs)) => self.less_than(lhs, rhs),
             Op::Float32ToUint32(val) => self.float32_to_uint32(val),
             Op::IfElse((cond, if_val, else_val)) => self.if_else(cond, if_val, else_val),
-            Op::NativeFn(f) => (*f)(&mut self.globals),
+            Op::NativeFn(f) => (f.0)(&mut self.globals),
         }
     }
 
@@ -451,7 +458,7 @@ impl Decodable for Op {
                 Decodable::decode(d)?,
                 Decodable::decode(d)?,
             )),
-            17 => Self::NativeFn(|_| Ok(SExprVal::Null)),
+            17 => Self::NativeFn(NativeFnCallback(|_| Ok(SExprVal::Null))),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid Op type")),
         };
         Ok(self_)

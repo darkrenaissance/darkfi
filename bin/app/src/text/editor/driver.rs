@@ -161,6 +161,7 @@ impl<'a> ParleyDriverWrapper<'a> {
         unimplemented!()
     }
 
+    #[allow(unused_variables)]
     pub fn insert_or_replace_selection(&mut self, text: &str) {
         #[cfg(not(target_os = "android"))]
         self.with_driver(|drv| drv.insert_or_replace_selection(text));
@@ -265,6 +266,7 @@ impl<'a> ParleyDriverWrapper<'a> {
         unimplemented!()
     }
 
+    #[allow(unused_variables)]
     pub fn move_to_point(&mut self, x: f32, y: f32) {
         #[cfg(not(target_os = "android"))]
         self.with_driver(|drv| drv.move_to_point(x, y));
@@ -273,14 +275,8 @@ impl<'a> ParleyDriverWrapper<'a> {
         unimplemented!()
     }
 
-    pub fn extend_selection_to_point(&mut self, x: f32, y: f32) {
-        #[cfg(not(target_os = "android"))]
-        self.with_driver(|drv| drv.extend_selection_to_point(x, y));
-
-        #[cfg(target_os = "android")]
-        unimplemented!()
-    }
-
+    #[allow(unused_variables)]
+    #[allow(dead_code)]
     pub fn select_byte_range(&mut self, start: usize, end: usize) {
         #[cfg(not(target_os = "android"))]
         self.with_driver(|drv| drv.select_byte_range(start, end));

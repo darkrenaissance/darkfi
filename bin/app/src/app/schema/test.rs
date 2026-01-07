@@ -21,17 +21,14 @@ use sled_overlay::sled;
 use super::chat::populate_tree;
 use crate::{
     app::{
-        node::{
-            create_chatview, create_layer, create_singleline_edit, create_text, create_vector_art,
-            create_video,
-        },
+        node::{create_chatview, create_layer, create_text, create_vector_art},
         App,
     },
     expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{BaseEdit, BaseEditType, ChatView, Layer, Text, VectorArt, VectorShape, Video},
+    ui::{ChatView, Layer, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -46,7 +43,7 @@ mod ui_consts {
         get_appdata_path().join("chatdb")
     }
     //pub const KING_PATH: &str = "king.png";
-    pub const VID_PATH: &str = "forest_720x1280.mp4";
+    //pub const VID_PATH: &str = "forest_720x1280.mp4";
 }
 
 #[cfg(not(target_os = "android"))]
@@ -57,7 +54,7 @@ mod ui_consts {
         "chatdb".into()
     }
     //pub const KING_PATH: &str = "assets/king.png";
-    pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
+    //pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
 }
 
 use ui_consts::*;
@@ -74,7 +71,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     )
     .unwrap();
 
-    let mut cc = Compiler::new();
+    let cc = Compiler::new();
 
     // Create a layer called view
     let layer_node = create_layer("view");

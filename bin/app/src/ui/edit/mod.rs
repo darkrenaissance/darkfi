@@ -27,7 +27,6 @@ use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
     mem::swap,
-    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Weak,
@@ -39,7 +38,7 @@ use tracing::instrument;
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
-    mesh::{Color, MeshBuilder},
+    mesh::MeshBuilder,
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
         PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role,
@@ -236,6 +235,7 @@ pub struct BaseEdit {
     touch_info: SyncMutex<TouchInfo>,
     is_phone_select: AtomicBool,
 
+    // TODO: we should make use of this!
     window_scale: PropertyFloat32,
     parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     is_mouse_hover: AtomicBool,

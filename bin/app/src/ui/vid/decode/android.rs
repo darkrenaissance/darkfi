@@ -56,7 +56,7 @@ pub fn spawn_decoder_thread(
 
         vid::videodecoder_set_id(decoder_handle.obj, decoder_id);
 
-        let decoded_count = vid::videodecoder_decode_all(decoder_handle.obj);
+        let _decoded_count = vid::videodecoder_decode_all(decoder_handle.obj);
 
         drop(decoder_handle);
 

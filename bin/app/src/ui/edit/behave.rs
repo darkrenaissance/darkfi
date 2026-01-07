@@ -15,7 +15,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use parking_lot::Mutex as SyncMutex;
 use std::sync::{atomic::Ordering, Arc};

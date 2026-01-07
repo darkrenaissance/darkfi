@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::native::android::{self, ndk_sys, ndk_utils::*};
-use parking_lot::{Mutex as SyncMutex, RwLock};
-use std::{
-    ffi::CString,
-    sync::{Arc, OnceLock},
+use miniquad::native::android::{
+    ndk_sys,
+    ndk_utils::{call_bool_method, call_void_method, get_utf_str, new_global_ref},
 };
+use parking_lot::{Mutex as SyncMutex, RwLock};
+use std::{ffi::CString, sync::OnceLock};
 
 use super::{super::util::get_jni_env, AndroidTextInputState, SharedStatePtr};
 
@@ -49,7 +49,7 @@ pub struct GameTextInput {
     input_connection_class: ndk_sys::jclass,
     state_class: ndk_sys::jclass,
     set_soft_keyboard_active_method: ndk_sys::jmethodID,
-    restart_input_method: ndk_sys::jmethodID,
+    //restart_input_method: ndk_sys::jmethodID,
     state_constructor: ndk_sys::jmethodID,
     state_class_info: StateClassInfo,
 }
@@ -88,13 +88,13 @@ impl GameTextInput {
                 set_soft_keyboard_active_sig.as_ptr() as _,
             );
 
-            let restart_input_sig = b"()V\0";
+            /*let restart_input_sig = b"()V\0";
             let restart_input_method = get_method_id(
                 env,
                 input_connection_class,
                 b"restartInput\0".as_ptr() as _,
                 restart_input_sig.as_ptr() as _,
-            );
+            );*/
 
             let state_class = new_global_ref!(env, state_java_class) as ndk_sys::jclass;
 
@@ -153,7 +153,7 @@ impl GameTextInput {
                 input_connection_class,
                 state_class,
                 set_soft_keyboard_active_method,
-                restart_input_method,
+                //restart_input_method,
                 state_constructor,
                 state_class_info,
             }
@@ -272,7 +272,7 @@ impl GameTextInput {
         }
     }
 
-    pub fn restart_input(&self) {
+    /*pub fn restart_input(&self) {
         let Some(input_connection) = *self.input_connection.read() else {
             w!("restart_input() - no input_connection set");
             return
@@ -282,7 +282,7 @@ impl GameTextInput {
             let call_void_method = (**env).CallVoidMethod.unwrap();
             call_void_method(env, input_connection, self.restart_input_method);
         }
-    }
+    }*/
 
     fn state_to_java(&self, state: &AndroidTextInputState) -> ndk_sys::jobject {
         unsafe {

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::native::android::{self, ndk_sys, ndk_utils};
+use miniquad::native::android::ndk_sys;
 use parking_lot::Mutex as SyncMutex;
 use std::sync::LazyLock;
 

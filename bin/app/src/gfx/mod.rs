@@ -23,13 +23,10 @@ use darkfi_serial::{
 #[cfg(target_os = "android")]
 use miniquad::native::egl;
 use miniquad::{
-    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
-    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
-    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource,
-    TextureFormat, TextureKind, TextureParams, TextureWrap, TouchPhase, UniformDesc, UniformType,
-    VertexAttribute, VertexFormat,
+    conf, window, Bindings, BufferSource, BufferType, BufferUsage, EventHandler, KeyCode, KeyMods,
+    MouseButton, PassAction, Pipeline, RenderingBackend, TextureFormat, TextureKind, TextureParams,
+    TextureWrap, TouchPhase, UniformType,
 };
-use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -50,8 +47,6 @@ mod shader;
 mod trax;
 use trax::get_trax;
 
-#[cfg(target_os = "android")]
-use crate::ExecutorPtr;
 use crate::{
     prop::{BatchGuardId, PropertyAtomicGuard},
     util::unixtime,

@@ -20,10 +20,7 @@ use std::cmp::{max, min};
 
 use super::driver::ParleyDriverWrapper;
 use crate::{
-    android::{
-        self,
-        textinput::{AndroidTextInput, AndroidTextInputState},
-    },
+    android::textinput::{AndroidTextInput, AndroidTextInputState},
     gfx::Point,
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
@@ -174,7 +171,7 @@ impl Editor {
         self.on_buffer_changed(atom);
     }
 
-    pub fn driver(&mut self) -> ParleyDriverWrapper {
+    pub fn driver(&mut self) -> ParleyDriverWrapper<'_> {
         ParleyDriverWrapper::new(&mut self.layout)
     }
 

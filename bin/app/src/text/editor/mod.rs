@@ -21,7 +21,6 @@ mod android;
 mod driver;
 #[cfg(target_os = "android")]
 pub use android::Editor;
-pub use driver::ParleyDriverWrapper;
 
 #[cfg(not(target_os = "android"))]
 mod parley;

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use chrono::{NaiveDate, NaiveDateTime};
-use darkfi_serial::Encodable;
 use sled_overlay::sled;
 use smol::Task;
 use std::sync::{Arc, Mutex as SyncMutex};
@@ -29,9 +27,9 @@ use crate::{
     error::Error,
     gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, RenderApi},
     plugin::PluginSettings,
-    prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
+    prop::{PropertyAtomicGuard, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
-    ui::{chatview, Window},
+    ui::Window,
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
@@ -114,7 +112,7 @@ impl App {
 
         let i18n_fish = self.setup_locale();
 
-        let mut window = create_window("window");
+        let window = create_window("window");
         #[cfg(target_os = "android")]
         {
             let insets = android::insets::get_insets();

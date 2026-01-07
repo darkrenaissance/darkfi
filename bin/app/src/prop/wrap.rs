@@ -367,6 +367,7 @@ impl PropertyRect {
     }
     */
 
+    #[cfg(target_os = "android")]
     pub fn set(&self, atom: &mut PropertyAtomicGuard, rect: &Rectangle) {
         self.prop().set_f32(atom, self.role, 0, rect.x).unwrap();
         self.prop().set_f32(atom, self.role, 1, rect.y).unwrap();

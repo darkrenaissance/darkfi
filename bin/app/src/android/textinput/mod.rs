@@ -23,7 +23,7 @@ use std::sync::Arc;
 mod gametextinput;
 mod jni;
 
-use gametextinput::{GameTextInput, GAME_TEXT_INPUT};
+use gametextinput::GAME_TEXT_INPUT;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "android::textinput", $($arg)*); } }
 

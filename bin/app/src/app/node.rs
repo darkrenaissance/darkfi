@@ -21,8 +21,6 @@ use crate::{
     scene::{CallArgType, SceneNode, SceneNodeType},
 };
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "app::node", $($arg)*); } }
-
 pub fn create_window(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Window);
 

@@ -34,8 +34,6 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::image", $($arg)*); } }
-
 pub type ImagePtr = Arc<Image>;
 
 pub struct Image {

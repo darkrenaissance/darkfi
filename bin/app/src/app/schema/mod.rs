@@ -17,14 +17,13 @@
  */
 
 use darkfi::system::msleep;
-use darkfi_serial::Encodable;
 use indoc::indoc;
 use sled_overlay::sled;
 use std::fs::File;
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_shortcut, create_vector_art, create_video},
+        node::{create_button, create_layer, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
@@ -32,8 +31,8 @@ use crate::{
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Button, Layer, ShapeVertex, Shortcut, VectorArt, VectorShape, Video},
-    util::{i18n::I18nBabelFish, spawn_thread},
+    ui::{emoji_picker, Button, Layer, VectorArt, VectorShape, Video},
+    util::i18n::I18nBabelFish,
 };
 
 mod chat;
@@ -72,10 +71,6 @@ mod ui_consts {
         get_appdata_path().join("first_time")
     }
 
-    pub fn get_window_scale_filename() -> PathBuf {
-        get_appdata_path().join("window_scale")
-    }
-
     pub fn get_settingsdb_path() -> PathBuf {
         get_appdata_path().join("settings")
     }
@@ -94,10 +89,6 @@ mod desktop_paths {
 
     pub fn get_first_time_filename() -> PathBuf {
         dirs::cache_dir().unwrap().join("darkfi/app/first_time")
-    }
-
-    pub fn get_window_scale_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/window_scale")
     }
 
     pub fn get_settingsdb_path() -> PathBuf {
@@ -591,10 +582,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         emoji_picker::EmojiMeshes::new(app.render_api.clone(), EMOJI_PICKER_ICON_SIZE);
 
     let emoji_meshes2 = emoji_meshes.clone();
-    app.ex.spawn(async move {
+    let _ = std::thread::spawn(move || {
         for i in (0..500).step_by(20) {
             for j in i..(i + 20) {
-                emoji_meshes2.lock().await.get(j).await;
+                emoji_meshes2.lock().get(j);
             }
         }
     });

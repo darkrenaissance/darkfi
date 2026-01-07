@@ -23,11 +23,11 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::{mesh::Color, util::spawn_thread};
+use crate::mesh::Color;
 
 pub mod atlas;
 mod editor;
-pub use editor::{Editor, ParleyDriverWrapper};
+pub use editor::Editor;
 mod render;
 pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 

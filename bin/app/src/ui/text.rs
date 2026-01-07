@@ -37,8 +37,6 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::text", $($arg)*); } }
-
 pub type TextPtr = Arc<Text>;
 
 pub struct Text {

@@ -161,7 +161,6 @@ impl EmojiPicker {
         //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
         let emoji_selected = {
-            let emoji_meshes = self.emoji_meshes.lock().await;
             if idx < DEFAULT_EMOJI_LIST.len() {
                 let emoji = DEFAULT_EMOJI_LIST[idx].to_string();
                 Some(emoji)
@@ -218,7 +217,7 @@ impl EmojiPicker {
         let mut y = -self.scroll.get();
         for i in 0..DEFAULT_EMOJI_LIST.len() {
             let pos = Point::new(x, y);
-            let mesh = self.emoji_meshes.lock().await.get(i).await;
+            let mesh = self.emoji_meshes.lock().get(i);
             instrs.extend_from_slice(&[DrawInstruction::SetPos(pos), DrawInstruction::Draw(mesh)]);
 
             x += off_x;

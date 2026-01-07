@@ -43,6 +43,7 @@ mod image;
 #[allow(unused_imports)]
 pub use image::{Image, ImagePtr};
 mod vid;
+#[allow(unused_imports)]
 pub use vid::{Video, VideoPtr};
 mod vector_art;
 pub use vector_art::{

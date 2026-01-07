@@ -30,7 +30,6 @@ use crate::{
 use super::UIObject;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::gesture", $($arg)*); } }
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::gesture", $($arg)*); } }
 
 /// Maximum number of simultaneous touch events.
 /// Put 3 here because any more is ridiculous.

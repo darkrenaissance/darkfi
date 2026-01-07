@@ -114,7 +114,7 @@ impl Editor {
         self.on_buffer_changed(atom);
     }
 
-    pub fn driver(&mut self) -> ParleyDriverWrapper {
+    pub fn driver(&mut self) -> ParleyDriverWrapper<'_> {
         ParleyDriverWrapper::new(&mut self.editor)
     }
 

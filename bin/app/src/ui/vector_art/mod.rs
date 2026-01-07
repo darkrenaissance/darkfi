@@ -34,8 +34,6 @@ use super::{DrawUpdate, OnModify, UIObject};
 pub mod shape;
 use shape::VectorShape;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:vector_art", $($arg)*); } }
-
 pub type VectorArtPtr = Arc<VectorArt>;
 
 pub struct VectorArt {

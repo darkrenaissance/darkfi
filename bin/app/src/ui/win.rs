@@ -30,8 +30,7 @@ use crate::{
         GraphicsEventTouchSub, Point, Rectangle, RenderApi,
     },
     prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyRect,
-        PropertyStr, Role,
+        BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
@@ -39,7 +38,7 @@ use crate::{
 };
 
 #[cfg(target_os = "android")]
-use crate::android;
+use crate::{android, prop::PropertyRect};
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
@@ -64,6 +63,7 @@ pub struct Window {
     locale: PropertyStr,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
+    #[cfg(target_os = "android")]
     insets: PropertyRect,
 }
 
@@ -85,8 +85,6 @@ impl Window {
         )
         .unwrap();
 
-        let insets = PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap();
-
         let self_ = Arc::new(Self {
             node,
             render_api,
@@ -96,7 +94,8 @@ impl Window {
             locale,
             screen_size,
             scale,
-            insets,
+            #[cfg(target_os = "android")]
+            insets: PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap(),
         });
 
         Pimpl::Window(self_)
