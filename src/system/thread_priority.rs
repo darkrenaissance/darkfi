@@ -56,8 +56,11 @@ pub fn set_thread_priority(priority: ThreadPriority) {
         }
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
+        // For android see:
+        // https://github.com/android/ndk/issues/1255#issuecomment-1426545936
+
         extern "C" {
             fn setpriority(which: i32, who: u32, prio: i32) -> i32;
         }
