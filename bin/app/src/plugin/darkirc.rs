@@ -517,6 +517,33 @@ impl DarkIrc {
         self_.settings.update_p2p_settings(&mut write_guard);
     }
 
+    async fn process_reconnect(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Reconnect method closed");
+            return false
+        };
+
+        t!("method called: reconnect({method_call:?})");
+
+        let Some(self_) = me.upgrade() else {
+            e!("DarkIrc destroyed before reconnect completed");
+            return false
+        };
+
+        i!("Manual P2P reconnection triggered");
+        self_.p2p.clone().stop().await;
+
+        while let Err(err) = self_.p2p.clone().start().await {
+            e!("Failed to start P2P network: {err}!");
+            e!("Retrying in {P2P_RETRY_TIME} secs");
+            sleep(P2P_RETRY_TIME).await;
+        }
+
+        i!("P2P reconnection completed");
+
+        true
+    }
+
     async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
         i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);
@@ -536,6 +563,13 @@ impl DarkIrc {
         let me2 = me.clone();
         let send_method_task =
             ex.spawn(async move { while Self::process_send(&me2, &method_sub).await {} });
+
+        let reconnect_method_sub = node.subscribe_method_call("reconnect").unwrap();
+        let me2 = me.clone();
+        let reconnect_method_task =
+            ex.spawn(
+                async move { while Self::process_reconnect(&me2, &reconnect_method_sub).await {} },
+            );
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
@@ -583,7 +617,8 @@ impl DarkIrc {
             }
         });
 
-        let mut tasks = vec![send_method_task, ev_task, dag_task, start_task, stop_task];
+        let mut tasks =
+            vec![send_method_task, reconnect_method_task, ev_task, dag_task, start_task, stop_task];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks).unwrap();
     }

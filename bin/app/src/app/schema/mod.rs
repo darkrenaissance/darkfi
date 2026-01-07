@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi::system::msleep;
 use darkfi_serial::Encodable;
 use indoc::indoc;
 use sled_overlay::sled;
@@ -23,7 +24,7 @@ use std::fs::File;
 
 use crate::{
     app::{
-        node::{create_layer, create_shortcut, create_vector_art, create_video},
+        node::{create_button, create_layer, create_shortcut, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
@@ -31,7 +32,7 @@ use crate::{
     prop::{PropertyAtomicGuard, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Layer, Shortcut, VectorArt, VectorShape, Video},
+    ui::{emoji_picker, Button, Layer, ShapeVertex, Shortcut, VectorArt, VectorShape, Video},
     util::{i18n::I18nBabelFish, spawn_thread},
 };
 
@@ -39,6 +40,9 @@ mod chat;
 mod menu;
 //mod settings;
 pub mod test;
+
+macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }
 
 const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 //const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
@@ -410,6 +414,87 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net3_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     netlayer_node.link(net3_node);
+
+    // netstat-klik icon (visual feedback when reconnect button is clicked)
+    let klik_color = [0., 0.5, 1., 1.]; // Blue
+    let node = create_vector_art("netstat_klik");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    // Above other icons
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(NETSTATUS_ICON_SIZE),
+        expr::const_f32(NETSTATUS_ICON_SIZE),
+        klik_color,
+    );
+    let netstat_klik_node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    netlayer_node.link(netstat_klik_node.clone());
+
+    // Reconnect Button (overlaid on netstatus icons)
+    let node = create_button("reconnect_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let render_api = app.render_api.clone();
+    let (slot, recvr) = Slot::new("reconnect_clicked");
+    node.register("click", slot).unwrap();
+    let reconnect_task = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            i!("Reconnect button clicked");
+
+            // Show netstat-klik icon
+            let netstat_klik =
+                sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
+
+            {
+                let atom = &mut render_api.make_guard(gfxtag!("netstat_klik_show"));
+                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
+                {
+                    e!("Failed to show netstat_klik: {e}");
+                }
+            }
+
+            // Trigger reconnect
+            match sg_root.lookup_node("/plugin/darkirc") {
+                Some(darkirc) => {
+                    if let Err(e) = darkirc.call_method("reconnect", vec![]).await {
+                        e!("Failed to trigger reconnect: {e}");
+                    }
+                }
+                None => {
+                    e!("DarkIrc plugin has not been loaded");
+                }
+            }
+
+            msleep(200).await;
+
+            // Hide netstat-klik icon
+            {
+                let atom = &mut render_api.make_guard(gfxtag!("netstat_klik_hide"));
+                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
+                {
+                    e!("Failed to hide netstat_klik: {e}");
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(reconnect_task);
+
+    let node = node.setup(Button::new).await;
+    netlayer_node.link(node);
 
     // Navbar Settings Button
 
