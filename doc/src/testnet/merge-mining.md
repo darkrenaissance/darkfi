@@ -91,7 +91,7 @@ by returning back to our Monero shell, starting up `monerod` and
 waiting for the sync to finish:
 
 ```shell
-$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 0 --hide-my-port --add-peer 125.229.105.12:28081 --add-peer 37.187.74.171:28089 --fast-block-sync=1
+$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 0 --hide-my-port --add-peer 125.229.105.12:28081 --add-peer 37.187.74.171:28089 --fast-block-sync=1 --zmq-pub tcp://127.0.0.1:28083
 
 Synced 3601/2754128 (0%, 2750527 left)
 Synced 5801/2754128 (0%, 2748327 left)
@@ -101,17 +101,9 @@ Synced 9301/2754128 (0%, 2744827 left)
 Synced 9801/2754128 (0%, 2744327 left)
 ```
 
-After the sync is finished, we will take the node offline and continue
-our work locally. So quit the `monerod` node, and restart it offline
-with fixed difficulty that will make our mining process faster:
-
-```shell
-$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 1 --hide-my-port --fixed-difficulty 20000 --disable-rpc-ban --offline --zmq-pub tcp://127.0.0.1:28083
-```
-
-Now we should also create a Monero wallet. On a new shell in the same
-directory run `monero-wallet-cli` and follow the wizard to create a
-wallet:
+After the sync is finished, we should also create a Monero wallet. On
+a new shell in the same directory run `monero-wallet-cli` and follow
+the wizard to create a wallet:
 
 ```shell
 $ ./monero-wallet-cli --testnet --trusted-daemon
@@ -149,13 +141,13 @@ blocks.
 ## xmrig setup
 
 `xmrig` is pretty simple. Just start it with a chosen number of threads
-and point it to `p2pool` Stratum port. `-u x+1 20000` is defined by the
-`--fixed-difficulty` setting we started `monerod` with. `-t 1` is the
-number of CPU threads to use for mining. With a low difficulty, one
-thread should be enough.
+and point it to `p2pool` Stratum port. `-t 1` is the number of CPU
+threads to use for mining. All miners should use the lowest possible
+resources so other people can mine blocks to retrieve `DRK` for
+testing.
 
 ```shell
-$ ./xmrig -u x+1 20000 -o 127.0.0.1:3333 -t 1
+$ ./xmrig -o 127.0.0.1:3333 -t 1
 ```
 
 Now we should see blocks being mined in p2pool and submitted to our
@@ -209,7 +201,7 @@ provided to `p2pool` merge-mine parameters.
 
 Happy mining!
 
-## Merge mining for a DAO
+## Merge-mining for a DAO
 
 To retrieve a DAO merge mining configuration, execute:
 
@@ -236,6 +228,27 @@ drk> dao balance {YOUR_DAO}
  Token ID                                     | Aliases | Balance
 ----------------------------------------------+---------+---------
  241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb | DRK     | 80
+```
+
+## Offline merge-mining
+
+For testing purposes its better to merge-mine in offline mode. To start
+your Monero node in offline mode with fixed difficulty, execute:
+
+```shell
+$ ./monerod --testnet --no-igd --data-dir bitmonero --log-level 1 --hide-my-port --fixed-difficulty 20000 --disable-rpc-ban --offline --zmq-pub tcp://127.0.0.1:28083
+```
+
+Now start `p2pool`:
+
+```shell
+$ ./p2pool --host 127.0.0.1 --rpc-port 28081 --zmq-port 28083 --wallet {YOUR_MONERO_WALLET_ADDRESS_HERE} --stratum 127.0.0.1:3333 --data-dir ./p2pool-data --no-igd --merge-mine 127.0.0.1:18348 {YOUR_DARKFI_WALLET_ADDRESS}
+```
+
+And `xmrig`:
+
+```shell
+$ ./xmrig -u x+1 20000 -o 127.0.0.1:3333 -t 1
 ```
 
 [1]: https://github.com/monero-project/monero?tab=readme-ov-file#dependencies

@@ -284,6 +284,9 @@ which wallet:
 $ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:18347 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
+> NOTE: All miners should use the lowest possible resources so other
+> people can mine blocks to retrieve `DRK` for testing.
+
 In `darkfid`, you should see a notification like this:
 
 ```shell
