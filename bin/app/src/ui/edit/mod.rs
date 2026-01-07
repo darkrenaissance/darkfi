@@ -1273,14 +1273,18 @@ impl BaseEdit {
         t!("handle_android_event({state:?})");
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
-        let mut editor = self.editor.lock();
-        // Diff old and new state so we know what changed
-        let is_text_changed = editor.state.text != state.text;
-        let is_select_changed = editor.state.select != state.select;
-        let is_compose_changed = editor.state.compose != state.compose;
-        editor.state = state;
-        editor.on_buffer_changed(atom).await;
-        drop(editor);
+        let (is_text_changed, is_select_changed, is_compose_changed) = {
+            let mut editor = self.editor.lock();
+            // Diff old and new state so we know what changed
+            let diff = (
+                editor.state.text != state.text,
+                editor.state.select != state.select,
+                editor.state.compose != state.compose,
+            );
+            editor.state = state;
+            editor.on_buffer_changed(atom);
+            diff
+        };
 
         // Nothing changed. Just return.
         if !is_text_changed && !is_select_changed && !is_compose_changed {
@@ -1297,6 +1301,8 @@ impl BaseEdit {
 
         // Not sure what to do if only compose changes lol
         // For now just ignore it.
+        // Changing the cursor pos will change the compose state if a word is edited.
+        // However making selection has a tendency to send spurious compose events.
 
         // Text changed - finish any active selection
         if is_text_changed {
@@ -1479,7 +1485,7 @@ impl UIObject for BaseEdit {
 
         #[cfg(target_os = "android")]
         {
-            let recvr = self.lock_editor().await.recvr.clone();
+            let recvr = self.editor.lock().recvr.clone();
             let me2 = me.clone();
             let autosuggest_task = ex.spawn(async move {
                 loop {

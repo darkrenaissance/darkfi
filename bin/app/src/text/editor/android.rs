@@ -143,7 +143,7 @@ impl Editor {
         let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
         assert!(!select.is_collapsed());
         let select = select.text_range();
-        self.set_selection(select.start, select.end).await;
+        self.set_selection(select.start, select.end);
     }
 
     pub fn get_cursor_pos(&self) -> Point {
@@ -171,7 +171,7 @@ impl Editor {
         self.state.select = (cursor_idx, cursor_idx);
         self.state.compose = None;
         self.input.set_state(self.state.clone());
-        self.on_buffer_changed(atom).await;
+        self.on_buffer_changed(atom);
     }
 
     pub fn driver(&mut self) -> ParleyDriverWrapper {

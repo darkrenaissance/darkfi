@@ -16,12 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(target_os = "android")]
+use std::marker::PhantomData;
+
+use crate::mesh::Color;
 #[cfg(not(target_os = "android"))]
-use crate::{mesh::Color, text};
+use crate::text;
 
 pub struct ParleyDriverWrapper<'a> {
     #[cfg(not(target_os = "android"))]
     editor: &'a mut parley::PlainEditor<Color>,
+
+    /// Needed or we get a stupid error about unused lifetime.
+    /// This is zerocost anyway.
+    #[cfg(target_os = "android")]
+    _phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> ParleyDriverWrapper<'a> {
@@ -32,7 +41,7 @@ impl<'a> ParleyDriverWrapper<'a> {
 
     #[cfg(target_os = "android")]
     pub fn new(_layout: &mut parley::Layout<Color>) -> Self {
-        Self {}
+        Self { _phantom: PhantomData }
     }
 
     #[cfg(not(target_os = "android"))]
