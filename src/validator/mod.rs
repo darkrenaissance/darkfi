@@ -387,7 +387,7 @@ impl Validator {
         let mut state_inverse_diffs = vec![];
         info!(target: "validator::confirmation", "Confirming proposals:");
         for (index, proposal) in confirmed_proposals.iter().enumerate() {
-            info!(target: "validator::confirmation", "\t{proposal} - {}", confirmed_blocks[index].header.height);
+            info!(target: "validator::confirmation", "\t{proposal} ({}) - {}", confirmed_blocks[index].header.pow_data, confirmed_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
             module.append(&confirmed_blocks[index].header, &next_difficulty)?;

@@ -45,6 +45,15 @@ pub enum PowData {
     Monero(MoneroPowData),
 }
 
+impl fmt::Display for PowData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DarkFi => write!(f, "PoW: DarkFi"),
+            Self::Monero(_) => write!(f, "PoW: Monero"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can restrict API access.
 pub struct HeaderHash(pub [u8; 32]);
