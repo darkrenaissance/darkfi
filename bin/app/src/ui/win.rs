@@ -187,8 +187,9 @@ impl Window {
                 while let Ok(insets_val) = insets_rx.recv().await {
                     let Some(self_) = me.upgrade() else { break };
                     let atom = &mut self_.render_api.make_guard(gfxtag!("Window::insets_task"));
-                    insets.set(atom, &Rectangle::from(insets_val));
-                    self_.draw(atom).await;
+                    let insets_val = Rectangle::from(insets_val);
+                    t!("Insets changed: {insets_val:?}");
+                    insets.set(atom, &insets_val);
                 }
             })
         };
