@@ -265,8 +265,7 @@ impl UIObject for EmojiPicker {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        // TODO: Figure out how to call async clear from sync context
-        // self.emoji_meshes.lock().await.clear();
+        self.emoji_meshes.lock().clear();
     }
 
     #[instrument(target = "ui::emoji_picker")]
