@@ -181,17 +181,19 @@ impl EmojiPicker {
     }
 
     #[instrument(target = "ui::emoji_picker")]
-    async fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
-
-        let Some(draw_update) = self.get_draw_calls(parent_rect, atom).await else {
+    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            warn!(target: "ui:emoji_picker", "Skip draw since parent rect is empty");
+            return
+        };
+        let Some(draw_update) = self.get_draw_calls(parent_rect, atom) else {
             error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
             return
         };
         self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
     }
 
-    async fn get_draw_calls(
+    fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
@@ -253,7 +255,7 @@ impl UIObject for EmojiPicker {
 
         async fn redraw(self_: Arc<EmojiPicker>, batch: BatchGuardPtr) {
             let atom = &mut batch.spawn();
-            self_.redraw(atom).await;
+            self_.redraw(atom);
         }
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
@@ -275,7 +277,7 @@ impl UIObject for EmojiPicker {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, atom).await
+        self.get_draw_calls(parent_rect, atom)
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
@@ -296,7 +298,7 @@ impl UIObject for EmojiPicker {
         scroll = scroll.clamp(0., self.max_scroll());
         self.scroll.set(atom, scroll);
 
-        self.redraw(atom).await;
+        self.redraw(atom);
 
         true
     }
@@ -359,7 +361,7 @@ impl UIObject for EmojiPicker {
                         let mut scroll = touch_info.start_scroll + y_diff;
                         scroll = scroll.clamp(0., self.max_scroll());
                         self.scroll.set(atom, scroll);
-                        self.redraw(atom).await;
+                        self.redraw(atom);
                     }
                 }
                 TouchPhase::Ended | TouchPhase::Cancelled => {

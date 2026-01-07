@@ -78,7 +78,9 @@ impl UIObject for Button {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        let _ = self.rect.eval(atom, &parent_rect);
+        if let Err(e) = self.rect.eval(atom, &parent_rect) {
+            warn!(target: "ui::button", "Rect eval failure: {e}");
+        }
         None
     }
 

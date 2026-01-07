@@ -85,7 +85,10 @@ impl Layer {
 
     #[instrument(target = "ui::layer")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            warn!(target: "ui:layer", "Skip draw since parent rect is empty");
+            return
+        };
 
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(parent_rect, atom).await else {

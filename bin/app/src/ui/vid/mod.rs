@@ -140,10 +140,13 @@ impl Video {
 
     #[instrument(target = "ui::video")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            warn!(target: "ui:video", "Skip draw since parent rect is empty");
+            return
+        };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
             error!(target: "ui:video", "Video failed to draw");
             return
         };
@@ -159,7 +162,7 @@ impl Video {
         mesh.alloc(&self.render_api)
     }
 
-    async fn get_draw_calls(
+    fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
@@ -296,7 +299,7 @@ impl UIObject for Video {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect).await
+        self.get_draw_calls(atom, parent_rect)
     }
 }
 

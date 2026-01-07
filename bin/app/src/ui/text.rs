@@ -134,17 +134,20 @@ impl Text {
 
     #[instrument(target = "ui::text")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            warn!(target: "ui:text", "Skip draw since parent rect is empty");
+            return
+        };
 
         let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect).await else {
+        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
             error!(target: "ui::text", "Text failed to draw");
             return
         };
         self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
     }
 
-    async fn get_draw_calls(
+    fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
@@ -205,7 +208,7 @@ impl UIObject for Text {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect).await
+        self.get_draw_calls(atom, parent_rect)
     }
 
     fn set_i18n(&self, i18n_fish: &I18nBabelFish) {

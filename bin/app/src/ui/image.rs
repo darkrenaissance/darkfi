@@ -116,9 +116,12 @@ impl Image {
         self.render_api.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("img"))
     }
 
-    #[instrument(target = "ui::button")]
+    #[instrument(target = "ui::image")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            warn!(target: "ui:image", "Skip draw since parent rect is empty");
+            return
+        };
 
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
