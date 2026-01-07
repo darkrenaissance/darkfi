@@ -340,7 +340,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Create shortcut to go back as well
@@ -948,7 +948,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Create shortcut to send as well
@@ -1052,7 +1052,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Commands help hint
@@ -1099,7 +1099,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     cmd_layer_node.link(node);
 
     // Create the actionbar bg
@@ -1365,7 +1365,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Paste button
@@ -1398,7 +1398,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Select all button
@@ -1419,7 +1419,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Paste overlay popup
@@ -1524,7 +1524,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, ACTION_PASTE_RECT.w).unwrap();
     prop.set_f32(atom, Role::App, 3, ACTION_PASTE_RECT.h).unwrap();
 
-    let node = node.setup(|me| Button::new(me)).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node.clone());
 
     let (slot, recvr) = Slot::new("paste_clicked");

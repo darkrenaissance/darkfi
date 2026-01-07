@@ -163,7 +163,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     //let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
     //node.register("click", slot_click).unwrap();
 
-    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node);
 
     // Create another mesh

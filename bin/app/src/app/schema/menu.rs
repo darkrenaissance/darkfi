@@ -271,7 +271,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         });
         app.tasks.lock().unwrap().push(listen_click);
 
-        let node = node.setup(|me| Button::new(me)).await;
+        let node = node.setup(Button::new).await;
         layer_node.link(node);
 
         // Create shortcut

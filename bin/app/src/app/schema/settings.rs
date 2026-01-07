@@ -259,7 +259,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    let node = node.setup(Button::new).await;
     layer_node.link(node.clone());
 
     // Label: "SETTINGS" title
@@ -1358,7 +1358,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 });
                 app.tasks.lock().unwrap().push(listen_click);
 
-                let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+                let node = node.setup(Button::new).await;
                 setting_layer_node.link(node.clone());
             }
         }
@@ -1404,7 +1404,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-            let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+            let node = node.setup(Button::new).await;
             setting_layer_node.link(node.clone());
 
             // Handle confirm button click
@@ -1457,7 +1457,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-        let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+        let node = node.setup(Button::new).await;
         setting_layer_node.link(node.clone());
 
         // Handle reset button click
