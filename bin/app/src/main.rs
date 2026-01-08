@@ -444,6 +444,8 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_method("reconnect", vec![], None).unwrap();
+
     node
 }
 
