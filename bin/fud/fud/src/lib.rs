@@ -331,7 +331,7 @@ impl Fud {
                     hash,
                     ResourceType::Unknown,
                     &path,
-                    ResourceStatus::Incomplete,
+                    ResourceStatus::Incomplete(None),
                     file_selection,
                 ),
             );
@@ -514,7 +514,7 @@ impl Fud {
 
             match resource.status {
                 ResourceStatus::Seeding => {}
-                ResourceStatus::Incomplete => {}
+                ResourceStatus::Incomplete(_) => {}
                 _ => continue,
             };
 
@@ -522,14 +522,16 @@ impl Fud {
             let resource_path = match self.hash_to_path(&resource.hash) {
                 Ok(Some(v)) => v,
                 Ok(None) | Err(_) => {
-                    update_resource(&mut resource, ResourceStatus::Incomplete, None, 0, 0).await;
+                    update_resource(&mut resource, ResourceStatus::Incomplete(None), None, 0, 0)
+                        .await;
                     continue;
                 }
             };
             let mut chunked = match self.geode.get(&resource.hash, &resource_path).await {
                 Ok(v) => v,
                 Err(_) => {
-                    update_resource(&mut resource, ResourceStatus::Incomplete, None, 0, 0).await;
+                    update_resource(&mut resource, ResourceStatus::Incomplete(None), None, 0, 0)
+                        .await;
                     continue;
                 }
             };
@@ -537,7 +539,7 @@ impl Fud {
                 self.verify_chunks(resource, &mut chunked, &resource.file_selection).await;
             if let Err(e) = verify_res {
                 error!(target: "fud::verify_resources()", "Error while verifying chunks of {}: {e}", hash_to_string(&resource.hash));
-                update_resource(&mut resource, ResourceStatus::Incomplete, None, 0, 0).await;
+                update_resource(&mut resource, ResourceStatus::Incomplete(None), None, 0, 0).await;
                 continue;
             }
             let (total_bytes_downloaded, target_bytes_downloaded) = verify_res.unwrap();
@@ -549,7 +551,7 @@ impl Fud {
             if !chunked.is_complete() {
                 update_resource(
                     &mut resource,
-                    ResourceStatus::Incomplete,
+                    ResourceStatus::Incomplete(None),
                     Some(&chunked),
                     total_bytes_downloaded,
                     target_bytes_downloaded,
@@ -640,7 +642,7 @@ impl Fud {
         match self.hash_to_path(&resource.hash) {
             Ok(Some(_)) => {}
             Ok(None) | Err(_) => {
-                resource.status = ResourceStatus::Incomplete;
+                resource.status = ResourceStatus::Incomplete(None);
                 resource.total_bytes_downloaded = 0;
                 resource.target_bytes_downloaded = 0;
                 notify_event!(self, ResourceUpdated, resource);
@@ -759,7 +761,9 @@ impl Fud {
 
         if let Err(e) = metadata_result {
             // Set resource status to `Incomplete` and send a `MetadataNotFound` event
-            let resource = update_resource!(hash, { status = ResourceStatus::Incomplete });
+            let resource = update_resource!(hash, {
+                status = ResourceStatus::Incomplete(Some("Metadata not found".to_string()))
+            });
             notify_event!(self, MetadataNotFound, resource);
             dht_sub.unsubscribe().await;
             return Err(e)
@@ -869,7 +873,7 @@ impl Fud {
             let resource = update_resource!(hash, {
                 status = match chunked.is_complete() {
                     true => ResourceStatus::Seeding,
-                    false => ResourceStatus::Incomplete,
+                    false => ResourceStatus::Incomplete(None),
                 },
                 target_chunks_downloaded = chunks.len() as u64,
                 total_chunks_downloaded = chunked.local_chunks() as u64,
@@ -935,7 +939,9 @@ impl Fud {
         // (some chunks were missing from all seeders)
         if !is_complete {
             // Set resource status to `Incomplete`
-            let resource = update_resource!(hash, { status = ResourceStatus::Incomplete });
+            let resource = update_resource!(hash, {
+                status = ResourceStatus::Incomplete(Some("Missing chunks".to_string()))
+            });
 
             // Send a MissingChunks event
             notify_event!(self, MissingChunks, resource);

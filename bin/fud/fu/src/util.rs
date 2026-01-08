@@ -30,7 +30,7 @@ pub fn status_to_colorspec(status: &ResourceStatus) -> ColorSpec {
             ResourceStatus::Downloading => Some(Color::Blue),
             ResourceStatus::Seeding => Some(Color::Green),
             ResourceStatus::Discovering => Some(Color::Magenta),
-            ResourceStatus::Incomplete => Some(Color::Red),
+            ResourceStatus::Incomplete(_) => Some(Color::Red),
             ResourceStatus::Verifying => Some(Color::Yellow),
         })
         .set_bold(true)

@@ -35,7 +35,7 @@ pub enum ResourceStatus {
     Downloading,
     Seeding,
     Discovering,
-    Incomplete,
+    Incomplete(Option<String>),
     Verifying,
 }
 
@@ -45,7 +45,7 @@ impl ResourceStatus {
             ResourceStatus::Downloading => "downloading",
             ResourceStatus::Seeding => "seeding",
             ResourceStatus::Discovering => "discovering",
-            ResourceStatus::Incomplete => "incomplete",
+            ResourceStatus::Incomplete(_) => "incomplete",
             ResourceStatus::Verifying => "verifying",
         }
     }
@@ -54,7 +54,7 @@ impl ResourceStatus {
             "downloading" => Ok(ResourceStatus::Downloading),
             "seeding" => Ok(ResourceStatus::Seeding),
             "discovering" => Ok(ResourceStatus::Discovering),
-            "incomplete" => Ok(ResourceStatus::Incomplete),
+            "incomplete" => Ok(ResourceStatus::Incomplete(None)),
             "verifying" => Ok(ResourceStatus::Verifying),
             _ => Err(Error::Custom("Invalid resource status".to_string())),
         }

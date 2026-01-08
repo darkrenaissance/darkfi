@@ -30,6 +30,7 @@ use darkfi::{
 use crate::{
     event::{self, notify_event},
     proto::FudAnnounce,
+    resource::ResourceStatus,
     Fud, FudEvent, FudState,
 };
 
@@ -92,6 +93,13 @@ pub async fn get_task(fud: Arc<Fud>) -> Result<()> {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
                         error!(target: "fud::get_task()", "Error while fetching resource: {e}");
+
+                        // Set resource status to `Incomplete`
+                        let mut resources = fud_2.resources.write().await;
+                        if let Some(resource) = resources.get_mut(&hash) {
+                            resource.status = ResourceStatus::Incomplete(Some(e.to_string()));
+                        }
+                        drop(resources);
 
                         // Send a DownloadError for any error that stopped the fetch task
                         notify_event!(fud_2, DownloadError, {
