@@ -94,7 +94,7 @@ impl App {
             screen_density / 2.625
         };
         #[cfg(not(target_os = "android"))]
-        let window_scale = 1.2;
+        let window_scale = 1.;
 
         d!("Setting window scale to {window_scale}");
 
