@@ -23,6 +23,7 @@
 use clap::Parser;
 use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
+use url::Url;
 
 #[macro_use]
 extern crate tracing;
@@ -276,14 +277,6 @@ async fn load_plugins(
         })
         .await;
 
-    let fud = create_fud("fud");
-    let sg_root2 = sg_root.clone();
-    let fud = fud
-        .setup(|me| async {
-            plugin::FudPlugin::new(me, sg_root2, ex.clone()).await.expect("Fud pimpl setup")
-        })
-        .await;
-
     let (slot, recvr) = Slot::new("recvmsg");
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
@@ -399,10 +392,39 @@ async fn load_plugins(
     });
 
     plugin.link(darkirc);
+
+    let fud = create_fud("fud");
+    let sg_root2 = sg_root.clone();
+    let fud = fud
+        .setup(|me| async {
+            plugin::FudPlugin::new(me, sg_root2, ex.clone()).await.expect("Fud pimpl setup")
+        })
+        .await;
+
+    let (slot, recv) = Slot::new("file_status_update");
+    let _ = fud.register("file_status_updated", slot);
+    let sg_root2 = sg_root.clone();
+    let listen_file_status = ex.spawn(async move {
+        while let Ok(data) = recv.recv().await {
+            let window = sg_root2.lookup_node("/window/content").unwrap();
+            let mut cur = Cursor::new(&data);
+            let url = Url::decode(&mut cur).unwrap();
+            let status = chatview::FileMessageStatus::decode(&mut cur).unwrap();
+            for child in window.get_children() {
+                if let Some(chatty) = child.lookup_node("/content/chatty") {
+                    let mut data = vec![];
+                    url.encode(&mut data).unwrap();
+                    status.encode(&mut data).unwrap();
+                    let _ = chatty.call_method("set_file_status", data).await;
+                }
+            }
+        }
+    });
+
     plugin.link(fud);
 
     i!("Plugins loaded");
-    futures::join!(listen_recv, listen_connect);
+    futures::join!(listen_recv, listen_connect, listen_file_status);
 }
 
 pub fn create_darkirc(name: &str) -> SceneNode {
@@ -457,7 +479,15 @@ pub fn create_fud(name: &str) -> SceneNode {
     prop.set_defaults_bool(vec![false]).unwrap();
     node.add_property(prop).unwrap();
 
-    node.add_method("get", vec![("hash", "Hash", CallArgType::Str)], None).unwrap();
+    node.add_signal(
+        "file_status_updated",
+        "File download status updated",
+        vec![("url", "File URL", CallArgType::Str), ("status", "File status", CallArgType::Str)],
+    )
+    .unwrap();
+
+    node.add_method("get", vec![("url", "Url", CallArgType::Str)], None).unwrap();
+    node.add_method("track_file", vec![("url", "Url", CallArgType::Str)], None).unwrap();
 
     node
 }

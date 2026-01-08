@@ -26,7 +26,12 @@ use darkfi::{
 };
 use darkfi_serial::{Decodable, Encodable};
 use fud::{
-    event::FudEvent, proto::ProtocolFud, settings::Args as FudSettings, util::hash_to_string, Fud,
+    event::FudEvent,
+    proto::ProtocolFud,
+    resource::ResourceStatus,
+    settings::Args as FudSettings,
+    util::{hash_to_string, FileSelection},
+    Fud,
 };
 use sled_overlay::sled;
 use smol::lock::Mutex;
@@ -41,8 +46,10 @@ use url::Url;
 use crate::{
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, Role},
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
-    ui::OnModify,
+    scene::{
+        MethodCall, MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak,
+    },
+    ui::{chatview::FileMessageStatus, OnModify},
     ExecutorPtr,
 };
 
@@ -119,7 +126,7 @@ pub struct FudPlugin {
     event_pub: PublisherPtr<FudEvent>,
     fud: Arc<Fud>,
 
-    download_on_ready: Arc<Mutex<HashSet<Url>>>,
+    tracked_files: Arc<Mutex<HashSet<Url>>>,
 
     settings: PluginSettings,
 }
@@ -264,7 +271,7 @@ impl FudPlugin {
             p2p,
             event_pub,
             fud,
-            download_on_ready: Arc::new(Mutex::new(HashSet::new())),
+            tracked_files: Arc::new(Mutex::new(HashSet::new())),
             settings,
         });
         self_.clone().start(ex).await;
@@ -303,6 +310,11 @@ impl FudPlugin {
         let get_method_task =
             ex.spawn(async move { while Self::process_get(&me2, &method_sub).await {} });
 
+        let method_sub = node.subscribe_method_call("track_file").unwrap();
+        let me2 = me.clone();
+        let track_file_method_task =
+            ex.spawn(async move { while Self::process_track_file(&me2, &method_sub).await {} });
+
         let event_pub = self.event_pub.clone();
         let me2 = me.clone();
         let ev_task = ex.spawn(async move {
@@ -326,7 +338,7 @@ impl FudPlugin {
             }
         });
 
-        let mut tasks = vec![get_method_task, ev_task, start_task];
+        let mut tasks = vec![get_method_task, track_file_method_task, ev_task, start_task];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks).unwrap();
 
@@ -360,6 +372,68 @@ impl FudPlugin {
         Ok(blake3::Hash::from_bytes(hash_buf_arr))
     }
 
+    fn parse_url(url: &Url) -> std::io::Result<(String, blake3::Hash)> {
+        let hash_string = url
+            .host_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Missing fud hash"))?;
+
+        let hash = Self::string_to_hash(&hash_string)?;
+
+        Ok((hash_string, hash))
+    }
+
+    fn url_to_file_selection(url: &Url) -> FileSelection {
+        match url.path() {
+            "/" | "" => FileSelection::All,
+            path => {
+                let mut selection = HashSet::new();
+                selection.insert(PathBuf::from(path.strip_prefix("/").unwrap_or(path)));
+                FileSelection::Set(selection)
+            }
+        }
+    }
+
+    async fn find_urls_by_hash(&self, hash: &blake3::Hash) -> Vec<Url> {
+        let tracked = self.tracked_files.lock().await;
+        let hash_str = hash_to_string(hash);
+        tracked
+            .iter()
+            .filter(|url| url.host_str() == Some(hash_str.as_str()))
+            .cloned()
+            .collect()
+    }
+
+    fn decode_data(
+        &self,
+        method_call: &MethodCall,
+    ) -> (Option<String>, std::io::Result<(blake3::Hash, Url, Option<String>)>) {
+        fn decode_data(data: &[u8]) -> std::io::Result<(String, Url, Option<String>)> {
+            let mut cur = Cursor::new(&data);
+            let url = Url::decode(&mut cur)?;
+            let Some(hash_string) = url.host_str() else {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Missing fud hash"))
+            };
+            let hash_string = hash_string.to_string();
+            let err_msg = String::decode(&mut cur).ok();
+
+            Ok((hash_string, url, err_msg))
+        }
+
+        let Ok((hash_string, url, err_msg)) = decode_data(&method_call.data) else {
+            return (None, Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid fud url")))
+        };
+
+        let Ok(hash) = FudPlugin::string_to_hash(&hash_string) else {
+            return (
+                Some(hash_string),
+                Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid fud url")),
+            )
+        };
+
+        (Some(hash_string), Ok((hash, url, err_msg)))
+    }
+
     async fn process_get(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
             d!("Fud event relayer closed");
@@ -369,70 +443,194 @@ impl FudPlugin {
         t!("method called: get({method_call:?})");
         assert!(method_call.send_res.is_none());
 
-        fn decode_data(data: &[u8]) -> std::io::Result<(String, Url)> {
-            let mut cur = Cursor::new(&data);
-            let url = Url::decode(&mut cur)?;
-            let Some(hash_string) = url.host_str().clone() else {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Missing fud hash"))
-            };
-            let hash_string = hash_string.to_string();
-
-            Ok((hash_string, url))
-        }
-
         let Some(self_) = me.upgrade() else {
             // Should not happen
             panic!("self destroyed before get_method_task was stopped!");
         };
 
-        let Ok((hash_string, url)) = decode_data(&method_call.data) else {
-            e!("get() method invalid arg data");
+        let (hash_string, data) = self_.decode_data(&method_call);
+        if let Err(e) = data {
+            e!("get() method invalid arg data: {e}");
             return true
         };
 
-        let Ok(hash) = FudPlugin::string_to_hash(&hash_string) else {
-            let mut data = vec![];
-            "invalid fud url".encode(&mut data).unwrap();
-            self_.update_file(hash_string, "error", data).await;
-            return true
-        };
+        let hash_string = hash_string.unwrap();
+        let (hash, url, _) = data.unwrap();
 
         if self_.node.upgrade().unwrap().get_property_bool("ready").unwrap() {
-            let file_selection = match url.path() {
-                "/" | "" => fud::util::FileSelection::All,
-                path => {
-                    let mut selection = HashSet::new();
-                    selection.insert(PathBuf::from(path.strip_prefix("/").unwrap_or(path)));
-                    fud::util::FileSelection::Set(selection)
-                }
-            };
+            let file_selection = Self::url_to_file_selection(&url);
             let _ = self_
                 .fud
                 .get(&hash, &get_downloads_path().join(&hash_string), file_selection)
                 .await;
-        } else {
-            self_.download_on_ready.lock().await.insert(url);
         }
 
         true
     }
 
-    async fn update_file(self: &Arc<Self>, hash: String, status: &str, encoded_data: Vec<u8>) {
-        let window = self.sg_root.lookup_node("/window");
-        if window.is_none() {
-            return
+    /// Get the current file status for a fileurl, a `None` means it should not
+    /// be updated
+    async fn get_status(&self, hash: &blake3::Hash, url: &Url) -> Option<FileMessageStatus> {
+        let resources = self.fud.resources().await;
+        let resource = resources.get(hash);
+        if resource.is_none() {
+            return Some(FileMessageStatus::Idle)
         }
-        let window = window.unwrap();
-
-        for child in window.get_children() {
-            if let Some(chatty) = child.lookup_node("/content/chatty") {
-                let mut data = vec![];
-                hash.encode(&mut data).unwrap();
-                status.encode(&mut data).unwrap();
-                data.extend(encoded_data.clone());
-                let _ = chatty.call_method("update_file", data).await;
+        let resource = resource.unwrap();
+        let mut path = resource.path.clone();
+        let file_selection = Self::url_to_file_selection(url);
+        if let FileSelection::Set(selection) = &file_selection {
+            if let Some(rel_path) = selection.iter().next() {
+                path = path.join(rel_path);
             }
         }
+        let path = path.to_string_lossy().to_string();
+
+        if file_selection.is_disjoint(&resource.last_file_selection) {
+            return None::<FileMessageStatus>
+        }
+
+        let (bytes_downloaded, bytes_total) = self.fud.get_progress(hash, &file_selection).await;
+        let progress =
+            if bytes_total != 0 { bytes_downloaded as f32 / bytes_total as f32 * 100. } else { 0. };
+
+        match resource.status {
+            ResourceStatus::Discovering => Some(FileMessageStatus::Downloading { progress }),
+            ResourceStatus::Downloading => {
+                if progress < 100. {
+                    Some(FileMessageStatus::Downloading { progress })
+                } else {
+                    Some(FileMessageStatus::Downloaded { path })
+                }
+            }
+            ResourceStatus::Incomplete(ref err) => {
+                if progress < 100. {
+                    if let Some(msg) = err {
+                        Some(FileMessageStatus::Error { msg: msg.clone(), progress })
+                    } else {
+                        Some(FileMessageStatus::Error { msg: "incomplete".to_string(), progress })
+                    }
+                } else {
+                    Some(FileMessageStatus::Downloaded { path })
+                }
+            }
+            ResourceStatus::Verifying => None,
+            // Seeding status means we have the full resource
+            // (partial seeding is not supported by fud)
+            ResourceStatus::Seeding => Some(FileMessageStatus::Downloaded { path }),
+        }
+    }
+
+    async fn process_track_file(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Fud event relayer closed");
+            return false
+        };
+
+        t!("method called: track_file({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before track_file_method_task was stopped!");
+        };
+
+        let mut cur = Cursor::new(&method_call.data);
+        let Ok(url) = Url::decode(&mut cur) else {
+            e!("track_file() method invalid arg data");
+            return true
+        };
+
+        self_.track_file(url).await;
+
+        true
+    }
+
+    /// Emit file_status_updated signal to all ChatViews
+    async fn emit_file_status(&self, url: &Url, status: &FileMessageStatus) {
+        let mut data = vec![];
+        url.encode(&mut data).unwrap();
+        status.encode(&mut data).unwrap();
+        let _ = self.node.upgrade().unwrap().trigger("file_status_updated", data).await;
+    }
+
+    /// Emit error status for a URL
+    async fn emit_error(&self, url: &Url, msg: String) {
+        self.emit_file_status(url, &FileMessageStatus::Error { msg, progress: 0. }).await;
+    }
+
+    /// Update tracked files and emit status signal
+    async fn update_resource(&self, hash: &blake3::Hash) {
+        let urls = self.find_urls_by_hash(hash).await;
+        for url in urls {
+            self.update_fileurl(&url).await;
+        }
+    }
+
+    async fn update_fileurl(&self, url: &Url) -> bool {
+        let (_hash_string, hash) = match Self::parse_url(url) {
+            Ok(h) => h,
+            Err(err) => {
+                self.emit_error(url, err.to_string()).await;
+                return true
+            }
+        };
+
+        let status = self.get_status(&hash, url).await;
+
+        // Emit signal
+        if let Some(status) = status {
+            self.emit_file_status(url, &status).await;
+            return true
+        }
+
+        false
+    }
+
+    /// Emit status for all tracked files
+    async fn ready_files(&self) {
+        let tracked = self.tracked_files.lock().await;
+        let urls: Vec<Url> = tracked.iter().cloned().collect();
+        drop(tracked);
+
+        for url in urls {
+            let (_hash_string, hash) = match Self::parse_url(&url) {
+                Ok(h) => h,
+                Err(err) => {
+                    self.emit_error(&url, err.to_string()).await;
+                    continue
+                }
+            };
+
+            let status = self.get_status(&hash, &url).await;
+
+            if let Some(status) = status {
+                self.emit_file_status(&url, &status).await;
+            } else {
+                self.emit_file_status(&url, &FileMessageStatus::Idle).await;
+            }
+        }
+    }
+
+    /// Track a file URL (called when the fileurl_detected signal is emitted)
+    async fn track_file(&self, url: Url) {
+        let (_hash_string, _hash) = match Self::parse_url(&url) {
+            Ok(h) => h,
+            Err(err) => {
+                self.emit_error(&url, err.to_string()).await;
+                return
+            }
+        };
+
+        if self.node.upgrade().unwrap().get_property_bool("ready").unwrap() {
+            let updated = self.update_fileurl(&url).await;
+            if !updated {
+                self.emit_file_status(&url, &FileMessageStatus::Idle).await;
+            }
+        }
+
+        let mut tracked = self.tracked_files.lock().await;
+        tracked.insert(url);
     }
 
     async fn process_events(me: &Weak<Self>, publisher: PublisherPtr<FudEvent>) {
@@ -454,55 +652,28 @@ impl FudPlugin {
                         .set_property_bool(atom, Role::App, "ready", true)
                         .unwrap();
 
-                    let window = self_.sg_root.lookup_node("/window");
-                    if window.is_none() {
-                        continue
-                    }
-
-                    for url in self_.download_on_ready.lock().await.iter() {
-                        let mut data = vec![];
-                        url.encode(&mut data).unwrap();
-                        let _ = self_.node.upgrade().unwrap().call_method("get", data).await;
-                    }
+                    self_.ready_files().await;
                 }
                 FudEvent::DownloadStarted(ev) => {
-                    let mut data = vec![];
-                    let bytes_downloaded = ev.resource.target_bytes_downloaded as f32;
-                    let bytes_size = ev.resource.target_bytes_size as f32;
-                    let progress =
-                        if bytes_size != 0.0 { bytes_downloaded / bytes_size * 100.0 } else { 0.0 };
-                    progress.encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.resource.hash), "downloading", data).await;
+                    self_.update_resource(&ev.resource.hash).await;
                 }
                 FudEvent::ChunkDownloadCompleted(ev) => {
-                    let mut data = vec![];
-                    let bytes_downloaded = ev.resource.target_bytes_downloaded as f32;
-                    let bytes_size = ev.resource.target_bytes_size as f32;
-                    let progress =
-                        if bytes_size != 0.0 { bytes_downloaded / bytes_size * 100.0 } else { 0.0 };
-                    progress.encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.resource.hash), "downloading", data).await;
+                    self_.update_resource(&ev.resource.hash).await;
                 }
                 FudEvent::DownloadCompleted(ev) => {
-                    let mut data = vec![];
-                    let path_string = ev.resource.path.to_string_lossy().to_string();
-                    path_string.encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.resource.hash), "downloaded", data).await;
+                    self_.update_resource(&ev.resource.hash).await;
+                }
+                FudEvent::ResourceUpdated(ev) => {
+                    self_.update_resource(&ev.resource.hash).await;
                 }
                 FudEvent::DownloadError(ev) => {
-                    let mut data = vec![];
-                    ev.error.encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.hash), "error", data).await;
+                    self_.update_resource(&ev.hash).await;
                 }
                 FudEvent::MissingChunks(ev) => {
-                    let mut data = vec![];
-                    "missing chunks".encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.hash), "error", data).await;
+                    self_.update_resource(&ev.hash).await;
                 }
                 FudEvent::MetadataNotFound(ev) => {
-                    let mut data = vec![];
-                    "missing metadata".encode(&mut data).unwrap();
-                    self_.update_file(hash_to_string(&ev.hash), "error", data).await;
+                    self_.update_resource(&ev.hash).await;
                 }
                 _ => {}
             };

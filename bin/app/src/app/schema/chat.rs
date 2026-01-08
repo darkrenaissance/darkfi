@@ -566,6 +566,30 @@ pub async fn make(
         .await;
     layer_node.link(chatview_node.clone());
 
+    let (slot, recvr) = Slot::new("fileurl_detect");
+    chatview_node.register("fileurl_detected", slot).unwrap();
+    let sg_root2 = app.sg_root.clone();
+    let listen_fileurl = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            if let Some(fud_node) = sg_root2.lookup_node("/plugin/fud") {
+                let _ = fud_node.call_method("track_file", data).await;
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_fileurl);
+
+    let (slot, recvr) = Slot::new("file_download_request");
+    chatview_node.register("file_download_request", slot).unwrap();
+    let sg_root2 = app.sg_root.clone();
+    let listen_file_download = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            if let Some(fud_node) = sg_root2.lookup_node("/plugin/fud") {
+                let _ = fud_node.call_method("get", data).await;
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_file_download);
+
     if is_first_time {
         let chatview = match chatview_node.pimpl() {
             Pimpl::ChatView(obj) => obj.as_ref(),

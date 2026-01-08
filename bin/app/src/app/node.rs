@@ -476,6 +476,20 @@ pub fn create_chatview(name: &str) -> SceneNode {
     prop.set_defaults_f32(vec![6.]).unwrap();
     node.add_property(prop).unwrap();
 
+    node.add_signal(
+        "fileurl_detected",
+        "File URL detected in message",
+        vec![("url", "File URL", CallArgType::Str)],
+    )
+    .unwrap();
+
+    node.add_signal(
+        "file_download_request",
+        "User requested file download",
+        vec![("url", "File URL", CallArgType::Str)],
+    )
+    .unwrap();
+
     node.add_method(
         "insert_line",
         vec![
@@ -500,7 +514,12 @@ pub fn create_chatview(name: &str) -> SceneNode {
     )
     .unwrap();
 
-    node.add_method("update_file", vec![("hash", "Hash", CallArgType::Str)], None).unwrap();
+    node.add_method(
+        "set_file_status",
+        vec![("url", "File URL", CallArgType::Str), ("status", "File status", CallArgType::Str)],
+        None,
+    )
+    .unwrap();
 
     node
 }

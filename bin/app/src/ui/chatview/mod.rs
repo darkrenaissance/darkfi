@@ -38,7 +38,8 @@ use tracing::instrument;
 use url::Url;
 
 mod page;
-use page::{FileMessageStatus, MessageBuffer};
+pub use page::FileMessageStatus;
+use page::MessageBuffer;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
@@ -344,6 +345,54 @@ impl ChatView {
         self_.handle_insert_unconf_line(timestamp, msg_id, nick, text).await;
         true
     }
+    async fn process_set_file_status_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        t!("method called: set_file_status({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        fn decode_data(data: &[u8]) -> std::io::Result<(Url, FileMessageStatus)> {
+            let mut cur = Cursor::new(&data);
+            let url = Url::decode(&mut cur)?;
+            let file_status = FileMessageStatus::decode(&mut cur)?;
+            Ok((url, file_status))
+        }
+
+        let Ok((url, file_status)) = decode_data(&method_call.data) else {
+            error!(target: "ui::chatview", "set_file_status() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before set_file_status_task was stopped!");
+        };
+
+        let mut msgbuf = self_.msgbuf.lock().await;
+        msgbuf.update_file_status(&url, &file_status);
+        msgbuf.adjust_params();
+        let atom = self_.render_api.make_guard(gfxtag!("ChatView::set_file_status"));
+        self_.redraw_cached(atom.batch_id, &mut msgbuf).await;
+
+        true
+    }
+
+    fn to_msgbuf_pos(&self, pos: Point) -> Point {
+        let mut x = pos.x;
+        let mut y = pos.y;
+
+        let rect = self.rect.get();
+
+        x -= rect.x;
+        y -= rect.y;
+        let scroll = self.scroll.get();
+        y = rect.h - y + scroll;
+
+        Point::new(x, y)
+    }
 
     /// Mark line as selected
     #[instrument(target = "ui::chatview")]
@@ -460,25 +509,16 @@ impl ChatView {
                 return
             }
 
-            if let Some(url) = get_file_url(&text) {
-                msgbuf.insert_filemsg(
-                    timest,
-                    msg_id,
-                    FileMessageStatus::Initializing,
-                    nick,
-                    url.clone(),
-                );
+            #[cfg(feature = "enable-plugins")]
+            {
+                if let Some(url) = get_file_url(&text) {
+                    let _ =
+                        msgbuf.insert_filemsg(self.node.clone(), timest, msg_id, nick, url.clone());
 
-                // This is incorrect. Scenegraph paths should not be hardcoded in widgets
-                // nor should there be dependencies on other widgets.
-                // Instead use signals and slots through app layer. See how focus is done with
-                // the edit widgets.
-                #[cfg(feature = "enable-plugins")]
-                {
+                    let node_ref = self.node.upgrade().unwrap();
                     let mut data = vec![];
                     url.encode(&mut data).unwrap();
-                    let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
-                    fud.call_method("get", data).await.unwrap();
+                    let _ = node_ref.trigger("fileurl_detected", data).await;
                 }
             }
         }
@@ -615,22 +655,21 @@ impl ChatView {
                 )
                 .await;
 
-            if let Some(url) = get_file_url(&chatmsg.text) {
-                msgbuf.insert_filemsg(
-                    timest,
-                    msg_id,
-                    FileMessageStatus::Initializing,
-                    chatmsg.nick.clone(),
-                    url.clone(),
-                );
+            #[cfg(feature = "enable-plugins")]
+            {
+                if let Some(url) = get_file_url(&chatmsg.text) {
+                    let _ = msgbuf.insert_filemsg(
+                        self.node.clone(),
+                        timest,
+                        msg_id,
+                        chatmsg.nick.clone(),
+                        url.clone(),
+                    );
 
-                // See comment in handle_insert_line()
-                #[cfg(feature = "enable-plugins")]
-                {
+                    let node_ref = self.node.upgrade().unwrap();
                     let mut data = vec![];
                     url.encode(&mut data).unwrap();
-                    let fud = self.sg_root.lookup_node("/plugin/fud").unwrap();
-                    fud.call_method("get", data).await.unwrap();
+                    let _ = node_ref.trigger("fileurl_detected", data).await;
                 }
             }
 
@@ -816,20 +855,10 @@ impl UIObject for ChatView {
             }
         });
 
-        let method_sub = node_ref.subscribe_method_call("update_file").unwrap();
-        let self_ = self.clone();
-        let update_file_task = ex.spawn(async move {
-            loop {
-                let Ok(method_call) = method_sub.receive().await else {
-                    d!("Event relayer closed");
-                    return
-                };
-                let mut msgbuf = self_.msgbuf.lock().await;
-                msgbuf.update_file(&method_call.data).await;
-                msgbuf.adjust_params();
-                let atom = self_.render_api.make_guard(gfxtag!("ChatView::update_file_task"));
-                self_.redraw_cached(atom.batch_id, &mut msgbuf).await;
-            }
+        let method_sub = node_ref.subscribe_method_call("set_file_status").unwrap();
+        let me2 = me.clone();
+        let set_file_status_method_task = ex.spawn(async move {
+            while Self::process_set_file_status_method(&me2, &method_sub).await {}
         });
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
@@ -866,7 +895,7 @@ impl UIObject for ChatView {
             insert_unconf_line_method_task,
             motion_task,
             bgload_task,
-            update_file_task,
+            set_file_status_method_task,
         ];
         tasks.append(&mut on_modify.tasks);
 
@@ -939,11 +968,25 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        let rect = self.rect.get();
+
+        if rect.contains(mouse_pos) {
+            let mut msgbuf = self.msgbuf.lock().await;
+            let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
+            if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                if msg
+                    .handle_mouse_btn_down(btn, Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y))
+                    .await
+                {
+                    return true
+                }
+            }
+        }
+
         if btn != MouseButton::Left {
             return false
         }
 
-        let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -959,6 +1002,20 @@ impl UIObject for ChatView {
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         t!("handle_mouse_btn_up({btn:?}, {mouse_pos:?})");
+
+        let rect = self.rect.get();
+        if rect.contains(mouse_pos) {
+            let mut msgbuf = self.msgbuf.lock().await;
+            let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
+            if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                if msg
+                    .handle_mouse_btn_up(btn, Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y))
+                    .await
+                {
+                    return true
+                }
+            }
+        }
 
         if btn != MouseButton::Left {
             return false
@@ -986,6 +1043,12 @@ impl UIObject for ChatView {
         if ENABLE_SELECT {
             let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::handle_mouse_move"));
             self.select_line(atom.batch_id, mouse_pos.y).await;
+        }
+
+        let mut msgbuf = self.msgbuf.lock().await;
+        let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
+        if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+            msg.handle_mouse_move(Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y)).await;
         }
         false
     }
@@ -1101,6 +1164,27 @@ impl UIObject for ChatView {
                 self.scrollview(scroll, atom).await;
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
+                let (start_y, is_select_mode) = {
+                    let touch_info = self.touch_info.lock();
+                    let Some(touch_info) = &*touch_info else { return true };
+                    (touch_info.start_y, touch_info.is_select_mode)
+                };
+
+                // If this selection mode is off and movement was minimal,
+                // it is a tap so we forward the touch event to the message
+                if is_select_mode != Some(true) && (touch_y - start_y).abs() < BIG_EPSILON {
+                    let mut msgbuf = self.msgbuf.lock().await;
+                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
+                    if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                        msg.handle_touch(
+                            TouchPhase::Ended,
+                            0,
+                            Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
+                        )
+                        .await;
+                    }
+                }
+
                 self.end_touch_phase(touch_y);
             }
         }

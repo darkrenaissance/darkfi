@@ -19,17 +19,20 @@
 use async_gen::{gen as async_gen, AsyncIter};
 use async_trait::async_trait;
 use chrono::{Local, NaiveDate, TimeZone};
-use darkfi_serial::{Decodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Encodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::stream::{Stream, StreamExt};
 use image::{ImageBuffer, ImageReader, Rgba};
-use miniquad::TextureFormat;
+use miniquad::{MouseButton, TextureFormat, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
     pin::pin,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 use url::Url;
 
@@ -38,7 +41,9 @@ use crate::{
     gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyColor, PropertyFloat32, PropertyPtr},
+    scene::SceneNodeWeak,
     text,
+    ui::UIObject,
     util::enumerate_mut,
 };
 
@@ -320,26 +325,31 @@ impl std::fmt::Debug for DateMessage {
     }
 }
 
-#[derive(Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum FileMessageStatus {
     Initializing,
+    Idle,
     Downloading { progress: f32 },
     Downloaded { path: String },
-    Error { msg: String },
+    Error { msg: String, progress: f32 },
 }
 
 type GenericImageBuffer = ImageBuffer<Rgba<u8>, Vec<u8>>;
 
-#[derive(Clone)]
 pub struct FileMessage {
+    chatview_node: SceneNodeWeak,
+
     font_size: f32,
     window_scale: f32,
     max_width: f32,
 
     file_url: Url,
-    status: FileMessageStatus,
+    pub status: FileMessageStatus,
     imgbuf: Arc<SyncMutex<Option<GenericImageBuffer>>>,
     timestamp: Timestamp,
+
+    active_rect: Option<Rectangle>,
+    mouse_btn_held: AtomicBool,
 
     mesh_cache: Option<Vec<DrawInstruction>>,
 }
@@ -349,12 +359,13 @@ impl FileMessage {
     const GLOW_SIZE: f32 = 20.;
     const MARGIN_TOP: f32 = 4.;
     const MARGIN_BOTTOM: f32 = 10.;
-    const BOX_PADDING_TOP: f32 = 15.;
-    const BOX_PADDING_BOTTOM: f32 = 8.;
+    const BOX_PADDING_Y: f32 = 12.;
     const BOX_PADDING_X: f32 = 15.;
     const IMG_MAX_HEIGHT: f32 = 500.;
 
     pub fn new(
+        chatview_node: SceneNodeWeak,
+
         font_size: f32,
         window_scale: f32,
 
@@ -363,6 +374,7 @@ impl FileMessage {
         timestamp: Timestamp,
     ) -> Message {
         Message::File(Self {
+            chatview_node,
             font_size,
             window_scale,
             max_width: 0.,
@@ -370,6 +382,8 @@ impl FileMessage {
             status,
             imgbuf: Arc::new(SyncMutex::new(None)),
             timestamp,
+            active_rect: None,
+            mouse_btn_held: AtomicBool::new(false),
             mesh_cache: None,
         })
     }
@@ -377,9 +391,16 @@ impl FileMessage {
     fn filestr(file_url: &Url, status: &FileMessageStatus) -> Vec<String> {
         let status_str = match status {
             FileMessageStatus::Initializing => "starting fud".to_string(),
+            FileMessageStatus::Idle => "tap to download".to_string(),
             FileMessageStatus::Downloading { progress } => format!("downloading [{progress:.1}%]"),
             FileMessageStatus::Downloaded { .. } => "downloaded".to_string(),
-            FileMessageStatus::Error { msg } => msg.to_lowercase(),
+            FileMessageStatus::Error { msg, progress } => {
+                if *progress > 0. {
+                    format!("{} [{progress:.1}%]", msg.to_lowercase())
+                } else {
+                    msg.to_lowercase()
+                }
+            }
         };
 
         vec![
@@ -422,7 +443,7 @@ impl FileMessage {
         let img_w = imgbuf.width() as f32;
         let img_h = imgbuf.height() as f32;
 
-        let width_scale = (self.max_width - Self::GLOW_SIZE) / img_w;
+        let width_scale = self.max_width / img_w;
         let height_scale = Self::IMG_MAX_HEIGHT / img_h;
 
         let scale = width_scale.min(height_scale);
@@ -441,7 +462,7 @@ impl FileMessage {
             return instrs.clone()
         }
 
-        self.max_width = clip.w - timestamp_width;
+        self.max_width = clip.w - timestamp_width - Self::GLOW_SIZE;
 
         // Extract image size while holding lock, then drop it
         let mut img_size = None;
@@ -451,12 +472,12 @@ impl FileMessage {
 
         // Lock is dropped here, safe to await now
         if let Some((img_w, img_h)) = img_size {
-            let mesh_rect =
-                Rectangle::from([timestamp_width, -img_h - Self::MARGIN_BOTTOM, img_w, img_h]);
+            let mesh_rect = Rectangle::from([timestamp_width, Self::MARGIN_TOP, img_w, img_h]);
             let texture = self.load_texture(render_api);
             let mut mesh_gradient = MeshBuilder::new(gfxtag!("file_gradient"));
             let glow_color = [timestamp_color[0], timestamp_color[1], timestamp_color[2], 0.5];
             mesh_gradient.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
+            self.active_rect = Some(mesh_rect);
 
             let mesh_gradient = mesh_gradient.alloc(render_api);
             let mut instrs = vec![DrawInstruction::Draw(mesh_gradient.draw_untextured())];
@@ -472,39 +493,23 @@ impl FileMessage {
             return instrs;
         }
 
-        // Image is not downloaded yet
+        // File is not an image, or the image is not downloaded yet
 
         let mut all_instrs = vec![];
 
-        // Draw background box
-
         let color = match self.status {
             FileMessageStatus::Initializing => timestamp_color,
+            FileMessageStatus::Idle => timestamp_color,
             FileMessageStatus::Downloading { .. } => COLOR_CYAN,
             FileMessageStatus::Downloaded { .. } => COLOR_GREEN,
             FileMessageStatus::Error { .. } => COLOR_RED,
         };
-        let box_height = 2. * line_height + Self::BOX_PADDING_TOP + Self::BOX_PADDING_BOTTOM;
 
-        let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg_box"));
-        let box_width = self.max_width + Self::BOX_PADDING_X * 2.;
-        let mesh_rect = Rectangle::new(
-            timestamp_width,
-            -box_height + Self::MARGIN_BOTTOM,
-            box_width,
-            box_height,
-        );
-        mesh.draw_outline(&mesh_rect, color, 1.);
-
-        let glow_color = [color[0], color[1], color[2], 0.3];
-        mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
-        let mesh = mesh.alloc(render_api);
-
-        all_instrs.push(DrawInstruction::Draw(mesh.draw_untextured()));
+        // Compute text
 
         let file_strs = Self::filestr(&self.file_url, &self.status);
-
         let mut layouts = Vec::with_capacity(file_strs.len());
+        let mut text_width = 0.;
         for file_str in &file_strs {
             let layout = text::make_layout(
                 file_str,
@@ -515,15 +520,39 @@ impl FileMessage {
                 Some(self.max_width),
                 &[],
             );
+            if layout.width() > text_width {
+                text_width = layout.width();
+            }
             layouts.push(layout);
         }
 
-        all_instrs
-            .push(DrawInstruction::Move(Point::new(timestamp_width + Self::BOX_PADDING_X, 0.)));
+        // Draw background box
+
+        let box_height = 2. * line_height + Self::BOX_PADDING_Y * 2.;
+
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg_box"));
+        let box_width = if text_width > self.max_width { self.max_width } else { text_width } +
+            Self::BOX_PADDING_X * 2.;
+        let mesh_rect = Rectangle::new(timestamp_width, Self::MARGIN_TOP, box_width, box_height);
+        mesh.draw_outline(&mesh_rect, color, 1.);
+        self.active_rect = Some(mesh_rect);
+
+        let glow_color = [color[0], color[1], color[2], 0.3];
+        mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
+        let mesh = mesh.alloc(render_api);
+
+        all_instrs.push(DrawInstruction::Draw(mesh.draw_untextured()));
+
+        // Draw text
+
+        all_instrs.push(DrawInstruction::Move(Point::new(
+            timestamp_width + Self::BOX_PADDING_X,
+            Self::MARGIN_TOP + Self::BOX_PADDING_Y,
+        )));
         for layout in layouts {
             let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
             all_instrs.extend(instrs);
-            all_instrs.push(DrawInstruction::Move(Point::new(0., -line_height)));
+            all_instrs.push(DrawInstruction::Move(Point::new(0., line_height)));
         }
 
         self.mesh_cache = Some(all_instrs.clone());
@@ -532,15 +561,11 @@ impl FileMessage {
 
     fn load_img(&self) -> Option<ImageBuffer<Rgba<u8>, Vec<u8>>> {
         if let FileMessageStatus::Downloaded { path } = &self.status {
-            let path = path.as_str();
-
             let data = Arc::new(SyncMutex::new(vec![]));
             let data2 = data.clone();
-            miniquad::fs::load_file(path, move |res| match res {
+            miniquad::fs::load_file(path.as_str(), move |res| match res {
                 Ok(res) => *data2.lock() = res,
-                Err(e) => {
-                    error!("Resource not found! {e}");
-                }
+                Err(_) => {}
             });
             let data = std::mem::take(&mut *data.lock());
             let Ok(img) =
@@ -583,10 +608,89 @@ impl FileMessage {
 
         // No image yet, so calculate height for text box
         // filestr() always returns 2 lines: [file_hash, status_string]
-        2. * line_height
+        2. * line_height + Self::BOX_PADDING_Y * 2. + Self::MARGIN_TOP + Self::MARGIN_BOTTOM
     }
 
     fn select(&mut self) {}
+
+    async fn download(&self) {
+        let node_ref = self.chatview_node.upgrade().unwrap();
+        let mut data = vec![];
+        self.file_url.encode(&mut data).unwrap();
+        let _ = node_ref.trigger("file_download_request", data).await;
+    }
+}
+
+#[async_trait]
+impl UIObject for FileMessage {
+    fn priority(&self) -> u32 {
+        1
+    }
+
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+        if self.active_rect.is_none() {
+            return false
+        }
+        let rect = self.active_rect.unwrap();
+        if !rect.contains(mouse_pos) {
+            return false
+        }
+
+        self.mouse_btn_held.store(true, Ordering::Relaxed);
+        true
+    }
+
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+
+        // Did we start the click inside this FileMessage?
+        let btn_held = self.mouse_btn_held.swap(false, Ordering::Relaxed);
+        if !btn_held {
+            return false
+        }
+
+        if self.active_rect.is_none() {
+            return false
+        }
+        let rect = self.active_rect.unwrap();
+        if !rect.contains(mouse_pos) {
+            return false
+        }
+
+        match self.status {
+            FileMessageStatus::Idle | FileMessageStatus::Error { .. } => {
+                self.download().await;
+            }
+            _ => {}
+        }
+        true
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, _id: u64, touch_pos: Point) -> bool {
+        if phase != TouchPhase::Ended {
+            return false
+        }
+        if self.active_rect.is_none() {
+            return false
+        }
+        let rect = self.active_rect.unwrap();
+        if !rect.contains(touch_pos) {
+            return false
+        }
+
+        match self.status {
+            FileMessageStatus::Idle | FileMessageStatus::Error { .. } => {
+                self.download().await;
+            }
+            _ => {}
+        }
+        true
+    }
 }
 
 impl std::fmt::Debug for FileMessage {
@@ -714,6 +818,34 @@ impl Message {
         match self {
             Message::File(msg) => Some(msg),
             _ => None,
+        }
+    }
+}
+
+#[async_trait]
+impl UIObject for Message {
+    fn priority(&self) -> u32 {
+        1
+    }
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        match self {
+            Self::Priv(_) => false,
+            Self::Date(_) => false,
+            Self::File(m) => m.handle_mouse_btn_down(btn, mouse_pos).await,
+        }
+    }
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        match self {
+            Self::Priv(_) => false,
+            Self::Date(_) => false,
+            Self::File(m) => m.handle_mouse_btn_up(btn, mouse_pos).await,
+        }
+    }
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        match self {
+            Self::Priv(_) => false,
+            Self::Date(_) => false,
+            Self::File(m) => m.handle_touch(phase, id, touch_pos).await,
         }
     }
 }
@@ -1028,9 +1160,9 @@ impl MessageBuffer {
 
     pub fn insert_filemsg(
         &mut self,
+        chatview_node: SceneNodeWeak,
         timest: Timestamp,
         msg_id: MessageId,
-        status: FileMessageStatus,
         nick: String,
         file_url: Url,
     ) -> Option<&mut FileMessage> {
@@ -1038,7 +1170,14 @@ impl MessageBuffer {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
 
-        let msg = FileMessage::new(font_size, window_scale, file_url, status, timest);
+        let msg = FileMessage::new(
+            chatview_node,
+            font_size,
+            window_scale,
+            file_url,
+            FileMessageStatus::Initializing,
+            timest,
+        );
 
         // Timestamps go from most recent backwards
         let mut idx = None;
@@ -1049,13 +1188,7 @@ impl MessageBuffer {
             }
         }
 
-        let idx = match idx {
-            Some(idx) => idx,
-            None => {
-                let last_page_idx = 0;
-                last_page_idx
-            }
-        };
+        let idx = idx.unwrap_or_default();
 
         self.msgs.insert(idx, msg);
         self.msgs[idx].get_filemsg_mut()
@@ -1128,7 +1261,7 @@ impl MessageBuffer {
         colors
     }
 
-    pub async fn select_line(&mut self, y: f32) {
+    pub async fn get_line(&mut self, y: f32) -> Option<(&mut Message, f32)> {
         let line_height = self.line_height.get();
         let msg_spacing = self.msg_spacing.get();
 
@@ -1142,48 +1275,34 @@ impl MessageBuffer {
             let msg_top = current_pos + mesh_height + msg_spacing;
 
             if msg_bottom <= y && y <= msg_top {
-                // Do nothing
-                if msg.is_date() {
-                    break
-                }
-
-                msg.select();
-                msg.clear_mesh();
-                break
+                return Some((msg, msg_top))
             }
 
             current_pos += msg_spacing;
             current_pos += mesh_height;
         }
+
+        None
     }
 
-    pub async fn update_file(&mut self, data: &Vec<u8>) {
-        let mut cur = Cursor::new(data);
-        let hash = String::decode(&mut cur).unwrap();
-        let status = String::decode(&mut cur).unwrap();
+    pub async fn select_line(&mut self, y: f32) {
+        if let Some((msg, _)) = self.get_line(y).await {
+            // Do nothing
+            if msg.is_date() {
+                return
+            }
 
-        let status = match status.as_str() {
-            "downloading" => {
-                let progress = f32::decode(&mut cur).unwrap();
-                FileMessageStatus::Downloading { progress }
-            }
-            "downloaded" => {
-                let path = String::decode(&mut cur).unwrap();
-                FileMessageStatus::Downloaded { path }
-            }
-            "error" => {
-                let msg = String::decode(&mut cur).unwrap();
-                FileMessageStatus::Error { msg }
-            }
-            _ => FileMessageStatus::Initializing,
-        };
+            msg.select();
 
-        // TODO: keep a cache of file messages somewhere to avoid looping
-        // over all messages
+            msg.clear_mesh();
+        }
+    }
+
+    pub fn update_file_status(&mut self, url: &Url, status: &FileMessageStatus) {
         for msg in &mut self.msgs {
             if let Some(filemsg) = msg.get_filemsg_mut() {
-                if filemsg.file_url.host_str() == Some(&hash) {
-                    filemsg.set_status(&status);
+                if filemsg.file_url == *url {
+                    filemsg.set_status(status);
                     filemsg.clear_mesh();
                 }
             }
