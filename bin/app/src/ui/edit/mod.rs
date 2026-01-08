@@ -235,8 +235,6 @@ pub struct BaseEdit {
     touch_info: SyncMutex<TouchInfo>,
     is_phone_select: AtomicBool,
 
-    // TODO: we should make use of this!
-    window_scale: PropertyFloat32,
     parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
     is_mouse_hover: AtomicBool,
 
@@ -297,7 +295,7 @@ impl BaseEdit {
             text.clone(),
             font_size.clone(),
             text_color.clone(),
-            window_scale.clone(),
+            window_scale,
             lineheight.clone(),
         )));
 
@@ -384,7 +382,6 @@ impl BaseEdit {
             touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.scroll_ctrl())),
             is_phone_select: AtomicBool::new(false),
 
-            window_scale: window_scale.clone(),
             parent_rect,
             is_mouse_hover: AtomicBool::new(false),
 

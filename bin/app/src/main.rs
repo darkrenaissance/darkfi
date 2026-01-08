@@ -74,7 +74,7 @@ pub use util::ExecutorPtr;
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 #[cfg(feature = "enable-plugins")]
 macro_rules! d { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
-#[cfg(feature = "enable-plugins")]
+#[cfg(any(feature = "enable-plugins", feature = "enable-netdebug"))]
 macro_rules! i { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
@@ -166,6 +166,7 @@ impl God {
             let ex = bg_ex.clone();
             let render_api = render_api.clone();
             let zmq_task = bg_ex.spawn(async {
+                i!("Enabled net debugging backend in this build");
                 let zmq_rpc = ZeroMQAdapter::new(sg_root, render_api, ex).await;
                 zmq_rpc.run().await;
             });

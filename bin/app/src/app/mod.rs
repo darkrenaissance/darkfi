@@ -87,11 +87,14 @@ impl App {
             sled_tree: settings_tree,
         });
 
-        // TODO: apply this to insets otherwise its wrong
-        //#[cfg(target_os = "android")]
-        //let window_scale = android::get_screen_density() / 2.625;
-        //#[cfg(not(target_os = "android"))]
-        let window_scale = 1.;
+        #[cfg(target_os = "android")]
+        let window_scale = {
+            let screen_density = android::get_screen_density();
+            i!("Android screen density: {screen_density}");
+            screen_density / 2.625
+        };
+        #[cfg(not(target_os = "android"))]
+        let window_scale = 1.2;
 
         d!("Setting window scale to {window_scale}");
 

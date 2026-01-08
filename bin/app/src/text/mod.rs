@@ -31,13 +31,11 @@ pub use editor::Editor;
 mod render;
 pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
 
-// Global shared FontContext (thread-safe via internal Arc<Mutex<>>)
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
-    let collection = Collection::new(CollectionOptions { shared: true, system_fonts: false });
-
-    let source_cache = SourceCache::new(SourceCacheOptions { shared: true });
-
-    let mut font_ctx = parley::FontContext { collection, source_cache };
+    let mut font_ctx = parley::FontContext {
+        collection: Collection::new(CollectionOptions { shared: true, system_fonts: false }),
+        source_cache: SourceCache::new(SourceCacheOptions { shared: true }),
+    };
 
     let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
     font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
@@ -48,19 +46,16 @@ pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     font_ctx
 });
 
-// Thread-local LayoutContext
 thread_local! {
     pub static THREAD_LAYOUT_CTX: RefCell<parley::LayoutContext<Color>> =
         RefCell::new(parley::LayoutContext::new());
 }
 
-// Public constants
-pub const FONT_STACK: &[parley::FontFamily<'_>] = &[
+const FONT_STACK: &[parley::FontFamily<'_>] = &[
     parley::FontFamily::Named(std::borrow::Cow::Borrowed("IBM Plex Mono")),
     parley::FontFamily::Named(std::borrow::Cow::Borrowed("Noto Color Emoji")),
 ];
 
-// FREE FUNCTIONS (no TextContext wrapper!)
 pub fn make_layout(
     text: &str,
     text_color: Color,

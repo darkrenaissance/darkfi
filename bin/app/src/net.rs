@@ -30,6 +30,8 @@ use crate::{
     ExecutorPtr,
 };
 
+const USE_IPV6: bool = true;
+
 #[derive(Debug, SerialDecodable)]
 #[repr(u8)]
 enum Command {
@@ -86,10 +88,18 @@ pub struct ZeroMQAdapter {
 impl ZeroMQAdapter {
     pub async fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
-        zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
+        if USE_IPV6 {
+            zmq_rep.bind("tcp://[::]:9484").await.unwrap();
+        } else {
+            zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
+        }
 
         let mut zmq_pub = zeromq::PubSocket::new();
-        zmq_pub.bind("tcp://0.0.0.0:9485").await.unwrap();
+        if USE_IPV6 {
+            zmq_pub.bind("tcp://[::]:9485").await.unwrap();
+        } else {
+            zmq_pub.bind("tcp://0.0.0.0:9485").await.unwrap();
+        }
 
         Arc::new(Self {
             sg_root,

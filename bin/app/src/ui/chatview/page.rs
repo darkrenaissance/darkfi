@@ -104,7 +104,7 @@ impl PrivMessage {
     }
 
     fn height(&self, line_height: f32) -> f32 {
-        self.txt_layout.as_ref().unwrap().len() as f32 * line_height
+        self.txt_layout.as_ref().unwrap().len() as f32 * line_height * self.window_scale
     }
 
     fn cache_txt_layout(
