@@ -52,6 +52,16 @@ android-debug: $(SRC) fonts assets/forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
+# Windows cross-compilation using Docker/Podman
+win-docker-release: $(SRC)
+	podman run -v $(shell pwd):/root/build -w /root/build/ -t windows \
+		cargo build --release --target x86_64-pc-windows-gnu $(RELEASE_FEATURES)
+	./release/win/package.sh release
+win-docker-debug: $(SRC)
+	podman run -v $(shell pwd):/root/build -w /root/build/ -t windows \
+		cargo build --target x86_64-pc-windows-gnu $(DEBUG_FEATURES)
+	./release/win/package.sh debug
+
 build-release: $(SRC) fonts assets/forest_1920x1080.ivf
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .

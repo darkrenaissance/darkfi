@@ -1,4 +1,42 @@
-# Windows Build Guide (MSVC)
+# Windows Build Guide
+
+## Automated Cross-Compilation (Recommended)
+
+The easiest way to build for Windows from Linux is using Docker/Podman with cross-compilation. This eliminates the need for a Windows VM.
+
+### Prerequisites
+
+- Podman (or Docker)
+- Make
+
+### Build Instructions
+
+```bash
+# Build the Windows cross-compilation container
+podman build -t windows -f Dockerfile.windows .
+
+# Build Windows release
+make win-docker-release
+
+# Output files:
+#   - darkfi-win64-release.zip (portable archive)
+#   - darkfi-win64-release-installer.exe (installer with shortcuts)
+```
+
+### Distribution
+
+- **ZIP archive**: Extract and run `darkfi-app.exe` - no installation required
+- **Installer**: Run `darkfi-win64-release-installer.exe` for proper installation with Start Menu/Desktop shortcuts
+
+### Debug Builds
+
+```bash
+make win-docker-debug
+```
+
+---
+
+## Manual VM Build (Legacy)
 
 Skip the first step if you're already using Windows.
 
