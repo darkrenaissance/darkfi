@@ -60,11 +60,11 @@ pub struct Args {
     /// Network settings
     pub net: SettingsOpt,
 
-    #[structopt(flatten)]
+    #[structopt(skip)]
     /// Main JSON-RPC settings
     pub rpc: RpcSettingsOpt,
 
-    #[structopt(flatten)]
+    #[structopt(skip)]
     /// Management JSON-RPC settings
     pub management_rpc: RpcSettingsOpt,
 
