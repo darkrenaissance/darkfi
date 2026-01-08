@@ -72,6 +72,11 @@ pub fn spawn_decoder_thread(
                 let pct_loaded = 100. * frame_idx as f32 / 150.0;
                 d!("Decoded video {pct_loaded:.2}%%");
             }
+
+            assert!(frame_idx <= 150);
+            if frame_idx == 150 {
+                break
+            }
         }
 
         d!("Finished decoding video: {path} in {:?}", now.elapsed());

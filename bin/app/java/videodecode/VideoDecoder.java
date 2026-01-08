@@ -57,6 +57,8 @@ public class VideoDecoder {
     private int decoderId;
     private int outputColorFormat = -1;
     private Context context;
+    private int stride = -1;
+    private int sliceHeight = -1;
 
     /** Conditional logging based on DEBUG flag */
     private void log(String fstr, Object... args) {
@@ -234,6 +236,14 @@ public class VideoDecoder {
                 outputColorFormat = newFormat.getInteger(MediaFormat.KEY_COLOR_FORMAT);
                 log("Format changed: colorFormat=%d", outputColorFormat);
             }
+            // Extract stride and slice-height for handling padded buffers
+            if (newFormat.containsKey(MediaFormat.KEY_STRIDE)) {
+                stride = newFormat.getInteger(MediaFormat.KEY_STRIDE);
+            }
+            if (newFormat.containsKey(MediaFormat.KEY_SLICE_HEIGHT)) {
+                sliceHeight = newFormat.getInteger(MediaFormat.KEY_SLICE_HEIGHT);
+            }
+            log("Format changed: stride=%d, slice-height=%d", stride, sliceHeight);
         }
         return 0;
     }
@@ -244,6 +254,8 @@ public class VideoDecoder {
      * Handles different color formats:
      * - Semi-planar (NV21): De-interleaves UV data
      * - Planar (YV12/I420): Reads U and V planes directly
+     *
+     * Handles stride padding when hardware decoder uses row alignment.
      *
      * @param outputBuffer Raw decoded frame data from MediaCodec
      * @param offset Offset to valid data in buffer
@@ -260,7 +272,24 @@ public class VideoDecoder {
         byte[] uData = new byte[uvSize];
         byte[] vData = new byte[uvSize];
 
-        outputBuffer.get(yData, 0, ySize);
+        // Read Y plane, accounting for stride if present
+        int yStride = (stride > 0) ? stride : width;
+        int yRows = (sliceHeight > 0) ? sliceHeight : height;
+
+        // Read Y plane row by row, skipping padding
+        for (int row = 0; row < height && row < yRows; row++) {
+            int destOffset = row * width;
+            outputBuffer.get(yData, destOffset, width);
+            if (row < yRows - 1) {
+                // Skip padding bytes to next row
+                int skip = yStride - width;
+                outputBuffer.position(outputBuffer.position() + skip);
+            }
+        }
+
+        // Seek to UV plane start: Y plane ends at yStride * yRows
+        int uvPlaneStart = yStride * yRows;
+        outputBuffer.position(offset + uvPlaneStart);
 
         if (outputColorFormat == COLOR_FORMATYUV420_PLANAR) {
             outputBuffer.get(uData, 0, uvSize);
@@ -269,7 +298,8 @@ public class VideoDecoder {
             if (outputColorFormat != COLOR_FORMATYUV420_SEMIPLANAR) {
                 Log.w("darkfi", String.format("Unknown color format %d, assuming semi-planar", outputColorFormat));
             }
-            deinterleaveUV(outputBuffer, uData, vData, uvSize);
+            // For semi-planar, UV plane may also have stride
+            deinterleaveUV(outputBuffer, uData, vData, uvSize, yStride);
         }
 
         onFrameDecoded(decoderId, yData, uData, vData, width, height);
@@ -279,17 +309,35 @@ public class VideoDecoder {
     /**
      * De-interleaves UV data from semi-planar YUV format (NV21).
      *
+     * Handles stride padding in the UV plane.
+     *
      * @param outputBuffer Buffer containing interleaved UVUV... data
      * @param uData Output array for U component
      * @param vData Output array for V component
      * @param uvSize Number of UV pairs to de-interleave
+     * @param yStride Luma stride (used to calculate chroma stride)
      */
-    private void deinterleaveUV(ByteBuffer outputBuffer, byte[] uData, byte[] vData, int uvSize) {
-        byte[] uvInterleaved = new byte[uvSize * 2];
-        outputBuffer.get(uvInterleaved);
-        for (int i = 0; i < uvSize; i++) {
-            uData[i] = uvInterleaved[i * 2];
-            vData[i] = uvInterleaved[i * 2 + 1];
+    private void deinterleaveUV(ByteBuffer outputBuffer, byte[] uData, byte[] vData, int uvSize, int yStride) {
+        int uvWidth = width / 2;
+        int uvHeight = height / 2;
+        int uvStride = (yStride > 0) ? (yStride + 1) / 2 : uvWidth;
+
+        // Read UV plane row by row, deinterleaving and skipping padding
+        int uvIdx = 0;
+        for (int row = 0; row < uvHeight; row++) {
+            // Read one row of UV pairs (interleaved)
+            for (int col = 0; col < uvWidth; col++) {
+                int uByte = outputBuffer.get() & 0xFF;
+                int vByte = outputBuffer.get() & 0xFF;
+                uData[uvIdx] = (byte) uByte;
+                vData[uvIdx] = (byte) vByte;
+                uvIdx++;
+            }
+            // Skip padding to next row
+            if (row < uvHeight - 1) {
+                int skip = (uvStride - uvWidth) * 2;
+                outputBuffer.position(outputBuffer.position() + skip);
+            }
         }
     }
 }

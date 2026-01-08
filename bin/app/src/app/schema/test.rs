@@ -21,14 +21,14 @@ use sled_overlay::sled;
 use super::chat::populate_tree;
 use crate::{
     app::{
-        node::{create_chatview, create_layer, create_text, create_vector_art},
+        node::{create_chatview, create_layer, create_text, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{ChatView, Layer, Text, VectorArt, VectorShape},
+    ui::{ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -43,7 +43,7 @@ mod ui_consts {
         get_appdata_path().join("chatdb")
     }
     //pub const KING_PATH: &str = "king.png";
-    //pub const VID_PATH: &str = "forest_720x1280.mp4";
+    pub const VID_PATH: &str = "forest_720x1280.mp4";
 }
 
 #[cfg(not(target_os = "android"))]
@@ -54,7 +54,7 @@ mod ui_consts {
         "chatdb".into()
     }
     //pub const KING_PATH: &str = "assets/king.png";
-    //pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
+    pub const VID_PATH: &str = "assets/forest_1920x1080.ivf";
 }
 
 use ui_consts::*;
@@ -238,7 +238,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     */
 
     // Create KING GNU!
-    /*
     let node = create_video("king");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 80.).unwrap();
@@ -249,8 +248,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.link(node);
-    */
 
+    /*
     // Create some text
     let node = create_text("label");
     let prop = node.get_property("rect").unwrap();
@@ -367,7 +366,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .await;
     layer_node.link(node);
 
-    /*
     // Text edit
     let node = create_singleline_edit("editz");
     //let node = create_multiline_edit("editz");
