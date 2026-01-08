@@ -29,18 +29,22 @@ use smol::{
     lock::{OnceCell, RwLock},
     Executor,
 };
-use tinyjson::JsonValue::{self};
 use tracing::{debug, error, info, warn};
 
 use crate::{
     event_graph::util::replayer_log,
     net::P2pPtr,
-    rpc::{
+    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    Error, Result,
+};
+
+#[cfg(feature = "rpc")]
+use {
+    crate::rpc::{
         jsonrpc::{JsonResponse, JsonResult},
         util::json_map,
     },
-    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
-    Error, Result,
+    tinyjson::JsonValue::{self},
 };
 
 /// An event graph event
@@ -803,6 +807,7 @@ impl EventGraph {
         self.deg_publisher.notify(event).await;
     }
 
+    #[cfg(feature = "rpc")]
     pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
         let mut graph = HashMap::new();
         for iter_elem in self.dag.iter() {

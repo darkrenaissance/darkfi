@@ -17,26 +17,32 @@
  */
 
 use std::{
-    collections::HashMap,
     fs::{self, File, OpenOptions},
     io::Write,
     path::Path,
     time::UNIX_EPOCH,
 };
 
-use darkfi_serial::{deserialize, deserialize_async, serialize};
-use sled_overlay::sled;
-use tinyjson::JsonValue;
-use tracing::error;
-
 use crate::{
     event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS},
-    rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
-        util::json_map,
-    },
-    util::{encoding::base64, file::load_file},
+    util::encoding::base64,
     Result,
+};
+
+#[cfg(feature = "rpc")]
+use {
+    crate::{
+        rpc::{
+            jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
+            util::json_map,
+        },
+        util::file::load_file,
+    },
+    darkfi_serial::{deserialize, deserialize_async, serialize},
+    sled_overlay::sled,
+    std::collections::HashMap,
+    tinyjson::JsonValue,
+    tracing::error,
 };
 
 /// MilliSeconds in a day
@@ -148,6 +154,7 @@ pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Res
     Ok(())
 }
 
+#[cfg(feature = "rpc")]
 pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
     let log_path = datastore.join("replayer.log");
     if !log_path.exists() {

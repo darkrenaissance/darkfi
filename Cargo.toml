@@ -188,7 +188,7 @@ event-graph = [
     "darkfi-serial/collections",
     "darkfi-serial/hash",
     
-    "rpc",
+    "net",
 ]
 
 p2p-nym = []
