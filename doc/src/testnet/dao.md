@@ -261,9 +261,11 @@ drk> dao balance AnonDAO
 
 Now that the DAO has something in its treasury, we can generate a
 transfer proposal to send it somewhere, that will be up to vote
-for 1 block period, if we hold the DAO proposer key. Let's propose
-to send 5 of the 10 tokens to our address (we can find that with
-`wallet address`):
+for 1 [block period][blockwindow](~4h), if we hold the DAO proposer
+key. Let's propose to send 5 of the 10 tokens to our address (we can
+find that with `wallet address`):
+
+[blockwindow]: ../spec/contract/dao/model.md#blockwindow
 
 ```shell
 drk> dao propose-transfer AnonDAO 1 5 DAWN {YOUR_ADDRESS}
