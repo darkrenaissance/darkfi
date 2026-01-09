@@ -621,6 +621,10 @@ impl<'a> RenderContext<'a> {
 
             for instr in overlay.instrs {
                 match instr {
+                    GfxDrawInstruction::Move(off) => {
+                        self.cursor += off;
+                        self.apply_model();
+                    }
                     GfxDrawInstruction::Draw(mesh) => {
                         if DEBUG_RENDER {
                             d!("    draw_overlay({mesh:?})");

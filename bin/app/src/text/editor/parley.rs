@@ -96,7 +96,7 @@ impl Editor {
         self.editor.try_layout().unwrap()
     }
 
-    pub fn move_to_pos(&self, _pos: Point) {
+    pub fn move_to_pos(&mut self, pos: Point) {
         unimplemented!()
     }
     pub fn select_word_at_point(&mut self, _pos: Point) {
