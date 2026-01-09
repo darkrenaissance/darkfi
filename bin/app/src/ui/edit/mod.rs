@@ -193,6 +193,7 @@ pub struct BaseEdit {
     select_dc_key: u64,
     text_dc_key: u64,
     cursor_dc_key: u64,
+    overlay_dc_key: u64,
     cursor_mesh: SyncMutex<Option<DrawMesh>>,
 
     is_active: PropertyBool,
@@ -342,6 +343,7 @@ impl BaseEdit {
             select_dc_key: OsRng.gen(),
             text_dc_key: OsRng.gen(),
             cursor_dc_key: OsRng.gen(),
+            overlay_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
 
             is_active,
@@ -1003,6 +1005,7 @@ impl BaseEdit {
                     self.text_dc_key,
                     self.phone_select_handle_dc_key,
                     self.cursor_dc_key,
+                    self.overlay_dc_key,
                     self.select_dc_key,
                 ],
                 0,
@@ -1161,7 +1164,7 @@ impl BaseEdit {
                     self.root_dc_key,
                     DrawCall::new(
                         vec![DrawInstruction::Move(rect.pos())],
-                        vec![self.content_dc_key],
+                        vec![self.content_dc_key, self.overlay_dc_key],
                         self.z_index.get(),
                         "chatedit_root",
                     ),
@@ -1187,6 +1190,7 @@ impl BaseEdit {
                     self.phone_select_handle_dc_key,
                     DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),
                 ),
+                (self.overlay_dc_key, DrawCall::new(vec![], vec![], 0, "chatedit_overlay")),
             ],
         }
     }

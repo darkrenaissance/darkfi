@@ -477,6 +477,7 @@ pub enum DrawInstruction {
     Animation(ManagedSeqAnimPtr),
     EnableDebug,
     SetPipeline(GraphicPipeline),
+    Overlay(Vec<DrawInstruction>),
 }
 
 impl DrawInstruction {
@@ -497,6 +498,11 @@ impl DrawInstruction {
             Self::Animation(anim) => GfxDrawInstruction::Animation(anim),
             Self::EnableDebug => GfxDrawInstruction::EnableDebug,
             Self::SetPipeline(pipeline) => GfxDrawInstruction::SetPipeline(pipeline),
+            Self::Overlay(instrs) => {
+                let compiled =
+                    instrs.into_iter().map(|i| i.compile(textures, buffers, debug_str)).collect();
+                GfxDrawInstruction::Overlay(compiled)
+            }
         }
     }
 }
@@ -558,6 +564,7 @@ enum GfxDrawInstruction {
     Animation(ManagedSeqAnimPtr),
     EnableDebug,
     SetPipeline(GraphicPipeline),
+    Overlay(Vec<GfxDrawInstruction>),
 }
 
 #[derive(Clone, Debug)]
@@ -566,6 +573,11 @@ struct GfxDrawCall {
     dcs: Vec<DcId>,
     z_index: u32,
     timest: Timestamp,
+}
+
+struct OverlayDefer {
+    pos: Point,
+    instrs: Vec<GfxDrawInstruction>,
 }
 
 struct RenderContext<'a> {
@@ -581,6 +593,7 @@ struct RenderContext<'a> {
     gfx_pipeline: GraphicPipeline,
 
     anims: &'a mut HashMap<AnimId, GfxSeqAnim>,
+    overlays: Vec<OverlayDefer>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -595,6 +608,38 @@ impl<'a> RenderContext<'a> {
         self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
             d!("RenderContext::draw() [DONE]");
+        }
+        // View should be reset now so draw overlays
+        self.draw_overlays();
+    }
+
+    fn draw_overlays(&mut self) {
+        let overlays = std::mem::take(&mut self.overlays);
+        for overlay in overlays {
+            self.cursor = overlay.pos;
+            self.apply_model();
+
+            for instr in overlay.instrs {
+                match instr {
+                    GfxDrawInstruction::Draw(mesh) => {
+                        if DEBUG_RENDER {
+                            d!("    draw_overlay({mesh:?})");
+                        }
+                        let images = match &mesh.textures {
+                            Some(texs) => texs.iter().map(|(_, tex_id)| *tex_id).collect(),
+                            None => vec![self.white_texture],
+                        };
+                        let bindings = Bindings {
+                            vertex_buffers: vec![mesh.vertex_buffer],
+                            index_buffer: mesh.index_buffer,
+                            images,
+                        };
+                        self.ctx.apply_bindings(&bindings);
+                        self.ctx.draw(0, mesh.num_elements, 1);
+                    }
+                    _ => unimplemented!(),
+                }
+            }
         }
     }
 
@@ -738,6 +783,10 @@ impl<'a> RenderContext<'a> {
                     if is_debug {
                         d!("{ws}set_pipeline({pipeline:?})");
                     }
+                }
+                GfxDrawInstruction::Overlay(instrs) => {
+                    let pos = self.view.pos() + self.cursor;
+                    self.overlays.push(OverlayDefer { pos, instrs: instrs.clone() });
                 }
             }
         }
@@ -1771,6 +1820,7 @@ impl EventHandler for Stage {
             cursor: Point::from([0., 0.]),
             gfx_pipeline: GraphicPipeline::RGB,
             anims: &mut self.anims,
+            overlays: vec![],
         };
         render_ctx.draw();
 
