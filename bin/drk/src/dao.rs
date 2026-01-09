@@ -2922,6 +2922,13 @@ impl Drk {
         let block_target = self.get_block_target().await?;
         let current_blockwindow = blockwindow(next_block_height, block_target);
 
+        // Check if proposal has expired
+        if current_blockwindow >=
+            proposal.proposal.creation_blockwindow + proposal.proposal.duration_blockwindows
+        {
+            return Err(Error::Custom("[dao_vote] Proposal has expired".to_string()))
+        }
+
         // Generate the Money nullifiers Sparse Merkle Tree
         let store = MemoryStorageFp { tree: proposal.nullifiers_smt_snapshot.unwrap() };
         let money_null_smt = SmtMemoryFp::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
@@ -3196,6 +3203,17 @@ impl Drk {
         let block_target = self.get_block_target().await?;
         let current_blockwindow = blockwindow(next_block_height, block_target);
 
+        // Check if proposal duration has passed
+        if !early &&
+            current_blockwindow <
+                proposal.proposal.creation_blockwindow +
+                    proposal.proposal.duration_blockwindows
+        {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] Proposal period has not passed yet".to_string(),
+            ))
+        }
+
         // Now we can create the transfer call parameters
         let input_user_data_blind = Blind::random(&mut OsRng);
         let mut inputs = vec![];
@@ -3454,6 +3472,17 @@ impl Drk {
         let next_block_height = self.get_next_block_height().await?;
         let block_target = self.get_block_target().await?;
         let current_blockwindow = blockwindow(next_block_height, block_target);
+
+        // Check if proposal duration has passed
+        if !early &&
+            current_blockwindow <
+                proposal.proposal.creation_blockwindow +
+                    proposal.proposal.duration_blockwindows
+        {
+            return Err(Error::Custom(
+                "[dao_exec_generic] Proposal period has not passed yet".to_string(),
+            ))
+        }
 
         // Create the exec call
         let exec_signature_secret = SecretKey::random(&mut OsRng);
