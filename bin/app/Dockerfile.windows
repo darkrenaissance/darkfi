@@ -1,0 +1,22 @@
+FROM archlinux
+
+RUN pacman -Syu --noconfirm
+RUN pacman -S --noconfirm base-devel mingw-w64-gcc mingw-w64-cmake \
+    pkgconf git zip unzip nsis
+
+# Install Rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl -o rustup.sh --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
+RUN chmod +x rustup.sh && ./rustup.sh -y
+RUN rustup target add x86_64-pc-windows-gnu
+
+# Download and cache fonts
+RUN mkdir -p /root/build
+WORKDIR /root/build
+RUN wget -c https://dark.fi/assets/ibm-plex-mono-regular.otf
+RUN wget -c https://dark.fi/assets/NotoColorEmoji.ttf
+
+WORKDIR /root/build/
