@@ -3051,15 +3051,25 @@ impl Drk {
             all_vote_blind += vote.all_vote_blind;
         }
         let approval_ratio = (yes_vote_value as f64 * 100.0) / all_vote_value as f64;
-        if all_vote_value < dao.params.dao.quorum ||
-            approval_ratio <
-                (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base)
-                    as f64
-        {
+        let dao_approval_ratio =
+            (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base) as f64;
+        if approval_ratio < dao_approval_ratio {
             return Err(Error::Custom(
                 "[dao_exec_transfer] Proposal is not approved yet".to_string(),
             ))
-        };
+        }
+
+        // Check the quorum has been met
+        if all_vote_value < dao.params.dao.quorum {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] DAO quorum is not reached yet".to_string(),
+            ))
+        }
+        if early && all_vote_value < dao.params.dao.early_exec_quorum {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] DAO early execution quorum is not reached yet".to_string(),
+            ))
+        }
 
         // Fetch DAO unspent OwnCoins to see what its balance is for the coin
         let dao_spend_hook =
@@ -3387,13 +3397,23 @@ impl Drk {
             all_vote_blind += vote.all_vote_blind;
         }
         let approval_ratio = (yes_vote_value as f64 * 100.0) / all_vote_value as f64;
-        if all_vote_value < dao.params.dao.quorum ||
-            approval_ratio <
-                (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base)
-                    as f64
-        {
+        let dao_approval_ratio =
+            (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base) as f64;
+        if approval_ratio < dao_approval_ratio {
             return Err(Error::Custom("[dao_exec_generic] Proposal is not approved yet".to_string()))
-        };
+        }
+
+        // Check the quorum has been met
+        if all_vote_value < dao.params.dao.quorum {
+            return Err(Error::Custom(
+                "[dao_exec_generic] DAO quorum is not reached yet".to_string(),
+            ))
+        }
+        if early && all_vote_value < dao.params.dao.early_exec_quorum {
+            return Err(Error::Custom(
+                "[dao_exec_generic] DAO early execution quorum is not reached yet".to_string(),
+            ))
+        }
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
