@@ -66,8 +66,8 @@ pub(super) async fn http_read_from_stream_request(
     // Here we parse the HTTP for correctness and find Content-Length
     let mut headers = [httparse::EMPTY_HEADER; 8];
     let mut req = httparse::Request::new(&mut headers);
-    let _body_offset = match req.parse(buf) {
-        Ok(httparse::Status::Complete(body_offset)) => body_offset,
+    match req.parse(buf) {
+        Ok(httparse::Status::Complete(_)) => { /* Do nothing */ }
         Ok(httparse::Status::Partial) => {
             error!("[RPC] Failed parsing HTTP request: partial headers");
             return Err(io::ErrorKind::InvalidData.into())
@@ -76,7 +76,7 @@ pub(super) async fn http_read_from_stream_request(
             error!("[RPC] Failed parsing HTTP request: {e}");
             return Err(io::ErrorKind::InvalidData.into())
         }
-    };
+    }
 
     let mut content_length: usize = 0;
     for header in headers {
@@ -140,8 +140,8 @@ pub(super) async fn http_read_from_stream_response(
     // Here we parse the HTTP for correctness and find Content-Length
     let mut headers = [httparse::EMPTY_HEADER; 8];
     let mut resp = httparse::Response::new(&mut headers);
-    let _body_offset = match resp.parse(buf) {
-        Ok(httparse::Status::Complete(body_offset)) => body_offset,
+    match resp.parse(buf) {
+        Ok(httparse::Status::Complete(_)) => { /* Do nothing */ }
         Ok(httparse::Status::Partial) => {
             error!("[RPC] Failed parsing HTTP response: partial headers");
             return Err(io::ErrorKind::InvalidData.into())
@@ -150,7 +150,7 @@ pub(super) async fn http_read_from_stream_response(
             error!("[RPC] Failed parsing HTTP response: {e}");
             return Err(io::ErrorKind::InvalidData.into())
         }
-    };
+    }
 
     let mut content_length: usize = 0;
     for header in headers {
