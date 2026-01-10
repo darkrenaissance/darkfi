@@ -35,7 +35,7 @@ use darkfi::{
 use darkfi_sdk::pasta::{pallas, Fp};
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -46,7 +46,7 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
-    Msg, NickServ, OldPrivmsg, SERVER_NAME,
+    NickServ, Privmsg, SERVER_NAME,
 };
 use crate::crypto::rln::{closest_epoch, RlnIdentity, RLN2_SIGNAL_ZKBIN};
 
@@ -213,7 +213,7 @@ impl Client {
 
                                     // If we have a RLN identity, now we'll build a ZK proof.
                                     // Also I really want GOTO in Rust... Fags.
-                                    if let Some(mut rln_identity) = *self.server.rln_identity.write().await {
+                                    if let Some(ref mut rln_identity) = *self.server.rln_identity.write().await {
                                         // If the current epoch is different, we can reset the message counter
                                         if rln_identity.last_epoch != closest_epoch(event.header.timestamp) {
                                             rln_identity.last_epoch = closest_epoch(event.header.timestamp);
@@ -265,7 +265,6 @@ impl Client {
                 // <file:./command.rs::async fn get_history(&self, channels: &HashSet<String>) -> Result<Vec<ReplyType>> {>
                 // for which the logic for delivery should be kept in sync
                 r = self.incoming.receive().fuse() => {
-                    info!("incoming: {:?}", r);
                     // We will skip this if it's our own message.
                     let event_id = r.header.id();
                     if *self.last_sent.read().await == event_id {
@@ -283,11 +282,10 @@ impl Client {
                     }
 
                     // Try to deserialize the `Event`'s content into a `Privmsg`
-                    let mut privmsg = match Msg::deserialize(r.content()).await {
-                        Ok(Msg::V1(old_msg)) => old_msg.into_new(),
-                        Ok(Msg::V2(new_msg)) => new_msg,
+                    let mut privmsg = match deserialize_async_partial(r.content()).await {
+                        Ok((v, _)) => v,
                         Err(e) => {
-                            error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
+                            error!(target: "irc::client", "[IRC CLIENT] Failed deserializing event: {}", e);
                             continue
                         }
                     };
@@ -369,7 +367,7 @@ impl Client {
                     {
                         Ok((v, _)) => v,
                         Err(e) => {
-                            error!(target: "irc::server", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
+                            error!(target: "irc::client", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
                             continue
                         }
                     };
@@ -542,10 +540,12 @@ impl Client {
         // TODO: This is kept as old version of privmsg, since now we
         // can deserialize both old and new versions, after some time
         // this will be replaced with Privmsg (new version)
-        let mut privmsg = OldPrivmsg {
+        let mut privmsg = Privmsg {
+            version: 0,
             channel,
             nick: self.nickname.read().await.to_string(),
             msg: msg.to_string(),
+            msg_type: 0,
         };
 
         // Encrypt the Privmsg if an encryption method is available.
