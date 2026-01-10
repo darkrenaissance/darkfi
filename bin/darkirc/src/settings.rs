@@ -238,7 +238,7 @@ pub fn parse_rln_identity(data: &toml::Value) -> Result<Option<RlnIdentity>> {
         user_message_limit,
         // TODO: FIXME: We should probably keep track of these rather than
         // resetting here
-        message_id: 1,
+        message_id: 0,
         last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
     }))
 }

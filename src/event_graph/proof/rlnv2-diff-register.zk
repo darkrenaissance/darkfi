@@ -1,0 +1,22 @@
+k = 11;
+field = "pallas";
+
+constant "Rlnv2Diff_Register" {}
+
+witness "Rlnv2Diff_Register" {
+	Base identity_nullifier,
+	Base identity_trapdoor,
+	Base user_message_limit,
+	Base message_limit,
+}
+
+circuit "Rlnv2Diff_Register" {
+	identity_secret = poseidon_hash(identity_nullifier, identity_trapdoor);
+	identity_secret_hash = poseidon_hash(identity_secret, user_message_limit);
+	identity_commitment = poseidon_hash(identity_secret_hash);
+
+	less_than_strict(user_message_limit, message_limit);
+
+	constrain_instance(identity_commitment);
+	constrain_instance(user_message_limit);
+}

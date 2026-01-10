@@ -16,16 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
+use std::{io::Cursor, str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
 
-use darkfi::{event_graph::Event, Result};
+use darkfi::{
+    event_graph::Event,
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zkas::ZkBinary,
+    Error, Result,
+};
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::serialize_async;
 use smol::lock::RwLock;
 
 use super::super::{client::ReplyType, rpl::*};
 use crate::{
-    crypto::rln::{closest_epoch, RlnIdentity, USER_MSG_LIMIT},
+    crypto::rln::{closest_epoch, RlnIdentity, RLN2_REGISTER_ZKBIN},
     IrcServer,
 };
 
@@ -139,7 +144,8 @@ impl NickServ {
         let account_name = account_name.unwrap();
         let identity_nullifier = identity_nullifier.unwrap();
         let identity_trapdoor = identity_trapdoor.unwrap();
-        let _user_msg_limit = user_msg_limit.unwrap();
+        let user_msg_limit: u64 =
+            user_msg_limit.unwrap().parse().expect("msg limit must be a number");
 
         // Open the sled tree
         let db =
@@ -188,9 +194,9 @@ impl NickServ {
         let new_rln_identity = RlnIdentity {
             nullifier: identity_nullifier,
             trapdoor: identity_trapdoor,
-            user_message_limit: USER_MSG_LIMIT,
-            message_id: 1, // TODO
-            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
+            user_message_limit: user_msg_limit,
+            message_id: 0, // TODO
+            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_millis() as u64),
         };
 
         // Store account
@@ -204,17 +210,30 @@ impl NickServ {
         *self.server.rln_identity.write().await = Some(new_rln_identity);
 
         // Update SMT, DAG and broadcast
-        let mut identities_tree = self.server.rln_identity_tree.write().await;
         let rln_commitment = new_rln_identity.commitment();
-
-        let commitment = vec![rln_commitment];
-        let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
-        identities_tree.insert_batch(commitment)?;
-
         let evgr = &self.server.darkirc.event_graph;
         let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
+
+        let mut identity_tree = self.server.rln_identity_tree.write().await;
+
+        // Retrieve the register ZK proving key from the db
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let register_circuit = ZkCircuit::new(empty_witnesses(&register_zkbin)?, &register_zkbin);
+        let Some(proving_key) = self.server.server_store.get("rlnv2-diff-register-pk")? else {
+            return Err(Error::DatabaseError(
+                "RLN register proving key not found in server store".to_string(),
+            ))
+        };
+        let mut reader = Cursor::new(proving_key);
+        let proving_key = ProvingKey::read(&mut reader, register_circuit)?;
+
+        let proof =
+            new_rln_identity.create_register_proof(&event, &mut identity_tree, &proving_key)?;
+
+        let blob = serialize_async(&(proof, user_msg_limit)).await;
+
         evgr.static_insert(&event).await?;
-        evgr.static_broadcast(event).await?;
+        evgr.static_broadcast(event, blob).await?;
 
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),

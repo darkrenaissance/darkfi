@@ -101,6 +101,10 @@ pub const NULL_PARENTS: [Hash; N_EVENT_PARENTS] = [NULL_ID; N_EVENT_PARENTS];
 /// Maximum number of DAGs to store, this should be configurable
 pub const DAGS_MAX_NUMBER: i8 = 24;
 
+pub const RLN2_REGISTER_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-register.zk.bin");
+pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-signal.zk.bin");
+pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-slash.zk.bin");
+
 /// Atomic pointer to an [`EventGraph`] instance.
 pub type EventGraphPtr = Arc<EventGraph>;
 pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
@@ -369,8 +373,12 @@ pub struct EventGraph {
     deg_publisher: PublisherPtr<DegEvent>,
     /// Run in fast mode where if set we sync only headers.
     fast_mode: bool,
+    /// Registering verify key
+    register_vk: VerifyingKey,
     /// Signaling verify key
     signal_vk: VerifyingKey,
+    /// Slashing verify key
+    slash_vk: VerifyingKey,
 }
 
 impl EventGraph {
@@ -396,8 +404,27 @@ impl EventGraph {
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
         // Read or build signal verifying key
-        let signal_zkbin = include_bytes!("proofs/rlnv2-diff-signal.zk.bin");
-        let signal_zkbin = ZkBinary::decode(signal_zkbin, false).unwrap();
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
+        let register_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
+
+        let register_vk = match sled_db.get("rlnv2-diff-register-vk")? {
+            Some(vk) => {
+                let mut reader = Cursor::new(vk);
+                VerifyingKey::read(&mut reader, register_empty_circuit)?
+            }
+            None => {
+                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
+                let verifyingkey = VerifyingKey::build(register_zkbin.k, &register_empty_circuit);
+                let mut buf = vec![];
+                verifyingkey.write(&mut buf)?;
+                sled_db.insert("rlnv2-diff-register-vk", buf)?;
+                verifyingkey
+            }
+        };
+
+        // Read or build signal verifying key
+        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
         let signal_empty_circuit =
             ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
 
@@ -412,6 +439,26 @@ impl EventGraph {
                 let mut buf = vec![];
                 verifyingkey.write(&mut buf)?;
                 sled_db.insert("rlnv2-diff-signal-vk", buf)?;
+                verifyingkey
+            }
+        };
+
+        // Read or build slash verifying key
+        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
+        let slash_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
+
+        let slash_vk = match sled_db.get("rlnv2-diff-slash-vk")? {
+            Some(vk) => {
+                let mut reader = Cursor::new(vk);
+                VerifyingKey::read(&mut reader, slash_empty_circuit)?
+            }
+            None => {
+                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
+                let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
+                let mut buf = vec![];
+                verifyingkey.write(&mut buf)?;
+                sled_db.insert("rlnv2-diff-slash-vk", buf)?;
                 verifyingkey
             }
         };
@@ -449,7 +496,9 @@ impl EventGraph {
             synced: RwLock::new(false),
             deg_enabled: RwLock::new(false),
             deg_publisher: Publisher::new(),
+            register_vk,
             signal_vk,
+            slash_vk,
         });
 
         // Check if we have it in our DAG.
@@ -1285,8 +1334,8 @@ impl EventGraph {
         Ok(())
     }
 
-    pub async fn static_broadcast(&self, event: Event) -> Result<()> {
-        self.p2p.broadcast(&StaticPut(event)).await;
+    pub async fn static_broadcast(&self, event: Event, blob: Vec<u8>) -> Result<()> {
+        self.p2p.broadcast(&StaticPut(event, blob)).await;
         Ok(())
     }
 

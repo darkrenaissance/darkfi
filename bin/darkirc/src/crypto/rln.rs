@@ -43,13 +43,15 @@ pub const RLN_GENESIS: u64 = 1_738_688_400_000;
 /// RLN epoch length in millis
 pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
 
+pub const RLN2_REGISTER_ZKBIN: &[u8] =
+    include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-register.zk.bin");
 pub const RLN2_SIGNAL_ZKBIN: &[u8] =
-    include_bytes!("../../../../src/event_graph/proofs/rlnv2-diff-signal.zk.bin");
+    include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-signal.zk.bin");
 pub const RLN2_SLASH_ZKBIN: &[u8] =
-    include_bytes!("../../../../src/event_graph/proofs/rlnv2-diff-slash.zk.bin");
+    include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-slash.zk.bin");
 
 /// TODO: this should be configurable
-pub const USER_MSG_LIMIT: u64 = 6;
+pub const MAX_MSG_LIMIT: u64 = 20;
 
 /// Find closest epoch to given timestamp
 pub fn closest_epoch(timestamp: u64) -> u64 {
@@ -85,8 +87,8 @@ impl RlnIdentity {
                 pallas::Base::random(&mut rng),
             ]),
             trapdoor: poseidon_hash([RLN_TRAPDOOR_DERIVATION_PATH, pallas::Base::random(&mut rng)]),
-            user_message_limit: USER_MSG_LIMIT,
-            message_id: 1,
+            user_message_limit: MAX_MSG_LIMIT,
+            message_id: 0,
             last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_millis() as u64),
         }
     }
@@ -96,6 +98,36 @@ impl RlnIdentity {
         let identity_secret_hash = poseidon_hash([identity_secret, self.user_message_limit.into()]);
 
         poseidon_hash([identity_secret_hash])
+    }
+
+    pub fn create_register_proof(
+        &self,
+        event: &Event,
+        identities_tree: &mut SmtMemoryFp,
+        register_pk: &ProvingKey,
+    ) -> Result<Proof> {
+        let witnesses = vec![
+            Witness::Base(Value::known(self.nullifier)),
+            Witness::Base(Value::known(self.trapdoor)),
+            Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+            Witness::Base(Value::known(pallas::Base::from(MAX_MSG_LIMIT))),
+        ];
+
+        let commitment = self.commitment();
+        let public_inputs = vec![commitment, pallas::Base::from(self.user_message_limit)];
+
+        info!(target: "crypto::rln::create_register_proof", "[RLN] Creating register proof for account {}", event.header.id());
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
+
+        let proof =
+            Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng).unwrap();
+
+        let leaf = vec![commitment];
+        let leaf: Vec<_> = leaf.into_iter().map(|l| (l, l)).collect();
+        // TODO: Recipients should verify that identity doesn't exist already before insert.
+        identities_tree.insert_batch(leaf.clone()).unwrap(); // leaf == pos
+        Ok(proof)
     }
 
     pub fn create_signal_proof(
@@ -117,10 +149,11 @@ impl RlnIdentity {
         let internal_nullifier = poseidon_hash([a_1]);
 
         // 2. Inclusion proof
+        let commitment = self.commitment();
         let identity_root = identity_tree.root();
-        let identity_path = identity_tree.prove_membership(&self.commitment());
+        let identity_path = identity_tree.prove_membership(&commitment);
         // TODO: Delete me later
-        assert!(identity_path.verify(&identity_root, &self.commitment(), &self.commitment()));
+        assert!(identity_path.verify(&identity_root, &commitment, &commitment));
 
         // 3. Create ZK proof
         let witnesses = vec![

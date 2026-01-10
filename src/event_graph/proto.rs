@@ -26,7 +26,10 @@ use std::{
     },
 };
 
-use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{poseidon_hash, util::FieldElemAsStr},
+    pasta::{pallas, Fp},
+};
 use darkfi_serial::{
     async_trait, deserialize_async, deserialize_async_partial, SerialDecodable, SerialEncodable,
 };
@@ -146,7 +149,7 @@ impl_p2p_message!(EventPut, "EventGraph::EventPut", 0, 0, DEFAULT_METERING_CONFI
 /// A P2P message representing publishing an event of a static graph
 /// (most likely RLN_identities) on the network
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct StaticPut(pub Event);
+pub struct StaticPut(pub Event, pub Vec<u8>);
 impl_p2p_message!(StaticPut, "EventGraph::StaticPut", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// A P2P message representing an event request
@@ -299,6 +302,9 @@ impl ProtocolEventGraph {
             let mut verification_failed = false;
             #[allow(clippy::never_loop)]
             loop {
+                if blob.is_empty() {
+                    break
+                }
                 let (proof, y, internal_nullifier, identity_root): (
                     Proof,
                     pallas::Base,
@@ -325,15 +331,15 @@ impl ProtocolEventGraph {
                 let public_inputs =
                     vec![identity_root, external_nullifier, x, y, internal_nullifier];
 
-                metadata.add_share(external_nullifier, internal_nullifier, x, y)?;
-
                 if metadata.is_duplicate(&external_nullifier, &internal_nullifier, &x, &y) {
-                    error!("[Signal] Duplicate Message!");
+                    error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Duplicate Message!");
                     verification_failed = true;
                     break
                 }
 
+                info!("internal nullifier: {}", internal_nullifier.to_string());
                 if metadata.is_reused(&external_nullifier, &internal_nullifier) {
+                    info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Metadata is reused.. slashing..");
                     let shares = metadata.get_shares(&external_nullifier, &internal_nullifier);
                     let _secret = sss_recover(&shares);
 
@@ -346,6 +352,9 @@ impl ProtocolEventGraph {
                     break
                 }
 
+                // At this point we can safely add the shares
+                metadata.add_share(external_nullifier, internal_nullifier, x, y)?;
+
                 info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Verifying incoming Event RLN proof");
                 verification_failed =
                     proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
@@ -354,7 +363,7 @@ impl ProtocolEventGraph {
             }
 
             if verification_failed {
-                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event RLN proof verification failed");
+                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event RLN Signaling proof verification failed");
                 continue
             }
 
@@ -611,21 +620,19 @@ impl ProtocolEventGraph {
         let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
 
         loop {
-            let event = match self.st_put_sub.receive().await {
-                Ok(v) => v.0.clone(),
+            let (event, blob) = match self.st_put_sub.receive().await {
+                Ok(v) => (v.0.clone(), v.1.clone()),
                 Err(_) => continue,
             };
             trace!(
-                 target: "event_graph::protocol::handle_event_put()",
-                 "Got EventPut: {} [{}]", event.id(), self.channel.address(),
+                 target: "event_graph::protocol::handle_static_put()",
+                 "Got StaticPut: {} [{}]", event.id(), self.channel.address(),
             );
-
-            info!("Received a static event: {:?}", event);
 
             // Check if node has finished syncing its DAG
             if !*self.event_graph.synced.read().await {
                 debug!(
-                    target: "event_graph::protocol::handle_event_put",
+                    target: "event_graph::protocol::handle_static_put",
                     "DAG is still syncing, skipping..."
                 );
                 continue
@@ -640,6 +647,30 @@ impl ProtocolEventGraph {
                 continue
             }
 
+            if !blob.is_empty() {
+                let (proof, user_msg_limit): (Proof, u64) = match deserialize_async_partial(&blob)
+                    .await
+                {
+                    Ok((v, _)) => v,
+                    Err(e) => {
+                        error!(target: "event_graph::protocol::handle_static_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
+                        continue
+                    }
+                };
+                let commitment: Fp = match deserialize_async_partial(&event.content()).await {
+                    Ok((v, _)) => v,
+                    Err(e) => {
+                        error!(target: "event_graph::protocol::handle_static_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
+                        continue
+                    }
+                };
+                let public_inputs = vec![commitment, user_msg_limit.into()];
+
+                if proof.verify(&self.event_graph.register_vk, &public_inputs).is_err() {
+                    error!(target: "event_graph::protocol::handle_static_put()", "[EVENTGRAPH] Incoming Event RLN Registration proof verification failed");
+                    continue
+                }
+            }
             // Check if event's parents are in the static DAG
             for parent in event.header.parents.iter() {
                 if *parent == NULL_ID {
@@ -679,7 +710,7 @@ impl ProtocolEventGraph {
             );
 
             self.event_graph.static_insert(&event).await?;
-            self.event_graph.static_broadcast(event).await?
+            self.event_graph.static_broadcast(event, blob).await?
         }
     }
 
