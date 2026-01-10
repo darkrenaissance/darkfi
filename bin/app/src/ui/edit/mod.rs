@@ -661,6 +661,36 @@ impl BaseEdit {
     fn handle_touch_start(&self, touch_pos: Point) -> bool {
         t!("handle_touch_start({touch_pos:?})");
 
+        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
+        if let Some(action_id) = self.action_mode.interact(touch_pos) {
+            match action_id {
+                ACTION_COPY => {
+                    if let Some(txt) = self.editor.lock().selected_text() {
+                        miniquad::window::clipboard_set(&txt);
+                    }
+                }
+                ACTION_PASTE => {
+                    if let Some(txt) = miniquad::window::clipboard_get() {
+                        self.editor.lock().insert(&txt, atom);
+                        self.behave.apply_cursor_scroll();
+                    }
+                }
+                ACTION_SELALL => {
+                    self.editor.lock().driver().select_all();
+                    if let Some(seltext) = self.editor.lock().selected_text() {
+                        self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+                    }
+                }
+                _ => {}
+            }
+
+            self.eval_rect();
+            self.redraw(atom);
+            return true;
+        } else {
+            self.action_mode.redraw(atom.batch_id);
+        }
+
         let rect = self.rect.get();
         if !rect.contains(touch_pos) {
             t!("rect!cont rect={rect:?}, touch_pos={touch_pos:?}");
@@ -759,27 +789,39 @@ impl BaseEdit {
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
+                let cursor_pos = self.get_cursor_pos();
+                let mut menu = action::Menu::new(
+                    cursor_pos,
+                    self.font_size.get(),
+                    self.action_fg_color.get(),
+                    self.action_bg_color.get(),
+                    self.action_padding.get(),
+                    self.action_spacing.get(),
+                    self.window_scale.get(),
+                );
+
                 let atom = &mut self
                     .render_api
                     .make_guard(gfxtag!("BaseEdit::TouchStateAction::StartSelect"));
 
                 if self.text.get().is_empty() {
-                    self.node().trigger("paste_request", vec![]).await.unwrap();
-                    /*
-                    self.draw_pasta_overlay(atom.batch_id);
+                    menu.add("Paste", ACTION_PASTE);
 
-                    d!("touch state: StartSelect -> Pasta");
                     self.touch_info.lock().state = TouchStateAction::Inactive;
-                    */
                 } else {
-                    self.abs_to_local(&mut touch_pos);
+                    menu.add("Copy", ACTION_COPY);
+                    menu.add("Paste", ACTION_PASTE);
+                    menu.add("Select All", ACTION_SELALL);
 
+                    self.abs_to_local(&mut touch_pos);
                     self.start_touch_select(touch_pos, atom);
                     self.redraw_select(atom.batch_id);
 
                     d!("touch state: StartSelect -> Select");
                     self.touch_info.lock().state = TouchStateAction::Select;
                 }
+                self.action_mode.set(menu);
+                self.action_mode.redraw(atom.batch_id);
             }
             TouchStateAction::DragSelectHandle { side } => {
                 let rect = self.rect.get();
