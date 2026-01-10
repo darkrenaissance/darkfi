@@ -48,8 +48,13 @@ use crate::{
     ExecutorPtr,
 };
 
+const ACTION_COPY: u32 = 0;
+const ACTION_PASTE: u32 = 1;
+const ACTION_SELALL: u32 = 2;
+
 use super::{DrawUpdate, OnModify, UIObject};
 
+mod action;
 mod filter;
 use filter::{ALLOWED_KEYCODES, DISALLOWED_CHARS};
 mod behave;
@@ -81,7 +86,6 @@ enum TouchStateAction {
     Started { pos: Point, instant: std::time::Instant },
     StartSelect,
     Select,
-    Pasta,
     DragSelectHandle { side: isize },
     ScrollVert { start_pos: Point, scroll_start: f32 },
     SetCursorPos,
@@ -138,46 +142,6 @@ impl TouchInfo {
     }
 }
 
-/*
-impl std::fmt::Debug for Editor {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut changes = vec![];
-        let sel = self.editor.raw_selection();
-        if sel.is_collapsed() {
-            let cursor = sel.focus().index();
-            changes.push((cursor, '|'));
-        } else {
-            let sel = sel.text_range();
-            changes.push((sel.start, '{'));
-            changes.push((sel.end, '}'));
-        }
-
-        if let Some(compose) = self.editor.compose() {
-            changes.push((compose.start, '['));
-            changes.push((compose.end, ']'));
-        }
-
-        changes.sort_by(|a, b| b.0.cmp(&a.0));
-
-        write!(f, "'")?;
-        let mut buffer = self.editor.raw_text();
-        for (byte_idx, c) in buffer.char_indices() {
-            while let Some((idx, d)) = changes.last() {
-                if *idx > byte_idx {
-                    break
-                }
-
-                write!(f, "{}", d)?;
-                let _ = changes.pop();
-            }
-
-            write!(f, "{}", c)?;
-        }
-        write!(f, "'")
-    }
-}
-*/
-
 pub type BaseEditPtr = Arc<BaseEdit>;
 
 pub struct BaseEdit {
@@ -194,7 +158,6 @@ pub struct BaseEdit {
     select_dc_key: u64,
     text_dc_key: u64,
     cursor_dc_key: u64,
-    overlay_dc_key: u64,
     cursor_mesh: SyncMutex<Option<DrawMesh>>,
 
     is_active: PropertyBool,
@@ -225,6 +188,11 @@ pub struct BaseEdit {
     priority: PropertyUint32,
     debug: PropertyBool,
 
+    action_fg_color: PropertyColor,
+    action_bg_color: PropertyColor,
+    action_padding: PropertyFloat32,
+    action_spacing: PropertyFloat32,
+
     mouse_btn_held: AtomicBool,
     cursor_is_visible: AtomicBool,
     blink_is_paused: AtomicBool,
@@ -238,7 +206,9 @@ pub struct BaseEdit {
     is_phone_select: AtomicBool,
 
     parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
+    window_scale: PropertyFloat32,
     is_mouse_hover: AtomicBool,
+    action_mode: action::ActionMode,
 
     editor: Arc<SyncMutex<Editor>>,
     behave: Box<dyn EditorBehavior>,
@@ -290,6 +260,15 @@ impl BaseEdit {
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
+        let action_fg_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "action_fg_color").unwrap();
+        let action_bg_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "action_bg_color").unwrap();
+        let action_padding =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "action_padding", 0).unwrap();
+        let action_spacing =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "action_spacing", 0).unwrap();
+
         let parent_rect = Arc::new(SyncMutex::new(None));
         let scroll = Arc::new(AtomicF32::new(0.));
 
@@ -297,7 +276,7 @@ impl BaseEdit {
             text.clone(),
             font_size.clone(),
             text_color.clone(),
-            window_scale,
+            window_scale.clone(),
             lineheight.clone(),
         )));
 
@@ -332,6 +311,8 @@ impl BaseEdit {
             }
         };
 
+        let action_mode = action::ActionMode::new(render_api.clone());
+
         let self_ = Arc::new(Self {
             node,
             tasks: SyncMutex::new(vec![]),
@@ -344,7 +325,6 @@ impl BaseEdit {
             select_dc_key: OsRng.gen(),
             text_dc_key: OsRng.gen(),
             cursor_dc_key: OsRng.gen(),
-            overlay_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
 
             is_active,
@@ -375,6 +355,11 @@ impl BaseEdit {
             priority,
             debug,
 
+            action_fg_color,
+            action_bg_color,
+            action_padding,
+            action_spacing,
+
             mouse_btn_held: AtomicBool::new(false),
             cursor_is_visible: AtomicBool::new(true),
             blink_is_paused: AtomicBool::new(false),
@@ -386,7 +371,9 @@ impl BaseEdit {
             is_phone_select: AtomicBool::new(false),
 
             parent_rect,
+            window_scale,
             is_mouse_hover: AtomicBool::new(false),
+            action_mode,
 
             editor,
             behave,
@@ -782,7 +769,7 @@ impl BaseEdit {
                     self.draw_pasta_overlay(atom.batch_id);
 
                     d!("touch state: StartSelect -> Pasta");
-                    self.touch_info.lock().state = TouchStateAction::Pasta;
+                    self.touch_info.lock().state = TouchStateAction::Inactive;
                     */
                 } else {
                     self.abs_to_local(&mut touch_pos);
@@ -1007,7 +994,6 @@ impl BaseEdit {
                     self.text_dc_key,
                     self.phone_select_handle_dc_key,
                     self.cursor_dc_key,
-                    self.overlay_dc_key,
                     self.select_dc_key,
                 ],
                 0,
@@ -1035,37 +1021,6 @@ impl BaseEdit {
             ),
         ];
         self.render_api.replace_draw_calls(batch_id, draw_calls);
-    }
-
-    fn draw_pasta_overlay(&self, batch_id: BatchGuardId) {
-        let font_size = self.font_size.get();
-        //let window_scale = self.window_scale.get();
-        let lineheight = self.lineheight.get();
-
-        let rect = Rectangle::new(0., 0., 200., 80.);
-        let mut mesh = MeshBuilder::new(gfxtag!("chatedit_overlay_pasta_box"));
-        mesh.draw_box(&rect, [0., 0., 0., 0.2], &Rectangle::zero());
-        mesh.draw_outline(&rect, [1., 0., 0., 1.], 1.);
-        let mut instrs = vec![
-            DrawInstruction::Move(Point::new(0., -100.)),
-            DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()),
-        ];
-        let layout = text::make_layout(
-            // translator for this
-            "paste",
-            [1., 0., 0., 1.],
-            font_size,
-            lineheight,
-            1.,
-            None,
-            &vec![],
-        );
-        let mut txt_instrs =
-            text::render_layout(&layout, &self.render_api, gfxtag!("chatedit_overlay_pasta_txt"));
-        instrs.append(&mut txt_instrs);
-        let dcs =
-            vec![(self.overlay_dc_key, DrawCall::new(instrs, vec![], 1, "chatedit_overlay_pasta"))];
-        self.render_api.replace_draw_calls(batch_id, dcs);
     }
 
     fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
@@ -1178,12 +1133,15 @@ impl BaseEdit {
         content_instrs.append(&mut bg_instrs);
         content_instrs.push(DrawInstruction::Move(self.behave.scroll()));
 
+        let action_instrs = self.action_mode.get_instrs();
+
         // + root (move)
         // -+ content (apply view)
         //  └╴select
         //  └╴text
         //  └╴phone_handle
         //  └╴cursor
+        // -- action bar
 
         // Why do we have such a complicated layout?
         // When adjusting selection, it's slow to redraw everything, so the selection
@@ -1197,7 +1155,7 @@ impl BaseEdit {
                     self.root_dc_key,
                     DrawCall::new(
                         vec![DrawInstruction::Move(rect.pos())],
-                        vec![self.content_dc_key, self.overlay_dc_key],
+                        vec![self.content_dc_key, self.action_mode.dc_key],
                         self.z_index.get(),
                         "chatedit_root",
                     ),
@@ -1223,7 +1181,10 @@ impl BaseEdit {
                     self.phone_select_handle_dc_key,
                     DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel"),
                 ),
-                (self.overlay_dc_key, DrawCall::new(vec![], vec![], 0, "chatedit_overlay")),
+                (
+                    self.action_mode.dc_key,
+                    DrawCall::new(action_instrs, vec![], 0, "chatedit_action"),
+                ),
             ],
         }
     }
@@ -1642,11 +1603,33 @@ impl UIObject for BaseEdit {
 
         if btn != MouseButton::Left {
             if btn == MouseButton::Right && rect.contains(mouse_pos) {
+                let cursor_pos = self.get_cursor_pos();
+                let mut menu = action::Menu::new(
+                    cursor_pos,
+                    self.font_size.get(),
+                    self.action_fg_color.get(),
+                    self.action_bg_color.get(),
+                    self.action_padding.get(),
+                    self.action_spacing.get(),
+                    self.window_scale.get(),
+                );
+
                 if self.text.get().is_empty() {
-                    self.node().trigger("paste_request", vec![]).await.unwrap();
+                    //self.node().trigger("paste_request", vec![]).await.unwrap();
+                    menu.add("Paste", ACTION_PASTE);
+                } else {
+                    menu.add("Copy", ACTION_COPY);
+                    menu.add("Paste", ACTION_PASTE);
+                    menu.add("Select All", ACTION_SELALL);
                 }
+                self.action_mode.set(menu);
+                let atom =
+                    &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
+                self.action_mode.redraw(atom.batch_id);
+
                 return true
             }
+
             return false
         }
 
@@ -1683,9 +1666,46 @@ impl UIObject for BaseEdit {
         true
     }
 
-    async fn handle_mouse_btn_up(&self, _btn: MouseButton, _mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
+        }
+
+        self.abs_to_local(&mut mouse_pos);
+
+        // Check if action was clicked
+        if btn == MouseButton::Left {
+            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
+            if let Some(action_id) = self.action_mode.interact(mouse_pos) {
+                match action_id {
+                    ACTION_COPY => {
+                        if let Some(txt) = self.editor.lock().selected_text() {
+                            miniquad::window::clipboard_set(&txt);
+                        }
+                    }
+                    ACTION_PASTE => {
+                        if let Some(txt) = miniquad::window::clipboard_get() {
+                            self.editor.lock().insert(&txt, atom);
+                            self.behave.apply_cursor_scroll();
+                        }
+                    }
+                    ACTION_SELALL => {
+                        self.editor.lock().driver().select_all();
+                        if let Some(seltext) = self.editor.lock().selected_text() {
+                            self.select_text
+                                .clone()
+                                .set_str(atom, Role::Internal, 0, seltext)
+                                .unwrap();
+                        }
+                    }
+                    _ => {}
+                }
+
+                self.redraw(atom);
+                return true;
+            } else {
+                self.action_mode.redraw(atom.batch_id);
+            }
         }
 
         // Stop any selection scrolling

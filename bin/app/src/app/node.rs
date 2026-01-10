@@ -364,6 +364,32 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("action_fg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Action Menu FG Color", "Foreground color of action menu items");
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0., 0.94, 1., 1.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("action_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Action Menu BG Color", "Background color of action menu items");
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0.1, 0.1, 0.1, 0.9]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("action_padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Action Menu Padding", "Padding inside action menu items");
+    prop.set_defaults_f32(vec![8.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("action_spacing", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Action Menu Spacing", "Spacing between action menu items");
+    prop.set_defaults_f32(vec![4.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
     node.add_signal("focus_request", "Request to gain focus", vec![]).unwrap();
     node.add_signal("paste_request", "Request to show paste dialog", vec![]).unwrap();

@@ -96,10 +96,10 @@ impl Editor {
         self.editor.try_layout().unwrap()
     }
 
-    pub fn move_to_pos(&mut self, pos: Point) {
+    pub fn move_to_pos(&mut self, _: Point) {
         unimplemented!()
     }
-    pub fn select_word_at_point(&mut self, _pos: Point) {
+    pub fn select_word_at_point(&mut self, _: Point) {
         unimplemented!()
     }
 

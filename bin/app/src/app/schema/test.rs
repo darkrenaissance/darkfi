@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#![allow(unused_imports, unused_variables, dead_code)]
+
 use sled_overlay::sled;
 
 use super::chat::populate_tree;
