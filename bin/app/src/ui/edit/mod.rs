@@ -1600,40 +1600,39 @@ impl UIObject for BaseEdit {
         }
 
         let rect = self.rect.get();
-
-        if btn != MouseButton::Left {
-            if btn == MouseButton::Right && rect.contains(mouse_pos) {
-                let cursor_pos = self.get_cursor_pos();
-                let mut menu = action::Menu::new(
-                    cursor_pos,
-                    self.font_size.get(),
-                    self.action_fg_color.get(),
-                    self.action_bg_color.get(),
-                    self.action_padding.get(),
-                    self.action_spacing.get(),
-                    self.window_scale.get(),
-                );
-
-                if self.text.get().is_empty() {
-                    //self.node().trigger("paste_request", vec![]).await.unwrap();
-                    menu.add("Paste", ACTION_PASTE);
-                } else {
-                    menu.add("Copy", ACTION_COPY);
-                    menu.add("Paste", ACTION_PASTE);
-                    menu.add("Select All", ACTION_SELALL);
-                }
-                self.action_mode.set(menu);
-                let atom =
-                    &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
-                self.action_mode.redraw(atom.batch_id);
-
-                return true
-            }
-
+        if !rect.contains(mouse_pos) {
             return false
         }
 
-        if !rect.contains(mouse_pos) {
+        if btn == MouseButton::Right {
+            let cursor_pos = self.get_cursor_pos();
+            let mut menu = action::Menu::new(
+                cursor_pos,
+                self.font_size.get(),
+                self.action_fg_color.get(),
+                self.action_bg_color.get(),
+                self.action_padding.get(),
+                self.action_spacing.get(),
+                self.window_scale.get(),
+            );
+
+            if self.text.get().is_empty() {
+                //self.node().trigger("paste_request", vec![]).await.unwrap();
+                menu.add("Paste", ACTION_PASTE);
+            } else {
+                menu.add("Copy", ACTION_COPY);
+                menu.add("Paste", ACTION_PASTE);
+                menu.add("Select All", ACTION_SELALL);
+            }
+            self.action_mode.set(menu);
+            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
+            self.action_mode.redraw(atom.batch_id);
+
+            return true
+        }
+
+        // Handle main case
+        if btn != MouseButton::Left {
             return false
         }
 
@@ -1674,46 +1673,47 @@ impl UIObject for BaseEdit {
         self.abs_to_local(&mut mouse_pos);
 
         // Check if action was clicked
-        if btn == MouseButton::Left {
-            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
-            if let Some(action_id) = self.action_mode.interact(mouse_pos) {
-                match action_id {
-                    ACTION_COPY => {
-                        if let Some(txt) = self.editor.lock().selected_text() {
-                            miniquad::window::clipboard_set(&txt);
-                        }
-                    }
-                    ACTION_PASTE => {
-                        if let Some(txt) = miniquad::window::clipboard_get() {
-                            self.editor.lock().insert(&txt, atom);
-                            self.behave.apply_cursor_scroll();
-                        }
-                    }
-                    ACTION_SELALL => {
-                        self.editor.lock().driver().select_all();
-                        if let Some(seltext) = self.editor.lock().selected_text() {
-                            self.select_text
-                                .clone()
-                                .set_str(atom, Role::Internal, 0, seltext)
-                                .unwrap();
-                        }
-                    }
-                    _ => {}
-                }
+        if btn != MouseButton::Left {
+            return false
+        }
 
-                self.redraw(atom);
-                return true;
-            } else {
-                self.action_mode.redraw(atom.batch_id);
+        // releasing mouse button will end selection
+        self.mouse_btn_held.store(false, Ordering::Relaxed);
+
+        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
+        if let Some(action_id) = self.action_mode.interact(mouse_pos) {
+            match action_id {
+                ACTION_COPY => {
+                    if let Some(txt) = self.editor.lock().selected_text() {
+                        miniquad::window::clipboard_set(&txt);
+                    }
+                }
+                ACTION_PASTE => {
+                    if let Some(txt) = miniquad::window::clipboard_get() {
+                        self.editor.lock().insert(&txt, atom);
+                        self.behave.apply_cursor_scroll();
+                    }
+                }
+                ACTION_SELALL => {
+                    self.editor.lock().driver().select_all();
+                    if let Some(seltext) = self.editor.lock().selected_text() {
+                        self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
+                    }
+                }
+                _ => {}
             }
+
+            self.eval_rect();
+            self.redraw(atom);
+            return true;
+        } else {
+            self.action_mode.redraw(atom.batch_id);
         }
 
         // Stop any selection scrolling
         let scroll_sender = self.sel_sender.lock().clone().unwrap();
         scroll_sender.send(None).await.unwrap();
 
-        // releasing mouse button will end selection
-        self.mouse_btn_held.store(false, Ordering::Relaxed);
         false
     }
 

@@ -397,11 +397,7 @@ impl FudPlugin {
     async fn find_urls_by_hash(&self, hash: &blake3::Hash) -> Vec<Url> {
         let tracked = self.tracked_files.lock().await;
         let hash_str = hash_to_string(hash);
-        tracked
-            .iter()
-            .filter(|url| url.host_str() == Some(hash_str.as_str()))
-            .cloned()
-            .collect()
+        tracked.iter().filter(|url| url.host_str() == Some(hash_str.as_str())).cloned().collect()
     }
 
     fn decode_data(
