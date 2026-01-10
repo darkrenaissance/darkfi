@@ -22,7 +22,7 @@ use darkfi::{
     event_graph::Event,
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
-    zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -49,11 +49,11 @@ use url::Url;
 use super::{
     client::Client,
     services::nickserv::{ACCOUNTS_DB_PREFIX, ACCOUNTS_KEY_RLN_IDENTITY},
-    IrcChannel, IrcContact, Priv, Privmsg,
+    IrcChannel, IrcContact, Privmsg,
 };
 use crate::{
     crypto::{
-        rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
+        rln::{RlnIdentity, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
         saltbox,
     },
     settings::{
@@ -156,7 +156,28 @@ impl IrcServer {
         let mut identity_tree = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         // Generate RLN proving and verifying keys, if needed
-        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
+        let rln_register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let rln_register_circuit =
+            ZkCircuit::new(empty_witnesses(&rln_register_zkbin)?, &rln_register_zkbin);
+
+        if server_store.get("rlnv2-diff-register-pk")?.is_none() {
+            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register ProvingKey");
+            let provingkey = ProvingKey::build(rln_register_zkbin.k, &rln_register_circuit);
+            let mut buf = vec![];
+            provingkey.write(&mut buf)?;
+            server_store.insert("rlnv2-diff-register-pk", buf)?;
+        }
+
+        // if server_store.get("rlnv2-diff-register-vk")?.is_none() {
+        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
+        //     let verifyingkey = VerifyingKey::build(rln_register_zkbin.k, &rln_register_circuit);
+        //     let mut buf = vec![];
+        //     verifyingkey.write(&mut buf)?;
+        //     server_store.insert("rlnv2-diff-register-vk", buf)?;
+        // }
+
+        // Generate RLN proving and verifying keys, if needed
+        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
         let rln_signal_circuit =
             ZkCircuit::new(empty_witnesses(&rln_signal_zkbin)?, &rln_signal_zkbin);
 
@@ -168,33 +189,37 @@ impl IrcServer {
             server_store.insert("rlnv2-diff-signal-pk", buf)?;
         }
 
-        if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-            let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-signal-vk", buf)?;
-        }
+        // if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
+        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+        //     let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
+        //     let mut buf = vec![];
+        //     verifyingkey.write(&mut buf)?;
+        //     server_store.insert("rlnv2-diff-signal-vk", buf)?;
+        // }
+
+        // Generate RLN proving and verifying keys, if needed
+        let rln_slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN)?;
+        let rln_slash_circuit =
+            ZkCircuit::new(empty_witnesses(&rln_slash_zkbin)?, &rln_slash_zkbin);
 
         if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
             info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
             let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
             let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
             let provingkey = ProvingKey::build(zkbin.k, &circuit);
+            let provingkey = ProvingKey::build(rln_slash_zkbin.k, &rln_slash_circuit);
             let mut buf = vec![];
             provingkey.write(&mut buf)?;
             server_store.insert("rlnv2-diff-slash-pk", buf)?;
         }
 
-        if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
-            let verifyingkey = VerifyingKey::build(zkbin.k, &circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-slash-vk", buf)?;
-        }
+        // if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
+        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
+        //     let verifyingkey = VerifyingKey::build(rln_slash_zkbin.k, &rln_slash_circuit);
+        //     let mut buf = vec![];
+        //     verifyingkey.write(&mut buf)?;
+        //     server_store.insert("rlnv2-diff-slash-vk", buf)?;
+        // }
 
         // Construct SMT from static DAG
         let mut events = darkirc.event_graph.static_fetch_all().await?;
@@ -403,28 +428,28 @@ impl IrcServer {
     }
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
-    pub async fn try_encrypt<T: Priv>(&self, privmsg: &mut T) {
-        if let Some((name, channel)) = self.channels.read().await.get_key_value(privmsg.channel()) {
+    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will use a dummy channel value of MAX_NICK_LEN,
                 // since its not used, so all encrypted messages look the same.
-                *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
                 // We will pad the name to MAX_NICK_LEN so they all look the same
-                *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
-                *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
+                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
+                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
                 debug!("Successfully encrypted message for {name}");
                 return
             }
         };
 
-        if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
+        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
             // We will use dummy channel and nick values of MAX_NICK_LEN,
             // since they are not used, so all encrypted messages look the same.
-            *privmsg.channel() = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
+            privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
             // We will encrypt the dummy nick value using our own self saltbox,
             // so we can identify our messages.
-            *privmsg.nick() = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
-            *privmsg.msg() = saltbox::encrypt(&contact.saltbox, privmsg.msg().as_bytes());
+            privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+            privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
             debug!("Successfully encrypted message for {name}");
         };
     }

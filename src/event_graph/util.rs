@@ -304,11 +304,9 @@ impl MessageMetadata {
         external_nullifier: &pallas::Base,
         internal_nullifier: &pallas::Base,
     ) -> bool {
-        let inner_map = self.data.get(external_nullifier);
-        if inner_map.is_some() {
-            return inner_map.unwrap().get(internal_nullifier).is_some()
+        if let Some(inner_map) = self.data.get(external_nullifier) {
+            return inner_map.get(internal_nullifier).is_some()
         }
-
         false
     }
 }

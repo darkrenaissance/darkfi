@@ -15,8 +15,7 @@ RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 
 # List of zkas circuits to compile, used for tests
 PROOFS_SRC = \
-	$(shell find proof -type f -name '*.zk') \
-	$(shell find bin/darkirc/proof -type f -name '*.zk')
+	$(shell find proof -type f -name '*.zk')
 
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
