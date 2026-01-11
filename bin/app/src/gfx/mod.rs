@@ -788,8 +788,8 @@ impl<'a> RenderContext<'a> {
                         d!("{ws}set_pipeline({pipeline:?})");
                     }
                 }
-                GfxDrawInstruction::Overlay(instrs) => {
-                    let pos = self.view.pos() + self.cursor;
+               GfxDrawInstruction::Overlay(instrs) => {
+                    let pos = self.view.pos() + (self.cursor * self.scale);
                     self.overlays.push(OverlayDefer { pos, instrs: instrs.clone() });
                 }
             }
@@ -1821,7 +1821,7 @@ impl EventHandler for Stage {
             loaded_pipelines: &self.loaded_pipelines,
             scale: 1.,
             view: Rectangle::from([0., 0., screen_w, screen_h]),
-            cursor: Point::from([0., 0.]),
+            cursor: Point::zero(),
             gfx_pipeline: GraphicPipeline::RGB,
             anims: &mut self.anims,
             overlays: vec![],

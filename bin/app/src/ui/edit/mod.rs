@@ -661,8 +661,12 @@ impl BaseEdit {
     fn handle_touch_start(&self, touch_pos: Point) -> bool {
         t!("handle_touch_start({touch_pos:?})");
 
+        let mut local_pos = touch_pos;
+        self.abs_to_local(&mut local_pos);
+        t!("localize touch_pos = {local_pos:?}");
+
         let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
-        if let Some(action_id) = self.action_mode.interact(touch_pos) {
+        if let Some(action_id) = self.action_mode.interact(local_pos) {
             match action_id {
                 ACTION_COPY => {
                     if let Some(txt) = self.editor.lock().selected_text() {
@@ -697,7 +701,7 @@ impl BaseEdit {
             return false
         }
 
-        if self.try_handle_drag(touch_pos) {
+        if self.try_handle_drag(local_pos) {
             return true
         }
 
@@ -723,9 +727,6 @@ impl BaseEdit {
     fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
         let editor = self.editor.lock();
         let Some((mut first, mut last)) = self.get_select_handles(&editor) else { return false };
-
-        self.abs_to_local(&mut touch_pos);
-        t!("localize touch_pos = {touch_pos:?}");
 
         let baseline = self.baseline.get();
         let handle_off_y = self.handle_descent.get();

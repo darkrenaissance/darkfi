@@ -91,6 +91,10 @@ mod android_ui_consts {
     pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 1000.;
     pub const CMD_HELP_NICK_DESC_X: f32 = 320.;
     pub const CMD_HELP_LABEL_Y: f32 = 20.;
+
+    // Action menu
+    pub const ACTION_PADDING: f32 = 32.;
+    pub const ACTION_SPACING: f32 = 8.;
 }
 
 #[cfg(target_os = "android")]
@@ -152,6 +156,10 @@ mod ui_consts {
     pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 500.;
     pub const CMD_HELP_NICK_DESC_X: f32 = 160.;
     pub const CMD_HELP_LABEL_Y: f32 = 10.;
+
+    // Action menu
+    pub const ACTION_PADDING: f32 = 8.;
+    pub const ACTION_SPACING: f32 = 4.;
 }
 
 use super::EMOJI_PICKER_ICON_SIZE;
@@ -763,6 +771,8 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
+    node.set_property_f32(atom, Role::App, "action_padding", ACTION_PADDING).unwrap();
+    node.set_property_f32(atom, Role::App, "action_spacing", ACTION_SPACING).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
