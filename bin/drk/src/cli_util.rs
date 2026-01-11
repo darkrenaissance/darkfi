@@ -409,7 +409,9 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         Arg::with_name("calls-map").help("Optional parent/children dependency map for the calls");
 
     let tx_from_calls = SubCommand::with_name("tx-from-calls")
-        .about("Create a transaction from newline-separated calls from stdin")
+        .about(
+            "Create a transaction from newline-separated calls from stdin and attach the fee call",
+        )
         .args(&[calls_map]);
 
     // Inspect

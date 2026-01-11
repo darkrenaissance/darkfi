@@ -95,7 +95,7 @@ fn help(output: &mut Vec<String>) {
     output
         .push(String::from("\tattach-fee: Attach the fee call to a transaction given from stdin"));
     output.push(String::from(
-        "\ttx-from-calls: Create a transaction from newline-separated calls from stdin",
+        "\ttx-from-calls: Create a transaction from newline-separated calls from stdin and attach the fee call",
     ));
     output.push(String::from("\tinspect: Inspect a transaction from stdin"));
     output.push(String::from("\tbroadcast: Read a transaction from stdin and broadcast it"));
@@ -545,7 +545,7 @@ pub async fn interactive(
                 "otc" => handle_otc(drk, &parts, &input, &mut output).await,
                 "dao" => handle_dao(drk, &parts, &input, &mut output).await,
                 "attach-fee" => handle_attach_fee(drk, &input, &mut output).await,
-                "tx-from-calls" => handle_tx_from_calls(&parts, &input, &mut output).await,
+                "tx-from-calls" => handle_tx_from_calls(drk, &parts, &input, &mut output).await,
                 "inspect" => handle_inspect(&input, &mut output).await,
                 "broadcast" => handle_broadcast(drk, &input, &mut output).await,
                 "subscribe" => {
@@ -2352,7 +2352,12 @@ async fn handle_attach_fee(drk: &DrkPtr, input: &[String], output: &mut Vec<Stri
 }
 
 /// Auxiliary function to define the tx from calls command handling.
-async fn handle_tx_from_calls(parts: &[&str], input: &[String], output: &mut Vec<String>) {
+async fn handle_tx_from_calls(
+    drk: &DrkPtr,
+    parts: &[&str],
+    input: &[String],
+    output: &mut Vec<String>,
+) {
     // Check correct subcommand structure
     if parts.len() != 1 && parts.len() != 2 {
         output.push(String::from("Malformed `tx-from-calls` subcommand"));
@@ -2395,7 +2400,7 @@ async fn handle_tx_from_calls(parts: &[&str], input: &[String], output: &mut Vec
         return
     }
 
-    // Create a transaction from the mapped calls.
+    // Create a transaction from the mapped calls
     let (mut tx_builder, signature_secrets) = match tx_from_calls_mapped(&calls, &calls_map) {
         Ok(pair) => pair,
         Err(e) => {
@@ -2404,7 +2409,7 @@ async fn handle_tx_from_calls(parts: &[&str], input: &[String], output: &mut Vec
         }
     };
 
-    // Now build and sign the tx
+    // Now build and sign the fee-less tx
     let mut tx = match tx_builder.build() {
         Ok(tx) => tx,
         Err(e) => {
@@ -2420,6 +2425,25 @@ async fn handle_tx_from_calls(parts: &[&str], input: &[String], output: &mut Vec
         }
     };
     tx.signatures.push(sigs);
+
+    // Attach its fee and grab its signature
+    if let Err(e) = drk.read().await.attach_fee(&mut tx).await {
+        output.push(format!("Failed to attach the fee call to the transaction: {e}"));
+        return
+    }
+    // Its safe to unwrap here since we know the fee signature
+    // is in the last position.
+    let fee_signature = tx.signatures.last().unwrap().clone();
+
+    // Re-sign the tx using the calls secrets
+    let sigs = match tx.create_sigs(&signature_secrets) {
+        Ok(s) => s,
+        Err(e) => {
+            output.push(format!("Failed to create the transaction signatures: {e}"));
+            return
+        }
+    };
+    tx.signatures = vec![sigs, fee_signature];
 
     output.push(base64::encode(&serialize_async(&tx).await));
 }

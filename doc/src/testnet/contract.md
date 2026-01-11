@@ -180,7 +180,7 @@ actual registration transaction, attach a fee to it and broadcast it to
 the network:
 
 ```shell
-drk> tx-from-calls < ../smart-contract/register.call | attach-fee | broadcast
+drk> tx-from-calls < ../smart-contract/register.call | broadcast
 
 [mark_tx_spend] Processing transaction: 23ea7d01ae16389e71d73fa27748ce1633d39c6b55a4aa31d8f5ba1017a4f840
 [mark_tx_spend] Found Money contract in call 1
@@ -204,7 +204,7 @@ Then, we build the actual deregistration transaction again, attach its
 fee and broadcast it to the network:
 
 ```shell
-drk> tx-from-calls < ../smart-contract/deregister.call | attach-fee | broadcast
+drk> tx-from-calls < ../smart-contract/deregister.call | broadcast
 
 [mark_tx_spend] Processing transaction: f3304e6f5673d9ece211af6dd85c70ec8c8e85e91439b8cffbcf5387b11de1d0
 [mark_tx_spend] Found Money contract in call 1

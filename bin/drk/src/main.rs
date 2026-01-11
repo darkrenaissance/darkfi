@@ -178,7 +178,7 @@ enum Subcmd {
     /// Attach the fee call to a transaction given from stdin
     AttachFee,
 
-    /// Create a transaction from newline-separated calls from stdin
+    /// Create a transaction from newline-separated calls from stdin and attach the fee call
     TxFromCalls {
         /// Optional parent/children dependency map for the calls
         calls_map: Option<String>,
@@ -2054,17 +2054,40 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 exit(1);
             }
 
-            // Create a transaction from the mapped calls.
+            // Create a transaction from the mapped calls
             let (mut tx_builder, signature_secrets) = tx_from_calls_mapped(&calls, &calls_map)?;
 
-            // Now build and sign the tx
+            // Now build the fee-less tx
             let mut tx = tx_builder.build()?;
             let sigs = tx.create_sigs(&signature_secrets)?;
             tx.signatures.push(sigs);
 
+            // Attach its fee and grab its signature
+            let drk = new_wallet(
+                network,
+                blockchain_config.cache_path,
+                blockchain_config.wallet_path,
+                blockchain_config.wallet_pass,
+                Some(blockchain_config.endpoint),
+                &ex,
+                args.fun,
+            )
+            .await;
+            if let Err(e) = drk.attach_fee(&mut tx).await {
+                eprintln!("Failed to attach the fee call to the transaction: {e}");
+                exit(2);
+            };
+            // Its safe to unwrap here since we know the fee signature
+            // is in the last position.
+            let fee_signature = tx.signatures.last().unwrap().clone();
+
+            // Re-sign the tx using the calls secrets
+            let sigs = tx.create_sigs(&signature_secrets)?;
+            tx.signatures = vec![sigs, fee_signature];
+
             println!("{}", base64::encode(&serialize_async(&tx).await));
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Inspect => {
