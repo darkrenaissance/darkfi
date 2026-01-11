@@ -105,23 +105,18 @@ impl ActionMode {
     }
 
     /// Returns `Some(n)` if item n is selected.
-    pub fn interact(&self, mut pos: Point) -> Option<u32> {
-        d!("Interact with action bar {pos:?}");
+    pub fn interact(&self, pos: Point) -> Option<u32> {
         let Some(menu) = std::mem::take(&mut *self.menu.lock()) else {
-            d!("No items");
             return None
         };
 
-        // Check each item
         for item in &menu.items {
-            d!("Checking action item: {:?}", item.rect);
             if item.rect.contains(pos) {
                 d!("Action clicked: {}", item.action_id);
                 return Some(item.action_id);
             }
         }
 
-        // Inside menu but no item clicked
         d!("Nothing clicked");
         None
     }
