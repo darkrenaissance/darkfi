@@ -181,12 +181,12 @@ impl Validator {
         let tx_in_pending_txs_store = self.blockchain.transactions.contains_pending(&tx_hash)?;
 
         if tx_in_txstore || tx_in_pending_txs_store {
-            info!(target: "validator::append_tx", "We have already seen this tx");
+            debug!(target: "validator::append_tx", "We have already seen tx: {tx_hash}");
             return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.as_string()).into())
         }
 
         // Verify state transition
-        info!(target: "validator::append_tx", "Starting state transition validation");
+        info!(target: "validator::append_tx", "Starting state transition validation for tx: {tx_hash}");
         let tx_vec = [tx.clone()];
         let mut valid = false;
 
@@ -241,7 +241,7 @@ impl Validator {
         // Add transaction to pending txs store
         if write {
             self.blockchain.add_pending_txs(&tx_vec)?;
-            info!(target: "validator::append_tx", "Appended tx to pending txs store");
+            info!(target: "validator::append_tx", "Appended tx {tx_hash} to pending txs store");
         }
 
         Ok(())
