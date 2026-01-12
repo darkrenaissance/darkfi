@@ -34,7 +34,7 @@ fn darkfid_protocols_metering() {
     const VARINT_LEN: usize = 1;
     const HEADER_HASH_LEN: usize = 32;
     // Header = U8_LEN + HEADER_HASH_LEN + U32_LEN + U32_LEN + U64_LEN + (U8_LEN * 32) + STATE_HASH_LEN + ENUM_LEN =
-    // 1 + 32 + 4 + 4 + 8 + (1 * 32) + 1 = 53 + 32 + 32 + 1 = 118
+    // 1 + 32 + 4 + 4 + 8 + (1 * 32) + 32 + 1 = 53 + 32 + 32 + 1 = 118
     const HEADER_LEN: usize = 114;
 
     // Generate a dummy `Header`.
