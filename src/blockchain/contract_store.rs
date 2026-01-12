@@ -846,14 +846,14 @@ impl ContractStoreOverlay {
         }
 
         // Check if wasm bincodes cache exists
-        let Some((state_cache, _)) = diff.caches.get(SLED_CONTRACTS_TREES_TREE) else {
+        let Some((wasm_cache, _)) = diff.caches.get(SLED_BINCODE_TREE) else {
             debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
             tree.set_headroot(root.as_ref());
             return Ok(())
         };
 
         // Check if wasm bincodes cache is updated
-        if state_cache.cache.is_empty() && state_cache.removed.is_empty() {
+        if wasm_cache.cache.is_empty() && wasm_cache.removed.is_empty() {
             debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
             tree.set_headroot(root.as_ref());
             return Ok(())
