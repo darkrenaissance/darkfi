@@ -679,8 +679,9 @@ impl BaseEdit {
                     }
                 }
                 ACTION_SELALL => {
-                    self.editor.lock().driver().select_all();
-                    if let Some(seltext) = self.editor.lock().selected_text() {
+                    let mut editor = self.editor.lock();
+                    editor.select_all();
+                    if let Some(seltext) = editor.selected_text() {
                         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
                     }
                 }
@@ -790,9 +791,7 @@ impl BaseEdit {
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
-                let cursor_pos = self.get_cursor_pos();
                 let mut menu = action::Menu::new(
-                    cursor_pos,
                     self.font_size.get(),
                     self.action_fg_color.get(),
                     self.action_bg_color.get(),
@@ -807,6 +806,8 @@ impl BaseEdit {
 
                 if self.text.get().is_empty() {
                     menu.add("Paste", ACTION_PASTE);
+                    // Set the menu pos to the current cursor pos
+                    menu.pos = self.get_cursor_pos();
 
                     self.touch_info.lock().state = TouchStateAction::Inactive;
                 } else {
@@ -817,6 +818,19 @@ impl BaseEdit {
                     self.abs_to_local(&mut touch_pos);
                     self.start_touch_select(touch_pos, atom);
                     self.redraw_select(atom.batch_id);
+
+                    {
+                        let editor = self.editor.lock();
+                        let (curs_lhs, _) = self.get_select_handles(&editor).unwrap();
+                        // Set the menu pos to the LHS of the selection
+                        menu.pos = curs_lhs + self.behave.inner_pos();
+                    }
+
+                    // Adjust menu pos so RHS doesnt leave the RHS of this widget
+                    let rect = self.rect.get();
+                    if menu.pos.x + menu.total_width() > rect.w {
+                        menu.pos.x = rect.w - menu.total_width();
+                    }
 
                     d!("touch state: StartSelect -> Select");
                     self.touch_info.lock().state = TouchStateAction::Select;
@@ -1374,8 +1388,6 @@ impl UIObject for BaseEdit {
         self.priority.get()
     }
 
-    fn init(&self) {}
-
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
@@ -1648,9 +1660,7 @@ impl UIObject for BaseEdit {
         }
 
         if btn == MouseButton::Right {
-            let cursor_pos = self.get_cursor_pos();
             let mut menu = action::Menu::new(
-                cursor_pos,
                 self.font_size.get(),
                 self.action_fg_color.get(),
                 self.action_bg_color.get(),
@@ -1660,13 +1670,16 @@ impl UIObject for BaseEdit {
             );
 
             if self.text.get().is_empty() {
-                //self.node().trigger("paste_request", vec![]).await.unwrap();
                 menu.add("Paste", ACTION_PASTE);
             } else {
                 menu.add("Copy", ACTION_COPY);
                 menu.add("Paste", ACTION_PASTE);
                 menu.add("Select All", ACTION_SELALL);
             }
+
+            // Mouse pos relative to root layout
+            menu.pos = mouse_pos - rect.pos();
+
             self.action_mode.set(menu);
             let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
             self.action_mode.redraw(atom.batch_id);
@@ -1738,8 +1751,9 @@ impl UIObject for BaseEdit {
                     }
                 }
                 ACTION_SELALL => {
-                    self.editor.lock().driver().select_all();
-                    if let Some(seltext) = self.editor.lock().selected_text() {
+                    let mut editor = self.editor.lock();
+                    editor.select_all();
+                    if let Some(seltext) = editor.selected_text() {
                         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
                     }
                 }

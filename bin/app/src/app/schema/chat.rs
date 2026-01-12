@@ -48,8 +48,6 @@ use super::{ColorScheme, COLOR_SCHEME};
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
-    use crate::gfx::{Point, Rectangle};
-
     pub const CHANNEL_LABEL_Y: f32 = 30.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
@@ -112,8 +110,6 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
-    use crate::gfx::{Point, Rectangle};
-
     // Chat UI
     pub const CHANNEL_LABEL_Y: f32 = 12.;
     pub const BACKARROW_SCALE: f32 = 15.;

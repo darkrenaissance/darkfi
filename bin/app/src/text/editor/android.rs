@@ -220,6 +220,13 @@ impl Editor {
         self.input.set_select(select_start, select_end);
     }
 
+    pub fn select_all(&mut self) {
+        let text_len = self.state.text.len();
+        self.state.select = (0, text_len);
+        self.state.compose = None;
+        self.input.set_select(0, text_len);
+    }
+
     #[allow(dead_code)]
     pub fn buffer(&self) -> String {
         self.state.text.clone()

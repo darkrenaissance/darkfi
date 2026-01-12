@@ -157,6 +157,14 @@ impl Mul<f32> for Point {
     }
 }
 
+impl Div<f32> for Point {
+    type Output = Self;
+
+    fn div(self, div: f32) -> Self {
+        Point::new(self.x / div, self.y / div)
+    }
+}
+
 #[derive(Clone, Copy, SerialEncodable, SerialDecodable)]
 pub struct Rectangle {
     pub x: f32,

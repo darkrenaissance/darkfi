@@ -41,13 +41,12 @@ pub struct Menu {
     padding: f32,
     spacing: f32,
     window_scale: f32,
-    pos: Point,
+    pub pos: Point,
     items: Vec<MenuItem>,
 }
 
 impl Menu {
     pub fn new(
-        pos: Point,
         font_size: f32,
         fg_color: Color,
         bg_color: Color,
@@ -55,7 +54,16 @@ impl Menu {
         spacing: f32,
         window_scale: f32,
     ) -> Self {
-        Self { font_size, fg_color, bg_color, padding, spacing, window_scale, pos, items: vec![] }
+        Self {
+            font_size,
+            fg_color,
+            bg_color,
+            padding,
+            spacing,
+            window_scale,
+            pos: Point::zero(),
+            items: vec![],
+        }
     }
 
     pub fn add(&mut self, label: &str, action: u32) {
@@ -74,17 +82,20 @@ impl Menu {
 
         let x_offset = match self.items.last() {
             Some(item) => item.rect.rhs() + self.spacing,
-            None => self.pos.x,
+            None => 0.,
         };
 
-        let rect = Rectangle::new(
-            x_offset,
-            self.pos.y - item_height,
-            item_width + 2. * self.padding,
-            item_height,
-        );
+        let rect =
+            Rectangle::new(x_offset, -item_height, item_width + 2. * self.padding, item_height);
 
         self.items.push(MenuItem { layout, action_id: action, rect });
+    }
+
+    pub fn total_width(&self) -> f32 {
+        match self.items.last() {
+            Some(item) => item.rect.rhs(),
+            None => 0.,
+        }
     }
 }
 
@@ -106,12 +117,13 @@ impl ActionMode {
 
     /// Returns `Some(n)` if item n is selected.
     pub fn interact(&self, pos: Point) -> Option<u32> {
-        let Some(menu) = std::mem::take(&mut *self.menu.lock()) else {
-            return None
-        };
+        let menu = std::mem::take(&mut *self.menu.lock())?;
+
+        let local_pos = pos - menu.pos;
+        //d!("interact: pos={:?}, menu.pos={:?}, local_pos={:?}", pos, menu.pos, local_pos);
 
         for item in &menu.items {
-            if item.rect.contains(pos) {
+            if item.rect.contains(local_pos) {
                 d!("Action clicked: {}", item.action_id);
                 return Some(item.action_id);
             }
@@ -125,7 +137,7 @@ impl ActionMode {
     pub fn get_instrs(&self) -> Vec<DrawInstruction> {
         let Some(menu) = &*self.menu.lock() else { return vec![] };
 
-        let mut instrs = vec![];
+        let mut instrs = vec![DrawInstruction::Move(menu.pos)];
 
         for item in &menu.items {
             // Used to reset the pos again

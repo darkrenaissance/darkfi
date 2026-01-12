@@ -392,7 +392,6 @@ pub fn create_baseedit(name: &str) -> SceneNode {
 
     node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
     node.add_signal("focus_request", "Request to gain focus", vec![]).unwrap();
-    node.add_signal("paste_request", "Request to show paste dialog", vec![]).unwrap();
 
     // Used by emoji_picker
     node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();

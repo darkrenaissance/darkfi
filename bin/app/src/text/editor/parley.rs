@@ -141,6 +141,10 @@ impl Editor {
         self.driver().select_byte_range(select_start, select_end);
     }
 
+    pub fn select_all(&mut self) {
+        self.driver().select_all();
+    }
+
     #[allow(dead_code)]
     pub fn buffer(&self) -> String {
         self.editor.raw_text().to_string()

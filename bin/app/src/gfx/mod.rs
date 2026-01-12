@@ -576,6 +576,7 @@ struct GfxDrawCall {
 }
 
 struct OverlayDefer {
+    scale: f32,
     pos: Point,
     instrs: Vec<GfxDrawInstruction>,
 }
@@ -614,8 +615,16 @@ impl<'a> RenderContext<'a> {
     }
 
     fn draw_overlays(&mut self) {
+        let (screen_w, screen_h) = miniquad::window::screen_size();
+
         let overlays = std::mem::take(&mut self.overlays);
         for overlay in overlays {
+            self.view = Rectangle::new(0., 0., screen_w, screen_h);
+            self.scale = overlay.scale;
+            self.view.w /= self.scale;
+            self.view.h /= self.scale;
+            self.apply_view();
+
             self.cursor = overlay.pos;
             self.apply_model();
 
@@ -788,9 +797,13 @@ impl<'a> RenderContext<'a> {
                         d!("{ws}set_pipeline({pipeline:?})");
                     }
                 }
-               GfxDrawInstruction::Overlay(instrs) => {
-                    let pos = self.view.pos() + (self.cursor * self.scale);
-                    self.overlays.push(OverlayDefer { pos, instrs: instrs.clone() });
+                GfxDrawInstruction::Overlay(instrs) => {
+                    let pos = self.view.pos() / self.scale + self.cursor;
+                    self.overlays.push(OverlayDefer {
+                        scale: self.scale,
+                        pos,
+                        instrs: instrs.clone(),
+                    });
                 }
             }
         }
