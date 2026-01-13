@@ -490,3 +490,50 @@ impl HeaderStoreOverlay {
         Ok(ret)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::Fp};
+    use rand::Rng;
+
+    #[test]
+    /// Shows how to deserialize both the header with native and XMR PoW.
+    fn test_header_manual_deserialization() {
+        // =============
+        // Native header
+        // =============
+        let mut previous = [0u8; 32];
+        let mut rng = rand::thread_rng();
+        rng.fill(&mut previous[..]);
+        let previous = HeaderHash(previous);
+
+        let header = Header::new(previous, 1, 0, Timestamp::current_time());
+        let header_se = serialize(&header);
+
+        let version_de = header_se[0];
+        let previous_de = &header_se[1..33];
+        let height_de = &header_se[33..37];
+        let nonce_de = &header_se[37..41];
+        let timestamp_de = &header_se[41..49];
+        let transactions_root_de = &header_se[49..81];
+        let state_root_de = &header_se[81..113];
+        let pow_data_de = &header_se[113..];
+
+        assert_eq!(header.version, version_de);
+        assert_eq!(header.previous, HeaderHash(previous_de.try_into().unwrap()));
+        assert_eq!(header.height, u32::from_le_bytes(height_de.try_into().unwrap()));
+        assert_eq!(header.nonce, u32::from_le_bytes(nonce_de.try_into().unwrap()));
+        assert_eq!(header.timestamp.inner(), u64::from_le_bytes(timestamp_de.try_into().unwrap()));
+        assert_eq!(
+            header.transactions_root.inner(),
+            Fp::from_repr(transactions_root_de.try_into().unwrap()).unwrap()
+        );
+        assert_eq!(
+            header.state_root,
+            <&[u8] as TryInto<[u8; 32]>>::try_into(state_root_de).unwrap()
+        );
+        // Native PowData is an enum identifier 0x00
+        assert_eq!([0x00], <&[u8] as TryInto<[u8; 1]>>::try_into(pow_data_de).unwrap());
+    }
+}
