@@ -33,14 +33,17 @@ fn darkfid_protocols_metering() {
     const U32_LEN: usize = 4;
     const VARINT_LEN: usize = 1;
     const HEADER_HASH_LEN: usize = 32;
-    // Header = U8_LEN + HEADER_HASH_LEN + U32_LEN + U32_LEN + U64_LEN + (U8_LEN * 32) + STATE_HASH_LEN + ENUM_LEN =
-    // 1 + 32 + 4 + 4 + 8 + (1 * 32) + 32 + 1 = 53 + 32 + 32 + 1 = 118
-    const HEADER_LEN: usize = 114;
+    // MAX_POW_DATA_LEN = ENUM_LEN + MAX_MM_POW_DATA_LEN =
+    // 1 + (8 + 8 + 8 + 32 + 4) + 60 + 2 + 32 + 1030 + (200 + 8 + 8 + 1 + 1) + 1060 + 1030 =
+    // 1 + 60 + 60 + 2 + 32 + 1030 + 218 + 1060 + 1030 = 3493
+    // Header = U8_LEN + HEADER_HASH_LEN + U32_LEN + U32_LEN + U64_LEN + (U8_LEN * 32) + STATE_HASH_LEN + MAX_POW_DATA_LEN =
+    // 1 + 32 + 4 + 4 + 8 + (1 * 32) + 32 + 3493 = 49 + 32 + 32 + 3493 = 3606
+    const MAX_HEADER_LEN: usize = 3606;
 
     // Generate a dummy `Header`.
     // Its bytes vector length is constant.
     let header = Header::default();
-    assert_eq!(serialize(&header).len(), HEADER_LEN);
+    assert!(serialize(&header).len() <= MAX_HEADER_LEN);
 
     // Its hash bytes vector length is constant.
     let header_hash = header.hash();
@@ -103,8 +106,8 @@ fn darkfid_protocols_metering() {
     // Based on length size/type, this can add from 1(u8) to 8(u64) bytes.
     // Since `BATCH` is 20, its `VarInt` will be represented as a u8,
     // adding an extra byte.
-    // Length = (BATCH * HEADER_LEN) + VARINT_LEN = (20 * 114) + 1 = 2356 + 1 = 2357
-    assert_eq!(serialize(&header_sync_response).len(), (BATCH * HEADER_LEN) + VARINT_LEN);
+    // Length = (BATCH * MAX_HEADER_LEN) + VARINT_LEN = (20 * 3606) + 1 = 72120 + 1 = 72121
+    assert!(serialize(&header_sync_response).len() <= (BATCH * MAX_HEADER_LEN) + VARINT_LEN);
 
     // Protocol sync `SyncRequest` is limited by `BATCH` so it has a
     // constant max bytes length limit.
@@ -158,8 +161,8 @@ fn darkfid_protocols_metering() {
     // constant max bytes length limit.
     let fork_headers_response = ForkHeadersResponse { headers: vec![header; BATCH] };
     // Don't forget the extra byte from `Vec` length.
-    // Length = (BATCH * HEADER_LEN) + VARINT_LEN = (20 * 114) + 1 = 2356 + 1 = 2357
-    assert_eq!(serialize(&fork_headers_response).len(), (BATCH * HEADER_LEN) + VARINT_LEN);
+    // Length = (BATCH * MAX_HEADER_LEN) + VARINT_LEN = (20 * 3606) + 1 = 72120 + 1 = 72121
+    assert!(serialize(&fork_headers_response).len() <= (BATCH * MAX_HEADER_LEN) + VARINT_LEN);
 
     // Protocol sync `ForkProposalsRequest` is limited by `BATCH` so it has a
     // constant max bytes length limit.
