@@ -21,7 +21,7 @@ use hashbrown::{HashMap, HashSet};
 use sled_overlay::{sled::Tree, SledDbOverlay};
 
 use super::{
-    bits::Bits,
+    bits::{merge_owned_and_bits, Bits, BitsOwned},
     node::{Node, Unit},
     utils::{get_sorted_indices, slice_to_hash},
     Hash, Proof, HASH_LEN, ROOT_KEY,
@@ -372,6 +372,64 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
         Ok(Some(hash))
     }
 
+    /// Create and store a soft node using owned bits.
+    fn put_soft_node_owned(
+        &mut self,
+        target_hash: &[u8],
+        bits: &BitsOwned,
+    ) -> GenericResult<Option<Hash>> {
+        let bits_bytes = bits.to_bytes()?;
+        let node_bytes = [target_hash, &bits_bytes[..], &[0x00u8]].concat();
+        let node_hash = Self::hash_digest(&node_bytes);
+        self.db.put(&node_hash, node_bytes)?;
+        Ok(Some(node_hash))
+    }
+
+    /// Create hard node with owned left bits and preserved right bits (unchanged sibling).
+    fn put_hard_node_mixed(
+        &mut self,
+        left_hash: &[u8],
+        left_bits: &BitsOwned,
+        right: &Unit,
+    ) -> GenericResult<Option<Hash>> {
+        let lb_bytes = left_bits.to_bytes()?;
+        let rb_bytes = right.bits.to_bytes()?;
+
+        let (lh, lb, rh, rb) = if right.bits.first() {
+            (left_hash, &lb_bytes[..], right.hash, &rb_bytes[..])
+        } else {
+            (right.hash, &rb_bytes[..], left_hash, &lb_bytes[..])
+        };
+
+        let node_bytes = [lh, lb, rb, rh, &[0x01u8]].concat();
+        let node_hash = Self::hash_digest(&node_bytes);
+        self.db.put(&node_hash, node_bytes)?;
+        Ok(Some(node_hash))
+    }
+
+    /// Collapse a path through soft nodes, accumulating bit prefixes.
+    /// Returns `(target_hash, accumulated_bits)`.
+    fn collapse_to_target(
+        &mut self,
+        hash: &[u8],
+        prefix: BitsOwned,
+    ) -> GenericResult<(Hash, BitsOwned)> {
+        let Some(bytes) = self.db.get(hash)? else {
+            // Leaf value - return it with the accumulated prefix
+            return Ok((slice_to_hash(hash), prefix))
+        };
+
+        let node = Node::from_bytes(&bytes)?;
+        match node {
+            Node::Soft(Some(child)) => {
+                let merged = merge_owned_and_bits(&prefix, &child.bits);
+                self.collapse_to_target(child.hash, merged)
+            }
+            Node::Hard(_, _) => Ok((slice_to_hash(hash), prefix)),
+            _ => unreachable!("unexpected node type in collapse_to_target"),
+        }
+    }
+
     /// Recursively insert a bytes (in forms of Bits) and a leaf into the tree.
     ///
     /// Optimisation in `monotree` is mainly to compress the path as much as possible
@@ -462,19 +520,64 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
         let n = Bits::len_common_bits(&unit.bits, &bits);
 
         match n {
-            n if n == bits.len() => match right {
-                Some(_) => self.put_node(Node::new(None, right)),
-                None => Ok(None),
-            },
+            // Found the exact key to delete
+            n if n == bits.len() => {
+                match right {
+                    Some(ref sibling) => {
+                        // Collapse sibling path through any soft nodes
+                        let prefix = sibling.bits.to_bits_owned();
+                        let (target, merged_bits) =
+                            self.collapse_to_target(sibling.hash, prefix)?;
+                        self.put_soft_node_owned(&target, &merged_bits)
+                    }
+                    None => Ok(None),
+                }
+            }
+            // Recurse into subtree
             n if n == unit.bits.len() => {
                 let hash = self.delete_key(unit.hash, bits.drop(n))?;
                 match (hash, &right) {
                     (None, None) => Ok(None),
-                    (None, Some(_)) => self.put_node(Node::new(None, right)),
-                    (Some(ref hash), _) => {
-                        let unit = unit.to_owned();
-                        let left = Some(Unit { hash, ..unit });
-                        self.put_node(Node::new(left, right))
+
+                    (None, Some(sibling)) => {
+                        // Child deleted, collapse sibling
+                        let prefix = sibling.bits.to_bits_owned();
+                        let (target, merged_bits) =
+                            self.collapse_to_target(sibling.hash, prefix)?;
+                        self.put_soft_node_owned(&target, &merged_bits)
+                    }
+
+                    (Some(ref new_child), None) => {
+                        // Child modified, no sibling - collapse through
+                        let prefix = unit.bits.to_bits_owned();
+                        let (target, merged_bits) = self.collapse_to_target(new_child, prefix)?;
+                        self.put_soft_node_owned(&target, &merged_bits)
+                    }
+
+                    (Some(ref new_child), Some(sibling)) => {
+                        // Child modified, sibling exists - check if we need to inline soft node
+                        match self.db.get(new_child)? {
+                            Some(child_bytes) => {
+                                match Node::from_bytes(&child_bytes)? {
+                                    Node::Soft(Some(inner)) => {
+                                        // Inline the soft node: merge parent bits + soft node bits
+                                        let merged = Bits::merge(&unit.bits, &inner.bits);
+                                        self.put_hard_node_mixed(inner.hash, &merged, sibling)
+                                    }
+                                    Node::Hard(_, _) => {
+                                        // Can't inline hard node - keep reference
+                                        let parent_bits = unit.bits.to_bits_owned();
+                                        self.put_hard_node_mixed(new_child, &parent_bits, sibling)
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                            None => {
+                                // new_child is a leaf valuie
+                                let parent_bits = unit.bits.to_bits_owned();
+                                self.put_hard_node_mixed(new_child, &parent_bits, sibling)
+                            }
+                        }
                     }
                 }
             }

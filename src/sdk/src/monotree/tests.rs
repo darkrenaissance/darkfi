@@ -212,3 +212,25 @@ fn monotree_test_deterministic_ordering() {
     assert_eq!(root1, None);
     assert_eq!(root2, None);
 }
+
+#[test]
+fn monotree_test_insert_remove_identity() {
+    let keys = random_hashes(3);
+    let values = random_hashes(3);
+
+    println!("{:?}", keys);
+    println!("{:?}", values);
+
+    let db = MemoryDb::new();
+    let mut tree = Monotree::new(db);
+    let mut root = tree.inserts(None, &keys, &values).unwrap();
+    let original_root = root;
+
+    // Insert then remove a new key
+    let temp_key = random_hashes(1)[0];
+    let temp_value = random_hashes(1)[0];
+    root = tree.insert(root.as_ref(), &temp_key, &temp_value).unwrap();
+    root = tree.remove(root.as_ref(), &temp_key).unwrap();
+
+    assert_eq!(root, original_root);
+}
