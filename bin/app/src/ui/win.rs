@@ -467,6 +467,17 @@ impl Window {
         }
     }
 
+    pub fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+        self.local_scale(&mut touch_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_touch_sync(phase, id, touch_pos) {
+                return true
+            }
+        }
+        false
+    }
+
     #[instrument(target = "ui::win")]
     pub async fn draw(&self, atom: &mut PropertyAtomicGuard) {
         let virt_size = self.screen_size.get() / self.scale.get();

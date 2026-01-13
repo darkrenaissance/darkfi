@@ -773,7 +773,7 @@ impl BaseEdit {
         false
     }
 
-    async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
+    fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -847,10 +847,10 @@ impl BaseEdit {
                 // If so we gotta scroll it while selecting.
                 if !is_touch_hover {
                     // This process will begin selecting text and applying scroll too.
-                    sel_sender.send(Some((touch_pos, Some(*side)))).await.unwrap();
+                    sel_sender.try_send(Some((touch_pos, Some(*side)))).unwrap();
                 } else {
                     // Stop any existing select/scroll process
-                    sel_sender.send(None).await.unwrap();
+                    sel_sender.try_send(None).unwrap();
                     // Mouse is inside so just select the text once and be done.
                     self.handle_select(touch_pos, Some(*side));
                 }
@@ -876,7 +876,7 @@ impl BaseEdit {
         }
         true
     }
-    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
+    fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_end({touch_pos:?})");
         self.abs_to_local(&mut touch_pos);
 
@@ -893,9 +893,12 @@ impl BaseEdit {
 
         // Stop any selection scrolling
         let scroll_sender = self.sel_sender.lock().clone().unwrap();
-        scroll_sender.send(None).await.unwrap();
+        scroll_sender.try_send(None).unwrap();
 
-        self.node().trigger("focus_request", vec![]).await.unwrap();
+        let node = self.node();
+        smol::block_on(async {
+            node.trigger("focus_request", vec![]).await.unwrap();
+        });
 
         true
     }
@@ -1820,7 +1823,7 @@ impl UIObject for BaseEdit {
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -1832,8 +1835,8 @@ impl UIObject for BaseEdit {
 
         match phase {
             TouchPhase::Started => self.handle_touch_start(touch_pos),
-            TouchPhase::Moved => self.handle_touch_move(touch_pos).await,
-            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
+            TouchPhase::Moved => self.handle_touch_move(touch_pos),
+            TouchPhase::Ended => self.handle_touch_end(touch_pos),
             TouchPhase::Cancelled => false,
         }
     }

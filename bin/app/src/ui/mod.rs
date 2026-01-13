@@ -108,6 +108,10 @@ pub trait UIObject: Sync {
         false
     }
 
+    fn handle_touch_sync(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
+        false
+    }
+
     fn set_i18n(&self, _i18n_fish: &I18nBabelFish) {}
 }
 

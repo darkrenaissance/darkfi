@@ -49,6 +49,7 @@ use trax::get_trax;
 
 use crate::{
     prop::{BatchGuardId, PropertyAtomicGuard},
+    scene::{Pimpl, SceneNodePtr},
     util::unixtime,
     GOD,
 };
@@ -1031,6 +1032,9 @@ struct Stage {
 
     pruner: PruneMethodHeap,
     screen_state: ScreenState,
+
+    /// Cached window node, looked up lazily on first touch event
+    window_node: Option<SceneNodePtr>,
 }
 
 impl Stage {
@@ -1082,6 +1086,8 @@ impl Stage {
 
             pruner: PruneMethodHeap::new(epoch),
             screen_state: ScreenState::On,
+
+            window_node: None,
         };
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
@@ -1889,6 +1895,25 @@ impl EventHandler for Stage {
     /// The id corresponds to multi-touch. Multiple touch events have different ids.
     fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
         let pos = Point::from([x, y]);
+
+        // Lazy cache window on first touch event
+        if self.window_node.is_none() {
+            let god = GOD.get().unwrap();
+            self.window_node = god.app.sg_root.lookup_node("/window");
+        }
+
+        // Direct call to Window's handle_touch_event_sync
+        if let Some(window_node) = &self.window_node {
+            match window_node.pimpl() {
+                Pimpl::Window(win) => {
+                    if win.handle_touch_sync(phase, id, pos) {
+                        return
+                    }
+                }
+                _ => panic!(),
+            }
+        }
+
         self.event_pub.notify_touch(phase, id, pos);
     }
 

@@ -307,6 +307,20 @@ impl UIObject for Layer {
         false
     }
 
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
+        touch_pos -= self.rect.get().pos();
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_touch_sync(phase, id, touch_pos) {
+                return true
+            }
+        }
+        false
+    }
+
     fn set_i18n(&self, i18n_fish: &I18nBabelFish) {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
