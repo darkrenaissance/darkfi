@@ -20,10 +20,10 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder},
     prop::BatchGuardId,
-    text, RenderApi,
+    text,
 };
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::edit::action", $($arg)*); } }

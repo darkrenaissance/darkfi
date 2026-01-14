@@ -23,7 +23,6 @@
 use clap::Parser;
 use darkfi::system::CondVar;
 use std::sync::{Arc, OnceLock};
-use url::Url;
 
 #[macro_use]
 extern crate tracing;
@@ -62,11 +61,14 @@ use net::ZeroMQAdapter;
 #[cfg(feature = "enable-plugins")]
 use {
     darkfi_serial::{deserialize, Decodable, Encodable},
+    // Local imports
     gfx::RenderApi,
     prop::{PropertyBool, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     std::io::Cursor,
     ui::chatview,
+    // Global imports
+    url::Url,
 };
 
 // This is historical, but ideally we can fix the entire project and remove this import.

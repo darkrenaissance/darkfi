@@ -50,6 +50,19 @@ impl ShapeVertex {
     }
 }
 
+// This is bullshit. We need something in expr to support joining exprs somehow. Subroutines.
+// Hacky temp workaround for now.
+// s-expr surgery
+fn sexpr_add(mut x: SExprCode, op: Op) -> Option<SExprCode> {
+    let eqn = x.pop()?;
+    x.push(Op::Add((Box::new(eqn), Box::new(op))));
+    Some(x)
+}
+fn sexpr_mul(mut x: SExprCode, op: Op) -> Option<Op> {
+    let eqn = x.pop()?;
+    Some(Op::Mul((Box::new(eqn), Box::new(op))))
+}
+
 #[derive(Debug)]
 pub struct VectorShape {
     pub verts: Vec<ShapeVertex>,
@@ -123,13 +136,6 @@ impl VectorShape {
         self.indices.append(&mut indices);
     }
 
-    // s-expr surgery
-    fn sexpr_add(mut x: SExprCode, border_px: f32) -> Option<SExprCode> {
-        let eqn = x.pop()?;
-        x.push(Op::Add((Box::new(eqn), Box::new(Op::ConstFloat32(border_px)))));
-        Some(x)
-    }
-
     pub fn add_outline(
         &mut self,
         x1: SExprCode,
@@ -143,7 +149,7 @@ impl VectorShape {
         self.add_filled_box(
             x1.clone(),
             y1.clone(),
-            Self::sexpr_add(x1.clone(), border_px).unwrap(),
+            sexpr_add(x1.clone(), Op::ConstFloat32(border_px)).unwrap(),
             y2.clone(),
             color.clone(),
         );
@@ -152,12 +158,12 @@ impl VectorShape {
             x1.clone(),
             y1.clone(),
             x2.clone(),
-            Self::sexpr_add(y1.clone(), border_px).unwrap(),
+            sexpr_add(y1.clone(), Op::ConstFloat32(border_px)).unwrap(),
             color.clone(),
         );
         // RHS
         self.add_filled_box(
-            Self::sexpr_add(x2.clone(), -border_px).unwrap(),
+            sexpr_add(x2.clone(), Op::ConstFloat32(-border_px)).unwrap(),
             y1.clone(),
             x2.clone(),
             y2.clone(),
@@ -166,11 +172,62 @@ impl VectorShape {
         // BHS
         self.add_filled_box(
             x1.clone(),
-            Self::sexpr_add(y2.clone(), -border_px).unwrap(),
+            sexpr_add(y2.clone(), Op::ConstFloat32(-border_px)).unwrap(),
             x2.clone(),
             y2.clone(),
             color.clone(),
         );
+    }
+
+    pub fn add_radial_glow(
+        &mut self,
+        center_x: SExprCode,
+        center_y: SExprCode,
+        width: SExprCode,
+        height: SExprCode,
+        segments: usize,
+        start_angle: f32,
+        end_angle: f32,
+        mut color: Color,
+    ) {
+        // Helper to create an x coordinate on the ellipse: center_x + width * cos_angle
+        fn ellipse_x(center_x: &SExprCode, width: &SExprCode, cos_angle: f32) -> SExprCode {
+            let width_calc = sexpr_mul(width.clone(), Op::ConstFloat32(cos_angle)).unwrap();
+            sexpr_add(center_x.clone(), width_calc).unwrap()
+        }
+
+        // Helper to create a y coordinate on the ellipse: center_y + height * sin_angle
+        fn ellipse_y(center_y: &SExprCode, height: &SExprCode, sin_angle: f32) -> SExprCode {
+            let height_calc = sexpr_mul(height.clone(), Op::ConstFloat32(sin_angle)).unwrap();
+            sexpr_add(center_y.clone(), height_calc).unwrap()
+        }
+
+        let mut new_verts = vec![];
+        let mut new_indices = vec![];
+        let base_idx = self.verts.len() as u16;
+
+        // Create center vertex at index 0
+        new_verts.push(ShapeVertex::new(center_x.clone(), center_y.clone(), color.clone()));
+
+        color[3] = 0.;
+        // Generate vertices along the arc
+        for i in 0..=segments {
+            let t = i as f32 / segments as f32;
+            let angle = start_angle + t * (end_angle - start_angle);
+            let x = ellipse_x(&center_x, &width, angle.cos() * 0.5);
+            let y = ellipse_y(&center_y, &height, angle.sin() * 0.5);
+            new_verts.push(ShapeVertex::new(x, y, color.clone()));
+        }
+
+        // Create triangles: center vertex (0) with each pair of adjacent arc vertices
+        for i in 0..segments {
+            new_indices.push(base_idx); // center
+            new_indices.push(base_idx + 1 + i as u16); // current arc vertex
+            new_indices.push(base_idx + 2 + i as u16); // next arc vertex
+        }
+
+        self.verts.append(&mut new_verts);
+        self.indices.append(&mut new_indices);
     }
 
     pub fn scaled(self, scale: f32) -> Self {

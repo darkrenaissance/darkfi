@@ -219,23 +219,27 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     window.link(node);
     */
 
+    // Root content layer
+    let content = create_layer("content");
+    let prop = content.get_property("rect").unwrap();
+    prop.set_expr(atom, Role::App, 0, expr::load_var("insets_left")).unwrap();
+    prop.set_expr(atom, Role::App, 1, expr::load_var("insets_top")).unwrap();
+    let code = cc.compile("w - insets_left - insets_right").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    let code = cc.compile("h - insets_top - insets_bottom").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    let window_insets = window.get_property("insets").unwrap();
+    prop.add_depend(&window_insets, 0, "insets_left");
+    prop.add_depend(&window_insets, 1, "insets_top");
+    prop.add_depend(&window_insets, 2, "insets_right");
+    prop.add_depend(&window_insets, 3, "insets_bottom");
+    content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let content = content.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    window.link(content.clone());
+
     if COLOR_SCHEME == ColorScheme::DarkMode {
-        // Bg layer
-        let layer_node = create_layer("bg_layer");
-        let prop = layer_node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-        layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-        layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
-        window.link(layer_node.clone());
-
         let node = create_video("king");
-
-        // Create a bg image
-        //let node = create_image("bg_image");
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
         prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -293,7 +297,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
         //layer_node.link(node);
         let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
-        layer_node.link(node);
+        content.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
         let prop = node.get_property("rect").unwrap();
@@ -316,25 +320,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
         window.link(node);
     }
-
-    // Root content layer
-    let content = create_layer("content");
-    let prop = content.get_property("rect").unwrap();
-    prop.set_expr(atom, Role::App, 0, expr::load_var("insets_left")).unwrap();
-    prop.set_expr(atom, Role::App, 1, expr::load_var("insets_top")).unwrap();
-    let code = cc.compile("w - insets_left - insets_right").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    let code = cc.compile("h - insets_top - insets_bottom").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
-    let window_insets = window.get_property("insets").unwrap();
-    prop.add_depend(&window_insets, 0, "insets_left");
-    prop.add_depend(&window_insets, 1, "insets_top");
-    prop.add_depend(&window_insets, 2, "insets_right");
-    prop.add_depend(&window_insets, 3, "insets_bottom");
-    content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let content = content.setup(|me| Layer::new(me, app.render_api.clone())).await;
-    window.link(content.clone());
 
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();

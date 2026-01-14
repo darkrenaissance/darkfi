@@ -112,6 +112,21 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         1.,
         COLOR_PURPLE,
     );
+    shape.add_radial_glow(
+        // Center
+        cc.compile("w / 2").unwrap(),
+        cc.compile("h / 2").unwrap(),
+        // Size
+        expr::load_var("w"),
+        expr::load_var("h"),
+        // Segments
+        16,
+        // Angles
+        0.,
+        2. * std::f32::consts::PI,
+        // Color
+        [0., 1., 0., 1.],
+    );
     let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.link(node);
 

@@ -276,6 +276,13 @@ pub async fn make(
         cc.compile("h + 1").unwrap(),
         sep_color,
     );
+    shape.add_gradient_box(
+        expr::const_f32(EMOJI_BG_W + 1.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [[0., 1., 0.64, 0.3], [0., 1., 0.64, 0.3], [0., 0.88, 1., 0.], [0., 0.88, 1., 0.]],
+    );
 
     let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.link(node);
@@ -624,14 +631,6 @@ pub async fn make(
         expr::load_var("h"),
         bg_color,
     );
-    // Left hand darker box
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(1.),
-        expr::const_f32(EMOJI_BG_W),
-        expr::load_var("h"),
-        lhs_bg_color,
-    );
     // Top line
     shape.add_filled_box(
         expr::const_f32(0.),
@@ -640,13 +639,20 @@ pub async fn make(
         expr::const_f32(1.),
         line_color,
     );
-    // Side line
-    shape.add_filled_box(
-        expr::const_f32(EMOJI_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(EMOJI_BG_W + 1.),
+    shape.add_radial_glow(
+        // Center
+        cc.compile("w / 2").unwrap(),
         expr::load_var("h"),
-        line_color,
+        // Size
+        expr::load_var("w"),
+        cc.compile("h / 4").unwrap(),
+        // Segments
+        8,
+        // Angles
+        std::f32::consts::PI,
+        2. * std::f32::consts::PI,
+        // Color
+        [0., 0.4, 0., 1.],
     );
     // Bottom line
     //shape.add_filled_box(
