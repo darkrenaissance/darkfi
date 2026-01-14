@@ -201,6 +201,8 @@ pub enum ModifyAction {
     Set(usize),
     SetCache(Vec<usize>),
     Push(usize),
+    Insert(usize),
+    Remove(usize, PropertyValue),
 }
 
 type ModifyPublisher = PublisherPtr<(Role, ModifyAction, BatchGuardPtr)>;
@@ -697,6 +699,204 @@ impl Property {
         self.push_value(atom, role, PropertyValue::SceneNodeId(val))
     }
 
+    // Insert
+
+    fn insert_value(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        value: PropertyValue,
+    ) -> Result<usize> {
+        if self.is_bounded() {
+            return Err(Error::PropertyIsBounded)
+        }
+        if index > self.get_len() {
+            return Err(Error::PropertyWrongIndex)
+        }
+
+        let mut vals = self.vals.lock().unwrap();
+        vals.insert(index, value);
+        drop(vals);
+
+        atom.add(self.clone(), role, ModifyAction::Insert(index));
+        Ok(index)
+    }
+
+    pub fn insert_null(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Null)
+    }
+
+    pub fn insert_bool(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: bool,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Bool(val))
+    }
+
+    pub fn insert_u32(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: u32,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Uint32(val))
+    }
+
+    pub fn insert_f32(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: f32,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Float32(val))
+    }
+
+    pub fn insert_str<S: Into<String>>(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: S,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Str(val.into()))
+    }
+
+    pub fn insert_enum<S: Into<String>>(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: S,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::Enum(val.into()))
+    }
+
+    pub fn insert_node_id(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+        val: SceneNodeId,
+    ) -> Result<usize> {
+        self.insert_value(atom, role, index, PropertyValue::SceneNodeId(val))
+    }
+
+    // Remove
+
+    fn remove_value(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<PropertyValue> {
+        if self.is_bounded() {
+            return Err(Error::PropertyIsBounded)
+        }
+        if index >= self.get_len() {
+            return Err(Error::PropertyWrongIndex)
+        }
+
+        let mut vals = self.vals.lock().unwrap();
+        let value = vals.remove(index);
+        drop(vals);
+
+        atom.add(self.clone(), role, ModifyAction::Remove(index, value.clone()));
+        Ok(value)
+    }
+
+    pub fn remove_null(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<()> {
+        self.remove_value(atom, role, index)?;
+        Ok(())
+    }
+
+    pub fn remove_bool(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<bool> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::Bool(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
+    pub fn remove_u32(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<u32> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::Uint32(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
+    pub fn remove_f32(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<f32> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::Float32(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
+    pub fn remove_str(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<String> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::Str(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
+    pub fn remove_enum(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<String> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::Enum(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
+    pub fn remove_node_id(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        index: usize,
+    ) -> Result<SceneNodeId> {
+        match self.remove_value(atom, role, index)? {
+            PropertyValue::SceneNodeId(v) => Ok(v),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
+
     // Get
 
     pub fn is_bounded(&self) -> bool {
@@ -876,13 +1076,14 @@ mod tests {
 
     #[test]
     fn test_getset() {
-        let prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop.set_f32(Role::App, 1, 4.).is_err());
+        let prop = Arc::new(Property::new("foo", PropertyType::Float32, PropertySubType::Null));
+        let atom = &mut PropertyAtomicGuard::none();
+        assert!(prop.set_f32(atom, Role::App, 1, 4.).is_err());
         assert!(prop.is_unset(0).unwrap());
-        assert!(prop.set_f32(Role::App, 0, 4.).is_ok());
+        assert!(prop.set_f32(atom, Role::App, 0, 4.).is_ok());
         assert_eq!(prop.get_f32(0).unwrap(), 4.);
         assert!(!prop.is_unset(0).unwrap());
-        prop.unset(Role::App, 0).unwrap();
+        prop.unset(atom, Role::App, 0).unwrap();
         assert!(prop.is_unset(0).unwrap());
         assert_eq!(prop.get_f32(0).unwrap(), 0.);
     }
@@ -890,17 +1091,19 @@ mod tests {
     #[test]
     fn test_nullable() {
         // default len is 1
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop.set_defaults_f32(vec![1.0, 0.0]).is_err());
-        assert!(prop.set_defaults_f32(vec![2.0]).is_ok());
-        prop.allow_null_values();
-        prop.set_null(Role::App, 0).unwrap();
+        let mut prop_temp = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        assert!(prop_temp.set_defaults_f32(vec![1.0, 0.0]).is_err());
+        assert!(prop_temp.set_defaults_f32(vec![2.0]).is_ok());
+        prop_temp.allow_null_values();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+        prop.set_null(atom, Role::App, 0).unwrap();
 
         assert!(prop.get_f32_opt(1).is_err());
         assert!(prop.get_f32_opt(0).is_ok());
         assert!(prop.get_f32_opt(0).unwrap().is_none());
 
-        prop.clear_values(Role::App);
+        prop.clear_values(atom, Role::App);
         assert!(prop.get_f32(0).is_ok());
         assert!(prop.get_f32_opt(0).unwrap().is_some());
         assert_eq!(prop.get_f32(0).unwrap(), 2.0);
@@ -908,64 +1111,228 @@ mod tests {
 
     #[test]
     fn test_nonnullable() {
-        let prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop.set_null(Role::App, 0).is_err());
+        let prop = Arc::new(Property::new("foo", PropertyType::Float32, PropertySubType::Null));
+        let atom = &mut PropertyAtomicGuard::none();
+        assert!(prop.set_null(atom, Role::App, 0).is_err());
         assert!(prop.is_unset(0).unwrap());
     }
 
     #[test]
     fn test_unbounded() {
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        prop.set_unbounded();
+        let mut prop_temp = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        prop_temp.set_unbounded();
+        prop_temp.allow_null_values();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
         assert_eq!(prop.get_len(), 0);
-        prop.push_f32(Role::App, 2.0).unwrap();
-        prop.push_f32(Role::App, 3.0).unwrap();
+        prop.push_f32(atom, Role::App, 2.0).unwrap();
+        prop.push_f32(atom, Role::App, 3.0).unwrap();
         assert_eq!(prop.get_len(), 2);
 
-        prop.clear_values(Role::App);
+        prop.clear_values(atom, Role::App);
         assert_eq!(prop.get_len(), 0);
-        prop.allow_null_values();
-        prop.push_null(Role::App).unwrap();
-        prop.push_f32(Role::App, 4.0).unwrap();
-        prop.push_f32(Role::App, 5.0).unwrap();
+        prop.push_null(atom, Role::App).unwrap();
+        prop.push_f32(atom, Role::App, 4.0).unwrap();
+        prop.push_f32(atom, Role::App, 5.0).unwrap();
         assert_eq!(prop.get_len(), 3);
         assert!(prop.get_f32_opt(0).unwrap().is_none());
         assert!(prop.get_f32_opt(1).unwrap().is_some());
         assert!(prop.get_f32_opt(2).unwrap().is_some());
         assert!(prop.get_f32_opt(3).is_err());
 
-        let prop2 = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop2.push_f32(Role::App, 4.0).is_err());
+        let prop2 = Arc::new(Property::new("foo", PropertyType::Float32, PropertySubType::Null));
+        let atom2 = &mut PropertyAtomicGuard::none();
+        assert!(prop2.push_f32(atom2, Role::App, 4.0).is_err());
     }
 
     #[test]
     fn test_range() {
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        let mut prop_temp = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
         let half_pi = 3.1415926535 / 2.;
-        prop.set_range_f32(-half_pi, half_pi);
-        assert!(prop.set_f32(Role::App, 0, 6.).is_err());
-        assert!(prop.set_f32(Role::App, 0, 1.).is_ok());
+        prop_temp.set_range_f32(-half_pi, half_pi);
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+        assert!(prop.set_f32(atom, Role::App, 0, 6.).is_err());
+        assert!(prop.set_f32(atom, Role::App, 0, 1.).is_ok());
     }
 
     #[test]
     fn test_enum() {
-        let mut prop = Property::new("foo", PropertyType::Enum, PropertySubType::Null);
-        prop.set_enum_items(vec!["ABC", "XYZ", "FOO"]).unwrap();
-        assert!(prop.set_enum(Role::App, 0, "ABC").is_ok());
-        assert!(prop.set_enum(Role::App, 0, "BAR").is_err());
+        let mut prop_temp = Property::new("foo", PropertyType::Enum, PropertySubType::Null);
+        prop_temp.set_enum_items(vec!["ABC", "XYZ", "FOO"]).unwrap();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+        assert!(prop.set_enum(atom, Role::App, 0, "ABC").is_ok());
+        assert!(prop.set_enum(atom, Role::App, 0, "BAR").is_err());
     }
 
     #[test]
     fn test_expr() {
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        prop.allow_exprs();
+        let mut prop_temp = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        prop_temp.allow_exprs();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
         assert_eq!(prop.get_f32(0).unwrap(), 0.);
         let code = vec![Op::ConstFloat32(4.)];
-        prop.set_expr(Role::App, 0, code).unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
         let val = prop.get_cached(0).unwrap();
         assert!(val.is_null());
-        prop.set_cache_f32(Role::App, 0, 4.).unwrap();
+        prop.set_cache_f32(atom, Role::App, 0, 4.).unwrap();
         let val = prop.get_cached(0).unwrap();
         assert_eq!(val.as_f32().unwrap(), 4.);
+    }
+
+    fn setup_test_property() -> Arc<Property> {
+        let mut prop_temp = Property::new("test", PropertyType::Str, PropertySubType::Null);
+        prop_temp.set_unbounded();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+        prop.push_str(atom, Role::Internal, "Item 1").unwrap();
+        prop.push_str(atom, Role::Internal, "Item 2").unwrap();
+        prop.push_str(atom, Role::Internal, "Item 3").unwrap();
+        prop
+    }
+
+    #[test]
+    fn test_insert_at_beginning() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        prop.insert_str(atom, Role::App, 0, "NEW").unwrap();
+
+        assert_eq!(prop.get_len(), 4);
+        assert_eq!(prop.get_str(0).unwrap(), "NEW");
+        assert_eq!(prop.get_str(1).unwrap(), "Item 1");
+        assert_eq!(prop.get_str(2).unwrap(), "Item 2");
+        assert_eq!(prop.get_str(3).unwrap(), "Item 3");
+    }
+
+    #[test]
+    fn test_insert_at_end() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        prop.insert_str(atom, Role::App, 3, "NEW").unwrap();
+
+        assert_eq!(prop.get_len(), 4);
+        assert_eq!(prop.get_str(0).unwrap(), "Item 1");
+        assert_eq!(prop.get_str(1).unwrap(), "Item 2");
+        assert_eq!(prop.get_str(2).unwrap(), "Item 3");
+        assert_eq!(prop.get_str(3).unwrap(), "NEW");
+    }
+
+    #[test]
+    fn test_insert_in_middle() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        prop.insert_str(atom, Role::App, 1, "NEW").unwrap();
+
+        assert_eq!(prop.get_len(), 4);
+        assert_eq!(prop.get_str(0).unwrap(), "Item 1");
+        assert_eq!(prop.get_str(1).unwrap(), "NEW");
+        assert_eq!(prop.get_str(2).unwrap(), "Item 2");
+        assert_eq!(prop.get_str(3).unwrap(), "Item 3");
+    }
+
+    #[test]
+    fn test_insert_bounded_fails() {
+        let mut prop_temp = Property::new("test", PropertyType::Str, PropertySubType::Null);
+        prop_temp.set_array_len(3);
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let result = prop.insert_str(atom, Role::App, 0, "NEW");
+        assert!(matches!(result, Err(Error::PropertyIsBounded)));
+    }
+
+    #[test]
+    fn test_insert_out_of_bounds_fails() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let result = prop.insert_str(atom, Role::App, 10, "NEW");
+        assert!(matches!(result, Err(Error::PropertyWrongIndex)));
+    }
+
+    #[test]
+    fn test_remove_from_beginning() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let removed = prop.remove_str(atom, Role::App, 0).unwrap();
+
+        assert_eq!(removed, "Item 1");
+        assert_eq!(prop.get_len(), 2);
+        assert_eq!(prop.get_str(0).unwrap(), "Item 2");
+        assert_eq!(prop.get_str(1).unwrap(), "Item 3");
+    }
+
+    #[test]
+    fn test_remove_from_end() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let removed = prop.remove_str(atom, Role::App, 2).unwrap();
+
+        assert_eq!(removed, "Item 3");
+        assert_eq!(prop.get_len(), 2);
+        assert_eq!(prop.get_str(0).unwrap(), "Item 1");
+        assert_eq!(prop.get_str(1).unwrap(), "Item 2");
+    }
+
+    #[test]
+    fn test_remove_from_middle() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let removed = prop.remove_str(atom, Role::App, 1).unwrap();
+
+        assert_eq!(removed, "Item 2");
+        assert_eq!(prop.get_len(), 2);
+        assert_eq!(prop.get_str(0).unwrap(), "Item 1");
+        assert_eq!(prop.get_str(1).unwrap(), "Item 3");
+    }
+
+    #[test]
+    fn test_remove_bounded_fails() {
+        let mut prop_temp = Property::new("test", PropertyType::Str, PropertySubType::Null);
+        prop_temp.set_array_len(3);
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let result = prop.remove_str(atom, Role::App, 0);
+        assert!(matches!(result, Err(Error::PropertyIsBounded)));
+    }
+
+    #[test]
+    fn test_remove_out_of_bounds_fails() {
+        let prop = setup_test_property();
+        let atom = &mut PropertyAtomicGuard::none();
+
+        let result = prop.remove_str(atom, Role::App, 10);
+        assert!(matches!(result, Err(Error::PropertyWrongIndex)));
+    }
+
+    #[test]
+    fn test_insert_remove_mixed_types() {
+        let mut prop_temp = Property::new("test", PropertyType::Float32, PropertySubType::Null);
+        prop_temp.set_unbounded();
+        let prop = Arc::new(prop_temp);
+        let atom = &mut PropertyAtomicGuard::none();
+
+        prop.push_f32(atom, Role::App, 1.0).unwrap();
+        prop.push_f32(atom, Role::App, 3.0).unwrap();
+
+        prop.insert_f32(atom, Role::App, 1, 2.0).unwrap();
+        assert_eq!(prop.get_f32(0).unwrap(), 1.0);
+        assert_eq!(prop.get_f32(1).unwrap(), 2.0);
+        assert_eq!(prop.get_f32(2).unwrap(), 3.0);
+
+        let removed = prop.remove_f32(atom, Role::App, 1).unwrap();
+        assert_eq!(removed, 2.0);
+        assert_eq!(prop.get_len(), 2);
+        assert_eq!(prop.get_f32(0).unwrap(), 1.0);
+        assert_eq!(prop.get_f32(1).unwrap(), 3.0);
     }
 }

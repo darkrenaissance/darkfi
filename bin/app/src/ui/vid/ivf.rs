@@ -254,7 +254,8 @@ mod tests {
         // Frame count
         header_data[24..28].copy_from_slice(&100u32.to_le_bytes());
 
-        let header = IvfDemuxer::parse_header(&header_data).unwrap();
+        let demuxer = IvfStreamingDemuxer::from_first_chunk(header_data).unwrap();
+        let header = demuxer.header;
 
         assert_eq!(&header.signature, b"DKIF");
         assert_eq!(&header.codec_fourcc, b"AV01");
@@ -270,7 +271,7 @@ mod tests {
         let mut header_data = vec![0u8; 32];
         header_data[0..4].copy_from_slice(b"BAD!");
 
-        let result = IvfDemuxer::from_bytes(header_data);
+        let result = IvfStreamingDemuxer::from_first_chunk(header_data);
         assert!(matches!(result, Err(IvfError::InvalidSignature(_))));
     }
 
@@ -281,7 +282,7 @@ mod tests {
         // VP8 instead of AV1
         header_data[8..12].copy_from_slice(b"VP80");
 
-        let result = IvfDemuxer::from_bytes(header_data);
+        let result = IvfStreamingDemuxer::from_first_chunk(header_data);
         assert!(matches!(result, Err(IvfError::UnsupportedCodec(_))));
     }
 }
