@@ -35,6 +35,9 @@ pub use netlogo2::create_netlogo2;
 mod netlogo3;
 pub use netlogo3::create_netlogo3;
 
+mod version_block;
+pub use version_block::create_version_block;
+
 //mod settings;
 //pub use settings::{create_right_border, create_settings};
 

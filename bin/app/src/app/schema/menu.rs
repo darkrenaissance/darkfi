@@ -25,6 +25,7 @@ use crate::{
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
+    shape,
     ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
@@ -37,6 +38,9 @@ mod android_ui_consts {
     pub const CHANNEL_LABEL_Y: f32 = 35.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
+    pub const VERBLOCK_SCALE: f32 = 150.;
+    pub const VERBLOCK_X: f32 = 180.;
+    pub const VERBLOCK_Y: f32 = 80.;
 }
 
 #[cfg(target_os = "android")]
@@ -58,11 +62,18 @@ mod ui_consts {
     pub const CHANNEL_LABEL_Y: f32 = 14.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
+    pub const VERBLOCK_SCALE: f32 = 25.;
+    pub const VERBLOCK_X: f32 = 50.;
+    pub const VERBLOCK_Y: f32 = 50.;
 }
 
 use ui_consts::*;
 
 pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+    let mut cc = expr::Compiler::new();
+    cc.add_const_f32("VERBLOCK_X", VERBLOCK_X);
+    cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
+
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/setting/scale").unwrap(),
         Role::Internal,
@@ -298,4 +309,18 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         channel_y += CHANNEL_LABEL_LINESPACE;
     }
+
+    let node = create_vector_art("net0");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - VERBLOCK_X").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h - VERBLOCK_Y").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let shape = shape::create_version_block([1., 0., 0.25, 1.]).scaled(VERBLOCK_SCALE);
+    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    layer_node.link(node);
 }

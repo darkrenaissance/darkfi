@@ -601,8 +601,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     menu::make(app, content.clone(), i18n_fish).await;
 
     // @@@ Debug stuff @@@
-    let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
-    chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let menu_node = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
-    menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    //let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
+    //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    //let menu_node = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
+    //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }
