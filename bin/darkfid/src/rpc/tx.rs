@@ -173,11 +173,13 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Queries the node pending transactions store to remove all transactions.
-    // Returns a vector of hex-encoded transaction hashes.
+    // Queries the node pending transactions store to remove all
+    // transactions.
+    // Returns `true` if the operation was successful, otherwise, a
+    // corresponding error.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.clean_pending", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": ["TxHash", "..."], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn tx_clean_pending(&self, id: u16, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
@@ -191,23 +193,12 @@ impl DarkfiNode {
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        let pending_txs = match self.validator.blockchain.get_pending_txs() {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {e}");
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
-        if let Err(e) = self.validator.blockchain.remove_pending_txs(&pending_txs) {
-            error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {e}");
+        if let Err(e) = self.validator.blockchain.remove_all_pending_txs() {
+            error!(target: "darkfid::rpc::tx_clean_pending", "Failed removing pending txs: {e}");
             return JsonError::new(InternalError, None, id).into()
         };
 
-        let pending_txs: Vec<JsonValue> =
-            pending_txs.iter().map(|x| JsonValue::String(x.hash().to_string())).collect();
-
-        JsonResponse::new(JsonValue::Array(pending_txs), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 
     // RPCAPI:

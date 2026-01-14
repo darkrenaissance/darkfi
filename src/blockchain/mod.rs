@@ -349,6 +349,24 @@ impl Blockchain {
         Ok(())
     }
 
+    /// Remove all transactions from the pending tx store.
+    pub fn remove_all_pending_txs(&self) -> Result<()> {
+        let txs: Vec<TransactionHash> =
+            self.transactions.get_all_pending()?.keys().copied().collect();
+        let indexes: Vec<u64> =
+            self.transactions.get_all_pending_order()?.iter().map(|(k, _)| *k).collect();
+
+        let txs_batch = self.transactions.remove_batch_pending(&txs);
+        let txs_order_batch = self.transactions.remove_batch_pending_order(&indexes);
+
+        // Perform an atomic transaction over the trees and apply the batches.
+        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
+        let batches = [txs_batch, txs_order_batch];
+        self.atomic_write(&trees, &batches)?;
+
+        Ok(())
+    }
+
     /// Auxiliary function to write to multiple trees completely atomic.
     fn atomic_write(&self, trees: &[sled::Tree], batches: &[sled::Batch]) -> Result<()> {
         if trees.len() != batches.len() {
