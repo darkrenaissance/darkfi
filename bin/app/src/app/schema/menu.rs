@@ -18,7 +18,10 @@
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_shortcut, create_text, create_vector_art},
+        node::{
+            create_button, create_layer, create_menu, create_shortcut, create_text,
+            create_vector_art,
+        },
         App,
     },
     expr,
@@ -26,7 +29,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, Layer, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
+    ui::{Button, Layer, Menu, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -73,6 +76,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("VERBLOCK_X", VERBLOCK_X);
     cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
+    cc.add_const_f32("CHANNEL_LABEL_LINESPACE", CHANNEL_LABEL_LINESPACE);
 
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/setting/scale").unwrap(),
@@ -167,8 +171,56 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .await;
     layer_node.link(node);
 
-    let mut channel_y = CHANNEL_LABEL_LINESPACE;
+    let node = create_menu("main_menu");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_LINESPACE).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    let code = cc.compile("h - CHANNEL_LABEL_LINESPACE").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "padding", CHANNEL_LABEL_LINESPACE).unwrap();
 
+    let prop = node.get_property("bg_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.1).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.07).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
+
+    node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
+
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let prop = node.get_property("sep_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.4).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.4).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let prop = node.get_property("padding").unwrap();
+    prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_LINESPACE / 2.).unwrap();
+
+    let prop = node.get_property("items").unwrap();
+    for channel in CHANNELS {
+        let label = "#".to_string() + channel;
+        prop.push_str(atom, Role::App, label).unwrap();
+    }
+    for channel in
+        ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
+    {
+        prop.push_str(atom, Role::App, channel).unwrap();
+    }
+
+    let node = node.setup(|me| Menu::new(me, window_scale.clone(), app.render_api.clone())).await;
+    layer_node.link(node);
+
+    /*
+    let mut channel_y = CHANNEL_LABEL_LINESPACE;
     for (i, channel) in CHANNELS.iter().enumerate() {
         let node = create_vector_art(&(channel.to_string() + "_channel_label_bg"));
         let prop = node.get_property("rect").unwrap();
@@ -309,8 +361,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         channel_y += CHANNEL_LABEL_LINESPACE;
     }
+    */
 
-    let node = create_vector_art("net0");
+    let node = create_vector_art("version_block");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - VERBLOCK_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
@@ -319,7 +372,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]).scaled(VERBLOCK_SCALE);
     let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
     layer_node.link(node);

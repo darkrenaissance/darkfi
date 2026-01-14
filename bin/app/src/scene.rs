@@ -117,6 +117,7 @@ pub enum SceneNodeType {
     EmojiPicker = 19,
     SettingRoot = 20,
     Setting = 21,
+    Menu = 22,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -545,6 +546,7 @@ pub enum Pimpl {
     Shortcut(ui::ShortcutPtr),
     Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
+    Menu(ui::MenuPtr),
     DarkIrc(plugin::DarkIrcPtr),
     Fud(plugin::FudPtr),
 }

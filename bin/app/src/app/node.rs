@@ -584,3 +584,94 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
 
     node
 }
+
+pub fn create_menu(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::Menu);
+
+    let mut prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
+    prop.set_defaults_bool(vec![true]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Scroll", "Scroll position from the top");
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Font Size", "Text font size in pixels");
+    prop.set_defaults_f32(vec![22.0]).unwrap();
+    prop.set_range_f32(1., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Padding", "Padding [left, top/bottom]");
+    prop.set_array_len(2);
+    prop.set_defaults_f32(vec![14.0, 14.0]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Text Color", "Text color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![1., 1., 1., 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Background Color", "Item background color");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.1, 0.1, 0.1, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("sep_size", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Separator Size", "Separator line thickness");
+    prop.set_defaults_f32(vec![1.0]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("sep_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Separator Color", "Separator line color");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.5, 0.5, 0.5, 0.3]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("scroll_start_accel", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Scroll Start Acceleration", "Multiplier for initial scroll velocity");
+    prop.set_defaults_f32(vec![1.0]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll_resist", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Scroll Resistance", "Momentum decay factor (0-1, lower = faster stop)");
+    prop.set_defaults_f32(vec![0.95]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("items", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Items", "Menu items");
+    prop.set_unbounded();
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "selected",
+        "Item selected",
+        vec![("item", "Selected item name", CallArgType::Str)],
+    )
+    .unwrap();
+
+    node
+}

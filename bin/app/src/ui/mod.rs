@@ -54,6 +54,8 @@ mod layer;
 pub use layer::{Layer, LayerPtr};
 mod shortcut;
 pub use shortcut::{Shortcut, ShortcutPtr};
+mod menu;
+pub use menu::{Menu, MenuPtr};
 mod text;
 pub use text::{Text, TextPtr};
 mod win;
@@ -211,6 +213,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::EmojiPicker(obj) => obj.clone(),
         Pimpl::Shortcut(obj) => obj.clone(),
         Pimpl::Gesture(obj) => obj.clone(),
+        Pimpl::Menu(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
@@ -227,6 +230,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
         Pimpl::Shortcut(obj) => obj.as_ref(),
         Pimpl::Gesture(obj) => obj.as_ref(),
+        Pimpl::Menu(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
