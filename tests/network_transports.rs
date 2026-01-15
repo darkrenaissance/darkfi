@@ -89,6 +89,38 @@ fn tcp_tls_transport() {
 }
 
 #[test]
+fn quic_transport() {
+    let executor = LocalExecutor::new();
+
+    smol::block_on(executor.run(async {
+        let listener = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let url = Url::parse(&format!("quic://127.0.0.1:{port}")).unwrap();
+
+        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
+
+        executor
+            .spawn(async move {
+                let (stream, _) = listener.next().await.unwrap();
+                let (mut reader, mut writer) = smol::io::split(stream);
+                io::copy(&mut reader, &mut writer).await.unwrap();
+            })
+            .detach();
+
+        let payload = "ohai quic";
+
+        let dialer = Dialer::new(url, None, None).await.unwrap();
+        let mut client = dialer.dial(None).await.unwrap();
+        payload.encode_async(&mut client).await.unwrap();
+
+        let buf: String = AsyncDecodable::decode_async(&mut client).await.unwrap();
+
+        assert_eq!(buf, payload);
+    }));
+}
+
+#[test]
 fn unix_transport() {
     let executor = LocalExecutor::new();
 

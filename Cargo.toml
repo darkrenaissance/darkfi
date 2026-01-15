@@ -67,6 +67,7 @@ tor-hscrypto = {version = "0.37.0", optional = true}
 tor-hsservice = {version = "0.37.0", optional = true}
 tor-proto = {version = "0.37.0", optional = true}
 tor-cell = {version = "0.37.0", optional = true}
+quinn = {git="https://github.com/parazyd/quinn", branch="no-tokio", default-features = false, features = ["rustls-ring", "runtime-smol"], optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.2.0", optional = true}
@@ -228,6 +229,7 @@ net-defaults = [
     "p2p-i2p",
     "p2p-socks5",
     "p2p-unix",
+    "p2p-quic",
 ]
 
 p2p-unix = []
@@ -236,6 +238,10 @@ p2p-socks5 = []
 
 p2p-i2p = [
     "p2p-socks5"
+]
+
+p2p-quic = [
+	"quinn"
 ]
 
 net = ["net-defaults"]

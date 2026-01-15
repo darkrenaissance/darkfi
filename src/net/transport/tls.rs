@@ -36,10 +36,13 @@ use x509_parser::{
     prelude::{GeneralName, ParsedExtension, X509Certificate},
 };
 
+/// The DNS name used for certificate validation across all transports
+pub(crate) const TLS_DNS_NAME: &str = "dark.fi";
+
 /// Validate certificate DNSName.
 fn validate_dnsname(cert: &X509Certificate) -> std::result::Result<(), rustls::Error> {
     #[rustfmt::skip]
-        let oid = x509_parser::oid_registry::asn1_rs::oid!(2.5.29.17);
+    let oid = x509_parser::oid_registry::asn1_rs::oid!(2.5.29.17);
     let Ok(Some(extension)) = cert.get_extension_unique(&oid) else {
         return Err(rustls::CertificateError::BadEncoding.into())
     };
@@ -59,15 +62,52 @@ fn validate_dnsname(cert: &X509Certificate) -> std::result::Result<(), rustls::E
         _ => return Err(rustls::CertificateError::BadEncoding.into()),
     };
 
-    if dns_name != "dark.fi" {
+    if dns_name != TLS_DNS_NAME {
         return Err(rustls::CertificateError::BadEncoding.into())
     }
 
     Ok(())
 }
 
+fn verify_ed25519_signature(
+    message: &[u8],
+    cert: &CertificateDer,
+    dss: &DigitallySignedStruct,
+) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+    if dss.scheme != SignatureScheme::ED25519 {
+        return Err(rustls::CertificateError::BadSignature.into())
+    }
+
+    // Read the DER-encoded certificate into a buffer
+    let buf: Vec<u8> = cert.iter().copied().collect();
+
+    // Parse the cert and extract the public key
+    let Ok((_, cert)) = parse_x509_certificate(&buf) else {
+        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing TLS certificate");
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    let Ok(public_key) = ed25519_compact::PublicKey::from_der(cert.public_key().raw) else {
+        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing public key");
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    let Ok(signature) = ed25519_compact::Signature::from_slice(dss.signature()) else {
+        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature");
+        return Err(rustls::CertificateError::BadSignature.into())
+    };
+
+    if let Err(e) = public_key.verify(message, &signature) {
+        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature: {e}");
+        return Err(rustls::CertificateError::BadSignature.into())
+    }
+
+    Ok(HandshakeSignatureValid::assertion())
+}
+
 #[derive(Debug)]
-struct ServerCertificateVerifier;
+pub(crate) struct ServerCertificateVerifier;
+
 impl ServerCertVerifier for ServerCertificateVerifier {
     fn verify_server_cert(
         &self,
@@ -78,10 +118,7 @@ impl ServerCertVerifier for ServerCertificateVerifier {
         _now: UnixTime,
     ) -> std::result::Result<ServerCertVerified, rustls::Error> {
         // Read the DER-encoded certificate into a buffer
-        let mut buf = Vec::with_capacity(end_entity.len());
-        for byte in end_entity.iter() {
-            buf.push(*byte);
-        }
+        let buf: Vec<u8> = end_entity.iter().copied().collect();
 
         // Parse the certificate
         let Ok((_, cert)) = parse_x509_certificate(&buf) else {
@@ -110,40 +147,7 @@ impl ServerCertVerifier for ServerCertificateVerifier {
         cert: &CertificateDer,
         dss: &DigitallySignedStruct,
     ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
-        // Verify we're using the correct signature scheme
-        if dss.scheme != SignatureScheme::ED25519 {
-            return Err(rustls::CertificateError::BadSignature.into())
-        }
-
-        // Read the DER-encoded certificate into a buffer
-        let mut buf = Vec::with_capacity(cert.len());
-        for byte in cert.iter() {
-            buf.push(*byte);
-        }
-
-        // Parse the certificate and extract the public key
-        let Ok((_, cert)) = parse_x509_certificate(&buf) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed parsing server TLS certificate");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        let Ok(public_key) = ed25519_compact::PublicKey::from_der(cert.public_key().raw) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed parsing server public key");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        // Verify the signature
-        let Ok(signature) = ed25519_compact::Signature::from_slice(dss.signature()) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature");
-            return Err(rustls::CertificateError::BadSignature.into())
-        };
-
-        if let Err(e) = public_key.verify(message, &signature) {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {e}");
-            return Err(rustls::CertificateError::BadSignature.into())
-        }
-
-        Ok(HandshakeSignatureValid::assertion())
+        verify_ed25519_signature(message, cert, dss)
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
@@ -152,7 +156,8 @@ impl ServerCertVerifier for ServerCertificateVerifier {
 }
 
 #[derive(Debug)]
-struct ClientCertificateVerifier;
+pub(crate) struct ClientCertificateVerifier;
+
 impl ClientCertVerifier for ClientCertificateVerifier {
     fn offer_client_auth(&self) -> bool {
         true
@@ -173,13 +178,10 @@ impl ClientCertVerifier for ClientCertificateVerifier {
         _now: UnixTime,
     ) -> std::result::Result<ClientCertVerified, rustls::Error> {
         // Read the DER-encoded certificate into a buffer
-        let mut cert = Vec::with_capacity(end_entity.len());
-        for byte in end_entity.iter() {
-            cert.push(*byte);
-        }
+        let buf: Vec<u8> = end_entity.iter().copied().collect();
 
         // Parse the certificate
-        let Ok((_, cert)) = parse_x509_certificate(&cert) else {
+        let Ok((_, cert)) = parse_x509_certificate(&buf) else {
             error!(target: "net::tls::verify_server_cert", "[net::tls] Failed parsing server TLS certificate");
             return Err(rustls::CertificateError::BadEncoding.into())
         };
@@ -205,45 +207,45 @@ impl ClientCertVerifier for ClientCertificateVerifier {
         cert: &CertificateDer,
         dss: &DigitallySignedStruct,
     ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
-        // Verify we're using the correct signature scheme
-        if dss.scheme != SignatureScheme::ED25519 {
-            return Err(rustls::CertificateError::BadSignature.into())
-        }
-
-        // Read the DER-encoded certificate into a buffer
-        let mut buf = Vec::with_capacity(cert.len());
-        for byte in cert.iter() {
-            buf.push(*byte);
-        }
-
-        // Parse the certificate and extract the public key
-        let Ok((_, cert)) = parse_x509_certificate(&buf) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed parsing server TLS certificate");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        let Ok(public_key) = ed25519_compact::PublicKey::from_der(cert.public_key().raw) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed parsing server public key");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        // Verify the signature
-        let Ok(signature) = ed25519_compact::Signature::from_slice(dss.signature()) else {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature");
-            return Err(rustls::CertificateError::BadSignature.into())
-        };
-
-        if let Err(e) = public_key.verify(message, &signature) {
-            error!(target: "net::tls::verify_tls13_signature", "[net::tls] Failed verifying server signature: {e}");
-            return Err(rustls::CertificateError::BadSignature.into())
-        }
-
-        Ok(HandshakeSignatureValid::assertion())
+        verify_ed25519_signature(message, cert, dss)
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         vec![SignatureScheme::ED25519]
     }
+}
+
+/// Generate a self-signed Ed25519 certificate for TLS.
+/// Returns the certificate and private key in DER format.
+pub(crate) fn generate_certificate() -> io::Result<(CertificateDer<'static>, PrivateKeyDer<'static>)>
+{
+    let Ok(keypair) = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519) else {
+        return Err(io::Error::other("Failed to generate TLS keypair"))
+    };
+
+    let Ok(mut cert_params) = rcgen::CertificateParams::new(&[]) else {
+        return Err(io::Error::other("Failed to generate TLS params"))
+    };
+
+    cert_params.subject_alt_names =
+        vec![rcgen::SanType::DnsName(Ia5String::try_from(TLS_DNS_NAME).unwrap())];
+    cert_params.extended_key_usages = vec![
+        rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+        rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+    ];
+
+    let Ok(certificate) = cert_params.self_signed(&keypair) else {
+        return Err(io::Error::other("Failed to sign TLS certificate"))
+    };
+
+    let certificate = certificate.der().clone();
+    let keypair_der = keypair.serialize_der();
+
+    let Ok(secret_key_der) = PrivateKeyDer::try_from(keypair_der) else {
+        return Err(io::Error::other("Failed to deserialize DER TLS secret"))
+    };
+
+    Ok((certificate, secret_key_der))
 }
 
 pub struct TlsUpgrade {
@@ -256,30 +258,7 @@ pub struct TlsUpgrade {
 impl TlsUpgrade {
     pub async fn new() -> io::Result<Self> {
         // On each instantiation, generate a new keypair and certificate
-        let Ok(keypair) = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519) else {
-            return Err(io::Error::other("Failed to generate TLS keypair"))
-        };
-
-        let Ok(mut cert_params) = rcgen::CertificateParams::new(&[]) else {
-            return Err(io::Error::other("Failed to generate TLS params"))
-        };
-
-        cert_params.subject_alt_names =
-            vec![rcgen::SanType::DnsName(Ia5String::try_from("dark.fi").unwrap())];
-        cert_params.extended_key_usages = vec![
-            rcgen::ExtendedKeyUsagePurpose::ClientAuth,
-            rcgen::ExtendedKeyUsagePurpose::ServerAuth,
-        ];
-
-        let Ok(certificate) = cert_params.self_signed(&keypair) else {
-            return Err(io::Error::other("Failed to sign TLS certificate"))
-        };
-        let certificate = certificate.der();
-
-        let keypair_der = keypair.serialize_der();
-        let Ok(secret_key_der) = PrivateKeyDer::try_from(keypair_der) else {
-            return Err(io::Error::other("Failed to deserialize DER TLS secret"))
-        };
+        let (certificate, secret_key_der) = generate_certificate()?;
 
         // Server-side config
         let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
@@ -307,7 +286,7 @@ impl TlsUpgrade {
     where
         IO: super::PtStream,
     {
-        let server_name = ServerName::try_from("dark.fi").unwrap();
+        let server_name = ServerName::try_from(TLS_DNS_NAME).unwrap();
         let connector = TlsConnector::from(self.client_config);
         let stream = connector.connect(server_name, stream).await?;
         Ok(TlsStream::Client(stream))

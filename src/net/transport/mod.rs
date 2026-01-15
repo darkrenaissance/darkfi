@@ -48,6 +48,10 @@ pub(crate) mod nym;
 #[cfg(feature = "p2p-unix")]
 pub(crate) mod unix;
 
+/// QUIC transport
+#[cfg(feature = "p2p-quic")]
+pub(crate) mod quic;
+
 /// Dialer variants
 #[derive(Debug, Clone)]
 pub enum DialerVariant {
@@ -84,6 +88,9 @@ pub enum DialerVariant {
     /// SOCKS5 proxy with TLS
     #[cfg(feature = "p2p-socks5")]
     Socks5Tls(socks5::Socks5Dialer),
+
+    /// QUIC (with built-in TLS)
+    Quic(quic::QuicDialer),
 }
 
 /// Listener variants
@@ -99,9 +106,13 @@ pub enum ListenerVariant {
     /// Tor
     Tor(tor::TorListener),
 
-    /// Unix socket
     #[cfg(feature = "p2p-unix")]
+    /// Unix socket
     Unix(unix::UnixListener),
+
+    #[cfg(feature = "p2p-quic")]
+    /// QUIC (with built-in TLS)
+    Quic(quic::QuicListener),
 }
 
 /// A dialer that is able to transparently operate over arbitrary transports.
@@ -243,6 +254,15 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-quic")]
+            "quic" => {
+                // Build a QUIC dialer (TLS is built-in)
+                enforce_hostport!(endpoint);
+                let variant = quic::QuicDialer::new().await?;
+                let variant = DialerVariant::Quic(variant);
+                Ok(Self { endpoint, variant })
+            }
+
             x => {
                 error!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
@@ -323,6 +343,13 @@ impl Dialer {
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
+
+            #[cfg(feature = "p2p-quic")]
+            DialerVariant::Quic(dialer) => {
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let stream = dialer.do_dial(sockaddr[0], timeout).await?;
+                Ok(Box::new(stream))
+            }
         }
     }
 
@@ -378,6 +405,14 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-quic")]
+            "quic" => {
+                enforce_hostport!(endpoint);
+                let variant = quic::QuicListener::new().await?;
+                let variant = ListenerVariant::Quic(variant);
+                Ok(Self { endpoint, variant })
+            }
+
             x => {
                 error!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
@@ -419,6 +454,13 @@ impl Listener {
                 let l = listener.do_listen(&path).await?;
                 Ok(Box::new(l))
             }
+
+            #[cfg(feature = "p2p-quic")]
+            ListenerVariant::Quic(listener) => {
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let l = listener.do_listen(sockaddr[0]).await?;
+                Ok(Box::new(l))
+            }
         }
     }
 
@@ -443,8 +485,24 @@ impl Listener {
 
                 endpoint
             }
+
             #[cfg(feature = "p2p-tor")]
             ListenerVariant::Tor(listener) => listener.endpoint.get().unwrap().clone(),
+
+            #[cfg(feature = "p2p-quic")]
+            ListenerVariant::Quic(listener) => {
+                let mut endpoint = self.endpoint.clone();
+                let port = self.endpoint.port().unwrap();
+
+                if port == 0 {
+                    if let Some(actual_port) = listener.port.get() {
+                        endpoint.set_port(Some(*actual_port)).unwrap();
+                    }
+                }
+
+                endpoint
+            }
+
             #[allow(unreachable_patterns)]
             _ => self.endpoint.clone(),
         }
@@ -466,6 +524,9 @@ impl PtStream for futures_rustls::TlsStream<arti_client::DataStream> {}
 
 #[cfg(feature = "p2p-unix")]
 impl PtStream for smol::net::unix::UnixStream {}
+
+#[cfg(feature = "p2p-quic")]
+impl PtStream for quic::QuicStream {}
 
 /// Wrapper trait for async listeners
 #[async_trait]
