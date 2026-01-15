@@ -11,6 +11,8 @@ witness "Rlnv2Diff_Slash" {
 }
 
 circuit "Rlnv2Diff_Slash" {
+	constrain_instance(secret_key);
+	constrain_instance(user_message_limit);
 	identity_secret_hash = poseidon_hash(secret_key, user_message_limit);
 	identity_commitment = poseidon_hash(identity_secret_hash);
 	root = sparse_merkle_root(identity_commitment, path, identity_commitment);

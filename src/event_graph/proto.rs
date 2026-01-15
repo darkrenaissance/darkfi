@@ -31,14 +31,17 @@ use darkfi_sdk::{
     pasta::{pallas, Fp},
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, deserialize_async_partial, SerialDecodable, SerialEncodable,
+    async_trait, deserialize_async, deserialize_async_partial, serialize_async, SerialDecodable,
+    SerialEncodable,
 };
 use smol::Executor;
 use tracing::{debug, error, info, trace, warn};
 
 use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS};
 use crate::{
-    event_graph::util::{closest_epoch, hash_event, sss_recover, MessageMetadata},
+    event_graph::util::{
+        closest_epoch, create_slash_proof, hash_event, sss_recover, MessageMetadata,
+    },
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -305,11 +308,11 @@ impl ProtocolEventGraph {
                 if blob.is_empty() {
                     break
                 }
-                let (proof, y, internal_nullifier, identity_root): (
+                let (proof, y, internal_nullifier, user_msg_limit): (
                     Proof,
                     pallas::Base,
                     pallas::Base,
-                    pallas::Base,
+                    u64,
                 ) = match deserialize_async_partial(&blob).await {
                     Ok((v, _)) => v,
                     Err(e) => {
@@ -328,26 +331,48 @@ impl ProtocolEventGraph {
                 let epoch = pallas::Base::from(current_epoch);
                 let external_nullifier = poseidon_hash([epoch, rln_app_identifier]);
                 let x = hash_event(&event);
+                let identity_root = self.event_graph.rln_identity_tree.read().await.root();
                 let public_inputs =
                     vec![identity_root, external_nullifier, x, y, internal_nullifier];
 
                 if metadata.is_duplicate(&external_nullifier, &internal_nullifier, &x, &y) {
-                    error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Duplicate Message!");
+                    error!(target: "event_graph::protocol::handle_event_put()", "[RLN] Duplicate Message!");
                     verification_failed = true;
                     break
                 }
 
-                info!("internal nullifier: {}", internal_nullifier.to_string());
                 if metadata.is_reused(&external_nullifier, &internal_nullifier) {
-                    info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Metadata is reused.. slashing..");
+                    info!(target: "event_graph::protocol::handle_event_put()", "[RLN] Metadata is reused.. slashing..");
                     let shares = metadata.get_shares(&external_nullifier, &internal_nullifier);
-                    let _secret = sss_recover(&shares);
+                    let secret = sss_recover(&shares);
 
-                    // TODO: broadcast slashing event
-                    // let evgr = &self.event_graph;
-                    // let st_event = Event::new_static(serialize_async(&secret).await, evgr).await;
-                    // evgr.static_insert(&st_event).await?;
-                    // evgr.static_broadcast(st_event);
+                    // Broadcast slashing event
+                    let slash_pk = &self.event_graph.slash_pk;
+                    let mut identity_tree = self.event_graph.rln_identity_tree.write().await;
+
+                    info!("[RLN] Creating slashing proof");
+                    let (proof, identity_root) = match create_slash_proof(
+                        secret,
+                        user_msg_limit,
+                        &mut identity_tree,
+                        slash_pk,
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RLN] Failed creating RLN slash proof: {}", e);
+                            // Just use an empty "proof"
+                            (Proof::new(vec![]), pallas::Base::from(0))
+                        }
+                    };
+                    drop(identity_tree);
+
+                    let blob =
+                        serialize_async(&(proof, secret, user_msg_limit, identity_root)).await;
+
+                    let evgr = &self.event_graph;
+                    let st_event = Event::new_static(vec![0, 1], evgr).await;
+                    evgr.static_broadcast(st_event, blob).await?;
+
                     verification_failed = true;
                     break
                 }
@@ -355,7 +380,7 @@ impl ProtocolEventGraph {
                 // At this point we can safely add the shares
                 metadata.add_share(external_nullifier, internal_nullifier, x, y)?;
 
-                info!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Verifying incoming Event RLN proof");
+                info!(target: "event_graph::protocol::handle_event_put()", "[RLN] Verifying incoming Event RLN proof");
                 verification_failed =
                     proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
 
@@ -363,7 +388,7 @@ impl ProtocolEventGraph {
             }
 
             if verification_failed {
-                error!(target: "event_graph::protocol::handle_event_put()", "[EVENTGRAPH] Incoming Event RLN Signaling proof verification failed");
+                error!(target: "event_graph::protocol::handle_event_put()", "[RLN] Incoming Event RLN Signaling proof verification failed");
                 continue
             }
 
@@ -647,13 +672,14 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            if !blob.is_empty() {
+            // Register
+            if !blob.is_empty() && !event.content().is_empty() {
                 let (proof, user_msg_limit): (Proof, u64) = match deserialize_async_partial(&blob)
                     .await
                 {
                     Ok((v, _)) => v,
                     Err(e) => {
-                        error!(target: "event_graph::protocol::handle_static_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
+                        error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
                         continue
                     }
                 };
@@ -664,13 +690,47 @@ impl ProtocolEventGraph {
                         continue
                     }
                 };
+                info!("registering account: {}", commitment.to_string());
                 let public_inputs = vec![commitment, user_msg_limit.into()];
 
                 if proof.verify(&self.event_graph.register_vk, &public_inputs).is_err() {
-                    error!(target: "event_graph::protocol::handle_static_put()", "[EVENTGRAPH] Incoming Event RLN Registration proof verification failed");
+                    error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Registration proof verification failed");
                     continue
                 }
             }
+
+            // Slash
+            if event.content() == vec![0, 1] {
+                let (proof, secret, user_msg_limit, identity_root): (
+                    Proof,
+                    pallas::Base,
+                    u64,
+                    pallas::Base,
+                ) = match deserialize_async_partial(&blob).await {
+                    Ok((v, _)) => v,
+                    Err(e) => {
+                        error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
+                        continue
+                    }
+                };
+
+                let public_inputs = vec![secret, pallas::Base::from(user_msg_limit), identity_root];
+
+                if proof.verify(&self.event_graph.slash_vk, &public_inputs).is_err() {
+                    error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Slashing proof verification failed");
+                    continue
+                }
+
+                let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
+                let commitment = poseidon_hash([identity_secret_hash]);
+                info!("slashing account: {}", commitment.to_string());
+                let commitment = vec![commitment];
+                let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+
+                let mut rln_id_tree = self.event_graph.rln_identity_tree.write().await;
+                rln_id_tree.remove_leaves(commitment)?;
+            }
+
             // Check if event's parents are in the static DAG
             for parent in event.header.parents.iter() {
                 if *parent == NULL_ID {
@@ -740,7 +800,7 @@ impl ProtocolEventGraph {
             // If we do have it, we will send it back to them as `EventRep`.
             // Otherwise, we'll stay quiet. An honest node should always have
             // something to reply with provided that the request is legitimate,
-            // i.e. we've sent something to them and they did not have some of
+            // i.e. we've sent something to them and they did not haveinfo some of
             // the parents.
 
             // Check if we expected this request to come around.

@@ -47,11 +47,9 @@ pub const RLN2_REGISTER_ZKBIN: &[u8] =
     include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-register.zk.bin");
 pub const RLN2_SIGNAL_ZKBIN: &[u8] =
     include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-signal.zk.bin");
-pub const RLN2_SLASH_ZKBIN: &[u8] =
-    include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-slash.zk.bin");
 
-/// TODO: this should be configurable
-pub const MAX_MSG_LIMIT: u64 = 20;
+/// TODO: this is arbitrary it should be based on stake
+pub const MAX_MSG_LIMIT: u64 = 100;
 
 /// Find closest epoch to given timestamp
 pub fn closest_epoch(timestamp: u64) -> u64 {
@@ -135,7 +133,7 @@ impl RlnIdentity {
         event: &Event,
         identity_tree: &SmtMemoryFp,
         signal_pk: &ProvingKey,
-    ) -> Result<(Proof, pallas::Base, pallas::Base, pallas::Base)> {
+    ) -> Result<(Proof, pallas::Base, pallas::Base, u64)> {
         // 1. Construct share
         let rln_app_identifier = pallas::Base::from(1000);
         let epoch = pallas::Base::from(closest_epoch(event.header.timestamp));
@@ -173,7 +171,7 @@ impl RlnIdentity {
         let signal_circuit = ZkCircuit::new(witnesses.clone(), &signal_zkbin);
 
         let proof = Proof::create(signal_pk, &[signal_circuit], &public_inputs, &mut OsRng)?;
-        Ok((proof, y, internal_nullifier, identity_root))
+        Ok((proof, y, internal_nullifier, self.user_message_limit))
         // Ok((proof, public_inputs))
     }
 }

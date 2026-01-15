@@ -26,10 +26,7 @@ use darkfi::{
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::{
-    crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
-    pasta::Fp,
-};
+use darkfi_sdk::pasta::Fp;
 use darkfi_serial::{deserialize_async, deserialize_async_partial};
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
@@ -53,7 +50,7 @@ use super::{
 };
 use crate::{
     crypto::{
-        rln::{RlnIdentity, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN, RLN2_SLASH_ZKBIN},
+        rln::{RlnIdentity, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN},
         saltbox,
     },
     settings::{
@@ -93,8 +90,6 @@ pub struct IrcServer {
     pub password: String,
     /// Persistent server storage
     pub server_store: sled::Tree,
-    /// RLN identity storage
-    pub rln_identity_tree: RwLock<SmtMemoryFp>,
 }
 
 impl IrcServer {
@@ -151,9 +146,6 @@ impl IrcServer {
 
         // Open persistent dbs
         let server_store = darkirc.sled.open_tree("server_store")?;
-        let hasher = PoseidonFp::new();
-        let store = MemoryStorageFp::new();
-        let mut identity_tree = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         // Generate RLN proving and verifying keys, if needed
         let rln_register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
@@ -168,14 +160,6 @@ impl IrcServer {
             server_store.insert("rlnv2-diff-register-pk", buf)?;
         }
 
-        // if server_store.get("rlnv2-diff-register-vk")?.is_none() {
-        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
-        //     let verifyingkey = VerifyingKey::build(rln_register_zkbin.k, &rln_register_circuit);
-        //     let mut buf = vec![];
-        //     verifyingkey.write(&mut buf)?;
-        //     server_store.insert("rlnv2-diff-register-vk", buf)?;
-        // }
-
         // Generate RLN proving and verifying keys, if needed
         let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
         let rln_signal_circuit =
@@ -189,39 +173,8 @@ impl IrcServer {
             server_store.insert("rlnv2-diff-signal-pk", buf)?;
         }
 
-        // if server_store.get("rlnv2-diff-signal-vk")?.is_none() {
-        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-        //     let verifyingkey = VerifyingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
-        //     let mut buf = vec![];
-        //     verifyingkey.write(&mut buf)?;
-        //     server_store.insert("rlnv2-diff-signal-vk", buf)?;
-        // }
-
-        // Generate RLN proving and verifying keys, if needed
-        let rln_slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN)?;
-        let rln_slash_circuit =
-            ZkCircuit::new(empty_witnesses(&rln_slash_zkbin)?, &rln_slash_zkbin);
-
-        if server_store.get("rlnv2-diff-slash-pk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
-            let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
-            let provingkey = ProvingKey::build(zkbin.k, &circuit);
-            let provingkey = ProvingKey::build(rln_slash_zkbin.k, &rln_slash_circuit);
-            let mut buf = vec![];
-            provingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-slash-pk", buf)?;
-        }
-
-        // if server_store.get("rlnv2-diff-slash-vk")?.is_none() {
-        //     info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-        //     let verifyingkey = VerifyingKey::build(rln_slash_zkbin.k, &rln_slash_circuit);
-        //     let mut buf = vec![];
-        //     verifyingkey.write(&mut buf)?;
-        //     server_store.insert("rlnv2-diff-slash-vk", buf)?;
-        // }
-
         // Construct SMT from static DAG
+        let mut identity_tree = darkirc.event_graph.rln_identity_tree.write().await;
         let mut events = darkirc.event_graph.static_fetch_all().await?;
         events.sort_by(|a, b| a.header.timestamp.cmp(&b.header.timestamp));
 
@@ -240,6 +193,8 @@ impl IrcServer {
             let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
             identity_tree.insert_batch(commitment)?;
         }
+
+        drop(identity_tree);
 
         // Set the default RLN account if any
         let default_db = darkirc.sled.open_tree(format!("{}default", ACCOUNTS_DB_PREFIX))?;
@@ -264,7 +219,6 @@ impl IrcServer {
             clients: Mutex::new(HashMap::new()),
             password,
             server_store,
-            rln_identity_tree: RwLock::new(identity_tree),
         });
 
         // Load any channel/contact configuration.
