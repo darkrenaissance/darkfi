@@ -74,9 +74,12 @@ main {
     overflow-x: auto;
 }
 
-/* Don't change font size in headers. */
+/* Don't change font size in headers. Use inline code colors. */
 h1 code, h2 code, h3 code, h4 code, h5 code, h6 code {
     font-size: unset;
+    color: var(--inline-code-color);
+    background-color: var(--hljs-inline-bg);
+    border: 1px solid var(--hljs-inline-border);
 }
 
 .left { float: left; }

@@ -526,6 +526,9 @@ html:not(.sidebar-resizing) .sidebar {
 }
 .sidebar code {
     line-height: 2em;
+    color: var(--inline-code-color);
+    background-color: var(--hljs-inline-bg);
+    border: 1px solid var(--hljs-inline-border);
 }
 .sidebar .sidebar-scrollbox {
     overflow-y: auto;
