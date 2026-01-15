@@ -19,7 +19,6 @@
 // use async_std::stream::from_iter;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    io::Cursor,
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -27,6 +26,7 @@ use std::{
 
 // use futures::stream::FuturesOrdered;
 use blake3::Hash;
+use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP};
 use darkfi_serial::{deserialize_async, serialize_async};
 use event::Header;
 use futures::{
@@ -46,12 +46,14 @@ use url::Url;
 use crate::{
     event_graph::{
         proto::StaticPut,
-        util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
+        util::{
+            build_register_vk, build_signal_vk, build_slash_pk, build_slash_vk,
+            next_hour_timestamp, next_rotation_timestamp, replayer_log,
+        },
     },
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
-    zk::{empty_witnesses, VerifyingKey, ZkCircuit},
-    zkas::ZkBinary,
+    zk::{ProvingKey, VerifyingKey},
     Error, Result,
 };
 
@@ -100,10 +102,6 @@ pub const NULL_PARENTS: [Hash; N_EVENT_PARENTS] = [NULL_ID; N_EVENT_PARENTS];
 
 /// Maximum number of DAGs to store, this should be configurable
 pub const DAGS_MAX_NUMBER: i8 = 24;
-
-pub const RLN2_REGISTER_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-register.zk.bin");
-pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-signal.zk.bin");
-pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-slash.zk.bin");
 
 /// Atomic pointer to an [`EventGraph`] instance.
 pub type EventGraphPtr = Arc<EventGraph>;
@@ -377,8 +375,12 @@ pub struct EventGraph {
     register_vk: VerifyingKey,
     /// Signaling verify key
     signal_vk: VerifyingKey,
+    /// Slashing proving key
+    slash_pk: ProvingKey,
     /// Slashing verify key
     slash_vk: VerifyingKey,
+    /// RLN identity storage
+    pub rln_identity_tree: RwLock<SmtMemoryFp>,
 }
 
 impl EventGraph {
@@ -403,65 +405,14 @@ impl EventGraph {
         hours_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
-        // Read or build signal verifying key
-        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
-        let register_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
+        let register_vk = build_register_vk(&sled_db)?;
+        let signal_vk = build_signal_vk(&sled_db)?;
+        let slash_pk = build_slash_pk(&sled_db)?;
+        let slash_vk = build_slash_vk(&sled_db)?;
 
-        let register_vk = match sled_db.get("rlnv2-diff-register-vk")? {
-            Some(vk) => {
-                let mut reader = Cursor::new(vk);
-                VerifyingKey::read(&mut reader, register_empty_circuit)?
-            }
-            None => {
-                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
-                let verifyingkey = VerifyingKey::build(register_zkbin.k, &register_empty_circuit);
-                let mut buf = vec![];
-                verifyingkey.write(&mut buf)?;
-                sled_db.insert("rlnv2-diff-register-vk", buf)?;
-                verifyingkey
-            }
-        };
-
-        // Read or build signal verifying key
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
-        let signal_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
-
-        let signal_vk = match sled_db.get("rlnv2-diff-signal-vk")? {
-            Some(vk) => {
-                let mut reader = Cursor::new(vk);
-                VerifyingKey::read(&mut reader, signal_empty_circuit)?
-            }
-            None => {
-                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-                let verifyingkey = VerifyingKey::build(signal_zkbin.k, &signal_empty_circuit);
-                let mut buf = vec![];
-                verifyingkey.write(&mut buf)?;
-                sled_db.insert("rlnv2-diff-signal-vk", buf)?;
-                verifyingkey
-            }
-        };
-
-        // Read or build slash verifying key
-        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
-        let slash_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
-
-        let slash_vk = match sled_db.get("rlnv2-diff-slash-vk")? {
-            Some(vk) => {
-                let mut reader = Cursor::new(vk);
-                VerifyingKey::read(&mut reader, slash_empty_circuit)?
-            }
-            None => {
-                info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-                let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
-                let mut buf = vec![];
-                verifyingkey.write(&mut buf)?;
-                sled_db.insert("rlnv2-diff-slash-vk", buf)?;
-                verifyingkey
-            }
-        };
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let identity_tree = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_pub = Publisher::new();
@@ -498,7 +449,9 @@ impl EventGraph {
             deg_publisher: Publisher::new(),
             register_vk,
             signal_vk,
+            slash_pk,
             slash_vk,
+            rln_identity_tree: RwLock::new(identity_tree),
         });
 
         // Check if we have it in our DAG.

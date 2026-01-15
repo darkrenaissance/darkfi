@@ -223,17 +223,17 @@ impl Client {
 
                                         rln_identity.message_id += 1;
 
-                                        let (proof, y, internal_nullifier, identity_root) = match self.create_rln_signal_proof(&rln_identity, &event).await {
+                                        let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(&rln_identity, &event).await {
                                             Ok(v) => v,
                                             Err(e) => {
                                                 // TODO: Send a message to the IRC client telling that sending went wrong
                                                 error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
                                                 // Just use an empty "proof"
-                                                (Proof::new(vec![]), pallas::Base::from(0), pallas::Base::from(0), pallas::Base::from(0))
+                                                (Proof::new(vec![]), pallas::Base::from(0), pallas::Base::from(0), 0)
                                             }
                                         };
 
-                                        let blob = serialize_async(&(proof, y, internal_nullifier, identity_root)).await;
+                                        let blob = serialize_async(&(proof, y, internal_nullifier, user_msg_limit)).await;
 
                                         self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
                                     } else {
@@ -363,7 +363,6 @@ impl Client {
                     }
 
                     // Update SMT
-                    let mut identities_tree = self.server.rln_identity_tree.write().await;
                     let fetched_rln_commitment: Fp = match deserialize_async_partial(r.content()).await
                     {
                         Ok((v, _)) => v,
@@ -374,7 +373,9 @@ impl Client {
                     };
                     let commitment = vec![fetched_rln_commitment];
                     let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+                    let mut identities_tree = self.server.darkirc.event_graph.rln_identity_tree.write().await;
                     identities_tree.insert_batch(commitment)?;
+                    drop(identities_tree);
 
                     // Mark the message as seen for this USER
                     if let Err(e) = self.mark_seen(&event_id).await {
@@ -593,8 +594,8 @@ impl Client {
         &self,
         rln_identity: &RlnIdentity,
         event: &Event,
-    ) -> Result<(Proof, pallas::Base, pallas::Base, pallas::Base)> {
-        let identity_tree = self.server.rln_identity_tree.read().await;
+    ) -> Result<(Proof, pallas::Base, pallas::Base, u64)> {
+        let identity_tree = self.server.darkirc.event_graph.rln_identity_tree.read().await;
 
         // Retrieve the ZK proving key from the db
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;

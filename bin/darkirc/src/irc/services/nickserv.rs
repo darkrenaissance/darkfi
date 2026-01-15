@@ -214,8 +214,6 @@ impl NickServ {
         let evgr = &self.server.darkirc.event_graph;
         let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
 
-        let mut identity_tree = self.server.rln_identity_tree.write().await;
-
         // Retrieve the register ZK proving key from the db
         let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
         let register_circuit = ZkCircuit::new(empty_witnesses(&register_zkbin)?, &register_zkbin);
@@ -226,12 +224,14 @@ impl NickServ {
         };
         let mut reader = Cursor::new(proving_key);
         let proving_key = ProvingKey::read(&mut reader, register_circuit)?;
+        let mut identity_tree = self.server.darkirc.event_graph.rln_identity_tree.write().await;
 
         let proof =
             new_rln_identity.create_register_proof(&event, &mut identity_tree, &proving_key)?;
 
-        let blob = serialize_async(&(proof, user_msg_limit)).await;
+        drop(identity_tree);
 
+        let blob = serialize_async(&(proof, user_msg_limit)).await;
         evgr.static_insert(&event).await?;
         evgr.static_broadcast(event, blob).await?;
 
