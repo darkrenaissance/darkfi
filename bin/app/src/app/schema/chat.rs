@@ -276,12 +276,17 @@ pub async fn make(
         cc.compile("h + 1").unwrap(),
         sep_color,
     );
-    shape.add_gradient_box(
+    let color1 = [0., 0.17, 0.18, 0.3];
+    let color2 = [0., 0.88, 1., 0.];
+    shape.add_smooth_vertical_gradient(
         expr::const_f32(EMOJI_BG_W + 1.),
         expr::const_f32(0.),
         expr::load_var("w"),
-        expr::load_var("h"),
-        [[0., 1., 0.64, 0.3], [0., 1., 0.64, 0.3], [0., 0.88, 1., 0.], [0., 0.88, 1., 0.]],
+        cc.compile("h / 2").unwrap(),
+        color1,
+        color2,
+        8,
+        0.2,
     );
 
     let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
@@ -652,7 +657,7 @@ pub async fn make(
         std::f32::consts::PI,
         2. * std::f32::consts::PI,
         // Color
-        [0., 0.4, 0., 1.],
+        [0., 0.28, 0.2, 1.],
     );
     // Bottom line
     //shape.add_filled_box(

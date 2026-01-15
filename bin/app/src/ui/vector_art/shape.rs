@@ -136,6 +136,80 @@ impl VectorShape {
         self.indices.append(&mut indices);
     }
 
+    /// Create a smooth vertical gradient by subdividing into multiple strips.
+    /// This provides a more linear-looking fade than add_gradient_box with 2 colors.
+    ///
+    /// # Arguments
+    /// * `x1, y1` - Top-left corner
+    /// * `x2, y2` - Bottom-right corner
+    /// * `top_color` - Color at the top edge
+    /// * `bottom_color` - Color at the bottom edge
+    /// * `strips` - Number of horizontal strips (more = smoother gradient, try 8-16)
+    /// * `gamma` - Low gamma below 0.5 is good
+    pub fn add_smooth_vertical_gradient(
+        &mut self,
+        mut x1: SExprCode,
+        mut y1: SExprCode,
+        mut x2: SExprCode,
+        mut y2: SExprCode,
+        top_color: Color,
+        bottom_color: Color,
+        strips: usize,
+        gamma: f32,
+    ) {
+        let x1 = x1.pop().unwrap();
+        let y1 = y1.pop().unwrap();
+        let x2 = x2.pop().unwrap();
+        let y2 = y2.pop().unwrap();
+
+        // Use inverse power curve for perceptually smooth alpha blending
+        // This puts more strips where alpha is high (visible changes)
+        for i in 0..strips {
+            // Linear strip positions (equal height strips)
+            let t0 = i as f32 / strips as f32;
+            let t1 = (i + 1) as f32 / strips as f32;
+
+            // Apply inverse gamma to COLOR interpolation (not positions!)
+            // This makes color changes more perceptually uniform
+            let t0_color = t0.powf(gamma);
+            let t1_color = t1.powf(gamma);
+
+            // Interpolate colors with gamma correction
+            let color_top = [
+                top_color[0] + (bottom_color[0] - top_color[0]) * t0_color,
+                top_color[1] + (bottom_color[1] - top_color[1]) * t0_color,
+                top_color[2] + (bottom_color[2] - top_color[2]) * t0_color,
+                top_color[3] + (bottom_color[3] - top_color[3]) * t0_color,
+            ];
+
+            let color_bottom = [
+                top_color[0] + (bottom_color[0] - top_color[0]) * t1_color,
+                top_color[1] + (bottom_color[1] - top_color[1]) * t1_color,
+                top_color[2] + (bottom_color[2] - top_color[2]) * t1_color,
+                top_color[3] + (bottom_color[3] - top_color[3]) * t1_color,
+            ];
+
+            // Y coordinates use LINEAR spacing (equal strip heights)
+            let y_top = vec![Op::Add((
+                Box::new(Op::Mul((Box::new(Op::ConstFloat32(1.0 - t0)), Box::new(y1.clone())))),
+                Box::new(Op::Mul((Box::new(Op::ConstFloat32(t0)), Box::new(y2.clone())))),
+            ))];
+
+            let y_bottom = vec![Op::Add((
+                Box::new(Op::Mul((Box::new(Op::ConstFloat32(1.0 - t1)), Box::new(y1.clone())))),
+                Box::new(Op::Mul((Box::new(Op::ConstFloat32(t1)), Box::new(y2.clone())))),
+            ))];
+
+            self.add_gradient_box(
+                vec![x1.clone()],
+                y_top,
+                vec![x2.clone()],
+                y_bottom,
+                [color_top, color_top, color_bottom, color_bottom],
+            );
+        }
+    }
+
     pub fn add_outline(
         &mut self,
         x1: SExprCode,
