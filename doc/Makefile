@@ -11,7 +11,6 @@ JSONRPC = \
 all: $(JSONRPC)
 	./generate_seminar_ics.py --table > src/dev/seminars.md
 	mdbook build
-	cp -f theme/logo* book/
 	./generate_seminar_ics.py --ics
 	$(MAKE) -C ../ rustdoc
 	cp -r ../target/$(RUST_TARGET)/doc/* book/dev/

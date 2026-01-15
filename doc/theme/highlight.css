@@ -1,0 +1,91 @@
+/*
+ * DarkForest Syntax Highlighting Theme
+ */
+
+/* Comment - Dark Green */
+.hljs-comment,
+.hljs-quote {
+  color: #3a5a3f;
+}
+
+/* Variables/Attributes - Cyan */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attribute,
+.hljs-attr,
+.hljs-regexp,
+.hljs-link,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #00ffff;
+}
+
+/* Numbers/Literals - Hot Pink */
+.hljs-number,
+.hljs-meta,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params {
+  color: #8af0b1;
+}
+
+/* Strings - Spring Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet {
+  color: #fdaef0;
+}
+
+/* Titles - Deep Pink */
+.hljs-title,
+.hljs-built_in,
+.hljs-section {
+  color: #7acff7;
+}
+
+/* Keywords - Dark Cyan */
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #00ced1;
+}
+
+/* Name - Light Red */
+.hljs-name,
+.hljs-tag {
+  color: #ff6b6b;
+}
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  background: var(--hljs-bg);
+  color: var(--hljs-fg);
+  border: .05em solid var(--hljs-border);
+}
+
+p .hljs {
+  background: var(--hljs-inline-bg);
+  border: .05em solid var(--hljs-inline-border);
+  padding: 3px 4px 3px 4px;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* Additions - Green */
+.hljs-addition {
+  color: #00ff7f;
+  background-color: #081a0f;
+}
+
+/* Deletions - Crimson */
+.hljs-deletion {
+  color: #dc143c;
+  background-color: #1a0f10;
+}
