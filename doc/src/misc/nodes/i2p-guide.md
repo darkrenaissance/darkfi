@@ -11,16 +11,7 @@ for the seed nodes you connect to.
 
 ## Generating configuration files
 
-After compiling, you can start the application so it can spawn its configuration 
-file. We use `darkirc` as the application example going forward.
-
-```shell
-% ./darkirc
-```
-
-`darkirc` creates a configuration file `darkirc_config.toml` by default in 
-`~/.config/darkfi/`. You will review and edit this configuration file for your 
-preferred network settings. 
+For configuration file generation, see [Common Setup Steps](public-guide.md#generating-configuration-files). 
 
 ## Configure network settings
 
@@ -123,14 +114,8 @@ inbound = ["tcp://127.0.0.1:25551"]
 
 ## Connect and test your node
 
-Run `./darkirc`. Welcome to the dark forest.
-
-You can test if your node is configured properly on the network. Use 
-[Dnet](../../learn/dchat/network-tools/using-dnet.md) and the 
-[ping-tool](../network-troubleshooting.md#ping-tool) to test your node 
-connections. You can view if your node is making inbound and outbound connections.
+See [Common Setup Steps → Connect and test your node](public-guide.md#connect-and-test-your-node).
 
 ## Troubleshooting
 
-Refer to [Network troubleshooting](../network-troubleshooting.md)
-for further troubleshooting resources.
+See [Common Setup Steps → Troubleshooting](public-guide.md#troubleshooting).

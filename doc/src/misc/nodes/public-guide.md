@@ -8,25 +8,36 @@ explains how to run the optimal DarkFi public node configurations.
 <u><b>Note</b></u>: If you do not want your IP address to be public you can run 
 a node using Tor.
 
-<u><b>Note</b></u>: This page is a general guide for public nodes in the DarkFi 
-ecosystem and is applicable to other apps such as `taud` and `darkfid`. We use 
+<u><b>Note</b></u>: This page is a general guide for public nodes in the DarkFi
+ecosystem and is applicable to other apps such as `taud` and `darkfid`. We use
 `darkirc` as our main example throughout this guide. Commands such as `./darkirc`
 and configuration filenames need to be adjusted if using different apps.
-If you're using another app, the network configurations remain the same except 
-for the seed nodes you connect to. 
+If you're using another app, the network configurations remain the same except
+for the seed nodes you connect to.
 
-## Generating configuration files
+## Common Setup Steps
 
-After compiling, you can start the application so it can spawn its configuration 
-file. We use `darkirc` as the application example going forward.
+### Generating configuration files
+
+After compiling, you can start the application so it can spawn its configuration file. We use `darkirc` as the application example going forward.
 
 ```shell
 % ./darkirc
 ```
 
-`darkirc` creates a configuration file `darkirc_config.toml` by default in 
-`~/.config/darkfi/`. You will review and edit this configuration file for your 
-preferred network settings. 
+`darkirc` creates a configuration file `darkirc_config.toml` by default in `~/.config/darkfi/`. You will review and edit this configuration file for your preferred network settings.
+
+## Connect and test your node
+
+Run ./darkirc. Welcome to the dark forest.
+
+You can test if your node is configured properly on the network. Use [Dnet](../../learn/dchat/network-tools/using-dnet.md) and the [ping-tool](../network-troubleshooting.md#ping-tool) to test your node connections. You can view if your node is making inbound and outbound connections.
+
+### Troubleshooting
+
+Refer to [Network troubleshooting](../network-troubleshooting.md) for further troubleshooting resources.
+
+---
 
 ## Configure your network settings
 
@@ -282,15 +293,3 @@ seeds = [
     "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
 ]
 ```
-
-## Test your node
-
-You can test if your node is configured properly on the network. Use 
-[Dnet](../../learn/dchat/network-tools/using-dnet.md) and the
-[ping-tool](../network-troubleshooting.md#ping-tool) to test your node
-connections. You can view if your node is making inbound and outbound connections.
-
-## Troubleshooting
-
-Refer to [Network troubleshooting](../network-troubleshooting.md)
-for further troubleshooting resources.
