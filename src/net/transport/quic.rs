@@ -17,10 +17,11 @@
  */
 
 use std::{
+    collections::HashMap,
     io,
     net::SocketAddr,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     task::{Context, Poll},
     time::Duration,
 };
@@ -37,7 +38,7 @@ use quinn::{
 };
 use smol::{
     io::{AsyncRead, AsyncWrite},
-    lock::OnceCell,
+    lock::{Mutex, OnceCell},
     Timer,
 };
 use tracing::debug;
@@ -49,6 +50,121 @@ use super::{
     },
     PtListener, PtStream,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct EndpointKey {
+    is_ipv6: bool,
+    port: u16,
+}
+
+impl EndpointKey {
+    fn from_addr(addr: SocketAddr) -> Self {
+        Self { is_ipv6: addr.is_ipv6(), port: addr.port() }
+    }
+}
+
+/// Global registry of QUIC endpoints, keyed by (addr_family, port).
+/// This enables transparent endpoint sharing between Dialer and Listener.
+static ENDPOINT_REGISTRY: OnceLock<Mutex<EndpointRegistry>> = OnceLock::new();
+
+struct EndpointRegistry {
+    endpoints: HashMap<EndpointKey, Endpoint>,
+}
+
+impl EndpointRegistry {
+    fn new() -> Self {
+        Self { endpoints: HashMap::new() }
+    }
+
+    /// Find an endpoint suitable for dialing the given target address.
+    fn find_for_target(&self, target: SocketAddr) -> Option<Endpoint> {
+        let is_ipv6 = target.is_ipv6();
+        self.endpoints.iter().find(|(k, _)| k.is_ipv6 == is_ipv6).map(|(_, ep)| ep.clone())
+    }
+}
+
+fn registry() -> &'static Mutex<EndpointRegistry> {
+    ENDPOINT_REGISTRY.get_or_init(|| Mutex::new(EndpointRegistry::new()))
+}
+
+/// Register an endpoint for the given bind address.
+/// Returns the endpoint (may be existing if already registered).
+async fn register_endpoint(bind_addr: SocketAddr) -> io::Result<Endpoint> {
+    let mut reg = registry().lock().await;
+
+    let key = EndpointKey::from_addr(bind_addr);
+
+    // Check if we already have an endpoint for this (family, port)
+    if bind_addr.port() != 0 {
+        if let Some(endpoint) = reg.endpoints.get(&key) {
+            debug!(
+                target: "net::quic::registry",
+                "[QUIC] Reusing existing {} endpoint on port {}",
+                if key.is_ipv6 { "IPv6" } else { "IPv4" },
+                key.port,
+            );
+            return Ok(endpoint.clone())
+        }
+    }
+
+    // Create new dual-mode endpoint
+    let endpoint = create_dual_endpoint(bind_addr).await?;
+    let actual_port = endpoint.local_addr()?.port();
+
+    let actual_key = EndpointKey { is_ipv6: key.is_ipv6, port: actual_port };
+
+    debug!(
+        target: "net::quic::registry",
+        "[QUIC] Created new {} QUIC endpoint on port {}",
+        if actual_key.is_ipv6 { "IPv6" } else { "IPv4" },
+        actual_port,
+    );
+
+    reg.endpoints.insert(actual_key, endpoint.clone());
+
+    Ok(endpoint)
+}
+
+/// Get an endpoint suitable for dialing the given target address.
+/// If no matching endpoint exist, creates a new one.
+async fn get_endpoint_for_target(target: SocketAddr) -> io::Result<Endpoint> {
+    let reg = registry().lock().await;
+    if let Some(endpoint) = reg.find_for_target(target) {
+        debug!(
+            target: "net::quic::registry",
+            "[QUIC] Dialer using existing {} endpoint on port {}",
+            if target.is_ipv6() { "IPv6" } else { "IPv4" },
+            endpoint.local_addr().map(|a| a.port()).unwrap_or(0),
+        );
+        return Ok(endpoint)
+    }
+    drop(reg);
+
+    // No suitable endpoint, create one.
+    let bind_addr: SocketAddr =
+        if target.is_ipv6() { "[::]:0".parse().unwrap() } else { "0.0.0.0:0".parse().unwrap() };
+
+    debug!(
+        target: "net::quic::registry",
+        "[QUIC] Creating new {} endpoint for dialing",
+        if target.is_ipv6() { "IPv6" } else { "IPv4" },
+    );
+
+    register_endpoint(bind_addr).await
+}
+
+/// Create an endpoint configured for both client and server roles
+async fn create_dual_endpoint(bind_addr: SocketAddr) -> io::Result<Endpoint> {
+    let server_config = create_server_config()?;
+    let client_config = create_client_config()?;
+
+    let endpoint = Endpoint::server(server_config, bind_addr)
+        .map_err(|e| io::Error::other(format!("Failed to create QUIC endpoint: {e}")))?;
+
+    endpoint.set_default_client_config(client_config);
+
+    Ok(endpoint)
+}
 
 /// Create QUIC client configuration with our TLS config
 fn create_client_config() -> io::Result<ClientConfig> {
@@ -151,24 +267,19 @@ impl AsyncWrite for QuicStream {
     }
 }
 
-/// QUIC Dialer implementation
+/// QUIC Dialer implementation.
+///
+/// Automatically shares endpoint with QuicListener when one exists,
+/// enabling NAT hole punching without any special configuration.
 #[derive(Clone, Debug)]
-pub struct QuicDialer {
-    endpoint: Endpoint,
-}
+pub struct QuicDialer;
 
 impl QuicDialer {
     /// Instantiate a new [`QuicDialer`] object
+    ///
+    /// The actual endpoint is selected at dial-time based on the target.
     pub(crate) async fn new() -> io::Result<Self> {
-        let client_config = create_client_config()?;
-
-        // Bind to any available port for outgoing connections
-        let endpoint = Endpoint::client("0.0.0.0:0".parse().unwrap())
-            .map_err(|e| io::Error::other(format!("Failed to create QUIC endpoint: {e}")))?;
-
-        endpoint.set_default_client_config(client_config);
-
-        Ok(Self { endpoint })
+        Ok(Self {})
     }
 
     /// Internal dial function
@@ -177,12 +288,20 @@ impl QuicDialer {
         socket_addr: SocketAddr,
         timeout: Option<Duration>,
     ) -> io::Result<QuicStream> {
-        debug!(target: "net::quic::do_dial", "Dialing {socket_addr} with QUIC...");
+        // Get appropriate endpoint for target address family
+        let endpoint = get_endpoint_for_target(socket_addr).await?;
+
+        debug!(
+            target: "net::quic::do_dial",
+            "[QUIC] Dialing {} {} from local {}",
+            if socket_addr.is_ipv6() { "IPv6" } else { "IPv4" },
+            socket_addr,
+            endpoint.local_addr().map(|a| a.to_string()).unwrap_or_default(),
+        );
 
         let connect = async {
             // Connect to the remote endpoint
-            let connection = self
-                .endpoint
+            let connection = endpoint
                 .connect(socket_addr, TLS_DNS_NAME)
                 .map_err(|e| io::Error::other(format!("QUIC connect error: {e}")))?
                 .await
@@ -215,6 +334,9 @@ impl QuicDialer {
 }
 
 /// QUIC Listener implementation
+///
+/// When created, registers its endpoint so that QuicDialer can share it,
+/// enabling NAT hole punching automatically.
 #[derive(Debug, Clone)]
 pub struct QuicListener {
     /// When the user puts a port of 0, the OS will assign a random port.
@@ -233,20 +355,18 @@ impl QuicListener {
         &self,
         socket_addr: SocketAddr,
     ) -> io::Result<QuicListenerIntern> {
-        let server_config = create_server_config()?;
+        let endpoint = register_endpoint(socket_addr).await?;
 
-        let endpoint = Endpoint::server(server_config, socket_addr)
-            .map_err(|e| io::Error::other(format!("Failed to create QUIC server endpoint: {e}")))?;
-
-        let local_port = endpoint.local_addr()?.port();
+        let local_addr = endpoint.local_addr()?;
 
         debug!(
             target: "net::quic::do_listen",
-            "Listening on QUIC endpoint: {}",
-            endpoint.local_addr()?,
+            "[QUIC] Listening on {} QUIC endpoint: {}",
+            if local_addr.is_ipv6() { "IPv6" } else { "IPv4" },
+            local_addr,
         );
 
-        self.port.set(local_port).await.expect("fatal port already set for QuicListener");
+        self.port.set(local_addr.port()).await.expect("fatal port already set for QuicListener");
 
         Ok(QuicListenerIntern { endpoint })
     }
