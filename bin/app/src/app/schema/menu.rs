@@ -183,9 +183,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let prop = node.get_property("bg_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.1).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.07).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.5).unwrap();
 
     node.set_property_f32(atom, Role::App, "font_size", CHANNEL_LABEL_FONTSIZE).unwrap();
 

@@ -34,8 +34,8 @@ use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
     mesh::MeshBuilder,
     prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
-        PropertyPtr, PropertyRect, PropertyUint32, Role,
+        BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
+        PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
     text, ExecutorPtr,
@@ -92,7 +92,8 @@ pub struct Menu {
     node: SceneNodeWeak,
     render_api: RenderApi,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
-    dc_key: u64,
+    root_dc_key: u64,
+    content_dc_key: u64,
 
     is_visible: PropertyBool,
     rect: PropertyRect,
@@ -111,7 +112,6 @@ pub struct Menu {
 
     mouse_pos: SyncMutex<Point>,
     touch_info: SyncMutex<Option<TouchInfo>>,
-    touch_is_active: AtomicBool,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     motion_cv: Arc<CondVar>,
@@ -152,7 +152,8 @@ impl Menu {
             node: node.clone(),
             render_api: render_api.clone(),
             tasks: SyncMutex::new(vec![]),
-            dc_key: OsRng.gen(),
+            root_dc_key: OsRng.gen(),
+            content_dc_key: OsRng.gen(),
             is_visible,
             rect,
             scroll,
@@ -168,7 +169,6 @@ impl Menu {
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
-            touch_is_active: AtomicBool::new(false),
             scroll_start_accel,
             scroll_resist,
             motion_cv,
@@ -213,7 +213,7 @@ impl Menu {
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
 
-        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
+        let mut instrs = vec![];
 
         let scroll = self.scroll.get();
         let item_height = self.get_item_height();
@@ -227,24 +227,23 @@ impl Menu {
         let window_scale = self.window_scale.get();
 
         let num_items = self.items.get_len();
-        //d!("Number of menu items: {num_items}");
 
-        let start_idx = (scroll / item_height).floor() as usize;
-        let end_idx = ((scroll + rect.h) / item_height).ceil() as usize;
-        let end_idx = end_idx.min(num_items);
+        // Draw single background mesh for the entire menu
+        let content_height = num_items as f32 * item_height;
 
-        for idx in start_idx..end_idx {
+        let mut bg_mesh = MeshBuilder::new(gfxtag!("menu_bg"));
+        bg_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, content_height), bg_color);
+        let bg_mesh = bg_mesh.alloc(&self.render_api).draw_untextured();
+
+        instrs.push(DrawInstruction::Draw(bg_mesh));
+
+        // Separator line mesh
+        let mut sep_mesh = MeshBuilder::new(gfxtag!("menu_sep"));
+        sep_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
+        let sep_mesh = sep_mesh.alloc(&self.render_api).draw_untextured();
+
+        for idx in 0..num_items {
             let item_text = self.items.get_str(idx).unwrap();
-            let y_pos = idx as f32 * item_height - scroll;
-
-            // Draw background
-            instrs.push(DrawInstruction::SetPos(Point::new(0., y_pos)));
-
-            let mut mesh = MeshBuilder::new(gfxtag!("menu_bg"));
-            mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, item_height), bg_color);
-            let bg_mesh = mesh.alloc(&self.render_api).draw_untextured();
-
-            instrs.push(DrawInstruction::Draw(bg_mesh));
 
             // Draw text
             let layout = text::make_layout(
@@ -256,33 +255,44 @@ impl Menu {
                 Some(rect.w - padding_x * 2.),
                 &[],
             );
-            //d!("Menu item: {item_text}");
 
             let text_instr = text::render_layout(&layout, &self.render_api, gfxtag!("menu_text"));
 
-            instrs.push(DrawInstruction::SetPos(Point::new(padding_x, y_pos + padding_y)));
+            instrs.push(DrawInstruction::Move(Point::new(padding_x, padding_y)));
             instrs.extend(text_instr);
+            instrs.push(DrawInstruction::Move(Point::new(-padding_x, font_size + padding_y)));
 
             // Draw separator (except for last item)
-            if idx < num_items - 1 && sep_size > 0. {
-                let sep_y = y_pos + item_height - sep_size;
-
-                instrs.push(DrawInstruction::SetPos(Point::new(0., sep_y)));
-
-                let mut mesh = MeshBuilder::new(gfxtag!("menu_sep"));
-                mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
-                let sep_mesh = mesh.alloc(&self.render_api).draw_untextured();
-
-                instrs.push(DrawInstruction::Draw(sep_mesh));
+            if idx < num_items - 1 {
+                instrs.push(DrawInstruction::Draw(sep_mesh.clone()));
             }
         }
 
         Some(DrawUpdate {
-            key: self.dc_key,
-            draw_calls: vec![(
-                self.dc_key,
-                DrawCall::new(instrs, vec![], self.z_index.get(), "menu"),
-            )],
+            key: self.root_dc_key,
+            draw_calls: vec![
+                (
+                    self.root_dc_key,
+                    DrawCall {
+                        instrs: vec![
+                            DrawInstruction::ApplyView(rect),
+                            DrawInstruction::Move(Point::new(0., -scroll)),
+                        ],
+                        dcs: vec![self.content_dc_key],
+                        z_index: self.z_index.get(),
+                        debug_str: "menu_root",
+                    },
+                ),
+                (
+                    self.content_dc_key,
+                    DrawCall {
+                        instrs,
+                        dcs: vec![],
+                        z_index: self.z_index.get(),
+                        debug_str: "menu_content",
+                    },
+                ),
+            ],
         })
     }
 
@@ -295,7 +305,26 @@ impl Menu {
         self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
     }
 
-    async fn scrollview(&self, scroll: f32, atom: &mut PropertyAtomicGuard) {
+    fn redraw_scroll(&self, batch_id: BatchGuardId) {
+        let rect = self.rect.get();
+        let scroll = self.scroll.get();
+
+        // Only recreate root with updated scroll position
+        let root_instrs =
+            vec![DrawInstruction::ApplyView(rect), DrawInstruction::Move(Point::new(0., -scroll))];
+
+        let root_dc = DrawCall {
+            instrs: root_instrs,
+            dcs: vec![self.content_dc_key],
+            z_index: self.z_index.get(),
+            debug_str: "menu_root",
+        };
+
+        let draw_calls = vec![(self.root_dc_key, root_dc)];
+        self.render_api.replace_draw_calls(batch_id, draw_calls);
+    }
+
+    fn scrollview(&self, scroll: f32, atom: &mut PropertyAtomicGuard) {
         let item_height = self.get_item_height();
         let num_items = self.items.get_len() as f32;
         let content_height = num_items * item_height;
@@ -303,14 +332,13 @@ impl Menu {
         let rect = self.rect.get();
         let max_scroll = (content_height - rect.h).max(0.);
 
-        let scroll = scroll.clamp(0., max_scroll);
+        // Allow 50% overscroll past the end of the content
+        let overscroll = rect.h * 0.5;
+        let scroll = scroll.clamp(0., max_scroll + overscroll);
         self.scroll.set(atom, scroll);
 
-        if let Some(parent_rect) = self.parent_rect.lock().clone() {
-            if let Some(draw_update) = self.get_draw_calls(atom, parent_rect) {
-                self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
-            }
-        }
+        // Only update root draw call with new scroll position
+        self.redraw_scroll(atom.batch_id);
     }
 
     fn start_scroll(&self, delta: f32) {
@@ -334,7 +362,7 @@ impl Menu {
                 let atom = &mut self.render_api.make_guard(gfxtag!("Menu::movement"));
 
                 let scroll = self.scroll.get();
-                self.scrollview(scroll + speed, atom).await;
+                self.scrollview(scroll + speed, atom);
                 speed *= resist;
                 self.speed.store(speed, Ordering::Relaxed);
                 darkfi::system::msleep(16).await;
@@ -345,8 +373,8 @@ impl Menu {
     }
 
     fn end_touch_phase(&self, touch_y: f32) {
-        let touch_info = self.touch_info.lock();
-        let Some(info) = &*touch_info else { return };
+        let touch_info = std::mem::take(&mut *self.touch_info.lock());
+        let info = touch_info.unwrap();
 
         if let Some((dt, _)) = info.first_sample() {
             if dt > EPSILON {
@@ -445,35 +473,33 @@ impl UIObject for Menu {
         false
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if id != 0 {
             return false
         }
 
-        let rect = self.rect.get();
-
         match phase {
             TouchPhase::Started => {
+                let rect = self.rect.get();
                 if !rect.contains(touch_pos) {
                     *self.touch_info.lock() = None;
                     return false
                 }
 
-                self.touch_is_active.store(true, Ordering::Relaxed);
                 *self.touch_info.lock() = Some(TouchInfo::new(self.scroll.get(), touch_pos.y));
                 true
             }
 
             TouchPhase::Moved => {
-                let (_needs_update, scroll) = {
+                let scroll = {
                     let mut touch_info = self.touch_info.lock();
                     let Some(info) = &mut *touch_info else { return false };
 
                     info.last_y = touch_pos.y;
                     info.push_sample(touch_pos.y);
 
-                    let last_elapsed = info.last_instant.elapsed().as_micros();
-                    if last_elapsed <= 20_000 {
+                    let last_elapsed = info.last_instant.elapsed().as_millis();
+                    if last_elapsed <= 20 {
                         return true
                     }
                     info.last_instant = std::time::Instant::now();
@@ -483,13 +509,27 @@ impl UIObject for Menu {
                         return true
                     }
 
-                    (true, info.start_scroll - dist)
+                    info.start_scroll - dist
                 };
 
                 let atom = &mut self.render_api.make_guard(gfxtag!("Menu::touch"));
-                self.scrollview(scroll, atom).await;
+                self.scrollview(scroll, atom);
                 true
             }
+
+            // Use async handler instead
+            TouchPhase::Ended | TouchPhase::Cancelled => false,
+        }
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        if id != 0 {
+            return false
+        }
+
+        match phase {
+            // Should be handled by handle_touch_sync
+            TouchPhase::Started | TouchPhase::Moved => false,
 
             TouchPhase::Ended | TouchPhase::Cancelled => {
                 let is_tap = {
@@ -500,6 +540,7 @@ impl UIObject for Menu {
                 };
 
                 if is_tap {
+                    let rect = self.rect.get();
                     let click_y = touch_pos.y - rect.y;
 
                     if let Some(item_idx) = self.get_selected_item_index(click_y) {
