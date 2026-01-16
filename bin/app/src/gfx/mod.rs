@@ -43,7 +43,7 @@ use anim::{Frame as AnimFrame, GfxSeqAnim};
 mod api;
 pub use api::{
     EpochIndex, GraphicsMethod, ManagedBuffer, ManagedBufferPtr, ManagedSeqAnim, ManagedSeqAnimPtr,
-    ManagedTexture, ManagedTexturePtr, RenderApi,
+    ManagedTexture, ManagedTexturePtr, RenderApi, RenderApiSync,
 };
 mod ev;
 pub use ev::{
@@ -115,10 +115,6 @@ impl Vertex {
 pub type TextureId = u32;
 pub type BufferId = u32;
 pub type AnimId = u32;
-
-static NEXT_BUFFER_ID: AtomicU32 = AtomicU32::new(0);
-static NEXT_TEXTURE_ID: AtomicU32 = AtomicU32::new(0);
-static NEXT_ANIM_ID: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Clone, Debug)]
 pub struct DrawMesh {
@@ -626,6 +622,7 @@ struct Stage {
     epoch: EpochIndex,
     method_recv: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
+    render_api: RenderApi,
 
     pruner: PruneMethodHeap,
     screen_state: ScreenState,
@@ -643,7 +640,8 @@ impl Stage {
 
         let god = GOD.get().unwrap();
         // Start a new epoch. This is a brand new UI run.
-        let epoch = god.render_api.next_epoch();
+        let render_api = god.render_api.clone();
+        let epoch = render_api.next_epoch();
         // This will start the app to start. Needed since we cannot get window size for init
         // until window is created.
         god.start_app(epoch);
@@ -680,6 +678,7 @@ impl Stage {
             epoch,
             method_recv,
             event_pub,
+            render_api,
 
             pruner: PruneMethodHeap::new(epoch),
             screen_state: ScreenState::On,
@@ -778,7 +777,7 @@ impl Stage {
         }
     }
 
-    fn method_new_texture(
+    pub(self) fn method_new_texture(
         &mut self,
         width: u16,
         height: u16,
@@ -826,7 +825,7 @@ impl Stage {
             get_trax().lock().put_stat(0);
         }
     }
-    fn method_delete_texture(&mut self, gfx_texture_id: TextureId) {
+    pub(self) fn method_delete_texture(&mut self, gfx_texture_id: TextureId) {
         let Some(texture) = self.textures.remove(&gfx_texture_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
@@ -841,7 +840,7 @@ impl Stage {
             get_trax().lock().put_stat(0);
         }
     }
-    fn method_new_vertex_buffer(&mut self, verts: &[Vertex], gfx_buffer_id: BufferId) {
+    pub(self) fn method_new_vertex_buffer(&mut self, verts: &[Vertex], gfx_buffer_id: BufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
@@ -862,7 +861,7 @@ impl Stage {
             get_trax().lock().put_stat(0);
         }
     }
-    fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) {
+    pub(self) fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
@@ -883,7 +882,7 @@ impl Stage {
             get_trax().lock().put_stat(0);
         }
     }
-    fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) {
+    pub(self) fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) {
         let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
             if DEBUG_TRAX {
                 get_trax().lock().put_stat(2);
@@ -898,7 +897,7 @@ impl Stage {
             get_trax().lock().put_stat(0);
         }
     }
-    fn method_new_anim(&mut self, gfx_anim_id: AnimId, frames_len: usize, oneshot: bool) {
+    pub(self) fn method_new_anim(&mut self, gfx_anim_id: AnimId, frames_len: usize, oneshot: bool) {
         if DEBUG_GFXAPI {
             d!("Invoked method: new_anim({gfx_anim_id}, {frames_len}, {oneshot})");
         }
@@ -906,7 +905,12 @@ impl Stage {
             panic!("Duplicate anim ID={gfx_anim_id} detected!");
         }
     }
-    fn method_update_anim(&mut self, gfx_anim_id: AnimId, frame_idx: usize, frame: AnimFrame) {
+    pub(self) fn method_update_anim(
+        &mut self,
+        gfx_anim_id: AnimId,
+        frame_idx: usize,
+        frame: AnimFrame,
+    ) {
         let Some(anim) = self.anims.get_mut(&gfx_anim_id) else {
             panic!("couldn't find anim {gfx_anim_id}");
         };
@@ -915,7 +919,7 @@ impl Stage {
         }
         anim.set(frame_idx, frame, &self.textures, &self.buffers);
     }
-    fn method_delete_anim(&mut self, gfx_anim_id: AnimId) {
+    pub(self) fn method_delete_anim(&mut self, gfx_anim_id: AnimId) {
         let Some(anim) = self.anims.remove(&gfx_anim_id) else {
             panic!("couldn't find anim {gfx_anim_id}");
         };
@@ -923,7 +927,11 @@ impl Stage {
             d!("Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
         }
     }
-    fn method_replace_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
+    pub(self) fn method_replace_draw_calls(
+        &mut self,
+        batch_timest: Timestamp,
+        dcs: Vec<(DcId, DrawCall)>,
+    ) {
         if DEBUG_GFXAPI {
             d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
@@ -1271,11 +1279,17 @@ impl EventHandler for Stage {
             self.window_node = god.app.sg_root.lookup_node("/window");
         }
 
+        // Clone window_node to avoid borrow conflict with RenderApiSync
+        let window_node = self.window_node.clone();
+
+        // Create RenderApiSync for direct graphics operations
+        let mut render_api_sync = RenderApiSync::new(self);
+
         // Direct call to Window's handle_touch_event_sync
-        if let Some(window_node) = &self.window_node {
+        if let Some(window_node) = &window_node {
             match window_node.pimpl() {
                 Pimpl::Window(win) => {
-                    if win.handle_touch_sync(phase, id, pos) {
+                    if win.handle_touch_sync(&mut render_api_sync, phase, id, pos) {
                         return
                     }
                 }

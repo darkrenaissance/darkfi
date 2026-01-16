@@ -27,7 +27,7 @@ use crate::{
         gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventTouchSub, Point, Rectangle, RenderApi,
+        GraphicsEventTouchSub, Point, Rectangle, RenderApi, RenderApiSync,
     },
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
@@ -467,11 +467,17 @@ impl Window {
         }
     }
 
-    pub fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    pub fn handle_touch_sync(
+        &self,
+        render_api: &mut RenderApiSync,
+        phase: TouchPhase,
+        id: u64,
+        mut touch_pos: Point,
+    ) -> bool {
         self.local_scale(&mut touch_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(phase, id, touch_pos) {
+            if obj.handle_touch_sync(render_api, phase, id, touch_pos) {
                 return true
             }
         }

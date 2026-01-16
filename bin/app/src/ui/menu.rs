@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, RenderApiSync},
     mesh::MeshBuilder,
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
@@ -330,6 +330,25 @@ impl Menu {
         self.render_api.replace_draw_calls(None, draw_calls);
     }
 
+    fn redraw_scroll_sync(&self, render_api: &mut RenderApiSync) {
+        let rect = self.rect.get();
+        let scroll = self.scroll.load(Ordering::Relaxed);
+
+        // Only recreate root with updated scroll position
+        let root_instrs =
+            vec![DrawInstruction::ApplyView(rect), DrawInstruction::Move(Point::new(0., -scroll))];
+
+        let root_dc = DrawCall {
+            instrs: root_instrs,
+            dcs: vec![self.content_dc_key],
+            z_index: self.z_index.get(),
+            debug_str: "menu_root",
+        };
+
+        let draw_calls = vec![(self.root_dc_key, root_dc)];
+        render_api.replace_draw_calls(draw_calls);
+    }
+
     fn scrollview(&self, scroll: f32) {
         let item_height = self.get_item_height();
         let num_items = self.items.get_len() as f32;
@@ -342,9 +361,6 @@ impl Menu {
         let overscroll = rect.h * 0.5;
         let scroll = scroll.clamp(0., max_scroll + overscroll);
         self.scroll.store(scroll, Ordering::Relaxed);
-
-        // Only update root draw call with new scroll position
-        self.redraw_scroll();
     }
 
     fn start_scroll(&self, delta: f32) {
@@ -367,6 +383,7 @@ impl Menu {
             while speed.abs() >= EPSILON {
                 let scroll = self.scroll.load(Ordering::Relaxed);
                 self.scrollview(scroll + speed);
+                self.redraw_scroll();
                 speed *= resist;
                 self.speed.store(speed, Ordering::Relaxed);
                 darkfi::system::msleep(16).await;
@@ -475,7 +492,13 @@ impl UIObject for Menu {
         false
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn handle_touch_sync(
+        &self,
+        render_api: &mut RenderApiSync,
+        phase: TouchPhase,
+        id: u64,
+        touch_pos: Point,
+    ) -> bool {
         if id != 0 {
             return false
         }
@@ -516,6 +539,7 @@ impl UIObject for Menu {
                 };
 
                 self.scrollview(scroll);
+                self.redraw_scroll_sync(render_api);
                 true
             }
 

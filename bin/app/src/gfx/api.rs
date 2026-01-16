@@ -22,8 +22,8 @@ use std::sync::{
 };
 
 use super::{
-    anim::Frame as AnimFrame, AnimId, BufferId, DebugTag, DrawCall, TextureFormat, TextureId,
-    Vertex, NEXT_ANIM_ID, NEXT_BUFFER_ID, NEXT_TEXTURE_ID,
+    anim::Frame as AnimFrame, AnimId, BufferId, DebugTag, DrawCall, Stage, TextureFormat,
+    TextureId, Vertex,
 };
 use crate::{
     prop::{BatchGuardId, PropertyAtomicGuard},
@@ -32,6 +32,10 @@ use crate::{
 
 pub type EpochIndex = u32;
 type DcId = u64;
+
+static NEXT_BUFFER_ID: AtomicU32 = AtomicU32::new(0);
+static NEXT_TEXTURE_ID: AtomicU32 = AtomicU32::new(0);
+static NEXT_ANIM_ID: AtomicU32 = AtomicU32::new(0);
 
 pub type ManagedTexturePtr = Arc<ManagedTexture>;
 pub type ManagedBufferPtr = Arc<ManagedBuffer>;
@@ -321,5 +325,51 @@ impl std::fmt::Debug for GraphicsMethod {
 impl Default for GraphicsMethod {
     fn default() -> Self {
         GraphicsMethod::Noop
+    }
+}
+
+pub struct RenderApiSync<'a> {
+    stage: &'a mut Stage,
+}
+
+impl<'a> RenderApiSync<'a> {
+    pub fn new(stage: &'a mut Stage) -> Self {
+        Self { stage }
+    }
+
+    // Texture methods
+    pub fn new_texture(
+        &mut self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        fmt: TextureFormat,
+        tag: DebugTag,
+    ) -> ManagedTexturePtr {
+        let render_api = self.stage.render_api.clone();
+        let id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
+        self.stage.method_new_texture(width, height, &data, fmt, id);
+        Arc::new(ManagedTexture { id, epoch: 0, render_api, tag })
+    }
+
+    // Buffer methods
+    pub fn new_vertex_buffer(&mut self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
+        let render_api = self.stage.render_api.clone();
+        let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
+        self.stage.method_new_vertex_buffer(&verts, id);
+        Arc::new(ManagedBuffer { id, epoch: 0, render_api, tag, buftype: 0 })
+    }
+
+    pub fn new_index_buffer(&mut self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
+        let render_api = self.stage.render_api.clone();
+        let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
+        self.stage.method_new_index_buffer(&indices, id);
+        Arc::new(ManagedBuffer { id, epoch: 0, render_api, tag, buftype: 1 })
+    }
+
+    // Draw calls (no batching)
+    pub fn replace_draw_calls(&mut self, dcs: Vec<(DcId, DrawCall)>) {
+        let timest = unixtime();
+        self.stage.method_replace_draw_calls(timest, dcs);
     }
 }

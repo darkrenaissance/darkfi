@@ -24,7 +24,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi, RenderApiSync},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
@@ -307,14 +307,20 @@ impl UIObject for Layer {
         false
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    fn handle_touch_sync(
+        &self,
+        render_api: &mut RenderApiSync,
+        phase: TouchPhase,
+        id: u64,
+        mut touch_pos: Point,
+    ) -> bool {
         if !self.is_visible.get() {
             return false
         }
         touch_pos -= self.rect.get().pos();
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(phase, id, touch_pos) {
+            if obj.handle_touch_sync(render_api, phase, id, touch_pos) {
                 return true
             }
         }

@@ -37,7 +37,10 @@ use tracing::instrument;
 #[cfg(target_os = "android")]
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Vertex},
+    gfx::{
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, RenderApiSync,
+        Vertex,
+    },
     mesh::MeshBuilder,
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
@@ -1823,7 +1826,13 @@ impl UIObject for BaseEdit {
         true
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn handle_touch_sync(
+        &self,
+        _render_api: &mut RenderApiSync,
+        phase: TouchPhase,
+        id: u64,
+        touch_pos: Point,
+    ) -> bool {
         if !self.is_active.get() {
             return false
         }
