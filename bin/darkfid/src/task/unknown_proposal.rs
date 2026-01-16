@@ -515,12 +515,18 @@ async fn handle_reorg(
         }
     }
 
-    // Rebuild fork contracts states monotree
-    if let Err(e) = peer_fork.compute_monotree() {
-        error!(target: "darkfid::task::handle_reorg", "Rebuilding peer fork monotree failed: {e}");
-        peer_fork.purge_new_trees();
-        return false
-    }
+    // Grab current overlay diff and use it as the first diff of the
+    // peer fork, so all consecutive diffs represent just the proposal
+    // changes.
+    let diff = match peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]) {
+        Ok(d) => d,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Generate full inverse diff failed: {e}");
+            peer_fork.purge_new_trees();
+            return false
+        }
+    };
+    peer_fork.diffs = vec![diff];
 
     // Retrieve the proposals of the hashes sequence, in batches
     info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", peer_header_hashes.len());
@@ -634,6 +640,19 @@ async fn handle_reorg(
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
+    if let Err(e) = peer_fork
+        .overlay
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .apply_diff(&peer_fork.diffs.remove(0))
+    {
+        error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
+        peer_fork.purge_new_trees();
+        return false
+    };
     *validator.consensus.module.write().await = module;
     *forks = vec![peer_fork];
     drop(forks);

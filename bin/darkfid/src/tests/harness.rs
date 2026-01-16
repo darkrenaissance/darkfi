@@ -93,8 +93,9 @@ impl Harness {
         vks::inject(&sled_db, &vks)?;
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
         deploy_native_contracts(&overlay, config.pow_target).await?;
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
         genesis_block.header.state_root =
-            overlay.lock().unwrap().get_state_monotree()?.get_headroot()?.unwrap();
+            overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -249,8 +250,8 @@ impl Harness {
             &mut MerkleTree::new(1),
         )
         .await?;
-        block.header.state_root =
-            overlay.lock().unwrap().get_state_monotree()?.get_headroot()?.unwrap();
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        block.header.state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Attach signature
         block.sign(&keypair.secret);
@@ -260,7 +261,6 @@ impl Harness {
             &fork.overlay,
             &fork.diffs,
             &fork.module,
-            &mut fork.state_monotree,
             &block,
             &previous,
             self.alice.validator.verify_fees,

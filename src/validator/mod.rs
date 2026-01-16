@@ -105,6 +105,11 @@ impl Validator {
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, config.pow_target).await?;
 
+        // Update the contracts states monotree in case native
+        // contracts zkas has changed.
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
+
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator::new", "Appending genesis block");
@@ -441,9 +446,6 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
-        // Grab current contracts states monotree to validate each block
-        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
-
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
@@ -455,15 +457,8 @@ impl Validator {
         // Validate and insert each block
         for (index, block) in blocks.iter().enumerate() {
             // Verify block
-            match verify_checkpoint_block(
-                &overlay,
-                &diffs,
-                &mut state_monotree,
-                block,
-                &headers[index],
-                module.target,
-            )
-            .await
+            match verify_checkpoint_block(&overlay, &diffs, block, &headers[index], module.target)
+                .await
             {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
@@ -552,9 +547,6 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
-        // Grab current contracts states monotree to validate each block
-        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
-
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
@@ -566,17 +558,7 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Verify block
-            match verify_block(
-                &overlay,
-                &diffs,
-                &module,
-                &mut state_monotree,
-                block,
-                previous,
-                self.verify_fees,
-            )
-            .await
-            {
+            match verify_block(&overlay, &diffs, &module, block, previous, self.verify_fees).await {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => {
@@ -786,9 +768,6 @@ impl Validator {
         // Create a PoW module to validate each block
         let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, Some(0))?;
 
-        // Grab current contracts states monotree to validate each block
-        let mut state_monotree = overlay.lock().unwrap().get_state_monotree()?;
-
         // Keep track of all block database state diffs
         let mut diffs = vec![];
 
@@ -801,16 +780,8 @@ impl Validator {
             let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
 
             // Verify block
-            if let Err(e) = verify_block(
-                &overlay,
-                &diffs,
-                &module,
-                &mut state_monotree,
-                &block,
-                &previous,
-                self.verify_fees,
-            )
-            .await
+            if let Err(e) =
+                verify_block(&overlay, &diffs, &module, &block, &previous, self.verify_fees).await
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set: {e}");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;

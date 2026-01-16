@@ -36,7 +36,7 @@ use darkfi::{
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
-    Error, Result,
+    Result,
 };
 use darkfi_contract_test_harness::vks;
 use darkfi_money_contract::{
@@ -170,11 +170,9 @@ fn main() -> Result<()> {
                 genesis_block.header.transactions_root = tree.root(0).unwrap();
 
                 // Grab the updated contracts states root
-                let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
-                let Some(state_root) = state_monotree.get_headroot()? else {
-                    return Err(Error::ContractsStatesRootNotFoundError);
-                };
-                genesis_block.header.state_root = state_root;
+                let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+                genesis_block.header.state_root =
+                    overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
                 // Write generated genesis block to stdin
                 let encoded = base64::encode(&serialize_async(&genesis_block).await);

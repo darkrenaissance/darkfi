@@ -26,7 +26,6 @@ use darkfi_sdk::{
     },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
-    monotree::{self, Monotree},
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
@@ -116,11 +115,9 @@ pub async fn verify_genesis_block(
         return Err(Error::BlockIsInvalid(block_hash))
     }
 
-    // Verify header contracts states root
-    let state_monotree = overlay.lock().unwrap().contracts.get_state_monotree()?;
-    let Some(state_root) = state_monotree.get_headroot()? else {
-        return Err(Error::ContractsStatesRootNotFoundError);
-    };
+    // Update the contracts states monotree and verify header contracts states root
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+    let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
             blake3::Hash::from_bytes(state_root).to_string(),
@@ -212,7 +209,6 @@ pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
     module: &PoWModule,
-    state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
     previous: &BlockInfo,
     verify_fees: bool,
@@ -270,12 +266,9 @@ pub async fn verify_block(
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
-    // Update the provided contracts states monotree and verify header contracts states root
+    // Update the contracts states monotree and verify header contracts states root
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
-    overlay.lock().unwrap().contracts.update_state_monotree(&diff, state_monotree)?;
-    let Some(state_root) = state_monotree.get_headroot()? else {
-        return Err(Error::ContractsStatesRootNotFoundError);
-    };
+    let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
             blake3::Hash::from_bytes(state_root).to_string(),
@@ -297,7 +290,6 @@ pub async fn verify_block(
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
-    state_monotree: &mut Monotree<monotree::MemoryDb>,
     block: &BlockInfo,
     header: &HeaderHash,
     block_target: u32,
@@ -350,12 +342,9 @@ pub async fn verify_checkpoint_block(
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
-    // Update the provided contracts states monotree and verify header contracts states root
+    // Update the contracts states monotree and verify header contracts states root
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
-    overlay.lock().unwrap().contracts.update_state_monotree(&diff, state_monotree)?;
-    let Some(state_root) = state_monotree.get_headroot()? else {
-        return Err(Error::ContractsStatesRootNotFoundError);
-    };
+    let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(
             blake3::Hash::from_bytes(state_root).to_string(),
@@ -1113,7 +1102,7 @@ pub async fn verify_proposal(
     }
 
     // Check if proposal extends any existing forks
-    let (mut fork, index) = consensus.find_extended_fork(proposal).await?;
+    let (fork, index) = consensus.find_extended_fork(proposal).await?;
 
     // Grab overlay last block
     let previous = fork.overlay.lock().unwrap().last_block()?;
@@ -1123,7 +1112,6 @@ pub async fn verify_proposal(
         &fork.overlay,
         &fork.diffs,
         &fork.module,
-        &mut fork.state_monotree,
         &proposal.block,
         &previous,
         verify_fees,
@@ -1167,7 +1155,6 @@ pub async fn verify_fork_proposal(
         &fork.overlay,
         &fork.diffs,
         &fork.module,
-        &mut fork.state_monotree,
         &proposal.block,
         &previous,
         verify_fees,

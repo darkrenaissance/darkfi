@@ -86,7 +86,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         &fork.overlay,
         &fork.diffs,
         &fork.module,
-        &mut fork.state_monotree,
         &block3,
         &block2,
         th.alice.validator.verify_fees,
@@ -260,14 +259,9 @@ fn darkfid_programmatic_control() -> Result<()> {
                 )
                 .unwrap();
                 darkfi::validator::utils::deploy_native_contracts(&overlay, 20).await.unwrap();
-                genesis_block.header.state_root = overlay
-                    .lock()
-                    .unwrap()
-                    .get_state_monotree()
-                    .unwrap()
-                    .get_headroot()
-                    .unwrap()
-                    .unwrap();
+                let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]).unwrap();
+                genesis_block.header.state_root =
+                    overlay.lock().unwrap().contracts.update_state_monotree(&diff).unwrap();
                 let config = darkfi::validator::ValidatorConfig {
                     confirmation_threshold: 1,
                     pow_target: 20,

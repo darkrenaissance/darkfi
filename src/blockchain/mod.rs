@@ -21,10 +21,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use darkfi_sdk::{
-    monotree::{self, Monotree},
-    tx::TransactionHash,
-};
+use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, Decodable};
 use sled_overlay::{
     sled,
@@ -452,14 +449,6 @@ impl Blockchain {
         Ok(())
     }
 
-    /// Generate a Monotree(SMT) containing all contracts states
-    /// roots, along with the wasm bincodes monotree root.
-    ///
-    /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
-        self.contracts.get_state_monotree(&self.sled_db)
-    }
-
     /// Grab the RandomX VM current and next key, based on provided key
     /// changing height and delay. Optionally, a height can be provided
     /// to get the keys before it.
@@ -716,16 +705,6 @@ impl BlockchainOverlay {
         let contracts = ContractStoreOverlay::new(&overlay)?;
 
         Ok(Arc::new(Mutex::new(Self { overlay, headers, blocks, transactions, contracts })))
-    }
-
-    /// Generate a Monotree(SMT) containing all contracts states
-    /// roots, along with the wasm bincodes monotree root.
-    /// A clone is used so we are not affected by the opened trees
-    /// during roots computing.
-    ///
-    /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree<monotree::MemoryDb>> {
-        self.full_clone()?.lock().unwrap().contracts.get_state_monotree()
     }
 }
 

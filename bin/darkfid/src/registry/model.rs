@@ -33,7 +33,7 @@ use darkfi::{
     validator::{consensus::Fork, verification::apply_producer_transaction, ValidatorPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
-    Error, Result,
+    Result,
 };
 use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -302,15 +302,8 @@ pub async fn generate_next_block_template(
     // Grab the updated contracts states root
     let diff =
         extended_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&extended_fork.diffs)?;
-    extended_fork
-        .overlay
-        .lock()
-        .unwrap()
-        .contracts
-        .update_state_monotree(&diff, &mut extended_fork.state_monotree)?;
-    let Some(state_root) = extended_fork.state_monotree.get_headroot()? else {
-        return Err(Error::ContractsStatesRootNotFoundError);
-    };
+    let state_root =
+        extended_fork.overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
     // Generate the new header
     let mut header =

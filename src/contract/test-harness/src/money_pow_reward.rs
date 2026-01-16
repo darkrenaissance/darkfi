@@ -139,8 +139,8 @@ impl TestHarness {
             &mut MerkleTree::new(1),
         )
         .await?;
-        block.header.state_root =
-            overlay.lock().unwrap().get_state_monotree()?.get_headroot()?.unwrap();
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        block.header.state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Attach signature
         block.sign(&wallet.keypair.secret);

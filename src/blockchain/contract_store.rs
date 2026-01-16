@@ -20,10 +20,10 @@ use std::{collections::BTreeMap, io::Cursor};
 
 use darkfi_sdk::{
     crypto::contract_id::{
-        ContractId, NATIVE_CONTRACT_IDS_BYTES, NATIVE_CONTRACT_ZKAS_DB_NAMES,
-        SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
+        ContractId, NATIVE_CONTRACT_IDS_BYTES, SMART_CONTRACT_MONOTREE_DB_NAME,
+        SMART_CONTRACT_ZKAS_DB_NAME,
     },
-    monotree::{MemoryDb, Monotree, SledOverlayDb, SledTreeDb, EMPTY_HASH},
+    monotree::{Hash as StateHash, Monotree, SledOverlayDb, SledTreeDb, EMPTY_HASH},
 };
 use darkfi_serial::{deserialize, serialize};
 use sled_overlay::{sled, SledDbOverlayStateDiff};
@@ -39,6 +39,11 @@ use super::{parse_record, SledDbOverlayPtr};
 
 pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 pub const SLED_CONTRACTS_TREES_TREE: &[u8] = b"_contracts_trees";
+// blake3 hash of `_contracts_monotree`
+pub const SLED_CONTRACTS_MONOTREE_TREE: &[u8; 32] = &[
+    82, 161, 124, 97, 228, 243, 197, 75, 11, 86, 60, 214, 241, 24, 64, 100, 86, 48, 159, 147, 254,
+    116, 94, 17, 165, 22, 39, 3, 149, 120, 122, 175,
+];
 pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
 
 /// The `ContractStore` is a structure representing all `sled` trees related
@@ -73,6 +78,17 @@ pub struct ContractStore {
     /// ```
     /// These values get mutated with `init()` and `remove()`.
     pub state_trees: sled::Tree,
+    /// The `sled` tree storing the full contracts states monotree,
+    /// excluding native contracts wasm bincodes.
+    /// The layout looks like this:
+    /// ```plaintext
+    ///  tree: "blake3(_contracts_monotree)"
+    ///   key: blake3(ContractId)
+    /// value: blake3(contract monotree root)
+    /// ```
+    /// These values get mutated on each block/proposal append with
+    /// `update_state_monotree()`.
+    pub state_monotree: sled::Tree,
 }
 
 impl ContractStore {
@@ -81,7 +97,8 @@ impl ContractStore {
         let wasm = db.open_tree(SLED_BINCODE_TREE)?;
         let state = db.open_tree(SLED_CONTRACTS_TREE)?;
         let state_trees = db.open_tree(SLED_CONTRACTS_TREES_TREE)?;
-        Ok(Self { wasm, state, state_trees })
+        let state_monotree = db.open_tree(SLED_CONTRACTS_MONOTREE_TREE)?;
+        Ok(Self { wasm, state, state_trees, state_monotree })
     }
 
     /// Fetches the bincode for a given ContractId from the store's wasm tree.
@@ -273,86 +290,16 @@ impl ContractStore {
         Ok(ret)
     }
 
-    /// Generate a Monotree(SMT) containing all contracts states
-    /// roots, along with the wasm bincodes monotree root.
+    /// Retrieve contracts states Monotree(SMT) current root.
     ///
-    /// Note: native contracts zkas tree and wasm bincodes are excluded.
-    pub fn get_state_monotree(&self, db: &sled::Db) -> Result<Monotree<MemoryDb>> {
-        // Initialize the monotree
-        debug!(target: "blockchain::contractstore::get_state_monotree", "Initializing global monotree...");
-        let mut root = None;
-        let monotree_db = MemoryDb::new();
-        let mut tree = Monotree::new(monotree_db);
-
-        // Iterate over current contracts states records
-        for state_record in self.state.iter() {
-            // Grab its monotree pointer
-            let (contract_id, state_pointers): (ContractId, Vec<[u8; 32]>) =
-                parse_record(state_record?)?;
-            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
-
-            // Check it exists
-            if !state_pointers.contains(&state_monotree_ptr) {
-                return Err(Error::ContractStateNotFound)
-            }
-            if !self.state_trees.contains_key(state_monotree_ptr)? {
-                return Err(Error::ContractStateNotFound)
-            }
-
-            // Grab its monotree
-            let state_tree = db.open_tree(state_monotree_ptr)?;
-            let state_monotree_db = SledTreeDb::new(&state_tree);
-            let state_monotree = Monotree::new(state_monotree_db);
-
-            // Insert its root to the global monotree
-            let state_monotree_root = match state_monotree.get_headroot()? {
-                Some(hash) => hash,
-                None => *EMPTY_HASH,
-            };
-            debug!(target: "blockchain::contractstore::get_state_monotree", "Contract {contract_id} root: {}", blake3::Hash::from(state_monotree_root));
-            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
-            debug!(target: "blockchain::contractstore::get_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-        }
-
-        // Iterate over current contracts wasm bincodes to compute its monotree root
-        debug!(target: "blockchain::contractstore::get_state_monotree", "Initializing wasm bincodes monotree...");
-        let mut wasm_monotree_root = None;
-        let wasm_monotree_db = MemoryDb::new();
-        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
-        for record in self.wasm.iter() {
-            let (key, value) = record?;
-
-            // Skip native ones
-            if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
-                continue
-            }
-
-            // Insert record
-            let key = blake3::hash(&key);
-            let value = blake3::hash(&value);
-            debug!(target: "blockchain::contractstore::get_state_monotree", "Inserting key {key} with value: {value}");
-            wasm_monotree_root = wasm_monotree.insert(
-                wasm_monotree_root.as_ref(),
-                key.as_bytes(),
-                value.as_bytes(),
-            )?;
-        }
-
-        // Insert wasm bincodes root to the global monotree
-        let wasm_monotree_root = match wasm_monotree_root {
+    /// Note: native contracts wasm bincodes are excluded.
+    pub fn get_state_monotree_root(&self) -> Result<StateHash> {
+        let monotree_db = SledTreeDb::new(&self.state_monotree);
+        let monotree = Monotree::new(monotree_db);
+        Ok(match monotree.get_headroot()? {
             Some(hash) => hash,
             None => *EMPTY_HASH,
-        };
-        debug!(target: "blockchain::contractstore::get_state_monotree", "New root: {}", blake3::Hash::from(wasm_monotree_root));
-        root = tree.insert(
-            root.as_ref(),
-            blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            &wasm_monotree_root,
-        )?;
-        debug!(target: "blockchain::contractstore::get_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-        tree.set_headroot(root.as_ref());
-
-        Ok(tree)
+        })
     }
 }
 
@@ -364,6 +311,7 @@ impl ContractStoreOverlay {
         overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREES_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_MONOTREE_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -496,220 +444,69 @@ impl ContractStoreOverlay {
         Ok((zkbin, vk))
     }
 
-    /// Generate a Monotree(SMT) containing all contracts states
-    /// roots, along with the wasm bincodes monotree roots.
-    /// Be carefull as this will open all states monotrees in the
-    /// overlay, and all contract state trees if their monotrees
-    /// need rebuild.
+    /// Retrieve contracts states Monotree(SMT) current root.
     ///
-    /// Note: native contracts zkas tree and wasm bincodes are
-    /// excluded.
-    pub fn get_state_monotree(&self) -> Result<Monotree<MemoryDb>> {
+    /// Note: native contracts wasm bincodes are excluded.
+    pub fn get_state_monotree_root(&self) -> Result<StateHash> {
         let mut lock = self.0.lock().unwrap();
-
-        // Grab all states pointers
-        debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Retrieving state pointers...");
-        let mut states_monotrees_pointers = vec![];
-        for state_record in lock.iter(SLED_CONTRACTS_TREE)? {
-            // Grab its monotree pointer
-            let (contract_id, mut state_pointers): (ContractId, Vec<[u8; 32]>) =
-                parse_record(state_record?)?;
-            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
-
-            // Check it exists
-            if !state_pointers.contains(&state_monotree_ptr) {
-                return Err(Error::ContractStateNotFound)
-            }
-            if !lock.contains_key(SLED_CONTRACTS_TREES_TREE, &state_monotree_ptr)? {
-                return Err(Error::ContractStateNotFound)
-            }
-
-            // Skip native zkas trees
-            if NATIVE_CONTRACT_IDS_BYTES.contains(&contract_id.to_bytes()) {
-                state_pointers.retain(|ptr| !NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(ptr));
-            }
-
-            states_monotrees_pointers.push((contract_id, state_pointers, state_monotree_ptr));
-        }
-
-        // Initialize the monotree
-        debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Initializing global monotree...");
-        let mut root = None;
-        let monotree_db = MemoryDb::new();
-        let mut tree = Monotree::new(monotree_db);
-
-        // Iterate over contract states monotrees pointers
-        for (contract_id, state_pointers, state_monotree_ptr) in states_monotrees_pointers {
-            // Iterate over contract state pointers to find their
-            // inserted keys. If any of them has dropped keys, we must
-            // rebuild the contract state monotree.
-            debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Updating monotree for contract: {contract_id}");
-            let mut rebuild = false;
-            let mut inserts = vec![];
-            'outer: for state_ptr in &state_pointers {
-                // Skip the actual monotree state pointer
-                if state_ptr == &state_monotree_ptr {
-                    continue
-                }
-
-                // Look for it in the overlay
-                for (state_key, state_cache) in &lock.state.caches {
-                    if state_key != state_ptr {
-                        continue
-                    }
-
-                    // Check if it has dropped keys
-                    if !state_cache.state.removed.is_empty() {
-                        rebuild = true;
-                        break 'outer
-                    }
-
-                    // Grab the new/updated keys
-                    for (key, value) in &state_cache.state.cache {
-                        let key = blake3::hash(key);
-                        let value = blake3::hash(value);
-                        inserts.push((key, value))
-                    }
-                    break
-                }
-            }
-
-            // Check if we need to rebuild it
-            if rebuild {
-                // Iterate over all contract states to grab the monotree keys
-                debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Rebuilding monotree...");
-                inserts = vec![];
-                for state_ptr in state_pointers {
-                    // Open the contract state
-                    lock.open_tree(&state_ptr, false)?;
-
-                    // If the pointer is the monotree one, clear it
-                    if state_ptr == state_monotree_ptr {
-                        lock.clear(&state_ptr)?;
-                        continue
-                    }
-
-                    // Grab all its keys
-                    for record in lock.iter(&state_ptr)? {
-                        let (key, value) = record?;
-                        let key = blake3::hash(&key);
-                        let value = blake3::hash(&value);
-                        inserts.push((key, value))
-                    }
-                }
-            }
-
-            // Grab its monotree
-            let state_monotree_db = SledOverlayDb::new(&mut lock, &state_monotree_ptr)?;
-            let mut state_monotree = Monotree::new(state_monotree_db);
-            let mut state_monotree_root =
-                if rebuild { None } else { state_monotree.get_headroot()? };
-            let state_monotree_root_str = match state_monotree_root {
-                Some(hash) => blake3::Hash::from(hash),
-                None => blake3::Hash::from(*EMPTY_HASH),
-            };
-            debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Current root: {state_monotree_root_str}");
-
-            // Update or insert new records
-            for (key, value) in &inserts {
-                debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Inserting key {key} with value: {value}");
-                state_monotree_root = state_monotree.insert(
-                    state_monotree_root.as_ref(),
-                    key.as_bytes(),
-                    value.as_bytes(),
-                )?;
-            }
-
-            // Set root
-            state_monotree.set_headroot(state_monotree_root.as_ref());
-
-            // Insert its root to the global monotree
-            let state_monotree_root = match state_monotree_root {
-                Some(hash) => hash,
-                None => *EMPTY_HASH,
-            };
-            debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "New root: {}", blake3::Hash::from(state_monotree_root));
-            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
-        }
-
-        // Iterate over current contracts wasm bincodes to compute its monotree root
-        debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Initializing wasm bincodes monotree...");
-        let mut wasm_monotree_root = None;
-        let wasm_monotree_db = MemoryDb::new();
-        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
-        for record in lock.iter(SLED_BINCODE_TREE)? {
-            let (key, value) = record?;
-
-            // Skip native ones
-            if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
-                continue
-            }
-
-            // Insert record
-            let key = blake3::hash(&key);
-            let value = blake3::hash(&value);
-            debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "Inserting key {key} with value: {value}");
-            wasm_monotree_root = wasm_monotree.insert(
-                wasm_monotree_root.as_ref(),
-                key.as_bytes(),
-                value.as_bytes(),
-            )?;
-        }
-
-        // Insert wasm bincodes root to the global monotree
-        let wasm_monotree_root = match wasm_monotree_root {
+        let monotree_db = SledOverlayDb::new(&mut lock, SLED_CONTRACTS_MONOTREE_TREE)?;
+        let monotree = Monotree::new(monotree_db);
+        Ok(match monotree.get_headroot()? {
             Some(hash) => hash,
             None => *EMPTY_HASH,
-        };
-        debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "New root: {}", blake3::Hash::from(wasm_monotree_root));
-        root = tree.insert(
-            root.as_ref(),
-            blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            &wasm_monotree_root,
-        )?;
-        debug!(target: "blockchain::contractstoreoverlay::get_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-        tree.set_headroot(root.as_ref());
-
-        Ok(tree)
+        })
     }
 
     /// Retrieve all updated contracts states and wasm bincodes from
     /// provided overlay diff, update their monotrees in the overlay
-    /// and their records in the provided Monotree(SMT).
+    /// their root records in the contracts states Monotree(SMT) and
+    /// return its current root. The provided diff must always append
+    /// new changes to the monotrees and it shouldn't contain dropped
+    /// contracts.
     ///
-    /// Note: native contracts zkas tree and wasm bincodes are
-    /// excluded.
-    pub fn update_state_monotree(
-        &self,
-        diff: &SledDbOverlayStateDiff,
-        tree: &mut Monotree<MemoryDb>,
-    ) -> Result<()> {
-        // If a contract was dropped, we must rebuild the monotree from
-        // scratch.
-        if let Some((state_cache, _)) = diff.caches.get(SLED_CONTRACTS_TREE) {
-            if !state_cache.removed.is_empty() {
-                debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Rebuilding global monotree...");
-                *tree = self.get_state_monotree()?;
-                return Ok(());
-            }
-        }
-
+    /// Note: native contracts wasm bincodes are excluded.
+    pub fn update_state_monotree(&self, diff: &SledDbOverlayStateDiff) -> Result<StateHash> {
         // Grab lock over the overlay
         let mut lock = self.0.lock().unwrap();
         debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Retrieving contracts updates...");
 
-        // If a contract tree was dropped, we must rebuild its monotree
-        // from scratch.
-        let mut contracts_updates = BTreeMap::new();
-        if let Some((state_cache, _)) = diff.caches.get(SLED_CONTRACTS_TREES_TREE) {
-            // Mark all the contracts of dropped trees for rebuild
-            for contract_id_bytes in state_cache.removed.values() {
-                contracts_updates.insert(contract_id_bytes.clone(), (true, vec![]));
-            }
-        }
-
         // Iterate over diff caches to find all contracts updates
+        let mut contracts_updates: BTreeMap<[u8; 32], ContractMonotreeUpdates> = BTreeMap::new();
         for (state_key, state_cache) in &diff.caches {
+            // Grab new/redeployed contracts wasm bincodes to include them
+            // in their monotrees, excluding native ones.
+            if state_key == SLED_BINCODE_TREE {
+                for (contract_id_bytes, (_, value)) in &state_cache.0.cache {
+                    // Grab the actual contract ID bytes
+                    let contract_id_bytes = deserialize(contract_id_bytes)?;
+
+                    // Skip native ones
+                    if NATIVE_CONTRACT_IDS_BYTES.contains(&contract_id_bytes) {
+                        continue
+                    }
+
+                    // Grab its contract monotree state pointer
+                    let contract_id: ContractId = deserialize(&contract_id_bytes)?;
+                    let monotree_pointer =
+                        contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
+
+                    // Grab its record from the map
+                    let mut contract_updates = match contracts_updates.remove(&contract_id_bytes) {
+                        Some(r) => r,
+                        None => ContractMonotreeUpdates::new(monotree_pointer),
+                    };
+
+                    // Create the new/updated wasm bincode record
+                    let key = blake3::hash(&contract_id_bytes);
+                    let value = blake3::hash(value);
+                    contract_updates.inserts.push((key, value));
+
+                    // Insert the update record
+                    contracts_updates.insert(contract_id_bytes, contract_updates);
+                }
+                continue
+            }
+
             // Check if that cache is not a contract state one.
             // Overlay protected trees are all the native/non-contract
             // ones.
@@ -718,185 +515,135 @@ impl ContractStoreOverlay {
             }
 
             // Grab the actual state key
-            let state_key = deserialize(state_key)?;
-
-            // Skip native zkas tree
-            if NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(&state_key) {
-                continue
-            }
+            let state_key: [u8; 32] = deserialize(state_key)?;
 
             // Grab its contract id
             let Some(contract_id_bytes) = lock.get(SLED_CONTRACTS_TREES_TREE, &state_key)? else {
                 return Err(Error::ContractStateNotFound)
             };
+            let contract_id_bytes: [u8; 32] = deserialize(&contract_id_bytes)?;
             let contract_id: ContractId = deserialize(&contract_id_bytes)?;
 
             // Skip the actual monotree state cache
-            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
-            if state_monotree_ptr == state_key {
+            let monotree_pointer = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
+            if monotree_pointer == state_key {
                 continue
             }
 
             // Grab its record from the map
-            let (rebuild, mut inserts) = match contracts_updates.get(&contract_id_bytes) {
-                Some(r) => r.clone(),
-                None => (false, vec![]),
+            let mut contract_updates = match contracts_updates.remove(&contract_id_bytes) {
+                Some(r) => r,
+                None => ContractMonotreeUpdates::new(monotree_pointer),
             };
-
-            // Check if the contract monotree is already marked for
-            // rebuild.
-            if rebuild {
-                continue
-            }
-
-            // If records have been dropped, mark the contract monotree
-            // for rebuild.
-            if !state_cache.0.removed.is_empty() {
-                contracts_updates.insert(contract_id_bytes, (true, vec![]));
-                continue
-            }
 
             // Grab the new/updated keys
             for (key, (_, value)) in &state_cache.0.cache {
-                let key = blake3::hash(key);
+                // Prefix key with its tree name
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(&state_key);
+                hasher.update(key);
+                let key = hasher.finalize();
                 let value = blake3::hash(value);
-                inserts.push((key, value))
+                contract_updates.inserts.push((key, value));
             }
-            contracts_updates.insert(contract_id_bytes, (rebuild, inserts));
+
+            // Grab the dropped keys
+            for key in state_cache.0.removed.keys() {
+                // Prefix key with its tree name
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(&state_key);
+                hasher.update(key);
+                let key = hasher.finalize();
+                contract_updates.removals.push(key);
+            }
+
+            // Insert the update record
+            contracts_updates.insert(contract_id_bytes, contract_updates);
         }
 
-        // Grab current root
-        let mut root = tree.get_headroot()?;
-        let root_str = match root {
-            Some(hash) => blake3::Hash::from(hash),
-            None => blake3::Hash::from(*EMPTY_HASH),
-        };
-        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Updating global monotree with root: {root_str}");
-
-        // Iterate over contracts updates
-        for (contract_id_bytes, (rebuild, mut inserts)) in contracts_updates {
+        // Apply all contracts updates and grab their new roots
+        let mut contracts_roots = BTreeMap::new();
+        for (contract_id_bytes, contract_updates) in contracts_updates {
             let contract_id: ContractId = deserialize(&contract_id_bytes)?;
-            let state_monotree_ptr = contract_id.hash_state_id(SMART_CONTRACT_MONOTREE_DB_NAME);
             debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Updating monotree for contract: {contract_id}");
 
-            // Check if we need to rebuild it
-            if rebuild {
-                // Grab its state pointers
-                let state_pointers = lock.get(SLED_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
-                let mut state_pointers: Vec<[u8; 32]> = deserialize(&state_pointers)?;
-
-                // Skip native zkas trees
-                if NATIVE_CONTRACT_IDS_BYTES.contains(&contract_id.to_bytes()) {
-                    state_pointers.retain(|ptr| !NATIVE_CONTRACT_ZKAS_DB_NAMES.contains(ptr));
-                }
-
-                // Iterate over all contract states to grab the monotree keys
-                debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Rebuilding monotree...");
-                for state_ptr in state_pointers {
-                    // Open the contract state
-                    lock.open_tree(&state_ptr, false)?;
-
-                    // If the pointer is the monotree one, clear it
-                    if state_ptr == state_monotree_ptr {
-                        lock.clear(&state_ptr)?;
-                        continue
-                    }
-
-                    // Grab all its keys
-                    for record in lock.iter(&state_ptr)? {
-                        let (key, value) = record?;
-                        let key = blake3::hash(&key);
-                        let value = blake3::hash(&value);
-                        inserts.push((key, value))
-                    }
-                }
-            }
-
             // Grab its monotree
-            let state_monotree_db = SledOverlayDb::new(&mut lock, &state_monotree_ptr)?;
-            let mut state_monotree = Monotree::new(state_monotree_db);
-            let mut state_monotree_root =
-                if rebuild { None } else { state_monotree.get_headroot()? };
-            let state_monotree_root_str = match state_monotree_root {
+            let monotree_db = SledOverlayDb::new(&mut lock, &contract_updates.monotree_pointer)?;
+            let mut monotree = Monotree::new(monotree_db);
+            let mut monotree_root = monotree.get_headroot()?;
+            let monotree_root_hash = match monotree_root {
                 Some(hash) => blake3::Hash::from(hash),
                 None => blake3::Hash::from(*EMPTY_HASH),
             };
-            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Current root: {state_monotree_root_str}");
+            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Current root: {monotree_root_hash}");
 
             // Update or insert new records
-            for (key, value) in &inserts {
+            for (key, value) in &contract_updates.inserts {
                 debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Inserting key {key} with value: {value}");
-                state_monotree_root = state_monotree.insert(
-                    state_monotree_root.as_ref(),
-                    key.as_bytes(),
-                    value.as_bytes(),
-                )?;
+                monotree_root =
+                    monotree.insert(monotree_root.as_ref(), key.as_bytes(), value.as_bytes())?;
+            }
+
+            // Remove dropped records
+            for key in &contract_updates.removals {
+                debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Removing key: {key}");
+                monotree_root = monotree.remove(monotree_root.as_ref(), key.as_bytes())?;
             }
 
             // Set root
-            state_monotree.set_headroot(state_monotree_root.as_ref());
+            monotree.set_headroot(monotree_root.as_ref());
 
-            // Insert its root to the global monotree
-            let state_monotree_root = match state_monotree_root {
+            // Keep track of the new root for the main monotree
+            let monotree_root = match monotree_root {
                 Some(hash) => hash,
                 None => *EMPTY_HASH,
             };
-            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New root: {}", blake3::Hash::from(state_monotree_root));
-            root = tree.insert(root.as_ref(), &contract_id.to_bytes(), &state_monotree_root)?;
+            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New root: {}", blake3::Hash::from(monotree_root));
+            contracts_roots.insert(contract_id_bytes, monotree_root);
         }
 
-        // Check if wasm bincodes cache exists
-        let Some((wasm_cache, _)) = diff.caches.get(SLED_BINCODE_TREE) else {
-            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-            tree.set_headroot(root.as_ref());
-            return Ok(())
+        // Grab the contracts states monotree
+        let monotree_db = SledOverlayDb::new(&mut lock, SLED_CONTRACTS_MONOTREE_TREE)?;
+        let mut monotree = Monotree::new(monotree_db);
+        let mut monotree_root = monotree.get_headroot()?;
+        let monotree_root_hash = match monotree_root {
+            Some(hash) => blake3::Hash::from(hash),
+            None => blake3::Hash::from(*EMPTY_HASH),
         };
+        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Updating global monotree with root: {monotree_root_hash}");
 
-        // Check if wasm bincodes cache is updated
-        if wasm_cache.cache.is_empty() && wasm_cache.removed.is_empty() {
-            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-            tree.set_headroot(root.as_ref());
-            return Ok(())
-        }
-
-        // Iterate over current contracts wasm bincodes to compute its monotree root
-        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Updating wasm bincodes monotree...");
-        let mut wasm_monotree_root = None;
-        let wasm_monotree_db = MemoryDb::new();
-        let mut wasm_monotree = Monotree::new(wasm_monotree_db);
-        for record in lock.iter(SLED_BINCODE_TREE)? {
-            let (key, value) = record?;
-
-            // Skip native ones
-            if NATIVE_CONTRACT_IDS_BYTES.contains(&deserialize(&key)?) {
-                continue
-            }
-
-            // Insert record
-            let key = blake3::hash(&key);
-            let value = blake3::hash(&value);
-            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Inserting key {key} with value: {value}");
-            wasm_monotree_root = wasm_monotree.insert(
-                wasm_monotree_root.as_ref(),
-                key.as_bytes(),
-                value.as_bytes(),
+        // Insert new/updated contracts monotrees roots
+        for (contract_id_bytes, contract_monotree_root) in &contracts_roots {
+            monotree_root = monotree.insert(
+                monotree_root.as_ref(),
+                contract_id_bytes,
+                contract_monotree_root,
             )?;
         }
 
-        // Insert wasm bincodes root to the global monotree
-        let wasm_monotree_root = match wasm_monotree_root {
+        // Set new global root
+        monotree.set_headroot(monotree_root.as_ref());
+
+        // Return its hash
+        let monotree_root = match monotree_root {
             Some(hash) => hash,
             None => *EMPTY_HASH,
         };
-        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New root: {}", blake3::Hash::from(wasm_monotree_root));
-        root = tree.insert(
-            root.as_ref(),
-            blake3::hash(SLED_BINCODE_TREE).as_bytes(),
-            &wasm_monotree_root,
-        )?;
-        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(root.unwrap()));
-        tree.set_headroot(root.as_ref());
+        debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "New global root: {}", blake3::Hash::from(monotree_root));
 
-        Ok(())
+        Ok(monotree_root)
+    }
+}
+
+/// Auxiliary struct representing a contract monotree updates.
+struct ContractMonotreeUpdates {
+    monotree_pointer: [u8; 32],
+    inserts: Vec<(blake3::Hash, blake3::Hash)>,
+    removals: Vec<blake3::Hash>,
+}
+
+impl ContractMonotreeUpdates {
+    fn new(monotree_pointer: [u8; 32]) -> Self {
+        Self { monotree_pointer, inserts: vec![], removals: vec![] }
     }
 }

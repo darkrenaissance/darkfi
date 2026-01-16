@@ -18,11 +18,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use darkfi_sdk::{
-    crypto::MerkleTree,
-    monotree::{self, Monotree},
-    tx::TransactionHash,
-};
+use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayStateDiff;
@@ -230,9 +226,6 @@ impl Consensus {
             fork.targets_rank += target_distance_sq;
             fork.hashes_rank += hash_distance_sq;
         }
-
-        // Rebuild fork contracts states monotree
-        fork.compute_monotree()?;
 
         // Drop forks lock
         drop(forks);
@@ -687,13 +680,10 @@ impl Consensus {
         // Grab a lock over current forks
         let lock = self.forks.read().await;
 
-        // Rebuild current canonical contract states monotree
-        let state_monotree = self.blockchain.get_state_monotree()?;
+        // Grab current canonical contracts states monotree root
+        let state_root = self.blockchain.contracts.get_state_monotree_root()?;
 
         // Check that the root matches last block header state root
-        let Some(state_root) = state_monotree.get_headroot()? else {
-            return Err(Error::ContractsStatesRootNotFoundError);
-        };
         let last_block_state_root = self.blockchain.last_header()?.state_root;
         if state_root != last_block_state_root {
             return Err(Error::ContractsStatesRootError(
@@ -746,8 +736,6 @@ pub struct Fork {
     pub overlay: BlockchainOverlayPtr,
     /// Current PoW module state
     pub module: PoWModule,
-    /// Current contracts states Monotree(SMT)
-    pub state_monotree: Monotree<monotree::MemoryDb>,
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
@@ -764,8 +752,6 @@ impl Fork {
     pub async fn new(blockchain: Blockchain, module: PoWModule) -> Result<Self> {
         let mempool = blockchain.get_pending_txs()?.iter().map(|tx| tx.hash()).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
-        // Build current contract states monotree
-        let state_monotree = overlay.lock().unwrap().get_state_monotree()?;
         // Retrieve last block difficulty to access current ranks
         let last_difficulty = blockchain.last_block_difficulty()?;
         let targets_rank = last_difficulty.ranks.targets_rank;
@@ -774,7 +760,6 @@ impl Fork {
             blockchain,
             overlay,
             module,
-            state_monotree,
             proposals: vec![],
             diffs: vec![],
             mempool,
@@ -940,7 +925,6 @@ impl Fork {
         let blockchain = self.blockchain.clone();
         let overlay = self.overlay.lock().unwrap().full_clone()?;
         let module = self.module.clone();
-        let state_monotree = self.state_monotree.clone();
         let proposals = self.proposals.clone();
         let diffs = self.diffs.clone();
         let mempool = self.mempool.clone();
@@ -951,19 +935,12 @@ impl Fork {
             blockchain,
             overlay,
             module,
-            state_monotree,
             proposals,
             diffs,
             mempool,
             targets_rank,
             hashes_rank,
         })
-    }
-
-    /// Build current contract states monotree.
-    pub fn compute_monotree(&mut self) -> Result<()> {
-        self.state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
-        Ok(())
     }
 
     /// Auxiliary function to check current contracts states
@@ -973,22 +950,8 @@ impl Fork {
     ///       a fork doesn't contain changes over the last appended
     //        proposal.
     pub fn healthcheck(&self) -> Result<()> {
-        // Rebuild current contract states monotree
-        let state_monotree = self.overlay.lock().unwrap().get_state_monotree()?;
-
-        // Check that it matches forks' tree
-        let Some(state_root) = state_monotree.get_headroot()? else {
-            return Err(Error::ContractsStatesRootNotFoundError);
-        };
-        let Some(fork_state_root) = self.state_monotree.get_headroot()? else {
-            return Err(Error::ContractsStatesRootNotFoundError);
-        };
-        if state_root != fork_state_root {
-            return Err(Error::ContractsStatesRootError(
-                blake3::Hash::from_bytes(state_root).to_string(),
-                blake3::Hash::from_bytes(fork_state_root).to_string(),
-            ));
-        }
+        // Grab current contracts states monotree root
+        let state_root = self.overlay.lock().unwrap().contracts.get_state_monotree_root()?;
 
         // Check that the root matches last block header state root
         let last_block_state_root = self.last_proposal()?.block.header.state_root;
