@@ -7,10 +7,10 @@ description = "DarkFi mdbook"
 text-direction = "ltr"
 
 [output.html]
-default-theme = "ayu"
-preferred-dark-theme = "ayu"
-#theme = "theme"
-additional-css = ["theme/tabs.css"]
+default-theme = "darkforest"
+preferred-dark-theme = "darkforest"
+theme = "theme"
+additional-css = ["theme/tabs.css", "theme/highlight.css", "src/fonts.css"]
 additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js", "theme/zkas-highlight.js", "theme/tabs.js"]
 
 [output.html.playground]
@@ -28,4 +28,3 @@ renderer = ["html"]
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
-
