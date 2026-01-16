@@ -35,19 +35,19 @@ Therefore, block production involves the following steps:
   to see if its newly extended fork can be confirmed.
 
 Pseudocode:
-```
+```rust
 loop {
-    fork = find_best_fork()
+    fork = find_best_fork();
 
-    block = generate_next_block(fork)
+    block = generate_next_block(fork);
 
-    mine_block(block)
+    mine_block(block);
 
-    p2p.broadcast_proposal(block)
+    p2p.broadcast_proposal(block);
 
-    fork.append_proposal(block)
+    fork.append_proposal(block);
 
-    chain_confirmation()
+    chain_confirmation();
 }
 ```
 
@@ -263,8 +263,8 @@ comparison the tx in Bitcoin with the most outputs has 2501.
 | `version`           | `u8`       | Block version                                            |
 | `previous`          | `[u8; 32]` | Previous block hash                                      |
 | `height`            | `u32`      | Block height                                             |
+| `nonce`             | `u32`      | The block's nonce value                                  |
 | `timestamp`         | `u64`      | Block creation timestamp                                 |
-| `nonce`             | `u64`      | The block's nonce value                                  |
 | `transactions_root` | `[u8; 32]` | Merkle tree root of the block's transactions hashes      |
 | `state_root`        | `[u8; 32]` | Contracts states Monotree(SMT) root the block commits to |
 | `pow_data`          | `Enum`     | Block Proof of Work type                                 |
@@ -302,15 +302,16 @@ comparison the tx in Bitcoin with the most outputs has 2501.
 ## Contracts states Monotree(SMT)
 
 DarkFi is using an optimized Sparse Merkle Tree implementation, called
-Monotree. Each contract has its own Monotree, containing all its
-database trees hashed records. Additionally, a global tree exists
-reflecting the total database state. The global tree is constructed
-using all contracts states monotrees roots, along with the wasm
-bincodes monotree root, excluding native contracts zkas tree and wasm
-bincodes.
-For each block, we compute the current tree root and keep it in its header,
-enabling us to both verify the contacts state after the block insertion,
-and create proofs commiting to that specific state.
+`Monotree`. Each contract has its own monotree, containing all its
+database trees hashed records, along with its hashed `wasm` bincode
+record. Native contracts exclude their `wasm` bincode from their
+monotrees, to allow code updates. Their `zkas` proofs code is included.
+A global monotree exists reflecting the total database state. The
+global monotree is constructed using all contracts states monotrees
+roots.
+For each block, we compute the current global monotree root and keep it
+in its header, enabling us to both verify the contacts state after the
+block insertion, and create proofs commiting to that specific state.
 
 ### Usage example
 
@@ -319,13 +320,14 @@ a proof for a specific state. First, we will create a random set of
 key-value `blake3` hash pairs, representing our contract states
 roots:
 
-```
+```rust
 keys = random_hashes(100);
 values = random_hashes(100);
 ```
 
 We compute our monotree, by inserting all the pairs:
-```
+
+```rust
 root = None;
 tree = Monotree::new();
 for (key, value) in keys.zip(values) {
@@ -340,7 +342,8 @@ to the state by appending the monotree root to the block header.
 Lets assume we now created a block commiting to that state,
 and want to get a Merkle proof for a specific key-value pair
 we want to commit to:
-```
+
+```rust
 root = tree.get_headroot()?
 block.header.state_root = root;
 proof = tree.get_merkle_proof(root, our_key);
@@ -349,7 +352,8 @@ proof = tree.get_merkle_proof(root, our_key);
 No matter how many blocks have passed, or how the state/tree has
 mutated, we can always verify that proof against the specific block
 it corresponds, by using its header root:
-```
+
+```rust
 assert!(verify_proof(block.header.state_root, our_key_value, proof));
 ```
 
