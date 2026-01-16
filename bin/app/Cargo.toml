@@ -87,8 +87,7 @@ halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v032" }
 dirs = "5.0.1"
 # AV1 video decoding - rav1d with Rust API from leo030303 fork
 # Enable ASM routines for non-Android platforms.
-#rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
-rav1d = { git = "https://github.com/narodnik/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
+rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2.0"

@@ -51,9 +51,9 @@ thread_local! {
         RefCell::new(parley::LayoutContext::new());
 }
 
-const FONT_STACK: &[parley::FontFamily<'_>] = &[
-    parley::FontFamily::Named(std::borrow::Cow::Borrowed("IBM Plex Mono")),
-    parley::FontFamily::Named(std::borrow::Cow::Borrowed("Noto Color Emoji")),
+const FONT_STACK: &[parley::FontFamilyName<'_>] = &[
+    parley::FontFamilyName::named("IBM Plex Mono"),
+    parley::FontFamilyName::named("Noto Color Emoji"),
 ];
 
 pub fn make_layout(
@@ -85,9 +85,7 @@ pub fn make_layout2(
         let mut builder = layout_ctx.ranged_builder(&mut font_ctx, text, window_scale, false);
         builder.push_default(parley::LineHeight::FontSizeRelative(lineheight));
         builder.push_default(parley::StyleProperty::FontSize(font_size));
-        builder.push_default(parley::StyleProperty::FontStack(parley::FontStack::List(
-            FONT_STACK.into(),
-        )));
+        builder.push_default(parley::StyleProperty::from(FONT_STACK));
         builder.push_default(parley::StyleProperty::Brush(text_color));
         builder.push_default(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
 

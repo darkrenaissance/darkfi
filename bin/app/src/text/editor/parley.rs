@@ -80,7 +80,7 @@ impl Editor {
         styles.insert(parley::StyleProperty::LineHeight(parley::LineHeight::FontSizeRelative(
             lineheight,
         )));
-        styles.insert(parley::StyleProperty::FontStack(parley::FontStack::List(FONT_STACK.into())));
+        styles.insert(parley::StyleProperty::from(FONT_STACK));
         styles.insert(parley::StyleProperty::Brush(text_color));
         styles.insert(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
         *self.editor.edit_styles() = styles;
