@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::deserialize;
+
+use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 use crate::{
     app::{
         node::{
@@ -32,8 +35,6 @@ use crate::{
     ui::{Button, Layer, Menu, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
-
-use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -210,11 +211,33 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let label = "#".to_string() + channel;
         prop.push_str(atom, Role::App, label).unwrap();
     }
-    for channel in
-        ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
-    {
-        prop.push_str(atom, Role::App, channel).unwrap();
-    }
+    //for channel in
+    //    ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
+    //{
+    //    prop.push_str(atom, Role::App, channel).unwrap();
+    //}
+
+    let (slot, recvr) = Slot::new("menu_clicked");
+    node.register("select", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+    let render_api = app.render_api.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let item_name: String = deserialize(&data).unwrap();
+            // use if let here
+            let channel = item_name.strip_prefix('#').unwrap();
+            let chatview_path = format!("/window/content/{}_chat_layer", channel);
+            let chatview_node = sg_root.lookup_node(chatview_path).unwrap();
+
+            let atom = &mut render_api.make_guard(gfxtag!("channel_clicked"));
+            info!(target: "app::menu", "clicked: {channel}!");
+            chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            menu_is_visible.set(atom, false);
+            //set_normal_color(atom);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Menu::new(me, window_scale.clone(), app.render_api.clone())).await;
     layer_node.link(node);

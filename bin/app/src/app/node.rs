@@ -667,7 +667,7 @@ pub fn create_menu(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     node.add_signal(
-        "selected",
+        "select",
         "Item selected",
         vec![("item", "Selected item name", CallArgType::Str)],
     )

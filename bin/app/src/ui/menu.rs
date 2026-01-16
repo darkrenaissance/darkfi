@@ -19,6 +19,7 @@
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::CondVar;
+use darkfi_serial::serialize;
 use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
@@ -179,29 +180,35 @@ impl Menu {
         Pimpl::Menu(self_)
     }
 
+    /// Height of a single item
     fn get_item_height(&self) -> f32 {
         self.font_size.get() + self.padding.get_f32(1).unwrap() * 2.0
     }
 
+    /// Height of the content without the overscroll
+    fn content_height(&self) -> f32 {
+        self.items.get_len() as f32 * self.get_item_height()
+    }
     fn get_selected_item_index(&self, click_y: f32) -> Option<usize> {
         let rect = self.rect.get();
         let scroll = self.scroll.get();
-        let item_height = self.get_item_height();
 
-        let content_y = click_y - rect.y - scroll;
-
-        if content_y >= 0. && content_y < self.items.get_len() as f32 * item_height {
-            Some((content_y / item_height) as usize)
-        } else {
-            None
+        // Scroll is positive value so to translate click into content, we must add the scroll.
+        let content_y = click_y + scroll - rect.y;
+        if content_y < 0. || content_y > self.content_height() {
+            return None
         }
+
+        let item_height = self.get_item_height();
+        Some((content_y / item_height) as usize)
     }
 
     async fn handle_selection(&self, item_idx: usize) {
         if item_idx < self.items.get_len() {
             let item_name = self.items.get_str(item_idx).unwrap();
             let node = self.node.upgrade().unwrap();
-            node.trigger("selected", item_name.as_bytes().to_vec()).await.unwrap();
+            let data = serialize(&item_name);
+            node.trigger("select", data).await.unwrap();
         }
     }
 
@@ -447,8 +454,7 @@ impl UIObject for Menu {
             return false
         }
 
-        let click_y = mouse_pos.y - rect.y;
-        if let Some(item_idx) = self.get_selected_item_index(click_y) {
+        if let Some(item_idx) = self.get_selected_item_index(mouse_pos.y) {
             self.handle_selection(item_idx).await;
             true
         } else {
@@ -540,10 +546,7 @@ impl UIObject for Menu {
                 };
 
                 if is_tap {
-                    let rect = self.rect.get();
-                    let click_y = touch_pos.y - rect.y;
-
-                    if let Some(item_idx) = self.get_selected_item_index(click_y) {
+                    if let Some(item_idx) = self.get_selected_item_index(touch_pos.y) {
                         self.handle_selection(item_idx).await;
                     }
                 }
