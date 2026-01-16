@@ -502,7 +502,7 @@ impl Window {
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(atom.batch_id, draw_calls);
+        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_calls);
     }
 
     async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {

@@ -714,18 +714,28 @@ impl Stage {
                 self.method_update_anim(*id, *frame_idx, frame.clone())
             }
             GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => self.method_delete_anim(*ganim_id),
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, .. } => {
-                //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
-                //t!("Commit dc to {batch_id}: {debug_strs:?}");
-                if self.dropped_batches.contains(batch_id) {
-                    t!("Discarding ReplaceGfxDrawCalls from dropped {batch_id}");
-                    return
+            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, ref mut dcs } => {
+                match batch_id {
+                    Some(bid) => {
+                        //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
+                        //t!("Commit dc to {bid}: {debug_strs:?}");
+                        if self.dropped_batches.contains(&bid) {
+                            t!("Discarding ReplaceGfxDrawCalls from dropped {bid}");
+                            return
+                        }
+                        let Some(batch) = self.pending_batches.get_mut(&bid) else {
+                            panic!("unknown batch {bid}")
+                        };
+                        let method = std::mem::take(&mut method);
+                        batch.push(method);
+                    }
+                    None => {
+                        // Process immediately without batching
+                        let timest = unixtime();
+                        let dcs = std::mem::take(dcs);
+                        self.method_replace_draw_calls(timest, dcs);
+                    }
                 }
-                let Some(batch) = self.pending_batches.get_mut(batch_id) else {
-                    panic!("unknown batch {batch_id}")
-                };
-                let method = std::mem::take(&mut method);
-                batch.push(method);
                 if DEBUG_TRAX {
                     get_trax().lock().put_stat(0);
                 }
@@ -975,7 +985,9 @@ impl Stage {
                 //trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
             }
             GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs } => {
-                trax.put_dcs(epoch, *batch_id, dcs);
+                if let Some(bid) = batch_id {
+                    trax.put_dcs(epoch, *bid, dcs);
+                }
             }
             GraphicsMethod::StartBatch { batch_id, tag } => {
                 trax.put_start_batch(epoch, *batch_id, *tag);

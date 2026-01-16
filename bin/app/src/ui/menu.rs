@@ -309,10 +309,10 @@ impl Menu {
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else { return };
 
-        self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
-    fn redraw_scroll(&self, batch_id: BatchGuardId) {
+    fn redraw_scroll(&self) {
         let rect = self.rect.get();
         let scroll = self.scroll.get();
 
@@ -328,7 +328,7 @@ impl Menu {
         };
 
         let draw_calls = vec![(self.root_dc_key, root_dc)];
-        self.render_api.replace_draw_calls(batch_id, draw_calls);
+        self.render_api.replace_draw_calls(None, draw_calls);
     }
 
     fn scrollview(&self, scroll: f32, atom: &mut PropertyAtomicGuard) {
@@ -345,7 +345,7 @@ impl Menu {
         self.scroll.set(atom, scroll);
 
         // Only update root draw call with new scroll position
-        self.redraw_scroll(atom.batch_id);
+        self.redraw_scroll();
     }
 
     fn start_scroll(&self, delta: f32) {

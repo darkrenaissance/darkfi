@@ -787,7 +787,7 @@ impl ChatView {
         let draw_calls =
             vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
-        self.render_api.replace_draw_calls(batch_id, draw_calls);
+        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     /// Invalidates cache and redraws everything
@@ -1195,7 +1195,8 @@ impl UIObject for ChatView {
 impl Drop for ChatView {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("ChatView::drop"));
-        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }
 

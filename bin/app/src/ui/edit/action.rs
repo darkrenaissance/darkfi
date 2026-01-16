@@ -175,6 +175,6 @@ impl ActionMode {
     pub fn redraw(&self, batch_id: BatchGuardId) {
         let dcs =
             vec![(self.dc_key, DrawCall::new(self.get_instrs(), vec![], 1, "chatedit_action"))];
-        self.render_api.replace_draw_calls(batch_id, dcs);
+        self.render_api.replace_draw_calls(Some(batch_id), dcs);
     }
 }

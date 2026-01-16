@@ -95,7 +95,7 @@ impl Layer {
             error!(target: "ui:layer", "Layer failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     async fn get_draw_calls(

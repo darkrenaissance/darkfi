@@ -144,7 +144,7 @@ impl Text {
             error!(target: "ui::text", "Text failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn get_draw_calls(
@@ -219,7 +219,8 @@ impl UIObject for Text {
 impl Drop for Text {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("Text::drop"));
-        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }
 

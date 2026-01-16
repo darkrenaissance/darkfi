@@ -91,7 +91,7 @@ impl VectorArt {
             error!(target: "ui:vector_art", "Mesh failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
@@ -169,7 +169,8 @@ impl UIObject for VectorArt {
 impl Drop for VectorArt {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("VectorArt::drop"));
-        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }
 

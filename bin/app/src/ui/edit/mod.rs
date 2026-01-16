@@ -1034,7 +1034,7 @@ impl BaseEdit {
     #[instrument(target = "ui::edit")]
     fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let draw_update = self.make_draw_calls();
-        self.render_api.replace_draw_calls(atom.batch_id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
     /// Called when scroll changes. Moves content up or down. Nothing more.
@@ -1060,13 +1060,13 @@ impl BaseEdit {
                 "chatedit_content",
             ),
         )];
-        self.render_api.replace_draw_calls(batch_id, draw_main);
+        self.render_api.replace_draw_calls(Some(batch_id), draw_main);
     }
 
     fn redraw_cursor(&self, batch_id: BatchGuardId) {
         let instrs = self.get_cursor_instrs();
         let draw_calls = vec![(self.cursor_dc_key, DrawCall::new(instrs, vec![], 2, "curs_redr"))];
-        self.render_api.replace_draw_calls(batch_id, draw_calls);
+        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     fn redraw_select(&self, batch_id: BatchGuardId) {
@@ -1080,7 +1080,7 @@ impl BaseEdit {
                 DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
             ),
         ];
-        self.render_api.replace_draw_calls(batch_id, draw_calls);
+        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
@@ -1381,7 +1381,7 @@ impl Drop for BaseEdit {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("BaseEdit::drop"));
         self.render_api
-            .replace_draw_calls(atom.batch_id, vec![(self.text_dc_key, Default::default())]);
+            .replace_draw_calls(Some(atom.batch_id), vec![(self.text_dc_key, Default::default())]);
     }
 }
 

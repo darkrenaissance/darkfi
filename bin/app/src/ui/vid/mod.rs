@@ -150,7 +150,7 @@ impl Video {
             error!(target: "ui:video", "Video failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(batch.id, draw_update.draw_calls);
+        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn regen_mesh(&self) -> MeshInfo {
@@ -306,7 +306,8 @@ impl UIObject for Video {
 impl Drop for Video {
     fn drop(&mut self) {
         let atom = self.render_api.make_guard(gfxtag!("Video::drop"));
-        self.render_api.replace_draw_calls(atom.batch_id, vec![(self.dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }
 

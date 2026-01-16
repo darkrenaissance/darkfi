@@ -246,7 +246,7 @@ impl RenderApi {
         self.send_with_epoch(method, epoch);
     }
 
-    pub fn replace_draw_calls(&self, batch_id: BatchGuardId, dcs: Vec<(DcId, DrawCall)>) {
+    pub fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
         let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
         self.send(method);
 
@@ -290,7 +290,7 @@ pub enum GraphicsMethod {
     NewSeqAnim { id: AnimId, frames_len: usize, oneshot: bool, tag: DebugTag },
     UpdateSeqAnim { id: AnimId, frame_idx: usize, frame: AnimFrame, tag: DebugTag },
     DeleteSeqAnim((AnimId, DebugTag)),
-    ReplaceGfxDrawCalls { batch_id: BatchGuardId, dcs: Vec<(DcId, DrawCall)> },
+    ReplaceGfxDrawCalls { batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)> },
     StartBatch { batch_id: BatchGuardId, tag: DebugTag },
     EndBatch { batch_id: BatchGuardId, timest: u64 },
     Noop,
@@ -307,9 +307,10 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::NewSeqAnim { .. } => write!(f, "NewSeqAnim"),
             Self::UpdateSeqAnim { .. } => write!(f, "UpdateSeqAnim"),
             Self::DeleteSeqAnim(_) => write!(f, "DeleteSeqAnim"),
-            Self::ReplaceGfxDrawCalls { batch_id: bid, dcs: _ } => {
-                write!(f, "ReplaceGfxDrawCalls({bid})")
-            }
+            Self::ReplaceGfxDrawCalls { batch_id, dcs: _ } => match batch_id {
+                Some(bid) => write!(f, "ReplaceGfxDrawCalls({bid})"),
+                None => write!(f, "ReplaceGfxDrawCalls(immediate)"),
+            },
             Self::StartBatch { batch_id, tag } => write!(f, "StartBatch({batch_id}, {tag:?})"),
             Self::EndBatch { batch_id, timest } => write!(f, "EndBatch({batch_id}, {timest})"),
             Self::Noop => write!(f, "Noop"),
