@@ -18,7 +18,7 @@
 
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use lazy_static::lazy_static;
 use pasta_curves::{group::ff::PrimeField, pallas};
 
@@ -114,7 +114,7 @@ impl ContractId {
     /// fixed-size name for a contract's state db.
     pub fn hash_state_id(&self, tree_name: &str) -> [u8; 32] {
         let mut hasher = blake3::Hasher::new();
-        hasher.update(&serialize(self));
+        hasher.update(&self.to_bytes());
         hasher.update(tree_name.as_bytes());
         let id = hasher.finalize();
         *id.as_bytes()
