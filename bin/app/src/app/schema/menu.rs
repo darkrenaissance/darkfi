@@ -211,11 +211,11 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let label = "#".to_string() + channel;
         prop.push_str(atom, Role::App, label).unwrap();
     }
-    //for channel in
-    //    ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
-    //{
-    //    prop.push_str(atom, Role::App, channel).unwrap();
-    //}
+    for channel in
+        ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
+    {
+        prop.push_str(atom, Role::App, channel).unwrap();
+    }
 
     let (slot, recvr) = Slot::new("menu_clicked");
     node.register("select", slot).unwrap();

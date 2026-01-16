@@ -98,7 +98,7 @@ pub struct Menu {
 
     is_visible: PropertyBool,
     rect: PropertyRect,
-    scroll: PropertyFloat32,
+    scroll: AtomicF32,
     z_index: PropertyUint32,
     priority: PropertyUint32,
     items: PropertyPtr,
@@ -130,7 +130,6 @@ impl Menu {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
-        let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let items = node_ref.get_property("items").expect("Menu::items");
@@ -157,7 +156,7 @@ impl Menu {
             content_dc_key: OsRng.gen(),
             is_visible,
             rect,
-            scroll,
+            scroll: AtomicF32::new(0.),
             z_index,
             priority,
             items,
@@ -191,7 +190,7 @@ impl Menu {
     }
     fn get_selected_item_index(&self, click_y: f32) -> Option<usize> {
         let rect = self.rect.get();
-        let scroll = self.scroll.get();
+        let scroll = self.scroll.load(Ordering::Relaxed);
 
         // Scroll is positive value so to translate click into content, we must add the scroll.
         let content_y = click_y + scroll - rect.y;
@@ -222,7 +221,7 @@ impl Menu {
 
         let mut instrs = vec![];
 
-        let scroll = self.scroll.get();
+        let scroll = self.scroll.load(Ordering::Relaxed);
         let item_height = self.get_item_height();
         let font_size = self.font_size.get();
         let padding_x = self.padding.get_f32(0).unwrap();
@@ -314,7 +313,7 @@ impl Menu {
 
     fn redraw_scroll(&self) {
         let rect = self.rect.get();
-        let scroll = self.scroll.get();
+        let scroll = self.scroll.load(Ordering::Relaxed);
 
         // Only recreate root with updated scroll position
         let root_instrs =
@@ -331,7 +330,7 @@ impl Menu {
         self.render_api.replace_draw_calls(None, draw_calls);
     }
 
-    fn scrollview(&self, scroll: f32, atom: &mut PropertyAtomicGuard) {
+    fn scrollview(&self, scroll: f32) {
         let item_height = self.get_item_height();
         let num_items = self.items.get_len() as f32;
         let content_height = num_items * item_height;
@@ -342,7 +341,7 @@ impl Menu {
         // Allow 50% overscroll past the end of the content
         let overscroll = rect.h * 0.5;
         let scroll = scroll.clamp(0., max_scroll + overscroll);
-        self.scroll.set(atom, scroll);
+        self.scroll.store(scroll, Ordering::Relaxed);
 
         // Only update root draw call with new scroll position
         self.redraw_scroll();
@@ -366,10 +365,8 @@ impl Menu {
             }
 
             while speed.abs() >= EPSILON {
-                let atom = &mut self.render_api.make_guard(gfxtag!("Menu::movement"));
-
-                let scroll = self.scroll.get();
-                self.scrollview(scroll + speed, atom);
+                let scroll = self.scroll.load(Ordering::Relaxed);
+                self.scrollview(scroll + speed);
                 speed *= resist;
                 self.speed.store(speed, Ordering::Relaxed);
                 darkfi::system::msleep(16).await;
@@ -417,7 +414,6 @@ impl UIObject for Menu {
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         on_modify.when_change(self.items.clone(), Self::redraw);
-        on_modify.when_change(self.scroll.prop(), Self::redraw);
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.font_size.prop(), Self::redraw);
         on_modify.when_change(self.padding.clone(), Self::redraw);
@@ -492,7 +488,8 @@ impl UIObject for Menu {
                     return false
                 }
 
-                *self.touch_info.lock() = Some(TouchInfo::new(self.scroll.get(), touch_pos.y));
+                *self.touch_info.lock() =
+                    Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos.y));
                 true
             }
 
@@ -518,8 +515,7 @@ impl UIObject for Menu {
                     info.start_scroll - dist
                 };
 
-                let atom = &mut self.render_api.make_guard(gfxtag!("Menu::touch"));
-                self.scrollview(scroll, atom);
+                self.scrollview(scroll);
                 true
             }
 
