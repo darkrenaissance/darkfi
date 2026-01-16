@@ -522,7 +522,7 @@ impl NetworkProfile {
 
     /// Creates [`NetworkProfile`] from [`NetworkProfileOpt`] based on the profile
     fn from_with_profile(opt: NetworkProfileOpt, profile: &str) -> Self {
-        let def = if profile == "tcp" || profile == "tcp+tls" {
+        let def = if ["tcp", "tcp+tls", "quic"].contains(&profile) {
             NetworkProfile::default()
         } else {
             NetworkProfile::tor_default()
