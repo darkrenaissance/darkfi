@@ -15,10 +15,10 @@ identify issues and areas of improvement.
 
 Contribute according to your own interests, skills, and topics in which you would
 like to become more knowledgable. Take initiative. Other darkfi devs can help you
-as mentors: see [the Methodology section of the Study Guide](../learn.md#methodology).
+as mentors: see [the Methodology section of the Study Guide](../philosophy/learn.md#methodology).
 
 Few people are able be an expert in all domains. Choose a topic and specialize.
-Example specializations are described [here](../learn.md#branches).
+Example specializations are described [here](../philosophy/learn.md#branches).
 Don't make the mistake that you must become an expert in all areas before getting started.
 It's best to just jump in.
 

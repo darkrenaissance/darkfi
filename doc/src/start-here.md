@@ -46,7 +46,7 @@ Check out the [contributor's guide](dev/contrib/contrib.md) for where
 to find tasks and submitting patches to the project.
 
 If you're not a dev but wish to learn then take a look at the
-[agorism hackers study guide](dev/learn.md).
+[agorism hackers study guide](philosophy/learn.md).
 
 Lastly familiarize yourself with the
 [project architecture](arch/arch.md). The book also contains a

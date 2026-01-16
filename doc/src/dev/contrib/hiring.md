@@ -7,7 +7,7 @@ Follow this guide to work on DarkFi and get paid.
 If you're not a dev, see the [learn] section. We offer mentoring.
 Anybody can become a dev. It's not that hard, you just need focus and dedication.
 
-[learn]: ../learn.md
+[learn]: ../philosophy/learn.md
 
 ## Criteria
 
