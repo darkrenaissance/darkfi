@@ -91,7 +91,7 @@ impl App {
         let window_scale = {
             let screen_density = android::get_screen_density();
             i!("Android screen density: {screen_density}");
-            screen_density / 2.625
+            screen_density / 2.8
         };
         #[cfg(not(target_os = "android"))]
         let window_scale = 1.;
