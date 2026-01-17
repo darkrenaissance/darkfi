@@ -25,7 +25,7 @@ use crate::android;
 
 use crate::{
     error::Error,
-    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, RenderApi},
+    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
     plugin::PluginSettings,
     prop::{PropertyAtomicGuard, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
@@ -55,14 +55,14 @@ pub type AppPtr = Arc<App>;
 
 pub struct App {
     pub sg_root: SceneNodePtr,
-    pub render_api: RenderApi,
+    pub renderer: Renderer,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
 }
 
 impl App {
-    pub fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
-        Arc::new(Self { sg_root, ex, render_api, tasks: SyncMutex::new(vec![]) })
+    pub fn new(sg_root: SceneNodePtr, renderer: Renderer, ex: ExecutorPtr) -> Arc<Self> {
+        Arc::new(Self { sg_root, ex, renderer, tasks: SyncMutex::new(vec![]) })
     }
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
@@ -128,7 +128,7 @@ impl App {
         }
         let window = window
             .setup(|me| {
-                Window::new(me, self.render_api.clone(), i18n_fish.clone(), setting_root.clone())
+                Window::new(me, self.renderer.clone(), i18n_fish.clone(), setting_root.clone())
             })
             .await;
 
@@ -225,7 +225,7 @@ impl App {
     }
 
     async fn trigger_draw(&self) {
-        let atom = &mut self.render_api.make_guard(gfxtag!("App::trigger_draw"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("App::trigger_draw"));
         let window_node = self.sg_root.lookup_node("/window").expect("no window attached!");
         match window_node.pimpl() {
             Pimpl::Window(win) => win.draw(atom).await,

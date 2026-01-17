@@ -42,7 +42,7 @@ pub use page::FileMessageStatus;
 use page::MessageBuffer;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyUint32, Role,
@@ -154,7 +154,7 @@ pub type ChatViewPtr = Arc<ChatView>;
 pub struct ChatView {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
-    render_api: RenderApi,
+    renderer: Renderer,
     sg_root: SceneNodePtr,
 
     tree: sled::Tree,
@@ -196,7 +196,7 @@ impl ChatView {
         node: SceneNodeWeak,
         tree: sled::Tree,
         window_scale: PropertyFloat32,
-        render_api: RenderApi,
+        renderer: Renderer,
         sg_root: SceneNodePtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -237,7 +237,7 @@ impl ChatView {
         let self_ = Arc::new(Self {
             node: node.clone(),
             tasks: SyncMutex::new(vec![]),
-            render_api: render_api.clone(),
+            renderer: renderer.clone(),
             sg_root,
 
             tree,
@@ -253,7 +253,7 @@ impl ChatView {
                 nick_colors,
                 hi_bg_color,
                 window_scale,
-                render_api,
+                renderer,
             )),
             dc_key: OsRng.gen(),
 
@@ -374,7 +374,7 @@ impl ChatView {
         let mut msgbuf = self_.msgbuf.lock().await;
         msgbuf.update_file_status(&url, &file_status);
         msgbuf.adjust_params();
-        let atom = self_.render_api.make_guard(gfxtag!("ChatView::set_file_status"));
+        let atom = self_.renderer.make_guard(gfxtag!("ChatView::set_file_status"));
         self_.redraw_cached(atom.batch_id, &mut msgbuf).await;
 
         true
@@ -523,7 +523,7 @@ impl ChatView {
             }
         }
 
-        let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_insert_line"));
+        let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_insert_line"));
         self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         self.bgload_cv.notify();
     }
@@ -545,7 +545,7 @@ impl ChatView {
             return
         };
         privmsg.confirmed = false;
-        let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_insert_unconf_line"));
+        let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_insert_unconf_line"));
         self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         self.bgload_cv.notify();
     }
@@ -584,7 +584,7 @@ impl ChatView {
             }
 
             let scroll = self.scroll.get() + speed;
-            let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::motion_task"));
+            let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::motion_task"));
             let dist = self.scrollview(scroll, atom).await;
 
             // We reached the end so just stop
@@ -685,7 +685,7 @@ impl ChatView {
             remaining_visible -= msg_height;
         }
         if do_redraw {
-            let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_bgload"));
+            let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_bgload"));
             self.redraw_cached(atom.batch_id, &mut msgbuf).await;
         }
     }
@@ -787,7 +787,7 @@ impl ChatView {
         let draw_calls =
             vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
 
-        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
+        self.renderer.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     /// Invalidates cache and redraws everything
@@ -991,7 +991,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        let atom = self.render_api.make_guard(gfxtag!("ChatView::handle_mouse_btn_down"));
+        let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_mouse_btn_down"));
 
         if ENABLE_SELECT {
             self.select_line(atom.batch_id, mouse_pos.y).await;
@@ -1041,7 +1041,7 @@ impl UIObject for ChatView {
         }
 
         if ENABLE_SELECT {
-            let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::handle_mouse_move"));
+            let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::handle_mouse_move"));
             self.select_line(atom.batch_id, mouse_pos.y).await;
         }
 
@@ -1076,7 +1076,7 @@ impl UIObject for ChatView {
 
         let rect = self.rect.get();
         //t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
-        let atom = &mut self.render_api.make_guard(gfxtag!("ChatView::handle_touch"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::handle_touch"));
 
         let touch_y = touch_pos.y;
 
@@ -1194,8 +1194,8 @@ impl UIObject for ChatView {
 
 impl Drop for ChatView {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("ChatView::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("ChatView::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

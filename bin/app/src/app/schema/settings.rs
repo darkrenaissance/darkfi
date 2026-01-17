@@ -159,7 +159,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        layer_node.setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone())).await;
     window.link(layer_node.clone());
 
     let mut setting_y = 0.;
@@ -201,7 +201,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     );
 
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     // Create the back button
@@ -215,7 +215,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     let node = create_button("back_btn");
@@ -281,7 +281,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             Text::new(
                 me,
                 window_scale.clone(),
-                app.render_api.clone(),
+                app.renderer.clone(),
                 i18n_fish.clone(),
             )
         })
@@ -311,7 +311,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     );
 
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     // Search Bar Input
@@ -360,7 +360,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let shape = shape::create_logo([1., 1., 1., 1.]).scaled(500.);
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     // Search placeholder
@@ -382,7 +382,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             Text::new(
                 me,
                 window_scale.clone(),
-                app.render_api.clone(),
+                app.renderer.clone(),
                 i18n_fish.clone(),
             )
         })
@@ -408,7 +408,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             Text::new(
                 me,
                 window_scale.clone(),
-                app.render_api.clone(),
+                app.renderer.clone(),
                 i18n_fish.clone(),
             )
         })
@@ -481,7 +481,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             EditBox::new(
                 me,
                 window_scale.clone(),
-                app.render_api.clone(),
+                app.renderer.clone(),
                 app.text_shaper.clone(),
                 app.ex.clone(),
             )
@@ -528,7 +528,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     );
 
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     let node = create_vector_art("search_bg2");
@@ -570,7 +570,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     );
 
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
     // Create a BTreeMap to store settings
@@ -614,7 +614,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     settings_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settings_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let settings_layer_node = settings_layer_node
-        .setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone()))
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone()))
         .await;
     layer_node.link(settings_layer_node.clone());
 
@@ -637,7 +637,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         setting_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         setting_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let setting_layer_node = setting_layer_node
-            .setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone()))
             .await;
         settings_layer_node.link(setting_layer_node.clone());
 
@@ -682,7 +682,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         );
 
         let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
             .await;
         setting_layer_node.link(node);
 
@@ -749,7 +749,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             );
 
             let node = node
-                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                 .await;
             setting_layer_node.link(node);
 
@@ -815,7 +815,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             );
 
             let node = node
-                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                 .await;
             setting_layer_node.link(node);
         } else {
@@ -875,7 +875,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             );
 
             let node = node
-                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                 .await;
             setting_layer_node.link(node);
         }
@@ -911,7 +911,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 Text::new(
                     me,
                     window_scale.clone(),
-                    app.render_api.clone(),
+                    app.renderer.clone(),
                     app.text_shaper.clone(),
                     app.ex.clone(),
                 )
@@ -985,7 +985,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 EditBox::new(
                     me,
                     window_scale.clone(),
-                    app.render_api.clone(),
+                    app.renderer.clone(),
                     app.text_shaper.clone(),
                     app.ex.clone(),
                 )
@@ -1027,7 +1027,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
                 let shape = shape::create_circle([0.9, 0.4, 0.4, 0.7]).scaled(5.);
                 let node = node
-                    .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                    .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                     .await;
                 setting_layer_node.link(node);
 
@@ -1056,7 +1056,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
                 let shape = shape::create_circle([0., 0.94, 1., 1.]).scaled(5.);
                 let node = node
-                    .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                    .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                     .await;
                 setting_layer_node.link(node);
 
@@ -1112,7 +1112,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         Text::new(
                             me,
                             window_scale.clone(),
-                            app.render_api.clone(),
+                            app.renderer.clone(),
                             app.text_shaper.clone(),
                             app.ex.clone(),
                         )
@@ -1156,7 +1156,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         Text::new(
                             me,
                             window_scale.clone(),
-                            app.render_api.clone(),
+                            app.renderer.clone(),
                             app.text_shaper.clone(),
                             app.ex.clone(),
                         )
@@ -1375,7 +1375,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
             let shape = shape::create_switch([0., 0.94, 1., 1.]).scaled(10.);
             let node = node
-                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                 .await;
             setting_layer_node.link(node);
         } else {
@@ -1391,7 +1391,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
             let shape = shape::create_confirm([0., 0.94, 1., 1.]).scaled(10.);
             let node = node
-                .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+                .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
                 .await;
             setting_layer_node.link(node.clone());
 
@@ -1444,7 +1444,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let shape = shape::create_reset([0., 0.94, 1., 1.]).scaled(15.);
         let node = node
-            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone()))
             .await;
         setting_layer_node.link(node);
 

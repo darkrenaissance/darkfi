@@ -22,7 +22,7 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{DrawCall, Point, Rectangle, RenderApiSync},
+    gfx::{DrawCall, Point, Rectangle, RendererSync},
     prop::{BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
@@ -112,7 +112,7 @@ pub trait UIObject: Sync {
 
     fn handle_touch_sync(
         &self,
-        _render_api: &mut RenderApiSync,
+        _render_api: &mut RendererSync,
         _phase: TouchPhase,
         _id: u64,
         _touch_pos: Point,

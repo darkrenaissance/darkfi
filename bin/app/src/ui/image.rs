@@ -25,7 +25,7 @@ use std::{io::Cursor, sync::Arc};
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, Renderer},
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
@@ -38,7 +38,7 @@ pub type ImagePtr = Arc<Image>;
 
 pub struct Image {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     texture: SyncMutex<Option<ManagedTexturePtr>>,
@@ -54,7 +54,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();
@@ -64,7 +64,7 @@ impl Image {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             tasks: SyncMutex::new(vec![]),
 
             texture: SyncMutex::new(None),
@@ -113,7 +113,7 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        self.render_api.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("img"))
+        self.renderer.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("img"))
     }
 
     #[instrument(target = "ui::image")]
@@ -128,7 +128,7 @@ impl Image {
             error!(target: "ui::image", "Image failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     /// Called whenever any property changes.
@@ -138,7 +138,7 @@ impl Image {
         let mesh_rect = Rectangle::from([0., 0., rect.w, rect.h]);
         let mut mesh = MeshBuilder::new(gfxtag!("img"));
         mesh.draw_box(&mesh_rect, COLOR_WHITE, &uv);
-        mesh.alloc(&self.render_api)
+        mesh.alloc(&self.renderer)
     }
 
     fn get_draw_calls(
@@ -216,8 +216,8 @@ impl UIObject for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("Image::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("Image::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

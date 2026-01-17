@@ -27,7 +27,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
@@ -56,7 +56,7 @@ pub type EmojiPickerPtr = Arc<EmojiPicker>;
 
 pub struct EmojiPicker {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
@@ -77,7 +77,7 @@ pub struct EmojiPicker {
 impl EmojiPicker {
     pub async fn new(
         node: SceneNodeWeak,
-        render_api: RenderApi,
+        renderer: Renderer,
         emoji_meshes: EmojiMeshesPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -91,7 +91,7 @@ impl EmojiPicker {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             tasks: SyncMutex::new(vec![]),
 
             dc_key: OsRng.gen(),
@@ -190,7 +190,7 @@ impl EmojiPicker {
             error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
     fn get_draw_calls(
@@ -291,7 +291,7 @@ impl UIObject for EmojiPicker {
             return false
         }
         t!("handle_mouse_wheel()");
-        let atom = &mut self.render_api.make_guard(gfxtag!("EmojiPicker::handle_mouse_wheel"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("EmojiPicker::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
@@ -321,7 +321,7 @@ impl UIObject for EmojiPicker {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("EmojiPicker::handle_touch"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("EmojiPicker::handle_touch"));
 
         let rect = self.rect.get();
         let pos = touch_pos - Point::new(rect.x, rect.y);
@@ -383,8 +383,8 @@ impl UIObject for EmojiPicker {
 
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("EmojiPicker::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("EmojiPicker::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

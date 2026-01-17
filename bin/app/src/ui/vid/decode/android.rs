@@ -27,7 +27,7 @@ use std::{
 
 use crate::{
     android::vid::{self, DecodedFrame},
-    gfx::{gfxtag, RenderApi},
+    gfx::{gfxtag, Renderer},
     ui::vid::{Av1VideoData, YuvTextures},
     util::spawn_thread,
 };
@@ -37,9 +37,9 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video::decode", $($arg)*)
 pub fn spawn_decoder_thread(
     path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
-    render_api: RenderApi,
+    renderer: Renderer,
 ) -> thread::JoinHandle<()> {
-    *vid_data.lock() = Some(Av1VideoData::new(150, &render_api));
+    *vid_data.lock() = Some(Av1VideoData::new(150, &renderer));
 
     spawn_thread("video-decoder-android", move || {
         let now = std::time::Instant::now();
@@ -62,7 +62,7 @@ pub fn spawn_decoder_thread(
 
         let mut frame_idx = 0;
         while let Ok(frame) = frame_rx.recv() {
-            if process_frame(frame_idx, frame, &vid_data, &render_api).is_err() {
+            if process_frame(frame_idx, frame, &vid_data, &renderer).is_err() {
                 d!("Video stopped, exiting decoder thread");
                 return;
             }
@@ -89,12 +89,12 @@ fn process_frame(
     frame_idx: usize,
     frame: DecodedFrame,
     vid_data: &SyncMutex<Option<Av1VideoData>>,
-    render_api: &RenderApi,
+    renderer: &Renderer,
 ) -> Result<(), ()> {
     let uv_width = frame.width / 2;
     let uv_height = frame.height / 2;
 
-    let tex_y = render_api.new_texture(
+    let tex_y = renderer.new_texture(
         frame.width as u16,
         frame.height as u16,
         frame.y_data,
@@ -102,7 +102,7 @@ fn process_frame(
         gfxtag!("video_y"),
     );
 
-    let tex_u = render_api.new_texture(
+    let tex_u = renderer.new_texture(
         uv_width as u16,
         uv_height as u16,
         frame.u_data,
@@ -110,7 +110,7 @@ fn process_frame(
         gfxtag!("video_u"),
     );
 
-    let tex_v = render_api.new_texture(
+    let tex_v = renderer.new_texture(
         uv_width as u16,
         uv_height as u16,
         frame.v_data,

@@ -45,13 +45,13 @@ pub type ManagedSeqAnimPtr = Arc<ManagedSeqAnim>;
 pub struct ManagedTexture {
     pub(super) id: TextureId,
     pub(super) epoch: u32,
-    render_api: RenderApi,
+    renderer: Renderer,
     pub(super) tag: DebugTag,
 }
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_texture(self.id, self.epoch, self.tag);
+        self.renderer.delete_unmanaged_texture(self.id, self.epoch, self.tag);
     }
 }
 
@@ -65,14 +65,14 @@ impl std::fmt::Debug for ManagedTexture {
 pub struct ManagedBuffer {
     pub(super) id: BufferId,
     pub(super) epoch: u32,
-    render_api: RenderApi,
+    renderer: Renderer,
     pub(super) tag: DebugTag,
     pub(super) buftype: u8,
 }
 
 impl Drop for ManagedBuffer {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_buffer(self.id, self.epoch, self.tag, self.buftype);
+        self.renderer.delete_unmanaged_buffer(self.id, self.epoch, self.tag, self.buftype);
     }
 }
 
@@ -86,20 +86,20 @@ pub struct ManagedSeqAnim {
     frames_len: usize,
     pub id: AnimId,
     epoch: u32,
-    render_api: RenderApi,
+    renderer: Renderer,
     tag: DebugTag,
 }
 
 impl ManagedSeqAnim {
     pub fn update(&self, frame_idx: usize, frame: AnimFrame) {
         assert!(frame_idx < self.frames_len);
-        self.render_api.update_unmanaged_anim(self.id, frame_idx, frame, self.epoch, self.tag);
+        self.renderer.update_unmanaged_anim(self.id, frame_idx, frame, self.epoch, self.tag);
     }
 }
 
 impl Drop for ManagedSeqAnim {
     fn drop(&mut self) {
-        self.render_api.delete_unmanaged_anim(self.id, self.epoch, self.tag);
+        self.renderer.delete_unmanaged_anim(self.id, self.epoch, self.tag);
     }
 }
 
@@ -110,14 +110,14 @@ impl std::fmt::Debug for ManagedSeqAnim {
 }
 
 #[derive(Clone)]
-pub struct RenderApi {
+pub struct Renderer {
     /// We are abusing async_channel since it's cloneable whereas std::sync::mpsc is shit.
     method_send: async_channel::Sender<(EpochIndex, GraphicsMethod)>,
     /// Keep track of the current UI epoch
     epoch: Arc<AtomicU32>,
 }
 
-impl RenderApi {
+impl Renderer {
     pub fn new(method_send: async_channel::Sender<(EpochIndex, GraphicsMethod)>) -> Self {
         Self { method_send, epoch: Arc::new(AtomicU32::new(0)) }
     }
@@ -160,7 +160,7 @@ impl RenderApi {
         tag: DebugTag,
     ) -> ManagedTexturePtr {
         let (id, epoch) = self.new_unmanaged_texture(width, height, data, fmt, tag);
-        Arc::new(ManagedTexture { id, epoch, render_api: self.clone(), tag })
+        Arc::new(ManagedTexture { id, epoch, renderer: self.clone(), tag })
     }
 
     fn delete_unmanaged_texture(&self, texture: TextureId, epoch: EpochIndex, tag: DebugTag) {
@@ -196,11 +196,11 @@ impl RenderApi {
 
     pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
         let (id, epoch) = self.new_unmanaged_vertex_buffer(verts, tag);
-        Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 0 })
+        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 0 })
     }
     pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
         let (id, epoch) = self.new_unmanaged_index_buffer(indices, tag);
-        Arc::new(ManagedBuffer { id, epoch, render_api: self.clone(), tag, buftype: 1 })
+        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 1 })
     }
 
     fn delete_unmanaged_buffer(
@@ -230,7 +230,7 @@ impl RenderApi {
 
     pub fn new_anim(&self, frames_len: usize, oneshot: bool, tag: DebugTag) -> ManagedSeqAnimPtr {
         let (id, epoch) = self.new_unmanaged_anim(frames_len, oneshot, tag);
-        Arc::new(ManagedSeqAnim { frames_len, id, epoch, render_api: self.clone(), tag })
+        Arc::new(ManagedSeqAnim { frames_len, id, epoch, renderer: self.clone(), tag })
     }
 
     pub fn update_unmanaged_anim(
@@ -328,12 +328,12 @@ impl Default for GraphicsMethod {
     }
 }
 
-pub struct RenderApiSync<'a> {
+pub struct RendererSync<'a> {
     stage: &'a mut Stage,
     is_dirty: bool,
 }
 
-impl<'a> RenderApiSync<'a> {
+impl<'a> RendererSync<'a> {
     pub fn new(stage: &'a mut Stage) -> Self {
         Self { stage, is_dirty: false }
     }
@@ -347,25 +347,25 @@ impl<'a> RenderApiSync<'a> {
         fmt: TextureFormat,
         tag: DebugTag,
     ) -> ManagedTexturePtr {
-        let render_api = self.stage.render_api.clone();
+        let renderer = self.stage.renderer.clone();
         let id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
         self.stage.method_new_texture(width, height, &data, fmt, id);
-        Arc::new(ManagedTexture { id, epoch: 0, render_api, tag })
+        Arc::new(ManagedTexture { id, epoch: 0, renderer, tag })
     }
 
     // Buffer methods
     pub fn new_vertex_buffer(&mut self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
-        let render_api = self.stage.render_api.clone();
+        let renderer = self.stage.renderer.clone();
         let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
         self.stage.method_new_vertex_buffer(&verts, id);
-        Arc::new(ManagedBuffer { id, epoch: 0, render_api, tag, buftype: 0 })
+        Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 0 })
     }
 
     pub fn new_index_buffer(&mut self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
-        let render_api = self.stage.render_api.clone();
+        let renderer = self.stage.renderer.clone();
         let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
         self.stage.method_new_index_buffer(&indices, id);
-        Arc::new(ManagedBuffer { id, epoch: 0, render_api, tag, buftype: 1 })
+        Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 1 })
     }
 
     // Draw calls (no batching)
@@ -376,7 +376,7 @@ impl<'a> RenderApiSync<'a> {
     }
 }
 
-impl Drop for RenderApiSync<'_> {
+impl Drop for RendererSync<'_> {
     fn drop(&mut self) {
         if self.is_dirty {
             // Force an update

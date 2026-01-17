@@ -21,7 +21,7 @@
 use parking_lot::Mutex as SyncMutex;
 use std::sync::Arc;
 
-use crate::gfx::RenderApi;
+use crate::gfx::Renderer;
 
 use super::Av1VideoData;
 
@@ -39,11 +39,11 @@ mod rav1d;
 pub fn spawn_decoder_thread(
     path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
-    render_api: RenderApi,
+    renderer: Renderer,
 ) -> std::thread::JoinHandle<()> {
     #[cfg(target_os = "android")]
-    return android::spawn_decoder_thread(path, vid_data, render_api);
+    return android::spawn_decoder_thread(path, vid_data, renderer);
 
     #[cfg(not(target_os = "android"))]
-    return rav1d::spawn_decoder_thread(path, vid_data, render_api);
+    return rav1d::spawn_decoder_thread(path, vid_data, renderer);
 }

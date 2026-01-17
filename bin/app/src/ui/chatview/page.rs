@@ -38,7 +38,7 @@ use url::Url;
 
 use super::{MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, Renderer},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyColor, PropertyFloat32, PropertyPtr},
     scene::SceneNodeWeak,
@@ -170,7 +170,7 @@ impl PrivMessage {
         timestamp_color: Color,
         text_color: Color,
         hi_bg_color: Color,
-        render_api: &RenderApi,
+        renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
         if let Some(instrs) = &self.mesh_cache {
             assert!(self.txt_layout.is_some());
@@ -201,20 +201,19 @@ impl PrivMessage {
                 &Rectangle { x: 0., y: -height, w: clip.w, h: height },
                 hi_bg_color,
             );
-            all_instrs
-                .push(DrawInstruction::Draw(mesh.alloc(render_api).draw_with_textures(vec![])));
+            all_instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_with_textures(vec![])));
         }
 
         // Render timestamp
         let timestamp_instrs =
-            text::render_layout(&timestamp_layout, render_api, gfxtag!("chatview_privmsg_ts"));
+            text::render_layout(&timestamp_layout, renderer, gfxtag!("chatview_privmsg_ts"));
         all_instrs.extend(timestamp_instrs);
 
         // Render message text offset by timestamp_width
         all_instrs.push(DrawInstruction::Move(Point::new(timestamp_width, 0.)));
         let text_instrs = text::render_layout(
             self.txt_layout.as_ref().unwrap(),
-            render_api,
+            renderer,
             gfxtag!("chatview_privmsg_text"),
         );
         all_instrs.extend(text_instrs);
@@ -291,7 +290,7 @@ impl DateMessage {
         &mut self,
         line_height: f32,
         timestamp_color: Color,
-        render_api: &RenderApi,
+        renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
         // Return cached mesh if available
         if let Some(cache) = &self.mesh_cache {
@@ -310,7 +309,7 @@ impl DateMessage {
             &[],
         );
 
-        let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_datemsg"));
+        let instrs = text::render_layout(&layout, renderer, gfxtag!("chatview_datemsg"));
         // Cache the instructions
         self.mesh_cache = Some(instrs.clone());
         instrs
@@ -456,7 +455,7 @@ impl FileMessage {
         line_height: f32,
         timestamp_width: f32,
         timestamp_color: Color,
-        render_api: &RenderApi,
+        renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
         if let Some(instrs) = &self.mesh_cache {
             return instrs.clone()
@@ -473,19 +472,19 @@ impl FileMessage {
         // Lock is dropped here, safe to await now
         if let Some((img_w, img_h)) = img_size {
             let mesh_rect = Rectangle::from([timestamp_width, Self::MARGIN_TOP, img_w, img_h]);
-            let texture = self.load_texture(render_api);
+            let texture = self.load_texture(renderer);
             let mut mesh_gradient = MeshBuilder::new(gfxtag!("file_gradient"));
             let glow_color = [timestamp_color[0], timestamp_color[1], timestamp_color[2], 0.5];
             mesh_gradient.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
             self.active_rect = Some(mesh_rect);
 
-            let mesh_gradient = mesh_gradient.alloc(render_api);
+            let mesh_gradient = mesh_gradient.alloc(renderer);
             let mut instrs = vec![DrawInstruction::Draw(mesh_gradient.draw_untextured())];
 
             let mut mesh_img = MeshBuilder::new(gfxtag!("file_img"));
             let uv_rect = Rectangle::from([0., 0., 1., 1.]);
             mesh_img.draw_box(&mesh_rect, COLOR_WHITE, &uv_rect);
-            let mesh_img = mesh_img.alloc(render_api);
+            let mesh_img = mesh_img.alloc(renderer);
             instrs.push(DrawInstruction::Draw(mesh_img.draw_with_textures(vec![texture])));
 
             self.mesh_cache = Some(instrs.clone());
@@ -539,7 +538,7 @@ impl FileMessage {
 
         let glow_color = [color[0], color[1], color[2], 0.3];
         mesh.draw_box_shadow(&mesh_rect, glow_color, Self::GLOW_SIZE);
-        let mesh = mesh.alloc(render_api);
+        let mesh = mesh.alloc(renderer);
 
         all_instrs.push(DrawInstruction::Draw(mesh.draw_untextured()));
 
@@ -550,7 +549,7 @@ impl FileMessage {
             Self::MARGIN_TOP + Self::BOX_PADDING_Y,
         )));
         for layout in layouts {
-            let instrs = text::render_layout(&layout, render_api, gfxtag!("chatview_filemsg_text"));
+            let instrs = text::render_layout(&layout, renderer, gfxtag!("chatview_filemsg_text"));
             all_instrs.extend(instrs);
             all_instrs.push(DrawInstruction::Move(Point::new(0., line_height)));
         }
@@ -579,7 +578,7 @@ impl FileMessage {
         None
     }
 
-    fn load_texture(&self, render_api: &RenderApi) -> ManagedTexturePtr {
+    fn load_texture(&self, renderer: &Renderer) -> ManagedTexturePtr {
         let imgbuf = self.imgbuf.lock();
         let img = imgbuf.as_ref().unwrap();
 
@@ -588,13 +587,7 @@ impl FileMessage {
         let bmp = img.as_raw().clone();
         drop(imgbuf);
 
-        render_api.new_texture(
-            width,
-            height,
-            bmp,
-            TextureFormat::RGBA8,
-            gfxtag!("file_img_texture"),
-        )
+        renderer.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("file_img_texture"))
     }
 
     pub fn height(&self, line_height: f32) -> f32 {
@@ -767,7 +760,7 @@ impl Message {
         timestamp_color: Color,
         text_color: Color,
         hi_bg_color: Color,
-        render_api: &RenderApi,
+        renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
         match self {
             Self::Priv(m) => {
@@ -780,13 +773,13 @@ impl Message {
                     timestamp_color,
                     text_color,
                     hi_bg_color,
-                    render_api,
+                    renderer,
                 )
                 .await
             }
-            Self::Date(m) => m.gen_mesh(line_height, timestamp_color, render_api).await,
+            Self::Date(m) => m.gen_mesh(line_height, timestamp_color, renderer).await,
             Self::File(m) => {
-                m.gen_mesh(clip, line_height, timestamp_width, timestamp_color, render_api).await
+                m.gen_mesh(clip, line_height, timestamp_width, timestamp_color, renderer).await
             }
         }
     }
@@ -879,7 +872,7 @@ pub struct MessageBuffer {
     /// If it does then we must reload the glyphs too.
     old_window_scale: f32,
 
-    render_api: RenderApi,
+    renderer: Renderer,
 }
 
 impl MessageBuffer {
@@ -895,7 +888,7 @@ impl MessageBuffer {
         nick_colors: PropertyPtr,
         hi_bg_color: PropertyColor,
         window_scale: PropertyFloat32,
-        render_api: RenderApi,
+        renderer: Renderer,
     ) -> Self {
         let old_window_scale = window_scale.get();
         Self {
@@ -916,7 +909,7 @@ impl MessageBuffer {
             window_scale,
             old_window_scale,
 
-            render_api,
+            renderer,
         }
     }
 
@@ -1118,7 +1111,7 @@ impl MessageBuffer {
         let nick_colors = self.read_nick_colors();
         let hi_bg_color = self.hi_bg_color.get();
 
-        let render_api = self.render_api.clone();
+        let renderer = self.renderer.clone();
 
         let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
@@ -1136,7 +1129,7 @@ impl MessageBuffer {
                     timest_color,
                     text_color,
                     hi_bg_color,
-                    &render_api,
+                    &renderer,
                 )
                 .await;
 

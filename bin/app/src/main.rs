@@ -62,7 +62,7 @@ use net::ZeroMQAdapter;
 use {
     darkfi_serial::{deserialize, Decodable, Encodable},
     // Local imports
-    gfx::RenderApi,
+    gfx::Renderer,
     prop::{PropertyBool, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     std::io::Cursor,
@@ -102,7 +102,7 @@ struct God {
 
     /// This is the main rendering API used to send commands to the gfx subsystem.
     /// We have a ref here so the gfx subsystem can increment the epoch counter.
-    render_api: gfx::RenderApi,
+    renderer: gfx::Renderer,
     /// This is how the gfx subsystem receives messages from the render API.
     method_recv: async_channel::Receiver<(gfx::EpochIndex, gfx::GraphicsMethod)>,
     /// Publisher to send input and window events to subscribers.
@@ -149,10 +149,10 @@ impl God {
         let (method_send, method_recv) = async_channel::unbounded();
         // The UI actually needs to be running for this to reply back.
         // Otherwise calls will just hang.
-        let render_api = gfx::RenderApi::new(method_send);
+        let renderer = gfx::Renderer::new(method_send);
         let event_pub = gfx::GraphicsEventPublisher::new();
 
-        let app = App::new(sg_root.clone(), render_api.clone(), fg_ex.clone());
+        let app = App::new(sg_root.clone(), renderer.clone(), fg_ex.clone());
 
         let app2 = app.clone();
         let cv_app_is_setup = Arc::new(CondVar::new());
@@ -167,10 +167,10 @@ impl God {
         {
             let sg_root = sg_root.clone();
             let ex = bg_ex.clone();
-            let render_api = render_api.clone();
+            let renderer = renderer.clone();
             let zmq_task = bg_ex.spawn(async {
                 i!("Enabled net debugging backend in this build");
-                let zmq_rpc = ZeroMQAdapter::new(sg_root, render_api, ex).await;
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, renderer, ex).await;
                 zmq_rpc.run().await;
             });
             bg_runtime.push_task(zmq_task);
@@ -180,9 +180,9 @@ impl God {
         {
             let ex = bg_ex.clone();
             let cv = cv_app_is_setup.clone();
-            let render_api = render_api.clone();
+            let renderer = renderer.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, render_api, cv).await;
+                load_plugins(ex, sg_root, renderer, cv).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -199,7 +199,7 @@ impl God {
             cv_app_is_setup,
             app,
 
-            render_api,
+            renderer,
             method_recv,
             event_pub,
             _file_logging_guard: file_logging_guard,
@@ -261,7 +261,7 @@ static GOD: OnceLock<God> = OnceLock::new();
 async fn load_plugins(
     ex: ExecutorPtr,
     sg_root: SceneNodePtr,
-    render_api: RenderApi,
+    renderer: Renderer,
     cv: Arc<CondVar>,
 ) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
@@ -283,10 +283,10 @@ async fn load_plugins(
     darkirc.register("recv", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
-    let render_api2 = render_api.clone();
+    let renderer2 = renderer.clone();
     let listen_recv = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let atom = &mut render_api2.make_guard(gfxtag!("darkirc msg recv"));
+            let atom = &mut renderer2.make_guard(gfxtag!("darkirc msg recv"));
 
             let mut cur = Cursor::new(&data);
             let channel = String::decode(&mut cur).unwrap();
@@ -358,7 +358,7 @@ async fn load_plugins(
         while let Ok(data) = recvr.recv().await {
             let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-            let atom = &mut render_api.make_guard(gfxtag!("netstatus change"));
+            let atom = &mut renderer.make_guard(gfxtag!("netstatus change"));
 
             if peers_count == 0 {
                 net0_is_visible.set(atom, true);
@@ -512,7 +512,7 @@ fn main() {
 
     GOD.get_or_init(God::new);
 
-    // Reuse render_api and event_pub
+    // Reuse renderer and event_pub
     // No need for setup(), just wait for gfx start then call .start()
     // ZMQ, darkirc stay running
 

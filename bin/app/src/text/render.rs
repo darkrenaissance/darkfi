@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    gfx::{DebugTag, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi},
+    gfx::{DebugTag, DrawInstruction, DrawMesh, Point, Rectangle, Renderer},
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
@@ -51,21 +51,21 @@ impl std::ops::BitOrAssign for DebugRenderOptions {
 
 pub fn render_layout(
     layout: &parley::Layout<Color>,
-    render_api: &RenderApi,
+    renderer: &Renderer,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
-    render_layout_with_opts(layout, DebugRenderOptions::OFF, render_api, tag)
+    render_layout_with_opts(layout, DebugRenderOptions::OFF, renderer, tag)
 }
 
 pub fn render_layout_with_opts(
     layout: &parley::Layout<Color>,
     opts: DebugRenderOptions,
-    render_api: &RenderApi,
+    renderer: &Renderer,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
     // First pass to create atlas
     let mut scale_ctx = swash::scale::ScaleContext::new();
-    let mut atlas = Atlas::new(render_api, tag);
+    let mut atlas = Atlas::new(renderer, tag);
     let mut run_idx = 0;
     for line in layout.lines() {
         for item in line.items() {
@@ -89,7 +89,7 @@ pub fn render_layout_with_opts(
         for item in line.items() {
             match item {
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    let mesh = render_glyph_run(&glyph_run, run_idx, opts, &atlas, render_api, tag);
+                    let mesh = render_glyph_run(&glyph_run, run_idx, opts, &atlas, renderer, tag);
                     instrs.push(DrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
@@ -129,7 +129,7 @@ fn render_glyph_run(
     run_idx: usize,
     opts: DebugRenderOptions,
     atlas: &RenderedAtlas,
-    render_api: &RenderApi,
+    renderer: &Renderer,
     tag: DebugTag,
 ) -> DrawMesh {
     let mut run_x = glyph_run.offset();
@@ -173,7 +173,7 @@ fn render_glyph_run(
         );
     }
 
-    mesh.alloc(render_api).draw_with_textures(vec![atlas.texture.clone()])
+    mesh.alloc(renderer).draw_with_textures(vec![atlas.texture.clone()])
 }
 
 fn render_underline(

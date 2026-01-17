@@ -24,7 +24,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi, RenderApiSync},
+    gfx::{DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
@@ -41,7 +41,7 @@ pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     dc_key: u64,
 
@@ -54,7 +54,7 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -63,7 +63,7 @@ impl Layer {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
@@ -95,7 +95,7 @@ impl Layer {
             error!(target: "ui:layer", "Layer failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     async fn get_draw_calls(
@@ -309,7 +309,7 @@ impl UIObject for Layer {
 
     fn handle_touch_sync(
         &self,
-        render_api: &mut RenderApiSync,
+        renderer: &mut RendererSync,
         phase: TouchPhase,
         id: u64,
         mut touch_pos: Point,
@@ -320,7 +320,7 @@ impl UIObject for Layer {
         touch_pos -= self.rect.get().pos();
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(render_api, phase, id, touch_pos) {
+            if obj.handle_touch_sync(renderer, phase, id, touch_pos) {
                 return true
             }
         }

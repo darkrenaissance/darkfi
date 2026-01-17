@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, Renderer},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
@@ -38,7 +38,7 @@ pub type VectorArtPtr = Arc<VectorArt>;
 
 pub struct VectorArt {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     shape: VectorShape,
@@ -53,7 +53,7 @@ pub struct VectorArt {
 }
 
 impl VectorArt {
-    pub async fn new(node: SceneNodeWeak, shape: VectorShape, render_api: RenderApi) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, shape: VectorShape, renderer: Renderer) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -62,7 +62,7 @@ impl VectorArt {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             tasks: SyncMutex::new(vec![]),
 
             shape,
@@ -91,7 +91,7 @@ impl VectorArt {
             error!(target: "ui:vector_art", "Mesh failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn get_draw_instrs(&self) -> Vec<DrawInstruction> {
@@ -106,8 +106,8 @@ impl VectorArt {
         let num_elements = self.shape.indices.len() as i32;
 
         //debug!(target: "ui::vector_art", "vec_draw_instrs {verts:?} | {indices:?} | {num_elements}");
-        let vertex_buffer = self.render_api.new_vertex_buffer(verts, gfxtag!("vectorart"));
-        let index_buffer = self.render_api.new_index_buffer(indices, gfxtag!("vectorart"));
+        let vertex_buffer = self.renderer.new_vertex_buffer(verts, gfxtag!("vectorart"));
+        let index_buffer = self.renderer.new_index_buffer(indices, gfxtag!("vectorart"));
         let mesh = DrawMesh { vertex_buffer, index_buffer, textures: None, num_elements };
 
         vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
@@ -168,8 +168,8 @@ impl UIObject for VectorArt {
 
 impl Drop for VectorArt {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("VectorArt::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("VectorArt::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

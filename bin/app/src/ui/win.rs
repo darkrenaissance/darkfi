@@ -27,7 +27,7 @@ use crate::{
         gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventTouchSub, Point, Rectangle, RenderApi, RenderApiSync,
+        GraphicsEventTouchSub, Point, Rectangle, Renderer, RendererSync,
     },
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
@@ -56,7 +56,7 @@ pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     i18n_fish: I18nBabelFish,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
@@ -70,7 +70,7 @@ pub struct Window {
 impl Window {
     pub async fn new(
         node: SceneNodeWeak,
-        render_api: RenderApi,
+        renderer: Renderer,
         i18n_fish: I18nBabelFish,
         setting_root: SceneNodePtr,
     ) -> Pimpl {
@@ -87,7 +87,7 @@ impl Window {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             i18n_fish,
             tasks: SyncMutex::new(vec![]),
 
@@ -130,7 +130,7 @@ impl Window {
                     panic!("self destroyed before modify_task was stopped!");
                 };
 
-                let atom = &mut self_.render_api.make_guard(gfxtag!("Window::resize_task"));
+                let atom = &mut self_.renderer.make_guard(gfxtag!("Window::resize_task"));
                 // Now update the properties
                 screen_size2.set(atom, size);
 
@@ -186,7 +186,7 @@ impl Window {
             ex.spawn(async move {
                 while let Ok(insets_val) = insets_rx.recv().await {
                     let Some(self_) = me.upgrade() else { break };
-                    let atom = &mut self_.render_api.make_guard(gfxtag!("Window::insets_task"));
+                    let atom = &mut self_.renderer.make_guard(gfxtag!("Window::insets_task"));
                     let scale = self_.scale.get();
                     let insets_val = Rectangle::from(insets_val) / scale;
                     t!("Insets changed: {insets_val:?}");
@@ -469,7 +469,7 @@ impl Window {
 
     pub fn handle_touch_sync(
         &self,
-        render_api: &mut RenderApiSync,
+        renderer: &mut RendererSync,
         phase: TouchPhase,
         id: u64,
         mut touch_pos: Point,
@@ -477,7 +477,7 @@ impl Window {
         self.local_scale(&mut touch_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(render_api, phase, id, touch_pos) {
+            if obj.handle_touch_sync(renderer, phase, id, touch_pos) {
                 return true
             }
         }
@@ -508,7 +508,7 @@ impl Window {
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_calls);
+        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_calls);
     }
 
     async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {

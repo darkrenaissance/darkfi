@@ -43,7 +43,7 @@ use anim::{Frame as AnimFrame, GfxSeqAnim};
 mod api;
 pub use api::{
     EpochIndex, GraphicsMethod, ManagedBuffer, ManagedBufferPtr, ManagedSeqAnim, ManagedSeqAnimPtr,
-    ManagedTexture, ManagedTexturePtr, RenderApi, RenderApiSync,
+    ManagedTexture, ManagedTexturePtr, Renderer, RendererSync,
 };
 mod ev;
 pub use ev::{
@@ -622,7 +622,7 @@ struct Stage {
     epoch: EpochIndex,
     method_recv: async_channel::Receiver<(EpochIndex, GraphicsMethod)>,
     event_pub: GraphicsEventPublisherPtr,
-    render_api: RenderApi,
+    renderer: Renderer,
 
     pruner: PruneMethodHeap,
     screen_state: ScreenState,
@@ -640,8 +640,8 @@ impl Stage {
 
         let god = GOD.get().unwrap();
         // Start a new epoch. This is a brand new UI run.
-        let render_api = god.render_api.clone();
-        let epoch = render_api.next_epoch();
+        let renderer = god.renderer.clone();
+        let epoch = renderer.next_epoch();
         // This will start the app to start. Needed since we cannot get window size for init
         // until window is created.
         god.start_app(epoch);
@@ -678,7 +678,7 @@ impl Stage {
             epoch,
             method_recv,
             event_pub,
-            render_api,
+            renderer,
 
             pruner: PruneMethodHeap::new(epoch),
             screen_state: ScreenState::On,
@@ -1282,13 +1282,13 @@ impl EventHandler for Stage {
         let window_node = self.window_node.clone();
 
         // Create RenderApiSync for direct graphics operations
-        let mut render_api_sync = RenderApiSync::new(self);
+        let mut renderer_sync = RendererSync::new(self);
 
         // Direct call to Window's handle_touch_event_sync
         if let Some(window_node) = &window_node {
             match window_node.pimpl() {
                 Pimpl::Window(win) => {
-                    if win.handle_touch_sync(&mut render_api_sync, phase, id, pos) {
+                    if win.handle_touch_sync(&mut renderer_sync, phase, id, pos) {
                         return
                     }
                 }
@@ -1296,7 +1296,7 @@ impl EventHandler for Stage {
             }
         }
 
-        drop(render_api_sync);
+        drop(renderer_sync);
 
         self.event_pub.notify_touch(phase, id, pos);
     }

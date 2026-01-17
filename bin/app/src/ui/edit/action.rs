@@ -20,7 +20,7 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
     mesh::{Color, MeshBuilder},
     prop::BatchGuardId,
     text,
@@ -103,12 +103,12 @@ pub struct ActionMode {
     pub dc_key: u64,
 
     menu: SyncMutex<Option<Menu>>,
-    render_api: RenderApi,
+    renderer: Renderer,
 }
 
 impl ActionMode {
-    pub fn new(render_api: RenderApi) -> Self {
-        Self { dc_key: OsRng.gen(), menu: SyncMutex::new(None), render_api }
+    pub fn new(renderer: Renderer) -> Self {
+        Self { dc_key: OsRng.gen(), menu: SyncMutex::new(None), renderer }
     }
 
     pub fn set(&self, menu: Menu) {
@@ -151,7 +151,7 @@ impl ActionMode {
 
             off_pos -= item.rect.pos();
             instrs.push(DrawInstruction::Move(item.rect.pos()));
-            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured()));
 
             // Draw text label
             let layout_height = item.layout.height();
@@ -159,7 +159,7 @@ impl ActionMode {
             let text_y = (item.rect.h - layout_height) / 2.;
             let text_pos = Point::new(menu.padding, text_y);
             let mut txt_instrs =
-                text::render_layout(&item.layout, &self.render_api, gfxtag!("action_txt"));
+                text::render_layout(&item.layout, &self.renderer, gfxtag!("action_txt"));
             off_pos -= text_pos;
             instrs.push(DrawInstruction::Move(text_pos));
             instrs.append(&mut txt_instrs);
@@ -175,6 +175,6 @@ impl ActionMode {
     pub fn redraw(&self, batch_id: BatchGuardId) {
         let dcs =
             vec![(self.dc_key, DrawCall::new(self.get_instrs(), vec![], 1, "chatedit_action"))];
-        self.render_api.replace_draw_calls(Some(batch_id), dcs);
+        self.renderer.replace_draw_calls(Some(batch_id), dcs);
     }
 }

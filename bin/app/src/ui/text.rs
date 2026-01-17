@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, Renderer},
     mesh::MeshBuilder,
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
@@ -41,7 +41,7 @@ pub type TextPtr = Arc<Text>;
 
 pub struct Text {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     i18n_fish: I18nBabelFish,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
@@ -65,7 +65,7 @@ impl Text {
     pub async fn new(
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
-        render_api: RenderApi,
+        renderer: Renderer,
         i18n_fish: I18nBabelFish,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -81,7 +81,7 @@ impl Text {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             i18n_fish,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
@@ -129,7 +129,7 @@ impl Text {
             debug_opts |= text::DebugRenderOptions::BASELINE;
         }
 
-        text::render_layout_with_opts(&layout, debug_opts, &self.render_api, gfxtag!("text"))
+        text::render_layout_with_opts(&layout, debug_opts, &self.renderer, gfxtag!("text"))
     }
 
     #[instrument(target = "ui::text")]
@@ -144,7 +144,7 @@ impl Text {
             error!(target: "ui::text", "Text failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn get_draw_calls(
@@ -162,7 +162,7 @@ impl Text {
             let rect = self.rect.get().with_zero_pos();
             let mut mesh = MeshBuilder::new(gfxtag!("text_debug-rect"));
             mesh.draw_outline(&rect, [0., 1., 0., 0.7], 1.);
-            let mesh = mesh.alloc(&self.render_api).draw_untextured();
+            let mesh = mesh.alloc(&self.renderer).draw_untextured();
             instrs.push(DrawInstruction::Draw(mesh));
         }
 
@@ -218,8 +218,8 @@ impl UIObject for Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("Text::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("Text::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

@@ -140,7 +140,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.register("shortcut", slot).unwrap();
     let window_scale = app.sg_root.lookup_node("/setting/scale").unwrap();
     let window_scale2 = window_scale.clone();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
@@ -153,7 +153,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut render_api.make_guard(gfxtag!("zoom_out shortcut"));
+            let atom = &mut renderer.make_guard(gfxtag!("zoom_out shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
@@ -168,7 +168,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (slot, recvr) = Slot::new("zoom_in_pressed");
     node.register("shortcut", slot).unwrap();
     let window_scale2 = window_scale.clone();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
@@ -181,7 +181,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut render_api.make_guard(gfxtag!("zoom_in shortcut"));
+            let atom = &mut renderer.make_guard(gfxtag!("zoom_in shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
@@ -235,7 +235,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.add_depend(&window_insets, 3, "insets_bottom");
     content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let content = content.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let content = content.setup(|me| Layer::new(me, app.renderer.clone())).await;
     window.link(content.clone());
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
@@ -294,9 +294,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         //node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
         node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        //let node = node.setup(|me| Image::new(me, app.render_api.clone())).await;
+        //let node = node.setup(|me| Image::new(me, app.renderer.clone())).await;
         //layer_node.link(node);
-        let node = node.setup(|me| Video::new(me, app.render_api.clone(), app.ex.clone())).await;
+        let node = node.setup(|me| Video::new(me, app.renderer.clone(), app.ex.clone())).await;
         content.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
@@ -317,7 +317,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             expr::load_var("h"),
             [c, c, c, 0.3],
         );
-        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+        let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
         window.link(node);
     }
 
@@ -332,7 +332,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
@@ -346,7 +346,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
-    let net0_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net0_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net0_node);
 
     let node = create_vector_art("net1");
@@ -360,7 +360,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
-    let net1_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net1_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net1_node);
 
     let node = create_vector_art("net2");
@@ -374,7 +374,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    let net2_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net2_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net2_node);
 
     let node = create_vector_art("net3");
@@ -388,7 +388,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    let net3_node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let net3_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net3_node);
 
     // netstat-klik icon (visual feedback when reconnect button is clicked)
@@ -410,8 +410,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         expr::const_f32(NETSTATUS_ICON_SIZE),
         klik_color,
     );
-    let netstat_klik_node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let netstat_klik_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(netstat_klik_node.clone());
 
     // Reconnect Button (overlaid on netstatus icons)
@@ -424,7 +423,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
 
     let sg_root = app.sg_root.clone();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let (slot, recvr) = Slot::new("reconnect_clicked");
     node.register("click", slot).unwrap();
     let reconnect_task = app.ex.spawn(async move {
@@ -436,7 +435,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
 
             {
-                let atom = &mut render_api.make_guard(gfxtag!("netstat_klik_show"));
+                let atom = &mut renderer.make_guard(gfxtag!("netstat_klik_show"));
                 if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
                 {
                     e!("Failed to show netstat_klik: {e}");
@@ -459,7 +458,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
             // Hide netstat-klik icon
             {
-                let atom = &mut render_api.make_guard(gfxtag!("netstat_klik_hide"));
+                let atom = &mut renderer.make_guard(gfxtag!("netstat_klik_hide"));
                 if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
                 {
                     e!("Failed to hide netstat_klik: {e}");
@@ -486,7 +485,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let settingslayer_node =
-        settingslayer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+        settingslayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(settingslayer_node.clone());
 
     // Background
@@ -500,7 +499,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     settingslayer_node.link(node);
 
     // Button
@@ -563,8 +562,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     settingslayer_node.link(node);
     */
 
-    let emoji_meshes =
-        emoji_picker::EmojiMeshes::new(app.render_api.clone(), EMOJI_PICKER_ICON_SIZE);
+    let emoji_meshes = emoji_picker::EmojiMeshes::new(app.renderer.clone(), EMOJI_PICKER_ICON_SIZE);
 
     let emoji_meshes2 = emoji_meshes.clone();
     let _ = std::thread::spawn(move || {

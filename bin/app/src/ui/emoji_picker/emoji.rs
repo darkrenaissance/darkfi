@@ -20,7 +20,7 @@ use parking_lot::Mutex as SyncMutex;
 use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, DrawInstruction, DrawMesh, RenderApi},
+    gfx::{gfxtag, DrawInstruction, DrawMesh, Renderer},
     mesh::COLOR_WHITE,
     text,
 };
@@ -30,14 +30,14 @@ use super::default::DEFAULT_EMOJI_LIST;
 pub type EmojiMeshesPtr = Arc<SyncMutex<EmojiMeshes>>;
 
 pub struct EmojiMeshes {
-    render_api: RenderApi,
+    renderer: Renderer,
     emoji_size: f32,
     meshes: Vec<DrawMesh>,
 }
 
 impl EmojiMeshes {
-    pub fn new(render_api: RenderApi, emoji_size: f32) -> EmojiMeshesPtr {
-        Arc::new(SyncMutex::new(Self { render_api, emoji_size, meshes: vec![] }))
+    pub fn new(renderer: Renderer, emoji_size: f32) -> EmojiMeshesPtr {
+        Arc::new(SyncMutex::new(Self { renderer, emoji_size, meshes: vec![] }))
     }
 
     pub fn clear(&mut self) {
@@ -66,7 +66,7 @@ impl EmojiMeshes {
         // The params here don't actually matter since we're talking about BMP fixed sizes
         let layout = text::make_layout(emoji, COLOR_WHITE, self.emoji_size, 1., 1., None, &[]);
 
-        let instrs = text::render_layout(&layout, &self.render_api, gfxtag!("emoji_mesh"));
+        let instrs = text::render_layout(&layout, &self.renderer, gfxtag!("emoji_mesh"));
 
         // Extract the mesh from the draw instructions
         // For a single emoji, we should get exactly one Draw instruction with a mesh

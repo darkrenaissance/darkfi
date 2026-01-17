@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, RenderApiSync},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
     mesh::MeshBuilder,
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
@@ -91,7 +91,7 @@ pub type MenuPtr = Arc<Menu>;
 
 pub struct Menu {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     root_dc_key: u64,
     content_dc_key: u64,
@@ -125,7 +125,7 @@ impl Menu {
     pub async fn new(
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
-        render_api: RenderApi,
+        renderer: Renderer,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
@@ -150,7 +150,7 @@ impl Menu {
 
         let self_ = Arc::new(Self {
             node: node.clone(),
-            render_api: render_api.clone(),
+            renderer: renderer.clone(),
             tasks: SyncMutex::new(vec![]),
             root_dc_key: OsRng.gen(),
             content_dc_key: OsRng.gen(),
@@ -239,14 +239,14 @@ impl Menu {
 
         let mut bg_mesh = MeshBuilder::new(gfxtag!("menu_bg"));
         bg_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, content_height), bg_color);
-        let bg_mesh = bg_mesh.alloc(&self.render_api).draw_untextured();
+        let bg_mesh = bg_mesh.alloc(&self.renderer).draw_untextured();
 
         instrs.push(DrawInstruction::Draw(bg_mesh));
 
         // Separator line mesh
         let mut sep_mesh = MeshBuilder::new(gfxtag!("menu_sep"));
         sep_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
-        let sep_mesh = sep_mesh.alloc(&self.render_api).draw_untextured();
+        let sep_mesh = sep_mesh.alloc(&self.renderer).draw_untextured();
 
         for idx in 0..num_items {
             let item_text = self.items.get_str(idx).unwrap();
@@ -262,7 +262,7 @@ impl Menu {
                 &[],
             );
 
-            let text_instr = text::render_layout(&layout, &self.render_api, gfxtag!("menu_text"));
+            let text_instr = text::render_layout(&layout, &self.renderer, gfxtag!("menu_text"));
 
             instrs.push(DrawInstruction::Move(Point::new(padding_x, padding_y)));
             instrs.extend(text_instr);
@@ -308,7 +308,7 @@ impl Menu {
         let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else { return };
 
-        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
     fn redraw_scroll(&self) {
@@ -327,10 +327,10 @@ impl Menu {
         };
 
         let draw_calls = vec![(self.root_dc_key, root_dc)];
-        self.render_api.replace_draw_calls(None, draw_calls);
+        self.renderer.replace_draw_calls(None, draw_calls);
     }
 
-    fn redraw_scroll_sync(&self, render_api: &mut RenderApiSync) {
+    fn redraw_scroll_sync(&self, renderer: &mut RendererSync) {
         let rect = self.rect.get();
         let scroll = self.scroll.load(Ordering::Relaxed);
 
@@ -346,7 +346,7 @@ impl Menu {
         };
 
         let draw_calls = vec![(self.root_dc_key, root_dc)];
-        render_api.replace_draw_calls(draw_calls);
+        renderer.replace_draw_calls(draw_calls);
     }
 
     fn scrollview(&self, scroll: f32) {
@@ -494,7 +494,7 @@ impl UIObject for Menu {
 
     fn handle_touch_sync(
         &self,
-        render_api: &mut RenderApiSync,
+        renderer: &mut RendererSync,
         phase: TouchPhase,
         id: u64,
         touch_pos: Point,
@@ -539,7 +539,7 @@ impl UIObject for Menu {
                 };
 
                 self.scrollview(scroll);
-                self.redraw_scroll_sync(render_api);
+                self.redraw_scroll_sync(renderer);
                 true
             }
 

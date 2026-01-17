@@ -18,7 +18,7 @@
 
 use miniquad::TextureFormat;
 
-use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi};
+use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, Renderer};
 
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly
@@ -27,8 +27,8 @@ const ATLAS_GAP: usize = 2;
 
 /*
 /// Convenience wrapper fn. Use if rendering a single line of glyphs.
-pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> RenderedAtlas {
-    let mut atlas = Atlas::new(render_api);
+pub fn make_texture_atlas(renderer: &Renderer, glyphs: &Vec<Glyph>) -> RenderedAtlas {
+    let mut atlas = Atlas::new(renderer);
     atlas.push(&glyphs);
     atlas.make()
 }
@@ -42,7 +42,7 @@ type GlyphKey = (swash::GlyphId, RunIdx);
 /// This makes OpenGL batch precomputation of meshes efficient.
 ///
 /// ```rust
-///     let mut atlas = Atlas::new(&render_api);
+///     let mut atlas = Atlas::new(&renderer);
 ///     atlas.push_glyph(glyph, run_idx, &mut scaler);
 ///     let atlas = atlas.make().unwrap();
 ///     let uv = atlas.fetch_uv(glyph_id, run_idx).unwrap();
@@ -57,12 +57,12 @@ pub struct Atlas<'a> {
     width: usize,
     height: usize,
 
-    render_api: &'a RenderApi,
+    renderer: &'a Renderer,
     tag: DebugTag,
 }
 
 impl<'a> Atlas<'a> {
-    pub fn new(render_api: &'a RenderApi, tag: DebugTag) -> Self {
+    pub fn new(renderer: &'a Renderer, tag: DebugTag) -> Self {
         Self {
             glyph_keys: vec![],
             sprites: vec![],
@@ -74,7 +74,7 @@ impl<'a> Atlas<'a> {
             // FYI glyphs have a gap on all sides (top and bottom here).
             height: 2 * ATLAS_GAP,
 
-            render_api,
+            renderer,
             tag,
         }
     }
@@ -184,7 +184,7 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_keys.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture = self.render_api.new_texture(
+        let texture = self.renderer.new_texture(
             self.width as u16,
             self.height as u16,
             atlas,

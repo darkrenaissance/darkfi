@@ -25,7 +25,7 @@ use rav1d::{
 use std::{sync::Arc, time::Instant};
 
 use crate::{
-    gfx::{gfxtag, RenderApi},
+    gfx::{gfxtag, Renderer},
     ui::vid::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures},
     util::spawn_thread,
 };
@@ -41,13 +41,13 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video::decode", $($arg)*)
 ///   1. Drain all pending frames with `try_recv()`
 ///   2. When queue is empty, block on `recv()` for next frame
 ///   3. Repeat - this minimizes latency by never waiting when data is available
-/// - Creates textures directly via render_api and stores in vid_data
+/// - Creates textures directly via renderer and stores in vid_data
 /// - Triggers draw updates when frames are ready
 /// - On channel close, flushes decoder
 ///
 /// # Arguments
 /// * `vid_data` - Shared video data storage to update with textures
-/// * `render_api` - Render API for creating textures
+/// * `renderer` - Render API for creating textures
 /// * `dc_key` - Draw call key for triggering updates
 ///
 /// # Returns
@@ -55,7 +55,7 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:video::decode", $($arg)*)
 pub fn spawn_decoder_thread(
     path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
-    render_api: RenderApi,
+    renderer: Renderer,
 ) -> std::thread::JoinHandle<()> {
     let mut settings = Rav1dSettings::new();
     // 0 is auto detect
@@ -84,7 +84,7 @@ pub fn spawn_decoder_thread(
     let mut demuxer = IvfStreamingDemuxer::from_first_chunk(data).unwrap();
     let num_frames = demuxer.header.num_frames as usize;
 
-    *vid_data.lock() = Some(Av1VideoData::new(num_frames, &render_api));
+    *vid_data.lock() = Some(Av1VideoData::new(num_frames, &renderer));
 
     spawn_thread("video-decoder", move || {
         let now = Instant::now();
@@ -93,7 +93,7 @@ pub fn spawn_decoder_thread(
             let Some(av1_frame) = demuxer.try_read_frame() else {
                 // Channel closed - drain decoder (like dav1dplay)
                 while let Ok(pic) = decoder.get_picture() {
-                    if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                    if process(&mut frame_idx, &pic, &vid_data, &renderer).is_err() {
                         d!("Video stopped, exiting decoder thread");
                         return;
                     }
@@ -113,7 +113,7 @@ pub fn spawn_decoder_thread(
             loop {
                 match decoder.get_picture() {
                     Ok(pic) => {
-                        if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                        if process(&mut frame_idx, &pic, &vid_data, &renderer).is_err() {
                             d!("Video stopped, exiting decoder thread");
                             return;
                         }
@@ -130,7 +130,7 @@ pub fn spawn_decoder_thread(
             if try_again {
                 while let Err(Rav1dError::TryAgain) = decoder.send_pending_data() {
                     let Ok(pic) = decoder.get_picture() else { continue };
-                    if process(&mut frame_idx, &pic, &vid_data, &render_api).is_err() {
+                    if process(&mut frame_idx, &pic, &vid_data, &renderer).is_err() {
                         d!("Video stopped, exiting decoder thread");
                         return;
                     }
@@ -144,7 +144,7 @@ fn process(
     frame_idx: &mut usize,
     pic: &Rav1dPicture,
     vid_data: &SyncMutex<Option<Av1VideoData>>,
-    render_api: &RenderApi,
+    renderer: &Renderer,
 ) -> Result<(), ()> {
     // rav1d stores data as planar GBR (Y=G, U=B, V=R)
     let y_plane = pic.plane(PlanarImageComponent::Y);
@@ -168,7 +168,7 @@ fn process(
     let v_data = copy_plane(&v_plane, v_stride, uv_width, uv_height);
 
     // Create 3 separate textures with Alpha format (1 byte per pixel)
-    let tex_y = render_api.new_texture(
+    let tex_y = renderer.new_texture(
         width as u16,
         height as u16,
         y_data,
@@ -176,7 +176,7 @@ fn process(
         gfxtag!("video_y"),
     );
 
-    let tex_u = render_api.new_texture(
+    let tex_u = renderer.new_texture(
         uv_width as u16,
         uv_height as u16,
         u_data,
@@ -184,7 +184,7 @@ fn process(
         gfxtag!("video_u"),
     );
 
-    let tex_v = render_api.new_texture(
+    let tex_v = renderer.new_texture(
         uv_width as u16,
         uv_height as u16,
         v_data,

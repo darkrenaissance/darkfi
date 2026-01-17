@@ -97,7 +97,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(layer_node.clone());
 
     // Channels label bg
@@ -137,7 +137,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         [0.15, 0.2, 0.19, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create some text
@@ -168,7 +168,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
     layer_node.link(node);
 
@@ -221,7 +221,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.register("select", slot).unwrap();
     let sg_root = app.sg_root.clone();
     let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let item_name: String = deserialize(&data).unwrap();
@@ -230,7 +230,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let chatview_path = format!("/window/content/{}_chat_layer", channel);
             let chatview_node = sg_root.lookup_node(chatview_path).unwrap();
 
-            let atom = &mut render_api.make_guard(gfxtag!("channel_clicked"));
+            let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
             info!(target: "app::menu", "clicked: {channel}!");
             chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             menu_is_visible.set(atom, false);
@@ -239,7 +239,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Menu::new(me, window_scale.clone(), app.render_api.clone())).await;
+    let node = node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
     layer_node.link(node);
 
     /*
@@ -277,7 +277,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             sep_color,
         );
 
-        let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+        let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
         layer_node.link(node);
 
         // Desktop platforms
@@ -318,7 +318,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         let node = node
             .setup(|me| {
-                Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone())
+                Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())
             })
             .await;
         layer_node.link(node);
@@ -340,9 +340,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();
         let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
 
-        let render_api = app.render_api.clone();
+        let renderer = app.renderer.clone();
         let select_channel = move || {
-            let atom = &mut render_api.make_guard(gfxtag!("channel_clicked"));
+            let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
             info!(target: "app::menu", "clicked: {channel}!");
             chatview_is_visible.set(atom, true);
             menu_is_visible.set(atom, false);
@@ -397,6 +397,6 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]).scaled(VERBLOCK_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 }

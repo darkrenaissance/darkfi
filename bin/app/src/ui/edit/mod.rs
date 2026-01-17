@@ -38,7 +38,7 @@ use tracing::instrument;
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, RenderApiSync,
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, Renderer, RendererSync,
         Vertex,
     },
     mesh::MeshBuilder,
@@ -150,7 +150,7 @@ pub type BaseEditPtr = Arc<BaseEdit>;
 pub struct BaseEdit {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
-    render_api: RenderApi,
+    renderer: Renderer,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
     // Moves the draw cursor and applies scroll
@@ -221,7 +221,7 @@ impl BaseEdit {
     pub async fn new(
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
-        render_api: RenderApi,
+        renderer: Renderer,
         edit_type: BaseEditType,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -314,12 +314,12 @@ impl BaseEdit {
             }
         };
 
-        let action_mode = action::ActionMode::new(render_api.clone());
+        let action_mode = action::ActionMode::new(renderer.clone());
 
         let self_ = Arc::new(Self {
             node,
             tasks: SyncMutex::new(vec![]),
-            render_api,
+            renderer,
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
             root_dc_key: OsRng.gen(),
@@ -421,7 +421,7 @@ impl BaseEdit {
 
         let mut mesh = MeshBuilder::new(gfxtag!("chatedit_cursor"));
         mesh.draw_filled_box(&cursor_rect, cursor_color);
-        mesh.alloc(&self.render_api).draw_untextured()
+        mesh.alloc(&self.renderer).draw_untextured()
     }
 
     fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, mut pos: Point, side: f32) {
@@ -667,7 +667,7 @@ impl BaseEdit {
         let rect = self.rect.get();
         let local_pos = touch_pos - rect.pos();
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
         if let Some(action_id) = self.action_mode.interact(local_pos) {
             match action_id {
                 ACTION_COPY => {
@@ -804,7 +804,7 @@ impl BaseEdit {
                 );
 
                 let atom = &mut self
-                    .render_api
+                    .renderer
                     .make_guard(gfxtag!("BaseEdit::TouchStateAction::StartSelect"));
 
                 if self.text.get().is_empty() {
@@ -867,7 +867,7 @@ impl BaseEdit {
                 }
                 self.scroll.store(scroll, Ordering::Release);
                 let atom = &mut self
-                    .render_api
+                    .renderer
                     .make_guard(gfxtag!("BaseEdit::TouchStateAction::ScrollVert"));
                 self.redraw_scroll(atom.batch_id);
             }
@@ -887,7 +887,7 @@ impl BaseEdit {
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
+                let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
                 self.touch_set_cursor_pos(atom, touch_pos);
                 self.redraw(atom);
             }
@@ -931,7 +931,7 @@ impl BaseEdit {
 
         let mut clip_mouse_pos = rect.clip_point(mouse_pos);
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
 
         // Handle scrolling
         if !is_mouse_hover {
@@ -1037,7 +1037,7 @@ impl BaseEdit {
     #[instrument(target = "ui::edit")]
     fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let draw_update = self.make_draw_calls();
-        self.render_api.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
     /// Called when scroll changes. Moves content up or down. Nothing more.
@@ -1063,13 +1063,13 @@ impl BaseEdit {
                 "chatedit_content",
             ),
         )];
-        self.render_api.replace_draw_calls(Some(batch_id), draw_main);
+        self.renderer.replace_draw_calls(Some(batch_id), draw_main);
     }
 
     fn redraw_cursor(&self, batch_id: BatchGuardId) {
         let instrs = self.get_cursor_instrs();
         let draw_calls = vec![(self.cursor_dc_key, DrawCall::new(instrs, vec![], 2, "curs_redr"))];
-        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
+        self.renderer.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     fn redraw_select(&self, batch_id: BatchGuardId) {
@@ -1083,7 +1083,7 @@ impl BaseEdit {
                 DrawCall::new(phone_sel_instrs, vec![], 1, "chatedit_phone_sel_redraw_sel"),
             ),
         ];
-        self.render_api.replace_draw_calls(Some(batch_id), draw_calls);
+        self.renderer.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
     fn get_cursor_instrs(&self) -> Vec<DrawInstruction> {
@@ -1121,7 +1121,7 @@ impl BaseEdit {
         rect.h -= pad_top + pad_bottom;
         mesh.draw_outline(&rect, [0., 1., 0., 0.5], 1.);
 
-        vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
+        vec![DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured())]
     }
 
     fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
@@ -1131,7 +1131,7 @@ impl BaseEdit {
         let layout = editor.layout();
 
         let mut render_instrs =
-            text::render_layout(layout, &self.render_api, gfxtag!("chatedit_txt_mesh"));
+            text::render_layout(layout, &self.renderer, gfxtag!("chatedit_txt_mesh"));
         instrs.append(&mut render_instrs);
 
         instrs
@@ -1151,7 +1151,7 @@ impl BaseEdit {
                 mesh.draw_filled_box(&rect.into(), sel_color);
             });
 
-            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured()));
+            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured()));
         }
 
         instrs
@@ -1172,14 +1172,14 @@ impl BaseEdit {
         let mut mesh = MeshBuilder::new(gfxtag!("chatedit_phone_select_handle"));
         self.draw_phone_select_handle(&mut mesh, first, -1.);
         self.draw_phone_select_handle(&mut mesh, last, 1.);
-        vec![DrawInstruction::Draw(mesh.alloc(&self.render_api).draw_untextured())]
+        vec![DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured())]
     }
 
     /// This does not make use of an atom since we want to de-atomize updating this widget from
     /// its dependencies so theres zero latency when typing.
     /// Should be called when text contents changes.
     fn eval_rect(&self) {
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
         self.behave.eval_rect(atom);
     }
 
@@ -1277,8 +1277,7 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let atom =
-            &mut self_.render_api.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
+        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
         self_.editor.lock().insert(&text, atom);
         self_.eval_rect();
         self_.redraw(atom);
@@ -1329,7 +1328,7 @@ impl BaseEdit {
         }
 
         t!("handle_android_event({state:?})");
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_android_event"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
         let (is_text_changed, is_select_changed, is_compose_changed) = {
             let mut editor = self.editor.lock();
@@ -1382,8 +1381,8 @@ impl BaseEdit {
 
 impl Drop for BaseEdit {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("BaseEdit::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("BaseEdit::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.text_dc_key, Default::default())]);
     }
 }
@@ -1490,7 +1489,7 @@ impl UIObject for BaseEdit {
 
                 // Invert the bool
                 self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
-                let atom = &mut self_.render_api.make_guard(gfxtag!("BaseEdit::start"));
+                let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::start"));
                 self_.redraw_cursor(atom.batch_id);
             }
         });
@@ -1601,7 +1600,7 @@ impl UIObject for BaseEdit {
             repeater.key_down(PressedKey::Char(key), repeat)
         };
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_char"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_char"));
 
         if mods.ctrl || mods.alt || mods.logo {
             if repeat {
@@ -1646,7 +1645,7 @@ impl UIObject for BaseEdit {
             t!("Key {:?} has {} actions", key, actions);
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_key_down"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_key_down"));
 
         let mut is_handled = false;
         for _ in 0..actions {
@@ -1687,7 +1686,7 @@ impl UIObject for BaseEdit {
             menu.pos = mouse_pos - rect.pos();
 
             self.action_mode.set(menu);
-            let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
+            let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
             self.action_mode.redraw(atom.batch_id);
 
             return true
@@ -1698,7 +1697,7 @@ impl UIObject for BaseEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
 
         // clicking inside box will:
         // 1. make it active
@@ -1742,7 +1741,7 @@ impl UIObject for BaseEdit {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
         if let Some(action_id) = self.action_mode.interact(mouse_pos) {
             match action_id {
                 ACTION_COPY => {
@@ -1814,7 +1813,7 @@ impl UIObject for BaseEdit {
             return false
         }
 
-        let atom = &mut self.render_api.make_guard(gfxtag!("BaseEdit::handle_mouse_wheel"));
+        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_wheel"));
 
         let mut scroll =
             self.scroll.load(Ordering::Relaxed) - wheel_pos.y * self.scroll_speed.get();
@@ -1828,7 +1827,7 @@ impl UIObject for BaseEdit {
 
     fn handle_touch_sync(
         &self,
-        _render_api: &mut RenderApiSync,
+        _render_api: &mut RendererSync,
         phase: TouchPhase,
         id: u64,
         touch_pos: Point,

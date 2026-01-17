@@ -25,7 +25,7 @@ use tracing::instrument;
 use crate::{
     gfx::{
         anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, GraphicPipeline,
-        ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, RenderApi,
+        ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, Renderer,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -60,17 +60,17 @@ pub struct Av1VideoData {
 }
 
 impl Av1VideoData {
-    fn new(len: usize, render_api: &RenderApi) -> Self {
+    fn new(len: usize, renderer: &Renderer) -> Self {
         let (textures_pub, textures_sub) = async_broadcast::broadcast(len);
 
-        let anim = render_api.new_anim(len, false, gfxtag!("video"));
+        let anim = renderer.new_anim(len, false, gfxtag!("video"));
         Self { textures: vec![None; len], anim, textures_pub, textures_sub }
     }
 }
 
 pub struct Video {
     node: SceneNodeWeak,
-    render_api: RenderApi,
+    renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     load_tasks: SyncMutex<Vec<smol::Task<()>>>,
     ex: ExecutorPtr,
@@ -90,7 +90,7 @@ pub struct Video {
 }
 
 impl Video {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer, ex: ExecutorPtr) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();
@@ -100,7 +100,7 @@ impl Video {
 
         let self_ = Arc::new(Self {
             node,
-            render_api,
+            renderer,
             tasks: SyncMutex::new(vec![]),
             load_tasks: SyncMutex::new(vec![]),
             ex,
@@ -133,7 +133,7 @@ impl Video {
         // Decoder thread:
         // loads path, decodes AV1 -> RGB, creates textures directly
         let decoder_handle =
-            spawn_decoder_thread(path, self.vid_data.clone(), self.render_api.clone());
+            spawn_decoder_thread(path, self.vid_data.clone(), self.renderer.clone());
 
         *self._decoder_handle.lock() = Some(decoder_handle);
     }
@@ -150,7 +150,7 @@ impl Video {
             error!(target: "ui:video", "Video failed to draw");
             return
         };
-        self.render_api.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
+        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     fn regen_mesh(&self) -> MeshInfo {
@@ -159,7 +159,7 @@ impl Video {
         let mesh_rect = Rectangle::from([0., 0., rect.w, rect.h]);
         let mut mesh = MeshBuilder::new(gfxtag!("img"));
         mesh.draw_box(&mesh_rect, COLOR_WHITE, &uv);
-        mesh.alloc(&self.render_api)
+        mesh.alloc(&self.renderer)
     }
 
     fn get_draw_calls(
@@ -305,8 +305,8 @@ impl UIObject for Video {
 
 impl Drop for Video {
     fn drop(&mut self) {
-        let atom = self.render_api.make_guard(gfxtag!("Video::drop"));
-        self.render_api
+        let atom = self.renderer.make_guard(gfxtag!("Video::drop"));
+        self.renderer
             .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
     }
 }

@@ -24,7 +24,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    gfx::{gfxtag, RenderApi},
+    gfx::{gfxtag, Renderer},
     prop::{PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
@@ -78,7 +78,7 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     sg_root: SceneNodePtr,
-    render_api: RenderApi,
+    renderer: Renderer,
     _ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
@@ -86,7 +86,7 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(sg_root: SceneNodePtr, render_api: RenderApi, ex: ExecutorPtr) -> Arc<Self> {
+    pub async fn new(sg_root: SceneNodePtr, renderer: Renderer, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         if USE_IPV6 {
             zmq_rep.bind("tcp://[::]:9484").await.unwrap();
@@ -103,7 +103,7 @@ impl ZeroMQAdapter {
 
         Arc::new(Self {
             sg_root,
-            render_api,
+            renderer,
             _ex: ex,
             zmq_rep: Mutex::new(zmq_rep),
             _zmq_pub: Mutex::new(zmq_pub),
@@ -253,7 +253,7 @@ impl ZeroMQAdapter {
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
                 let atom =
-                    &mut self.render_api.make_guard(gfxtag!("ZeroMQAdapter::SetPropertyValue"));
+                    &mut self.renderer.make_guard(gfxtag!("ZeroMQAdapter::SetPropertyValue"));
 
                 match prop_type {
                     PropertyType::Null => {

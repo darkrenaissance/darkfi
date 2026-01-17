@@ -17,7 +17,7 @@
  */
 
 use crate::gfx::{
-    DebugTag, DrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Vertex,
+    DebugTag, DrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, Renderer, Vertex,
 };
 
 pub type Color = [f32; 4];
@@ -214,14 +214,14 @@ impl MeshBuilder {
         self.append(verts, indices);
     }
 
-    pub fn alloc(self, render_api: &RenderApi) -> MeshInfo {
+    pub fn alloc(self, renderer: &Renderer) -> MeshInfo {
         //debug!(target: "mesh", "allocating {} verts:", self.verts.len());
         //for vert in &self.verts {
         //    debug!(target: "mesh", "  {:?}", vert);
         //}
         let num_elements = self.indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(self.verts, self.tag);
-        let index_buffer = render_api.new_index_buffer(self.indices, self.tag);
+        let vertex_buffer = renderer.new_vertex_buffer(self.verts, self.tag);
+        let index_buffer = renderer.new_index_buffer(self.indices, self.tag);
         MeshInfo { vertex_buffer, index_buffer, num_elements }
     }
 }

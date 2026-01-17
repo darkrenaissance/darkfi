@@ -219,7 +219,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(layer_node.clone());
 
     // Create a bg mesh on top to fade the bg image
@@ -238,7 +238,7 @@ pub async fn make(
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the toolbar bg
@@ -289,7 +289,7 @@ pub async fn make(
         0.2,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -302,7 +302,7 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the back button
@@ -319,10 +319,10 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let layer_node2 = layer_node.clone();
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
-        let atom = &mut render_api.make_guard(gfxtag!("goback action"));
+        let atom = &mut renderer.make_guard(gfxtag!("goback action"));
 
         let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
@@ -395,7 +395,7 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
     layer_node.link(node);
 
@@ -416,7 +416,7 @@ pub async fn make(
     //node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "emoji_size", EMOJI_PICKER_ICON_SIZE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node.setup(|me| EmojiPicker::new(me, app.render_api.clone(), emoji_meshes)).await;
+    let node = node.setup(|me| EmojiPicker::new(me, app.renderer.clone(), emoji_meshes)).await;
     let emoji_picker_node = node.clone();
     layer_node.link(node);
 
@@ -456,7 +456,7 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Main content view
@@ -472,7 +472,7 @@ pub async fn make(
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     layer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     chat_layer_node.link(layer_node.clone());
 
     // ChatView
@@ -562,7 +562,7 @@ pub async fn make(
                 me,
                 chat_tree,
                 window_scale.clone(),
-                app.render_api.clone(),
+                app.renderer.clone(),
                 app.sg_root.clone(),
             )
         })
@@ -667,7 +667,7 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -681,7 +681,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -699,7 +699,7 @@ pub async fn make(
         ColorScheme::PaperLight => [0., 0., 0., 1.],
     };
     let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -714,7 +714,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Text edit
@@ -832,7 +832,7 @@ pub async fn make(
 
     let node = node
         .setup(|me| {
-            BaseEdit::new(me, window_scale.clone(), app.render_api.clone(), BaseEditType::MultiLine)
+            BaseEdit::new(me, window_scale.clone(), app.renderer.clone(), BaseEditType::MultiLine)
         })
         .await;
     let chatedit_node = node.clone();
@@ -882,7 +882,7 @@ pub async fn make(
         ]
     );
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
     */
 
@@ -900,18 +900,18 @@ pub async fn make(
     let editz_text2 = editz_text.clone();
     let channel2 = format!("#{channel}");
     let sg_root = app.sg_root.clone();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let sendmsg = move || {
         let editz_text = editz_text2.clone();
         let channel = channel2.clone();
         let sg_root = sg_root.clone();
         let chatview_node = chatview_node.clone();
-        let render_api = render_api.clone();
+        let renderer = renderer.clone();
         async move {
             let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: {channel}");
             {
-                let atom = &mut render_api.make_guard(gfxtag!("sendmsg clear edit"));
+                let atom = &mut renderer.make_guard(gfxtag!("sendmsg clear edit"));
                 editz_text.set(atom, "");
             }
 
@@ -924,7 +924,7 @@ pub async fn make(
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
                 info!(target: "app::chat", "Setting nick to: {nick}");
                 {
-                    let atom = &mut render_api.make_guard(gfxtag!("sendmsg action"));
+                    let atom = &mut renderer.make_guard(gfxtag!("sendmsg action"));
                     darkirc.set_property_str(atom, Role::App, "nick", nick).unwrap();
                 }
 
@@ -1024,7 +1024,7 @@ pub async fn make(
     let (slot, recvr) = Slot::new("emoji_clicked");
     let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         let mut panel_height = if cfg!(target_os = "android") {
             let keyb_height = android_keyboard_height();
@@ -1039,7 +1039,7 @@ pub async fn make(
 
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
-            let atom = &mut render_api.make_guard(gfxtag!("emoji click action"));
+            let atom = &mut renderer.make_guard(gfxtag!("emoji click action"));
 
             if cfg!(target_os = "android") {
                 let keyb_height = android_keyboard_height();
@@ -1097,7 +1097,7 @@ pub async fn make(
     prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
     cmd_layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     cmd_layer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let cmd_layer_node = cmd_layer_node.setup(|me| Layer::new(me, app.render_api.clone())).await;
+    let cmd_layer_node = cmd_layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     layer_node.link(cmd_layer_node.clone());
 
     let cmd_hint_is_visible =
@@ -1115,11 +1115,11 @@ pub async fn make(
     let (slot, recvr) = Slot::new("nickcmd_clicked");
     node.register("click", slot).unwrap();
     let editz_text2 = editz_text.clone();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked /nick");
-            let atom = &mut render_api.make_guard(gfxtag!("nickcmd_clicked action"));
+            let atom = &mut renderer.make_guard(gfxtag!("nickcmd_clicked action"));
             // This will autohide this popup due to ending in a space.
             // Setting the property will retrigger the logic whether to show popup.
             editz_text2.set(atom, "/nick ");
@@ -1170,7 +1170,7 @@ pub async fn make(
         [0.29, 0.51, 0.45, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.render_api.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     cmd_layer_node.link(node);
 
     // Create some text
@@ -1192,7 +1192,7 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
     cmd_layer_node.link(node);
 
@@ -1215,15 +1215,15 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.render_api.clone(), i18n_fish.clone()))
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
     cmd_layer_node.link(node);
 
     let editz_text_sub = editz_text.prop().subscribe_modify();
-    let render_api = app.render_api.clone();
+    let renderer = app.renderer.clone();
     let editz_text_task = app.ex.spawn(async move {
         while let Ok(_) = editz_text_sub.receive().await {
-            let atom = &mut render_api.make_guard(gfxtag!("chatedit txt changed"));
+            let atom = &mut renderer.make_guard(gfxtag!("chatedit txt changed"));
 
             let text = editz_text.get();
             debug!(target: "app::chat", "text changed: {text}");
