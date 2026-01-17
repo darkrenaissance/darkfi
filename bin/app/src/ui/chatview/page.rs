@@ -38,7 +38,7 @@ use url::Url;
 
 use super::{MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyColor, PropertyFloat32, PropertyPtr},
     scene::SceneNodeWeak,

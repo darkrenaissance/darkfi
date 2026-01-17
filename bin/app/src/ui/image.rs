@@ -25,7 +25,10 @@ use std::{io::Cursor, sync::Arc};
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, Renderer},
+    gfx::{
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi,
+        Renderer,
+    },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},

@@ -27,7 +27,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },

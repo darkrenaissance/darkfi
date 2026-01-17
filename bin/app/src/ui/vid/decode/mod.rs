@@ -21,7 +21,7 @@
 use parking_lot::Mutex as SyncMutex;
 use std::sync::Arc;
 
-use crate::gfx::Renderer;
+use crate::gfx::{RenderApi, Renderer};
 
 use super::Av1VideoData;
 

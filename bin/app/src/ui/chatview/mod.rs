@@ -42,7 +42,7 @@ pub use page::FileMessageStatus;
 use page::MessageBuffer;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyColor, PropertyFloat32,
         PropertyRect, PropertyUint32, Role,

@@ -27,7 +27,7 @@ use std::{
 
 use crate::{
     android::vid::{self, DecodedFrame},
-    gfx::{gfxtag, Renderer},
+    gfx::{gfxtag, Renderer, RenderApi},
     ui::vid::{Av1VideoData, YuvTextures},
     util::spawn_thread,
 };

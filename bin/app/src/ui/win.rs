@@ -27,7 +27,7 @@ use crate::{
         gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventTouchSub, Point, Rectangle, Renderer, RendererSync,
+        GraphicsEventTouchSub, Point, Rectangle, RenderApi, Renderer, RendererSync,
     },
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,

@@ -20,7 +20,7 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder},
     prop::BatchGuardId,
     text,

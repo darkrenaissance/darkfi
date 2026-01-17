@@ -18,7 +18,7 @@
 
 use miniquad::TextureFormat;
 
-use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, Renderer};
+use crate::gfx::{DebugTag, ManagedTexturePtr, Rectangle, RenderApi, Renderer};
 
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly

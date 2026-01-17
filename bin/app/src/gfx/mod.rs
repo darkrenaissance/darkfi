@@ -43,7 +43,7 @@ use anim::{Frame as AnimFrame, GfxSeqAnim};
 mod api;
 pub use api::{
     EpochIndex, GraphicsMethod, ManagedBuffer, ManagedBufferPtr, ManagedSeqAnim, ManagedSeqAnimPtr,
-    ManagedTexture, ManagedTexturePtr, Renderer, RendererSync,
+    ManagedTexture, ManagedTexturePtr, RenderApi, Renderer, RendererSync,
 };
 mod ev;
 pub use ev::{

@@ -25,7 +25,7 @@ use tracing::instrument;
 use crate::{
     gfx::{
         anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, GraphicPipeline,
-        ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, Renderer,
+        ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, RenderApi, Renderer,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},

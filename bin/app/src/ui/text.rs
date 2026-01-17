@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
     mesh::MeshBuilder,
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,

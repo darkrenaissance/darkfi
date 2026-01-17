@@ -38,8 +38,8 @@ use tracing::instrument;
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, Renderer, RendererSync,
-        Vertex,
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer,
+        RendererSync, Vertex,
     },
     mesh::MeshBuilder,
     prop::{
@@ -776,7 +776,7 @@ impl BaseEdit {
         false
     }
 
-    fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
+    fn handle_touch_move(&self, renderer: &mut RendererSync, mut touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -879,7 +879,7 @@ impl BaseEdit {
         }
         true
     }
-    fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
+    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
         //t!("handle_touch_end({touch_pos:?})");
         self.abs_to_local(&mut touch_pos);
 
@@ -899,9 +899,7 @@ impl BaseEdit {
         scroll_sender.try_send(None).unwrap();
 
         let node = self.node();
-        smol::block_on(async {
-            node.trigger("focus_request", vec![]).await.unwrap();
-        });
+        node.trigger("focus_request", vec![]).await.unwrap();
 
         true
     }
@@ -1827,7 +1825,7 @@ impl UIObject for BaseEdit {
 
     fn handle_touch_sync(
         &self,
-        _render_api: &mut RendererSync,
+        renderer: &mut RendererSync,
         phase: TouchPhase,
         id: u64,
         touch_pos: Point,
@@ -1843,9 +1841,24 @@ impl UIObject for BaseEdit {
 
         match phase {
             TouchPhase::Started => self.handle_touch_start(touch_pos),
-            TouchPhase::Moved => self.handle_touch_move(touch_pos),
-            TouchPhase::Ended => self.handle_touch_end(touch_pos),
-            TouchPhase::Cancelled => false,
+            TouchPhase::Moved => self.handle_touch_move(renderer, touch_pos),
+            TouchPhase::Ended | TouchPhase::Cancelled => false,
+        }
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        if !self.is_active.get() {
+            return false
+        }
+
+        // Ignore multi-touch
+        if id != 0 {
+            return false
+        }
+
+        match phase {
+            TouchPhase::Started | TouchPhase::Moved | TouchPhase::Cancelled => false,
+            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
         }
     }
 }

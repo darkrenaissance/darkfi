@@ -16,9 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
+use std::{
+    cell::{Cell, UnsafeCell},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
 };
 
 use super::{
@@ -109,6 +112,29 @@ impl std::fmt::Debug for ManagedSeqAnim {
     }
 }
 
+/// This trait allows `Renderer` and `RendererSync` to be used interchangeably helping with
+/// code reuse.
+pub trait RenderApi {
+    /// Allocate a texture on the gfx card
+    fn new_texture(
+        &self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        fmt: TextureFormat,
+        tag: DebugTag,
+    ) -> ManagedTexturePtr;
+
+    /// Create a buffer to store vertices
+    fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr;
+
+    /// Create a buffer to store triangle faces
+    fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr;
+
+    /// Modify render tree.
+    fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>);
+}
+
 #[derive(Clone)]
 pub struct Renderer {
     /// We are abusing async_channel since it's cloneable whereas std::sync::mpsc is shit.
@@ -151,18 +177,6 @@ impl Renderer {
         (gfx_texture_id, epoch)
     }
 
-    pub fn new_texture(
-        &self,
-        width: u16,
-        height: u16,
-        data: Vec<u8>,
-        fmt: TextureFormat,
-        tag: DebugTag,
-    ) -> ManagedTexturePtr {
-        let (id, epoch) = self.new_unmanaged_texture(width, height, data, fmt, tag);
-        Arc::new(ManagedTexture { id, epoch, renderer: self.clone(), tag })
-    }
-
     fn delete_unmanaged_texture(&self, texture: TextureId, epoch: EpochIndex, tag: DebugTag) {
         let method = GraphicsMethod::DeleteTexture((texture, tag));
         self.send_with_epoch(method, epoch);
@@ -192,15 +206,6 @@ impl Renderer {
         let epoch = self.send(method);
 
         (gfx_buffer_id, epoch)
-    }
-
-    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
-        let (id, epoch) = self.new_unmanaged_vertex_buffer(verts, tag);
-        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 0 })
-    }
-    pub fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
-        let (id, epoch) = self.new_unmanaged_index_buffer(indices, tag);
-        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 1 })
     }
 
     fn delete_unmanaged_buffer(
@@ -250,17 +255,6 @@ impl Renderer {
         self.send_with_epoch(method, epoch);
     }
 
-    pub fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
-        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
-        self.send(method);
-
-        // I'm not sure whether we need this. Anyway its not fully reliable either since
-        // we have no guarantee that when `Stage::update()` whether this method is ready
-        // in the receiver.
-        #[cfg(target_os = "android")]
-        miniquad::window::schedule_update();
-    }
-
     fn start_batch(&self, batch_id: BatchGuardId, tag: DebugTag) {
         let method = GraphicsMethod::StartBatch { batch_id, tag };
         self.send(method);
@@ -281,6 +275,40 @@ impl Renderer {
         let r = self.clone();
         let end_batch = Box::new(move |bid| r.end_batch(bid));
         PropertyAtomicGuard::new(start_batch, end_batch)
+    }
+}
+
+impl RenderApi for Renderer {
+    fn new_texture(
+        &self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        fmt: TextureFormat,
+        tag: DebugTag,
+    ) -> ManagedTexturePtr {
+        let (id, epoch) = self.new_unmanaged_texture(width, height, data, fmt, tag);
+        Arc::new(ManagedTexture { id, epoch, renderer: self.clone(), tag })
+    }
+
+    fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
+        let (id, epoch) = self.new_unmanaged_vertex_buffer(verts, tag);
+        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 0 })
+    }
+    fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
+        let (id, epoch) = self.new_unmanaged_index_buffer(indices, tag);
+        Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 1 })
+    }
+
+    fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
+        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
+        self.send(method);
+
+        // I'm not sure whether we need this. Anyway its not fully reliable either since
+        // we have no guarantee that when `Stage::update()` whether this method is ready
+        // in the receiver.
+        #[cfg(target_os = "android")]
+        miniquad::window::schedule_update();
     }
 }
 
@@ -329,59 +357,63 @@ impl Default for GraphicsMethod {
 }
 
 pub struct RendererSync<'a> {
-    stage: &'a mut Stage,
-    is_dirty: bool,
+    stage: UnsafeCell<&'a mut Stage>,
 }
 
 impl<'a> RendererSync<'a> {
     pub fn new(stage: &'a mut Stage) -> Self {
-        Self { stage, is_dirty: false }
+        Self { stage: UnsafeCell::new(stage) }
     }
 
-    // Texture methods
-    pub fn new_texture(
-        &mut self,
+    // SAFETY: The '&a mut Stage' reference stored in UnsafeCell is guaranteed to be unique
+    // for the lifetime 'a of this RendererSync. No other references to this Stage can exist
+    // while RendererSync is alive, due to Rust's borrow checker rules on mutable references.
+    // Therefore, it's safe to return &mut Stage through &self.
+    fn stage(&self) -> &mut Stage {
+        unsafe { &mut *self.stage.get() }
+    }
+}
+
+impl RenderApi for RendererSync<'_> {
+    fn new_texture(
+        &self,
         width: u16,
         height: u16,
         data: Vec<u8>,
         fmt: TextureFormat,
         tag: DebugTag,
     ) -> ManagedTexturePtr {
-        let renderer = self.stage.renderer.clone();
+        let stage = self.stage();
+        let renderer = stage.renderer.clone();
         let id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
-        self.stage.method_new_texture(width, height, &data, fmt, id);
+        stage.method_new_texture(width, height, &data, fmt, id);
         Arc::new(ManagedTexture { id, epoch: 0, renderer, tag })
     }
 
-    // Buffer methods
-    pub fn new_vertex_buffer(&mut self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
-        let renderer = self.stage.renderer.clone();
+    fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
+        let stage = self.stage();
+        let renderer = stage.renderer.clone();
         let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
-        self.stage.method_new_vertex_buffer(&verts, id);
+        stage.method_new_vertex_buffer(&verts, id);
         Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 0 })
     }
 
-    pub fn new_index_buffer(&mut self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
-        let renderer = self.stage.renderer.clone();
+    fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
+        let stage = self.stage();
+        let renderer = stage.renderer.clone();
         let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
-        self.stage.method_new_index_buffer(&indices, id);
+        stage.method_new_index_buffer(&indices, id);
         Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 1 })
     }
 
-    // Draw calls (no batching)
-    pub fn replace_draw_calls(&mut self, dcs: Vec<(DcId, DrawCall)>) {
+    /// Draw calls (no batching). The batch ID is ignored here.
+    fn replace_draw_calls(&self, _: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
+        let stage = self.stage();
         let timest = unixtime();
-        self.stage.apply_draw_calls(timest, dcs);
-        self.is_dirty = true;
-    }
-}
+        stage.apply_draw_calls(timest, dcs);
 
-impl Drop for RendererSync<'_> {
-    fn drop(&mut self) {
-        if self.is_dirty {
-            // Force an update
-            #[cfg(target_os = "android")]
-            miniquad::window::schedule_update();
-        }
+        // Force an update
+        #[cfg(target_os = "android")]
+        miniquad::window::schedule_update();
     }
 }

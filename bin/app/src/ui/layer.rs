@@ -24,7 +24,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
+    gfx::{DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer, RendererSync},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,

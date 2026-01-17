@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer, RendererSync},
     mesh::MeshBuilder,
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
@@ -311,7 +311,7 @@ impl Menu {
         self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
-    fn redraw_scroll(&self) {
+    fn redraw_scroll<R: RenderApi>(&self, renderer: &R) {
         let rect = self.rect.get();
         let scroll = self.scroll.load(Ordering::Relaxed);
 
@@ -327,26 +327,7 @@ impl Menu {
         };
 
         let draw_calls = vec![(self.root_dc_key, root_dc)];
-        self.renderer.replace_draw_calls(None, draw_calls);
-    }
-
-    fn redraw_scroll_sync(&self, renderer: &mut RendererSync) {
-        let rect = self.rect.get();
-        let scroll = self.scroll.load(Ordering::Relaxed);
-
-        // Only recreate root with updated scroll position
-        let root_instrs =
-            vec![DrawInstruction::ApplyView(rect), DrawInstruction::Move(Point::new(0., -scroll))];
-
-        let root_dc = DrawCall {
-            instrs: root_instrs,
-            dcs: vec![self.content_dc_key],
-            z_index: self.z_index.get(),
-            debug_str: "menu_root",
-        };
-
-        let draw_calls = vec![(self.root_dc_key, root_dc)];
-        renderer.replace_draw_calls(draw_calls);
+        renderer.replace_draw_calls(None, draw_calls);
     }
 
     fn scrollview(&self, scroll: f32) {
@@ -383,7 +364,7 @@ impl Menu {
             while speed.abs() >= EPSILON {
                 let scroll = self.scroll.load(Ordering::Relaxed);
                 self.scrollview(scroll + speed);
-                self.redraw_scroll();
+                self.redraw_scroll(&self.renderer);
                 speed *= resist;
                 self.speed.store(speed, Ordering::Relaxed);
                 darkfi::system::msleep(16).await;
@@ -539,7 +520,7 @@ impl UIObject for Menu {
                 };
 
                 self.scrollview(scroll);
-                self.redraw_scroll_sync(renderer);
+                self.redraw_scroll(renderer);
                 true
             }
 

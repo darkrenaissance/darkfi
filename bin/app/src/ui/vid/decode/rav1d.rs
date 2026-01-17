@@ -25,7 +25,7 @@ use rav1d::{
 use std::{sync::Arc, time::Instant};
 
 use crate::{
-    gfx::{gfxtag, Renderer},
+    gfx::{gfxtag, RenderApi, Renderer},
     ui::vid::{ivf::IvfStreamingDemuxer, Av1VideoData, YuvTextures},
     util::spawn_thread,
 };
