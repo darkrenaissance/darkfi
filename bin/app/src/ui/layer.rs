@@ -309,7 +309,7 @@ impl UIObject for Layer {
 
     fn handle_touch_sync(
         &self,
-        renderer: &mut RendererSync,
+        renderer: &RendererSync,
         phase: TouchPhase,
         id: u64,
         mut touch_pos: Point,

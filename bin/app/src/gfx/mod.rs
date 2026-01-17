@@ -1282,13 +1282,13 @@ impl EventHandler for Stage {
         let window_node = self.window_node.clone();
 
         // Create RenderApiSync for direct graphics operations
-        let mut renderer_sync = RendererSync::new(self);
+        let renderer_sync = RendererSync::new(self);
 
         // Direct call to Window's handle_touch_event_sync
         if let Some(window_node) = &window_node {
             match window_node.pimpl() {
                 Pimpl::Window(win) => {
-                    if win.handle_touch_sync(&mut renderer_sync, phase, id, pos) {
+                    if win.handle_touch_sync(&renderer_sync, phase, id, pos) {
                         return
                     }
                 }

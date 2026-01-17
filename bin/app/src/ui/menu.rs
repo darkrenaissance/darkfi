@@ -475,7 +475,7 @@ impl UIObject for Menu {
 
     fn handle_touch_sync(
         &self,
-        renderer: &mut RendererSync,
+        renderer: &RendererSync,
         phase: TouchPhase,
         id: u64,
         touch_pos: Point,

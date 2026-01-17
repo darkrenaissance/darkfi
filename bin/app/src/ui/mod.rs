@@ -112,7 +112,7 @@ pub trait UIObject: Sync {
 
     fn handle_touch_sync(
         &self,
-        _renderer: &mut RendererSync,
+        _renderer: &RendererSync,
         _phase: TouchPhase,
         _id: u64,
         _touch_pos: Point,

@@ -361,7 +361,7 @@ pub struct RendererSync<'a> {
 }
 
 impl<'a> RendererSync<'a> {
-    pub fn new(stage: &'a mut Stage) -> Self {
+    pub(super) fn new(stage: &'a mut Stage) -> Self {
         Self { stage: UnsafeCell::new(stage) }
     }
 

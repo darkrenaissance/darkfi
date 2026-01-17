@@ -17,7 +17,7 @@
  */
 
 use crate::gfx::{
-    DebugTag, DrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi, Renderer,
+    DebugTag, DrawMesh, ManagedBufferPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
     Vertex,
 };
 
@@ -215,7 +215,7 @@ impl MeshBuilder {
         self.append(verts, indices);
     }
 
-    pub fn alloc(self, renderer: &Renderer) -> MeshInfo {
+    pub fn alloc<R: RenderApi>(self, renderer: &R) -> MeshInfo {
         //debug!(target: "mesh", "allocating {} verts:", self.verts.len());
         //for vert in &self.verts {
         //    debug!(target: "mesh", "  {:?}", vert);
