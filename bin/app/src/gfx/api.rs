@@ -330,11 +330,12 @@ impl Default for GraphicsMethod {
 
 pub struct RenderApiSync<'a> {
     stage: &'a mut Stage,
+    is_dirty: bool,
 }
 
 impl<'a> RenderApiSync<'a> {
     pub fn new(stage: &'a mut Stage) -> Self {
-        Self { stage }
+        Self { stage, is_dirty: false }
     }
 
     // Texture methods
@@ -370,6 +371,17 @@ impl<'a> RenderApiSync<'a> {
     // Draw calls (no batching)
     pub fn replace_draw_calls(&mut self, dcs: Vec<(DcId, DrawCall)>) {
         let timest = unixtime();
-        self.stage.method_replace_draw_calls(timest, dcs);
+        self.stage.apply_draw_calls(timest, dcs);
+        self.is_dirty = true;
+    }
+}
+
+impl Drop for RenderApiSync<'_> {
+    fn drop(&mut self) {
+        if self.is_dirty {
+            // Force an update
+            #[cfg(target_os = "android")]
+            miniquad::window::schedule_update();
+        }
     }
 }

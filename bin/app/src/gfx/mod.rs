@@ -927,11 +927,7 @@ impl Stage {
             d!("Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
         }
     }
-    pub(self) fn method_replace_draw_calls(
-        &mut self,
-        batch_timest: Timestamp,
-        dcs: Vec<(DcId, DrawCall)>,
-    ) {
+    fn method_replace_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
         if DEBUG_GFXAPI {
             d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
@@ -953,6 +949,9 @@ impl Stage {
         }
 
         // Phase 2: Apply entire batch atomically
+        self.apply_draw_calls(batch_timest, dcs)
+    }
+    pub(self) fn apply_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
         for (key, val) in dcs {
             let val = val.compile(&self.textures, &self.buffers, batch_timest);
 
@@ -1296,6 +1295,8 @@ impl EventHandler for Stage {
                 _ => panic!(),
             }
         }
+
+        drop(render_api_sync);
 
         self.event_pub.notify_touch(phase, id, pos);
     }
