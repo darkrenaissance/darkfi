@@ -250,7 +250,7 @@ impl Harness {
             &mut MerkleTree::new(1),
         )
         .await?;
-        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&fork.diffs)?;
         block.header.state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Attach signature
