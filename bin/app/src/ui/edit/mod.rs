@@ -1000,8 +1000,6 @@ impl BaseEdit {
 
             //t!("handle_select(): set_selection({start}, {end})");
             editor.set_selection(start, end);
-            editor.refresh();
-
             editor.selected_text()
         };
         //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?})");
