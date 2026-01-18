@@ -832,7 +832,13 @@ pub async fn make(
 
     let node = node
         .setup(|me| {
-            BaseEdit::new(me, window_scale.clone(), app.renderer.clone(), BaseEditType::MultiLine)
+            BaseEdit::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                BaseEditType::MultiLine,
+                app.ex.clone(),
+            )
         })
         .await;
     let chatedit_node = node.clone();

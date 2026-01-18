@@ -38,8 +38,8 @@ use tracing::instrument;
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
     gfx::{
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer,
-        RendererSync, Vertex,
+        anim::Frame as AnimFrame, gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedSeqAnimPtr,
+        Point, Rectangle, RenderApi, Renderer, RendererSync, Vertex,
     },
     mesh::MeshBuilder,
     prop::{
@@ -150,6 +150,8 @@ pub type BaseEditPtr = Arc<BaseEdit>;
 pub struct BaseEdit {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
+    ex: ExecutorPtr,
+    me: Weak<Self>,
     renderer: Renderer,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
@@ -162,6 +164,7 @@ pub struct BaseEdit {
     text_dc_key: u64,
     cursor_dc_key: u64,
     cursor_mesh: SyncMutex<Option<DrawMesh>>,
+    cursor_anim: SyncMutex<Option<ManagedSeqAnimPtr>>,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -197,8 +200,8 @@ pub struct BaseEdit {
     action_spacing: PropertyFloat32,
 
     mouse_btn_held: AtomicBool,
-    cursor_is_visible: AtomicBool,
-    blink_is_paused: AtomicBool,
+    is_cursor_visible: AtomicBool,
+    is_blink_paused: AtomicBool,
     /// Used to explicitly hide the cursor. Must be manually re-enabled.
     hide_cursor: AtomicBool,
     /// Used to start select and scroll when mouse moves outside widget rect.
@@ -223,6 +226,7 @@ impl BaseEdit {
         window_scale: PropertyFloat32,
         renderer: Renderer,
         edit_type: BaseEditType,
+        ex: ExecutorPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
@@ -316,9 +320,11 @@ impl BaseEdit {
 
         let action_mode = action::ActionMode::new(renderer.clone());
 
-        let self_ = Arc::new(Self {
+        let self_ = Arc::new_cyclic(|me| Self {
             node,
             tasks: SyncMutex::new(vec![]),
+            ex,
+            me: me.clone(),
             renderer,
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
@@ -329,6 +335,7 @@ impl BaseEdit {
             text_dc_key: OsRng.gen(),
             cursor_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
+            cursor_anim: SyncMutex::new(None),
 
             is_active,
             is_focused,
@@ -364,8 +371,8 @@ impl BaseEdit {
             action_spacing,
 
             mouse_btn_held: AtomicBool::new(false),
-            cursor_is_visible: AtomicBool::new(true),
-            blink_is_paused: AtomicBool::new(false),
+            is_cursor_visible: AtomicBool::new(true),
+            is_blink_paused: AtomicBool::new(false),
             hide_cursor: AtomicBool::new(false),
             sel_sender: SyncMutex::new(None),
             scroll: scroll.clone(),
@@ -1021,13 +1028,42 @@ impl BaseEdit {
 
         self.pause_blinking();
         //self.behave.apply_cursor_scroll();
-        self.redraw_cursor(renderer, atom.batch_id);
+        self.redraw_cursor(renderer);
         self.redraw_select(renderer, atom.batch_id);
     }
 
+    /// Cursor must be redrawn after calling this either via `redraw_cursor()` or `redraw()`.
     fn pause_blinking(&self) {
-        self.blink_is_paused.store(true, Ordering::Relaxed);
-        self.cursor_is_visible.store(true, Ordering::Relaxed);
+        // First, redraw cursor with static cursor
+        self.is_blink_paused.store(true, Ordering::Relaxed);
+        //self.redraw_cursor(&self.renderer);
+
+        let cursor_idle_time = self.cursor_idle_time.get();
+        let me = self.me.clone();
+
+        // Spawn task to sleep and then restore animation
+        self.ex
+            .spawn(async move {
+                // Sleep for idle time
+                msleep(cursor_idle_time as u64).await;
+
+                let Some(self_) = me.upgrade() else { return };
+
+                // Restore animation draw calls
+                let pos = self_.get_cursor_pos();
+                let anim = self_.cursor_anim.lock().clone().unwrap();
+                let instrs = vec![DrawInstruction::Move(pos), DrawInstruction::Animation(anim)];
+                self_.renderer.replace_draw_calls(
+                    None,
+                    vec![(
+                        self_.cursor_dc_key,
+                        DrawCall::new(instrs, vec![], 2, "chatedit_anim_curs"),
+                    )],
+                );
+
+                self_.is_blink_paused.store(false, Ordering::Relaxed);
+            })
+            .detach();
     }
 
     #[instrument(target = "ui::edit")]
@@ -1062,10 +1098,10 @@ impl BaseEdit {
         renderer.replace_draw_calls(Some(batch_id), draw_main);
     }
 
-    fn redraw_cursor<R: RenderApi>(&self, renderer: &R, batch_id: BatchGuardId) {
+    fn redraw_cursor<R: RenderApi>(&self, renderer: &R) {
         let instrs = self.get_cursor_instrs(renderer);
         let draw_calls = vec![(self.cursor_dc_key, DrawCall::new(instrs, vec![], 2, "curs_redr"))];
-        renderer.replace_draw_calls(Some(batch_id), draw_calls);
+        renderer.replace_draw_calls(None, draw_calls);
     }
 
     fn redraw_select<R: RenderApi>(&self, renderer: &R, batch_id: BatchGuardId) {
@@ -1082,18 +1118,24 @@ impl BaseEdit {
         renderer.replace_draw_calls(Some(batch_id), draw_calls);
     }
 
-    fn get_cursor_instrs<R: RenderApi>(&self, renderer: &R) -> Vec<DrawInstruction> {
-        if !self.is_focused.get() ||
-            !self.cursor_is_visible.load(Ordering::Relaxed) ||
-            self.hide_cursor.load(Ordering::Relaxed)
-        {
+    fn get_cursor_instrs<R: RenderApi>(&self, _renderer: &R) -> Vec<DrawInstruction> {
+        if !self.is_focused.get() || self.hide_cursor.load(Ordering::Relaxed) {
             return vec![]
         }
 
-        let cursor_mesh =
-            self.cursor_mesh.lock().get_or_insert_with(|| self.regen_cursor_mesh(renderer)).clone();
+        let pos = self.get_cursor_pos();
+        let mut instrs = Vec::with_capacity(2);
+        instrs.push(DrawInstruction::Move(pos));
 
-        vec![DrawInstruction::Move(self.get_cursor_pos()), DrawInstruction::Draw(cursor_mesh)]
+        if self.is_blink_paused.load(Ordering::Relaxed) {
+            let mesh = self.cursor_mesh.lock().clone().unwrap();
+            instrs.push(DrawInstruction::Draw(mesh));
+        } else {
+            // Use the animation for cursor blinking
+            let anim = self.cursor_anim.lock().clone().unwrap();
+            instrs.push(DrawInstruction::Animation(anim));
+        }
+        instrs
     }
 
     fn regen_bg_mesh<R: RenderApi>(&self, renderer: &R) -> Vec<DrawInstruction> {
@@ -1391,7 +1433,6 @@ impl UIObject for BaseEdit {
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
-
         let node_ref = &self.node.upgrade().unwrap();
 
         let method_sub = node_ref.subscribe_method_call("insert_text").unwrap();
@@ -1465,30 +1506,27 @@ impl UIObject for BaseEdit {
         on_modify.when_change(self.cursor_descent.prop(), regen_cursor);
         on_modify.when_change(self.cursor_width.prop(), regen_cursor);
 
-        let me2 = me.clone();
-        let cursor_blink_time = self.cursor_blink_time.clone();
-        let cursor_idle_time = self.cursor_idle_time.clone();
-        let blinking_cursor_task = ex.spawn(async move {
-            loop {
-                msleep(cursor_blink_time.get() as u64).await;
+        // Create the blinking cursor animation using SeqAnim
+        // Frame 0: visible cursor
+        // Frame 1: invisible (empty)
+        let cursor_anim = self.renderer.new_anim(2, false, gfxtag!("baseedit_cursor_blink"));
+        let cursor_mesh = self.regen_cursor_mesh(&self.renderer);
 
-                let self_ = me2.upgrade().unwrap();
+        // Frame 0: visible cursor (just the draw, no position)
+        let dc_visible = DrawCall::new(
+            vec![DrawInstruction::Draw(cursor_mesh.clone())],
+            vec![],
+            2,
+            "cursor_vis",
+        );
+        cursor_anim.update(0, AnimFrame::new(self.cursor_blink_time.get(), dc_visible));
 
-                if self_.blink_is_paused.swap(false, Ordering::Relaxed) {
-                    msleep(cursor_idle_time.get() as u64).await;
-                    continue
-                }
+        // Frame 1: invisible (empty draw call)
+        let dc_invisible = DrawCall::new(vec![], vec![], 2, "cursor_invis");
+        cursor_anim.update(1, AnimFrame::new(self.cursor_blink_time.get(), dc_invisible));
 
-                if !self_.rect.has_cached() {
-                    continue
-                }
-
-                // Invert the bool
-                self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
-                let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::start"));
-                self_.redraw_cursor(&self_.renderer, atom.batch_id);
-            }
-        });
+        *self.cursor_anim.lock() = Some(cursor_anim);
+        *self.cursor_mesh.lock() = Some(cursor_mesh);
 
         let (sel_sender, sel_recvr) = async_channel::unbounded();
         *self.sel_sender.lock() = Some(sel_sender);
@@ -1530,8 +1568,7 @@ impl UIObject for BaseEdit {
             }
         });
 
-        let mut tasks =
-            vec![insert_text_task, focus_task, unfocus_task, blinking_cursor_task, sel_task];
+        let mut tasks = vec![insert_text_task, focus_task, unfocus_task, sel_task];
         tasks.append(&mut on_modify.tasks);
 
         #[cfg(target_os = "android")]
@@ -1615,6 +1652,7 @@ impl UIObject for BaseEdit {
         self.editor.lock().insert(&key_str, atom);
         self.eval_rect();
         self.behave.apply_cursor_scroll();
+        self.pause_blinking();
         self.redraw(atom);
         true
     }
