@@ -140,7 +140,7 @@ pub struct BlockTemplate {
     /// Block that is being mined
     pub block: BlockInfo,
     /// RandomX current and next keys pair
-    pub randomx_keys: (HeaderHash, HeaderHash),
+    pub randomx_keys: (HeaderHash, Option<HeaderHash>),
     /// Compacted block mining target
     pub target: Vec<u8>,
     /// Block difficulty
@@ -154,7 +154,7 @@ pub struct BlockTemplate {
 impl BlockTemplate {
     fn new(
         block: BlockInfo,
-        randomx_keys: (HeaderHash, HeaderHash),
+        randomx_keys: (HeaderHash, Option<HeaderHash>),
         target: Vec<u8>,
         difficulty: f64,
         secret: SecretKey,
@@ -178,10 +178,10 @@ impl BlockTemplate {
                 JsonValue::from(hex::encode(self.randomx_keys.0.inner()).to_string()),
             ),
         ]);
-        if self.randomx_keys.0 != self.randomx_keys.1 {
+        if let Some(next_randomx_key) = self.randomx_keys.1 {
             job.insert(
                 "next_seed_hash".to_string(),
-                JsonValue::from(hex::encode(self.randomx_keys.1.inner()).to_string()),
+                JsonValue::from(hex::encode(next_randomx_key.inner()).to_string()),
             );
         }
         (block_hash, JsonValue::from(job))
@@ -265,9 +265,11 @@ pub async fn generate_next_block_template(
     let randomx_keys = if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
         next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
     {
-        (extended_fork.module.darkfi_rx_keys.1, extended_fork.module.darkfi_rx_keys.1)
+        (extended_fork.module.darkfi_rx_keys.1, None)
+    } else if extended_fork.module.darkfi_rx_keys.0 != extended_fork.module.darkfi_rx_keys.1 {
+        (extended_fork.module.darkfi_rx_keys.0, Some(extended_fork.module.darkfi_rx_keys.1))
     } else {
-        extended_fork.module.darkfi_rx_keys
+        (extended_fork.module.darkfi_rx_keys.0, None)
     };
 
     // Grab forks' next mine target and difficulty
