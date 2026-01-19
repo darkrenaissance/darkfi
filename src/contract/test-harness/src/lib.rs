@@ -166,12 +166,16 @@ impl Wallet {
         // Inject the cached VKs into the database
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
         vks::inject(&overlay, vks)?;
+        let pow_target = 120;
+        deploy_native_contracts(&overlay, pow_target).await?;
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Create the `Validator` instance
         let validator_config = ValidatorConfig {
             confirmation_threshold: 3,
-            pow_target: 120,
+            pow_target,
             pow_fixed_difficulty: Some(BigUint::from(1_u8)),
             genesis_block,
             verify_fees,
