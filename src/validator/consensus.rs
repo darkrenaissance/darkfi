@@ -465,7 +465,8 @@ impl Consensus {
         if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
             next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
         {
-            Ok(rx_keys.1)
+            // Its safe to unwrap here since we know the key has been set
+            Ok(rx_keys.1.unwrap())
         } else {
             Ok(rx_keys.0)
         }

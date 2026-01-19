@@ -758,6 +758,10 @@ impl Validator {
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, pow_target).await?;
 
+        // Update the contracts states monotree
+        let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+        overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
+
         // Validate genesis block
         verify_genesis_block(&overlay, &previous, pow_target).await?;
         info!(target: "validator::validate_blockchain", "Genesis block validated successfully!");
@@ -871,7 +875,7 @@ impl Validator {
         let mut blocks_count = self.blockchain.len() as u32;
         info!(target: "validator::rebuild_block_difficulties", "Rebuilding {blocks_count} block difficulties...");
         if blocks_count == 0 {
-            info!(target: "validator::reset_to_height", "Validator block difficulties rebuilt successfully!");
+            info!(target: "validator::rebuild_block_difficulties", "Validator block difficulties rebuilt successfully!");
             return Ok(())
         }
 
@@ -924,7 +928,7 @@ impl Validator {
             // Add difficulty to database
             self.blockchain.blocks.insert_difficulty(&[block_difficulty])?;
 
-            info!(target: "validator::validate_blockchain", "Block {index}/{blocks_count} difficulty added successfully!");
+            info!(target: "validator::rebuild_block_difficulties", "Block {index}/{blocks_count} difficulty added successfully!");
             index += 1;
         }
 
@@ -934,7 +938,7 @@ impl Validator {
         // Release append lock
         drop(append_lock);
 
-        info!(target: "validator::reset_to_height", "Validator block difficulties rebuilt successfully!");
+        info!(target: "validator::rebuild_block_difficulties", "Validator block difficulties rebuilt successfully!");
 
         Ok(())
     }

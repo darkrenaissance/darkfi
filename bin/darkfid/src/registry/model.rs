@@ -265,11 +265,10 @@ pub async fn generate_next_block_template(
     let randomx_keys = if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
         next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
     {
-        (extended_fork.module.darkfi_rx_keys.1, None)
-    } else if extended_fork.module.darkfi_rx_keys.0 != extended_fork.module.darkfi_rx_keys.1 {
-        (extended_fork.module.darkfi_rx_keys.0, Some(extended_fork.module.darkfi_rx_keys.1))
+        // Its safe to unwrap here since we know the key has been set
+        (extended_fork.module.darkfi_rx_keys.1.unwrap(), None)
     } else {
-        (extended_fork.module.darkfi_rx_keys.0, None)
+        extended_fork.module.darkfi_rx_keys
     };
 
     // Grab forks' next mine target and difficulty

@@ -460,7 +460,7 @@ impl Blockchain {
         key_change_height: &u32,
         key_change_delay: &u32,
         height: Option<u32>,
-    ) -> Result<(HeaderHash, HeaderHash)> {
+    ) -> Result<(HeaderHash, Option<HeaderHash>)> {
         // Grab last known block header
         let last = match height {
             Some(h) => &self.get_headers_by_heights(&[if h != 0 { h - 1 } else { 0 }])?[0],
@@ -473,7 +473,7 @@ impl Blockchain {
             let current = self.genesis()?.1;
 
             // Check if last known block header is the next key
-            let next = if &last.height == key_change_height { last.hash() } else { current };
+            let next = if &last.height == key_change_height { Some(last.hash()) } else { None };
 
             return Ok((current, next))
         }
@@ -488,7 +488,7 @@ impl Blockchain {
         if distance == 0 {
             return Ok((
                 self.get_headers_by_heights(&[last.height - key_change_height])?[0].hash(),
-                last.hash(),
+                Some(last.hash()),
             ))
         }
 
@@ -500,7 +500,7 @@ impl Blockchain {
             return Ok((
                 self.get_headers_by_heights(&[last.height - (distance + key_change_height)])?[0]
                     .hash(),
-                self.get_headers_by_heights(&[last.height - distance])?[0].hash(),
+                Some(self.get_headers_by_heights(&[last.height - distance])?[0].hash()),
             ))
         }
 
@@ -508,7 +508,7 @@ impl Blockchain {
         // current key is the block header located at last_height - distance
         // height and we don't know the next key.
         let current = self.get_headers_by_heights(&[last.height - distance])?[0].hash();
-        Ok((current, current))
+        Ok((current, None))
     }
 }
 
@@ -779,14 +779,14 @@ mod tests {
 
     /// Compute the RandomX VM current and next key heights, based on
     /// provided key changing height and delay.
-    fn get_randomx_vm_keys_heights(last: u32) -> (u32, u32) {
+    fn get_randomx_vm_keys_heights(last: u32) -> (u32, Option<u32>) {
         // Check if we passed the first key change height
         if last <= RANDOMX_KEY_CHANGING_HEIGHT {
             // Genesis is our current
             let current = 0;
 
             // Check if last height is the next key height
-            let next = if last == RANDOMX_KEY_CHANGING_HEIGHT { last } else { current };
+            let next = if last == RANDOMX_KEY_CHANGING_HEIGHT { Some(last) } else { None };
 
             return (current, next)
         }
@@ -798,21 +798,21 @@ mod tests {
         // When distance is 0, current key is the last_height - RANDOMX_KEY_CHANGING_HEIGHT
         // height, while last is the next key.
         if distance == 0 {
-            return (last - RANDOMX_KEY_CHANGING_HEIGHT, last)
+            return (last - RANDOMX_KEY_CHANGING_HEIGHT, Some(last))
         }
 
         // When distance is less than key change delay, current key
         // is the last_height - (distance + RANDOMX_KEY_CHANGING_HEIGHT) height,
         // while the last_height - distance height is the next key.
         if distance < RANDOMX_KEY_CHANGE_DELAY {
-            return (last - (distance + RANDOMX_KEY_CHANGING_HEIGHT), last - distance)
+            return (last - (distance + RANDOMX_KEY_CHANGING_HEIGHT), Some(last - distance))
         }
 
         // When distance is greater or equal to key change delay,
         // current key is the last_height - distance height and we
         // don't know the next key height.
         let current = last - distance;
-        (current, current)
+        (current, None)
     }
 
     #[test]
@@ -820,32 +820,32 @@ mod tests {
         // last < RANDOMX_KEY_CHANGING_HEIGHT(2048)
         let (current, next) = get_randomx_vm_keys_heights(2047);
         assert_eq!(current, 0);
-        assert_eq!(next, 0);
+        assert!(next.is_none());
 
         // last == RANDOMX_KEY_CHANGING_HEIGHT(2048)
         let (current, next) = get_randomx_vm_keys_heights(2048);
         assert_eq!(current, 0);
-        assert_eq!(next, 2048);
+        assert_eq!(next, Some(2048));
 
         // last > RANDOMX_KEY_CHANGING_HEIGHT(2048)
         // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) == 0
         let (current, next) = get_randomx_vm_keys_heights(4096);
         assert_eq!(current, 2048);
-        assert_eq!(next, 4096);
+        assert_eq!(next, Some(4096));
 
         // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) < RANDOMX_KEY_CHANGE_DELAY(64)
         let (current, next) = get_randomx_vm_keys_heights(4097);
         assert_eq!(current, 2048);
-        assert_eq!(next, 4096);
+        assert_eq!(next, Some(4096));
 
         // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) == RANDOMX_KEY_CHANGE_DELAY(64)
         let (current, next) = get_randomx_vm_keys_heights(4160);
         assert_eq!(current, 4096);
-        assert_eq!(next, 4096);
+        assert!(next.is_none());
 
         // last % RANDOMX_KEY_CHANGING_HEIGHT(2048) > RANDOMX_KEY_CHANGE_DELAY(64)
         let (current, next) = get_randomx_vm_keys_heights(4161);
         assert_eq!(current, 4096);
-        assert_eq!(next, 4096);
+        assert!(next.is_none());
     }
 }

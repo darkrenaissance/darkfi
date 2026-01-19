@@ -98,7 +98,7 @@ pub struct PoWModule {
     /// difficulties buffer last.
     pub cumulative_difficulty: BigUint,
     /// Native PoW RandomX VMs current and next keys pair
-    pub darkfi_rx_keys: (HeaderHash, HeaderHash),
+    pub darkfi_rx_keys: (HeaderHash, Option<HeaderHash>),
     /// RandomXFactory for native PoW (Arc from parent)
     pub darkfi_rx_factory: RandomXFactory,
     /// RandomXFactory for Monero PoW (Arc from parent)
@@ -305,7 +305,8 @@ impl PoWModule {
                 let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
                     header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
                 {
-                    &self.darkfi_rx_keys.1
+                    // Its safe to unwrap here since we know the key has been set
+                    &self.darkfi_rx_keys.1.unwrap()
                 } else {
                     &self.darkfi_rx_keys.0
                 };
@@ -372,13 +373,15 @@ impl PoWModule {
         if header.height.is_multiple_of(RANDOMX_KEY_CHANGING_HEIGHT) {
             let next_key = header.hash();
             let _ = self.darkfi_rx_factory.create(&next_key.inner()[..])?;
-            self.darkfi_rx_keys.1 = next_key;
+            self.darkfi_rx_keys.1 = Some(next_key);
             return Ok(())
         }
 
         // Check if need to rotate keys
         if header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY {
-            self.darkfi_rx_keys.0 = self.darkfi_rx_keys.1;
+            // Its safe to unwrap here since we know the key has been set
+            self.darkfi_rx_keys.0 = self.darkfi_rx_keys.1.unwrap();
+            self.darkfi_rx_keys.1 = None;
         }
 
         Ok(())
@@ -410,7 +413,8 @@ impl PoWModule {
         let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
             header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
         {
-            &self.darkfi_rx_keys.1
+            // Its safe to unwrap here since we know the key has been set
+            &self.darkfi_rx_keys.1.unwrap()
         } else {
             &self.darkfi_rx_keys.0
         };
