@@ -30,7 +30,12 @@ use darkfi::{
         encoding::base64,
         time::{NanoTimestamp, Timestamp},
     },
-    validator::{consensus::Fork, verification::apply_producer_transaction, ValidatorPtr},
+    validator::{
+        consensus::Fork,
+        pow::{RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
+        verification::apply_producer_transaction,
+        ValidatorPtr,
+    },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -256,6 +261,15 @@ pub async fn generate_next_block_template(
     // Grab forks' next block height
     let next_block_height = last_proposal.block.header.height + 1;
 
+    // Grab forks' RandomX keys for that height
+    let randomx_keys = if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
+        next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
+    {
+        (extended_fork.module.darkfi_rx_keys.1, extended_fork.module.darkfi_rx_keys.1)
+    } else {
+        extended_fork.module.darkfi_rx_keys
+    };
+
     // Grab forks' next mine target and difficulty
     let (target, difficulty) = extended_fork.module.next_mine_target_and_difficulty()?;
 
@@ -318,7 +332,7 @@ pub async fn generate_next_block_template(
 
     Ok(BlockTemplate::new(
         next_block,
-        extended_fork.module.darkfi_rx_keys,
+        randomx_keys,
         target,
         difficulty,
         block_signing_keypair.secret,
