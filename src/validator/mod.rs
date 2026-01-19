@@ -113,7 +113,8 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator::new", "Appending genesis block");
-            verify_genesis_block(&overlay, &config.genesis_block, config.pow_target).await?;
+            verify_genesis_block(&overlay, &[diff], &config.genesis_block, config.pow_target)
+                .await?;
         };
 
         // Write the changes to the actual chain db
@@ -763,7 +764,7 @@ impl Validator {
         overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Validate genesis block
-        verify_genesis_block(&overlay, &previous, pow_target).await?;
+        verify_genesis_block(&overlay, &[diff], &previous, pow_target).await?;
         info!(target: "validator::validate_blockchain", "Genesis block validated successfully!");
 
         // Write the changes to the in memory db

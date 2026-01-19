@@ -88,10 +88,10 @@ impl Harness {
         genesis_block.append_txs(vec![producer_tx]);
 
         // Compute genesis contracts states monotree root
-        let (_, vks) = vks::get_cached_pks_and_vks()?;
         let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db, &vks)?;
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        let (_, vks) = vks::get_cached_pks_and_vks()?;
+        vks::inject(&overlay, &vks)?;
         deploy_native_contracts(&overlay, config.pow_target).await?;
         let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
         genesis_block.header.state_root =
@@ -282,8 +282,12 @@ pub async fn generate_node(
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> Result<DarkfiNodePtr> {
     let sled_db = sled::Config::new().temporary(true).open()?;
-    vks::inject(&sled_db, vks)?;
-
+    let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+    vks::inject(&overlay, vks)?;
+    deploy_native_contracts(&overlay, config.pow_target).await?;
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+    overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
+    overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
     let validator = Validator::new(&sled_db, config).await?;
 
     let mut subscribers = HashMap::new();

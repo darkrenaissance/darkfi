@@ -252,12 +252,12 @@ fn darkfid_programmatic_control() -> Result<()> {
                 let producer_tx = genesis_block.txs.pop().unwrap();
                 genesis_block.append_txs(vec![producer_tx]);
                 let sled_db = sled_overlay::sled::Config::new().temporary(true).open().unwrap();
-                let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks().unwrap();
-                darkfi_contract_test_harness::vks::inject(&sled_db, &vks).unwrap();
                 let overlay = darkfi::blockchain::BlockchainOverlay::new(
                     &darkfi::blockchain::Blockchain::new(&sled_db).unwrap(),
                 )
                 .unwrap();
+                let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks().unwrap();
+                darkfi_contract_test_harness::vks::inject(&overlay, &vks).unwrap();
                 darkfi::validator::utils::deploy_native_contracts(&overlay, 20).await.unwrap();
                 let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]).unwrap();
                 genesis_block.header.state_root =

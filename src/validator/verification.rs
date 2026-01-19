@@ -54,6 +54,7 @@ use crate::{
 /// Verify given genesis [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_genesis_block(
     overlay: &BlockchainOverlayPtr,
+    diffs: &[SledDbOverlayStateDiff],
     block: &BlockInfo,
     block_target: u32,
 ) -> Result<()> {
@@ -116,7 +117,7 @@ pub async fn verify_genesis_block(
     }
 
     // Update the contracts states monotree and verify header contracts states root
-    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+    let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
     let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
         return Err(Error::ContractsStatesRootError(

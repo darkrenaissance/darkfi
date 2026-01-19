@@ -472,11 +472,11 @@ impl ContractStoreOverlay {
 
         // Iterate over diff caches to find all contracts updates
         let mut contracts_updates: BTreeMap<[u8; 32], ContractMonotreeUpdates> = BTreeMap::new();
-        for (state_key, state_cache) in &diff.caches {
+        for (state_key, (state_cache, _)) in &diff.caches {
             // Grab new/redeployed contracts wasm bincodes to include them
             // in their monotrees, excluding native ones.
             if state_key == SLED_BINCODE_TREE {
-                for (contract_id_bytes, (_, value)) in &state_cache.0.cache {
+                for (contract_id_bytes, (_, value)) in &state_cache.cache {
                     // Grab the actual contract ID bytes
                     let contract_id_bytes = deserialize(contract_id_bytes)?;
 
@@ -539,7 +539,7 @@ impl ContractStoreOverlay {
             // Handle the contract zkas tree
             if contract_id.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME) == state_key {
                 // Grab the new/updated keys
-                for (key, (_, value)) in &state_cache.0.cache {
+                for (key, (_, value)) in &state_cache.cache {
                     // Prefix key with its tree name
                     let mut hasher = blake3::Hasher::new();
                     hasher.update(&state_key);
@@ -558,7 +558,7 @@ impl ContractStoreOverlay {
             }
 
             // Grab the new/updated keys
-            for (key, (_, value)) in &state_cache.0.cache {
+            for (key, (_, value)) in &state_cache.cache {
                 // Prefix key with its tree name
                 let mut hasher = blake3::Hasher::new();
                 hasher.update(&state_key);
@@ -569,7 +569,7 @@ impl ContractStoreOverlay {
             }
 
             // Grab the dropped keys
-            for key in state_cache.0.removed.keys() {
+            for key in state_cache.removed.keys() {
                 // Prefix key with its tree name
                 let mut hasher = blake3::Hasher::new();
                 hasher.update(&state_key);
@@ -635,6 +635,8 @@ impl ContractStoreOverlay {
 
         // Insert new/updated contracts monotrees roots
         for (contract_id_bytes, contract_monotree_root) in &contracts_roots {
+            let contract_id: ContractId = deserialize(contract_id_bytes)?;
+            debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Inserting key {contract_id} with value: {}", blake3::Hash::from(*contract_monotree_root));
             monotree_root = monotree.insert(
                 monotree_root.as_ref(),
                 contract_id_bytes,

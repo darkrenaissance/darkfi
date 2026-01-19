@@ -24,6 +24,7 @@ use std::{
 };
 
 use darkfi::{
+    blockchain::BlockchainOverlayPtr,
     zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -44,13 +45,12 @@ use darkfi_sdk::crypto::contract_id::{
 };
 use darkfi_serial::{deserialize, serialize};
 
-use sled_overlay::sled;
 use tracing::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "46a30a57bd14b6bc5851bbde8b011ba2e12765bba7901c5e42f511bdb68b3255";
-const VKS_HASH: &str = "4e6f5326b3acc7fd4f6525914be8076276b16c5601940d034de0617c94b1170f";
+const PKS_HASH: &str = "35ce1debf6ab12d1ec6db2b8c0c2a8a9b1fd25c2ff15c1258548923ce00f781f";
+const VKS_HASH: &str = "415cb6ae64917b4dac078ac47d49408549799b71a39603d5fa4d3e6934eeece9";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -177,15 +177,20 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
     Ok((pks, vks))
 }
 
-/// Inject cached VKs into a given blockchain database reference
-pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
+/// Inject cached VKs into a given blockchain database overlay
+/// reference.
+pub fn inject(overlay: &BlockchainOverlayPtr, vks: &Vks) -> Result<()> {
+    // Grab a lock over the blockchain overlay
+    let lock = overlay.lock().unwrap();
+    let mut overlay = lock.overlay.lock().unwrap();
+
     // Derive the database names for the specific contracts
     let money_db_name = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
     let dao_db_name = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
 
-    // Create the db trees
-    let money_tree = sled_db.open_tree(money_db_name)?;
-    let dao_tree = sled_db.open_tree(dao_db_name)?;
+    // Ensure they are open in the overlay
+    overlay.open_tree(&money_db_name, false)?;
+    overlay.open_tree(&dao_db_name, false)?;
 
     for (bincode, namespace, vk) in vks.iter() {
         match namespace.as_str() {
@@ -197,7 +202,7 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
-                money_tree.insert(key, value)?;
+                overlay.insert(&money_db_name, &key, &value)?;
             }
 
             // DAO contract circuits
@@ -212,7 +217,7 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_ENC_COIN_NS => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
-                dao_tree.insert(key, value)?;
+                overlay.insert(&dao_db_name, &key, &value)?;
             }
 
             x => panic!("Found unhandled zkas namespace {x}"),

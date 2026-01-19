@@ -135,12 +135,12 @@ fn main() -> Result<()> {
 
                 // Initialize a temporary sled database
                 let sled_db = sled::Config::new().temporary(true).open()?;
-                let (_, vks) = vks::get_cached_pks_and_vks()?;
-                vks::inject(&sled_db, &vks)?;
 
                 // Create an overlay over whole blockchain
                 let blockchain = Blockchain::new(&sled_db)?;
                 let overlay = BlockchainOverlay::new(&blockchain)?;
+                let (_, vks) = vks::get_cached_pks_and_vks()?;
+                vks::inject(&overlay, &vks)?;
                 deploy_native_contracts(&overlay, 0).await?;
 
                 // Grab genesis transactions from folder
@@ -187,15 +187,20 @@ fn main() -> Result<()> {
 
                 // Initialize a temporary sled database
                 let sled_db = sled::Config::new().temporary(true).open()?;
-                let (_, vks) = vks::get_cached_pks_and_vks()?;
-                vks::inject(&sled_db, &vks)?;
 
                 // Create an overlay over whole blockchain
                 let blockchain = Blockchain::new(&sled_db)?;
                 let overlay = BlockchainOverlay::new(&blockchain)?;
+                let (_, vks) = vks::get_cached_pks_and_vks()?;
+                vks::inject(&overlay, &vks)?;
                 deploy_native_contracts(&overlay, 0).await?;
 
-                verify_genesis_block(&overlay, &genesis_block, 0).await?;
+                // Update the contracts states monotree
+                let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
+                overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
+
+                // Validate genesis block
+                verify_genesis_block(&overlay, &[diff], &genesis_block, 0).await?;
 
                 println!("Genesis block {hash} verified successfully!");
             }

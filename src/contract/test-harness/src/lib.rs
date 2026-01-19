@@ -164,7 +164,9 @@ impl Wallet {
         let sled_db = sled::Config::new().temporary(true).open()?;
 
         // Inject the cached VKs into the database
-        vks::inject(&sled_db, vks)?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        vks::inject(&overlay, vks)?;
+        overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Create the `Validator` instance
         let validator_config = ValidatorConfig {
@@ -274,8 +276,8 @@ impl TestHarness {
 
         // Compute genesis contracts states monotree root
         let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db, &vks)?;
         let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        vks::inject(&overlay, &vks)?;
         deploy_native_contracts(&overlay, 90).await?;
         let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
         genesis_block.header.state_root =
