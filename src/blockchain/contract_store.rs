@@ -536,6 +536,27 @@ impl ContractStoreOverlay {
                 None => ContractMonotreeUpdates::new(monotree_pointer),
             };
 
+            // Handle the contract zkas tree
+            if contract_id.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME) == state_key {
+                // Grab the new/updated keys
+                for (key, (_, value)) in &state_cache.0.cache {
+                    // Prefix key with its tree name
+                    let mut hasher = blake3::Hasher::new();
+                    hasher.update(&state_key);
+                    hasher.update(key);
+                    let key = hasher.finalize();
+
+                    // Exclude its verifying key from the value
+                    let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(value)?;
+                    let value = blake3::hash(&zkbin);
+                    contract_updates.inserts.push((key, value));
+                }
+
+                // Insert the update record
+                contracts_updates.insert(contract_id_bytes, contract_updates);
+                continue
+            }
+
             // Grab the new/updated keys
             for (key, (_, value)) in &state_cache.0.cache {
                 // Prefix key with its tree name
