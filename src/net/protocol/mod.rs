@@ -71,6 +71,15 @@ pub use protocol_address::ProtocolAddress;
 pub mod protocol_seed;
 pub use protocol_seed::ProtocolSeed;
 
+/// NAT Hole Punching Protocol (QUIC-only)
+///
+/// This protocol enables direct connections between peers behind NATs by
+/// using existing connected peers as signaling relays. It is restricted to
+/// QUIC because QUIC's single-socket design allows the dialer and listener
+/// to share the same port, which is essential for NAT traversal.
+pub mod protocol_holepunch;
+pub use protocol_holepunch::ProtocolHolepunch;
+
 /// Generic protocol to receive specified structure messages.
 ///
 /// Acts as a simple message queue, where we listen for the specified
