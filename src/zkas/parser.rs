@@ -467,7 +467,7 @@ impl Parser {
     }
 
     /// Parse a typed section (constant or witness) into an IndexMap.
-    /// Both sections have the same structure: pairs of '<Type> <n>' separated by commas.
+    /// Both sections have the same structure: pairs of `<Type> <n>` separated by commas.
     fn parse_typed_section(
         &self,
         section_name: &str,
