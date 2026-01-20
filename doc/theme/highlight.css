@@ -5,7 +5,7 @@
 /* Comment - Dark Green */
 .hljs-comment,
 .hljs-quote {
-  color: #3a5a3f;
+  color: var(--hljs-comment-color);
 }
 
 /* Variables/Attributes - Cyan */
@@ -17,7 +17,7 @@
 .hljs-link,
 .hljs-selector-id,
 .hljs-selector-class {
-  color: #00ffff;
+  color: var(--hljs-variable-color);
 }
 
 /* Numbers/Literals - Hot Pink */
@@ -27,33 +27,33 @@
 .hljs-literal,
 .hljs-type,
 .hljs-params {
-  color: #8af0b1;
+  color: var(--hljs-number-color);
 }
 
 /* Strings - Spring Green */
 .hljs-string,
 .hljs-symbol,
 .hljs-bullet {
-  color: #fdaef0;
+  color: var(--hljs-string-color);
 }
 
 /* Titles - Deep Pink */
 .hljs-title,
 .hljs-built_in,
 .hljs-section {
-  color: #7acff7;
+  color: var(--hljs-title-color);
 }
 
 /* Keywords - Dark Cyan */
 .hljs-keyword,
 .hljs-selector-tag {
-  color: #00ced1;
+  color: var(--hljs-keyword-color);
 }
 
 /* Name - Light Red */
 .hljs-name,
 .hljs-tag {
-  color: #ff6b6b;
+  color: var(--hljs-name-color);
 }
 
 .hljs {
@@ -80,12 +80,12 @@ p .hljs {
 
 /* Additions - Green */
 .hljs-addition {
-  color: #00ff7f;
-  background-color: #081a0f;
+  color: var(--hljs-addition-color);
+  background-color: var(--hljs-addition-bg);
 }
 
 /* Deletions - Crimson */
 .hljs-deletion {
-  color: #dc143c;
-  background-color: #1a0f10;
+  color: var(--hljs-deletion-color);
+  background-color: var(--hljs-deletion-bg);
 }

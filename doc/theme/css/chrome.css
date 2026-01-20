@@ -526,9 +526,20 @@ html:not(.sidebar-resizing) .sidebar {
 }
 .sidebar code {
     line-height: 2em;
-    color: var(--inline-code-color);
-    background-color: var(--hljs-inline-bg);
-    border: 1px solid var(--hljs-inline-border);
+    color: var(--sidebar-code-fg);
+    background-color: var(--sidebar-code-bg);
+    border: 1px solid var(--sidebar-code-border);
+    font-family: var(--menu-number-font), monospace !important;
+}
+.sidebar a:hover code,
+.sidebar code:hover {
+    color: var(--sidebar-active);
+    border-color: var(--sidebar-active);
+}
+.sidebar a.active code,
+.sidebar a.current-header code {
+    color: var(--sidebar-active);
+    border-color: var(--sidebar-active);
 }
 .sidebar .sidebar-scrollbox {
     overflow-y: auto;

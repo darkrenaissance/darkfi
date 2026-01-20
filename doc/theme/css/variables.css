@@ -13,6 +13,9 @@
     --code-font-size: 0.875em; /* please adjust the ace font size accordingly in editor.js */
     --searchbar-margin-block-start: 5px;
     --menu-number-font: "IosevkaCustomLight", monospace;
+    --sidebar-code-bg: var(--hljs-inline-bg);
+    --sidebar-code-border: var(--hljs-inline-border);
+    --sidebar-code-fg: var(--inline-code-color);
 
     /* Header border colors */
     --h1-border-color: #00ffff;
@@ -23,6 +26,18 @@
 
     /* Code background */
     --code-bg: #f0f0f0;
+
+    --hljs-comment-color: #3a5a3f;
+    --hljs-variable-color: #00ffff;
+    --hljs-number-color: #8af0b1;
+    --hljs-string-color: #fdaef0;
+    --hljs-title-color: #7acff7;
+    --hljs-keyword-color: #00ced1;
+    --hljs-name-color: #ff6b6b;
+    --hljs-addition-color: #00ff7f;
+    --hljs-addition-bg: #081a0f;
+    --hljs-deletion-color: #dc143c;
+    --hljs-deletion-bg: #1a0f10;
 }
 
 /* Themes */
@@ -229,6 +244,18 @@
     --hljs-inline-bg: #f0f0f0;
     --hljs-inline-border: #d0d0d0;
     --hljs-fg: #000000;
+
+    --hljs-comment-color: #6a9955;
+    --hljs-variable-color: #001080;
+    --hljs-number-color: #098658;
+    --hljs-string-color: #a31515;
+    --hljs-title-color: #0000ff;
+    --hljs-keyword-color: #0000ff;
+    --hljs-name-color: #9cdcfe;
+    --hljs-addition-color: #008000;
+    --hljs-addition-bg: #e6ffed;
+    --hljs-deletion-color: #c00;
+    --hljs-deletion-bg: #ffeef0;
 }
 
 .navy {
@@ -316,7 +343,7 @@
 
     --links: #2b79a2;
 
-    --inline-code-color: #6e6b5e;
+    --inline-code-color: #4a4743;
 
     --theme-popup-bg: #e1e1db;
     --theme-popup-border: #b38f6b;
@@ -363,6 +390,21 @@
     --hljs-inline-bg: #e0dcd7;
     --hljs-inline-border: #c0b8b0;
     --hljs-fg: #262625;
+
+    --hljs-comment-color: #6e6e50;
+    --hljs-variable-color: #043863;
+    --hljs-number-color: #2e5c1e;
+    --hljs-string-color: #8f2626;
+    --hljs-title-color: #1e4a8f;
+    --hljs-keyword-color: #2e5c1e;
+    --hljs-name-color: #4b69c6;
+    --hljs-addition-color: #2e5c1e;
+    --hljs-addition-bg: #d8e8d0;
+    --hljs-deletion-color: #8f2626;
+    --hljs-deletion-bg: #f0d8d8;
+
+    --sidebar-code-fg: #4a4743;
+    --sidebar-code-border: #4a4743;
 }
 
 .darkforest {
@@ -454,6 +496,10 @@
     --hljs-inline-bg: #0d1414;
     --hljs-inline-border: #41121c;
     --hljs-fg: #e0e0e0;
+
+    --sidebar-code-bg: transparent;
+    --sidebar-code-border: #5a5a66;
+    --sidebar-code-fg: #dbdcf1;
 
 }
 
