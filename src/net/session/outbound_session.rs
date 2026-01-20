@@ -293,13 +293,13 @@ impl Slot {
         // If we only have grey entries, select from the greylist. Otherwise,
         // use the preference defined in settings.
         let addrs = if grey_only && !preference_strict {
-            container.fetch_with_schemes(HostColor::Grey as usize, &transports, None)
+            container.fetch_with_schemes(HostColor::Grey, &transports, None)
         } else if slot < gold_count {
-            container.fetch_with_schemes(HostColor::Gold as usize, &transports, None)
+            container.fetch_with_schemes(HostColor::Gold, &transports, None)
         } else if slot < white_count {
-            container.fetch_with_schemes(HostColor::White as usize, &transports, None)
+            container.fetch_with_schemes(HostColor::White, &transports, None)
         } else {
-            container.fetch_with_schemes(HostColor::Grey as usize, &transports, None)
+            container.fetch_with_schemes(HostColor::Grey, &transports, None)
         };
 
         hosts.check_addrs(addrs).await

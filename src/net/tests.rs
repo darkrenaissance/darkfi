@@ -204,11 +204,11 @@ async fn get_random_gold_host(
     info!("Getting gold addr from node={external_addr}");
     info!("========================================================");
 
-    let list = hosts.container.hostlists[HostColor::Gold as usize].read().unwrap();
+    let list = hosts.container.fetch_all(HostColor::Gold);
     assert!(!list.is_empty());
     let position = rand::thread_rng().gen_range(0..list.len());
-    let entry = &list[position];
-    (entry.clone(), position)
+    let entry = list[position].clone();
+    (entry, position)
 }
 
 async fn _check_random_hostlist(outbound_instances: &[Arc<P2p>], rng: &mut ThreadRng) {
@@ -444,10 +444,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ===========================================================
     // 7. Verify the peer has been removed from the Gold list.
     // ===========================================================
-    outbound_instances[random_node_index]
-        .hosts()
-        .container
-        .contains(HostColor::Grey as usize, &addr);
+    outbound_instances[random_node_index].hosts().container.contains(HostColor::Grey, &addr);
     info!("========================================================");
     info!("Greylist downgrade occured successfully!");
     info!("========================================================");

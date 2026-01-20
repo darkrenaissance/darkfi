@@ -44,7 +44,7 @@ use super::super::p2p::{P2p, P2pPtr};
 use crate::{
     net::{
         connector::Connector,
-        hosts::{HostColor, HostState},
+        hosts::HostColor,
         protocol::ProtocolVersion,
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
@@ -236,6 +236,10 @@ impl GreylistRefinery {
 
             sleep(greylist_refinery_interval).await;
 
+            // Prune stale entries from the host registry to prevent unbounded growth.
+            // Entries in Free state for longer than REGISTRY_PRUNE_AGE_SECS are removed.
+            hosts.prune_registry();
+
             if hosts.container.is_empty(HostColor::Grey) {
                 debug!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
@@ -247,8 +251,7 @@ impl GreylistRefinery {
             // limit.
             let offline_limit = Duration::from_secs(time_with_no_connections);
 
-            let offline_timer =
-                { Instant::now().duration_since(*hosts.last_connection.lock().unwrap()) };
+            let offline_timer = { Instant::now().duration_since(*hosts.last_connection.lock()) };
 
             if !self.p2p().is_connected() && offline_timer >= offline_limit {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
@@ -270,17 +273,14 @@ impl GreylistRefinery {
 
             // Only attempt to refine peers that match our transports.
             match hosts.container.fetch_random_with_schemes(HostColor::Grey, &active_profiles) {
-                Some((entry, _)) => {
-                    let url = &entry.0;
-
-                    if let Err(e) = hosts.try_register(url.clone(), HostState::Refine) {
-                        debug!(target: "net::refinery", "Unable to refine addr={}, err={e}",
-                               url.clone());
+                Some((url, _last_seen)) => {
+                    if !hosts.refinable(&url) {
+                        debug!(target: "net::refinery", "Unable to refine addr={}", url);
                         continue
                     }
 
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
-                        hosts.container.remove_if_exists(HostColor::Grey, url);
+                        hosts.container.remove(HostColor::Grey, &url);
 
                         debug!(
                             target: "net::refinery",
@@ -288,7 +288,7 @@ impl GreylistRefinery {
                         );
 
                         // Free up this addr for future operations.
-                        if let Err(e) = hosts.unregister(url) {
+                        if let Err(e) = hosts.unregister(&url) {
                             warn!(target: "net::refinery", "Error while unregistering addr={url}, err={e}");
                         }
 
@@ -300,7 +300,7 @@ impl GreylistRefinery {
                     );
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    hosts.whitelist_host(url, last_seen).await.unwrap();
+                    hosts.whitelist_host(&url, last_seen).await.unwrap();
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
 

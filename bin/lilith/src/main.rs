@@ -199,7 +199,7 @@ impl Lilith {
                     let url = &entry.0;
                     let last_seen = &entry.1;
 
-                    if !hosts.refinable(url.clone()) {
+                    if !hosts.refinable(url) {
                         debug!(target: "net::refinery::whitelist_refinery", "Addr={} not available!",
                        url.clone());
 

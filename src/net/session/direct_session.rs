@@ -561,13 +561,13 @@ impl PeerDiscovery {
                 });
 
                 for color in [HostColor::Gold, HostColor::White, HostColor::Grey].iter() {
-                    if let Some((entry, _)) = self
+                    if let Some((url, _last_seen)) = self
                         .p2p()
                         .hosts()
                         .container
-                        .fetch_random_with_schemes(color.clone(), &active_profiles)
+                        .fetch_random_with_schemes(*color, &active_profiles)
                     {
-                        channel = self.p2p().session_direct().get_channel(&entry.0).await.ok();
+                        channel = self.p2p().session_direct().get_channel(&url).await.ok();
                         break;
                     }
                 }

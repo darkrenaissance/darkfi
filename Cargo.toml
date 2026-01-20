@@ -48,6 +48,7 @@ members = [
 libc = "0.2.178"
 thiserror = "2.0.17"
 tracing = "0.1.44"
+parking_lot = "0.12.5"
 
 # async-runtime
 async-trait = {version = "0.1.89", optional = true}

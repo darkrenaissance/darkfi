@@ -145,7 +145,7 @@ impl Acceptor {
             match listener.next().await {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
-                    if hosts.container.contains(HostColor::Black as usize, &url) ||
+                    if hosts.container.contains(HostColor::Black, &url) ||
                         hosts.block_all_ports(&url)
                     {
                         warn!(target: "net::acceptor::run_accept_loop", "Peer {url} is blacklisted");

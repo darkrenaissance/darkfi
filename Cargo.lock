@@ -1810,6 +1810,7 @@ dependencies = [
  "monero",
  "nu-ansi-term",
  "num-bigint",
+ "parking_lot 0.12.5",
  "pin-project-lite",
  "plotters",
  "prettytable-rs",

@@ -155,7 +155,7 @@ impl ProtocolAddress {
             let mut addrs = self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::Gold,
                 &requested_transports,
-                get_addrs_msg.max,
+                get_addrs_msg.max as usize,
             );
 
             // Then we grab address with the requested transports from the whitelist
@@ -164,7 +164,7 @@ impl ProtocolAddress {
             addrs.append(&mut self.hosts.container.fetch_n_random_with_schemes(
                 HostColor::White,
                 &requested_transports,
-                get_addrs_msg.max,
+                get_addrs_msg.max as usize,
             ));
 
             // Next we grab addresses without the requested transports
@@ -173,7 +173,7 @@ impl ProtocolAddress {
             // Then we grab address without the requested transports from the gold list
             debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching gold entries without schemes");
-            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
                 HostColor::Gold,
                 &requested_transports,
@@ -183,7 +183,7 @@ impl ProtocolAddress {
             // Then we grab address without the requested transports from the white list
             debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching white entries without schemes");
-            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
             addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
                 HostColor::White,
                 &requested_transports,
@@ -199,7 +199,7 @@ impl ProtocolAddress {
 
             debug!(target: "net::protocol_address::handle_receive_get_addrs",
             "Fetching dark entries");
-            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
             addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain));
 
             // Filter out transports not meant to be shared like Socks5 and Socks5+tls
