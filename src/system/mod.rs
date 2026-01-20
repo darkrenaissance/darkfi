@@ -37,9 +37,6 @@ pub use publisher::{Publisher, PublisherPtr, Subscription};
 pub mod timeout;
 pub use timeout::io_timeout;
 
-/// Thread priority setting
-pub mod thread_priority;
-
 pub type ExecutorPtr = Arc<Executor<'static>>;
 
 /// Sleep for any number of seconds.
