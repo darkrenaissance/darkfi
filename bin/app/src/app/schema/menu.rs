@@ -68,8 +68,8 @@ mod ui_consts {
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
     pub const MENU_SEP_SIZE: f32 = 1.;
-    pub const VERBLOCK_SCALE: f32 = 25.;
-    pub const VERBLOCK_X: f32 = 50.;
+    pub const VERBLOCK_SCALE: f32 = 80.;
+    pub const VERBLOCK_X: f32 = 110.;
     pub const VERBLOCK_Y: f32 = 50.;
 }
 
@@ -410,7 +410,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let shape = shape::create_version_block([1., 0., 0.25, 1.]).scaled(VERBLOCK_SCALE);
+    node.set_property_f32(atom, Role::App, "scale", VERBLOCK_SCALE).unwrap();
+    let shape = shape::create_version_block([1., 0., 0.25, 1.]);
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     layer_node.link(node);
 }
