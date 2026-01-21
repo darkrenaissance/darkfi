@@ -19,15 +19,16 @@
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::CondVar;
-use darkfi_serial::serialize;
+use darkfi_serial::{serialize, Decodable};
 use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
+    io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Weak,
     },
 };
 
@@ -38,7 +39,7 @@ use crate::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
         PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text, ExecutorPtr,
 };
 
@@ -48,6 +49,12 @@ const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ItemStatus {
+    Active,
+    Alert,
+}
 
 #[derive(Clone)]
 struct TouchInfo {
@@ -109,6 +116,8 @@ pub struct Menu {
     bg_color: PropertyColor,
     sep_size: PropertyFloat32,
     sep_color: PropertyColor,
+    active_color: PropertyColor,
+    alert_color: PropertyColor,
     window_scale: PropertyFloat32,
 
     mouse_pos: SyncMutex<Point>,
@@ -119,6 +128,7 @@ pub struct Menu {
     speed: AtomicF32,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
+    item_states: SyncMutex<HashMap<String, ItemStatus>>,
 }
 
 impl Menu {
@@ -140,6 +150,8 @@ impl Menu {
         let bg_color = PropertyColor::wrap(node_ref, Role::Internal, "bg_color").unwrap();
         let sep_size = PropertyFloat32::wrap(node_ref, Role::Internal, "sep_size", 0).unwrap();
         let sep_color = PropertyColor::wrap(node_ref, Role::Internal, "sep_color").unwrap();
+        let active_color = PropertyColor::wrap(node_ref, Role::Internal, "active_color").unwrap();
+        let alert_color = PropertyColor::wrap(node_ref, Role::Internal, "alert_color").unwrap();
 
         let scroll_start_accel =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
@@ -166,6 +178,8 @@ impl Menu {
             bg_color,
             sep_size,
             sep_color,
+            active_color,
+            alert_color,
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
@@ -174,6 +188,7 @@ impl Menu {
             motion_cv,
             speed: AtomicF32::new(0.),
             parent_rect: SyncMutex::new(None),
+            item_states: SyncMutex::new(HashMap::new()),
         });
 
         Pimpl::Menu(self_)
@@ -205,6 +220,9 @@ impl Menu {
     async fn handle_selection(&self, item_idx: usize) {
         if item_idx < self.items.get_len() {
             let item_name = self.items.get_str(item_idx).unwrap();
+
+            self.item_states.lock().remove(&item_name);
+
             let node = self.node.upgrade().unwrap();
             let data = serialize(&item_name);
             node.trigger("select", data).await.unwrap();
@@ -227,6 +245,8 @@ impl Menu {
         let padding_x = self.padding.get_f32(0).unwrap();
         let padding_y = self.padding.get_f32(1).unwrap();
         let text_color = self.text_color.get();
+        let active_color = self.active_color.get();
+        let alert_color = self.alert_color.get();
         let bg_color = self.bg_color.get();
         let sep_size = self.sep_size.get();
         let sep_color = self.sep_color.get();
@@ -248,13 +268,21 @@ impl Menu {
         sep_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
         let sep_mesh = sep_mesh.alloc(&self.renderer).draw_untextured();
 
+        let item_states = self.item_states.lock();
+
         for idx in 0..num_items {
             let item_text = self.items.get_str(idx).unwrap();
+
+            let color = match item_states.get(&item_text) {
+                Some(ItemStatus::Active) => active_color,
+                Some(ItemStatus::Alert) => alert_color,
+                _ => text_color,
+            };
 
             // Draw text
             let layout = text::make_layout(
                 &item_text,
-                text_color,
+                color,
                 font_size,
                 1.0,
                 window_scale,
@@ -302,12 +330,9 @@ impl Menu {
         })
     }
 
-    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
+    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
         let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
-
-        let atom = &mut batch.spawn();
         let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else { return };
-
         self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
     }
 
@@ -385,6 +410,72 @@ impl Menu {
             }
         }
     }
+
+    async fn process_mark_active_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        d!("method called: mark_active({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        fn decode_data(data: &[u8]) -> std::io::Result<String> {
+            use std::io::Cursor;
+            let mut cur = Cursor::new(&data);
+            let item_name = String::decode(&mut cur)?;
+            Ok(item_name)
+        }
+
+        let Ok(item_name) = decode_data(&method_call.data) else {
+            d!("mark_active() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            d!("Self destroyed");
+            return true
+        };
+
+        self_.item_states.lock().insert(item_name, ItemStatus::Active);
+        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::mark_active"));
+        self_.redraw(atom);
+
+        true
+    }
+
+    async fn process_mark_alert_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        d!("method called: mark_alert({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        fn decode_data(data: &[u8]) -> std::io::Result<String> {
+            use std::io::Cursor;
+            let mut cur = Cursor::new(&data);
+            let item_name = String::decode(&mut cur)?;
+            Ok(item_name)
+        }
+
+        let Ok(item_name) = decode_data(&method_call.data) else {
+            d!("mark_alert() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            d!("Self destroyed");
+            return true
+        };
+
+        self_.item_states.lock().insert(item_name, ItemStatus::Alert);
+        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::mark_alert"));
+        self_.redraw(atom);
+
+        true
+    }
 }
 
 #[async_trait]
@@ -395,6 +486,7 @@ impl UIObject for Menu {
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
+        let node_ref = &self.node.upgrade().unwrap();
 
         let me2 = me.clone();
         let cv = self.motion_cv.clone();
@@ -409,18 +501,37 @@ impl UIObject for Menu {
             }
         });
 
+        let method_sub = node_ref.subscribe_method_call("mark_active").unwrap();
+        let me2 = me.clone();
+        let mark_active_task =
+            ex.spawn(
+                async move { while Self::process_mark_active_method(&me2, &method_sub).await {} },
+            );
+
+        let method_sub = node_ref.subscribe_method_call("mark_alert").unwrap();
+        let me2 = me.clone();
+        let mark_alert_task =
+            ex.spawn(
+                async move { while Self::process_mark_alert_method(&me2, &method_sub).await {} },
+            );
+
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
-        on_modify.when_change(self.items.clone(), Self::redraw);
-        on_modify.when_change(self.rect.prop(), Self::redraw);
-        on_modify.when_change(self.font_size.prop(), Self::redraw);
-        on_modify.when_change(self.padding.clone(), Self::redraw);
-        on_modify.when_change(self.text_color.prop(), Self::redraw);
-        on_modify.when_change(self.bg_color.prop(), Self::redraw);
-        on_modify.when_change(self.sep_size.prop(), Self::redraw);
-        on_modify.when_change(self.sep_color.prop(), Self::redraw);
+        async fn redraw(self_: Arc<Menu>, batch: BatchGuardPtr) {
+            let atom = &mut batch.spawn();
+            self_.redraw(atom);
+        }
 
-        let mut tasks = vec![motion_task];
+        on_modify.when_change(self.items.clone(), redraw);
+        on_modify.when_change(self.rect.prop(), redraw);
+        on_modify.when_change(self.font_size.prop(), redraw);
+        on_modify.when_change(self.padding.clone(), redraw);
+        on_modify.when_change(self.text_color.prop(), redraw);
+        on_modify.when_change(self.bg_color.prop(), redraw);
+        on_modify.when_change(self.sep_size.prop(), redraw);
+        on_modify.when_change(self.sep_color.prop(), redraw);
+
+        let mut tasks = vec![motion_task, mark_active_task, mark_alert_task];
         tasks.append(&mut on_modify.tasks);
         *self.tasks.lock() = tasks;
     }

@@ -199,6 +199,18 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
+    let prop = node.get_property("active_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let prop = node.get_property("alert_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
     let prop = node.get_property("sep_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.4).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
@@ -237,7 +249,6 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             info!(target: "app::menu", "clicked: {channel}!");
             chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             menu_is_visible.set(atom, false);
-            //set_normal_color(atom);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

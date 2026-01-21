@@ -649,6 +649,20 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("active_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Active Color", "Active item text color");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![1., 1., 1., 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("alert_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Alert Color", "Alert item text color");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![1., 0.3, 0.3, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
     let mut prop =
         Property::new("scroll_start_accel", PropertyType::Float32, PropertySubType::Null);
     prop.set_ui_text("Scroll Start Acceleration", "Multiplier for initial scroll velocity");
@@ -672,6 +686,12 @@ pub fn create_menu(name: &str) -> SceneNode {
         vec![("item", "Selected item name", CallArgType::Str)],
     )
     .unwrap();
+
+    node.add_method("mark_active", vec![("item_name", "Item name", CallArgType::Str)], None)
+        .unwrap();
+
+    node.add_method("mark_alert", vec![("item_name", "Item name", CallArgType::Str)], None)
+        .unwrap();
 
     node
 }
