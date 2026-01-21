@@ -228,13 +228,15 @@ async fn handle_unknown_proposal(
     false
 }
 
-/// Auxiliary function to handle a potential reorg.
-/// We first find our last common block with the peer,
-/// then grab the header sequence from that block until
-/// the proposal and check if it ranks higher than our
+/// Auxiliary function to handle a potential reorg. We first find our
+/// last common block with the peer, then grab the header sequence from
+/// that block until the proposal and check if it ranks higher than our
 /// current best ranking fork, to perform a reorg.
-/// Returns a boolean flag indicate if we should ban the
-/// channel.
+///
+/// Returns a boolean flag indicate if we should ban the channel.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 async fn handle_reorg(
     validator: &ValidatorPtr,
     p2p: &P2pPtr,
@@ -501,7 +503,6 @@ async fn handle_reorg(
         Ok(i) => i,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Retrieving state inverse diffs failed: {e}");
-            peer_fork.purge_new_trees();
             return false
         }
     };
@@ -510,7 +511,6 @@ async fn handle_reorg(
             peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)
         {
             error!(target: "darkfid::task::handle_reorg", "Applying inverse diff failed: {e}");
-            peer_fork.purge_new_trees();
             return false
         }
     }
@@ -522,7 +522,6 @@ async fn handle_reorg(
         Ok(d) => d,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Generate full inverse diff failed: {e}");
-            peer_fork.purge_new_trees();
             return false
         }
     };
@@ -545,7 +544,6 @@ async fn handle_reorg(
         let request = ForkProposalsRequest { headers: batch.clone(), fork_header: proposal.hash };
         if let Err(e) = channel.send(&request).await {
             debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            peer_fork.purge_new_trees();
             return true
         };
 
@@ -557,7 +555,6 @@ async fn handle_reorg(
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for proposals sequence failed: {e}");
-                peer_fork.purge_new_trees();
                 return true
             }
         };
@@ -566,7 +563,6 @@ async fn handle_reorg(
         // Response sequence must be the same length as the one requested
         if response.proposals.len() != batch.len() {
             debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different proposals sequence length");
-            peer_fork.purge_new_trees();
             return true
         }
 
@@ -577,7 +573,6 @@ async fn handle_reorg(
             // Validate its the proposal we requested
             if peer_proposal.hash != batch[peer_proposal_index] {
                 error!(target: "darkfid::task::handle_reorg", "Peer responded with a differend proposal: {} - {}", batch[peer_proposal_index], peer_proposal.hash);
-                peer_fork.purge_new_trees();
                 return true
             }
 
@@ -592,7 +587,6 @@ async fn handle_reorg(
             // Append proposal
             if let Err(e) = peer_fork.append_proposal(peer_proposal).await {
                 error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-                peer_fork.purge_new_trees();
                 return true
             }
         }
@@ -613,7 +607,6 @@ async fn handle_reorg(
     // Append trigger proposal
     if let Err(e) = peer_fork.append_proposal(proposal).await {
         error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-        peer_fork.purge_new_trees();
         return true
     }
 
@@ -623,7 +616,6 @@ async fn handle_reorg(
         Ok(i) => i,
         Err(e) => {
             debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
-            peer_fork.purge_new_trees();
             return false
         }
     };
@@ -633,7 +625,6 @@ async fn handle_reorg(
             peer_fork.hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer fork ranks lower than our current best fork, skipping...");
-        peer_fork.purge_new_trees();
         drop(forks);
         return true
     }
@@ -650,7 +641,6 @@ async fn handle_reorg(
         .apply_diff(&peer_fork.diffs.remove(0))
     {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
-        peer_fork.purge_new_trees();
         return false
     };
     *validator.consensus.module.write().await = module;

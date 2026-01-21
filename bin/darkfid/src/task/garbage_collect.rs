@@ -26,6 +26,11 @@ use crate::DarkfiNodePtr;
 pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
     info!(target: "darkfid::task::garbage_collect_task", "Starting garbage collection task...");
 
+    // Purge all unreferenced contract trees from the database
+    if let Err(e) = node.validator.consensus.purge_unreferenced_trees().await {
+        error!(target: "darkfid::task::garbage_collect_task", "Purging unreferenced contract trees from the database failed: {e}");
+    }
+
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let (mut last_checked, mut txs) =
@@ -39,6 +44,12 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 return Ok(())
             }
         };
+
+    // Check if we have transactions to process
+    if txs.is_empty() {
+        info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
+        return Ok(())
+    }
 
     while !txs.is_empty() {
         // Verify each one against current forks
@@ -156,6 +167,11 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 break
             }
         };
+    }
+
+    // Purge all unreferenced contract trees from the database again
+    if let Err(e) = node.validator.consensus.purge_unreferenced_trees().await {
+        error!(target: "darkfid::task::garbage_collect_task", "Purging unreferenced contract trees from the database failed: {e}");
     }
 
     info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");

@@ -140,10 +140,13 @@ impl Validator {
         Ok(state)
     }
 
-    /// Auxiliary function to compute provided transaction's required fee,
-    /// against current best fork.
-    /// The function takes a boolean called `verify_fee` to overwrite
-    /// the nodes configured `verify_fees` flag.
+    /// Auxiliary function to compute provided transaction's required
+    /// fee, against current best fork. The function takes a boolean
+    /// called `verify_fee` to overwrite the nodes configured
+    /// `verify_fees` flag.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn calculate_fee(&self, tx: &Transaction, verify_fee: bool) -> Result<u64> {
         // Grab the best fork to verify against
         let forks = self.consensus.forks.read().await;
@@ -171,14 +174,14 @@ impl Validator {
         )
         .await?;
 
-        // Purge new trees
-        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-
         Ok(compute_fee(&verify_result.total_gas_used()))
     }
 
-    /// The node retrieves a transaction, validates its state transition,
-    /// and appends it to the pending txs store.
+    /// The node retrieves a transaction, validates its state
+    /// transition, and appends it to the pending txs store.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn append_tx(&self, tx: &Transaction, write: bool) -> Result<()> {
         let tx_hash = tx.hash();
 
@@ -218,9 +221,6 @@ impl Validator {
             )
             .await;
 
-            // Purge new trees
-            fork_clone.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-
             // Handle response
             match verify_result {
                 Ok(_) => {}
@@ -253,7 +253,11 @@ impl Validator {
         Ok(())
     }
 
-    /// The node removes invalid transactions from the pending txs store.
+    /// The node removes invalid transactions from the pending txs
+    /// store.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn purge_pending_txs(&self) -> Result<()> {
         info!(target: "validator::purge_pending_txs", "Removing invalid transactions from pending transactions store...");
 
@@ -291,9 +295,6 @@ impl Validator {
                     self.verify_fees,
                 )
                 .await;
-
-                // Purge new trees
-                fork_clone.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
                 // Handle response
                 match verify_result {
@@ -419,13 +420,17 @@ impl Validator {
         Ok(confirmed_blocks)
     }
 
-    /// Apply provided set of [`BlockInfo`] without doing formal verification.
-    /// A set of [`HeaderHash`] is also provided, to verify that the provided
-    /// block hash matches the expected header one.
-    /// Note: this function should only be used for blocks received using a
-    /// checkpoint, since in that case we enforce the node to follow the sequence,
-    /// assuming all its blocks are valid. Additionally, it will update
-    /// any forks to a single empty one, holding the updated module.
+    /// Apply provided set of [`BlockInfo`] without doing formal
+    /// verification. A set of [`HeaderHash`] is also provided, to
+    /// verify that the provided block hash matches the expected header
+    /// one.
+    ///
+    /// Note: this function should only be used for blocks received
+    /// using a checkpoint, since in that case we enforce the node to
+    /// follow the sequence, assuming all its blocks are valid.
+    /// Additionally, it will update any forks to a single empty one,
+    /// holding the updated module. Always remember to purge new trees
+    /// from the database if not needed.
     pub async fn add_checkpoint_blocks(
         &self,
         blocks: &[BlockInfo],
@@ -466,7 +471,6 @@ impl Validator {
                 Err(Error::BlockAlreadyExists(_)) => continue,
                 Err(e) => {
                     error!(target: "validator::add_checkpoint_blocks", "Erroneous block found in set: {e}");
-                    overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                     return Err(Error::BlockIsInvalid(block.hash().as_string()))
                 }
             };
@@ -530,9 +534,12 @@ impl Validator {
         Ok(())
     }
 
-    /// Validate a set of [`BlockInfo`] in sequence and apply them if all are valid.
-    /// Note: this function should only be used in tests when we don't want to
-    /// perform consensus logic.
+    /// Validate a set of [`BlockInfo`] in sequence and apply them if
+    /// all are valid.
+    ///
+    /// Note: this function should only be used in tests when we don't
+    /// want to perform consensus logic and always remember to purge
+    /// new trees from the database if not needed.
     pub async fn add_test_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         debug!(target: "validator::add_test_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
@@ -568,7 +575,6 @@ impl Validator {
                 }
                 Err(e) => {
                     error!(target: "validator::add_test_blocks", "Erroneous block found in set: {e}");
-                    overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                     return Err(Error::BlockIsInvalid(block.hash().as_string()))
                 }
             };
@@ -632,14 +638,18 @@ impl Validator {
         Ok(())
     }
 
-    /// Validate a set of [`Transaction`] in sequence and apply them if all are valid.
-    /// In case any of the transactions fail, they will be returned to the caller.
-    /// The function takes a boolean called `write` which tells it to actually write
-    /// the state transitions to the database, and a boolean called `verify_fees` to
+    /// Validate a set of [`Transaction`] in sequence and apply them if
+    /// all are valid. In case any of the transactions fail, they will
+    /// be returned to the caller. The function takes a boolean called
+    /// `write` which tells it to actually write the state transitions
+    /// to the database, and a boolean called `verify_fees` to
     /// overwrite the nodes configured `verify_fees` flag.
     ///
-    /// Returns the total gas used and total paid fees for the given transactions.
-    /// Note: this function should only be used in tests.
+    /// Returns the total gas used and total paid fees for the given
+    /// transactions.
+    ///
+    /// Note: This function should only be used in tests and always
+    /// remember to purge new trees from the database if not needed.
     pub async fn add_test_transactions(
         &self,
         txs: &[Transaction],
@@ -665,16 +675,13 @@ impl Validator {
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
 
-        if let Err(e) = verify_result {
-            overlay.purge_new_trees()?;
-            return Err(e)
-        }
-
-        let gas_values = verify_result.unwrap();
+        let gas_values = match verify_result {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
 
         if !write {
             debug!(target: "validator::add_transactions", "Skipping apply of state updates because write=false");
-            overlay.purge_new_trees()?;
             return Ok(gas_values)
         }
 
@@ -683,11 +690,13 @@ impl Validator {
         Ok(gas_values)
     }
 
-    /// Validate a producer `Transaction` and apply it if valid.
-    /// In case the transactions fail, ir will be returned to the caller.
-    /// The function takes a boolean called `write` which tells it to actually write
-    /// the state transitions to the database.
-    /// This should be only used for test purposes.
+    /// Validate a producer `Transaction` and apply it if valid. In
+    /// case the transactions fail, ir will be returned to the caller.
+    /// The function takes a boolean called `write` which tells it to
+    /// actually write the state transitions to the database.
+    ///
+    /// Note: This function should only be used in tests and always
+    /// remember to purge new trees from the database if not needed.
     pub async fn add_test_producer_transaction(
         &self,
         tx: &Transaction,
@@ -717,13 +726,11 @@ impl Validator {
         let mut overlay = lock.overlay.lock().unwrap();
         if !erroneous_txs.is_empty() {
             warn!(target: "validator::add_test_producer_transaction", "Erroneous transactions found in set");
-            overlay.purge_new_trees()?;
             return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
         }
 
         if !write {
             debug!(target: "validator::add_test_producer_transaction", "Skipping apply of state updates because write=false");
-            overlay.purge_new_trees()?;
             return Ok(())
         }
 
@@ -735,6 +742,9 @@ impl Validator {
     /// Retrieve all existing blocks and try to apply them
     /// to an in memory overlay to verify their correctness.
     /// Be careful as this will try to load everything in memory.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn validate_blockchain(
         &self,
         pow_target: u32,
@@ -789,7 +799,6 @@ impl Validator {
                 verify_block(&overlay, &diffs, &module, &block, &previous, self.verify_fees).await
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set: {e}");
-                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
 

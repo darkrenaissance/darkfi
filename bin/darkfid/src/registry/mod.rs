@@ -215,6 +215,9 @@ impl DarkfiMinersRegistry {
     /// Create a registry record for provided wallet config. If the
     /// record already exists return its template, otherwise create its
     /// current template based on provided validator state.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     async fn create_template(
         &self,
         validator: &ValidatorPtr,
@@ -241,9 +244,6 @@ impl DarkfiMinersRegistry {
             validator.verify_fees,
         )
         .await;
-
-        // Drop new trees opened by the forks' overlay
-        extended_fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
         // Check result
         let block_template = result?;
@@ -344,6 +344,9 @@ impl DarkfiMinersRegistry {
 
     /// Refresh outdated jobs in the provided registry maps based on
     /// provided validator state.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn refresh_jobs(
         &self,
         block_templates: &mut HashMap<String, BlockTemplate>,
@@ -425,9 +428,6 @@ impl DarkfiMinersRegistry {
                 validator.verify_fees,
             )
             .await;
-
-            // Drop new trees opened by the forks' overlay
-            extended_fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
             // Check result
             *block_template = result?;

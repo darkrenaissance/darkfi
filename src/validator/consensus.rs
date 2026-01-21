@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, deserialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
-use sled_overlay::database::SledDbOverlayStateDiff;
+use sled_overlay::{database::SledDbOverlayStateDiff, sled::IVec};
 use smol::lock::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     blockchain::{
@@ -500,12 +500,15 @@ impl Consensus {
         Ok((last.block.header.height, last.hash))
     }
 
-    /// Auxiliary function to purge current forks and reset the ones starting
-    /// with the provided prefix, excluding provided confirmed fork.
-    /// Additionally, remove confirmed transactions from the forks mempools,
-    /// along with the unporposed transactions sled trees.
-    /// This function assumes that the prefix blocks have already been appended
-    /// to canonical chain from the confirmed fork.
+    /// Auxiliary function to purge current forks and reset the ones
+    /// starting with the provided prefix, excluding provided confirmed
+    /// fork. Additionally, remove confirmed transactions from the
+    /// forks mempools. This function assumes that the prefix blocks
+    /// have already been appended to canonical chain from the
+    /// confirmed fork.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn reset_forks(
         &self,
         prefix: &[HeaderHash],
@@ -517,40 +520,18 @@ impl Consensus {
 
         // Find all the forks that start with the provided prefix,
         // excluding confirmed fork index, and remove their prefixed
-        // proposals, and their corresponding diffs.
-        // If the fork is not starting with the provided prefix,
-        // drop it. Additionally, keep track of all the referenced
-        // trees in overlays that are valid.
+        // proposals, and their corresponding diffs. If the fork is not
+        // starting with the provided prefix, drop it.
         let excess = prefix.len();
         let prefix_last_index = excess - 1;
         let prefix_last = prefix.last().unwrap();
         let mut keep = vec![true; forks.len()];
-        let mut referenced_trees = HashSet::new();
-        let mut referenced_txs = HashSet::new();
         let confirmed_txs_hashes: Vec<TransactionHash> =
             confirmed_txs.iter().map(|tx| tx.hash()).collect();
         for (index, fork) in forks.iter_mut().enumerate() {
             if &index == confirmed_fork_index {
-                // Store its tree references
-                let fork_overlay = fork.overlay.lock().unwrap();
-                let overlay = fork_overlay.overlay.lock().unwrap();
-                for tree in &overlay.state.initial_tree_names {
-                    referenced_trees.insert(tree.clone());
-                }
-                for tree in &overlay.state.new_tree_names {
-                    referenced_trees.insert(tree.clone());
-                }
-                for tree in overlay.state.dropped_trees.keys() {
-                    referenced_trees.insert(tree.clone());
-                }
                 // Remove confirmed proposals txs from fork's mempool
                 fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
-                // Store its txs references
-                for tx in &fork.mempool {
-                    referenced_txs.insert(*tx);
-                }
-                drop(overlay);
-                drop(fork_overlay);
                 continue
             }
 
@@ -564,10 +545,6 @@ impl Consensus {
 
             // Remove confirmed proposals txs from fork's mempool
             fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
-            // Store its txs references
-            for tx in &fork.mempool {
-                referenced_txs.insert(*tx);
-            }
 
             // Remove the commited differences
             let rest_proposals = fork.proposals.split_off(excess);
@@ -578,59 +555,6 @@ impl Consensus {
             for diff in diffs.iter_mut() {
                 fork.overlay.lock().unwrap().overlay.lock().unwrap().remove_diff(diff);
             }
-
-            // Store its tree references
-            let fork_overlay = fork.overlay.lock().unwrap();
-            let overlay = fork_overlay.overlay.lock().unwrap();
-            for tree in &overlay.state.initial_tree_names {
-                referenced_trees.insert(tree.clone());
-            }
-            for tree in &overlay.state.new_tree_names {
-                referenced_trees.insert(tree.clone());
-            }
-            for tree in overlay.state.dropped_trees.keys() {
-                referenced_trees.insert(tree.clone());
-            }
-            drop(overlay);
-            drop(fork_overlay);
-        }
-
-        // Find the trees and pending txs that are no longer referenced by valid forks
-        let mut dropped_trees = HashSet::new();
-        let mut dropped_txs = HashSet::new();
-        for (index, fork) in forks.iter_mut().enumerate() {
-            if keep[index] {
-                continue
-            }
-            for tx in &fork.mempool {
-                if !referenced_txs.contains(tx) {
-                    dropped_txs.insert(*tx);
-                }
-            }
-            let fork_overlay = fork.overlay.lock().unwrap();
-            let overlay = fork_overlay.overlay.lock().unwrap();
-            for tree in &overlay.state.initial_tree_names {
-                if !referenced_trees.contains(tree) {
-                    dropped_trees.insert(tree.clone());
-                }
-            }
-            for tree in &overlay.state.new_tree_names {
-                if !referenced_trees.contains(tree) {
-                    dropped_trees.insert(tree.clone());
-                }
-            }
-            for tree in overlay.state.dropped_trees.keys() {
-                if !referenced_trees.contains(tree) {
-                    dropped_trees.insert(tree.clone());
-                }
-            }
-            drop(overlay);
-            drop(fork_overlay);
-        }
-
-        // Drop unreferenced trees from the database
-        for tree in dropped_trees {
-            self.blockchain.sled_db.drop_tree(tree)?;
         }
 
         // Drop invalid forks
@@ -639,9 +563,6 @@ impl Consensus {
 
         // Remove confirmed proposals txs from the unporposed txs sled tree
         self.blockchain.remove_pending_txs_hashes(&confirmed_txs_hashes)?;
-
-        // Remove unreferenced txs from the unporposed txs sled tree
-        self.blockchain.remove_pending_txs_hashes(&Vec::from_iter(dropped_txs))?;
 
         // Drop forks lock
         drop(forks);
@@ -700,6 +621,50 @@ impl Consensus {
 
         Ok(())
     }
+
+    /// Auxiliary function to purge all unreferenced contract trees
+    /// from the database.
+    pub async fn purge_unreferenced_trees(&self) -> Result<()> {
+        // Grab a lock over current forks
+        let lock = self.forks.read().await;
+
+        // Keep track of referenced trees
+        let mut referenced_trees = BTreeSet::new();
+
+        // Check if we have forks
+        if lock.is_empty() {
+            // If no forks exist, build a new one so we retrieve the
+            // native/protected trees references.
+            let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+            fork.referenced_trees(&mut referenced_trees);
+        } else {
+            // Iterate over current forks to retrieve referenced trees
+            for fork in lock.iter() {
+                fork.referenced_trees(&mut referenced_trees);
+            }
+        }
+
+        // Retrieve current database trees
+        let current_trees = self.blockchain.sled_db.tree_names();
+
+        // Iterate over current database trees and drop unreferenced
+        // contracts ones.
+        for tree in current_trees {
+            // Check if its referenced
+            if referenced_trees.contains(&tree) {
+                continue
+            }
+
+            // Check if its a contract tree pointer
+            let Ok(tree) = deserialize::<[u8; 32]>(&tree) else { continue };
+
+            // Drop it
+            debug!(target: "validator::consensus::purge_unreferenced_trees", "Dropping unreferenced tree: {}", blake3::Hash::from(tree));
+            self.blockchain.sled_db.drop_tree(tree)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// This struct represents a block proposal, used for consensus.
@@ -726,9 +691,10 @@ impl From<Proposal> for BlockInfo {
 
 /// Struct representing a forked blockchain state.
 ///
-/// An overlay over the original blockchain is used, containing all pending to-write
-/// records. Additionally, each fork keeps a vector of valid pending transactions hashes,
-/// in order of receival, and the proposals hashes sequence, for validations.
+/// An overlay over the original blockchain is used, containing all
+/// pending to-write records. Additionally, each fork keeps a vector of
+/// valid pending transactions hashes, in order of receival, and the
+/// proposals hashes sequence, for validations.
 #[derive(Clone)]
 pub struct Fork {
     /// Canonical (confirmed) blockchain
@@ -828,7 +794,8 @@ impl Fork {
     /// Auxiliary function to retrieve unproposed valid transactions,
     /// along with their total gas used and total paid fees.
     ///
-    /// Note: Always remember to purge new trees from the overlay if not needed.
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
     pub async fn unproposed_txs(
         &self,
         verifying_block_height: u32,
@@ -885,7 +852,6 @@ impl Fork {
                 Ok(gas_values) => gas_values,
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
-                    self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                     self.overlay.lock().unwrap().revert_to_checkpoint()?;
                     continue
                 }
@@ -903,7 +869,6 @@ impl Fork {
                     target: "validator::consensus::unproposed_txs",
                     "Retrieving transaction {tx} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
                 );
-                self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 self.overlay.lock().unwrap().revert_to_checkpoint()?;
                 break
             }
@@ -919,9 +884,10 @@ impl Fork {
         Ok((unproposed_txs, total_gas_used, total_gas_paid))
     }
 
-    /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
-    /// Changes to this copy don't affect original fork overlay records, since underlying
-    /// overlay pointer have been updated to the cloned one.
+    /// Auxiliary function to create a full clone using
+    /// BlockchainOverlay::full_clone. Changes to this copy don't
+    /// affect original fork overlay records, since underlying overlay
+    /// pointer have been updated to the cloned one.
     pub fn full_clone(&self) -> Result<Self> {
         let blockchain = self.blockchain.clone();
         let overlay = self.overlay.lock().unwrap().full_clone()?;
@@ -966,11 +932,31 @@ impl Fork {
         Ok(())
     }
 
-    /// Auxiliary function to purge all new trees from the fork
-    /// overlay.
-    pub fn purge_new_trees(&self) {
-        if let Err(e) = self.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees() {
-            error!(target: "validator::consensus::fork::purge_new_trees", "Purging new trees in the overlay failed: {e}");
+    /// Auxiliary function to retrieve all referenced trees from the
+    /// fork overlay and insert them to provided `BTreeSet`.
+    pub fn referenced_trees(&self, trees: &mut BTreeSet<IVec>) {
+        // Grab its current overlay
+        let fork_overlay = self.overlay.lock().unwrap();
+        let overlay = fork_overlay.overlay.lock().unwrap();
+
+        // Retrieve its initial trees
+        for initial_tree in &overlay.state.initial_tree_names {
+            trees.insert(initial_tree.clone());
+        }
+
+        // Retrieve its new trees
+        for new_tree in &overlay.state.new_tree_names {
+            trees.insert(new_tree.clone());
+        }
+
+        // Retrieve its dropped trees
+        for dropped_tree in overlay.state.dropped_trees.keys() {
+            trees.insert(dropped_tree.clone());
+        }
+
+        // Retrieve its protected trees
+        for protected_tree in &overlay.state.protected_tree_names {
+            trees.insert(protected_tree.clone());
         }
     }
 }

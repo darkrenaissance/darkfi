@@ -51,7 +51,11 @@ use crate::{
     Error, Result,
 };
 
-/// Verify given genesis [`BlockInfo`], and apply it to the provided overlay.
+/// Verify given genesis [`BlockInfo`], and apply it to the provided
+/// overlay.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_genesis_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
@@ -105,7 +109,6 @@ pub async fn verify_genesis_block(
             target: "validator::verification::verify_genesis_block",
             "[VALIDATOR] Erroneous transactions found in set",
         );
-        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(e)
     }
 
@@ -206,6 +209,9 @@ pub fn validate_blockchain(
 }
 
 /// Verify given [`BlockInfo`], and apply it to the provided overlay.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
@@ -233,7 +239,7 @@ pub async fn verify_block(
     // Verify transactions, exluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    let e = verify_transactions(
+    if let Err(e) = verify_transactions(
         overlay,
         block.header.height,
         module.target,
@@ -241,13 +247,12 @@ pub async fn verify_block(
         &mut tree,
         verify_fees,
     )
-    .await;
-    if let Err(e) = e {
+    .await
+    {
         warn!(
             target: "validator::verification::verify_block",
             "[VALIDATOR] Erroneous transactions found in set",
         );
-        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(e)
     }
 
@@ -287,7 +292,11 @@ pub async fn verify_block(
     Ok(())
 }
 
-/// Verify given checkpoint [`BlockInfo`], and apply it to the provided overlay.
+/// Verify given checkpoint [`BlockInfo`], and apply it to the provided
+/// overlay.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
@@ -317,13 +326,13 @@ pub async fn verify_checkpoint_block(
     // Apply transactions, excluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    let e = apply_transactions(overlay, block.header.height, block_target, txs, &mut tree).await;
-    if let Err(e) = e {
+    if let Err(e) =
+        apply_transactions(overlay, block.header.height, block_target, txs, &mut tree).await
+    {
         warn!(
             target: "validator::verification::verify_checkpoint_block",
             "[VALIDATOR] Erroneous transactions found in set",
         );
-        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(e)
     }
 
@@ -953,12 +962,15 @@ pub async fn apply_transaction(
     Ok(())
 }
 
-/// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
+/// Verify a set of [`Transaction`] in sequence and apply them if all
+/// are valid. In case any of the transactions fail, they will be
+/// returned to the caller as an error. If all transactions are valid,
+/// the function will return the total gas used and total paid fees
+/// from all the transactions. Additionally, their hash is appended to
+/// the provided Merkle tree.
 ///
-/// In case any of the transactions fail, they will be returned to the caller as an error.
-/// If all transactions are valid, the function will return the total gas used and total
-/// paid fees from all the transactions. Additionally, their hash is appended to the provided
-/// Merkle tree.
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -1007,7 +1019,6 @@ pub async fn verify_transactions(
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {e}");
                 erroneous_txs.push(tx.clone());
-                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 overlay.lock().unwrap().revert_to_checkpoint()?;
                 continue
             }
@@ -1027,7 +1038,6 @@ pub async fn verify_transactions(
                 tx.hash()
             );
             erroneous_txs.push(tx.clone());
-            overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
             overlay.lock().unwrap().revert_to_checkpoint()?;
             break
         }
@@ -1087,6 +1097,9 @@ async fn apply_transactions(
 ///     1. Proposal hash matches the actual block one
 ///     2. Block is valid
 /// Additional validity rules can be applied.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_proposal(
     consensus: &Consensus,
     proposal: &Proposal,
@@ -1120,7 +1133,6 @@ pub async fn verify_proposal(
     .await
     {
         error!(target: "validator::verification::verify_proposal", "Erroneous proposal block found: {e}");
-        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
 
@@ -1133,6 +1145,9 @@ pub async fn verify_proposal(
 ///     1. Proposal hash matches the actual block one
 ///     2. Block is valid
 /// Additional validity rules can be applied.
+///
+/// Note: Always remember to purge new trees from the database if not
+/// needed.
 pub async fn verify_fork_proposal(
     fork: &mut Fork,
     proposal: &Proposal,
@@ -1163,7 +1178,6 @@ pub async fn verify_fork_proposal(
     .await
     {
         error!(target: "validator::verification::verify_fork_proposal", "Erroneous proposal block found: {e}");
-        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
 
