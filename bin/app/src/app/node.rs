@@ -78,6 +78,11 @@ pub fn create_vector_art(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Scale", "Scale factor for the vector art");
+    prop.set_defaults_f32(vec![1.0]).unwrap();
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 

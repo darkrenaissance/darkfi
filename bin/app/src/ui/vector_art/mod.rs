@@ -23,8 +23,11 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, Renderer},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect,
+        PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
 };
@@ -46,6 +49,7 @@ pub struct VectorArt {
 
     is_visible: PropertyBool,
     rect: PropertyRect,
+    scale: PropertyFloat32,
     z_index: PropertyUint32,
     priority: PropertyUint32,
 
@@ -57,6 +61,7 @@ impl VectorArt {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
@@ -70,6 +75,7 @@ impl VectorArt {
 
             is_visible,
             rect,
+            scale,
             z_index,
             priority,
 
@@ -101,9 +107,16 @@ impl VectorArt {
         }
 
         let rect = self.rect.get();
-        let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
+        let scale = self.scale.get();
+        let mut verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
         let indices = self.shape.indices.clone();
         let num_elements = self.shape.indices.len() as i32;
+
+        // Apply scaling
+        for v in &mut verts {
+            v.pos[0] *= scale;
+            v.pos[1] *= scale;
+        }
 
         //debug!(target: "ui::vector_art", "vec_draw_instrs {verts:?} | {indices:?} | {num_elements}");
         let vertex_buffer = self.renderer.new_vertex_buffer(verts, gfxtag!("vectorart"));
@@ -145,6 +158,7 @@ impl UIObject for VectorArt {
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
         on_modify.when_change(self.is_visible.prop(), Self::redraw);
         on_modify.when_change(self.rect.prop(), Self::redraw);
+        on_modify.when_change(self.scale.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
 
         *self.tasks.lock() = on_modify.tasks;

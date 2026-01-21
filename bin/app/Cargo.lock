@@ -1475,6 +1475,7 @@ dependencies = [
  "libc",
  "nu-ansi-term",
  "num-bigint",
+ "parking_lot 0.12.5",
  "pin-project-lite",
  "quinn",
  "rand 0.8.5",

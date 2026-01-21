@@ -343,9 +343,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]).scaled(NETLOGO_SCALE);
-    shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
-    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]);
+    shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
     let net0_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net0_node);
 
@@ -357,9 +358,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE);
-    shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
-    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]);
+    shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
     let net1_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net1_node);
 
@@ -371,9 +373,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
-    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
     let net2_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net2_node);
 
@@ -385,9 +388,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
-    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
-    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
     let net3_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     netlayer_node.link(net3_node);
 
