@@ -135,39 +135,39 @@ fmt:
 	$(CARGO) +nightly fmt --all
 
 # cargo install cargo-hack
-check: $(PROOFS_BIN)
+check: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --target=$(RUST_TARGET) \
 		--release --feature-powerset --workspace
 
-clippy: $(PROOFS_BIN)
+clippy: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests
 
-fix: $(PROOFS_BIN)
+fix: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests --fix --allow-dirty
 
-rustdoc: $(PROOFS_BIN)
+rustdoc: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --target=$(RUST_TARGET) \
 		--release --all-features --workspace --document-private-items --no-deps
 
-test: $(PROOFS_BIN)
+test: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --all-features --workspace
 
-bench-zk-from-json: $(PROOFS_BIN)
+bench-zk-from-json: contracts $(PROOFS_BIN)
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--bench zk_from_json --all-features --workspace \
 		-- --save-baseline master
 
-bench: $(PROOFS_BIN)
+bench: contracts $(PROOFS_BIN)
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--all-features --workspace \
 		-- --save-baseline master
 
-coverage: $(PROOFS_BIN)
+coverage: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) llvm-cov --target=$(RUST_TARGET) \
 		--release --all-features --workspace --html
 
