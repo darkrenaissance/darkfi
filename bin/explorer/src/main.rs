@@ -44,13 +44,13 @@ use smol::{
     lock::{Mutex, MutexGuard},
     Executor,
 };
-use tapes::{BlobTape, FixedSizedTape, TapeOpenOptions, Tapes};
+use tapes::{TapeOpenOptions, Tapes};
 use tinyjson::JsonValue;
 use tracing::{debug, info};
 
 /// Database interfaces
 mod db;
-use db::{BlockIndex, DifficultyIndex, TxIndex};
+use db::{DifficultyIndex, TapesDatabase};
 /// JSON-RPC server methods
 mod rpc;
 
@@ -65,11 +65,7 @@ pub struct Explorer {
 
     tapes_db: Tapes,
     _tapes_options: TapeOpenOptions,
-    block_index: FixedSizedTape<BlockIndex>,
-    tx_index: FixedSizedTape<TxIndex>,
-    difficulty_index: FixedSizedTape<DifficultyIndex>,
-    blocks: BlobTape,
-    transactions: BlobTape,
+    database: TapesDatabase,
 
     rpc_sub: StoppableTaskPtr,
     rpc_sub_handler: StoppableTaskPtr,
@@ -114,8 +110,7 @@ impl Explorer {
         let tapes_options =
             TapeOpenOptions { top_cache_size: 64 * 1024, dir: tapes_path.to_path_buf() };
 
-        let (block_index, tx_index, difficulty_index, blocks, transactions) =
-            Self::open_tapes(&tapes_db, &tapes_options)?;
+        let database = Self::open_tapes(&tapes_db, &tapes_options)?;
 
         Ok(Self {
             synced: AtomicBool::new(false),
@@ -125,11 +120,7 @@ impl Explorer {
             tx_indices,
             tapes_db,
             _tapes_options: tapes_options,
-            block_index,
-            tx_index,
-            difficulty_index,
-            blocks,
-            transactions,
+            database,
             rpc_sub: StoppableTask::new(),
             rpc_sub_handler: StoppableTask::new(),
             blocks_publisher: Publisher::new(),
