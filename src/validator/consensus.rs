@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use darkfi_serial::{async_trait, deserialize, SerialDecodable, SerialEncodable};
@@ -662,6 +662,38 @@ impl Consensus {
             debug!(target: "validator::consensus::purge_unreferenced_trees", "Dropping unreferenced tree: {}", blake3::Hash::from(tree));
             self.blockchain.sled_db.drop_tree(tree)?;
         }
+
+        Ok(())
+    }
+
+    /// Auxiliary function to purge all unproposed pending
+    /// transactions from the database.
+    pub async fn purge_unproposed_pending_txs(&self) -> Result<()> {
+        // Grab a lock over current forks
+        let mut forks = self.forks.write().await;
+
+        // Keep track of proposed txs
+        let mut proposed_txs = HashSet::new();
+
+        // Iterate over all forks to find proposed txs
+        for fork in forks.iter() {
+            // Grab all current proposals transactions hashes
+            let proposals_txs =
+                fork.overlay.lock().unwrap().get_blocks_txs_hashes(&fork.proposals)?;
+            for tx in proposals_txs {
+                proposed_txs.insert(tx);
+            }
+        }
+
+        // Iterate over all forks again to remove unproposed txs from
+        // their mempools.
+        for fork in forks.iter_mut() {
+            fork.mempool.retain(|tx| proposed_txs.contains(tx));
+        }
+
+        // Remove unproposed txs from the pending store
+        let proposed_txs: Vec<TransactionHash> = proposed_txs.into_iter().collect();
+        self.blockchain.reset_pending_txs(&proposed_txs)?;
 
         Ok(())
     }

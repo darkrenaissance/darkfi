@@ -173,8 +173,8 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Queries the node pending transactions store to remove all
-    // transactions.
+    // Queries the node pending transactions store to reset all
+    // transactions. Unproposed transactions are removed.
     // Returns `true` if the operation was successful, otherwise, a
     // corresponding error.
     //
@@ -193,7 +193,7 @@ impl DarkfiNode {
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        if let Err(e) = self.validator.blockchain.remove_all_pending_txs() {
+        if let Err(e) = self.validator.consensus.purge_unproposed_pending_txs().await {
             error!(target: "darkfid::rpc::tx_clean_pending", "Failed removing pending txs: {e}");
             return JsonError::new(InternalError, None, id).into()
         };

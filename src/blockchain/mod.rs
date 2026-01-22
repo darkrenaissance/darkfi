@@ -346,19 +346,32 @@ impl Blockchain {
         Ok(())
     }
 
-    /// Remove all transactions from the pending tx store.
-    pub fn remove_all_pending_txs(&self) -> Result<()> {
-        let txs: Vec<TransactionHash> =
-            self.transactions.get_all_pending()?.keys().copied().collect();
+    /// Remove all transactions from the pending tx store not in the
+    /// provided vector and rebuild the remaining ones order.
+    pub fn reset_pending_txs(&self, exclude_txs: &[TransactionHash]) -> Result<()> {
+        let mut txs = vec![];
+        let mut removed_txs = vec![];
+        for tx in self.transactions.get_all_pending()?.keys() {
+            if exclude_txs.contains(tx) {
+                txs.push(*tx);
+                continue
+            }
+            removed_txs.push(*tx);
+        }
         let indexes: Vec<u64> =
             self.transactions.get_all_pending_order()?.iter().map(|(k, _)| *k).collect();
 
-        let txs_batch = self.transactions.remove_batch_pending(&txs);
+        let txs_batch = self.transactions.remove_batch_pending(&removed_txs);
         let txs_order_batch = self.transactions.remove_batch_pending_order(&indexes);
+        let txs_new_order_batch = self.transactions.insert_batch_pending_order(&txs)?;
 
         // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
-        let batches = [txs_batch, txs_order_batch];
+        let trees = [
+            self.transactions.pending.clone(),
+            self.transactions.pending_order.clone(),
+            self.transactions.pending_order.clone(),
+        ];
+        let batches = [txs_batch, txs_order_batch, txs_new_order_batch];
         self.atomic_write(&trees, &batches)?;
 
         Ok(())
