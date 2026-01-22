@@ -126,6 +126,45 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
+    // Queries the blockchain database to fetch the difficulty and cumulative
+    // difficulty for a specific block height.
+    //
+    // **Params:**
+    // * `array[0]`: Block height
+    //
+    // **Returns:**
+    // * `difficulty`: Block difficulty as integer
+    // * `cumulative_difficulty`: Cumulative block difficulty as integer
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_difficulty", "params": [1], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [123, 456], "id": 1}
+    pub async fn blockchain_get_difficulty(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_number() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let height = *params[0].get::<f64>().unwrap() as u32;
+
+        if height == 0 {
+            return JsonResponse::new(JsonValue::Array(vec![1_f64.into(), 1_f64.into()]), id).into()
+        }
+
+        let Ok(diff) = self.validator.blockchain.blocks.get_difficulty(&[height], true) else {
+            return server_error(RpcError::UnknownBlockHeight, id, None)
+        };
+
+        let block_diff = diff[0].clone().unwrap();
+
+        let difficulty: f64 = block_diff.difficulty.to_string().parse().unwrap();
+        let cumulative: f64 = block_diff.cumulative_difficulty.to_string().parse().unwrap();
+
+        JsonResponse::new(JsonValue::Array(vec![difficulty.into(), cumulative.into()]), id).into()
+    }
+
+    // RPCAPI:
     // Queries the blockchain database to find the last confirmed block.
     //
     // **Params:**
