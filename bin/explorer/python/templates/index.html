@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DarkFi Blocks - Block Explorer</title>
+  <link rel="stylesheet" href="/static/layout.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container flex justify-between items-center">
+      <div class="logo"><span>Dark</span>Fi {{ network }} Blocks</div>
+      <nav class="nav">
+        <a href="/" class="active">Explorer</a>
+        <a href="#">Stats</a>
+        <a href="https://dark.fi/book/">Docs</a>
+        <a href="https://codeberg.org/darkrenaissance/darkfi/">Code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container section">
+
+    <div class="input-group mb-lg" style="max-width: 600px;">
+      <input type="search" class="input" placeholder="Search by block height, hash, or transaction...">
+      <button type="submit" class="btn">Search</button>
+    </div>
+
+    <div class="stats-grid mb-lg">
+      <div class="stat-card">
+        <div class="label">Difficulty</div>
+        <div class="value">{{ current_difficulty }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Height</div>
+        <div class="value">{{ current_height }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Hashrate</div>
+        <div class="value">n/a</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Emission</div>
+        <div class="value">n/a</div>
+      </div>
+    </div>
+
+	<!-- 
+    <div class="table-section mb-lg">
+      <div class="table-header">
+        <h3>Transaction Pool</h3>
+        <span class="badge">{{ mempool_txs_len }} Transactions</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Hash</th>
+              <th>Timestamp</th>
+              <th>Fee</th>
+              <th>Size</th>
+            </tr>
+          </thead>
+          <tbody>
+          	{% for tx in mempool_txs %}
+            <tr>
+              <td><a href="/tx/{{ tx.hash }}">{{ tx.hash }}</a></td>
+              <td>{{ tx.timestamp }}</td>
+              <td>{{ tx.fee }}</td>
+              <td>{{ tx.size }} B</td>
+          	{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    -->
+
+    <div class="table-section">
+      <div class="table-header">
+        <h3>Latest Blocks</h3>
+        <a href="#">View all →</a>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Height</th>
+              <th>Size</th>
+              <th>Txs</th>
+              <th>Timestamp</th>
+              <th>PoW</th>
+              <th>Block Hash</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for block in latest_blocks %}
+            <tr>
+              <td class="height"><a href="/block/{{ block.height }}">{{ block.height }}</a></td>
+              <td>{{ block.size }}</td>
+              <td>{{ block.n_txs }}</td>
+              <td>{{ block.timestamp }}</td>
+              <th>{{ block.powtype }}</td>
+              <td><a href="/block/{{ block.height }}">{{ block.hash }}</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <a href="https://dark.fi">Let there be Dark</a>
+    </div>
+  </footer>
+
+</body>
+</html>

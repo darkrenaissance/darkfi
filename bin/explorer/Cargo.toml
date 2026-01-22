@@ -1,0 +1,24 @@
+[package]
+name = "explorer"
+version = "0.5.0"
+edition = "2021"
+
+[dependencies]
+darkfi = {path = "../../", features = ["blockchain", "rpc"]}
+darkfi-serial = {path = "../../src/serial", features = ["derive"]}
+darkfi-sdk = {path = "../../src/sdk"}
+
+async-channel = "2.5.0"
+async-trait = "0.1.89"
+easy-parallel = "3.3.1"
+smol = "2.0.2"
+
+tracing = "0.1.44"
+
+url = "2.5.7"
+tinyjson = "2.5.1"
+hex = "0.4.3"
+
+sled = "0.34.7"
+tapes = {git = "https://github.com/Cuprate/Tapes"}
+bytemuck = {version = "1.24.0", features = ["derive"]}

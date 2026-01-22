@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DarkFi Blocks - Block Explorer</title>
+  <link rel="stylesheet" href="/static/layout.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container flex justify-between items-center">
+      <div class="logo"><span>Dark</span>Fi {{ network }} Blocks</div>
+      <nav class="nav">
+        <a href="/" class="active">Explorer</a>
+        <a href="#">Stats</a>
+        <a href="https://dark.fi/book/">Docs</a>
+        <a href="https://codeberg.org/darkrenaissance/darkfi/">Code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container section">
+
+    <div class="input-group mb-lg" style="max-width: 600px;">
+      <input type="search" class="input" placeholder="Search by block height, hash, or transaction...">
+      <button type="submit" class="btn">Search</button>
+    </div>
+
+    <div class="stats-grid mb-lg">
+      <div class="stat-card">
+        <div class="label">Difficulty</div>
+        <div class="value">{{ current_difficulty }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Height</div>
+        <div class="value">{{ current_height }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Hashrate</div>
+        <div class="value">n/a</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Emission</div>
+        <div class="value">n/a</div>
+      </div>
+    </div>
+
+    <div class="block-title mb-lg">
+      <h1>
+        Block
+        {% if block.height != 0 %}
+        <a href="/block/{{ block.height - 1 }}" class="block-nav">&lt</a>
+        {% else %}
+        <a href="/block/0" class="block-nav">&lt</a>
+        {% endif %}
+        {{ block.height }}
+        <a href="/block/{{ block.height + 1 }}" class="block-nav">&gt;</a>
+      </h1>
+      <span class="block-hash">{{ block.hash }}</span>
+    </div>
+
+    <div class="table-section mb-lg">
+      <div class="table-header">
+        <h3>Block Info</h3>
+      </div>
+      <div class="table-wrapper">
+        <table class="info-table">
+          <tbody>
+            <tr>
+              <td class="info-label">Version</td>
+              <td>{{ block.version }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Previous Hash</td>
+              <td><a href="/block/{{ block.height -1 }}" class="hash">{{ block.previous_hash }}</a></td>
+            </tr>
+            <tr>
+              <td class="info-label">Height</td>
+              <td>{{ block.height }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Nonce</td>
+              <td>{{ block.nonce }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Timestamp</td>
+              <td>{{ block.timestamp }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Transactions Root</td>
+              <td class="hash">{{ block.transactions_root }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">State Root</td>
+              <td class="hash">{{ block.state_root }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Block Size (bytes)</td>
+              <td>{{ block.size }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Block Difficulty</td>
+              <td>{{ block.difficulty }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Cumulative Difficulty</td>
+              <td>{{ block.cumulative }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Transactions</td>
+              <td>{{ block.n_txs }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if block.powtype == "Monero" %}
+    <div class="table-section mb-lg pow-monero">
+      <div class="table-header">
+        <h3>PoW Data</h3>
+        <span class="badge badge-monero">Merge Mined · Monero</span>
+      </div>
+      <div class="table-wrapper">
+        <table class="info-table">
+          <tbody>
+            <tr>
+              <td class="info-label">Monero Block Hash</td>
+              <td><a href="https://localmonero.co/blocks/block/{{ monero_hash }}" target="_blank" class="hash hash-monero">{{ monero_hash }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="table-section mb-lg pow-native">
+      <div class="table-header">
+        <h3>PoW Data</h3>
+        <span class="badge">Native · DarkFi</span>
+      </div>
+      <div class="pow-native-info">
+        <span class="text-muted">Native DarkFi proof-of-work</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="table-section mb-lg">
+      <div class="table-header">
+        <h3>Coinbase Transaction</h3>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Hash</th>
+              <th>Amount</th>
+              <th>Bytes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="/tx/{{ block.coinbase.hash }}" class="hash">{{ block.coinbase.hash }}</a></td>
+              <td>{{ block.coinbase.reward }}</td>
+              <td>{{ block.coinbase.size }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header">
+        <h3>Transactions ({{ block.n_txs }})</h3>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Hash</th>
+              <th>Calls</th>
+              <th>Fee</th>
+              <th>Bytes</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for tx in block.txs %}
+            <tr>
+              <td><a href="/tx/{{ tx.hash }}" class="hash">{{ tx.hash }}</a></td>
+              <td>{{ tx.n_calls }}</td>
+              <td>{{ tx.fee }}</td>
+              <td>{{ tx.size }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <a href="https://dark.fi">Let there be Dark</a> · Code licensed under AGPL-3
+    </div>
+  </footer>
+
+</body>
+</html>

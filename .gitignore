@@ -36,8 +36,8 @@ witness.json
 /bin/vanityaddr/vanityaddr
 /vanityaddr
 
-/bin/explorer/explorerd/explorerd
-/explorerd
+/bin/explorer/explorer
+/explorer
 
 /bin/fud/fud/fud
 /fud

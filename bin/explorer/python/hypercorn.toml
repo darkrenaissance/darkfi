@@ -1,0 +1,13 @@
+# hypercorn --config hypercorn.toml app:app
+bind = ["unix:/run/explorer/hypercorn.sock"]
+workers = 8
+worker_class = "asyncio"
+
+accesslog = "/var/log/explorer/access.log"
+errorlog = "/var/log/explorer/error.log"
+loglevel = "info"
+
+graceful_timeout = 30
+keep_alive_timeout = 65
+
+umask = 0o117
