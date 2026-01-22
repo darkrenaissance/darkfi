@@ -1,4 +1,0 @@
-flask[async]
-Pygments
-tomli
-gunicorn
