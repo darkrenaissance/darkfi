@@ -18,13 +18,15 @@
 
 use std::{
     collections::HashSet,
-    path::Path,
+    path::{Path, PathBuf},
+    process::exit,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
 
+use arg::Args;
 use async_trait::async_trait;
 use darkfi::{
     blockchain::BlockInfo,
@@ -35,8 +37,8 @@ use darkfi::{
         settings::RpcSettings,
     },
     system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
-    util::encoding::base64,
-    Error, Result,
+    util::{encoding::base64, path::expand_path},
+    Error, Result, ANSI_LOGO,
 };
 use darkfi_serial::deserialize_async;
 use smol::{
@@ -47,6 +49,7 @@ use smol::{
 use tapes::{TapeOpenOptions, Tapes};
 use tinyjson::JsonValue;
 use tracing::{debug, info};
+use url::Url;
 
 /// Database interfaces
 mod db;
@@ -54,7 +57,21 @@ use db::{DifficultyIndex, TapesDatabase};
 /// JSON-RPC server methods
 mod rpc;
 
-const RPC_ENDPOINT: &str = "tcp://127.0.0.1:18345";
+const ABOUT: &str =
+    concat!("explorer ", env!("CARGO_PKG_VERSION"), '\n', env!("CARGO_PKG_DESCRIPTION"));
+
+const USAGE: &str = r#"
+Usage: explorer [OPTIONS]
+
+Options:
+  -e <endpoint>  darkfid JSON-RPC endpoint (default: tcp://127.0.0.1:18345)
+  -d <path>      Path to database (default: ~/.local/share/darkfi/explorer/db)
+  -h             Show this help
+"#;
+
+fn usage() {
+    print!("{ANSI_LOGO}{ABOUT}\n{USAGE}");
+}
 
 pub struct Explorer {
     synced: AtomicBool,
@@ -130,7 +147,7 @@ impl Explorer {
         })
     }
 
-    async fn handle_block_sub(&self, ex: Arc<Executor<'_>>) -> Result<()> {
+    async fn handle_block_sub(&self, rpc_endpoint: Url, ex: Arc<Executor<'_>>) -> Result<()> {
         info!("Started handle_block_sub(), waiting until blockchain is synced");
         let block_subscription = self.blocks_publisher.clone().subscribe().await;
         self.synced_notifier.wait();
@@ -169,7 +186,7 @@ impl Explorer {
 
                     // Get difficulty
                     let rpc_client =
-                        RpcClient::new(RPC_ENDPOINT.parse().unwrap(), ex.clone()).await.unwrap();
+                        RpcClient::new(rpc_endpoint.clone(), ex.clone()).await.unwrap();
 
                     let req = JsonRequest::new(
                         "blockchain.get_difficulty",
@@ -194,6 +211,7 @@ impl Explorer {
 
     async fn sync_blockchain(
         &self,
+        rpc_endpoint: Url,
         from_height: u64,
         to_height: u64,
         ex: Arc<Executor<'_>>,
@@ -204,7 +222,7 @@ impl Explorer {
         }
 
         info!("sync_blockchain started from_height={from_height} to_height={to_height}...");
-        let rpc_client = Arc::new(RpcClient::new(RPC_ENDPOINT.parse().unwrap(), ex.clone()).await?);
+        let rpc_client = Arc::new(RpcClient::new(rpc_endpoint, ex.clone()).await?);
 
         for height in from_height..=to_height {
             info!("Requesting block at height {height}");
@@ -240,11 +258,11 @@ impl Explorer {
     }
 }
 
-async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
+async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>>) -> Result<()> {
     let explorer = Arc::new(Explorer::new(
-        Path::new("db/sled_db"),
-        Path::new("db/tapes_metadata"),
-        Path::new("db/tapes"),
+        &db_path.join("sled_db"),
+        &db_path.join("tapes_metadata"),
+        &db_path.join("tapes"),
     )?);
 
     // First we should subscribe to new blocks and queue them to apply
@@ -254,8 +272,9 @@ async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
     let explorer_ = Arc::clone(&explorer);
     let explorer__ = Arc::clone(&explorer);
     let ex_ = ex.clone();
+    let rpc_endpoint_ = rpc_endpoint.clone();
     explorer.rpc_sub_handler.clone().start(
-        async move { explorer_.handle_block_sub(ex_).await },
+        async move { explorer_.handle_block_sub(rpc_endpoint_, ex_).await },
         |res| async move {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) | Err(Error::RpcServerStopped) => {}
@@ -278,7 +297,7 @@ async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
     // Then we subscribe to darkfid's RPC to get new blocks. We should first
     // fetch the current height, so we know how far to sync. Then any blocks
     // that come after that should be queued in the `blocks_publisher`.
-    let rpc_client = Arc::new(RpcClient::new(RPC_ENDPOINT.parse().unwrap(), ex.clone()).await?);
+    let rpc_client = Arc::new(RpcClient::new(rpc_endpoint.clone(), ex.clone()).await?);
 
     let req = JsonRequest::new("blockchain.last_confirmed_block", JsonValue::Array(vec![]));
     let rep = rpc_client.request(req).await?;
@@ -319,7 +338,9 @@ async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
     // is going to request and parse all the necessary blocks, and then
     // apply them to the databases.
     let sync_from = explorer.get_height()?.unwrap_or(0);
-    explorer.sync_blockchain(sync_from, last_confirmed_height, ex.clone()).await?;
+    explorer
+        .sync_blockchain(rpc_endpoint.clone(), sync_from, last_confirmed_height, ex.clone())
+        .await?;
     explorer.synced.store(true, Ordering::SeqCst);
     explorer.synced_notifier.notify();
 
@@ -333,6 +354,44 @@ async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    let argv;
+    let mut hflag = false;
+    let mut evalue = "tcp://127.0.0.1:18345".to_string();
+    let mut dvalue = "~/.local/share/darkfi/explorer/db".to_string();
+
+    {
+        let mut args = Args::new().with_cb(|args, flag| match flag {
+            'e' => evalue = args.eargf().to_string(),
+            'd' => dvalue = args.eargf().to_string(),
+            _ => hflag = true,
+        });
+
+        argv = args.parse();
+    }
+
+    if hflag || argv.is_empty() {
+        usage();
+        exit(1);
+    }
+
+    let rpc_endpoint: Url = match evalue.parse() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Error parsing RPC endpoint: {e}");
+            usage();
+            exit(1);
+        }
+    };
+
+    let db_path: PathBuf = match expand_path(&dvalue) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Error parsing DB path: {e}");
+            usage();
+            exit(1);
+        }
+    };
+
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
@@ -344,7 +403,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread
         .finish(|| {
             future::block_on(async {
-                realmain(ex.clone()).await?;
+                realmain(rpc_endpoint, db_path, ex.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })

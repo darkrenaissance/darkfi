@@ -2834,6 +2834,7 @@ dependencies = [
 name = "explorer"
 version = "0.5.0"
 dependencies = [
+ "arg",
  "async-channel 2.5.0",
  "async-trait",
  "bytemuck",
