@@ -190,6 +190,7 @@ fn completion(buffer: &str, lc: &mut Vec<String>) {
         lc.push(prefix.clone() + "dao create");
         lc.push(prefix.clone() + "dao view");
         lc.push(prefix.clone() + "dao import");
+        lc.push(prefix.clone() + "dao remove");
         lc.push(prefix.clone() + "dao list");
         lc.push(prefix.clone() + "dao balance");
         lc.push(prefix.clone() + "dao mint");
@@ -354,9 +355,10 @@ fn hints(buffer: &str) -> Option<(String, i32, bool)> {
         "transfer " => Some(("[--half-split] <amount> <token> <recipient> [spend_hook] [user_data]".to_string(), color, bold)),
         "otc " => Some(("(init|join|inspect|sign)".to_string(), color, bold)),
         "otc init " => Some(("<value_pair> <token_pair>".to_string(), color, bold)),
-        "dao " => Some(("(create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)".to_string(), color, bold)),
+        "dao " => Some(("(create|view|import|remove|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)".to_string(), color, bold)),
         "dao create " => Some(("<proposer-limit> <quorum> <early-exec-quorum> <approval-ratio> <gov-token-id>".to_string(), color, bold)),
         "dao import " => Some(("<name>".to_string(), color, bold)),
+        "dao remove " => Some(("<name>".to_string(), color, bold)),
         "dao list " => Some(("[name]".to_string(), color, bold)),
         "dao balance " => Some(("<name>".to_string(), color, bold)),
         "dao mint " => Some(("<name>".to_string(), color, bold)),
@@ -1413,7 +1415,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
     // Check correct command structure
     if parts.len() < 2 {
         output.push(String::from("Malformed `dao` command"));
-        output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
+        output.push(String::from("Usage: dao (create|view|import|remove|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
         return
     }
 
@@ -1422,6 +1424,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "create" => handle_dao_create(drk, parts, output).await,
         "view" => handle_dao_view(parts, input, output).await,
         "import" => handle_dao_import(drk, parts, input, output).await,
+        "remove" => handle_dao_remove(drk, parts, output).await,
         "list" => handle_dao_list(drk, parts, output).await,
         "balance" => handle_dao_balance(drk, parts, output).await,
         "mint" => handle_dao_mint(drk, parts, output).await,
@@ -1436,7 +1439,7 @@ async fn handle_dao(drk: &DrkPtr, parts: &[&str], input: &[String], output: &mut
         "mining-config" => handle_dao_mining_config(drk, parts, output).await,
         _ => {
             output.push(format!("Unrecognized DAO subcommand: {}", parts[1]));
-            output.push(String::from("Usage: dao (create|view|import|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
+            output.push(String::from("Usage: dao (create|view|import|remove|list|balance|mint|propose-transfer|propose-generic|proposals|proposal|proposal-import|vote|exec|spend-hook|mining-config)"));
         }
     }
 }
@@ -1613,6 +1616,20 @@ async fn handle_dao_import(
 
     if let Err(e) = drk.read().await.import_dao(parts[2], &params, output).await {
         output.push(format!("Failed to import DAO: {e}"))
+    }
+}
+
+/// Auxiliary function to define the dao remove subcommand handling.
+async fn handle_dao_remove(drk: &DrkPtr, parts: &[&str], output: &mut Vec<String>) {
+    // Check correct subcommand structure
+    if parts.len() != 3 {
+        output.push(String::from("Malformed `dao remove` subcommand"));
+        output.push(String::from("Usage: dao remove <name>"));
+        return
+    }
+
+    if let Err(e) = drk.read().await.remove_dao(parts[2], output).await {
+        output.push(format!("Failed to remove DAO: {e}"))
     }
 }
 

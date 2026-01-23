@@ -1825,6 +1825,18 @@ impl Drk {
         Ok(())
     }
 
+    /// Remove a DAO and all its records given its name.
+    pub async fn remove_dao(&self, name: &str, output: &mut Vec<String>) -> Result<()> {
+        output.push(format!("Removing \"{name}\" DAO from the wallet"));
+        let query = format!("DELETE FROM {} WHERE {} = ?1;", *DAO_DAOS_TABLE, DAO_DAOS_COL_NAME);
+        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![name]) {
+            return Err(Error::DatabaseError(format!("[remove_dao] DAO removal failed: {e}")))
+        };
+        output.push(String::from("Successfully removed DAO"));
+
+        Ok(())
+    }
+
     /// Fetch a DAO given its bulla.
     pub async fn get_dao_by_bulla(&self, bulla: &DaoBulla) -> Result<DaoRecord> {
         let row = match self.wallet.query_single(

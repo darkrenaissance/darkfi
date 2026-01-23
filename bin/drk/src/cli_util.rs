@@ -312,6 +312,10 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .about("Import DAO data from stdin")
         .args(slice::from_ref(&name));
 
+    let remove = SubCommand::with_name("remove")
+        .about("Remove a DAO and all its data")
+        .args(slice::from_ref(&name));
+
     let opt_name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
 
     let list = SubCommand::with_name("list")
@@ -386,6 +390,7 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         create,
         view,
         import,
+        remove,
         list,
         balance,
         mint,

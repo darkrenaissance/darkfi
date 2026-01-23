@@ -324,6 +324,12 @@ enum DaoSubcmd {
         name: String,
     },
 
+    /// Remove a DAO and all its data
+    Remove {
+        /// Name identifier for the DAO
+        name: String,
+    },
+
     /// List imported DAOs (or info about a specific one)
     List {
         /// Name identifier for the DAO (optional)
@@ -1342,6 +1348,28 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 if let Err(e) = drk.import_dao(&name, &params, &mut output).await {
                     print_output(&output);
                     eprintln!("Failed to import DAO: {e}");
+                    exit(2);
+                }
+                print_output(&output);
+
+                Ok(())
+            }
+
+            DaoSubcmd::Remove { name } => {
+                let drk = new_wallet(
+                    network,
+                    blockchain_config.cache_path,
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    &ex,
+                    args.fun,
+                )
+                .await;
+                let mut output = vec![];
+                if let Err(e) = drk.remove_dao(&name, &mut output).await {
+                    print_output(&output);
+                    eprintln!("Failed to remove DAO: {e}");
                     exit(2);
                 }
                 print_output(&output);
