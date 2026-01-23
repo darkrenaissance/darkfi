@@ -151,6 +151,7 @@ impl Explorer {
             })?;
 
         info!(
+            target: "explorer::append_block",
             "Appended block {} ({} bytes header, {} txs)",
             block.header.height,
             header_data.len(),
@@ -262,6 +263,7 @@ impl Explorer {
             })?;
 
         info!(
+            target: "explorer::revert_blocks",
             "Reverted {} blocks (new height: {})",
             count,
             if new_block_count == 0 { 0 } else { new_block_count - 1 }

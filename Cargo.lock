@@ -232,7 +232,7 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 [[package]]
 name = "arg"
 version = "1.0.0"
-source = "git+https://github.com/parazyd/arg#bad0beb83e9df6d9037aa68d4624c77708c8c957"
+source = "git+https://github.com/parazyd/arg#008a89841c899f14c44916758a77c2c48a6f81d8"
 
 [[package]]
 name = "arrayref"

@@ -38,7 +38,7 @@ use darkfi::{
     },
     system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
     util::{encoding::base64, path::expand_path},
-    Error, Result, ANSI_LOGO,
+    verbose, Error, Result, ANSI_LOGO,
 };
 use darkfi_serial::deserialize_async;
 use smol::{
@@ -48,7 +48,7 @@ use smol::{
 };
 use tapes::{TapeOpenOptions, Tapes};
 use tinyjson::JsonValue;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use url::Url;
 
 /// Database interfaces
@@ -117,12 +117,12 @@ impl RequestHandler<RpcHandler> for Explorer {
 
 impl Explorer {
     fn new(sled_path: &Path, tapes_db_path: &Path, tapes_path: &Path) -> Result<Self> {
-        info!("Opening sled dbs");
+        info!(target: "explorer::new", "Opening sled trees");
         let sled_db = sled::open(sled_path)?;
         let header_indices = sled_db.open_tree("header_indices")?;
         let tx_indices = sled_db.open_tree("tx_indices")?;
 
-        info!("Opening tapes dbs");
+        info!(target: "explorer::new", "Opening tapes");
         std::fs::create_dir_all(tapes_db_path)?;
         std::fs::create_dir_all(tapes_path)?;
         let tapes_db = Tapes::open(tapes_db_path)?;
@@ -148,16 +148,22 @@ impl Explorer {
     }
 
     async fn handle_block_sub(&self, rpc_endpoint: Url, ex: Arc<Executor<'_>>) -> Result<()> {
-        info!("Started handle_block_sub(), waiting until blockchain is synced");
+        info!(
+            target: "explorer::handle_block_sub",
+            "Started block subscription, waiting until blockchain is synced",
+        );
         let block_subscription = self.blocks_publisher.clone().subscribe().await;
         self.synced_notifier.wait();
-        info!("Blockchain synced, processing new blocks...");
+        info!(
+            target: "explorer::handle_block_sub",
+            "Blockchain synced, now waiting for new blocks...",
+        );
 
         loop {
             // Handle the new block. We get a JsonResult, so also handle
             // any errors that might arise.
             let block_notification = block_subscription.receive().await;
-            info!("Got new block notification! {:?}", block_notification);
+            info!(target: "explorer::handle_block_sub", "Got new block notification!");
 
             match block_notification {
                 JsonResult::Notification(notification) => {
@@ -167,6 +173,8 @@ impl Explorer {
                     let block: BlockInfo = deserialize_async(&block_bytes).await.unwrap();
                     let incoming_height = block.header.height as u64;
 
+                    info!(target: "explorer::handle_block_sub", "Height {}", incoming_height);
+
                     // Check if we need to reorg
                     let current_height = self.get_height().ok().flatten().unwrap_or(0);
 
@@ -174,12 +182,16 @@ impl Explorer {
                         // Reorg needed: incoming block is at or before our current height
                         let blocks_to_revert = current_height - incoming_height + 1;
                         info!(
+                            target: "explorer::handle_block_sub",
                             "Reorg detected! Incoming height {} <= current height {}. Reverting {} blocks.",
                             incoming_height, current_height, blocks_to_revert
                         );
 
                         if let Err(e) = self.revert_blocks(blocks_to_revert).await {
-                            tracing::error!("Failed to revert blocks during reorg: {}", e);
+                            error!(
+                                target: "explorer::handle_block_sub",
+                                "Failed to revert blocks during reorg: {e}",
+                            );
                             continue;
                         }
                     }
@@ -202,7 +214,6 @@ impl Explorer {
                     let diff = DifficultyIndex { difficulty, cumulative };
 
                     self.append_block(&block, &diff).await.unwrap();
-                    info!("Appended block {}", block.header.height);
                 }
                 _ => panic!("fixme"),
             }
@@ -217,15 +228,17 @@ impl Explorer {
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
         if from_height == to_height {
-            info!("Blockchain already synced");
             return Ok(())
         }
 
-        info!("sync_blockchain started from_height={from_height} to_height={to_height}...");
+        info!(
+            target: "explorer::sync_blockchain",
+            "Started blockchain sync from_height={from_height} to_height={to_height}...",
+        );
         let rpc_client = Arc::new(RpcClient::new(rpc_endpoint, ex.clone()).await?);
 
         for height in from_height..=to_height {
-            info!("Requesting block at height {height}");
+            info!(target: "explorer::sync_blockchain", "Requesting block at height {height}");
 
             // Get block
             let req = JsonRequest::new(
@@ -346,7 +359,7 @@ async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>
 
     // Start up an RPC server that can be queried for data.
     // This normally serves the data to the Python website frontend.
-    info!("Starting JSONRPC server");
+    info!(target: "explorer", "Starting JSONRPC server");
     let rpc_settings = RpcSettings::default();
     listen_and_serve(rpc_settings, explorer, None, ex.clone()).await?;
 
@@ -354,22 +367,23 @@ async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>
 }
 
 fn main() -> Result<()> {
-    let argv;
     let mut hflag = false;
     let mut evalue = "tcp://127.0.0.1:18345".to_string();
     let mut dvalue = "~/.local/share/darkfi/explorer/db".to_string();
+    let mut verbose = 0;
 
     {
         let mut args = Args::new().with_cb(|args, flag| match flag {
             'e' => evalue = args.eargf().to_string(),
             'd' => dvalue = args.eargf().to_string(),
+            'v' => verbose += 1,
             _ => hflag = true,
         });
 
-        argv = args.parse();
+        args.parse();
     }
 
-    if hflag || argv.is_empty() {
+    if hflag {
         usage();
         exit(1);
     }
@@ -395,7 +409,11 @@ fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
-    darkfi::util::logger::setup_logging(1, None)?;
+    darkfi::util::logger::setup_logging(verbose, None)?;
+
+    info!(target: "explorer", "RPC Endpoint: {}", evalue);
+    info!(target: "explorer", "DB Path: {}", dvalue);
+    verbose!(target: "explorer", "Log Level: {}", verbose);
 
     let (_, result) = easy_parallel::Parallel::new()
         // Run four executor threads
