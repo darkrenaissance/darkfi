@@ -196,13 +196,150 @@ async def search():
         except JsonRpcError:
             pass
 
+    # Try as contract ID (base58)
+    try:
+        contract = await rpc.call("get_contract", params=[query])
+        return redirect(url_for("get_contract", contract_id=query))
+    except JsonRpcError:
+        pass
+
     # Nothing found
     return await render_template(
         "error.html",
         network=app.config["NETWORK"],
         error_code="Not Found",
-        error=f"No block or transaction found for: {query}"
+        error=f"No block, transaction, or contract found for: {query}"
     ), 404
+
+
+def format_bytes(size: int) -> str:
+    """Format byte size with appropriate unit."""
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    elif size >= 1024:
+        return f"{size / 1024:.2f} KB"
+    else:
+        return f"{size} bytes"
+
+
+@app.route("/contract/<contract_id>")
+async def get_contract(contract_id: str):
+    current_difficulty = await rpc.call("current_difficulty", params=[])
+    current_height = await rpc.call("current_height", params=[])
+    hashrate = await rpc.call("get_hashrate", params=[])
+    contract = await rpc.call("get_contract", params=[contract_id])
+
+    contract["wasm_size_formatted"] = format_bytes(int(contract["wasm_size"]))
+
+    return await render_template(
+        "contract.html",
+        network=app.config["NETWORK"],
+        current_difficulty=current_difficulty[0],
+        current_height=current_height,
+        hashrate=format_hashrate(hashrate),
+        contract=contract,
+    )
+
+
+@app.route("/contracts")
+async def list_contracts():
+    current_difficulty = await rpc.call("current_difficulty", params=[])
+    current_height = await rpc.call("current_height", params=[])
+    hashrate = await rpc.call("get_hashrate", params=[])
+    contracts = await rpc.call("list_contracts", params=[])
+    contract_count = await rpc.call("contract_count", params=[])
+
+    for contract in contracts:
+        contract["wasm_size_formatted"] = format_bytes(int(contract["wasm_size"]))
+
+    return await render_template(
+        "contracts.html",
+        network=app.config["NETWORK"],
+        current_difficulty=current_difficulty[0],
+        current_height=current_height,
+        hashrate=format_hashrate(hashrate),
+        contracts=contracts,
+        contract_count=contract_count,
+    )
+
+
+@app.route("/stats")
+async def stats():
+    current_difficulty = await rpc.call("current_difficulty", params=[])
+    current_height = await rpc.call("current_height", params=[])
+    hashrate = await rpc.call("get_hashrate", params=[])
+    stats_data = await rpc.call("get_stats", params=[])
+
+    return await render_template(
+        "stats.html",
+        network=app.config["NETWORK"],
+        current_difficulty=current_difficulty[0],
+        current_height=current_height,
+        hashrate=format_hashrate(hashrate),
+        stats=stats_data,
+    )
+
+
+@app.route("/stats/daily_tx_chart.png")
+async def daily_tx_chart():
+    """Generate daily average transactions chart as PNG using matplotlib."""
+    import io
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    from datetime import datetime, timezone
+
+    stats_data = await rpc.call("get_stats", params=[])
+    daily_stats = stats_data.get("daily_stats", [])
+
+    # Filter to last 90 days
+    if daily_stats:
+        max_day = max(d["day"] for d in daily_stats)
+        daily_stats = [d for d in daily_stats if d["day"] >= max_day - 90]
+
+    # Create figure with dark theme
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
+    fig.patch.set_facecolor('#0d1117')
+    ax.set_facecolor('#0d1117')
+
+    if daily_stats:
+        # Convert day numbers to dates
+        dates = [datetime.fromtimestamp(d["day"] * 86400, tz=timezone.utc) for d in daily_stats]
+        values = [d["avg_tx"] for d in daily_stats]
+
+        ax.fill_between(dates, values, alpha=0.3, color='#6366f1')
+        ax.plot(dates, values, color='#6366f1', linewidth=2)
+
+        # Format x-axis
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+        plt.xticks(rotation=45, ha='right')
+
+        ax.set_ylabel('Avg TX per Block', color='#9ca3af')
+        ax.tick_params(colors='#9ca3af')
+        ax.spines['bottom'].set_color('#30363d')
+        ax.spines['left'].set_color('#30363d')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(True, alpha=0.2, color='#30363d')
+    else:
+        ax.text(0.5, 0.5, 'No data available', ha='center', va='center',
+                transform=ax.transAxes, color='#9ca3af', fontsize=14)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+    plt.tight_layout()
+
+    # Save to bytes buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', facecolor='#0d1117', edgecolor='none')
+    plt.close(fig)
+    buf.seek(0)
+
+    from quart import Response
+    return Response(buf.getvalue(), mimetype='image/png')
 
 
 if __name__ == "__main__":

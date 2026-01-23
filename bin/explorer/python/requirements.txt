@@ -1,0 +1,3 @@
+quart>=0.20.0
+hypercorn>=0.18.0
+matplotlib>=3.10.0

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DarkFi Blocks - Contracts</title>
+  <link rel="stylesheet" href="/static/layout.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container flex justify-between items-center">
+      <div class="logo">DarkFi {{ network }} Blocks</div>
+      <nav class="nav">
+        <a href="/">Explorer</a>
+        <a href="/contracts" class="active">Contracts</a>
+        <a href="/stats">Stats</a>
+        <a href="https://dark.fi/book/">Docs</a>
+        <a href="https://codeberg.org/darkrenaissance/darkfi/">Code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container section">
+
+    <form action="/search" method="GET" class="input-group mb-lg" style="max-width: 600px;">
+      <input type="search" name="q" class="input" placeholder="Search by block height, hash, transaction, or contract ID...">
+      <button type="submit" class="btn">Search</button>
+    </form>
+
+    <div class="stats-grid mb-lg">
+      <div class="stat-card">
+        <div class="label">Difficulty</div>
+        <div class="value">{{ current_difficulty }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Height</div>
+        <div class="value">{{ current_height }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Hashrate</div>
+        <div class="value">{{ hashrate|default('n/a') }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Contracts</div>
+        <div class="value">{{ contract_count|int }}</div>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header">
+        <h3>Deployed Contracts</h3>
+        <span class="badge">{{ contract_count|int }} Total</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Contract ID</th>
+              <th>Status</th>
+              <th>WASM Size</th>
+              <th>Deploy Block</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for contract in contracts %}
+            <tr>
+              <td><a href="/contract/{{ contract.contract_id }}" class="hash">{{ contract.contract_id }}</a></td>
+              <td>
+                {% if contract.locked %}
+                <span class="status-locked">🔒 Locked</span>
+                {% else %}
+                <span class="status-unlocked">🔓 Unlocked</span>
+                {% endif %}
+              </td>
+              <td>{{ contract.wasm_size_formatted }}</td>
+              <td><a href="/block/{{ contract.deploy_block|int }}">{{ contract.deploy_block|int }}</a></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--color-muted);">No contracts deployed yet</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <a href="https://dark.fi">Let there be Dark</a> · Code licensed under AGPL-3
+    </div>
+  </footer>
+
+  <style>
+    .status-locked {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .status-unlocked {
+      color: #28a745;
+      font-weight: bold;
+    }
+  </style>
+</body>
+</html>
