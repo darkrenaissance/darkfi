@@ -1,4 +1,4 @@
-# hypercorn --config hypercorn.toml app:app
+# hypercorn --config hypercorn.toml explorer:app
 bind = ["unix:/run/explorer/hypercorn.sock"]
 workers = 8
 worker_class = "asyncio"
