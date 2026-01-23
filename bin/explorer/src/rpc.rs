@@ -25,9 +25,11 @@ use darkfi::{
         JsonError, JsonResponse, JsonResult,
     },
     tx::Transaction,
-    util::encoding::base64,
+    util::{encoding::base64, parse::encode_base10},
 };
-use darkfi_serial::serialize_async;
+use darkfi_money_contract::MoneyFunction;
+use darkfi_sdk::crypto::contract_id::MONEY_CONTRACT_ID;
+use darkfi_serial::{deserialize_async, serialize_async};
 use tinyjson::JsonValue;
 
 use crate::{DifficultyIndex, Explorer};
@@ -75,25 +77,26 @@ struct TransactionInfo {
 
 impl TransactionInfo {
     async fn new(tx: &Transaction) -> Self {
+        let mut fee = 0;
         let mut calls = Vec::with_capacity(tx.calls.len());
         for call in &tx.calls {
-            let call_data = serialize_async(&call.data).await;
-            let func = if call_data.is_empty() {
-                "0x00".to_string()
-            } else {
-                format!("0x{:02x}", call_data[0])
-            };
+            let func = call.data.data[0];
+
+            if call.data.contract_id == *MONEY_CONTRACT_ID && func == MoneyFunction::FeeV1 as u8 {
+                fee = deserialize_async(&call.data.data[1..9]).await.unwrap();
+            }
+
             calls.push(ContractCallInfo::new(
                 call.data.contract_id.to_string(),
-                func,
-                call_data.len() as u64,
+                format!("0x{:02x}", func),
+                call.data.data.len() as u64,
             ));
         }
 
         Self {
             hash: tx.hash().to_string(),
             calls,
-            fee: 0,
+            fee,
             size: serialize_async(tx).await.len() as u64,
         }
     }
@@ -104,7 +107,7 @@ impl TransactionInfo {
         JsonValue::Object(HashMap::from([
             ("hash".to_string(), JsonValue::String(self.hash.clone())),
             ("calls".to_string(), JsonValue::Array(calls)),
-            ("fee".to_string(), JsonValue::Number(self.fee as f64)),
+            ("fee".to_string(), JsonValue::String(encode_base10(self.fee, 8))),
             ("size".to_string(), JsonValue::Number(self.size as f64)),
         ]))
     }
@@ -124,18 +127,19 @@ struct ExplTxInfo {
 
 impl ExplTxInfo {
     async fn new(tx: &Transaction, block_height: u64, current_height: u64) -> Self {
+        let mut fee = 0;
         let mut calls = Vec::with_capacity(tx.calls.len());
         for call in &tx.calls {
-            let call_data = serialize_async(&call.data).await;
-            let func = if call_data.is_empty() {
-                "0x00".to_string()
-            } else {
-                format!("0x{:02x}", call_data[0])
-            };
+            let func = call.data.data[0];
+
+            if call.data.contract_id == *MONEY_CONTRACT_ID && func == MoneyFunction::FeeV1 as u8 {
+                fee = deserialize_async(&call.data.data[1..9]).await.unwrap();
+            }
+
             calls.push(ContractCallInfo::new(
                 call.data.contract_id.to_string(),
-                func,
-                call_data.len() as u64,
+                format!("0x{:02x}", func),
+                call.data.data.len() as u64,
             ));
         }
 
@@ -147,7 +151,7 @@ impl ExplTxInfo {
             hash: tx.hash().to_string(),
             from_block: block_height,
             confirmations,
-            fee: 0,
+            fee,
             size: raw_bytes.len() as u64,
             n_calls: tx.calls.len() as u64,
             calls,
@@ -160,7 +164,7 @@ impl ExplTxInfo {
             ("hash".to_string(), JsonValue::String(self.hash.clone())),
             ("from_block".to_string(), JsonValue::Number(self.from_block as f64)),
             ("confirmations".to_string(), JsonValue::Number(self.confirmations as f64)),
-            ("fee".to_string(), JsonValue::Number(self.fee as f64)),
+            ("fee".to_string(), JsonValue::String(encode_base10(self.fee, 8))),
             ("size".to_string(), JsonValue::Number(self.size as f64)),
             ("n_calls".to_string(), JsonValue::Number(self.n_calls as f64)),
             (

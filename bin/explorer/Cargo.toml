@@ -8,6 +8,8 @@ darkfi = {path = "../../", features = ["blockchain", "rpc"]}
 darkfi-serial = {path = "../../src/serial", features = ["derive"]}
 darkfi-sdk = {path = "../../src/sdk"}
 
+darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
+
 async-channel = "2.5.0"
 async-trait = "0.1.89"
 easy-parallel = "3.3.1"
