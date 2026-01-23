@@ -76,13 +76,13 @@ mixed_profiles = []
 
 [net.profiles."tcp+tls"]
 ## Seed nodes to connect to
-seeds = ["tcp+tls://lilith1.dark.fi:25551"]
+seeds = ["tcp+tls://lilith1.dark.fi:9600"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661"]
+external_addrs = ["tcp+tls://MY_IP_V4:9600", "tcp+tls://MY_IP_V6:9600", "tcp+tls://my.resolveable.address:9600"]
 
 ## P2P accept addresses
-inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
+inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]
 
 ## Connection settings with default values applicable for each profile separately
 #outbound_connect_timeout = 15
@@ -121,15 +121,15 @@ mixed_profiles = []
 [net.profiles."tor"]
 ## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
 ]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:26661"]
+external_addrs = ["tor://youraddress.onion:9601"]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:26661"]
+inbound = ["tcp://127.0.0.1:9601"]
 
 ## Connection settings with default values applicable for each profile separately
 #outbound_connect_timeout = 60
@@ -168,14 +168,14 @@ i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 [net.profiles."i2p"]
 ## Seed nodes to connect to
 seeds = [
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9602"
 ]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:26661"]
+external_addrs = ["i2p://youraddress.b32.i2p:9602"]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:26661"]
+inbound = ["tcp://127.0.0.1:9602"]
 
 ## Connection settings with default values applicable for each profile separately
 #outbound_connect_timeout = 60
@@ -215,42 +215,42 @@ mixed_profiles = []
 
 [net.profiles."tcp+tls"]
 ## Seed nodes to connect to
-seeds = ["tcp+tls://lilith0.dark.fi:25551", "tcp+tls://lilith1.dark.fi:25551"]
+seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
 
 ## P2P accept addresses
-inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
+inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661"]
+external_addrs = ["tcp+tls://MY_IP_V4:9600", "tcp+tls://MY_IP_V6:9600", "tcp+tls://my.resolveable.address:9600"]
 
 [net.profiles."tor"]
 ## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
 ]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:26662"]
+inbound = ["tcp://127.0.0.1:9601"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:26662"]
+external_addrs = ["tor://youraddress.onion:9601"]
 
 [net.profiles."i2p"]
 ## Seed nodes to connect to
 seeds = [
     ##TODO: replace with an official seed address
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9602"
 ]
 
 ## Manual peers to connect to
 #peers = []
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:26663"]
+inbound = ["tcp://127.0.0.1:9602"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:26663"]
+external_addrs = ["i2p://youraddress.b32.i2p:9602"]
 ```
 
 ### Autohost
@@ -264,13 +264,13 @@ in the `tcp+tls` profile as shown below.
 ```toml
 [net.profiles."tcp+tls"]
 ## P2P accept addresses
-inbound = ["tcp+tls://[::]:26661"]
+inbound = ["tcp+tls://[::]:9600"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://[::]:26661"]
+external_addrs = ["tcp+tls://[::]:9600"]
 
 ## Seed nodes to connect to
-seeds = ["tcp+tls://lilith0.dark.fi:25551", "tcp+tls://lilith1.dark.fi:25551"]
+seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
 ```
 
 #### Tor
@@ -282,14 +282,14 @@ edit the `inbound` field in the `tor` as shown below.
 ```toml
 [net.profiles."tor"]
 ## P2P accept addresses
-inbound = ["tor://127.0.0.1:26661"]
+inbound = ["tor://127.0.0.1:9601"]
 
 ## Addresses we want to advertise to peers
 external_addrs = []
 
 ## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
 ]
 ```

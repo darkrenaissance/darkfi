@@ -58,7 +58,7 @@ i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 [net.profiles."i2p"]
 ## Seed nodes to connect to
 seeds = [
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9602"
 ]
 ```
 
@@ -78,7 +78,7 @@ and create a file `darkirc.conf` with the following contents:
 [darkirc]
 type = server
 host = 127.0.0.1
-port = 25551
+port = 9602
 keys = darkirc.dat
 ```
 
@@ -91,7 +91,7 @@ Then restart i2pd:
 Find the hostname of your hidden service by running the following command:
 
 ```
-% curl -s http://127.0.0.1:7070/?page=i2p_tunnels | grep -Eo "[a-zA-Z0-9./?=_%:-]*" | grep "25551"
+% curl -s http://127.0.0.1:7070/?page=i2p_tunnels | grep -Eo "[a-zA-Z0-9./?=_%:-]*" | grep "9602"
 ```
 
 The above configuration saves the `i2p` hidden service key in `/var/lib/i2pd/darkirc.dat`,
@@ -106,10 +106,10 @@ inbound_connections = 64
 
 [net.profiles."i2p"]
 ## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:25551"]
+external_addrs = ["i2p://youraddress.b32.i2p:9602"]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:25551"]
+inbound = ["tcp://127.0.0.1:9602"]
 ```
 
 ## Connect and test your node

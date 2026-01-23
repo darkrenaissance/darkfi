@@ -72,7 +72,7 @@ nym_socks5_proxy = "socks5://127.0.0.1:1080"
 [net.profiles."socks5+tls"]
 ## Seed nodes to connect to
 seeds = [
-    "socks5+tls://127.0.0.1:1080/lilith1.dark.fi:25551"
+    "socks5+tls://127.0.0.1:1080/lilith1.dark.fi:9603"
 ]
 ```
 

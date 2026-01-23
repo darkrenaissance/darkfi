@@ -37,22 +37,22 @@ If the seed node is down, you will see this message in the debug output:
 
 ```
 ERROR] [P2P] Network reseed failed!
-[WARN] [P2P] Unable to connect to seed [tcp+tls://lilith1.dark.fi:5262/]: IO error: connection refused
+[WARN] [P2P] Unable to connect to seed [tcp+tls://lilith1.dark.fi:9600/]: IO error: connection refused
 ```
 
 If it's a problem related to nodes, you will typically see a successful
 seed connection like so:
 
 ```
-[INFO] [P2P] Connected seed [tcp+tls://lilith1.dark.fi:5262/]
-[INFO] [P2P] Disconnecting from seed [tcp+tls://lilith1.dark.fi:5262/]
+[INFO] [P2P] Connected seed [tcp+tls://lilith1.dark.fi:9600/]
+[INFO] [P2P] Disconnecting from seed [tcp+tls://lilith1.dark.fi:9600/]
 ```
 
 Followed by multiple connection failed messages, like so:
 
 ```
-[INFO] [P2P] Unable to connect outbound slot #5 [tcp+tls://example_peer:26661/]: IO error: connection refused
-[INFO] [P2P] Unable to connect outbound slot #6 [tcp+tls://example_peer2:26661/]: IO error: host unreachable
+[INFO] [P2P] Unable to connect outbound slot #5 [tcp+tls://example_peer:9600/]: IO error: connection refused
+[INFO] [P2P] Unable to connect outbound slot #6 [tcp+tls://example_peer2:9600/]: IO error: host unreachable
 ```
 
 ### Seed node is down
@@ -60,7 +60,7 @@ Followed by multiple connection failed messages, like so:
 If you get an error like this:
 
 ```
-[WARN] [P2P] Unable to connect to seed [tcp+tls://lilith1.dark.fi:5262/]: IO error: connection refused
+[WARN] [P2P] Unable to connect to seed [tcp+tls://lilith1.dark.fi:9600/]: IO error: connection refused
 ```
 
 This means you are failing to establish a connection to the seed node.
@@ -80,14 +80,14 @@ is down. Please do the following:
 1. Take careful note of the `IO error` that is written after `Unable to
 connect to seed`.
 2. Refer to [Error reporting](#error-reporting) section below.
-3. You can set a peer such as `tcp+tls://example_peer:26661` in your
+3. You can set a peer such as `tcp+tls://example_peer:9600` in your
 config file. Ask in the telegram community channel for an active peer
 (here we are using a fake peer called `example_peer`. Then open the
 config file at `~/.config/darkfi/darkirc_config.toml` and modify the `peers`
 field with the provided peer as follows:
 
 ```
-peers = ["tcp+tls://example_peer:26661"]
+peers = ["tcp+tls://example_peer:9600"]
 ```
 
 #### It's not my first time connecting to the network
@@ -154,7 +154,7 @@ we'll delete the directory:
 If you see something in the logs like this:
 
 ```
-[INFO] [P2P] Outbound slot #1 connected [tcp-tls://example_peer:25551/] 
+[INFO] [P2P] Outbound slot #1 connected [tcp-tls://example_peer:9600/] 
 ```
 
 That means you are connected. You can verify that by writing `test` in
@@ -202,7 +202,7 @@ your hostlist file. You can now use the `ping` tool by
 running this command:
 
 ```
-$ cargo run -- tcp+tls://example_peer:26661
+$ cargo run -- tcp+tls://example_peer:9600
 ```
 
 If the peers are reachable, you'll receive a `Connected!` output.
