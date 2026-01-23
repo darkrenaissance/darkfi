@@ -25,6 +25,7 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::schnorr::Signature;
 use darkfi_serial::{deserialize_async, serialize_async};
+use sled::{transaction::TransactionError, Transactional};
 use tapes::{BlobTape, FixedSizedTape, Persistence, TapeOpenOptions, Tapes};
 use tracing::info;
 
@@ -118,26 +119,36 @@ impl Explorer {
         // Append difficulty
         tx.append_entries(&self.database.difficulty_index, std::slice::from_ref(diff))?;
 
-        // sled stores transaction indices so we can reference them
-        let mut batch = sled::Batch::default();
-        for (i, tx) in block.txs.iter().enumerate() {
-            let tx_hash = tx.hash();
+        // Commit Tapes first
+        tx.commit(Persistence::SyncData)?;
+
+        // Prepare data for atomic sled transaction
+        let header_hash = serialize_async(&block.header.hash()).await;
+        // Store height as u64 (8 bytes) to match lookup format
+        let height_bytes = (block.header.height as u64).to_le_bytes();
+
+        // Collect tx hashes and their indices
+        let mut tx_entries: Vec<([u8; 32], [u8; 8])> = Vec::with_capacity(block.txs.len());
+        for (i, transaction) in block.txs.iter().enumerate() {
+            let tx_hash = *transaction.hash().inner();
             let tx_idx_pos = tx_start_idx + i as u64;
-            batch.insert(tx_hash.inner(), &tx_idx_pos.to_le_bytes());
+            tx_entries.push((tx_hash, tx_idx_pos.to_le_bytes()));
         }
 
-        // Commit Tapes and Sled
-        tx.commit(Persistence::SyncData)?;
-        self.tx_indices.apply_batch(batch)?;
-
-        // TODO: This should also be atomic with the above batch
-        // Also store a map of header_hash -> height
-        // On reorg/delete we can get_header(height) from tapes and then find
-        // which header to remove from header_indices.
-        self.header_indices.insert(
-            serialize_async(&block.header.hash()).await,
-            &block.header.height.to_le_bytes(),
-        )?;
+        // Atomic sled transaction for both tx_indices and header_indices
+        (&self.tx_indices, &self.header_indices)
+            .transaction(|(tx_tree, header_tree)| {
+                // Insert all transaction indices
+                for (hash, idx) in &tx_entries {
+                    tx_tree.insert(hash.as_slice(), idx.as_slice())?;
+                }
+                // Insert header hash -> height mapping
+                header_tree.insert(header_hash.as_slice(), height_bytes.as_slice())?;
+                Ok(())
+            })
+            .map_err(|e: TransactionError<sled::Error>| {
+                io::Error::other(format!("sled transaction error: {e}"))
+            })?;
 
         info!(
             "Appended block {} ({} bytes header, {} txs)",
@@ -162,7 +173,7 @@ impl Explorer {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "Cannot revert more blocks than exist",
-            ));
+            ))
         }
 
         let new_block_count = current_len - count;
@@ -235,18 +246,20 @@ impl Explorer {
 
         truncate_tx.commit(Persistence::SyncData)?;
 
-        // Remove from sled
-        let mut tx_batch = sled::Batch::default();
-        for tx_hash in &tx_hashes_to_remove {
-            tx_batch.remove(tx_hash.as_slice());
-        }
-        self.tx_indices.apply_batch(tx_batch)?;
-
-        let mut header_batch = sled::Batch::default();
-        for header_hash in &header_hashes_to_remove {
-            header_batch.remove(header_hash.as_slice());
-        }
-        self.header_indices.apply_batch(header_batch)?;
+        // Atomic sled transaction for removing both tx and header indices
+        (&self.tx_indices, &self.header_indices)
+            .transaction(|(tx_tree, header_tree)| {
+                for tx_hash in &tx_hashes_to_remove {
+                    tx_tree.remove(tx_hash.as_slice())?;
+                }
+                for header_hash in &header_hashes_to_remove {
+                    header_tree.remove(header_hash.as_slice())?;
+                }
+                Ok(())
+            })
+            .map_err(|e: TransactionError<sled::Error>| {
+                io::Error::other(format!("sled transaction error: {e}"))
+            })?;
 
         info!(
             "Reverted {} blocks (new height: {})",
@@ -304,18 +317,37 @@ impl Explorer {
         };
 
         if block_idx.tx_count == 0 {
-            return Ok(Some(vec![]));
+            return Ok(Some(vec![]))
         }
 
-        let mut txs = Vec::with_capacity(block_idx.tx_count as usize);
+        // Read all TxIndex entries for this block
+        let mut tx_indices = Vec::with_capacity(block_idx.tx_count as usize);
         for i in 0..block_idx.tx_count {
             let tx_idx = reader
                 .read_entry(&self.database.tx_index, block_idx.tx_start_idx + i)?
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "tx index not found"))?;
+            tx_indices.push(tx_idx);
+        }
 
-            let mut data = vec![0u8; tx_idx.length as usize];
-            reader.read_bytes(&self.database.transactions, tx_idx.offset, &mut data)?;
-            txs.push(deserialize_async(&data).await?);
+        if tx_indices.is_empty() {
+            return Ok(Some(vec![]))
+        }
+
+        // Since transactions are stored contiguously, read all data at once
+        let first_tx = &tx_indices[0];
+        let last_tx = &tx_indices[tx_indices.len() - 1];
+        let total_len = (last_tx.offset + last_tx.length - first_tx.offset) as usize;
+
+        // Read all transaction data in one operation
+        let mut all_tx_data = vec![0u8; total_len];
+        reader.read_bytes(&self.database.transactions, first_tx.offset, &mut all_tx_data)?;
+
+        // Deserialize each transaction from the combined buffer
+        let mut txs = Vec::with_capacity(tx_indices.len());
+        for tx_idx in &tx_indices {
+            let start = (tx_idx.offset - first_tx.offset) as usize;
+            let end = start + tx_idx.length as usize;
+            txs.push(deserialize_async(&all_tx_data[start..end]).await?);
         }
 
         Ok(Some(txs))
@@ -332,6 +364,40 @@ impl Explorer {
 
         // We don't care about displaying the block signature.
         Ok(Some(BlockInfo { header, txs, signature: Signature::dummy() }))
+    }
+
+    /// Get basic block info without loading all transactions.
+    /// Returns (header, tx_count, total_size) for efficient latest_blocks display.
+    pub async fn get_block_summary(&self, height: u64) -> io::Result<Option<(Header, u64, u64)>> {
+        let reader = self.tapes_db.reader();
+
+        let block_idx = match reader.read_entry(&self.database.block_index, height)? {
+            Some(idx) => idx,
+            None => return Ok(None),
+        };
+
+        let mut header_data = vec![0u8; block_idx.length as usize];
+        reader.read_bytes(&self.database.blocks, block_idx.offset, &mut header_data)?;
+        let header: Header = deserialize_async(&header_data).await?;
+
+        // Calculate total size: header + all transactions
+        let total_tx_size = if block_idx.tx_count == 0 {
+            0
+        } else {
+            let first_tx_idx = reader
+                .read_entry(&self.database.tx_index, block_idx.tx_start_idx)?
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "tx index not found"))?;
+            let last_tx_idx = reader
+                .read_entry(
+                    &self.database.tx_index,
+                    block_idx.tx_start_idx + block_idx.tx_count - 1,
+                )?
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "tx index not found"))?;
+            last_tx_idx.offset + last_tx_idx.length - first_tx_idx.offset
+        };
+
+        let total_size = block_idx.length + total_tx_size;
+        Ok(Some((header, block_idx.tx_count, total_size)))
     }
 
     /// Get a transaction by its hash.

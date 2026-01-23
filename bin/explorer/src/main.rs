@@ -87,6 +87,8 @@ impl RequestHandler<RpcHandler> for Explorer {
             "latest_blocks" => self.rpc_latest_blocks(req.id, req.params).await,
             "get_block" => self.rpc_get_block(req.id, req.params).await,
             "get_tx" => self.rpc_get_tx(req.id, req.params).await,
+            "search" => self.rpc_search(req.id, req.params).await,
+            "get_hashrate" => self.rpc_get_hashrate(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -142,13 +144,28 @@ impl Explorer {
 
             match block_notification {
                 JsonResult::Notification(notification) => {
-                    // TODO: Check if height is lower than our known height.
-                    // This means we need to reorg.
-
                     // Deserialize base64 block
                     let block_bytes =
                         base64::decode(notification.params[0].get::<String>().unwrap()).unwrap();
                     let block: BlockInfo = deserialize_async(&block_bytes).await.unwrap();
+                    let incoming_height = block.header.height as u64;
+
+                    // Check if we need to reorg
+                    let current_height = self.get_height().ok().flatten().unwrap_or(0);
+
+                    if incoming_height <= current_height {
+                        // Reorg needed: incoming block is at or before our current height
+                        let blocks_to_revert = current_height - incoming_height + 1;
+                        info!(
+                            "Reorg detected! Incoming height {} <= current height {}. Reverting {} blocks.",
+                            incoming_height, current_height, blocks_to_revert
+                        );
+
+                        if let Err(e) = self.revert_blocks(blocks_to_revert).await {
+                            tracing::error!("Failed to revert blocks during reorg: {}", e);
+                            continue;
+                        }
+                    }
 
                     // Get difficulty
                     let rpc_client =
@@ -225,9 +242,9 @@ impl Explorer {
 
 async fn realmain(ex: Arc<Executor<'static>>) -> Result<()> {
     let explorer = Arc::new(Explorer::new(
-        Path::new("sled_db"),
-        Path::new("tapes_metadata"),
-        Path::new("tapes"),
+        Path::new("db/sled_db"),
+        Path::new("db/tapes_metadata"),
+        Path::new("db/tapes"),
     )?);
 
     // First we should subscribe to new blocks and queue them to apply

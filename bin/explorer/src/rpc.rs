@@ -1,3 +1,21 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2026 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use std::collections::HashMap;
 
 use darkfi::{
@@ -13,44 +31,6 @@ use darkfi_serial::serialize_async;
 use tinyjson::JsonValue;
 
 use crate::{DifficultyIndex, Explorer};
-
-struct LatestBlockInfo {
-    height: u64,
-    size: u64,
-    n_txs: u64,
-    timestamp: u64,
-    powtype: String,
-    hash: String,
-}
-
-impl LatestBlockInfo {
-    async fn new(block: &BlockInfo) -> Self {
-        let powtype = match block.header.pow_data {
-            PowData::DarkFi => "DarkFi".to_string(),
-            PowData::Monero(_) => "Monero".to_string(),
-        };
-
-        Self {
-            height: block.header.height as u64,
-            size: serialize_async(block).await.len() as u64,
-            n_txs: block.txs.len() as u64,
-            timestamp: block.header.timestamp.inner(),
-            powtype,
-            hash: block.header.hash().to_string(),
-        }
-    }
-
-    fn to_json(&self) -> JsonValue {
-        JsonValue::Object(HashMap::from([
-            ("height".to_string(), JsonValue::Number(self.height as f64)),
-            ("size".to_string(), JsonValue::Number(self.size as f64)),
-            ("n_txs".to_string(), JsonValue::Number(self.n_txs as f64)),
-            ("timestamp".to_string(), JsonValue::Number(self.timestamp as f64)),
-            ("powtype".to_string(), JsonValue::String(self.powtype.clone())),
-            ("hash".to_string(), JsonValue::String(self.hash.clone())),
-        ]))
-    }
-}
 
 struct ContractCallInfo {
     contract_id: String,
@@ -328,18 +308,28 @@ impl Explorer {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        let (mut blocks, n_blocks) = if n_blocks > height {
-            (Vec::with_capacity(height as usize), height)
-        } else {
-            (Vec::with_capacity(n_blocks as usize), n_blocks)
-        };
+        // Calculate how many blocks we can actually return
+        let start_height = height.saturating_sub(n_blocks.saturating_sub(1));
+        let mut blocks = Vec::with_capacity((height - start_height + 1) as usize);
 
-        for i in (0..=n_blocks).rev() {
-            let Ok(Some(block)) = self.get_block(i).await else {
+        for h in (start_height..=height).rev() {
+            let Ok(Some((header, tx_count, size))) = self.get_block_summary(h).await else {
                 return JsonError::new(InternalError, None, id).into()
             };
 
-            blocks.push(LatestBlockInfo::new(&block).await.to_json());
+            let powtype = match header.pow_data {
+                PowData::DarkFi => "DarkFi".to_string(),
+                PowData::Monero(_) => "Monero".to_string(),
+            };
+
+            blocks.push(JsonValue::Object(HashMap::from([
+                ("height".to_string(), JsonValue::Number(header.height as f64)),
+                ("size".to_string(), JsonValue::Number(size as f64)),
+                ("n_txs".to_string(), JsonValue::Number(tx_count as f64)),
+                ("timestamp".to_string(), JsonValue::Number(header.timestamp.inner() as f64)),
+                ("powtype".to_string(), JsonValue::String(powtype)),
+                ("hash".to_string(), JsonValue::String(header.hash().to_string())),
+            ])));
         }
 
         JsonResponse::new(JsonValue::Array(blocks), id).into()
@@ -404,5 +394,101 @@ impl Explorer {
 
         let info = ExplTxInfo::new(&tx, block_height, current_height).await;
         JsonResponse::new(info.to_json(), id).into()
+    }
+
+    /// Search for a block or transaction by hash.
+    /// Returns `{"type": "block", "height": N}` or `{"type": "tx"}` depending on what was found.
+    pub async fn rpc_search(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let query = params[0].get::<String>().unwrap();
+
+        // Try to decode as hex
+        let Ok(hash_bytes) = hex::decode(query) else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        // Try block hash first (serialized blake3 hash)
+        if let Ok(Some(height_bytes)) = self.header_indices.get(&hash_bytes) {
+            let height = u64::from_le_bytes(height_bytes.as_ref().try_into().unwrap_or([0u8; 8]));
+            return JsonResponse::new(
+                JsonValue::Object(HashMap::from([
+                    ("type".to_string(), JsonValue::String("block".to_string())),
+                    ("height".to_string(), JsonValue::Number(height as f64)),
+                ])),
+                id,
+            )
+            .into()
+        }
+
+        // Try transaction hash (32 bytes)
+        if hash_bytes.len() == 32 {
+            let mut tx_hash = [0u8; 32];
+            tx_hash.copy_from_slice(&hash_bytes);
+            if self.tx_indices.get(tx_hash).ok().flatten().is_some() {
+                return JsonResponse::new(
+                    JsonValue::Object(HashMap::from([(
+                        "type".to_string(),
+                        JsonValue::String("tx".to_string()),
+                    )])),
+                    id,
+                )
+                .into()
+            }
+        }
+
+        // Not found
+        JsonError::new(InternalError, Some("Not found".to_string()), id).into()
+    }
+
+    /// Calculate the current network hashrate.
+    /// Hashrate = difficulty / average_block_time
+    /// We use the last N blocks to smooth out variance.
+    pub async fn rpc_get_hashrate(&self, id: u16, _params: JsonValue) -> JsonResult {
+        const BLOCKS_TO_AVERAGE: u64 = 30;
+
+        let Ok(Some(height)) = self.get_height() else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        if height < 2 {
+            return JsonResponse::new(JsonValue::Number(0.0), id).into()
+        }
+
+        let start_height = height.saturating_sub(BLOCKS_TO_AVERAGE);
+
+        // Get timestamps from start and end blocks
+        let Ok(Some(start_header)) = self.get_header(start_height).await else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+        let Ok(Some(end_header)) = self.get_header(height).await else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        let time_diff = end_header.timestamp.inner() as f64 - start_header.timestamp.inner() as f64;
+        let blocks_mined = (height - start_height) as f64;
+
+        if time_diff <= 0.0 || blocks_mined <= 0.0 {
+            return JsonResponse::new(JsonValue::Number(0.0), id).into()
+        }
+
+        // Get current difficulty
+        let Ok(Some(diff)) = self.get_difficulty(height) else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        // Average block time in seconds
+        let avg_block_time = time_diff / blocks_mined;
+
+        // Hashrate = difficulty / block_time
+        // This approximates hashes per second needed to find a block at current difficulty
+        let hashrate = (diff.difficulty as f64) / avg_block_time;
+
+        JsonResponse::new(JsonValue::Number(hashrate), id).into()
     }
 }
