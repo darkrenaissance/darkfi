@@ -9,7 +9,7 @@
 <body>
   <header class="header">
     <div class="container flex justify-between items-center">
-      <div class="logo"><span>Dark</span>Fi {{ network }} Blocks</div>
+      <div class="logo">DarkFi {{ network }} Blocks</div>
       <nav class="nav">
         <a href="/" class="active">Explorer</a>
         <a href="#">Stats</a>
@@ -21,10 +21,10 @@
 
   <main class="container section">
 
-    <div class="input-group mb-lg" style="max-width: 600px;">
-      <input type="search" class="input" placeholder="Search by block height, hash, or transaction...">
+    <form action="/search" method="GET" class="input-group mb-lg" style="max-width: 600px;">
+      <input type="search" name="q" class="input" placeholder="Search by block height, hash, or transaction...">
       <button type="submit" class="btn">Search</button>
-    </div>
+    </form>
 
     <div class="stats-grid mb-lg">
       <div class="stat-card">
@@ -37,7 +37,7 @@
       </div>
       <div class="stat-card">
         <div class="label">Hashrate</div>
-        <div class="value">n/a</div>
+        <div class="value">{{ hashrate|default('n/a') }}</div>
       </div>
       <div class="stat-card">
         <div class="label">Emission</div>
@@ -72,7 +72,11 @@
             </tr>
             <tr>
               <td class="info-label">Previous Hash</td>
-              <td><a href="/block/{{ block.height -1 }}" class="hash">{{ block.previous_hash }}</a></td>
+              {% if block.height == 0 %}
+              <td><span class="hash text-muted">{{ block.previous_hash }}</span> <span class="badge">Genesis</span></td>
+              {% else %}
+              <td><a href="/block/{{ block.height - 1 }}" class="hash">{{ block.previous_hash }}</a></td>
+              {% endif %}
             </tr>
             <tr>
               <td class="info-label">Height</td>

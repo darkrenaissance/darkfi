@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Error - DarkFi Block Explorer</title>
+  <link rel="stylesheet" href="/static/layout.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container flex justify-between items-center">
+      <div class="logo">>DarkFi {{ network }} Blocks</div>
+      <nav class="nav">
+        <a href="/">Explorer</a>
+        <a href="#">Stats</a>
+        <a href="https://dark.fi/book/">Docs</a>
+        <a href="https://codeberg.org/darkrenaissance/darkfi/">Code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container section">
+    <div class="error-page">
+      <div class="error-content">
+        <h1 class="error-title">{{ error_code|default('Error') }}</h1>
+        <p class="error-message">{{ error|default('An unexpected error occurred') }}</p>
+        <div class="error-actions">
+          <a href="/" class="btn">Return to Home</a>
+          <a href="javascript:history.back()" class="btn btn-outline">Go Back</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <a href="https://dark.fi">Let there be Dark</a> · Code licensed under AGPL-3
+    </div>
+  </footer>
+
+  <style>
+    .error-page {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 50vh;
+      text-align: center;
+    }
+    .error-content {
+      max-width: 500px;
+    }
+    .error-title {
+      font-size: 4rem;
+      color: var(--color-accent);
+      margin-bottom: 1rem;
+      border-left: none;
+      padding: 0;
+    }
+    .error-message {
+      font-size: 1.6rem;
+      color: var(--color-muted);
+      margin-bottom: 2rem;
+    }
+    .error-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+    }
+  </style>
+</body>
+</html>
