@@ -202,6 +202,10 @@ pub enum Error {
     #[error("Invalid state transition: current_state={0}, end_state={1}")]
     HostStateBlocked(String, String),
 
+    #[cfg(feature = "upnp-igd")]
+    #[error(transparent)]
+    UpnpError(#[from] oxy_upnp_igd::Error),
+
     // =============
     // Crypto errors
     // =============

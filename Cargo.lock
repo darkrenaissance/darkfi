@@ -1847,6 +1847,7 @@ dependencies = [
  "monero",
  "nu-ansi-term",
  "num-bigint",
+ "oxy-upnp-igd",
  "parking_lot 0.12.5",
  "pin-project-lite",
  "plotters",
@@ -3350,6 +3351,17 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "getifaddrs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06f770241660efeeedb30b48ccbe0a8e6f649322148237539e71f3ccd14a4461"
+dependencies = [
+ "bitflags 2.10.0",
+ "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4863,6 +4875,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxy-upnp-igd"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d27818d61515cd7f5592635320b7fe8981ff2c0a133e5ba94bb4707b59627f0d"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-trait",
+ "futures",
+ "getifaddrs",
+ "quick-xml",
+ "smol",
+ "thiserror 2.0.17",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5565,6 +5594,15 @@ name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
+
+[[package]]
+name = "quick-xml"
+version = "0.39.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2e3bf4aa9d243beeb01a7b3bc30b77cfe2c44e24ec02d751a7104a53c2c49a1"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "quinn-proto-smol"

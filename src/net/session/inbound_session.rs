@@ -26,7 +26,7 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use smol::{lock::Mutex, Executor};
+use smol::lock::Mutex;
 use tracing::{debug, error, warn};
 use url::Url;
 
@@ -40,7 +40,7 @@ use super::{
     Session, SessionBitFlag, SESSION_INBOUND,
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscription},
+    system::{ExecutorPtr, StoppableTask, StoppableTaskPtr, Subscription},
     util::logger::verbose,
     Error, Result,
 };
@@ -136,7 +136,7 @@ impl InboundSession {
         index: usize,
         accept_addr: Url,
         acceptor: AcceptorPtr,
-        ex: Arc<Executor<'_>>,
+        ex: ExecutorPtr,
     ) -> Result<()> {
         verbose!(target: "net::inbound_session", "[P2P] Starting Inbound session #{index} on {accept_addr}");
         // Start listener
@@ -156,7 +156,7 @@ impl InboundSession {
         self: Arc<Self>,
         channel_sub: Subscription<Result<ChannelPtr>>,
         index: usize,
-        ex: Arc<Executor<'_>>,
+        ex: ExecutorPtr,
     ) -> Result<()> {
         loop {
             let channel = channel_sub.receive().await?;
@@ -169,12 +169,7 @@ impl InboundSession {
 
     /// Registers the channel. First performs a network handshake and starts the channel.
     /// Then starts sending keep-alive and address messages across the channel.
-    async fn setup_channel(
-        self: Arc<Self>,
-        index: usize,
-        channel: ChannelPtr,
-        ex: Arc<Executor<'_>>,
-    ) {
+    async fn setup_channel(self: Arc<Self>, index: usize, channel: ChannelPtr, ex: ExecutorPtr) {
         verbose!(
              target: "net::inbound_session::setup_channel",
              "[P2P] Connected Inbound #{index} [{}]", channel.display_address()

@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use smol::{lock::RwLock as AsyncRwLock, Executor};
 use std::{sync::Arc, time::UNIX_EPOCH};
 use tracing::debug;
+use url::Url;
 
 use super::{
     super::{
@@ -75,6 +76,16 @@ const PROTO_NAME: &str = "ProtocolAddress";
 /// can request.
 const TRANSPORT_COMBOS: [&str; 9] =
     ["tor", "tls", "tcp", "nym", "i2p", "tor+tls", "nym+tls", "tcp+tls", "i2p+tls"];
+
+/// Strip query parameters from a URL before broadcasting.
+///
+/// This prevents leaking internal tracking identifiers (e.g., UPnP cookies)
+/// that could be used for fingerprinting nodes on the P2P network.
+fn strip_query_params(url: &Url) -> Url {
+    let mut stripped = url.clone();
+    stripped.set_query(None);
+    stripped
+}
 
 impl ProtocolAddress {
     /// Creates a new address protocol. Makes an address, an external address
@@ -244,8 +255,9 @@ impl ProtocolAddress {
         let mut addrs = vec![];
 
         for addr in external_addrs {
+            let stripped_addr = strip_query_params(&addr);
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            addrs.push((addr, last_seen));
+            addrs.push((stripped_addr, last_seen));
         }
 
         debug!(

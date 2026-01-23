@@ -24,9 +24,11 @@ use std::{
     },
 };
 
-use smol::Executor;
 use tracing::warn;
 use url::Url;
+
+#[cfg(feature = "upnp-igd")]
+use smol::lock::Mutex as AsyncMutex;
 
 use super::{
     channel::{Channel, ChannelPtr},
@@ -34,8 +36,15 @@ use super::{
     session::SessionWeakPtr,
     transport::{Listener, PtListener},
 };
+
+#[cfg(feature = "upnp-igd")]
+use super::upnp::{setup_port_mappings, PortMapping};
+
 use crate::{
-    system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{
+        CondVar, ExecutorPtr, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
+        Subscription,
+    },
     util::logger::verbose,
     Error, Result,
 };
@@ -49,6 +58,8 @@ pub struct Acceptor {
     task: StoppableTaskPtr,
     session: SessionWeakPtr,
     conn_count: AtomicUsize,
+    #[cfg(feature = "upnp-igd")]
+    port_mappings: AsyncMutex<Vec<Arc<dyn PortMapping>>>,
 }
 
 impl Acceptor {
@@ -59,11 +70,13 @@ impl Acceptor {
             task: StoppableTask::new(),
             session,
             conn_count: AtomicUsize::new(0),
+            #[cfg(feature = "upnp-igd")]
+            port_mappings: AsyncMutex::new(Vec::new()),
         })
     }
 
     /// Start accepting inbound socket connections
-    pub async fn start(self: Arc<Self>, endpoint: Url, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>, endpoint: Url, ex: ExecutorPtr) -> Result<()> {
         let datastore =
             self.session.upgrade().unwrap().p2p().settings().read().await.p2p_datastore.clone();
 
@@ -88,12 +101,29 @@ impl Acceptor {
                 .push(onion_addr);
         }
 
+        #[cfg(feature = "upnp-igd")]
+        {
+            let actual_endpoint = listener.endpoint().await;
+            let settings = self.session.upgrade().unwrap().p2p().settings();
+            let mappings = setup_port_mappings(&actual_endpoint, settings, ex.clone());
+            self.port_mappings.lock().await.extend(mappings);
+        }
+
         self.accept(ptlistener, ex);
         Ok(())
     }
 
     /// Stop accepting inbound socket connections
     pub async fn stop(&self) {
+        // Stop all port mappings
+        #[cfg(feature = "upnp-igd")]
+        {
+            let mappings = std::mem::take(&mut *self.port_mappings.lock().await);
+            for mapping in mappings {
+                mapping.stop();
+            }
+        }
+
         // Send stop signal
         self.task.stop().await;
     }
@@ -104,7 +134,7 @@ impl Acceptor {
     }
 
     /// Run the accept loop in a new thread and error if a connection problem occurs
-    fn accept(self: Arc<Self>, listener: Box<dyn PtListener>, ex: Arc<Executor<'_>>) {
+    fn accept(self: Arc<Self>, listener: Box<dyn PtListener>, ex: ExecutorPtr) {
         let self_ = self.clone();
         self.task.clone().start(
             self.run_accept_loop(listener, ex.clone()),
@@ -118,7 +148,7 @@ impl Acceptor {
     async fn run_accept_loop(
         self: Arc<Self>,
         listener: Box<dyn PtListener>,
-        ex: Arc<Executor<'_>>,
+        ex: ExecutorPtr,
     ) -> Result<()> {
         // CondVar used to notify the loop to recheck if new connections can
         // be accepted by the listener.

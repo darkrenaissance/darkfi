@@ -17,6 +17,10 @@ path = "src/lib.rs"
 name = "darkirc"
 path = "src/main.rs"
 
+[features]
+default = []
+upnp-igd = ["darkfi/upnp-igd"]
+
 [dependencies]
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}

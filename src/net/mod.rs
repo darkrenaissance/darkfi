@@ -55,6 +55,10 @@ pub use message_publisher::MessageSubscription;
 /// Exposes agnostic dialers and agnostic listeners.
 pub mod transport;
 
+/// Port mapping protocols (UPnP, NAT-PMP, PCP)
+#[cfg(feature = "upnp-igd")]
+pub mod upnp;
+
 /// Hosts are a list of network addresses used when establishing outbound
 /// connections.
 ///
