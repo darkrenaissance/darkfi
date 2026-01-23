@@ -2121,6 +2121,8 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
         Subcmd::Inspect => {
             let tx = parse_tx_from_stdin().await?;
 
+            // TODO: Contract ID shows here as hex, should be base58.
+            // Print manually and make it nice and informational.
             println!("{tx:#?}");
 
             Ok(())
