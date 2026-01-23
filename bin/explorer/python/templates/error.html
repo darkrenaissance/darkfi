@@ -24,6 +24,19 @@
       <div class="error-content">
         <h1 class="error-title">{{ error_code|default('Error') }}</h1>
         <p class="error-message">{{ error|default('An unexpected error occurred') }}</p>
+
+        {% if error_code == '404' or error_code == 404 %}
+        <div class="error-image">
+          <img src="/static/darkfi25.jpg">
+          <p class="error-image-caption">Is this what you're looking for?</p>
+        </div>
+        {% elif error_code == '500' or error_code == 500 %}
+        <div class="error-image">
+          <img src="/static/darkfi05.jpg">
+          <p class="error-image-caption">Reality fractured beyond repair!</p>
+        </div>
+        {% endif %}
+
         <div class="error-actions">
           <a href="/" class="btn">Return to Home</a>
           <a href="javascript:history.back()" class="btn btn-outline">Go Back</a>
@@ -60,6 +73,20 @@
       font-size: 1.6rem;
       color: var(--color-muted);
       margin-bottom: 2rem;
+    }
+    .error-image {
+      margin-bottom: 2rem;
+    }
+    .error-image img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+    .error-image-caption {
+      margin-top: 1rem;
+      font-size: 1.4rem;
+      color: var(--color-muted);
+      font-style: italic;
     }
     .error-actions {
       display: flex;
