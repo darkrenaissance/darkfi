@@ -815,8 +815,13 @@ impl Explorer {
         let mut remaining_days = days as i64;
 
         loop {
-            let days_in_year =
-                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) { 366i64 } else { 365i64 };
+            let days_in_year = if year.is_multiple_of(4) &&
+                (!year.is_multiple_of(100) || year.is_multiple_of(400))
+            {
+                366i64
+            } else {
+                365i64
+            };
 
             if remaining_days < days_in_year {
                 break;
@@ -826,7 +831,8 @@ impl Explorer {
         }
 
         // Now find month
-        let is_leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let is_leap =
+            year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
         let days_in_months: [i64; 12] = if is_leap {
             [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         } else {
