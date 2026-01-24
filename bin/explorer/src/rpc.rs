@@ -495,4 +495,210 @@ impl Explorer {
 
         JsonResponse::new(JsonValue::Number(hashrate), id).into()
     }
+
+    /// Get contract information by ID.
+    /// Params: `[contract_id: String]`
+    /// Returns: `{ contract_id, locked, wasm_size, deploy_block, deploy_tx }`
+    pub async fn rpc_get_contract(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let contract_id_str = params[0].get::<String>().unwrap();
+
+        let Ok(Some(contract)) = self.get_contract(contract_id_str).await else {
+            return JsonError::new(InternalError, Some("Contract not found".to_string()), id).into()
+        };
+
+        JsonResponse::new(
+            JsonValue::Object(HashMap::from([
+                ("contract_id".to_string(), JsonValue::String(contract.contract_id.to_string())),
+                ("locked".to_string(), JsonValue::Boolean(contract.locked)),
+                ("wasm_size".to_string(), JsonValue::Number(contract.wasm_size as f64)),
+                ("deploy_block".to_string(), JsonValue::Number(contract.deploy_block as f64)),
+                ("deploy_tx".to_string(), JsonValue::String(hex::encode(contract.deploy_tx_hash))),
+            ])),
+            id,
+        )
+        .into()
+    }
+
+    /// List all contracts.
+    /// Params: `[locked_filter: bool | null] (optional)`
+    /// Returns: Array of contract objects
+    pub async fn rpc_list_contracts(&self, id: u16, params: JsonValue) -> JsonResult {
+        let locked_filter = if let Some(params) = params.get::<Vec<JsonValue>>() {
+            if !params.is_empty() {
+                params[0].get::<bool>().copied()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let Ok(contracts) = self.list_contracts(locked_filter).await else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        let contracts_json: Vec<JsonValue> = contracts
+            .iter()
+            .map(|c| {
+                JsonValue::Object(HashMap::from([
+                    ("contract_id".to_string(), JsonValue::String(c.contract_id.to_string())),
+                    ("locked".to_string(), JsonValue::Boolean(c.locked)),
+                    ("wasm_size".to_string(), JsonValue::Number(c.wasm_size as f64)),
+                    ("deploy_block".to_string(), JsonValue::Number(c.deploy_block as f64)),
+                    ("deploy_tx".to_string(), JsonValue::String(hex::encode(c.deploy_tx_hash))),
+                ]))
+            })
+            .collect();
+
+        JsonResponse::new(JsonValue::Array(contracts_json), id).into()
+    }
+
+    /// Get contract count.
+    /// Returns: Number of contracts
+    pub async fn rpc_contract_count(&self, id: u16, _params: JsonValue) -> JsonResult {
+        let Ok(count) = self.get_contract_count() else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        JsonResponse::new(JsonValue::Number(count as f64), id).into()
+    }
+
+    /// Get blockchain statistics from stored data.
+    /// Returns daily stats, monthly growth, and tx per block stats.
+    pub async fn rpc_get_stats(&self, id: u16, _params: JsonValue) -> JsonResult {
+        // Get daily stats from sled
+        let daily_stats = match self.get_all_daily_stats().await {
+            Ok(stats) => stats,
+            Err(_) => return JsonError::new(InternalError, None, id).into(),
+        };
+
+        // Get monthly stats from sled
+        let monthly_stats = match self.get_all_monthly_stats().await {
+            Ok(stats) => stats,
+            Err(_) => return JsonError::new(InternalError, None, id).into(),
+        };
+
+        // Convert daily stats to JSON (for graph)
+        let daily_json: Vec<JsonValue> = daily_stats
+            .iter()
+            .map(|(day, stats)| {
+                let avg_tx = if stats.block_count > 0 {
+                    stats.user_tx_count as f64 / stats.block_count as f64
+                } else {
+                    0.0
+                };
+                JsonValue::Object(HashMap::from([
+                    ("day".to_string(), JsonValue::Number(*day as f64)),
+                    ("avg_tx".to_string(), JsonValue::Number(avg_tx)),
+                    ("block_count".to_string(), JsonValue::Number(stats.block_count as f64)),
+                    ("user_tx_count".to_string(), JsonValue::Number(stats.user_tx_count as f64)),
+                    ("total_size".to_string(), JsonValue::Number(stats.total_size as f64)),
+                ]))
+            })
+            .collect();
+
+        // Convert monthly stats to JSON with cumulative
+        let mut cumulative: u64 = 0;
+        let monthly_json: Vec<JsonValue> = monthly_stats
+            .iter()
+            .map(|(year, month, stats)| {
+                cumulative += stats.total_size;
+                JsonValue::Object(HashMap::from([
+                    ("year".to_string(), JsonValue::Number(*year as f64)),
+                    ("month".to_string(), JsonValue::Number(*month as f64)),
+                    (
+                        "size_mb".to_string(),
+                        JsonValue::Number(stats.total_size as f64 / 1_048_576.0),
+                    ),
+                    (
+                        "cumulative_mb".to_string(),
+                        JsonValue::Number(cumulative as f64 / 1_048_576.0),
+                    ),
+                    ("block_count".to_string(), JsonValue::Number(stats.block_count as f64)),
+                ]))
+            })
+            .collect();
+
+        // Calculate tx per block stats for time periods
+        // Get current day
+        let current_day = if let Some((day, _)) = daily_stats.last() { *day } else { 0 };
+
+        fn calc_period_stats(
+            daily_stats: &[(u64, crate::db::DailyStats)],
+            from_day: u64,
+            to_day: u64,
+        ) -> (f64, f64, u64, u64) {
+            let mut total_blocks: u64 = 0;
+            let mut total_user_tx: u64 = 0;
+            let mut empty_blocks: u64 = 0;
+
+            for (day, stats) in daily_stats {
+                if *day >= from_day && *day <= to_day {
+                    total_blocks += stats.block_count;
+                    total_user_tx += stats.user_tx_count;
+                    // A block is "empty" if it has 0 user transactions
+                    // We approximate empty blocks as: blocks where avg user_tx < 1
+                    // But we don't have per-block data, so we estimate
+                    if stats.block_count > 0 && stats.user_tx_count == 0 {
+                        empty_blocks += stats.block_count;
+                    }
+                }
+            }
+
+            let avg_tx =
+                if total_blocks > 0 { total_user_tx as f64 / total_blocks as f64 } else { 0.0 };
+            let empty_pct = if total_blocks > 0 {
+                empty_blocks as f64 / total_blocks as f64 * 100.0
+            } else {
+                0.0
+            };
+
+            (avg_tx, empty_pct, total_user_tx, total_blocks)
+        }
+
+        let (avg_day, empty_day, total_day, blocks_day) =
+            calc_period_stats(&daily_stats, current_day, current_day);
+        let (avg_week, empty_week, total_week, blocks_week) =
+            calc_period_stats(&daily_stats, current_day.saturating_sub(6), current_day);
+        let (avg_month, empty_month, total_month, blocks_month) =
+            calc_period_stats(&daily_stats, current_day.saturating_sub(29), current_day);
+        let (avg_year, empty_year, total_year, blocks_year) =
+            calc_period_stats(&daily_stats, current_day.saturating_sub(364), current_day);
+
+        fn stats_to_json(avg: f64, empty_pct: f64, total: u64, block_count: u64) -> JsonValue {
+            JsonValue::Object(HashMap::from([
+                ("avg_tx".to_string(), JsonValue::Number(avg)),
+                ("empty_pct".to_string(), JsonValue::Number(empty_pct)),
+                ("total_tx".to_string(), JsonValue::Number(total as f64)),
+                ("block_count".to_string(), JsonValue::Number(block_count as f64)),
+            ]))
+        }
+
+        let tx_per_block = JsonValue::Object(HashMap::from([
+            ("last_day".to_string(), stats_to_json(avg_day, empty_day, total_day, blocks_day)),
+            ("last_week".to_string(), stats_to_json(avg_week, empty_week, total_week, blocks_week)),
+            (
+                "last_month".to_string(),
+                stats_to_json(avg_month, empty_month, total_month, blocks_month),
+            ),
+            ("last_year".to_string(), stats_to_json(avg_year, empty_year, total_year, blocks_year)),
+        ]));
+
+        JsonResponse::new(
+            JsonValue::Object(HashMap::from([
+                ("daily_stats".to_string(), JsonValue::Array(daily_json)),
+                ("monthly_growth".to_string(), JsonValue::Array(monthly_json)),
+                ("tx_per_block".to_string(), tx_per_block),
+            ])),
+            id,
+        )
+        .into()
+    }
 }

@@ -2841,6 +2841,7 @@ dependencies = [
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
+ "darkfi_deployooor_contract",
  "darkfi_money_contract",
  "easy-parallel",
  "hex",

@@ -79,6 +79,8 @@ pub struct Explorer {
     _sled_db: sled::Db,
     header_indices: sled::Tree,
     tx_indices: sled::Tree,
+    contracts: sled::Tree,
+    stats: sled::Tree,
 
     tapes_db: Tapes,
     _tapes_options: TapeOpenOptions,
@@ -106,6 +108,10 @@ impl RequestHandler<RpcHandler> for Explorer {
             "get_tx" => self.rpc_get_tx(req.id, req.params).await,
             "search" => self.rpc_search(req.id, req.params).await,
             "get_hashrate" => self.rpc_get_hashrate(req.id, req.params).await,
+            "get_contract" => self.rpc_get_contract(req.id, req.params).await,
+            "list_contracts" => self.rpc_list_contracts(req.id, req.params).await,
+            "contract_count" => self.rpc_contract_count(req.id, req.params).await,
+            "get_stats" => self.rpc_get_stats(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -121,6 +127,8 @@ impl Explorer {
         let sled_db = sled::open(sled_path)?;
         let header_indices = sled_db.open_tree("header_indices")?;
         let tx_indices = sled_db.open_tree("tx_indices")?;
+        let contracts = sled_db.open_tree("contracts")?;
+        let stats = sled_db.open_tree("stats")?;
 
         info!(target: "explorer::new", "Opening tapes");
         std::fs::create_dir_all(tapes_db_path)?;
@@ -137,6 +145,8 @@ impl Explorer {
             _sled_db: sled_db,
             header_indices,
             tx_indices,
+            contracts,
+            stats,
             tapes_db,
             _tapes_options: tapes_options,
             database,

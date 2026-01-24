@@ -16,20 +16,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io;
+use std::{io, str::FromStr};
 
 use bytemuck::{Pod, Zeroable};
 use darkfi::{
     blockchain::{BlockInfo, Header},
     tx::Transaction,
 };
-use darkfi_sdk::crypto::schnorr::Signature;
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_deployooor_contract::{model::LockParamsV1, DeployFunction};
+use darkfi_sdk::{
+    crypto::{schnorr::Signature, ContractId, DEPLOYOOOR_CONTRACT_ID},
+    deploy::DeployParamsV1,
+};
+use darkfi_serial::{
+    async_trait, deserialize, deserialize_async, serialize, serialize_async, SerialDecodable,
+    SerialEncodable,
+};
 use sled::{transaction::TransactionError, Transactional};
 use tapes::{BlobTape, FixedSizedTape, Persistence, TapeOpenOptions, Tapes};
 use tracing::info;
 
 use super::Explorer;
+
+/// Contract information stored in sled
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ContractData {
+    pub contract_id: ContractId,
+    pub locked: bool,
+    pub wasm_size: u64,
+    pub deploy_block: u64,
+    pub deploy_tx_hash: [u8; 32],
+}
 
 /// Index entry for a block pointing to block data in the blob tape
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -135,15 +152,34 @@ impl Explorer {
             tx_entries.push((tx_hash, tx_idx_pos.to_le_bytes()));
         }
 
-        // Atomic sled transaction for both tx_indices and header_indices
-        (&self.tx_indices, &self.header_indices)
-            .transaction(|(tx_tree, header_tree)| {
+        // Scan for contract deployments and locks
+        let (new_contracts, locked_contracts) =
+            self.scan_contract_calls(block, block.header.height as u64).await;
+
+        // Atomic sled transaction for tx_indices, header_indices, and contracts
+        (&self.tx_indices, &self.header_indices, &self.contracts)
+            .transaction(|(tx_tree, header_tree, contracts_tree)| {
                 // Insert all transaction indices
                 for (hash, idx) in &tx_entries {
                     tx_tree.insert(hash.as_slice(), idx.as_slice())?;
                 }
                 // Insert header hash -> height mapping
                 header_tree.insert(header_hash.as_slice(), height_bytes.as_slice())?;
+
+                // Insert new contracts
+                for contract in &new_contracts {
+                    contracts_tree
+                        .insert(serialize(&contract.contract_id.inner()), serialize(contract))?;
+                }
+
+                // Update locked contracts
+                for contract_id in &locked_contracts {
+                    let data = contracts_tree.get(serialize(&contract_id.inner()))?.unwrap();
+                    let mut contract: ContractData = deserialize(&data).unwrap();
+                    contract.locked = true;
+                    contracts_tree.insert(serialize(&contract_id.inner()), serialize(&contract))?;
+                }
+
                 Ok(())
             })
             .map_err(|e: TransactionError<sled::Error>| {
@@ -157,6 +193,15 @@ impl Explorer {
             header_data.len(),
             block.txs.len(),
         );
+
+        // Update stats
+        let block_size = header_data.len() as u64 + (current_tx_offset - tx_blob_offset);
+        self.update_stats_for_block(
+            block.header.timestamp.inner(),
+            block.txs.len() as u64,
+            block_size,
+        )
+        .await?;
 
         Ok(())
     }
@@ -183,6 +228,7 @@ impl Explorer {
         // Collect data to remove from sled
         let mut header_hashes_to_remove: Vec<Vec<u8>> = Vec::new();
         let mut tx_hashes_to_remove: Vec<Vec<u8>> = Vec::new();
+        let mut contracts_to_remove: Vec<ContractId> = Vec::new();
 
         for height in new_block_count..current_len {
             // Get the block index to find transactions
@@ -196,7 +242,7 @@ impl Explorer {
             let header: Header = deserialize_async(&header_data).await?;
             header_hashes_to_remove.push(serialize_async(&header.hash()).await);
 
-            // Read each tx to get its hash
+            // Read each tx to get its hash and check for contract deployments
             for i in 0..block_idx.tx_count {
                 let tx_idx = reader
                     .read_entry(&self.database.tx_index, block_idx.tx_start_idx + i)?
@@ -206,6 +252,17 @@ impl Explorer {
                 reader.read_bytes(&self.database.transactions, tx_idx.offset, &mut tx_data)?;
                 let transaction: Transaction = deserialize_async(&tx_data).await?;
                 tx_hashes_to_remove.push(transaction.hash().0.to_vec());
+
+                // Check for contract deployments to remove
+                for call in &transaction.calls {
+                    if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID &&
+                        call.data.data[0] == DeployFunction::DeployV1 as u8
+                    {
+                        let params: DeployParamsV1 =
+                            deserialize_async(&call.data.data[1..]).await?;
+                        contracts_to_remove.push(ContractId::derive_public(params.public_key));
+                    }
+                }
             }
         }
 
@@ -247,14 +304,17 @@ impl Explorer {
 
         truncate_tx.commit(Persistence::SyncData)?;
 
-        // Atomic sled transaction for removing both tx and header indices
-        (&self.tx_indices, &self.header_indices)
-            .transaction(|(tx_tree, header_tree)| {
+        // Atomic sled transaction for removing tx, header indices, and contracts
+        (&self.tx_indices, &self.header_indices, &self.contracts)
+            .transaction(|(tx_tree, header_tree, contracts_tree)| {
                 for tx_hash in &tx_hashes_to_remove {
                     tx_tree.remove(tx_hash.as_slice())?;
                 }
                 for header_hash in &header_hashes_to_remove {
                     header_tree.remove(header_hash.as_slice())?;
+                }
+                for contract_id in &contracts_to_remove {
+                    contracts_tree.remove(serialize(&contract_id.inner()))?;
                 }
                 Ok(())
             })
@@ -268,6 +328,9 @@ impl Explorer {
             count,
             if new_block_count == 0 { 0 } else { new_block_count - 1 }
         );
+
+        // Rebuild stats from scratch after reorg
+        self.rebuild_stats().await?;
 
         Ok(())
     }
@@ -450,5 +513,335 @@ impl Explorer {
         tx_hash.copy_from_slice(&hash_bytes);
 
         self.get_tx_by_hash(&tx_hash).await
+    }
+
+    /// Scan a block's transactions for contract deployments and locks.
+    /// Returns (new_contracts, locked_contract_ids)
+    async fn scan_contract_calls(
+        &self,
+        block: &BlockInfo,
+        block_height: u64,
+    ) -> (Vec<ContractData>, Vec<ContractId>) {
+        let mut new_contracts = Vec::new();
+        let mut locked_contracts = Vec::new();
+
+        for transaction in &block.txs {
+            let tx_hash = *transaction.hash().inner();
+
+            for call in &transaction.calls {
+                // Check if this is a call to Deployoor
+                if call.data.contract_id != *DEPLOYOOOR_CONTRACT_ID {
+                    continue;
+                }
+
+                let func = call.data.data[0];
+                if func == DeployFunction::DeployV1 as u8 {
+                    let params: DeployParamsV1 =
+                        deserialize_async(&call.data.data[1..]).await.unwrap();
+                    let contract_id = ContractId::derive_public(params.public_key);
+
+                    info!(
+                        target: "explorer::scan_contract_calls",
+                        "Found contract deployment: {} (size: {} bytes)",
+                        contract_id, params.wasm_bincode.len(),
+                    );
+
+                    new_contracts.push(ContractData {
+                        contract_id,
+                        locked: false,
+                        wasm_size: params.wasm_bincode.len() as u64,
+                        deploy_block: block_height,
+                        deploy_tx_hash: tx_hash,
+                    });
+                } else if func == DeployFunction::LockV1 as u8 {
+                    let params: LockParamsV1 =
+                        deserialize_async(&call.data.data[1..]).await.unwrap();
+                    let contract_id = ContractId::derive_public(params.public_key);
+
+                    info!(
+                        target: "explorer::scan_contract_calls",
+                        "Found contract lock: {}", contract_id,
+                    );
+
+                    locked_contracts.push(contract_id);
+                }
+            }
+        }
+
+        (new_contracts, locked_contracts)
+    }
+
+    /// Get a contract by its ID string (base58 encoded).
+    pub async fn get_contract(&self, contract_id_str: &str) -> io::Result<Option<ContractData>> {
+        let Ok(contract_id) = ContractId::from_str(contract_id_str) else {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid contract ID"))
+        };
+
+        match self.contracts.get(serialize_async(&contract_id.inner()).await)? {
+            Some(data) => Ok(Some(deserialize_async(&data).await?)),
+            None => Ok(None),
+        }
+    }
+
+    /// List all contracts, optionally filtered by locked status.
+    pub async fn list_contracts(
+        &self,
+        locked_filter: Option<bool>,
+    ) -> io::Result<Vec<ContractData>> {
+        let mut contracts = Vec::new();
+
+        for result in self.contracts.iter() {
+            let (_, value) = result?;
+            let contract: ContractData = deserialize_async(&value).await?;
+            if let Some(filter) = locked_filter {
+                if contract.locked == filter {
+                    contracts.push(contract);
+                }
+            } else {
+                contracts.push(contract);
+            }
+        }
+
+        Ok(contracts)
+    }
+
+    /// Get the total number of contracts.
+    pub fn get_contract_count(&self) -> io::Result<u64> {
+        Ok(self.contracts.len() as u64)
+    }
+}
+
+/// Daily statistics aggregate
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct DailyStats {
+    pub block_count: u64,
+    pub user_tx_count: u64, // excluding coinbase
+    pub total_size: u64,
+}
+
+/// Monthly statistics aggregate
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct MonthlyStats {
+    pub block_count: u64,
+    pub total_size: u64,
+}
+
+impl Explorer {
+    /// Update stats for a single block
+    pub async fn update_stats_for_block(
+        &self,
+        timestamp: u64,
+        tx_count: u64,
+        block_size: u64,
+    ) -> io::Result<()> {
+        let day = Self::day_from_timestamp(timestamp);
+        let (year, month) = Self::year_month_from_timestamp(timestamp);
+        let user_tx = tx_count.saturating_sub(1); // exclude coinbase
+
+        // Update daily stats
+        let daily_key = format!("daily:{}", day);
+        let mut daily = self.get_daily_stats(day).await?.unwrap_or(DailyStats {
+            block_count: 0,
+            user_tx_count: 0,
+            total_size: 0,
+        });
+        daily.block_count += 1;
+        daily.user_tx_count += user_tx;
+        daily.total_size += block_size;
+        self.stats.insert(daily_key.as_bytes(), serialize_async(&daily).await)?;
+
+        // Update monthly stats
+        let monthly_key = format!("monthly:{}:{:02}", year, month);
+        let mut monthly = self
+            .get_monthly_stats(year, month)
+            .await?
+            .unwrap_or(MonthlyStats { block_count: 0, total_size: 0 });
+        monthly.block_count += 1;
+        monthly.total_size += block_size;
+        self.stats.insert(monthly_key.as_bytes(), serialize_async(&monthly).await)?;
+
+        Ok(())
+    }
+
+    /// Get daily stats for a specific day
+    pub async fn get_daily_stats(&self, day: u64) -> io::Result<Option<DailyStats>> {
+        let key = format!("daily:{}", day);
+        match self.stats.get(key.as_bytes())? {
+            Some(data) => Ok(Some(deserialize_async(&data).await?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Get monthly stats for a specific year/month
+    pub async fn get_monthly_stats(
+        &self,
+        year: u32,
+        month: u32,
+    ) -> io::Result<Option<MonthlyStats>> {
+        let key = format!("monthly:{}:{:02}", year, month);
+        match self.stats.get(key.as_bytes())? {
+            Some(data) => Ok(Some(deserialize_async(&data).await?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Get all daily stats (for graph generation)
+    pub async fn get_all_daily_stats(&self) -> io::Result<Vec<(u64, DailyStats)>> {
+        let mut result = Vec::new();
+        let prefix = b"daily:";
+
+        for item in self.stats.scan_prefix(prefix) {
+            let (key, value) = item?;
+            let key_str = String::from_utf8_lossy(&key);
+            if let Some(day_str) = key_str.strip_prefix("daily:") {
+                if let Ok(day) = day_str.parse::<u64>() {
+                    let stats = deserialize_async(&value).await?;
+                    result.push((day, stats));
+                }
+            }
+        }
+
+        result.sort_by_key(|(day, _)| *day);
+        Ok(result)
+    }
+
+    /// Get all monthly stats (for table generation)
+    pub async fn get_all_monthly_stats(&self) -> io::Result<Vec<(u32, u32, MonthlyStats)>> {
+        let mut result = Vec::new();
+        let prefix = b"monthly:";
+
+        for item in self.stats.scan_prefix(prefix) {
+            let (key, value) = item?;
+            let key_str = String::from_utf8_lossy(&key);
+            if let Some(ym_str) = key_str.strip_prefix("monthly:") {
+                let parts: Vec<&str> = ym_str.split(':').collect();
+                if parts.len() == 2 {
+                    if let (Ok(year), Ok(month)) =
+                        (parts[0].parse::<u32>(), parts[1].parse::<u32>())
+                    {
+                        let stats = deserialize_async(&value).await?;
+                        result.push((year, month, stats));
+                    }
+                }
+            }
+        }
+
+        result.sort_by_key(|(year, month, _)| (*year, *month));
+        Ok(result)
+    }
+
+    /// Clear all stats (called before rebuilding after reorg)
+    pub fn clear_stats(&self) -> io::Result<()> {
+        // Clear daily stats
+        let daily_keys: Vec<_> =
+            self.stats.scan_prefix(b"daily:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
+        for key in daily_keys {
+            self.stats.remove(&key)?;
+        }
+
+        // Clear monthly stats
+        let monthly_keys: Vec<_> =
+            self.stats.scan_prefix(b"monthly:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
+        for key in monthly_keys {
+            self.stats.remove(&key)?;
+        }
+
+        Ok(())
+    }
+
+    /// Rebuild all stats from blockchain data
+    pub async fn rebuild_stats(&self) -> io::Result<()> {
+        info!(target: "explorer::rebuild_stats", "Clearing existing stats...");
+        self.clear_stats()?;
+
+        let height = match self.get_height()? {
+            Some(h) => h,
+            None => return Ok(()), // No blocks yet
+        };
+
+        info!(target: "explorer::rebuild_stats", "Rebuilding stats for {} blocks...", height + 1);
+
+        let reader = self.tapes_db.reader();
+
+        for h in 0..=height {
+            let block_idx = match reader.read_entry(&self.database.block_index, h)? {
+                Some(idx) => idx,
+                None => continue,
+            };
+
+            // Read header to get timestamp
+            let mut header_data = vec![0u8; block_idx.length as usize];
+            reader.read_bytes(&self.database.blocks, block_idx.offset, &mut header_data)?;
+            let header: Header = deserialize_async(&header_data).await?;
+
+            // Calculate block size
+            let tx_size = if block_idx.tx_count == 0 {
+                0
+            } else {
+                let first_tx_idx = reader
+                    .read_entry(&self.database.tx_index, block_idx.tx_start_idx)?
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "tx index not found"))?;
+                let last_tx_idx = reader
+                    .read_entry(
+                        &self.database.tx_index,
+                        block_idx.tx_start_idx + block_idx.tx_count - 1,
+                    )?
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "tx index not found"))?;
+                last_tx_idx.offset + last_tx_idx.length - first_tx_idx.offset
+            };
+
+            let block_size = block_idx.length + tx_size;
+
+            self.update_stats_for_block(header.timestamp.inner(), block_idx.tx_count, block_size)
+                .await?;
+        }
+
+        info!(target: "explorer::rebuild_stats", "Stats rebuild complete");
+        Ok(())
+    }
+
+    /// Get day number from unix timestamp (days since epoch)
+    fn day_from_timestamp(timestamp: u64) -> u64 {
+        timestamp / 86400
+    }
+
+    /// Get year and month from unix timestamp
+    fn year_month_from_timestamp(timestamp: u64) -> (u32, u32) {
+        // Days since epoch
+        let days = timestamp / 86400;
+
+        // Approximate year (will be corrected)
+        let mut year = 1970u32;
+        let mut remaining_days = days as i64;
+
+        loop {
+            let days_in_year =
+                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) { 366i64 } else { 365i64 };
+
+            if remaining_days < days_in_year {
+                break;
+            }
+            remaining_days -= days_in_year;
+            year += 1;
+        }
+
+        // Now find month
+        let is_leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let days_in_months: [i64; 12] = if is_leap {
+            [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        } else {
+            [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        };
+
+        let mut month = 1u32;
+        for days_in_month in days_in_months.iter() {
+            if remaining_days < *days_in_month {
+                break;
+            }
+            remaining_days -= days_in_month;
+            month += 1;
+        }
+
+        (year, month)
     }
 }
