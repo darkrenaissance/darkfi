@@ -702,10 +702,8 @@ impl BlockchainOverlay {
     }
 
     /// Revert to current overlay checkpoint.
-    pub fn revert_to_checkpoint(&self) -> Result<()> {
-        self.overlay.lock().unwrap().revert_to_checkpoint()?;
-
-        Ok(())
+    pub fn revert_to_checkpoint(&self) {
+        self.overlay.lock().unwrap().revert_to_checkpoint();
     }
 
     /// Auxiliary function to create a full clone using SledDbOverlay::clone,

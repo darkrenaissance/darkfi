@@ -884,7 +884,7 @@ impl Fork {
                 Ok(gas_values) => gas_values,
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
-                    self.overlay.lock().unwrap().revert_to_checkpoint()?;
+                    self.overlay.lock().unwrap().revert_to_checkpoint();
                     continue
                 }
             };
@@ -901,7 +901,7 @@ impl Fork {
                     target: "validator::consensus::unproposed_txs",
                     "Retrieving transaction {tx} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
                 );
-                self.overlay.lock().unwrap().revert_to_checkpoint()?;
+                self.overlay.lock().unwrap().revert_to_checkpoint();
                 break
             }
 

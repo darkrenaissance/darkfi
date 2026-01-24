@@ -1019,7 +1019,7 @@ pub async fn verify_transactions(
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {e}");
                 erroneous_txs.push(tx.clone());
-                overlay.lock().unwrap().revert_to_checkpoint()?;
+                overlay.lock().unwrap().revert_to_checkpoint();
                 continue
             }
         };
@@ -1038,7 +1038,7 @@ pub async fn verify_transactions(
                 tx.hash()
             );
             erroneous_txs.push(tx.clone());
-            overlay.lock().unwrap().revert_to_checkpoint()?;
+            overlay.lock().unwrap().revert_to_checkpoint();
             break
         }
 
@@ -1080,7 +1080,7 @@ async fn apply_transactions(
         {
             warn!(target: "validator::verification::apply_transactions", "Transaction apply failed: {e}");
             erroneous_txs.push(tx.clone());
-            overlay.lock().unwrap().revert_to_checkpoint()?;
+            overlay.lock().unwrap().revert_to_checkpoint();
         };
     }
 
