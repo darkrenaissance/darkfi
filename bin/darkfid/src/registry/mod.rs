@@ -237,17 +237,14 @@ impl DarkfiMinersRegistry {
         let mut extended_fork = validator.best_current_fork().await?;
 
         // Generate the next block template
-        let result = generate_next_block_template(
+        let block_template = generate_next_block_template(
             &mut extended_fork,
             config,
             &self.powrewardv1_zk.zkbin,
             &self.powrewardv1_zk.provingkey,
             validator.verify_fees,
         )
-        .await;
-
-        // Check result
-        let block_template = result?;
+        .await?;
 
         // Create the new registry record
         block_templates.insert(wallet.clone(), block_template.clone());
@@ -407,7 +404,7 @@ impl DarkfiMinersRegistry {
         }
 
         // Iterate over active clients to refresh their jobs, if needed
-        for (_, client) in jobs.iter_mut() {
+        for (job_id, client) in jobs.iter_mut() {
             // Grab its wallet template. Its safe to unwrap here since
             // we know the job exists.
             let block_template = block_templates.get_mut(&client.wallet).unwrap();
@@ -431,7 +428,18 @@ impl DarkfiMinersRegistry {
             .await;
 
             // Check result
-            *block_template = result?;
+            *block_template = match result {
+                Ok(b) => b,
+                Err(e) => {
+                    error!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
+                        "Updating block template for job {job_id} failed: {e}",
+                    );
+                    // Mark block template as not submitted so the
+                    // miner can submit another one and don't get stuck
+                    block_template.submitted = false;
+                    continue;
+                }
+            };
 
             // Print the updated template wallet information
             let recipient_str = format!("{}", client.config.recipient);
