@@ -52,9 +52,8 @@
     </div>
 
     <div class="tx-grid mb-lg">
-
       <div class="table-section">
-        <div class="table-headear">
+        <div class="table-header">
           <h3>Transaction Info</h3>
         </div>
         <div class="table-wrapper">
@@ -69,7 +68,7 @@
                 <td><a href="/block/{{ tx.from_block }}">{{ tx.from_block }}</a></td>
               </tr>
               <tr>
-                <td class="info-label">Fee</a>
+                <td class="info-label">Fee</td>
                 <td>{{ tx.fee }}</td>
               </tr>
             </tbody>
@@ -92,14 +91,15 @@
                 {% if call.contract_tag %}
                   <span class="contract-tag">{{ call.contract_tag }}</span>
                 {% endif %}
-                </span
+                </span>
                 <div class="call-row">
                   <span class="call-label">Data</span>
                   <span class="call-value"><span class="call-byte">{{ call.func }}</span> {{ call.size }}</span>
                 </div>
               </div>
             </div>
-          {% endfor %}
+          </div>
+        {% endfor %}
         </div>
       </div>
     </div>

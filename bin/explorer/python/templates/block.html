@@ -50,9 +50,9 @@
       <h1>
         Block
         {% if block.height != 0 %}
-        <a href="/block/{{ block.height - 1 }}" class="block-nav">&lt</a>
+        <a href="/block/{{ block.height - 1 }}" class="block-nav">&lt;</a>
         {% else %}
-        <a href="/block/0" class="block-nav">&lt</a>
+        <a href="/block/0" class="block-nav">&lt;</a>
         {% endif %}
         {{ block.height }}
         <a href="/block/{{ block.height + 1 }}" class="block-nav">&gt;</a>
