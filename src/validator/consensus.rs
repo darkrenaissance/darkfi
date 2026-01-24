@@ -624,23 +624,23 @@ impl Consensus {
 
     /// Auxiliary function to purge all unreferenced contract trees
     /// from the database.
-    pub async fn purge_unreferenced_trees(&self) -> Result<()> {
+    pub async fn purge_unreferenced_trees(
+        &self,
+        referenced_trees: &mut BTreeSet<IVec>,
+    ) -> Result<()> {
         // Grab a lock over current forks
         let lock = self.forks.read().await;
-
-        // Keep track of referenced trees
-        let mut referenced_trees = BTreeSet::new();
 
         // Check if we have forks
         if lock.is_empty() {
             // If no forks exist, build a new one so we retrieve the
             // native/protected trees references.
             let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
-            fork.referenced_trees(&mut referenced_trees);
+            fork.referenced_trees(referenced_trees);
         } else {
             // Iterate over current forks to retrieve referenced trees
             for fork in lock.iter() {
-                fork.referenced_trees(&mut referenced_trees);
+                fork.referenced_trees(referenced_trees);
             }
         }
 

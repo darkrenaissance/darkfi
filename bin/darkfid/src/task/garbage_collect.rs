@@ -26,11 +26,6 @@ use crate::DarkfiNodePtr;
 pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
     info!(target: "darkfid::task::garbage_collect_task", "Starting garbage collection task...");
 
-    // Purge all unreferenced contract trees from the database
-    if let Err(e) = node.validator.consensus.purge_unreferenced_trees().await {
-        error!(target: "darkfid::task::garbage_collect_task", "Purging unreferenced contract trees from the database failed: {e}");
-    }
-
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let (mut last_checked, mut txs) =
@@ -116,9 +111,6 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 )
                 .await;
 
-                // Drop new trees opened by the forks' overlay
-                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-
                 // Check result
                 match result {
                     Ok(_) => valid = true,
@@ -169,11 +161,32 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
         };
     }
 
-    // Purge all unreferenced contract trees from the database again
-    if let Err(e) = node.validator.consensus.purge_unreferenced_trees().await {
-        error!(target: "darkfid::task::garbage_collect_task", "Purging unreferenced contract trees from the database failed: {e}");
-    }
-
     info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
     Ok(())
+}
+
+/// Auxiliary function to purge all unreferenced contract trees from
+/// the node database.
+pub async fn purge_unreferenced_trees(node: &DarkfiNodePtr) {
+    // Grab node registry locks
+    let submit_lock = node.registry.submit_lock.write().await;
+    let block_templates = node.registry.block_templates.write().await;
+    let jobs = node.registry.jobs.write().await;
+    let mm_jobs = node.registry.mm_jobs.write().await;
+
+    // Purge all unreferenced contract trees from the database
+    if let Err(e) = node
+        .validator
+        .consensus
+        .purge_unreferenced_trees(&mut node.registry.new_trees(&block_templates))
+        .await
+    {
+        error!(target: "darkfid::task::garbage_collect::purge_unreferenced_trees", "Purging unreferenced contract trees from the database failed: {e}");
+    }
+
+    // Release registry locks
+    drop(block_templates);
+    drop(jobs);
+    drop(mm_jobs);
+    drop(submit_lock);
 }

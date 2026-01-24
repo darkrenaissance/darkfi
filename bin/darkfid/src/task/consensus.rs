@@ -29,7 +29,10 @@ use darkfi_serial::serialize_async;
 use tracing::{error, info};
 
 use crate::{
-    task::{garbage_collect_task, sync_task},
+    task::{
+        garbage_collect::{garbage_collect_task, purge_unreferenced_trees},
+        sync_task,
+    },
     DarkfiNodePtr,
 };
 
@@ -190,9 +193,13 @@ async fn consensus_task(
             }
         };
 
+        // Refresh mining registry
         if let Err(e) = node.registry.refresh(&node.validator).await {
             error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
         }
+
+        // Purge all unreferenced contract trees from the database
+        purge_unreferenced_trees(node).await;
 
         if confirmed.is_empty() {
             continue

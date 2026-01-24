@@ -19,6 +19,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use rand::rngs::OsRng;
+use sled_overlay::sled::IVec;
 use tinyjson::JsonValue;
 use tracing::info;
 
@@ -139,6 +140,8 @@ impl MinerRewardsRecipientConfig {
 pub struct BlockTemplate {
     /// Block that is being mined
     pub block: BlockInfo,
+    /// New `sled` trees opened the overlay this block was generated
+    pub new_trees: Vec<IVec>,
     /// RandomX current and next keys pair
     pub randomx_keys: (HeaderHash, Option<HeaderHash>),
     /// Compacted block mining target
@@ -154,12 +157,13 @@ pub struct BlockTemplate {
 impl BlockTemplate {
     fn new(
         block: BlockInfo,
+        new_trees: Vec<IVec>,
         randomx_keys: (HeaderHash, Option<HeaderHash>),
         target: Vec<u8>,
         difficulty: f64,
         secret: SecretKey,
     ) -> Self {
-        Self { block, randomx_keys, target, difficulty, secret, submitted: false }
+        Self { block, new_trees, randomx_keys, target, difficulty, secret, submitted: false }
     }
 
     pub fn job_notification(&self) -> (String, JsonValue) {
@@ -333,6 +337,7 @@ pub async fn generate_next_block_template(
 
     Ok(BlockTemplate::new(
         next_block,
+        diff.new_trees(),
         randomx_keys,
         target,
         difficulty,

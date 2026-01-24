@@ -17,10 +17,11 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
+use sled_overlay::sled::IVec;
 use smol::lock::{Mutex, RwLock};
 use tinyjson::JsonValue;
 use tracing::{error, info};
@@ -478,5 +479,17 @@ impl DarkfiMinersRegistry {
         drop(submit_lock);
 
         Ok(())
+    }
+
+    /// Auxilliary function to retrieve all current block templates
+    /// newly opened trees.
+    pub fn new_trees(&self, block_templates: &HashMap<String, BlockTemplate>) -> BTreeSet<IVec> {
+        let mut new_trees = BTreeSet::new();
+        for block_template in block_templates.values() {
+            for new_tree in &block_template.new_trees {
+                new_trees.insert(new_tree.clone());
+            }
+        }
+        new_trees
     }
 }
