@@ -668,12 +668,12 @@ impl Consensus {
 
     /// Auxiliary function to purge all unproposed pending
     /// transactions from the database.
-    pub async fn purge_unproposed_pending_txs(&self) -> Result<()> {
+    pub async fn purge_unproposed_pending_txs(
+        &self,
+        mut proposed_txs: HashSet<TransactionHash>,
+    ) -> Result<()> {
         // Grab a lock over current forks
         let mut forks = self.forks.write().await;
-
-        // Keep track of proposed txs
-        let mut proposed_txs = HashSet::new();
 
         // Iterate over all forks to find proposed txs
         for fork in forks.iter() {
@@ -829,7 +829,7 @@ impl Fork {
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
     pub async fn unproposed_txs(
-        &self,
+        &mut self,
         verifying_block_height: u32,
         verify_fees: bool,
     ) -> Result<(Vec<Transaction>, u64, u64)> {
@@ -853,6 +853,7 @@ impl Fork {
 
         // Iterate through all pending transactions in the forks' mempool
         let mut unproposed_txs = vec![];
+        let mut erroneous_txs = vec![];
         for tx in &self.mempool {
             // If the hash is contained in the proposals transactions vec, skip it
             if proposals_txs.contains(tx) {
@@ -860,8 +861,14 @@ impl Fork {
             }
 
             // Retrieve the actual unproposed transaction
-            let unproposed_tx =
-                self.blockchain.transactions.get_pending(&[*tx], true)?[0].clone().unwrap();
+            let unproposed_tx = match self.blockchain.transactions.get_pending(&[*tx], true) {
+                Ok(txs) => txs[0].clone().unwrap(),
+                Err(e) => {
+                    debug!(target: "validator::consensus::unproposed_txs", "Transaction retrieval failed: {e}");
+                    erroneous_txs.push(*tx);
+                    continue
+                }
+            };
 
             // Update the verifying keys map
             for call in &unproposed_tx.calls {
@@ -885,6 +892,7 @@ impl Fork {
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
                     self.overlay.lock().unwrap().revert_to_checkpoint();
+                    erroneous_txs.push(*tx);
                     continue
                 }
             };
@@ -912,6 +920,9 @@ impl Fork {
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);
         }
+
+        // Remove erroneous transactions txs from fork's mempool
+        self.mempool.retain(|tx| !erroneous_txs.contains(tx));
 
         Ok((unproposed_txs, total_gas_used, total_gas_paid))
     }

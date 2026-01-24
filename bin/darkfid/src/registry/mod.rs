@@ -38,7 +38,10 @@ use darkfi::{
     validator::{consensus::Proposal, ValidatorPtr},
     Error, Result,
 };
-use darkfi_sdk::crypto::{keypair::Network, pasta_prelude::PrimeField};
+use darkfi_sdk::{
+    crypto::{keypair::Network, pasta_prelude::PrimeField},
+    tx::TransactionHash,
+};
 use darkfi_serial::serialize_async;
 
 use crate::{
@@ -499,5 +502,20 @@ impl DarkfiMinersRegistry {
             }
         }
         new_trees
+    }
+
+    /// Auxilliary function to retrieve all current block templates
+    /// transactions hashes.
+    pub fn proposed_transactions(
+        &self,
+        block_templates: &HashMap<String, BlockTemplate>,
+    ) -> HashSet<TransactionHash> {
+        let mut proposed_txs = HashSet::new();
+        for block_template in block_templates.values() {
+            for tx in &block_template.block.txs {
+                proposed_txs.insert(tx.hash());
+            }
+        }
+        proposed_txs
     }
 }

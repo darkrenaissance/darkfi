@@ -87,8 +87,9 @@ async fn simulate_unproposed_txs(
     }
 
     // Obtain fork
-    let forks = validator.consensus.forks.read().await;
-    let best_fork = &forks[best_fork_index(&forks)?];
+    let mut forks = validator.consensus.forks.write().await;
+    let index = best_fork_index(&forks)?;
+    let best_fork = &mut forks[index];
 
     // Retrieve unproposed transactions
     let (tx, total_gas_used, _) = best_fork.unproposed_txs(current_block_height, false).await?;

@@ -193,7 +193,27 @@ impl DarkfiNode {
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        if let Err(e) = self.validator.consensus.purge_unproposed_pending_txs().await {
+        // Grab node registry locks
+        let submit_lock = self.registry.submit_lock.write().await;
+        let block_templates = self.registry.block_templates.write().await;
+        let jobs = self.registry.jobs.write().await;
+        let mm_jobs = self.registry.mm_jobs.write().await;
+
+        // Purge all unproposed pending transactions from the database
+        let result = self
+            .validator
+            .consensus
+            .purge_unproposed_pending_txs(self.registry.proposed_transactions(&block_templates))
+            .await;
+
+        // Release registry locks
+        drop(block_templates);
+        drop(jobs);
+        drop(mm_jobs);
+        drop(submit_lock);
+
+        // Check result
+        if let Err(e) = result {
             error!(target: "darkfid::rpc::tx_clean_pending", "Failed removing pending txs: {e}");
             return JsonError::new(InternalError, None, id).into()
         };
