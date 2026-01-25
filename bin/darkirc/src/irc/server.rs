@@ -19,14 +19,16 @@
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
 use darkfi::{
-    event_graph::Event,
+    event_graph::{
+        rln::{process_commitment, RLNNode},
+        Event,
+    },
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::pasta::Fp;
 use darkfi_serial::{deserialize_async, deserialize_async_partial};
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
@@ -148,7 +150,7 @@ impl IrcServer {
         let server_store = darkirc.sled.open_tree("server_store")?;
 
         // Generate RLN proving and verifying keys, if needed
-        let rln_register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let rln_register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
         let rln_register_circuit =
             ZkCircuit::new(empty_witnesses(&rln_register_zkbin)?, &rln_register_zkbin);
 
@@ -161,7 +163,7 @@ impl IrcServer {
         }
 
         // Generate RLN proving and verifying keys, if needed
-        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN)?;
+        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let rln_signal_circuit =
             ZkCircuit::new(empty_witnesses(&rln_signal_zkbin)?, &rln_signal_zkbin);
 
@@ -180,7 +182,8 @@ impl IrcServer {
 
         for event in events.iter() {
             // info!("event: {}", event.id());
-            let fetched_rln_commitment: Fp = match deserialize_async_partial(event.content()).await
+            let fetched_rln_commitment: RLNNode = match deserialize_async_partial(event.content())
+                .await
             {
                 Ok((v, _)) => v,
                 Err(e) => {
@@ -189,9 +192,7 @@ impl IrcServer {
                 }
             };
 
-            let commitment = vec![fetched_rln_commitment];
-            let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
-            identity_tree.insert_batch(commitment)?;
+            process_commitment(fetched_rln_commitment, &mut identity_tree)?;
         }
 
         drop(identity_tree);

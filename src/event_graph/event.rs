@@ -20,7 +20,6 @@ use std::{collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
-use tracing::info;
 
 use crate::{event_graph::util::generate_genesis, Result};
 
