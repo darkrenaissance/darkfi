@@ -46,10 +46,7 @@ use url::Url;
 use crate::{
     event_graph::{
         proto::StaticPut,
-        util::{
-            build_register_vk, build_signal_vk, build_slash_pk, build_slash_vk,
-            next_hour_timestamp, next_rotation_timestamp, replayer_log,
-        },
+        util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
     },
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
@@ -73,6 +70,9 @@ pub use event::Event;
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
 use proto::{EventRep, EventReq, HeaderRep, HeaderReq, TipRep, TipReq};
+
+pub mod rln;
+use rln::{build_register_vk, build_signal_vk, build_slash_pk, build_slash_vk};
 
 /// Utility functions
 pub mod util;

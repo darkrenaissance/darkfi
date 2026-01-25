@@ -19,7 +19,7 @@
 use std::{io::Cursor, str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
 
 use darkfi::{
-    event_graph::Event,
+    event_graph::{rln::RLNNode, Event},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -211,11 +211,12 @@ impl NickServ {
 
         // Update SMT, DAG and broadcast
         let rln_commitment = new_rln_identity.commitment();
+        let rln_commitment = RLNNode::Registration(rln_commitment);
         let evgr = &self.server.darkirc.event_graph;
         let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
 
         // Retrieve the register ZK proving key from the db
-        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
         let register_circuit = ZkCircuit::new(empty_witnesses(&register_zkbin)?, &register_zkbin);
         let Some(proving_key) = self.server.server_store.get("rlnv2-diff-register-pk")? else {
             return Err(Error::DatabaseError(

@@ -28,7 +28,7 @@ use std::{
 
 use darkfi_sdk::{
     crypto::{poseidon_hash, util::FieldElemAsStr},
-    pasta::{pallas, Fp},
+    pasta::pallas,
 };
 use darkfi_serial::{
     async_trait, deserialize_async, deserialize_async_partial, serialize_async, SerialDecodable,
@@ -37,11 +37,12 @@ use darkfi_serial::{
 use smol::Executor;
 use tracing::{debug, error, info, trace, warn};
 
-use super::{event::Header, Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS};
+use super::{
+    event::Header,
+    rln::{closest_epoch, create_slash_proof, hash_event, sss_recover, MessageMetadata, RLNNode},
+    Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
+};
 use crate::{
-    event_graph::util::{
-        closest_epoch, create_slash_proof, hash_event, sss_recover, MessageMetadata,
-    },
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -370,7 +371,12 @@ impl ProtocolEventGraph {
                         serialize_async(&(proof, secret, user_msg_limit, identity_root)).await;
 
                     let evgr = &self.event_graph;
-                    let st_event = Event::new_static(vec![0, 1], evgr).await;
+                    let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
+                    let identity_commitment = poseidon_hash([identity_secret_hash]);
+                    let rln_commitment = RLNNode::Slashing(identity_commitment);
+                    let st_event =
+                        Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
+                    evgr.static_insert(&st_event).await?;
                     evgr.static_broadcast(st_event, blob).await?;
 
                     verification_failed = true;
@@ -672,63 +678,73 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // Register
-            if !blob.is_empty() && !event.content().is_empty() {
-                let (proof, user_msg_limit): (Proof, u64) = match deserialize_async_partial(&blob)
-                    .await
-                {
-                    Ok((v, _)) => v,
-                    Err(e) => {
-                        error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
-                        continue
-                    }
-                };
-                let commitment: Fp = match deserialize_async_partial(&event.content()).await {
-                    Ok((v, _)) => v,
-                    Err(e) => {
-                        error!(target: "event_graph::protocol::handle_static_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
-                        continue
-                    }
-                };
-                info!("registering account: {}", commitment.to_string());
-                let public_inputs = vec![commitment, user_msg_limit.into()];
-
-                if proof.verify(&self.event_graph.register_vk, &public_inputs).is_err() {
-                    error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Registration proof verification failed");
+            let rln_account: RLNNode = match deserialize_async_partial(&event.content()).await {
+                Ok((v, _)) => v,
+                Err(e) => {
+                    error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
                     continue
                 }
+            };
+
+            if blob.is_empty() {
+                error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed to register/slash: Not enough data provided");
+                continue
             }
+            match rln_account {
+                RLNNode::Registration(commitment) => {
+                    let (proof, user_msg_limit): (Proof, u64) = match deserialize_async_partial(
+                        &blob,
+                    )
+                    .await
+                    {
+                        Ok((v, _)) => v,
+                        Err(e) => {
+                            error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
+                            continue
+                        }
+                    };
 
-            // Slash
-            if event.content() == vec![0, 1] {
-                let (proof, secret, user_msg_limit, identity_root): (
-                    Proof,
-                    pallas::Base,
-                    u64,
-                    pallas::Base,
-                ) = match deserialize_async_partial(&blob).await {
-                    Ok((v, _)) => v,
-                    Err(e) => {
-                        error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
+                    info!("registering account: {:?}", commitment);
+                    let public_inputs = vec![commitment, user_msg_limit.into()];
+
+                    if proof.verify(&self.event_graph.register_vk, &public_inputs).is_err() {
+                        error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Registration proof verification failed");
                         continue
                     }
-                };
-
-                let public_inputs = vec![secret, pallas::Base::from(user_msg_limit), identity_root];
-
-                if proof.verify(&self.event_graph.slash_vk, &public_inputs).is_err() {
-                    error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Slashing proof verification failed");
-                    continue
                 }
+                RLNNode::Slashing(commitment) => {
+                    let (proof, secret, user_msg_limit, identity_root): (
+                        Proof,
+                        pallas::Base,
+                        u64,
+                        pallas::Base,
+                    ) = match deserialize_async_partial(&blob).await {
+                        Ok((v, _)) => v,
+                        Err(e) => {
+                            error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);
+                            continue
+                        }
+                    };
 
-                let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
-                let commitment = poseidon_hash([identity_secret_hash]);
-                info!("slashing account: {}", commitment.to_string());
-                let commitment = vec![commitment];
-                let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+                    let public_inputs =
+                        vec![secret, pallas::Base::from(user_msg_limit), identity_root];
 
-                let mut rln_id_tree = self.event_graph.rln_identity_tree.write().await;
-                rln_id_tree.remove_leaves(commitment)?;
+                    if proof.verify(&self.event_graph.slash_vk, &public_inputs).is_err() {
+                        error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Slashing proof verification failed");
+                        continue
+                    }
+
+                    let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
+                    let rebuilt_commitment = poseidon_hash([identity_secret_hash]);
+
+                    assert_eq!(commitment, rebuilt_commitment);
+                    info!("slashing account: {}", rebuilt_commitment.to_string());
+                    let commitment = vec![rebuilt_commitment];
+                    let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+
+                    let mut rln_id_tree = self.event_graph.rln_identity_tree.write().await;
+                    rln_id_tree.remove_leaves(commitment)?;
+                }
             }
 
             // Check if event's parents are in the static DAG

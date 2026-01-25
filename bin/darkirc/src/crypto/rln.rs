@@ -115,7 +115,7 @@ impl RlnIdentity {
         let public_inputs = vec![commitment, pallas::Base::from(self.user_message_limit)];
 
         info!(target: "crypto::rln::create_register_proof", "[RLN] Creating register proof for account {}", event.header.id());
-        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN)?;
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
         let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
 
         let proof =

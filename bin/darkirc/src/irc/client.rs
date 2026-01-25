@@ -27,13 +27,17 @@ use std::{
 };
 
 use darkfi::{
-    event_graph::{proto::EventPut, Event, NULL_ID},
+    event_graph::{
+        proto::EventPut,
+        rln::{process_commitment, RLNNode},
+        Event, NULL_ID,
+    },
     system::Subscription,
     zk::{empty_witnesses, Proof, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::pasta::{pallas, Fp};
+use darkfi_sdk::pasta::pallas;
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
 use sled_overlay::sled;
@@ -43,7 +47,7 @@ use smol::{
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
@@ -363,7 +367,7 @@ impl Client {
                     }
 
                     // Update SMT
-                    let fetched_rln_commitment: Fp = match deserialize_async_partial(r.content()).await
+                    let fetched_rln_commitment: RLNNode = match deserialize_async_partial(r.content()).await
                     {
                         Ok((v, _)) => v,
                         Err(e) => {
@@ -371,10 +375,9 @@ impl Client {
                             continue
                         }
                     };
-                    let commitment = vec![fetched_rln_commitment];
-                    let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
+
                     let mut identities_tree = self.server.darkirc.event_graph.rln_identity_tree.write().await;
-                    identities_tree.insert_batch(commitment)?;
+                    process_commitment(fetched_rln_commitment, &mut identities_tree)?;
                     drop(identities_tree);
 
                     // Mark the message as seen for this USER
@@ -416,7 +419,7 @@ impl Client {
         &self,
         line: &str,
         writer: &mut W,
-        args_queue: &mut VecDeque<OldPrivmsg>,
+        args_queue: &mut VecDeque<Privmsg>,
     ) -> Result<Option<Vec<Event>>>
     where
         W: AsyncWrite + Unpin,
@@ -533,7 +536,7 @@ impl Client {
     }
 
     // Internal helper function that creates a PRIVMSG from IRC client arguments
-    async fn args_to_privmsg(&self, args: String) -> OldPrivmsg {
+    async fn args_to_privmsg(&self, args: String) -> Privmsg {
         let nick = self.nickname.read().await.to_string();
         let channel = args.split_ascii_whitespace().next().unwrap().to_string();
         let msg_offset = args.find(':').unwrap() + 1;
@@ -541,18 +544,11 @@ impl Client {
 
         // Truncate messages longer than MAX_MSG_LEN
         let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
+        Privmsg { version: 0, msg_type: 0, channel, nick, msg: msg.to_string() }
+    }
 
-        // TODO: This is kept as old version of privmsg, since now we
-        // can deserialize both old and new versions, after some time
-        // this will be replaced with Privmsg (new version)
-        let mut privmsg = Privmsg {
-            version: 0,
-            channel,
-            nick: self.nickname.read().await.to_string(),
-            msg: msg.to_string(),
-            msg_type: 0,
-        };
-
+    // Internal helper function that creates an Event from PRIVMSG arguments
+    async fn privmsg_to_event(&self, mut privmsg: Privmsg) -> Event {
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;
 
