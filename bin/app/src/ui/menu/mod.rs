@@ -45,8 +45,11 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+mod shape;
+
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
+const LONG_PRESS_EPSILON: f32 = 5.0;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
 
@@ -59,22 +62,28 @@ enum ItemStatus {
 #[derive(Clone)]
 struct TouchInfo {
     start_scroll: f32,
-    start_y: f32,
+    start_pos: Point,
     start_instant: std::time::Instant,
     samples: VecDeque<(std::time::Instant, f32)>,
     last_instant: std::time::Instant,
     last_y: f32,
 }
 
+#[derive(Clone)]
+struct MouseClickInfo {
+    start_pos: Point,
+    start_instant: std::time::Instant,
+}
+
 impl TouchInfo {
-    fn new(start_scroll: f32, y: f32) -> Self {
+    fn new(start_scroll: f32, pos: Point) -> Self {
         Self {
             start_scroll,
-            start_y: y,
+            start_pos: pos,
             start_instant: std::time::Instant::now(),
-            samples: VecDeque::from([(std::time::Instant::now(), y)]),
+            samples: VecDeque::from([(std::time::Instant::now(), pos.y)]),
             last_instant: std::time::Instant::now(),
-            last_y: y,
+            last_y: pos.y,
         }
     }
 
@@ -112,6 +121,7 @@ pub struct Menu {
 
     font_size: PropertyFloat32,
     padding: PropertyPtr,
+    handle_padding: PropertyFloat32,
     text_color: PropertyColor,
     bg_color: PropertyColor,
     sep_size: PropertyFloat32,
@@ -122,10 +132,12 @@ pub struct Menu {
 
     mouse_pos: SyncMutex<Point>,
     touch_info: SyncMutex<Option<TouchInfo>>,
+    mouse_click_info: SyncMutex<Option<MouseClickInfo>>,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     motion_cv: Arc<CondVar>,
     speed: AtomicF32,
+    is_edit_mode: AtomicBool,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
     item_states: SyncMutex<HashMap<String, ItemStatus>>,
@@ -146,6 +158,8 @@ impl Menu {
 
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let padding = node_ref.get_property("padding").expect("Menu::padding");
+        let handle_padding =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "handle_padding", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let bg_color = PropertyColor::wrap(node_ref, Role::Internal, "bg_color").unwrap();
         let sep_size = PropertyFloat32::wrap(node_ref, Role::Internal, "sep_size", 0).unwrap();
@@ -174,6 +188,7 @@ impl Menu {
             items,
             font_size,
             padding,
+            handle_padding,
             text_color,
             bg_color,
             sep_size,
@@ -183,10 +198,12 @@ impl Menu {
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
+            mouse_click_info: SyncMutex::new(None),
             scroll_start_accel,
             scroll_resist,
             motion_cv,
             speed: AtomicF32::new(0.),
+            is_edit_mode: AtomicBool::new(false),
             parent_rect: SyncMutex::new(None),
             item_states: SyncMutex::new(HashMap::new()),
         });
@@ -229,6 +246,26 @@ impl Menu {
         }
     }
 
+    async fn handle_interaction(
+        &self,
+        y: f32,
+        is_tap: bool,
+        is_long_press_tap: bool,
+        elapsed_ms: u128,
+    ) {
+        let is_long_press = is_long_press_tap && elapsed_ms >= 500;
+
+        if is_long_press {
+            self.is_edit_mode.store(true, Ordering::Release);
+            let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
+            self.redraw(atom);
+        } else if is_tap {
+            if let Some(item_idx) = self.get_selected_item_index(y) {
+                self.handle_selection(item_idx).await;
+            }
+        }
+    }
+
     fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
@@ -244,6 +281,7 @@ impl Menu {
         let font_size = self.font_size.get();
         let padding_x = self.padding.get_f32(0).unwrap();
         let padding_y = self.padding.get_f32(1).unwrap();
+        let handle_padding = self.handle_padding.get();
         let text_color = self.text_color.get();
         let active_color = self.active_color.get();
         let alert_color = self.alert_color.get();
@@ -269,6 +307,25 @@ impl Menu {
         let sep_mesh = sep_mesh.alloc(&self.renderer).draw_untextured();
 
         let item_states = self.item_states.lock();
+        let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
+        let edit_offset = if is_edit_mode { 100.0 } else { 0.0 };
+
+        // Create X mesh for edit mode
+        let x_mesh =
+            if is_edit_mode { Some(shape::make_x(&self.renderer, font_size)) } else { None };
+
+        let mut edit_instrs = vec![];
+        if is_edit_mode {
+            let item_center_y = item_height / 2.0;
+            edit_instrs.push(DrawInstruction::Move(Point::new(handle_padding, item_center_y)));
+            edit_instrs.push(DrawInstruction::Draw(shape::make_x(&self.renderer, font_size)));
+            edit_instrs.push(DrawInstruction::Move(Point::new(-handle_padding, -item_center_y)));
+
+            let rhs = rect.w - handle_padding;
+            edit_instrs.push(DrawInstruction::Move(Point::new(rhs, item_center_y)));
+            edit_instrs.push(DrawInstruction::Draw(shape::make_hammy(&self.renderer, font_size)));
+            edit_instrs.push(DrawInstruction::Move(Point::new(-rhs, -item_center_y)));
+        }
 
         for idx in 0..num_items {
             let item_text = self.items.get_str(idx).unwrap();
@@ -278,6 +335,8 @@ impl Menu {
                 Some(ItemStatus::Alert) => alert_color,
                 _ => text_color,
             };
+
+            instrs.append(&mut edit_instrs.clone());
 
             // Draw text
             let layout = text::make_layout(
@@ -292,9 +351,12 @@ impl Menu {
 
             let text_instr = text::render_layout(&layout, &self.renderer, gfxtag!("menu_text"));
 
-            instrs.push(DrawInstruction::Move(Point::new(padding_x, padding_y)));
+            instrs.push(DrawInstruction::Move(Point::new(padding_x + edit_offset, padding_y)));
             instrs.extend(text_instr);
-            instrs.push(DrawInstruction::Move(Point::new(-padding_x, font_size + padding_y)));
+            instrs.push(DrawInstruction::Move(Point::new(
+                -padding_x - edit_offset,
+                font_size + padding_y,
+            )));
 
             // Draw separator (except for last item)
             if idx < num_items - 1 {
@@ -405,7 +467,7 @@ impl Menu {
 
         if let Some((dt, _)) = info.first_sample() {
             if dt > EPSILON {
-                let velocity = (touch_y - info.start_y) / dt;
+                let velocity = (touch_y - info.start_pos.y) / dt;
                 self.start_scroll(-velocity);
             }
         }
@@ -559,12 +621,30 @@ impl UIObject for Menu {
             return false
         }
 
-        if let Some(item_idx) = self.get_selected_item_index(mouse_pos.y) {
-            self.handle_selection(item_idx).await;
-            true
-        } else {
-            false
+        *self.mouse_click_info.lock() =
+            Some(MouseClickInfo { start_pos: mouse_pos, start_instant: std::time::Instant::now() });
+
+        false
+    }
+
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        if btn != MouseButton::Left {
+            return false
         }
+
+        let click_info = self.mouse_click_info.lock().take();
+        let Some(info) = click_info else { return false };
+
+        let is_click = (mouse_pos.y - info.start_pos.y).abs() < BIG_EPSILON;
+        let movement_dist = ((mouse_pos.x - info.start_pos.x).powi(2) +
+            (mouse_pos.y - info.start_pos.y).powi(2))
+        .sqrt();
+        let is_long_press_tap = movement_dist < LONG_PRESS_EPSILON;
+        let elapsed = info.start_instant.elapsed().as_millis();
+
+        self.handle_interaction(mouse_pos.y, is_click, is_long_press_tap, elapsed).await;
+
+        true
     }
 
     async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
@@ -604,7 +684,7 @@ impl UIObject for Menu {
                 }
 
                 *self.touch_info.lock() =
-                    Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos.y));
+                    Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos));
                 true
             }
 
@@ -622,7 +702,7 @@ impl UIObject for Menu {
                     }
                     info.last_instant = std::time::Instant::now();
 
-                    let dist = touch_pos.y - info.start_y;
+                    let dist = touch_pos.y - info.start_pos.y;
                     if dist.abs() < BIG_EPSILON {
                         return true
                     }
@@ -650,18 +730,20 @@ impl UIObject for Menu {
             TouchPhase::Started | TouchPhase::Moved => false,
 
             TouchPhase::Ended | TouchPhase::Cancelled => {
-                let is_tap = {
+                let (is_tap, is_long_press_tap, elapsed) = {
                     let touch_info = self.touch_info.lock();
                     let Some(info) = &*touch_info else { return true };
 
-                    (touch_pos.y - info.start_y).abs() < BIG_EPSILON
+                    let is_tap = (touch_pos.y - info.start_pos.y).abs() < BIG_EPSILON;
+                    let movement_dist = ((touch_pos.x - info.start_pos.x).powi(2) +
+                        (touch_pos.y - info.start_pos.y).powi(2))
+                    .sqrt();
+                    let is_long_press_tap = movement_dist < LONG_PRESS_EPSILON;
+                    let elapsed = info.start_instant.elapsed().as_millis();
+                    (is_tap, is_long_press_tap, elapsed)
                 };
 
-                if is_tap {
-                    if let Some(item_idx) = self.get_selected_item_index(touch_pos.y) {
-                        self.handle_selection(item_idx).await;
-                    }
-                }
+                self.handle_interaction(touch_pos.y, is_tap, is_long_press_tap, elapsed).await;
 
                 self.end_touch_phase(touch_pos.y);
                 true

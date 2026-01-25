@@ -627,6 +627,12 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("handle_padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Handle Padding", "X handle padding from left edge");
+    prop.set_defaults_f32(vec![14.0]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_ui_text("Text Color", "Text color (RGBA)");
     prop.set_array_len(4);

@@ -43,6 +43,7 @@ mod android_ui_consts {
     pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
     pub const MENU_SEP_SIZE: f32 = 3.;
+    pub const MENU_HANDLE_PAD: f32 = 100.;
     pub const VERBLOCK_SCALE: f32 = 150.;
     pub const VERBLOCK_X: f32 = 180.;
     pub const VERBLOCK_Y: f32 = 80.;
@@ -68,6 +69,7 @@ mod ui_consts {
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
     pub const MENU_SEP_SIZE: f32 = 1.;
+    pub const MENU_HANDLE_PAD: f32 = 50.;
     pub const VERBLOCK_SCALE: f32 = 80.;
     pub const VERBLOCK_X: f32 = 110.;
     pub const VERBLOCK_Y: f32 = 50.;
@@ -220,6 +222,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let prop = node.get_property("padding").unwrap();
     prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
     prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_LINESPACE / 2.).unwrap();
+
+    node.set_property_f32(atom, Role::App, "handle_padding", MENU_HANDLE_PAD).unwrap();
 
     let prop = node.get_property("items").unwrap();
     for channel in CHANNELS {
