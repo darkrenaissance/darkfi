@@ -613,7 +613,7 @@ impl PeerDiscovery {
                         }
                     }
                     Err(_) => {
-                        warn!(
+                        verbose!(
                             target: "net::direct_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );

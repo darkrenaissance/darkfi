@@ -667,7 +667,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                         );
                     }
                     Err(_) => {
-                        warn!(
+                        verbose!(
                             target: "net::outbound_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );
