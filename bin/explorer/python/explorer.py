@@ -17,9 +17,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from datetime import datetime, timezone
 
-from quart import Quart, render_template, abort, request, redirect, url_for
+from quart import Quart, render_template, abort, request, redirect, url_for, Response
 
-from rpc_client import JsonRpcPool, JsonRpcError
+from rpc_client import JsonRpcPool, JsonRpcError, RpcUnavailableError
 
 app = Quart(__name__)
 app.config.update(
@@ -27,6 +27,7 @@ app.config.update(
     RPC_PORT="22222",
     RPC_MIN_CONNECTIONS=5,
     RPC_MAX_CONNECTIONS=50,
+    RPC_RECONNECT_INTERVAL=5.0,
     NETWORK="Testnet",
 )
 
@@ -42,9 +43,10 @@ async def startup():
         port=app.config["RPC_PORT"],
         min_connections=app.config["RPC_MIN_CONNECTIONS"],
         max_connections=app.config["RPC_MAX_CONNECTIONS"],
+        reconnect_interval=app.config["RPC_RECONNECT_INTERVAL"],
     )
     await rpc.start()
-    app.logger.info(f"RPC pool started: {app.config['RPC_HOST']}:{app.config['RPC_PORT']}")
+    app.logger.info(f"RPC pool initialized for {app.config['RPC_HOST']}:{app.config['RPC_PORT']}")
 
 
 @app.after_serving
@@ -71,9 +73,20 @@ async def handle_rpc_error(error: JsonRpcError):
     ), 500
 
 
+@app.errorhandler(RpcUnavailableError)
+async def handle_rpc_unavailable(error: RpcUnavailableError):
+    app.logger.error(f"RPC Unavailable: {error}")
+    return await render_template(
+        "error.html",
+        network=app.config["NETWORK"],
+        error_code="503",
+        error="Blockchain node is currently unavailable. Please try again later."
+    ), 503
+
+
 @app.errorhandler(ConnectionError)
 async def handle_connection_error(error):
-    app.logger.error(f"RPC Connection Error: {error}")
+    app.logger.error(f"Connection Error: {error}")
     return await render_template(
         "error.html",
         network=app.config["NETWORK"],
@@ -104,6 +117,16 @@ def format_hashrate(hashrate: float) -> str:
         return f"{hashrate / 1e3:.2f} KH/s"
     else:
         return f"{hashrate:.2f} H/s"
+
+
+def format_bytes(size: int) -> str:
+    """Format byte size with appropriate unit."""
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    elif size >= 1024:
+        return f"{size / 1024:.2f} KB"
+    else:
+        return f"{size} bytes"
 
 
 @app.route("/")
@@ -212,16 +235,6 @@ async def search():
     ), 404
 
 
-def format_bytes(size: int) -> str:
-    """Format byte size with appropriate unit."""
-    if size >= 1024 * 1024:
-        return f"{size / (1024 * 1024):.2f} MB"
-    elif size >= 1024:
-        return f"{size / 1024:.2f} KB"
-    else:
-        return f"{size} bytes"
-
-
 @app.route("/contract/<contract_id>")
 async def get_contract(contract_id: str):
     current_difficulty = await rpc.call("current_difficulty", params=[])
@@ -288,7 +301,6 @@ async def daily_tx_chart():
     matplotlib.use('Agg')  # Non-interactive backend
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
-    from datetime import datetime, timezone
 
     stats_data = await rpc.call("get_stats", params=[])
     daily_stats = stats_data.get("daily_stats", [])
@@ -338,7 +350,6 @@ async def daily_tx_chart():
     plt.close(fig)
     buf.seek(0)
 
-    from quart import Response
     return Response(buf.getvalue(), mimetype='image/png')
 
 

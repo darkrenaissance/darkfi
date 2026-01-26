@@ -1,11 +1,14 @@
 import asyncio
 import json
-from dataclasses import dataclass
-from typing import Any
+import logging
+from typing import Any, Optional
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 
 class JsonRpcError(Exception):
+    """Error returned by the RPC server."""
     def __init__(self, code: int, message: str, data: Any = None):
         self.code = code
         self.message = message
@@ -13,8 +16,13 @@ class JsonRpcError(Exception):
         super().__init__(f"RPC Error {code}: {message}")
 
 
+class RpcUnavailableError(Exception):
+    """Raised when RPC endpoint is not reachable."""
+    pass
+
+
 class JsonRpcConnection:
-    """Single JSON-RPC connection over TCP"""
+    """Single JSON-RPC connection over TCP."""
 
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.reader = reader
@@ -84,7 +92,13 @@ class JsonRpcConnection:
 
 
 class JsonRpcPool:
-    """Connection pool with automatic reconnection"""
+    """
+    Connection pool with background reconnection.
+
+    - If RPC is unavailable, immediately returns error (no waiting)
+    - Background task keeps trying to reconnect every N seconds
+    - Once connected, requests work again
+    """
 
     def __init__(
         self,
@@ -92,84 +106,154 @@ class JsonRpcPool:
         port: int,
         min_connections: int = 5,
         max_connections: int = 20,
+        reconnect_interval: float = 5.0,
+        connect_timeout: float = 5.0,
     ):
         self.host = host
         self.port = port
         self.min_connections = min_connections
         self.max_connections = max_connections
+        self.reconnect_interval = reconnect_interval
+        self.connect_timeout = connect_timeout
 
         self._pool: asyncio.Queue[JsonRpcConnection] = None
         self._semaphore: asyncio.Semaphore = None
         self._connection_count = 0
         self._lock = asyncio.Lock()
         self._closed = False
+        self._available = False
+        self._reconnect_task: Optional[asyncio.Task] = None
 
     async def start(self):
-        """Initialize the pool with minimum connections"""
+        """Initialize the pool"""
         self._pool = asyncio.Queue()
         self._semaphore = asyncio.Semaphore(self.max_connections)
         self._connection_count = 0
+        self._closed = False
 
+        # Try to create initial connections
+        success_count = 0
         for _ in range(self.min_connections):
-            try:
-                conn = await self._create_connection()
+            conn = await self._create_connection()
+            if conn:
                 await self._pool.put(conn)
-            except Exception as e:
-                print(f"Warning: Failed to create initial connection: {e}")
+                success_count += 1
 
-    async def _create_connection(self) -> JsonRpcConnection:
-        reader, writer = await asyncio.open_connection(self.host, self.port)
-        async with self._lock:
-            self._connection_count += 1
-        return JsonRpcConnection(reader, writer)
+        if success_count > 0:
+            self._available = True
+            logger.info(f"RPC pool started with {success_count} connections")
+        else:
+            self._available = False
+            logger.warning(f"RPC {self.host}:{self.port} unavailable, will retry in background")
+            self._start_reconnect_task()
+
+    def _start_reconnect_task(self):
+        """Start background reconnection task if not already running."""
+        if self._reconnect_task is None or self._reconnect_task.done():
+            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+
+    async def _reconnect_loop(self):
+        """Background task that keeps trying to reconnect."""
+        while not self._closed and not self._available:
+            await asyncio.sleep(self.reconnect_interval)
+
+            if self._closed:
+                break
+
+            conn = await self._create_connection()
+            if conn:
+                await self._pool.put(conn)
+                self._available = True
+                logger.info(f"RPC {self.host}:{self.port} reconnected")
+                break
+            else:
+                logger.debug(f"RPC {self.host}:{self.port} still unavailable, retrying...")
+
+    async def _create_connection(self) -> Optional[JsonRpcConnection]:
+        """Create a new connection. Returns None if connection fails."""
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self.host, self.port),
+                timeout=self.connect_timeout
+            )
+            async with self._lock:
+                self._connection_count += 1
+            return JsonRpcConnection(reader, writer)
+        except (asyncio.TimeoutError, OSError) as e:
+            logger.debug(f"Connection failed: {e}")
+            return None
 
     async def _destroy_connection(self, conn: JsonRpcConnection):
+        """Close and clean up a connection"""
         await conn.close()
         async with self._lock:
-            self._connection_count -= 1
+            self._connection_count = max(0, self._connection_count - 1)
 
-    @asynccontextmanager
-    async def connection(self):
-        """Acquire a connection from the pool"""
+    async def call(self, method: str, params: Any = None, timeout: float = 30.0) -> Any:
+        """Make an RPC call. Raises RpcUnavailableError immediately if not connected."""
         if self._closed:
             raise RuntimeError("Pool's closed")
 
-        conn = None
+        if not self._available:
+            raise RpcUnavailableError(f"RPC {self.host}:{self.port} is unavailable")
 
         async with self._semaphore:
-            # Try to get an existing connection
+            # Get or create connection
+            conn = None
             while not self._pool.empty():
-                conn = await self._pool.get()
-                if not conn.is_closed:
+                try:
+                    conn = self._pool.get_nowait()
+                    if not conn.is_closed:
+                        break
+                    await self._destroy_connection(conn)
+                    conn = None
+                except asyncio.QueueEmpty:
                     break
-                await self._destroy_connection(conn)
-                conn = None
 
-            # Create new if needed
             if conn is None:
                 conn = await self._create_connection()
+                if conn is None:
+                    self._available = False
+                    self._start_reconnect_task()
+                    raise RpcUnavailableError(f"RPC {self.host}:{self.port} is unavailable")
 
+            # Make the call
             try:
-                yield conn
-            except (ConnectionError, TimeoutError):
-                # Connection is bad, don't return to pool
-                await self._destroy_connection(conn)
+                result = await conn.call(method, params, timeout)
+                await self._pool.put(conn)
+                return result
+            except JsonRpcError:
+                # Server error - connection is still good
+                await self._pool.put(conn)
                 raise
-            else:
-                # Return healthy connection to pool
-                if not conn.is_closed:
-                    await self._pool.put(conn)
-                else:
-                    await self._destroy_connection(conn)
+            except (ConnectionError, TimeoutError) as e:
+                # Connection failed
+                await self._destroy_connection(conn)
+                self._available = False
+                self._start_reconnect_task()
+                raise RpcUnavailableError(f"RPC {self.host}:{self.port} is unavailable: {e}")
 
-    async def call(self, method: str, params: Any = None, timeout: float = 30.0) -> Any:
-        """Make an RPC call using a pooled connection"""
-        async with self.connection() as conn:
-            return await conn.call(method, params, timeout)
+    @property
+    def is_available(self) -> bool:
+        """Check if RPC is currently available."""
+        return self._available
 
     async def close(self):
         """Close all connections"""
         self._closed = True
+
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+
         while not self._pool.empty():
-            conn = await self._pool.get()
-            await self._destroy_connection(conn)
+            try:
+                conn = self._pool.get_nowait()
+                await self._destroy_connection(conn)
+            except asyncio.QueueEmpty:
+                break
+
+        logger.info("RPC pool closed")
