@@ -133,6 +133,9 @@ pub struct Menu {
     mouse_pos: SyncMutex<Point>,
     touch_info: SyncMutex<Option<TouchInfo>>,
     mouse_click_info: SyncMutex<Option<MouseClickInfo>>,
+    long_press_task: SyncMutex<Option<smol::Task<()>>>,
+    weak_self: SyncMutex<Option<Weak<Self>>>,
+    ex: SyncMutex<Option<ExecutorPtr>>,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     motion_cv: Arc<CondVar>,
@@ -199,6 +202,9 @@ impl Menu {
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
             mouse_click_info: SyncMutex::new(None),
+            long_press_task: SyncMutex::new(None),
+            weak_self: SyncMutex::new(None),
+            ex: SyncMutex::new(None),
             scroll_start_accel,
             scroll_resist,
             motion_cv,
@@ -308,7 +314,7 @@ impl Menu {
 
         let item_states = self.item_states.lock();
         let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
-        let edit_offset = if is_edit_mode { 100.0 } else { 0.0 };
+        let edit_offset = if is_edit_mode { handle_padding } else { 0.0 };
 
         // Create X mesh for edit mode
         let x_mesh =
@@ -317,11 +323,11 @@ impl Menu {
         let mut edit_instrs = vec![];
         if is_edit_mode {
             let item_center_y = item_height / 2.0;
-            edit_instrs.push(DrawInstruction::Move(Point::new(handle_padding, item_center_y)));
+            edit_instrs.push(DrawInstruction::Move(Point::new(handle_padding / 2., item_center_y)));
             edit_instrs.push(DrawInstruction::Draw(shape::make_x(&self.renderer, font_size)));
-            edit_instrs.push(DrawInstruction::Move(Point::new(-handle_padding, -item_center_y)));
+            edit_instrs.push(DrawInstruction::Move(Point::new(-handle_padding / 2., -item_center_y)));
 
-            let rhs = rect.w - handle_padding;
+            let rhs = rect.w - handle_padding / 2.;
             edit_instrs.push(DrawInstruction::Move(Point::new(rhs, item_center_y)));
             edit_instrs.push(DrawInstruction::Draw(shape::make_hammy(&self.renderer, font_size)));
             edit_instrs.push(DrawInstruction::Move(Point::new(-rhs, -item_center_y)));
@@ -547,6 +553,8 @@ impl UIObject for Menu {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        *self.weak_self.lock() = Some(Arc::downgrade(&self));
+        *self.ex.lock() = Some(ex.clone());
         let me = Arc::downgrade(&self);
         let node_ref = &self.node.upgrade().unwrap();
 
@@ -624,12 +632,48 @@ impl UIObject for Menu {
         *self.mouse_click_info.lock() =
             Some(MouseClickInfo { start_pos: mouse_pos, start_instant: std::time::Instant::now() });
 
+        // Spawn a task to detect long press
+        let weak_self = self.weak_self.lock().clone().unwrap();
+        let start_pos = mouse_pos;
+
+        let ex = self.ex.lock().clone().unwrap();
+        let long_press_task = ex.spawn(async move {
+            darkfi::system::msleep(500).await;
+
+            let Some(arc_self) = weak_self.upgrade() else { return };
+            let current_mouse_pos = *arc_self.mouse_pos.lock();
+            let click_info = arc_self.mouse_click_info.lock();
+
+            // Check if button is still held and movement is within threshold
+            if let Some(info) = &*click_info {
+                let movement_dist = ((current_mouse_pos.x - start_pos.x).powi(2) +
+                    (current_mouse_pos.y - start_pos.y).powi(2))
+                .sqrt();
+
+                if movement_dist < LONG_PRESS_EPSILON {
+                    // Long press detected, trigger edit mode
+                    drop(click_info);
+                    arc_self.is_edit_mode.store(true, Ordering::Release);
+                    let atom = &mut arc_self.renderer.make_guard(gfxtag!("Menu::long_press"));
+                    arc_self.redraw(atom);
+                }
+            }
+        });
+
+        *self.long_press_task.lock() = Some(long_press_task);
+
         false
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if btn != MouseButton::Left {
             return false
+        }
+
+        // Cancel the long press detection task
+        let task = self.long_press_task.lock().take();
+        if let Some(task) = task {
+            task.cancel().await;
         }
 
         let click_info = self.mouse_click_info.lock().take();

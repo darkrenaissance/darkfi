@@ -18,7 +18,7 @@
 
 use crate::{
     gfx::{gfxtag, DrawMesh, Renderer, Vertex},
-    mesh::{Color, MeshBuilder},
+    mesh::{Color, MeshBuilder, COLOR_GREEN},
 };
 
 const X_COLOR: Color = [1.0, 0.0, 0.0, 1.0];
@@ -39,13 +39,13 @@ pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
     let mut diag_start2 = [-half_size + half_thick, -half_size - half_thick];
     let mut diag_end2 = [half_size + half_thick, half_size - half_thick];
 
-    let verts1 = vec![
+    let verts = vec![
         Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
     ];
-    mesh.append(verts1, vec![0, 2, 1, 1, 2, 3]);
+    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
 
     // Second diagonal line (bottom-left to top-right)
     // Diagonal from (-half_size, half_size) to (half_size, -half_size)
@@ -54,13 +54,21 @@ pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
     diag_start2[0] *= -1.;
     diag_end2[0] *= -1.;
 
-    let verts2 = vec![
+    let verts = vec![
         Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
         Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
     ];
-    mesh.append(verts2, vec![0, 2, 1, 1, 2, 3]);
+    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
+
+    let verts = vec![
+        Vertex { pos: [-5., -5.], color: COLOR_GREEN, uv: [0., 0.] },
+        Vertex { pos: [-5., 5.], color: COLOR_GREEN, uv: [0., 0.] },
+        Vertex { pos: [5., -5.], color: COLOR_GREEN, uv: [0., 0.] },
+        Vertex { pos: [5., 5.], color: COLOR_GREEN, uv: [0., 0.] },
+    ];
+    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
 
     mesh.alloc(renderer).draw_untextured()
 }
