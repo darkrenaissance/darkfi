@@ -171,6 +171,7 @@ async def get_block_by_height(block_height: int):
         current_height=current_height,
         hashrate=format_hashrate(hashrate),
         block=block,
+        monero_hash=block["monero_hash"],
     )
 
 

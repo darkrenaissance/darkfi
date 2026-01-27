@@ -237,7 +237,7 @@ impl Explorer {
         to_height: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        if from_height == to_height {
+        if from_height >= to_height {
             return Ok(())
         }
 

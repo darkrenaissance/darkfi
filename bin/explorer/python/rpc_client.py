@@ -173,7 +173,7 @@ class JsonRpcPool:
         """Create a new connection. Returns None if connection fails."""
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self.host, self.port),
+                asyncio.open_connection(self.host, self.port, limit=16*1024*1024),
                 timeout=self.connect_timeout
             )
             async with self._lock:

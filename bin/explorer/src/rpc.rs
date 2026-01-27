@@ -30,6 +30,8 @@ use darkfi::{
 use darkfi_money_contract::MoneyFunction;
 use darkfi_sdk::crypto::contract_id::MONEY_CONTRACT_ID;
 use darkfi_serial::{deserialize_async, serialize_async};
+use monero::{consensus::encode::Encodable, VarInt};
+use tiny_keccak::{Hasher, Keccak};
 use tinyjson::JsonValue;
 
 use crate::{DifficultyIndex, Explorer};
@@ -189,15 +191,35 @@ struct ExplBlockInfo {
     difficulty: u64,
     cumulative: u64,
     powtype: String,
+    monero_hash: Option<String>,
     txs: Vec<TransactionInfo>,
     coinbase: CoinbaseInfo,
 }
 
 impl ExplBlockInfo {
     async fn new(block: &BlockInfo, diff: &DifficultyIndex) -> Self {
-        let powtype = match block.header.pow_data {
+        let mut monero_hash = None;
+        let powtype = match &block.header.pow_data {
             PowData::DarkFi => "DarkFi".to_string(),
-            PowData::Monero(_) => "Monero".to_string(),
+            PowData::Monero(powdata) => {
+                // Calculate the Monero block header hash
+                let mut blockhashing_blob = powdata.to_block_hashing_blob();
+                // Monero prefixes a VarInt of the blob len before getting the
+                // block hash but doesn't do this when getting the PoW hash :)
+                let mut header = vec![];
+                VarInt(blockhashing_blob.len() as u64).consensus_encode(&mut header).unwrap();
+                header.append(&mut blockhashing_blob);
+
+                let mut keccak = Keccak::v256();
+                keccak.update(&header);
+
+                let mut hash = [0u8; 32];
+                keccak.finalize(&mut hash);
+
+                monero_hash = Some(hex::encode(hash));
+
+                "Monero".to_string()
+            }
         };
 
         let mut txs = Vec::with_capacity(block.txs.len());
@@ -220,12 +242,19 @@ impl ExplBlockInfo {
             difficulty: diff.difficulty,
             cumulative: diff.cumulative,
             powtype,
+            monero_hash,
             txs,
             coinbase,
         }
     }
 
     fn to_json(&self) -> JsonValue {
+        let monero_hash = if let Some(hash) = &self.monero_hash {
+            JsonValue::String(hash.to_string())
+        } else {
+            JsonValue::Null
+        };
+
         JsonValue::Object(HashMap::from([
             ("height".to_string(), JsonValue::Number(self.height as f64)),
             ("hash".to_string(), JsonValue::String(self.hash.clone())),
@@ -239,6 +268,7 @@ impl ExplBlockInfo {
             ("difficulty".to_string(), JsonValue::Number(self.difficulty as f64)),
             ("cumulative".to_string(), JsonValue::Number(self.cumulative as f64)),
             ("powtype".to_string(), JsonValue::String(self.powtype.clone())),
+            ("monero_hash".to_string(), monero_hash),
             ("txs".to_string(), JsonValue::Array(self.txs.iter().map(|t| t.to_json()).collect())),
             ("coinbase".to_string(), self.coinbase.to_json()),
         ]))

@@ -131,7 +131,11 @@
           <tbody>
             <tr>
               <td class="info-label">Monero Block Hash</td>
-              <td><a href="https://localmonero.co/blocks/block/{{ monero_hash }}" target="_blank" class="hash hash-monero">{{ monero_hash }}</a></td>
+              {% if network == 'Testnet' %}
+              <td><a href="https://testnet.xmrchain.net/search?value={{ monero_hash }}" target="_blank" class="hash hash-monero">{{ monero_hash }}</a></td>
+              {% else %}
+              <td><a href="https://blocks.p2pool.observer/block/{{ monero_hash }}" target="_blank" class="hash hash-monero">{{ monero_hash }}</a></td>
+              {% endif %}
             </tr>
           </tbody>
         </table>
