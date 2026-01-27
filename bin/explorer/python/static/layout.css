@@ -335,6 +335,10 @@ code {
   overflow: hidden;
 }
 
+.table-section.full-width {
+  width: 100%;
+}
+
 .table-header {
   display: flex;
   justify-content: space-between;
@@ -560,6 +564,58 @@ tbody tr:hover td { background: var(--color-hover); }
   padding: 0;
   word-break: break-all;
   white-space: pre-wrap;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--table-border-color);
+}
+
+.pagination .btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 1.3rem;
+}
+
+.pagination .btn-sm.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pagination-info {
+  font-size: 1.4rem;
+  color: var(--color-muted);
+  padding: 0 1rem;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--table-border-color);
+}
+
+.pagination .btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 1.3rem;
+}
+
+.pagination .btn-sm.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pagination-info {
+  font-size: 1.4rem;
+  color: var(--color-muted);
+  padding: 0 1rem;
 }
 
 .footer {

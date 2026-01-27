@@ -2308,7 +2308,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "337f65eb93d9996551b9442423480eca4532586b337484446eb5138d0cd8fcf0"
 dependencies = [
  "heck 0.5.0",
- "indexmap 2.13.0",
+ "indexmap 1.9.3",
  "itertools 0.14.0",
  "proc-macro-crate",
  "proc-macro2",
@@ -6945,12 +6945,11 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 [[package]]
 name = "tapes"
 version = "0.1.0"
-source = "git+https://github.com/Cuprate/Tapes#a30a5261564b12b21b126599149a88d5a0c5087c"
+source = "git+https://github.com/Cuprate/Tapes#5bb3fc964341f0d608c13275e3496d43d4b28ab1"
 dependencies = [
  "blake2",
  "borsh",
  "bytemuck",
- "libc",
  "parking_lot 0.12.5",
  "slab",
 ]

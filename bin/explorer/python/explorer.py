@@ -15,6 +15,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import asyncio
 from datetime import datetime, timezone
 
 from quart import Quart, render_template, abort, request, redirect, url_for, Response
@@ -147,6 +148,70 @@ async def index():
         current_height=current_height,
         hashrate=format_hashrate(hashrate),
         latest_blocks=latest_blocks,
+    )
+
+
+@app.route("/blocks")
+async def list_blocks():
+    """List all blocks with pagination"""
+    BLOCKS_PER_PAGE = 100
+
+    # Get page number from query param (1-indexed for users)
+    page = request.args.get("page", 1, type=int)
+    if page < 1:
+        page = 1
+
+    current_difficulty = await rpc.call("current_difficulty", params=[])
+    current_height = await rpc.call("current_height", params=[])
+    hashrate = await rpc.call("get_hashrate", params=[])
+
+    total = current_height + 1  # blocks 0 to current_height
+
+    # Calculate range: newest first
+    offset = (page - 1) * BLOCKS_PER_PAGE
+    start_height = current_height - offset
+    end_height = max(0, start_height - BLOCKS_PER_PAGE + 1)
+
+    # Build list of heights to fetch
+    heights = [h for h in range(start_height, end_height - 1, -1) if h >= 0]
+
+    async def fetch_block(height):
+        try:
+            block = await rpc.call("get_block", params=[height])
+            dt = datetime.fromtimestamp(block["timestamp"], tz=timezone.utc)
+            return {
+                "height": int(block["height"]),
+                "size": int(block["size"]),
+                "n_txs": len(block["txs"]),
+                "timestamp": dt.strftime("%H:%M UTC %d %b %Y"),
+                "powtype": block["powtype"],
+                "hash": block["hash"],
+            }
+        except JsonRpcError:
+            return None
+
+    # Fetch all blocks in parallel
+    results = await asyncio.gather(*[fetch_block(h) for h in heights])
+    blocks = [b for b in results if b is not None]
+
+    # Calculate pagination info
+    total_pages = (total + BLOCKS_PER_PAGE - 1) // BLOCKS_PER_PAGE
+    has_prev = page > 1
+    has_next = page < total_pages
+
+    return await render_template(
+        "blocks.html",
+        network=app.config["NETWORK"],
+        current_difficulty=current_difficulty[0],
+        current_height=current_height,
+        hashrate=format_hashrate(hashrate),
+        blocks=blocks,
+        total=total,
+        page=page,
+        total_pages=total_pages,
+        has_prev=has_prev,
+        has_next=has_next,
+        blocks_per_page=BLOCKS_PER_PAGE,
     )
 
 

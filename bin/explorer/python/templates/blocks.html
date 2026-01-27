@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Blocks - DarkFi Block Explorer</title>
+  <link rel="stylesheet" href="/static/layout.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container flex justify-between items-center">
+      <div class="logo">DarkFi {{ network }} Blocks</div>
+      <nav class="nav">
+        <a href="/">Explorer</a>
+        <a href="/contracts">Contracts</a>
+        <a href="/stats">Stats</a>
+        <a href="https://dark.fi/book/">Docs</a>
+        <a href="https://codeberg.org/darkrenaissance/darkfi/">Code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container section">
+
+    <div class="table-section">
+      <div class="table-header">
+        <h3>All Blocks</h3>
+        <span class="badge">{{ total }} Total</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Height</th>
+              <th>Size</th>
+              <th>Txs</th>
+              <th>Timestamp</th>
+              <th>PoW</th>
+              <th>Block Hash</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for block in blocks %}
+            <tr>
+              <td class="height"><a href="/block/{{ block.height|int }}">{{ block.height|int }}</a></td>
+              <td>{{ block.size|int }}</td>
+              <td>{{ block.n_txs|int }}</td>
+              <td>{{ block.timestamp }}</td>
+              <td>{{ block.powtype }}</td>
+              <td><a href="/block/{{ block.height|int }}">{{ block.hash }}</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        {% if has_prev %}
+        <a href="/blocks?page=1" class="btn btn-sm">&laquo; First</a>
+        <a href="/blocks?page={{ page - 1 }}" class="btn btn-sm">&lsaquo; Prev</a>
+        {% else %}
+        <span class="btn btn-sm disabled">&laquo; First</span>
+        <span class="btn btn-sm disabled">&lsaquo; Prev</span>
+        {% endif %}
+
+        <span class="pagination-info">Page {{ page }} of {{ total_pages }}</span>
+
+        {% if has_next %}
+        <a href="/blocks?page={{ page + 1 }}" class="btn btn-sm">Next &rsaquo;</a>
+        <a href="/blocks?page={{ total_pages }}" class="btn btn-sm">Last &raquo;</a>
+        {% else %}
+        <span class="btn btn-sm disabled">Next &rsaquo;</span>
+        <span class="btn btn-sm disabled">Last &raquo;</span>
+        {% endif %}
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <a href="https://dark.fi">Let there be Dark</a>
+    </div>
+  </footer>
+
+</body>
+</html>
