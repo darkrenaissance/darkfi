@@ -138,7 +138,7 @@ async def index():
 
     for block in latest_blocks:
         dt = datetime.fromtimestamp(block["timestamp"], tz=timezone.utc)
-        block["timestamp"] = dt.strftime("%B %d, %Y at %I:%M %p UTC")
+        block["timestamp"] = dt.strftime("%H:%M UTC %d %b %Y")
 
     return await render_template(
         "index.html",
@@ -161,7 +161,7 @@ async def get_block_by_height(block_height: int):
     block = await rpc.call("get_block", params=[block_height])
 
     dt = datetime.fromtimestamp(block["timestamp"], tz=timezone.utc)
-    block["timestamp"] = dt.strftime("%B %d, %Y at %I:%M %p UTC")
+    block["timestamp"] = dt.strftime("%H:%M UTC %d %b %Y")
     block["n_txs"] = len(block["txs"])
 
     return await render_template(
