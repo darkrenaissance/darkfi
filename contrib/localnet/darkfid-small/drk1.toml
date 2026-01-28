@@ -1,0 +1,26 @@
+## drk configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Blockchain network to use
+network = "localnet"
+
+# Localnet blockchain network configuration
+[network_config."localnet"]
+# Path to blockchain cache database
+cache_path = "drk1/cache"
+# Path to wallet database
+wallet_path = "drk1/wallet.db"
+
+# Password for the wallet database
+wallet_pass = "testing"
+
+# darkfid JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:48445"
+
+# Path to interactive shell history file
+history_path = "drk1/history.txt"
