@@ -32,7 +32,7 @@ use futures::{
     pin_mut,
 };
 use futures_rustls::rustls::{self, version::TLS13};
-use quinn::{
+use quinn_smol::{
     crypto::rustls::{QuicClientConfig, QuicServerConfig},
     ClientConfig, Endpoint, RecvStream, SendStream, ServerConfig, TransportConfig, VarInt,
 };

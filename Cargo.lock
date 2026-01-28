@@ -1852,7 +1852,7 @@ dependencies = [
  "plotters",
  "prettytable-rs",
  "primitive-types",
- "quinn",
+ "quinn-smol",
  "rand 0.8.5",
  "randomx",
  "rcgen",
@@ -2458,7 +2458,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2791,7 +2791,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3964,7 +3964,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4511,7 +4511,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5496,7 +5496,7 @@ dependencies = [
  "derive-deftly",
  "libc",
  "paste",
- "thiserror 2.0.17",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -5567,32 +5567,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
-name = "quinn"
+name = "quinn-proto-smol"
 version = "0.12.0"
-source = "git+https://github.com/parazyd/quinn?branch=no-tokio#b254813169d1421641b48f241b20545543131912"
-dependencies = [
- "async-channel 2.5.0",
- "async-io",
- "bytes",
- "cfg_aliases",
- "event-listener 5.4.1",
- "futures-io",
- "pin-project-lite",
- "quinn-proto",
- "quinn-udp",
- "rustc-hash 2.1.1",
- "rustls",
- "smol",
- "socket2",
- "thiserror 2.0.17",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "quinn-proto"
-version = "0.12.0"
-source = "git+https://github.com/parazyd/quinn?branch=no-tokio#b254813169d1421641b48f241b20545543131912"
+source = "git+https://github.com/parazyd/quinn?branch=main#9069081cf4632f3882fa86d0aa6fbe5ec6473ffa"
 dependencies = [
  "bytes",
  "getrandom 0.3.4",
@@ -5610,15 +5587,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "quinn-udp"
+name = "quinn-smol"
+version = "0.12.0"
+source = "git+https://github.com/parazyd/quinn?branch=main#9069081cf4632f3882fa86d0aa6fbe5ec6473ffa"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-io",
+ "bytes",
+ "cfg_aliases",
+ "event-listener 5.4.1",
+ "futures-io",
+ "pin-project-lite",
+ "quinn-proto-smol",
+ "quinn-udp-smol",
+ "rustc-hash 2.1.1",
+ "rustls",
+ "smol",
+ "socket2",
+ "thiserror 2.0.17",
+ "tracing",
+ "web-time",
+]
+
+[[package]]
+name = "quinn-udp-smol"
 version = "0.6.0"
-source = "git+https://github.com/parazyd/quinn?branch=no-tokio#b254813169d1421641b48f241b20545543131912"
+source = "git+https://github.com/parazyd/quinn?branch=main#9069081cf4632f3882fa86d0aa6fbe5ec6473ffa"
 dependencies = [
  "cfg_aliases",
  "libc",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6075,7 +6075,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7019,7 +7019,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9050,7 +9050,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
