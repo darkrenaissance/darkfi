@@ -86,8 +86,10 @@ pub struct Validator {
     pub blockchain: Blockchain,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
-    /// Flag signalling node has finished initial sync
+    /// Flag signalling if the node is synced
     pub synced: RwLock<bool>,
+    /// Flag signalling if the node is trying to execute a reorg
+    pub reorg: RwLock<bool>,
     /// Flag to enable tx fee verification
     pub verify_fees: bool,
 }
@@ -133,6 +135,7 @@ impl Validator {
             blockchain,
             consensus,
             synced: RwLock::new(false),
+            reorg: RwLock::new(false),
             verify_fees: config.verify_fees,
         });
 

@@ -210,14 +210,15 @@ async fn synced_peers(
 
             // Handle response
             if response.synced {
-                // Grab response tip
-                let tip = if response.height.is_some() && response.hash.is_some() {
-                    (response.height.unwrap(), *response.hash.unwrap().inner())
-                } else {
-                    // Empty response while synced means the peer is on an
-                    // entirely different chain/fork, so we keep track of
-                    // them in the empty tip reference.
-                    (0, [0u8; 32])
+                // Grab response tip. Empty response while synced means
+                // the peer is on an entirely different chain/fork, so
+                // we keep track of them in the empty tip reference.
+                let tip = match response.height {
+                    Some(height) => match response.hash {
+                        Some(hash) => (height, *hash.inner()),
+                        None => (0, [0u8; 32]),
+                    },
+                    None => (0, [0u8; 32]),
                 };
                 let Some(tip_peers) = tips.get_mut(&tip) else {
                     tips.insert(tip, vec![peer.clone()]);

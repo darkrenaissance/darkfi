@@ -198,12 +198,17 @@ async fn consensus_task(
             error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
         }
 
-        // Purge all unreferenced contract trees from the database
-        purge_unreferenced_trees(node).await;
-
         if confirmed.is_empty() {
             continue
         }
+
+        // Purge all unreferenced contract trees from the database iff
+        // the node is not executing a reorg.
+        let reorg_lock = node.validator.synced.write().await;
+        if !*reorg_lock {
+            purge_unreferenced_trees(node).await;
+        }
+        drop(reorg_lock);
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {

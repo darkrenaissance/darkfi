@@ -471,7 +471,6 @@ async fn handle_reorg(
         (targets_rank == best_fork.targets_rank && hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks lower than our current best fork, skipping...");
-        drop(forks);
         return true
     }
     drop(forks);
@@ -482,12 +481,16 @@ async fn handle_reorg(
         return true
     };
 
+    // Update the node reorg flag
+    *validator.reorg.write().await = true;
+
     // Create a fork from last common height
     let mut peer_fork =
         match Fork::new(validator.consensus.blockchain.clone(), module.clone()).await {
             Ok(f) => f,
             Err(e) => {
                 error!(target: "darkfid::task::handle_reorg", "Generating peer fork failed: {e}");
+                *validator.reorg.write().await = false;
                 return false
             }
         };
@@ -503,14 +506,16 @@ async fn handle_reorg(
         Ok(i) => i,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Retrieving state inverse diffs failed: {e}");
+            *validator.reorg.write().await = false;
             return false
         }
     };
     for inverse_diff in inverse_diffs.iter().rev() {
-        if let Err(e) =
-            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff)
-        {
+        let result =
+            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff);
+        if let Err(e) = result {
             error!(target: "darkfid::task::handle_reorg", "Applying inverse diff failed: {e}");
+            *validator.reorg.write().await = false;
             return false
         }
     }
@@ -518,10 +523,12 @@ async fn handle_reorg(
     // Grab current overlay diff and use it as the first diff of the
     // peer fork, so all consecutive diffs represent just the proposal
     // changes.
-    let diff = match peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]) {
+    let diff = peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]);
+    let diff = match diff {
         Ok(d) => d,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Generate full inverse diff failed: {e}");
+            *validator.reorg.write().await = false;
             return false
         }
     };
@@ -544,6 +551,7 @@ async fn handle_reorg(
         let request = ForkProposalsRequest { headers: batch.clone(), fork_header: proposal.hash };
         if let Err(e) = channel.send(&request).await {
             debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
+            *validator.reorg.write().await = false;
             return true
         };
 
@@ -555,6 +563,7 @@ async fn handle_reorg(
             Ok(r) => r,
             Err(e) => {
                 debug!(target: "darkfid::task::handle_reorg", "Asking peer for proposals sequence failed: {e}");
+                *validator.reorg.write().await = false;
                 return true
             }
         };
@@ -563,6 +572,7 @@ async fn handle_reorg(
         // Response sequence must be the same length as the one requested
         if response.proposals.len() != batch.len() {
             debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different proposals sequence length");
+            *validator.reorg.write().await = false;
             return true
         }
 
@@ -573,6 +583,7 @@ async fn handle_reorg(
             // Validate its the proposal we requested
             if peer_proposal.hash != batch[peer_proposal_index] {
                 error!(target: "darkfid::task::handle_reorg", "Peer responded with a differend proposal: {} - {}", batch[peer_proposal_index], peer_proposal.hash);
+                *validator.reorg.write().await = false;
                 return true
             }
 
@@ -581,12 +592,14 @@ async fn handle_reorg(
                 verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await
             {
                 error!(target: "darkfid::task::handle_reorg", "Verify fork proposal failed: {e}");
+                *validator.reorg.write().await = false;
                 return true
             }
 
             // Append proposal
             if let Err(e) = peer_fork.append_proposal(peer_proposal).await {
                 error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
+                *validator.reorg.write().await = false;
                 return true
             }
         }
@@ -601,12 +614,14 @@ async fn handle_reorg(
     // Verify trigger proposal
     if let Err(e) = verify_fork_proposal(&mut peer_fork, proposal, validator.verify_fees).await {
         error!(target: "darkfid::task::handle_reorg", "Verify proposal failed: {e}");
+        *validator.reorg.write().await = false;
         return true
     }
 
     // Append trigger proposal
     if let Err(e) = peer_fork.append_proposal(proposal).await {
         error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
+        *validator.reorg.write().await = false;
         return true
     }
 
@@ -616,6 +631,7 @@ async fn handle_reorg(
         Ok(i) => i,
         Err(e) => {
             debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
+            *validator.reorg.write().await = false;
             return false
         }
     };
@@ -625,26 +641,28 @@ async fn handle_reorg(
             peer_fork.hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer fork ranks lower than our current best fork, skipping...");
-        drop(forks);
+        *validator.reorg.write().await = false;
         return true
     }
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
-    if let Err(e) = peer_fork
+    let result = peer_fork
         .overlay
         .lock()
         .unwrap()
         .overlay
         .lock()
         .unwrap()
-        .apply_diff(&peer_fork.diffs.remove(0))
-    {
+        .apply_diff(&peer_fork.diffs.remove(0));
+    if let Err(e) = result {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
+        *validator.reorg.write().await = false;
         return false
     };
     *validator.consensus.module.write().await = module;
     *forks = vec![peer_fork];
+    *validator.reorg.write().await = false;
     drop(forks);
 
     // Check if we can confirm anything and broadcast them
