@@ -50,7 +50,7 @@ tmux send-keys -t "$session:node0.1" C-c
 sleep 5
 echo "===========[Restarting Node1]================"
 sed -i -e "s|skip_sync =.*|skip_sync = true|g" darkfid1.toml
-tmux send-keys -t "$session:node1.1" "$DARKFID -c darkfid1.toml $verbose -l darkfid1.log" Enter
+tmux send-keys -t "$session:node1.1" "$DARKFID -c darkfid1.toml $verbose -l darkfid1/darkfid.log" Enter
 tmux send-keys -t "$session:node1.0" "$XMRIG -u x+1 -r 1000 -R 20 -o 127.0.0.1:48447 -t 2 -u $XMRIG_USER1" Enter
 sleep 2
 
@@ -59,9 +59,9 @@ sh ./run-contract-test.sh "$DRK1"
 
 # Restart node0 and see reorg happening
 echo "=========[Restarting Node0 and Node2]========"
-tmux send-keys -t "$session:node0.1" "$DARKFID -c darkfid0.toml $verbose -l darkfid0.log" Enter
+tmux send-keys -t "$session:node0.1" "$DARKFID -c darkfid0.toml $verbose -l darkfid0/darkfid.log" Enter
 tmux send-keys -t "$session:node0.0" "$XMRIG -u x+1 -r 1000 -R 20 -o 127.0.0.1:48347 -t 2 -u $XMRIG_USER0" Enter
-tmux send-keys -t "$session:node2.0" "$DARKFID -c darkfid2.toml $verbose -l darkfid2.log" Enter
+tmux send-keys -t "$session:node2.0" "$DARKFID -c darkfid2.toml $verbose -l darkfid2/darkfid.log" Enter
 sleep 2
 
 # Test to check everything is working fine
