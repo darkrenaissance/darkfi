@@ -21,12 +21,13 @@ use std::{
     sync::Arc,
 };
 
+use num_bigint::BigUint;
 use smol::{channel::Receiver, lock::RwLock};
 use tinyjson::JsonValue;
 use tracing::{debug, error, info};
 
 use darkfi::{
-    blockchain::BlockDifficulty,
+    blockchain::{BlockDifficulty, HeaderHash},
     net::{ChannelPtr, P2pPtr},
     rpc::jsonrpc::JsonSubscriber,
     util::{encoding::base64, time::Timestamp},
@@ -37,7 +38,8 @@ use darkfi::{
         verification::verify_fork_proposal,
         ValidatorPtr,
     },
-    Error, Result,
+    Error::{Custom, DatabaseError, PoWInvalidOutHash, ProposalAlreadyExists},
+    Result,
 };
 use darkfi_serial::serialize_async;
 
@@ -206,7 +208,7 @@ async fn handle_unknown_proposal(
         match validator.append_proposal(proposal).await {
             Ok(()) => { /* Do nothing */ }
             // Skip already existing proposals
-            Err(Error::ProposalAlreadyExists) => continue,
+            Err(ProposalAlreadyExists) => continue,
             Err(e) => {
                 debug!(
                     target: "darkfid::task::handle_unknown_proposal",
@@ -237,6 +239,8 @@ async fn handle_unknown_proposal(
 ///
 /// Note: Always remember to purge new trees from the database if not
 /// needed.
+//  TODO: We keep everything in memory which can result in OOM for a
+//        valid long fork. We could use some disk space to store stuff.
 async fn handle_reorg(
     validator: &ValidatorPtr,
     p2p: &P2pPtr,
@@ -253,65 +257,24 @@ async fn handle_reorg(
         return true
     }
 
-    // Communication setup
-    let Ok(response_sub) = channel.subscribe_msg::<ForkHeaderHashResponse>().await else {
-        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeaderHashResponse` communication setup with peer: {channel:?}");
-        return true
-    };
+    // Retrieve communications timeout
+    let comms_timeout =
+        p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
 
-    // Keep track of received header hashes sequence
-    let mut peer_header_hashes = vec![];
-
-    // Find last common header, going backwards from the proposal
-    let mut previous_height = proposal.block.header.height;
-    let mut previous_hash = proposal.hash;
-    for height in (0..proposal.block.header.height).rev() {
-        // Request peer header hash for this height
-        let request = ForkHeaderHashRequest { height, fork_header: proposal.hash };
-        if let Err(e) = channel.send(&request).await {
-            debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            return true
-        };
-
-        let comms_timeout =
-            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
-        // Node waits for response
-        let response = match response_sub.receive_with_timeout(comms_timeout).await {
-            Ok(r) => r,
+    // Find last common header and its sequence, going backwards from
+    // the proposal.
+    let (last_common_height, last_common_hash, peer_header_hashes) =
+        match retrieve_peer_header_hashes(validator, (&channel, &comms_timeout), proposal).await {
+            Ok(t) => t,
+            Err(DatabaseError(e)) => {
+                error!(target: "darkfid::task::handle_reorg", "Internal error while retrieving peer headers hashes: {e}");
+                return false
+            }
             Err(e) => {
-                debug!(target: "darkfid::task::handle_reorg", "Asking peer for header hash failed: {e}");
+                error!(target: "darkfid::task::handle_reorg", "Retrieving peer headers hashes failed: {e}");
                 return true
             }
         };
-        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
-
-        // Check if peer returned a header
-        let Some(peer_header) = response.fork_header else {
-            debug!(target: "darkfid::task::handle_reorg", "Peer responded with an empty header");
-            return true
-        };
-
-        // Check if we know this header
-        let headers = match validator.blockchain.blocks.get_order(&[height], false) {
-            Ok(r) => r,
-            Err(e) => {
-                error!(target: "darkfid::task::handle_reorg", "Retrieving headers failed: {e}");
-                return false
-            }
-        };
-        match headers[0] {
-            Some(known_header) => {
-                if known_header == peer_header {
-                    previous_height = height;
-                    previous_hash = known_header;
-                    break
-                }
-                // Since we retrieve in right -> left order we push them in reverse order
-                peer_header_hashes.insert(0, peer_header);
-            }
-            None => peer_header_hashes.insert(0, peer_header),
-        }
-    }
 
     // Check if we have a sequence to process
     if peer_header_hashes.is_empty() {
@@ -319,15 +282,22 @@ async fn handle_reorg(
         return true
     }
 
-    // Communication setup
-    let Ok(response_sub) = channel.subscribe_msg::<ForkHeadersResponse>().await else {
-        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkHeadersResponse` communication setup with peer: {channel:?}");
-        return true
+    // Create a new PoW module from last common height
+    let module = match PoWModule::new(
+        validator.consensus.blockchain.clone(),
+        validator.consensus.module.read().await.target,
+        validator.consensus.module.read().await.fixed_difficulty.clone(),
+        Some(last_common_height + 1),
+    ) {
+        Ok(m) => m,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "PoWModule generation failed: {e}");
+            return false
+        }
     };
 
     // Grab last common height ranks
-    let last_common_height = previous_height;
-    let last_difficulty = match previous_height {
+    let last_difficulty = match last_common_height {
         0 => {
             let genesis_timestamp = match validator.blockchain.genesis_block() {
                 Ok(b) => b.header.timestamp,
@@ -347,118 +317,32 @@ async fn handle_reorg(
         },
     };
 
-    // Create a new PoW from last common height
-    let module = match PoWModule::new(
-        validator.consensus.blockchain.clone(),
-        validator.consensus.module.read().await.target,
-        validator.consensus.module.read().await.fixed_difficulty.clone(),
-        Some(last_common_height + 1),
-    ) {
-        Ok(m) => m,
-        Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "PoWModule generation failed: {e}");
+    // Retrieve the headers of the hashes sequence and its ranking
+    let (targets_rank, hashes_rank) = match retrieve_peer_headers_sequence_ranking(
+        (&last_common_height, &last_common_hash, &module, &last_difficulty),
+        (&channel, &comms_timeout),
+        &proposal.hash,
+        &peer_header_hashes,
+    )
+    .await
+    {
+        Ok(p) => p,
+        Err(DatabaseError(e)) => {
+            error!(target: "darkfid::task::handle_reorg", "Internal error while retrieving peer headers: {e}");
             return false
+        }
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Retrieving peer headers failed: {e}");
+            return true
         }
     };
 
-    // Retrieve the headers of the hashes sequence, in batches, keeping track of the sequence ranking
-    info!(target: "darkfid::task::handle_reorg", "Retrieving {} headers from peer...", peer_header_hashes.len());
-    let mut batch = Vec::with_capacity(BATCH);
-    let mut total_processed = 0;
-    let mut targets_rank = last_difficulty.ranks.targets_rank.clone();
-    let mut hashes_rank = last_difficulty.ranks.hashes_rank.clone();
-    let mut headers_module = module.clone();
-    for (index, hash) in peer_header_hashes.iter().enumerate() {
-        // Add hash in batch sequence
-        batch.push(*hash);
-
-        // Check if batch is full so we can send it
-        if batch.len() < BATCH && index != peer_header_hashes.len() - 1 {
-            continue
-        }
-
-        // Request peer headers
-        let request = ForkHeadersRequest { headers: batch.clone(), fork_header: proposal.hash };
-        if let Err(e) = channel.send(&request).await {
-            debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            return true
-        };
-
-        let comms_timeout =
-            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
-        // Node waits for response
-        let response = match response_sub.receive_with_timeout(comms_timeout).await {
-            Ok(r) => r,
-            Err(e) => {
-                debug!(target: "darkfid::task::handle_reorg", "Asking peer for headers sequence failed: {e}");
-                return true
-            }
-        };
-        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
-
-        // Response sequence must be the same length as the one requested
-        if response.headers.len() != batch.len() {
-            debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different headers sequence length");
-            return true
-        }
-
-        // Process retrieved headers
-        for (peer_header_index, peer_header) in response.headers.iter().enumerate() {
-            let peer_header_hash = peer_header.hash();
-            debug!(target: "darkfid::task::handle_reorg", "Processing header: {peer_header_hash} - {}", peer_header.height);
-
-            // Validate its the header we requested
-            if peer_header_hash != batch[peer_header_index] {
-                debug!(target: "darkfid::task::handle_reorg", "Peer responded with a differend header: {} - {peer_header_hash}", batch[peer_header_index]);
-                return true
-            }
-
-            // Validate sequence is correct
-            if peer_header.previous != previous_hash || peer_header.height != previous_height + 1 {
-                debug!(target: "darkfid::task::handle_reorg", "Invalid header sequence detected");
-                return true
-            }
-
-            // Verify header hash and calculate its rank
-            let (next_difficulty, target_distance_sq, hash_distance_sq) = match header_rank(
-                &headers_module,
-                peer_header,
-            ) {
-                Ok(tuple) => tuple,
-                Err(Error::PoWInvalidOutHash) => {
-                    debug!(target: "darkfid::task::handle_reorg", "Invalid header hash detected");
-                    return true
-                }
-                Err(e) => {
-                    debug!(target: "darkfid::task::handle_reorg", "Computing header rank failed: {e}");
-                    return false
-                }
-            };
-
-            // Update sequence ranking
-            targets_rank += target_distance_sq.clone();
-            hashes_rank += hash_distance_sq.clone();
-
-            // Update PoW headers module
-            if let Err(e) = headers_module.append(peer_header, &next_difficulty) {
-                debug!(target: "darkfid::task::handle_reorg", "Error while appending header to module: {e}");
-                return true
-            };
-
-            // Set previous header
-            previous_height = peer_header.height;
-            previous_hash = peer_header_hash;
-        }
-
-        total_processed += response.headers.len();
-        info!(target: "darkfid::task::handle_reorg", "Headers received and verified: {total_processed}/{}", peer_header_hashes.len());
-
-        // Reset batch
-        batch = Vec::with_capacity(BATCH);
-    }
+    // Grab the append lock so no other proposal gets processed while
+    // we are verifying the sequence.
+    let append_lock = validator.consensus.append_lock.write().await;
 
     // Check if the sequence ranks higher than our current best fork
-    let forks = validator.consensus.forks.read().await;
+    let mut forks = validator.consensus.forks.write().await;
     let index = match best_fork_index(&forks) {
         Ok(i) => i,
         Err(e) => {
@@ -473,197 +357,47 @@ async fn handle_reorg(
         info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks lower than our current best fork, skipping...");
         return true
     }
-    drop(forks);
 
-    // Communication setup
-    let Ok(response_sub) = channel.subscribe_msg::<ForkProposalsResponse>().await else {
-        debug!(target: "darkfid::task::handle_reorg", "Failure during `ForkProposalsResponse` communication setup with peer: {channel:?}");
-        return true
-    };
-
-    // Update the node reorg flag
-    *validator.reorg.write().await = true;
-
-    // Create a fork from last common height
-    let mut peer_fork =
-        match Fork::new(validator.consensus.blockchain.clone(), module.clone()).await {
-            Ok(f) => f,
-            Err(e) => {
-                error!(target: "darkfid::task::handle_reorg", "Generating peer fork failed: {e}");
-                *validator.reorg.write().await = false;
-                return false
-            }
-        };
-    peer_fork.targets_rank = last_difficulty.ranks.targets_rank.clone();
-    peer_fork.hashes_rank = last_difficulty.ranks.hashes_rank.clone();
-
-    // Grab all state inverse diffs after last common height, and add them to the fork
-    let inverse_diffs = match validator
-        .blockchain
-        .blocks
-        .get_state_inverse_diffs_after(last_common_height)
+    // Generate the peer fork and retrieve its ranking
+    let peer_fork = match retrieve_peer_fork(
+        validator,
+        (&last_common_height, &module, &last_difficulty),
+        (&channel, &comms_timeout),
+        proposal,
+        &peer_header_hashes,
+    )
+    .await
     {
-        Ok(i) => i,
+        Ok(p) => p,
+        Err(DatabaseError(e)) => {
+            error!(target: "darkfid::task::handle_reorg", "Internal error while retrieving peer fork: {e}");
+            return false
+        }
         Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "Retrieving state inverse diffs failed: {e}");
-            *validator.reorg.write().await = false;
-            return false
-        }
-    };
-    for inverse_diff in inverse_diffs.iter().rev() {
-        let result =
-            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff);
-        if let Err(e) = result {
-            error!(target: "darkfid::task::handle_reorg", "Applying inverse diff failed: {e}");
-            *validator.reorg.write().await = false;
-            return false
-        }
-    }
-
-    // Grab current overlay diff and use it as the first diff of the
-    // peer fork, so all consecutive diffs represent just the proposal
-    // changes.
-    let diff = peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]);
-    let diff = match diff {
-        Ok(d) => d,
-        Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "Generate full inverse diff failed: {e}");
-            *validator.reorg.write().await = false;
-            return false
-        }
-    };
-    peer_fork.diffs = vec![diff];
-
-    // Retrieve the proposals of the hashes sequence, in batches
-    info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", peer_header_hashes.len());
-    let mut batch = Vec::with_capacity(BATCH);
-    let mut total_processed = 0;
-    for (index, hash) in peer_header_hashes.iter().enumerate() {
-        // Add hash in batch sequence
-        batch.push(*hash);
-
-        // Check if batch is full so we can send it
-        if batch.len() < BATCH && index != peer_header_hashes.len() - 1 {
-            continue
-        }
-
-        // Request peer proposals
-        let request = ForkProposalsRequest { headers: batch.clone(), fork_header: proposal.hash };
-        if let Err(e) = channel.send(&request).await {
-            debug!(target: "darkfid::task::handle_reorg", "Channel send failed: {e}");
-            *validator.reorg.write().await = false;
-            return true
-        };
-
-        let comms_timeout =
-            p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
-
-        // Node waits for response
-        let response = match response_sub.receive_with_timeout(comms_timeout).await {
-            Ok(r) => r,
-            Err(e) => {
-                debug!(target: "darkfid::task::handle_reorg", "Asking peer for proposals sequence failed: {e}");
-                *validator.reorg.write().await = false;
-                return true
-            }
-        };
-        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
-
-        // Response sequence must be the same length as the one requested
-        if response.proposals.len() != batch.len() {
-            debug!(target: "darkfid::task::handle_reorg", "Peer responded with a different proposals sequence length");
-            *validator.reorg.write().await = false;
+            error!(target: "darkfid::task::handle_reorg", "Retrieving peer fork failed: {e}");
             return true
         }
-
-        // Process retrieved proposal
-        for (peer_proposal_index, peer_proposal) in response.proposals.iter().enumerate() {
-            info!(target: "darkfid::task::handle_reorg", "Processing proposal: {} - {}", peer_proposal.hash, peer_proposal.block.header.height);
-
-            // Validate its the proposal we requested
-            if peer_proposal.hash != batch[peer_proposal_index] {
-                error!(target: "darkfid::task::handle_reorg", "Peer responded with a differend proposal: {} - {}", batch[peer_proposal_index], peer_proposal.hash);
-                *validator.reorg.write().await = false;
-                return true
-            }
-
-            // Verify proposal
-            if let Err(e) =
-                verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await
-            {
-                error!(target: "darkfid::task::handle_reorg", "Verify fork proposal failed: {e}");
-                *validator.reorg.write().await = false;
-                return true
-            }
-
-            // Append proposal
-            if let Err(e) = peer_fork.append_proposal(peer_proposal).await {
-                error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-                *validator.reorg.write().await = false;
-                return true
-            }
-        }
-
-        total_processed += response.proposals.len();
-        info!(target: "darkfid::task::handle_reorg", "Proposals received and verified: {total_processed}/{}", peer_header_hashes.len());
-
-        // Reset batch
-        batch = Vec::with_capacity(BATCH);
-    }
-
-    // Verify trigger proposal
-    if let Err(e) = verify_fork_proposal(&mut peer_fork, proposal, validator.verify_fees).await {
-        error!(target: "darkfid::task::handle_reorg", "Verify proposal failed: {e}");
-        *validator.reorg.write().await = false;
-        return true
-    }
-
-    // Append trigger proposal
-    if let Err(e) = peer_fork.append_proposal(proposal).await {
-        error!(target: "darkfid::task::handle_reorg", "Appending proposal failed: {e}");
-        *validator.reorg.write().await = false;
-        return true
-    }
+    };
 
     // Check if the peer fork ranks higher than our current best fork
-    let mut forks = validator.consensus.forks.write().await;
-    let index = match best_fork_index(&forks) {
-        Ok(i) => i,
-        Err(e) => {
-            debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
-            *validator.reorg.write().await = false;
-            return false
-        }
-    };
-    let best_fork = &forks[index];
     if peer_fork.targets_rank < best_fork.targets_rank ||
         (peer_fork.targets_rank == best_fork.targets_rank &&
             peer_fork.hashes_rank <= best_fork.hashes_rank)
     {
         info!(target: "darkfid::task::handle_reorg", "Peer fork ranks lower than our current best fork, skipping...");
-        *validator.reorg.write().await = false;
         return true
     }
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
-    let result = peer_fork
-        .overlay
-        .lock()
-        .unwrap()
-        .overlay
-        .lock()
-        .unwrap()
-        .apply_diff(&peer_fork.diffs.remove(0));
-    if let Err(e) = result {
+    if let Err(e) = validator.blockchain.reset_to_height(last_common_height) {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
-        *validator.reorg.write().await = false;
         return false
     };
     *validator.consensus.module.write().await = module;
     *forks = vec![peer_fork];
-    *validator.reorg.write().await = false;
     drop(forks);
+    drop(append_lock);
 
     // Check if we can confirm anything and broadcast them
     let confirmed = match validator.confirmation().await {
@@ -691,4 +425,278 @@ async fn handle_reorg(
     proposals_sub.notify(vec![enc_prop].into()).await;
 
     false
+}
+
+/// Auxiliary function to retrieve the last common header and height,
+/// along with the headers sequence up to provided peer proposal.
+async fn retrieve_peer_header_hashes(
+    // Validator pointer
+    validator: &ValidatorPtr,
+    // Peer channel and its communications timeout
+    channel: (&ChannelPtr, &u64),
+    // Peer fork proposal
+    proposal: &Proposal,
+) -> Result<(u32, HeaderHash, Vec<HeaderHash>)> {
+    // Communication setup
+    let response_sub = channel.0.subscribe_msg::<ForkHeaderHashResponse>().await?;
+
+    // Keep track of received header hashes sequence
+    let mut peer_header_hashes = vec![];
+
+    // Find last common header, going backwards from the proposal
+    let mut previous_height = proposal.block.header.height;
+    let mut previous_hash = proposal.hash;
+    for height in (0..proposal.block.header.height).rev() {
+        // Request peer header hash for this height
+        let request = ForkHeaderHashRequest { height, fork_header: proposal.hash };
+        channel.0.send(&request).await?;
+
+        // Node waits for response
+        let response = response_sub.receive_with_timeout(*channel.1).await?;
+        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
+
+        // Check if peer returned a header
+        let Some(peer_header) = response.fork_header else {
+            return Err(Custom(String::from("Peer responded with an empty header")))
+        };
+
+        // Check if we know this header
+        let headers = match validator.blockchain.blocks.get_order(&[height], false) {
+            Ok(h) => h,
+            Err(e) => return Err(DatabaseError(format!("Retrieving headers failed: {e}"))),
+        };
+        match headers[0] {
+            Some(known_header) => {
+                if known_header == peer_header {
+                    previous_height = height;
+                    previous_hash = known_header;
+                    break
+                }
+                // Since we retrieve in right -> left order we push them in reverse order
+                peer_header_hashes.insert(0, peer_header);
+            }
+            None => peer_header_hashes.insert(0, peer_header),
+        }
+    }
+
+    Ok((previous_height, previous_hash, peer_header_hashes))
+}
+
+/// Auxiliary function to retrieve provided peer headers hashes
+/// sequence and its ranking, based on provided last common
+/// information.
+async fn retrieve_peer_headers_sequence_ranking(
+    // Last common header, PoW module and difficulty
+    last_common_info: (&u32, &HeaderHash, &PoWModule, &BlockDifficulty),
+    // Peer channel and its communications timeout
+    channel: (&ChannelPtr, &u64),
+    // Peer fork proposal header for our requests
+    fork_tip: &HeaderHash,
+    // Peer header hashes sequence
+    header_hashes: &[HeaderHash],
+) -> Result<(BigUint, BigUint)> {
+    // Communication setup
+    let response_sub = channel.0.subscribe_msg::<ForkHeadersResponse>().await?;
+
+    // Retrieve the headers of the hashes sequence, in batches, keeping track of the sequence ranking
+    info!(target: "darkfid::task::handle_reorg", "Retrieving {} headers from peer...", header_hashes.len());
+    let mut previous_height = *last_common_info.0;
+    let mut previous_hash = *last_common_info.1;
+    let mut module = last_common_info.2.clone();
+    let mut targets_rank = last_common_info.3.ranks.targets_rank.clone();
+    let mut hashes_rank = last_common_info.3.ranks.hashes_rank.clone();
+    let mut batch = Vec::with_capacity(BATCH);
+    let mut total_processed = 0;
+    for (index, hash) in header_hashes.iter().enumerate() {
+        // Add hash in batch sequence
+        batch.push(*hash);
+
+        // Check if batch is full so we can send it
+        if batch.len() < BATCH && index != header_hashes.len() - 1 {
+            continue
+        }
+
+        // Request peer headers
+        let request = ForkHeadersRequest { headers: batch.clone(), fork_header: *fork_tip };
+        channel.0.send(&request).await?;
+
+        // Node waits for response
+        let response = response_sub.receive_with_timeout(*channel.1).await?;
+        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
+
+        // Response sequence must be the same length as the one requested
+        if response.headers.len() != batch.len() {
+            return Err(Custom(String::from(
+                "Peer responded with a different headers sequence length",
+            )))
+        }
+
+        // Process retrieved headers
+        for (peer_header_index, peer_header) in response.headers.iter().enumerate() {
+            let peer_header_hash = peer_header.hash();
+            debug!(target: "darkfid::task::handle_reorg", "Processing header: {peer_header_hash} - {}", peer_header.height);
+
+            // Validate its the header we requested
+            if peer_header_hash != batch[peer_header_index] {
+                return Err(Custom(format!(
+                    "Peer responded with a differend header: {} - {peer_header_hash}",
+                    batch[peer_header_index]
+                )))
+            }
+
+            // Validate sequence is correct
+            if peer_header.previous != previous_hash || peer_header.height != previous_height + 1 {
+                return Err(Custom(String::from("Invalid header sequence detected")))
+            }
+
+            // Verify header hash and calculate its rank
+            let (next_difficulty, target_distance_sq, hash_distance_sq) =
+                match header_rank(&module, peer_header) {
+                    Ok(tuple) => tuple,
+                    Err(PoWInvalidOutHash) => return Err(PoWInvalidOutHash),
+                    Err(e) => {
+                        return Err(DatabaseError(format!("Computing header rank failed: {e}")))
+                    }
+                };
+
+            // Update sequence ranking
+            targets_rank += target_distance_sq.clone();
+            hashes_rank += hash_distance_sq.clone();
+
+            // Update PoW headers module
+            module.append(peer_header, &next_difficulty)?;
+
+            // Set previous header
+            previous_height = peer_header.height;
+            previous_hash = peer_header_hash;
+        }
+
+        total_processed += response.headers.len();
+        info!(target: "darkfid::task::handle_reorg", "Headers received and verified: {total_processed}/{}", header_hashes.len());
+
+        // Reset batch
+        batch = Vec::with_capacity(BATCH);
+    }
+
+    Ok((targets_rank, hashes_rank))
+}
+
+/// Auxiliary function to generate provided peer headers hashes fork
+/// and its ranking, based on provided last common information.
+async fn retrieve_peer_fork(
+    // Validator pointer
+    validator: &ValidatorPtr,
+    // Last common header height, PoW module and difficulty
+    last_common_info: (&u32, &PoWModule, &BlockDifficulty),
+    // Peer channel and its communications timeout
+    channel: (&ChannelPtr, &u64),
+    // Peer fork trigger proposal
+    proposal: &Proposal,
+    // Peer header hashes sequence
+    header_hashes: &[HeaderHash],
+) -> Result<Fork> {
+    // Communication setup
+    let response_sub = channel.0.subscribe_msg::<ForkProposalsResponse>().await?;
+
+    // Create a fork from last common height
+    let mut peer_fork =
+        match Fork::new(validator.consensus.blockchain.clone(), last_common_info.1.clone()).await {
+            Ok(f) => f,
+            Err(e) => return Err(DatabaseError(format!("Generating peer fork failed: {e}"))),
+        };
+    peer_fork.targets_rank = last_common_info.2.ranks.targets_rank.clone();
+    peer_fork.hashes_rank = last_common_info.2.ranks.hashes_rank.clone();
+
+    // Grab all state inverse diffs after last common height, and add them to the fork
+    let inverse_diffs =
+        match validator.blockchain.blocks.get_state_inverse_diffs_after(*last_common_info.0) {
+            Ok(i) => i,
+            Err(e) => {
+                return Err(DatabaseError(format!("Retrieving state inverse diffs failed: {e}")))
+            }
+        };
+    for inverse_diff in inverse_diffs.iter().rev() {
+        let result =
+            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff);
+        if let Err(e) = result {
+            return Err(DatabaseError(format!("Applying state inverse diff failed: {e}")))
+        }
+    }
+
+    // Grab current overlay diff and use it as the first diff of the
+    // peer fork, so all consecutive diffs represent just the proposal
+    // changes.
+    let diff = peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]);
+    let diff = match diff {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(DatabaseError(format!("Generate full state inverse diff failed: {e}")))
+        }
+    };
+    peer_fork.diffs = vec![diff];
+
+    // Retrieve the proposals of the hashes sequence, in batches
+    info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", header_hashes.len());
+    let mut batch = Vec::with_capacity(BATCH);
+    let mut total_processed = 0;
+    for (index, hash) in header_hashes.iter().enumerate() {
+        // Add hash in batch sequence
+        batch.push(*hash);
+
+        // Check if batch is full so we can send it
+        if batch.len() < BATCH && index != header_hashes.len() - 1 {
+            continue
+        }
+
+        // Request peer proposals
+        let request = ForkProposalsRequest { headers: batch.clone(), fork_header: proposal.hash };
+        channel.0.send(&request).await?;
+
+        // Node waits for response
+        let response = response_sub.receive_with_timeout(*channel.1).await?;
+        debug!(target: "darkfid::task::handle_reorg", "Peer response: {response:?}");
+
+        // Response sequence must be the same length as the one requested
+        if response.proposals.len() != batch.len() {
+            return Err(Custom(String::from(
+                "Peer responded with a different proposals sequence length",
+            )))
+        }
+
+        // Process retrieved proposal
+        for (peer_proposal_index, peer_proposal) in response.proposals.iter().enumerate() {
+            info!(target: "darkfid::task::handle_reorg", "Processing proposal: {} - {}", peer_proposal.hash, peer_proposal.block.header.height);
+
+            // Validate its the proposal we requested
+            if peer_proposal.hash != batch[peer_proposal_index] {
+                return Err(Custom(format!(
+                    "Peer responded with a differend proposal: {} - {}",
+                    batch[peer_proposal_index], peer_proposal.hash
+                )))
+            }
+
+            // Verify proposal
+            verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await?;
+
+            // Append proposal
+            peer_fork.append_proposal(peer_proposal).await?;
+        }
+
+        total_processed += response.proposals.len();
+        info!(target: "darkfid::task::handle_reorg", "Proposals received and verified: {total_processed}/{}", header_hashes.len());
+
+        // Reset batch
+        batch = Vec::with_capacity(BATCH);
+    }
+
+    // Verify trigger proposal
+    verify_fork_proposal(&mut peer_fork, proposal, validator.verify_fees).await?;
+
+    // Append trigger proposal
+    peer_fork.append_proposal(proposal).await?;
+
+    // Remove the reorg diff from the fork
+    peer_fork.diffs.remove(0);
+
+    Ok(peer_fork)
 }

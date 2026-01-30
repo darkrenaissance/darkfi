@@ -110,7 +110,6 @@ pub async fn consensus_init_task(
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
                 *node.validator.synced.write().await = false;
-                node.validator.consensus.purge_forks().await?;
                 if !config.skip_sync {
                     loop {
                         match sync_task(&node, checkpoint).await {
@@ -202,13 +201,12 @@ async fn consensus_task(
             continue
         }
 
-        // Purge all unreferenced contract trees from the database iff
-        // the node is not executing a reorg.
-        let reorg_lock = node.validator.synced.write().await;
-        if !*reorg_lock {
-            purge_unreferenced_trees(node).await;
-        }
-        drop(reorg_lock);
+        // Grab the append lock so no other proposal gets processed
+        // while the node is purging all unreferenced contract trees
+        // from the database.
+        let append_lock = node.validator.consensus.append_lock.write().await;
+        purge_unreferenced_trees(node).await;
+        drop(append_lock);
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {
