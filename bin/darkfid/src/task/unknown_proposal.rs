@@ -276,12 +276,6 @@ async fn handle_reorg(
             }
         };
 
-    // Check if we have a sequence to process
-    if peer_header_hashes.is_empty() {
-        debug!(target: "darkfid::task::handle_reorg", "No headers to process, skipping...");
-        return true
-    }
-
     // Create a new PoW module from last common height
     let module = match PoWModule::new(
         validator.consensus.blockchain.clone(),
@@ -321,7 +315,7 @@ async fn handle_reorg(
     let (targets_rank, hashes_rank) = match retrieve_peer_headers_sequence_ranking(
         (&last_common_height, &last_common_hash, &module, &last_difficulty),
         (&channel, &comms_timeout),
-        &proposal.hash,
+        proposal,
         &peer_header_hashes,
     )
     .await
@@ -490,8 +484,8 @@ async fn retrieve_peer_headers_sequence_ranking(
     last_common_info: (&u32, &HeaderHash, &PoWModule, &BlockDifficulty),
     // Peer channel and its communications timeout
     channel: (&ChannelPtr, &u64),
-    // Peer fork proposal header for our requests
-    fork_tip: &HeaderHash,
+    // Peer fork trigger proposal
+    proposal: &Proposal,
     // Peer header hashes sequence
     header_hashes: &[HeaderHash],
 ) -> Result<(BigUint, BigUint)> {
@@ -517,7 +511,7 @@ async fn retrieve_peer_headers_sequence_ranking(
         }
 
         // Request peer headers
-        let request = ForkHeadersRequest { headers: batch.clone(), fork_header: *fork_tip };
+        let request = ForkHeadersRequest { headers: batch.clone(), fork_header: proposal.hash };
         channel.0.send(&request).await?;
 
         // Node waits for response
@@ -577,6 +571,25 @@ async fn retrieve_peer_headers_sequence_ranking(
         // Reset batch
         batch = Vec::with_capacity(BATCH);
     }
+
+    // Validate trigger proposal header sequence is correct
+    if proposal.block.header.previous != previous_hash ||
+        proposal.block.header.height != previous_height + 1
+    {
+        return Err(Custom(String::from("Invalid header sequence detected")))
+    }
+
+    // Verify trigger proposal header hash and calculate its rank
+    let (_, target_distance_sq, hash_distance_sq) =
+        match header_rank(&module, &proposal.block.header) {
+            Ok(tuple) => tuple,
+            Err(PoWInvalidOutHash) => return Err(PoWInvalidOutHash),
+            Err(e) => return Err(DatabaseError(format!("Computing header rank failed: {e}"))),
+        };
+
+    // Update sequence ranking
+    targets_rank += target_distance_sq.clone();
+    hashes_rank += hash_distance_sq.clone();
 
     Ok((targets_rank, hashes_rank))
 }
