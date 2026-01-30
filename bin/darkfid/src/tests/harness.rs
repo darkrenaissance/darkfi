@@ -302,7 +302,7 @@ pub async fn generate_node(
         DarkfiNode::new(validator.clone(), p2p_handler.clone(), registry, 50, subscribers.clone())
             .await?;
 
-    p2p_handler.start(ex, &validator, &subscribers).await?;
+    p2p_handler.start(ex, &node).await?;
 
     node.validator.consensus.generate_empty_fork().await?;
 

@@ -28,8 +28,7 @@ use tracing::{debug, error, info};
 
 use darkfi::{
     blockchain::{BlockDifficulty, HeaderHash},
-    net::{ChannelPtr, P2pPtr},
-    rpc::jsonrpc::JsonSubscriber,
+    net::ChannelPtr,
     util::{encoding::base64, time::Timestamp},
     validator::{
         consensus::{Fork, Proposal},
@@ -43,10 +42,13 @@ use darkfi::{
 };
 use darkfi_serial::serialize_async;
 
-use crate::proto::{
-    ForkHeaderHashRequest, ForkHeaderHashResponse, ForkHeadersRequest, ForkHeadersResponse,
-    ForkProposalsRequest, ForkProposalsResponse, ForkSyncRequest, ForkSyncResponse,
-    ProposalMessage, BATCH,
+use crate::{
+    proto::{
+        ForkHeaderHashRequest, ForkHeaderHashResponse, ForkHeadersRequest, ForkHeadersResponse,
+        ForkProposalsRequest, ForkProposalsResponse, ForkSyncRequest, ForkSyncResponse,
+        ProposalMessage, BATCH,
+    },
+    DarkfiNodePtr,
 };
 
 /// Background task to handle unknown proposals.
@@ -54,10 +56,7 @@ pub async fn handle_unknown_proposals(
     receiver: Receiver<(Proposal, u32)>,
     unknown_proposals: Arc<RwLock<HashSet<[u8; 32]>>>,
     unknown_proposals_channels: Arc<RwLock<HashMap<u32, (u8, u64)>>>,
-    validator: ValidatorPtr,
-    p2p: P2pPtr,
-    proposals_sub: JsonSubscriber,
-    blocks_sub: JsonSubscriber,
+    node: DarkfiNodePtr,
 ) -> Result<()> {
     debug!(target: "darkfid::task::handle_unknown_proposal", "START");
     loop {
@@ -99,19 +98,10 @@ pub async fn handle_unknown_proposals(
         drop(lock);
 
         // Handle the unknown proposal
-        if handle_unknown_proposal(
-            &validator,
-            &p2p,
-            &proposals_sub,
-            &blocks_sub,
-            channel,
-            &proposal,
-        )
-        .await
-        {
+        if handle_unknown_proposal(&node, channel, &proposal).await {
             // Ban channel if it exceeds 5 consecutive unknown proposals
             if channel_counter > 5 {
-                if let Some(channel) = p2p.get_channel(channel) {
+                if let Some(channel) = node.p2p_handler.p2p.get_channel(channel) {
                     channel.ban().await;
                 }
                 unknown_proposals_channels.write().await.remove(&channel);
@@ -127,17 +117,10 @@ pub async fn handle_unknown_proposals(
 
 /// Background task to handle an unknown proposal.
 /// Returns a boolean flag indicate if we should ban the channel.
-async fn handle_unknown_proposal(
-    validator: &ValidatorPtr,
-    p2p: &P2pPtr,
-    proposals_sub: &JsonSubscriber,
-    blocks_sub: &JsonSubscriber,
-    channel: u32,
-    proposal: &Proposal,
-) -> bool {
+async fn handle_unknown_proposal(node: &DarkfiNodePtr, channel: u32, proposal: &Proposal) -> bool {
     // If proposal fork chain was not found, we ask our peer for its sequence
     debug!(target: "darkfid::task::handle_unknown_proposal", "Asking peer for fork sequence");
-    let Some(channel) = p2p.get_channel(channel) else {
+    let Some(channel) = node.p2p_handler.p2p.get_channel(channel) else {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Channel {channel} wasn't found.");
         return false
     };
@@ -149,7 +132,7 @@ async fn handle_unknown_proposal(
     };
 
     // Grab last known block to create the request and execute it
-    let last = match validator.blockchain.last() {
+    let last = match node.validator.blockchain.last() {
         Ok(l) => l,
         Err(e) => {
             error!(target: "darkfid::task::handle_unknown_proposal", "Blockchain last retriaval failed: {e}");
@@ -162,8 +145,13 @@ async fn handle_unknown_proposal(
         return true
     };
 
-    let comms_timeout =
-        p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
+    let comms_timeout = node
+        .p2p_handler
+        .p2p
+        .settings()
+        .read_arc()
+        .await
+        .outbound_connect_timeout(channel.address().scheme());
 
     // Node waits for response
     let response = match response_sub.receive_with_timeout(comms_timeout).await {
@@ -181,31 +169,31 @@ async fn handle_unknown_proposal(
     // Response should not be empty
     if response.proposals.is_empty() {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Peer responded with empty sequence, node might be out of sync!");
-        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
+        return handle_reorg(node, &(&channel, &comms_timeout), proposal).await
     }
 
     // Sequence length must correspond to requested height
     if response.proposals.len() as u32 != proposal.block.header.height - last.0 {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence length is erroneous");
-        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
+        return handle_reorg(node, &(&channel, &comms_timeout), proposal).await
     }
 
     // First proposal must extend canonical
     if response.proposals[0].block.header.previous != last.1 {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence doesn't extend canonical");
-        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
+        return handle_reorg(node, &(&channel, &comms_timeout), proposal).await
     }
 
     // Last proposal must be the same as the one requested
     if response.proposals.last().unwrap().hash != proposal.hash {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence doesn't correspond to requested tip");
-        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
+        return handle_reorg(node, &(&channel, &comms_timeout), proposal).await
     }
 
     // Process response proposals
     for proposal in &response.proposals {
         // Append proposal
-        match validator.append_proposal(proposal).await {
+        match node.validator.append_proposal(proposal).await {
             Ok(()) => { /* Do nothing */ }
             // Skip already existing proposals
             Err(ProposalAlreadyExists) => continue,
@@ -220,11 +208,11 @@ async fn handle_unknown_proposal(
 
         // Broadcast proposal to rest nodes
         let message = ProposalMessage(proposal.clone());
-        p2p.broadcast_with_exclude(&message, &[channel.address().clone()]).await;
+        node.p2p_handler.p2p.broadcast_with_exclude(&message, &[channel.address().clone()]).await;
 
         // Notify proposals subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
-        proposals_sub.notify(vec![enc_prop].into()).await;
+        node.subscribers.get("proposals").unwrap().notify(vec![enc_prop].into()).await;
     }
 
     false
@@ -242,14 +230,14 @@ async fn handle_unknown_proposal(
 //  TODO: We keep everything in memory which can result in OOM for a
 //        valid long fork. We could use some disk space to store stuff.
 async fn handle_reorg(
-    validator: &ValidatorPtr,
-    p2p: &P2pPtr,
-    proposals_sub: &JsonSubscriber,
-    blocks_sub: &JsonSubscriber,
-    channel: ChannelPtr,
+    // Node pointer
+    node: &DarkfiNodePtr,
+    // Peer channel and its communications timeout
+    channel: &(&ChannelPtr, &u64),
+    // Peer fork proposal
     proposal: &Proposal,
 ) -> bool {
-    info!(target: "darkfid::task::handle_reorg", "Checking for potential reorg from proposal {} - {} by peer: {channel:?}", proposal.hash, proposal.block.header.height);
+    info!(target: "darkfid::task::handle_reorg", "Checking for potential reorg from proposal {} - {} by peer: {:?}", proposal.hash, proposal.block.header.height, channel.0);
 
     // Check if genesis proposal was provided
     if proposal.block.header.height == 0 {
@@ -257,14 +245,10 @@ async fn handle_reorg(
         return true
     }
 
-    // Retrieve communications timeout
-    let comms_timeout =
-        p2p.settings().read_arc().await.outbound_connect_timeout(channel.address().scheme());
-
     // Find last common header and its sequence, going backwards from
     // the proposal.
     let (last_common_height, last_common_hash, peer_header_hashes) =
-        match retrieve_peer_header_hashes(validator, (&channel, &comms_timeout), proposal).await {
+        match retrieve_peer_header_hashes(&node.validator, channel, proposal).await {
             Ok(t) => t,
             Err(DatabaseError(e)) => {
                 error!(target: "darkfid::task::handle_reorg", "Internal error while retrieving peer headers hashes: {e}");
@@ -278,9 +262,9 @@ async fn handle_reorg(
 
     // Create a new PoW module from last common height
     let module = match PoWModule::new(
-        validator.consensus.blockchain.clone(),
-        validator.consensus.module.read().await.target,
-        validator.consensus.module.read().await.fixed_difficulty.clone(),
+        node.validator.consensus.blockchain.clone(),
+        node.validator.consensus.module.read().await.target,
+        node.validator.consensus.module.read().await.fixed_difficulty.clone(),
         Some(last_common_height + 1),
     ) {
         Ok(m) => m,
@@ -293,7 +277,7 @@ async fn handle_reorg(
     // Grab last common height ranks
     let last_difficulty = match last_common_height {
         0 => {
-            let genesis_timestamp = match validator.blockchain.genesis_block() {
+            let genesis_timestamp = match node.validator.blockchain.genesis_block() {
                 Ok(b) => b.header.timestamp,
                 Err(e) => {
                     error!(target: "darkfid::task::handle_reorg", "Retrieving genesis block failed: {e}");
@@ -302,7 +286,7 @@ async fn handle_reorg(
             };
             BlockDifficulty::genesis(genesis_timestamp)
         }
-        _ => match validator.blockchain.blocks.get_difficulty(&[last_common_height], true) {
+        _ => match node.validator.blockchain.blocks.get_difficulty(&[last_common_height], true) {
             Ok(d) => d[0].clone().unwrap(),
             Err(e) => {
                 error!(target: "darkfid::task::handle_reorg", "Retrieving block difficulty failed: {e}");
@@ -314,7 +298,7 @@ async fn handle_reorg(
     // Retrieve the headers of the hashes sequence and its ranking
     let (targets_rank, hashes_rank) = match retrieve_peer_headers_sequence_ranking(
         (&last_common_height, &last_common_hash, &module, &last_difficulty),
-        (&channel, &comms_timeout),
+        channel,
         proposal,
         &peer_header_hashes,
     )
@@ -333,10 +317,10 @@ async fn handle_reorg(
 
     // Grab the append lock so no other proposal gets processed while
     // we are verifying the sequence.
-    let append_lock = validator.consensus.append_lock.write().await;
+    let append_lock = node.validator.consensus.append_lock.write().await;
 
     // Check if the sequence ranks higher than our current best fork
-    let mut forks = validator.consensus.forks.write().await;
+    let mut forks = node.validator.consensus.forks.write().await;
     let index = match best_fork_index(&forks) {
         Ok(i) => i,
         Err(e) => {
@@ -354,9 +338,9 @@ async fn handle_reorg(
 
     // Generate the peer fork and retrieve its ranking
     let peer_fork = match retrieve_peer_fork(
-        validator,
+        &node.validator,
         (&last_common_height, &module, &last_difficulty),
-        (&channel, &comms_timeout),
+        channel,
         proposal,
         &peer_header_hashes,
     )
@@ -384,17 +368,17 @@ async fn handle_reorg(
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
-    if let Err(e) = validator.blockchain.reset_to_height(last_common_height) {
+    if let Err(e) = node.validator.blockchain.reset_to_height(last_common_height) {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
         return false
     };
-    *validator.consensus.module.write().await = module;
+    *node.validator.consensus.module.write().await = module;
     *forks = vec![peer_fork];
     drop(forks);
     drop(append_lock);
 
     // Check if we can confirm anything and broadcast them
-    let confirmed = match validator.confirmation().await {
+    let confirmed = match node.validator.confirmation().await {
         Ok(f) => f,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Confirmation failed: {e}");
@@ -402,21 +386,26 @@ async fn handle_reorg(
         }
     };
 
+    // Refresh mining registry
+    if let Err(e) = node.registry.refresh(&node.validator).await {
+        error!(target: "darkfid::task::handle_reorg", "Failed refreshing mining block templates: {e}")
+    }
+
     if !confirmed.is_empty() {
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
         }
-        blocks_sub.notify(JsonValue::Array(notif_blocks)).await;
+        node.subscribers.get("blocks").unwrap().notify(JsonValue::Array(notif_blocks)).await;
     }
 
     // Broadcast proposal to the network
     let message = ProposalMessage(proposal.clone());
-    p2p.broadcast(&message).await;
+    node.p2p_handler.p2p.broadcast(&message).await;
 
     // Notify proposals subscriber
     let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
-    proposals_sub.notify(vec![enc_prop].into()).await;
+    node.subscribers.get("proposals").unwrap().notify(vec![enc_prop].into()).await;
 
     false
 }
@@ -427,7 +416,7 @@ async fn retrieve_peer_header_hashes(
     // Validator pointer
     validator: &ValidatorPtr,
     // Peer channel and its communications timeout
-    channel: (&ChannelPtr, &u64),
+    channel: &(&ChannelPtr, &u64),
     // Peer fork proposal
     proposal: &Proposal,
 ) -> Result<(u32, HeaderHash, Vec<HeaderHash>)> {
@@ -483,7 +472,7 @@ async fn retrieve_peer_headers_sequence_ranking(
     // Last common header, PoW module and difficulty
     last_common_info: (&u32, &HeaderHash, &PoWModule, &BlockDifficulty),
     // Peer channel and its communications timeout
-    channel: (&ChannelPtr, &u64),
+    channel: &(&ChannelPtr, &u64),
     // Peer fork trigger proposal
     proposal: &Proposal,
     // Peer header hashes sequence
@@ -602,7 +591,7 @@ async fn retrieve_peer_fork(
     // Last common header height, PoW module and difficulty
     last_common_info: (&u32, &PoWModule, &BlockDifficulty),
     // Peer channel and its communications timeout
-    channel: (&ChannelPtr, &u64),
+    channel: &(&ChannelPtr, &u64),
     // Peer fork trigger proposal
     proposal: &Proposal,
     // Peer header hashes sequence

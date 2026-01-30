@@ -16,16 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use darkfi::{
     net::{P2p, P2pPtr, Settings},
-    rpc::jsonrpc::JsonSubscriber,
     system::ExecutorPtr,
-    validator::ValidatorPtr,
     Result,
 };
 use tracing::info;
+
+use crate::DarkfiNodePtr;
 
 /// Block proposal broadcast protocol
 mod protocol_proposal;
@@ -90,29 +90,22 @@ impl DarkfidP2pHandler {
         Ok(Arc::new(Self { p2p, proposals, sync, txs }))
     }
 
-    /// Start the Darkfid P2P protocols handler for provided validator.
-    pub async fn start(
-        &self,
-        executor: &ExecutorPtr,
-        validator: &ValidatorPtr,
-        subscribers: &HashMap<&'static str, JsonSubscriber>,
-    ) -> Result<()> {
+    /// Start the Darkfid P2P protocols handler for provided node.
+    pub async fn start(&self, executor: &ExecutorPtr, node: &DarkfiNodePtr) -> Result<()> {
         info!(
             target: "darkfid::proto::mod::DarkfidP2pHandler::start",
             "Starting the Darkfid P2P handler..."
         );
 
         // Start the `ProtocolProposal` messages handler
-        let proposals_sub = subscribers.get("proposals").unwrap().clone();
-        let blocks_sub = subscribers.get("blocks").unwrap().clone();
-        self.proposals.start(executor, validator, &self.p2p, proposals_sub, blocks_sub).await?;
+        self.proposals.start(executor, node).await?;
 
         // Start the `ProtocolSync` messages handler
-        self.sync.start(executor, validator).await?;
+        self.sync.start(executor, &node.validator).await?;
 
         // Start the `ProtocolTx` messages handler
-        let subscriber = subscribers.get("txs").unwrap().clone();
-        self.txs.start(executor, validator, subscriber).await?;
+        let subscriber = node.subscribers.get("txs").unwrap().clone();
+        self.txs.start(executor, &node.validator, subscriber).await?;
 
         // Start the P2P instance
         self.p2p.clone().start().await?;

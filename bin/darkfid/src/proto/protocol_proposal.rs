@@ -47,7 +47,7 @@ use darkfi::{
 };
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
-use crate::task::handle_unknown_proposals;
+use crate::{task::handle_unknown_proposals, DarkfiNodePtr};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -110,14 +110,7 @@ impl ProtocolProposalHandler {
     }
 
     /// Start the `ProtocolProposal` background task.
-    pub async fn start(
-        &self,
-        executor: &ExecutorPtr,
-        validator: &ValidatorPtr,
-        p2p: &P2pPtr,
-        proposals_sub: JsonSubscriber,
-        blocks_sub: JsonSubscriber,
-    ) -> Result<()> {
+    pub async fn start(&self, executor: &ExecutorPtr, node: &DarkfiNodePtr) -> Result<()> {
         debug!(
             target: "darkfid::proto::protocol_proposal::start",
             "Starting ProtocolProposal handler task..."
@@ -128,7 +121,7 @@ impl ProtocolProposalHandler {
 
         // Start the unkown proposals handler task
         self.unknown_proposals_handler.clone().start(
-            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub),
+            handle_unknown_proposals(receiver, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), node.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -141,7 +134,7 @@ impl ProtocolProposalHandler {
 
         // Start the proposals handler task
         self.proposals_handler.task.clone().start(
-            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), validator.clone(), proposals_sub),
+            handle_receive_proposal(self.proposals_handler.clone(), sender, self.unknown_proposals.clone(), self.unknown_proposals_channels.clone(), node.validator.clone(), node.subscribers.get("proposals").unwrap().clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }

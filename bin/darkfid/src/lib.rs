@@ -247,7 +247,7 @@ impl Darkfid {
 
         // Start the P2P network
         info!(target: "darkfid::Darkfid::start", "Starting P2P network");
-        self.node.p2p_handler.start(executor, &self.node.validator, &self.node.subscribers).await?;
+        self.node.p2p_handler.start(executor, &self.node).await?;
 
         // Start the consensus protocol
         info!(target: "darkfid::Darkfid::start", "Starting consensus protocol task");
