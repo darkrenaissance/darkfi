@@ -16,15 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    error::TxVerifyFailed,
-    validator::{verification::verify_transactions, Validator},
-    Error, Result,
-};
+use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
 use darkfi_sdk::crypto::MerkleTree;
 use tracing::{debug, error, info};
 
-use crate::{DarkfiMinersRegistryPtr, DarkfiNodePtr};
+use crate::DarkfiNodePtr;
 
 /// Async task used for purging erroneous pending transactions from the nodes mempool.
 pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
@@ -171,29 +167,4 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
 
     info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
     Ok(())
-}
-
-/// Auxiliary function to purge all unreferenced contract trees from
-/// the node database.
-pub async fn purge_unreferenced_trees(validator: &Validator, registry: &DarkfiMinersRegistryPtr) {
-    // Grab node registry locks
-    let submit_lock = registry.submit_lock.write().await;
-    let block_templates = registry.block_templates.write().await;
-    let jobs = registry.jobs.write().await;
-    let mm_jobs = registry.mm_jobs.write().await;
-
-    // Purge all unreferenced contract trees from the database
-    if let Err(e) = validator
-        .consensus
-        .purge_unreferenced_trees(&mut registry.new_trees(&block_templates))
-        .await
-    {
-        error!(target: "darkfid::task::garbage_collect::purge_unreferenced_trees", "Purging unreferenced contract trees from the database failed: {e}");
-    }
-
-    // Release registry locks
-    drop(block_templates);
-    drop(jobs);
-    drop(mm_jobs);
-    drop(submit_lock);
 }

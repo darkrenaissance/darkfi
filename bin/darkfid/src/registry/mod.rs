@@ -57,6 +57,301 @@ use model::{
     PowRewardV1Zk,
 };
 
+/// Atomic pointer to the DarkFi node miners registry state.
+pub type DarkfiMinersRegistryStatePtr = Arc<RwLock<DarkfiMinersRegistryState>>;
+
+/// DarkFi node miners registry state.
+pub struct DarkfiMinersRegistryState {
+    /// PowRewardV1 ZK data
+    pub powrewardv1_zk: PowRewardV1Zk,
+    /// Mining block templates of each wallet config
+    pub block_templates: HashMap<String, BlockTemplate>,
+    /// Active native clients mapped to their job information.
+    /// This client information includes their wallet template key,
+    /// recipient configuration, current mining job key(job id) and
+    /// its connection publisher. For native jobs the job key is the
+    /// hex encoded header hash.
+    pub jobs: HashMap<String, MinerClient>,
+    /// Active merge mining jobs mapped to the wallet template they
+    /// represent. The key(job id) is the the header template hash.
+    pub mm_jobs: HashMap<String, String>,
+}
+
+impl DarkfiMinersRegistryState {
+    pub async fn new(validator: &ValidatorPtr) -> Result<DarkfiMinersRegistryStatePtr> {
+        // Generate the PowRewardV1 ZK data
+        let powrewardv1_zk = PowRewardV1Zk::new(validator).await?;
+
+        Ok(Arc::new(RwLock::new(Self {
+            powrewardv1_zk,
+            block_templates: HashMap::new(),
+            jobs: HashMap::new(),
+            mm_jobs: HashMap::new(),
+        })))
+    }
+
+    /// Create a registry record for provided wallet config. If the
+    /// record already exists return its template, otherwise create its
+    /// current template based on provided validator state.
+    ///
+    /// Note: Always remember to purge new trees from the database if
+    /// not needed.
+    async fn create_template(
+        &mut self,
+        validator: &Validator,
+        wallet: &String,
+        config: &MinerRewardsRecipientConfig,
+    ) -> Result<BlockTemplate> {
+        // Check if a template already exists for this wallet
+        if let Some(block_template) = self.block_templates.get(wallet) {
+            return Ok(block_template.clone())
+        }
+
+        // Grab validator best current fork
+        let mut extended_fork = validator.best_current_fork().await?;
+
+        // Generate the next block template
+        let block_template = generate_next_block_template(
+            &mut extended_fork,
+            config,
+            &self.powrewardv1_zk.zkbin,
+            &self.powrewardv1_zk.provingkey,
+            validator.verify_fees,
+        )
+        .await?;
+
+        // Create the new registry record
+        self.block_templates.insert(wallet.clone(), block_template.clone());
+
+        // Print the new template wallet information
+        let recipient_str = format!("{}", config.recipient);
+        let spend_hook_str = match config.spend_hook {
+            Some(spend_hook) => format!("{spend_hook}"),
+            None => String::from("-"),
+        };
+        let user_data_str = match config.user_data {
+            Some(user_data) => bs58::encode(user_data.to_repr()).into_string(),
+            None => String::from("-"),
+        };
+        info!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
+            "Created new block template for wallet: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}",
+        );
+
+        Ok(block_template)
+    }
+
+    /// Register a new miner and create its job.
+    pub async fn register_miner(
+        &mut self,
+        validator: &Validator,
+        wallet: &String,
+        config: &MinerRewardsRecipientConfig,
+    ) -> Result<(String, String, JsonValue, JsonSubscriber)> {
+        // Create wallet template
+        let block_template = self.create_template(validator, wallet, config).await?;
+
+        // Grab the hex encoded block hash and create the client job record
+        let (job_id, job) = block_template.job_notification();
+        let (client_id, client) = MinerClient::new(wallet, config, &job_id);
+        let publisher = client.publisher.clone();
+        self.jobs.insert(client_id.clone(), client);
+
+        Ok((client_id, job_id, job, publisher))
+    }
+
+    /// Register a new merge miner and create its job.
+    pub async fn register_merge_miner(
+        &mut self,
+        validator: &Validator,
+        wallet: &String,
+        config: &MinerRewardsRecipientConfig,
+    ) -> Result<(String, f64)> {
+        // Create wallet template
+        let block_template = self.create_template(validator, wallet, config).await?;
+
+        // Grab the block template hash and its difficulty, and then
+        // create the job record.
+        let block_template_hash = block_template.block.header.template_hash().as_string();
+        let difficulty = block_template.difficulty;
+        self.mm_jobs.insert(block_template_hash.clone(), wallet.clone());
+
+        Ok((block_template_hash, difficulty))
+    }
+
+    /// Submit provided block to the provided node.
+    pub async fn submit(
+        &self,
+        validator: &mut Validator,
+        subscribers: &HashMap<&'static str, JsonSubscriber>,
+        p2p_handler: &DarkfidP2pHandlerPtr,
+        block: BlockInfo,
+    ) -> Result<()> {
+        let proposal = Proposal::new(block);
+        validator.append_proposal(&proposal).await?;
+
+        info!(
+            target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",
+            "Proposing new block to network",
+        );
+
+        let proposals_sub = subscribers.get("proposals").unwrap();
+        let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
+        proposals_sub.notify(vec![enc_prop].into()).await;
+
+        info!(
+            target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",
+            "Broadcasting new block to network",
+        );
+        let message = ProposalMessage(proposal);
+        p2p_handler.p2p.broadcast(&message).await;
+
+        Ok(())
+    }
+
+    /// Refresh outdated jobs in the registry based on provided
+    /// validator state.
+    pub async fn refresh(&mut self, validator: &Validator) -> Result<()> {
+        // Find inactive native jobs and drop them
+        let mut dropped_jobs = vec![];
+        let mut active_templates = HashSet::new();
+        for (client_id, client) in self.jobs.iter() {
+            // Clear inactive client publisher subscribers. If none
+            // exists afterwards, the client is considered inactive so
+            // we mark it for drop.
+            if client.publisher.publisher.clear_inactive().await {
+                dropped_jobs.push(client_id.clone());
+                continue
+            }
+
+            // Mark client block template as active
+            active_templates.insert(client.wallet.clone());
+        }
+        self.jobs.retain(|client_id, _| !dropped_jobs.contains(client_id));
+
+        // Grab validator best current fork and its last proposal for
+        // checks.
+        let extended_fork = validator.best_current_fork().await?;
+        let last_proposal = extended_fork.last_proposal()?.hash;
+
+        // Find mm jobs not extending the best current fork and drop
+        // them.
+        let mut dropped_mm_jobs = vec![];
+        for (job_id, wallet) in self.mm_jobs.iter() {
+            // Grab its wallet template. Its safe to unwrap here since
+            // we know the job exists.
+            let block_template = self.block_templates.get(wallet).unwrap();
+
+            // Check if it extends current best fork
+            if block_template.block.header.previous == last_proposal {
+                active_templates.insert(wallet.clone());
+                continue
+            }
+
+            // This mm job doesn't extend current best fork so we mark
+            // it for drop.
+            dropped_mm_jobs.push(job_id.clone());
+        }
+        self.mm_jobs.retain(|job_id, _| !dropped_mm_jobs.contains(job_id));
+
+        // Drop inactive templates. Merge miners will create a new
+        // template and job on next poll.
+        self.block_templates.retain(|wallet, _| active_templates.contains(wallet));
+
+        // Return if no wallets templates exists.
+        if self.block_templates.is_empty() {
+            return Ok(())
+        }
+
+        // Iterate over active clients to refresh their jobs, if needed
+        for (job_id, client) in self.jobs.iter_mut() {
+            // Grab its wallet template. Its safe to unwrap here since
+            // we know the job exists.
+            let block_template = self.block_templates.get_mut(&client.wallet).unwrap();
+
+            // Check if it extends current best fork
+            if block_template.block.header.previous == last_proposal {
+                continue
+            }
+
+            // Clone the fork so each client generates over a new one
+            let mut extended_fork = extended_fork.full_clone()?;
+
+            // Generate the next block template
+            let result = generate_next_block_template(
+                &mut extended_fork,
+                &client.config,
+                &self.powrewardv1_zk.zkbin,
+                &self.powrewardv1_zk.provingkey,
+                validator.verify_fees,
+            )
+            .await;
+
+            // Check result
+            *block_template = match result {
+                Ok(b) => b,
+                Err(e) => {
+                    error!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
+                        "Updating block template for job {job_id} failed: {e}",
+                    );
+                    // Mark block template as not submitted so the
+                    // miner can submit another one and don't get stuck
+                    block_template.submitted = false;
+                    continue;
+                }
+            };
+
+            // Print the updated template wallet information
+            let recipient_str = format!("{}", client.config.recipient);
+            let spend_hook_str = match client.config.spend_hook {
+                Some(spend_hook) => format!("{spend_hook}"),
+                None => String::from("-"),
+            };
+            let user_data_str = match client.config.user_data {
+                Some(user_data) => bs58::encode(user_data.to_repr()).into_string(),
+                None => String::from("-"),
+            };
+            info!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
+                "Updated block template for wallet: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}",
+            );
+
+            // Create the new job notification
+            let (job, notification) = block_template.job_notification();
+
+            // Update the client record
+            client.job = job;
+
+            // Push job notification to subscriber
+            client.publisher.notify(notification).await;
+        }
+
+        Ok(())
+    }
+
+    /// Auxilliary function to retrieve all current block templates
+    /// newly opened trees.
+    pub fn new_trees(&self) -> BTreeSet<IVec> {
+        let mut new_trees = BTreeSet::new();
+        for block_template in self.block_templates.values() {
+            for new_tree in &block_template.new_trees {
+                new_trees.insert(new_tree.clone());
+            }
+        }
+        new_trees
+    }
+
+    /// Auxilliary function to retrieve all current block templates
+    /// transactions hashes.
+    pub fn proposed_transactions(&self) -> HashSet<TransactionHash> {
+        let mut proposed_txs = HashSet::new();
+        for block_template in self.block_templates.values() {
+            for tx in &block_template.block.txs {
+                proposed_txs.insert(tx.hash());
+            }
+        }
+        proposed_txs
+    }
+}
+
 /// Atomic pointer to the DarkFi node miners registry.
 pub type DarkfiMinersRegistryPtr = Arc<DarkfiMinersRegistry>;
 
@@ -64,21 +359,8 @@ pub type DarkfiMinersRegistryPtr = Arc<DarkfiMinersRegistry>;
 pub struct DarkfiMinersRegistry {
     /// Blockchain network
     pub network: Network,
-    /// PowRewardV1 ZK data
-    pub powrewardv1_zk: PowRewardV1Zk,
-    /// Mining block templates of each wallet config
-    pub block_templates: RwLock<HashMap<String, BlockTemplate>>,
-    /// Active native clients mapped to their job information.
-    /// This client information includes their wallet template key,
-    /// recipient configuration, current mining job key(job id) and
-    /// its connection publisher. For native jobs the job key is the
-    /// hex encoded header hash.
-    pub jobs: RwLock<HashMap<String, MinerClient>>,
-    /// Active merge mining jobs mapped to the wallet template they
-    /// represent. The key(job id) is the the header template hash.
-    pub mm_jobs: RwLock<HashMap<String, String>>,
-    /// Submission lock so we can queue up submissions process
-    pub submit_lock: RwLock<()>,
+    /// Registry state
+    pub state: DarkfiMinersRegistryStatePtr,
     /// Stratum JSON-RPC background task
     stratum_rpc_task: StoppableTaskPtr,
     /// Stratum JSON-RPC connection tracker
@@ -100,8 +382,8 @@ impl DarkfiMinersRegistry {
             "Initializing a new DarkFi node miners registry..."
         );
 
-        // Generate the PowRewardV1 ZK data
-        let powrewardv1_zk = PowRewardV1Zk::new(validator).await?;
+        // Generate the registry state
+        let state = DarkfiMinersRegistryState::new(validator).await?;
 
         // Generate the stratum JSON-RPC background task and its
         // connections tracker.
@@ -120,11 +402,7 @@ impl DarkfiMinersRegistry {
 
         Ok(Arc::new(Self {
             network,
-            powrewardv1_zk,
-            block_templates: RwLock::new(HashMap::new()),
-            jobs: RwLock::new(HashMap::new()),
-            mm_jobs: RwLock::new(HashMap::new()),
-            submit_lock: RwLock::new(()),
+            state,
             stratum_rpc_task,
             stratum_rpc_connections,
             mm_rpc_task,
@@ -217,308 +495,5 @@ impl DarkfiMinersRegistry {
         self.mm_rpc_task.stop().await;
 
         info!(target: "darkfid::registry::mod::DarkfiMinersRegistry::stop", "DarkFi node miners registry terminated successfully!");
-    }
-
-    /// Create a registry record for provided wallet config. If the
-    /// record already exists return its template, otherwise create its
-    /// current template based on provided validator state.
-    ///
-    /// Note: Always remember to purge new trees from the database if
-    /// not needed.
-    async fn create_template(
-        &self,
-        validator: &Validator,
-        wallet: &String,
-        config: &MinerRewardsRecipientConfig,
-    ) -> Result<BlockTemplate> {
-        // Grab a lock over current templates
-        let mut block_templates = self.block_templates.write().await;
-
-        // Check if a template already exists for this wallet
-        if let Some(block_template) = block_templates.get(wallet) {
-            return Ok(block_template.clone())
-        }
-
-        // Grab validator best current fork
-        let mut extended_fork = validator.best_current_fork().await?;
-
-        // Generate the next block template
-        let block_template = generate_next_block_template(
-            &mut extended_fork,
-            config,
-            &self.powrewardv1_zk.zkbin,
-            &self.powrewardv1_zk.provingkey,
-            validator.verify_fees,
-        )
-        .await?;
-
-        // Create the new registry record
-        block_templates.insert(wallet.clone(), block_template.clone());
-
-        // Print the new template wallet information
-        let recipient_str = format!("{}", config.recipient);
-        let spend_hook_str = match config.spend_hook {
-            Some(spend_hook) => format!("{spend_hook}"),
-            None => String::from("-"),
-        };
-        let user_data_str = match config.user_data {
-            Some(user_data) => bs58::encode(user_data.to_repr()).into_string(),
-            None => String::from("-"),
-        };
-        info!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
-            "Created new block template for wallet: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}",
-        );
-
-        Ok(block_template)
-    }
-
-    /// Register a new miner and create its job.
-    pub async fn register_miner(
-        &self,
-        validator: &Validator,
-        wallet: &String,
-        config: &MinerRewardsRecipientConfig,
-    ) -> Result<(String, String, JsonValue, JsonSubscriber)> {
-        // Grab a lock over current native jobs
-        let mut jobs = self.jobs.write().await;
-
-        // Create wallet template
-        let block_template = self.create_template(validator, wallet, config).await?;
-
-        // Grab the hex encoded block hash and create the client job record
-        let (job_id, job) = block_template.job_notification();
-        let (client_id, client) = MinerClient::new(wallet, config, &job_id);
-        let publisher = client.publisher.clone();
-        jobs.insert(client_id.clone(), client);
-
-        Ok((client_id, job_id, job, publisher))
-    }
-
-    /// Register a new merge miner and create its job.
-    pub async fn register_merge_miner(
-        &self,
-        validator: &Validator,
-        wallet: &String,
-        config: &MinerRewardsRecipientConfig,
-    ) -> Result<(String, f64)> {
-        // Grab a lock over current mm jobs
-        let mut jobs = self.mm_jobs.write().await;
-
-        // Create wallet template
-        let block_template = self.create_template(validator, wallet, config).await?;
-
-        // Grab the block template hash and its difficulty, and then
-        // create the job record.
-        let block_template_hash = block_template.block.header.template_hash().as_string();
-        let difficulty = block_template.difficulty;
-        jobs.insert(block_template_hash.clone(), wallet.clone());
-
-        Ok((block_template_hash, difficulty))
-    }
-
-    /// Submit provided block to the provided node.
-    pub async fn submit(
-        &self,
-        validator: &mut Validator,
-        subscribers: &HashMap<&'static str, JsonSubscriber>,
-        p2p_handler: &DarkfidP2pHandlerPtr,
-        block: BlockInfo,
-    ) -> Result<()> {
-        let proposal = Proposal::new(block);
-        validator.append_proposal(&proposal).await?;
-
-        info!(
-            target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",
-            "Proposing new block to network",
-        );
-
-        let proposals_sub = subscribers.get("proposals").unwrap();
-        let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
-        proposals_sub.notify(vec![enc_prop].into()).await;
-
-        info!(
-            target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",
-            "Broadcasting new block to network",
-        );
-        let message = ProposalMessage(proposal);
-        p2p_handler.p2p.broadcast(&message).await;
-
-        Ok(())
-    }
-
-    /// Refresh outdated jobs in the provided registry maps based on
-    /// provided validator state.
-    ///
-    /// Note: Always remember to purge new trees from the database if
-    /// not needed.
-    pub async fn refresh_jobs(
-        &self,
-        block_templates: &mut HashMap<String, BlockTemplate>,
-        jobs: &mut HashMap<String, MinerClient>,
-        mm_jobs: &mut HashMap<String, String>,
-        validator: &Validator,
-    ) -> Result<()> {
-        // Find inactive native jobs and drop them
-        let mut dropped_jobs = vec![];
-        let mut active_templates = HashSet::new();
-        for (client_id, client) in jobs.iter() {
-            // Clear inactive client publisher subscribers. If none
-            // exists afterwards, the client is considered inactive so
-            // we mark it for drop.
-            if client.publisher.publisher.clear_inactive().await {
-                dropped_jobs.push(client_id.clone());
-                continue
-            }
-
-            // Mark client block template as active
-            active_templates.insert(client.wallet.clone());
-        }
-        jobs.retain(|client_id, _| !dropped_jobs.contains(client_id));
-
-        // Grab validator best current fork and its last proposal for
-        // checks.
-        let extended_fork = validator.best_current_fork().await?;
-        let last_proposal = extended_fork.last_proposal()?.hash;
-
-        // Find mm jobs not extending the best current fork and drop
-        // them.
-        let mut dropped_mm_jobs = vec![];
-        for (job_id, wallet) in mm_jobs.iter() {
-            // Grab its wallet template. Its safe to unwrap here since
-            // we know the job exists.
-            let block_template = block_templates.get(wallet).unwrap();
-
-            // Check if it extends current best fork
-            if block_template.block.header.previous == last_proposal {
-                active_templates.insert(wallet.clone());
-                continue
-            }
-
-            // This mm job doesn't extend current best fork so we mark
-            // it for drop.
-            dropped_mm_jobs.push(job_id.clone());
-        }
-        mm_jobs.retain(|job_id, _| !dropped_mm_jobs.contains(job_id));
-
-        // Drop inactive templates. Merge miners will create a new
-        // template and job on next poll.
-        block_templates.retain(|wallet, _| active_templates.contains(wallet));
-
-        // Return if no wallets templates exists.
-        if block_templates.is_empty() {
-            return Ok(())
-        }
-
-        // Iterate over active clients to refresh their jobs, if needed
-        for (job_id, client) in jobs.iter_mut() {
-            // Grab its wallet template. Its safe to unwrap here since
-            // we know the job exists.
-            let block_template = block_templates.get_mut(&client.wallet).unwrap();
-
-            // Check if it extends current best fork
-            if block_template.block.header.previous == last_proposal {
-                continue
-            }
-
-            // Clone the fork so each client generates over a new one
-            let mut extended_fork = extended_fork.full_clone()?;
-
-            // Generate the next block template
-            let result = generate_next_block_template(
-                &mut extended_fork,
-                &client.config,
-                &self.powrewardv1_zk.zkbin,
-                &self.powrewardv1_zk.provingkey,
-                validator.verify_fees,
-            )
-            .await;
-
-            // Check result
-            *block_template = match result {
-                Ok(b) => b,
-                Err(e) => {
-                    error!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
-                        "Updating block template for job {job_id} failed: {e}",
-                    );
-                    // Mark block template as not submitted so the
-                    // miner can submit another one and don't get stuck
-                    block_template.submitted = false;
-                    continue;
-                }
-            };
-
-            // Print the updated template wallet information
-            let recipient_str = format!("{}", client.config.recipient);
-            let spend_hook_str = match client.config.spend_hook {
-                Some(spend_hook) => format!("{spend_hook}"),
-                None => String::from("-"),
-            };
-            let user_data_str = match client.config.user_data {
-                Some(user_data) => bs58::encode(user_data.to_repr()).into_string(),
-                None => String::from("-"),
-            };
-            info!(target: "darkfid::registry::mod::DarkfiMinersRegistry::create_template",
-                "Updated block template for wallet: address={recipient_str}, spend_hook={spend_hook_str}, user_data={user_data_str}",
-            );
-
-            // Create the new job notification
-            let (job, notification) = block_template.job_notification();
-
-            // Update the client record
-            client.job = job;
-
-            // Push job notification to subscriber
-            client.publisher.notify(notification).await;
-        }
-
-        Ok(())
-    }
-
-    /// Refresh outdated jobs in the registry based on provided
-    /// validator state.
-    pub async fn refresh(&self, validator: &Validator) -> Result<()> {
-        // Grab registry locks
-        let submit_lock = self.submit_lock.write().await;
-        let mut block_templates = self.block_templates.write().await;
-        let mut jobs = self.jobs.write().await;
-        let mut mm_jobs = self.mm_jobs.write().await;
-
-        // Refresh jobs
-        self.refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, validator).await?;
-
-        // Release registry locks
-        drop(block_templates);
-        drop(jobs);
-        drop(mm_jobs);
-        drop(submit_lock);
-
-        Ok(())
-    }
-
-    /// Auxilliary function to retrieve all current block templates
-    /// newly opened trees.
-    pub fn new_trees(&self, block_templates: &HashMap<String, BlockTemplate>) -> BTreeSet<IVec> {
-        let mut new_trees = BTreeSet::new();
-        for block_template in block_templates.values() {
-            for new_tree in &block_template.new_trees {
-                new_trees.insert(new_tree.clone());
-            }
-        }
-        new_trees
-    }
-
-    /// Auxilliary function to retrieve all current block templates
-    /// transactions hashes.
-    pub fn proposed_transactions(
-        &self,
-        block_templates: &HashMap<String, BlockTemplate>,
-    ) -> HashSet<TransactionHash> {
-        let mut proposed_txs = HashSet::new();
-        for block_template in block_templates.values() {
-            for tx in &block_template.block.txs {
-                proposed_txs.insert(tx.hash());
-            }
-        }
-        proposed_txs
     }
 }

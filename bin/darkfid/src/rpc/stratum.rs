@@ -190,17 +190,23 @@ impl DarkfiNode {
             target: "darkfid::rpc::rpc_stratum::stratum_login",
             "[RPC-STRATUM] Got login from {wallet} ({agent})",
         );
-        let (client_id, job_id, job, publisher) =
-            match self.registry.register_miner(&validator, wallet, &config).await {
-                Ok(p) => p,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::rpc::rpc_stratum::stratum_login",
-                        "[RPC-STRATUM] Failed to register miner: {e}",
-                    );
-                    return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
-                }
-            };
+        let (client_id, job_id, job, publisher) = match self
+            .registry
+            .state
+            .write()
+            .await
+            .register_miner(&validator, wallet, &config)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                error!(
+                    target: "darkfid::rpc::rpc_stratum::stratum_login",
+                    "[RPC-STRATUM] Failed to register miner: {e}",
+                );
+                return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
+            }
+        };
 
         // Now we have the new job, we ship it to RPC
         info!(
@@ -246,9 +252,6 @@ impl DarkfiNode {
             return miner_status_response(id, "rejected")
         }
 
-        // Grab registry submissions lock
-        let submit_lock = self.registry.submit_lock.write().await;
-
         // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
@@ -263,8 +266,8 @@ impl DarkfiNode {
         };
 
         // If we don't know about this client, we can just abort here
-        let mut jobs = self.registry.jobs.write().await;
-        let Some(client) = jobs.get(client_id) else {
+        let mut registry = self.registry.state.write().await;
+        let Some(client) = registry.jobs.get(client_id) else {
             return miner_status_response(id, "rejected")
         };
 
@@ -281,11 +284,11 @@ impl DarkfiNode {
         if &client.job != job_id {
             return miner_status_response(id, "rejected")
         }
+        let wallet = client.wallet.clone();
 
         // If this client job wallet template doesn't exist, we can
         // just abort here.
-        let mut block_templates = self.registry.block_templates.write().await;
-        let Some(block_template) = block_templates.get_mut(&client.wallet) else {
+        let Some(block_template) = registry.block_templates.get(&wallet) else {
             return miner_status_response(id, "rejected")
         };
 
@@ -328,9 +331,13 @@ impl DarkfiNode {
         block.header.nonce = nonce;
         block.sign(&block_template.secret);
 
+        // Keep the template in memory so we can safely refernce the
+        // registry.
+        let mut block_template = block_template.clone();
+
         // Submit the new block through the registry
         if let Err(e) =
-            self.registry.submit(&mut validator, &self.subscribers, &self.p2p_handler, block).await
+            registry.submit(&mut validator, &self.subscribers, &self.p2p_handler, block).await
         {
             error!(
                 target: "darkfid::rpc::rpc_stratum::stratum_submit",
@@ -338,34 +345,19 @@ impl DarkfiNode {
             );
 
             // Try to refresh the jobs before returning error
-            let mut mm_jobs = self.registry.mm_jobs.write().await;
-            if let Err(e) = self
-                .registry
-                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &validator)
-                .await
-            {
+            if let Err(e) = registry.refresh(&validator).await {
                 error!(
                     target: "darkfid::rpc::rpc_stratum::stratum_submit",
                     "[RPC-STRATUM] Error refreshing registry jobs: {e}",
                 );
             }
 
-            // Release all locks
-            drop(block_templates);
-            drop(jobs);
-            drop(mm_jobs);
-            drop(submit_lock);
-
             return miner_status_response(id, "rejected")
         }
 
         // Mark block as submitted
         block_template.submitted = true;
-
-        // Release all locks
-        drop(block_templates);
-        drop(jobs);
-        drop(submit_lock);
+        registry.block_templates.insert(wallet, block_template);
 
         miner_status_response(id, "OK")
     }
@@ -396,7 +388,7 @@ impl DarkfiNode {
         };
 
         // If we don't know about this client job, we can just abort here
-        if !self.registry.jobs.read().await.contains_key(client_id) {
+        if !self.registry.state.read().await.jobs.contains_key(client_id) {
             return server_error(RpcError::MinerUnknownClient, id, None)
         };
 

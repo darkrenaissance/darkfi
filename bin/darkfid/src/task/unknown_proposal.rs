@@ -386,7 +386,7 @@ async fn handle_reorg(
     };
 
     // Refresh mining registry
-    if let Err(e) = node.registry.refresh(&validator).await {
+    if let Err(e) = node.registry.state.write().await.refresh(&validator).await {
         error!(target: "darkfid::task::handle_reorg", "Failed refreshing mining block templates: {e}")
     }
 

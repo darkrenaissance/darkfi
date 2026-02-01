@@ -29,10 +29,7 @@ use darkfi_serial::serialize_async;
 use tracing::{error, info};
 
 use crate::{
-    task::{
-        garbage_collect::{garbage_collect_task, purge_unreferenced_trees},
-        sync_task,
-    },
+    task::{garbage_collect::garbage_collect_task, sync_task},
     DarkfiNodePtr,
 };
 
@@ -196,7 +193,8 @@ async fn consensus_task(
         };
 
         // Refresh mining registry
-        if let Err(e) = node.registry.refresh(&validator).await {
+        let mut registry = node.registry.state.write().await;
+        if let Err(e) = registry.refresh(&validator).await {
             error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
         }
 
@@ -204,11 +202,12 @@ async fn consensus_task(
             continue
         }
 
-        // Grab the append lock so no other proposal gets processed
-        // while the node is purging all unreferenced contract trees
-        // from the database.
-        purge_unreferenced_trees(&validator, &node.registry).await;
-        drop(validator);
+        // Purge all unreferenced contract trees fro the database
+        if let Err(e) =
+            validator.consensus.purge_unreferenced_trees(&mut registry.new_trees()).await
+        {
+            error!(target: "darkfid::task::garbage_collect::purge_unreferenced_trees", "Purging unreferenced contract trees from the database failed: {e}");
+        }
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {
