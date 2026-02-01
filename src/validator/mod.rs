@@ -531,7 +531,9 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Verify block
-            match verify_block(&overlay, &diffs, &module, block, previous, self.verify_fees).await {
+            match verify_block(&overlay, &diffs, &mut module, block, previous, self.verify_fees)
+                .await
+            {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => {
@@ -761,7 +763,8 @@ impl Validator {
 
             // Verify block
             if let Err(e) =
-                verify_block(&overlay, &diffs, &module, &block, &previous, self.verify_fees).await
+                verify_block(&overlay, &diffs, &mut module, &block, &previous, self.verify_fees)
+                    .await
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set: {e}");
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))

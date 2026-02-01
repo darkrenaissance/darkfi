@@ -282,7 +282,7 @@ impl PoWModule {
     }
 
     /// Verify provided block timestamp and hash.
-    pub fn verify_current_block(&self, header: &Header) -> Result<()> {
+    pub fn verify_current_block(&mut self, header: &Header) -> Result<()> {
         // First we verify the block's timestamp
         if !self.verify_current_timestamp(header.timestamp)? {
             return Err(Error::PoWInvalidTimestamp)
@@ -293,7 +293,7 @@ impl PoWModule {
     }
 
     /// Verify provided block hash is less than provided mine target.
-    pub fn verify_block_target(&self, header: &Header, target: &BigUint) -> Result<BigUint> {
+    pub fn verify_block_target(&mut self, header: &Header, target: &BigUint) -> Result<BigUint> {
         let verifier_setup = Instant::now();
 
         // Grab verifier output hash based on block PoW data
@@ -348,7 +348,7 @@ impl PoWModule {
     }
 
     /// Verify provided block corresponds to next mine target.
-    pub fn verify_block_hash(&self, header: &Header) -> Result<()> {
+    pub fn verify_block_hash(&mut self, header: &Header) -> Result<()> {
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
@@ -734,7 +734,7 @@ mod tests {
         genesis_block.header.timestamp = 0.into();
         blockchain.add_block(&genesis_block)?;
 
-        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
+        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
 
         let (_, recvr) = smol::channel::bounded(1);
 

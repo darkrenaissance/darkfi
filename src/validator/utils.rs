@@ -119,7 +119,7 @@ pub async fn deploy_native_contracts(
 /// from max 32 bytes int, along with its squared RandomX hash number
 /// distance from max 32 bytes int.
 /// Genesis block has rank (0, 0).
-pub fn header_rank(module: &PoWModule, header: &Header) -> Result<(BigUint, BigUint, BigUint)> {
+pub fn header_rank(module: &mut PoWModule, header: &Header) -> Result<(BigUint, BigUint, BigUint)> {
     // Grab next mine target and difficulty
     let (target, difficulty) = module.next_mine_target_and_difficulty()?;
 

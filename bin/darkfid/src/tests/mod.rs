@@ -79,7 +79,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let alice = th.alice.validator.read().await;
     fork = Fork::new(alice.consensus.blockchain.clone(), alice.consensus.module.clone()).await?;
     // Append block3 to fork and generate the next one
-    verify_block(&fork.overlay, &fork.diffs, &fork.module, &block3, &block2, alice.verify_fees)
+    verify_block(&fork.overlay, &fork.diffs, &mut fork.module, &block3, &block2, alice.verify_fees)
         .await?;
     drop(alice);
     let block6 = th.generate_next_block(&mut fork).await?;

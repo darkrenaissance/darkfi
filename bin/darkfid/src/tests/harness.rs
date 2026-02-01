@@ -260,7 +260,7 @@ impl Harness {
         verify_block(
             &fork.overlay,
             &fork.diffs,
-            &fork.module,
+            &mut fork.module,
             &block,
             &previous,
             self.alice.validator.read().await.verify_fees,

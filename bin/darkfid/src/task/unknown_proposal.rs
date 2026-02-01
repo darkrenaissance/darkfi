@@ -533,7 +533,7 @@ async fn retrieve_peer_headers_sequence_ranking(
 
             // Verify header hash and calculate its rank
             let (next_difficulty, target_distance_sq, hash_distance_sq) =
-                match header_rank(&module, peer_header) {
+                match header_rank(&mut module, peer_header) {
                     Ok(tuple) => tuple,
                     Err(PoWInvalidOutHash) => return Err(PoWInvalidOutHash),
                     Err(e) => {
@@ -569,7 +569,7 @@ async fn retrieve_peer_headers_sequence_ranking(
 
     // Verify trigger proposal header hash and calculate its rank
     let (_, target_distance_sq, hash_distance_sq) =
-        match header_rank(&module, &proposal.block.header) {
+        match header_rank(&mut module, &proposal.block.header) {
             Ok(tuple) => tuple,
             Err(PoWInvalidOutHash) => return Err(PoWInvalidOutHash),
             Err(e) => return Err(DatabaseError(format!("Computing header rank failed: {e}"))),

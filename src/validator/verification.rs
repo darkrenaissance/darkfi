@@ -152,7 +152,11 @@ pub async fn verify_genesis_block(
 ///     5. Block header Proof of Work data are valid
 ///     6. Block hash is valid based on PoWModule validation
 /// Additional validity rules can be applied.
-pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
+pub fn validate_block(
+    block: &BlockInfo,
+    previous: &BlockInfo,
+    module: &mut PoWModule,
+) -> Result<()> {
     // Check block version (1)
     if block.header.version != block_version(block.header.height) {
         return Err(Error::BlockIsInvalid(block.hash().as_string()))
@@ -200,7 +204,7 @@ pub fn validate_blockchain(
     for (index, block) in blocks[1..].iter().enumerate() {
         let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
         let full_block = &full_blocks[1];
-        validate_block(full_block, &full_blocks[0], &module)?;
+        validate_block(full_block, &full_blocks[0], &mut module)?;
         // Update PoW module
         module.append(&full_block.header, &module.next_difficulty()?)?;
     }
@@ -215,7 +219,7 @@ pub fn validate_blockchain(
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     diffs: &[SledDbOverlayStateDiff],
-    module: &PoWModule,
+    module: &mut PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
     verify_fees: bool,
@@ -1116,7 +1120,7 @@ pub async fn verify_proposal(
     }
 
     // Check if proposal extends any existing forks
-    let (fork, index) = consensus.find_extended_fork(proposal).await?;
+    let (mut fork, index) = consensus.find_extended_fork(proposal).await?;
 
     // Grab overlay last block
     let previous = fork.overlay.lock().unwrap().last_block()?;
@@ -1125,7 +1129,7 @@ pub async fn verify_proposal(
     if let Err(e) = verify_block(
         &fork.overlay,
         &fork.diffs,
-        &fork.module,
+        &mut fork.module,
         &proposal.block,
         &previous,
         verify_fees,
@@ -1170,7 +1174,7 @@ pub async fn verify_fork_proposal(
     if let Err(e) = verify_block(
         &fork.overlay,
         &fork.diffs,
-        &fork.module,
+        &mut fork.module,
         &proposal.block,
         &previous,
         verify_fees,
