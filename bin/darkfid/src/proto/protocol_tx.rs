@@ -122,7 +122,8 @@ async fn handle_receive_tx(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let mut validator = validator.write().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_tx::handle_receive_tx",
                 "Node still syncing blockchain, skipping..."

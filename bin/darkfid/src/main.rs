@@ -197,7 +197,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if let Some(height) = args.reset {
         info!(target: "darkfid", "Node will reset validator state to height: {height}");
         let validator = Validator::new(&sled_db, &config).await?;
-        validator.reset_to_height(height).await?;
+        validator.write().await.reset_to_height(height).await?;
         info!(target: "darkfid", "Validator state reset successfully!");
         return Ok(())
     }
@@ -206,7 +206,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if args.purge_sync {
         info!(target: "darkfid", "Node will purge all pending sync headers.");
         let validator = Validator::new(&sled_db, &config).await?;
-        validator.blockchain.headers.remove_all_sync()?;
+        validator.read().await.blockchain.headers.remove_all_sync()?;
         info!(target: "darkfid", "Validator pending sync headers purged successfully!");
         return Ok(())
     }
@@ -215,7 +215,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if args.validate {
         info!(target: "darkfid", "Node will validate existing blockchain state.");
         let validator = Validator::new(&sled_db, &config).await?;
-        validator.validate_blockchain(config.pow_target, config.pow_fixed_difficulty).await?;
+        validator
+            .read()
+            .await
+            .validate_blockchain(config.pow_target, config.pow_fixed_difficulty)
+            .await?;
         info!(target: "darkfid", "Validator blockchain state validated successfully!");
         return Ok(())
     }
@@ -225,6 +229,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         info!(target: "darkfid", "Node will rebuild difficulties of existing blockchain state.");
         let validator = Validator::new(&sled_db, &config).await?;
         validator
+            .read()
+            .await
             .rebuild_block_difficulties(config.pow_target, config.pow_fixed_difficulty)
             .await?;
         info!(target: "darkfid", "Validator difficulties rebuilt successfully!");

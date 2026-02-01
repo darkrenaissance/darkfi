@@ -138,7 +138,7 @@ impl Darkfid {
         let p2p_handler = DarkfidP2pHandler::init(net_settings, ex).await?;
 
         // Initialize the miners registry
-        let registry = DarkfiMinersRegistry::init(network, &validator)?;
+        let registry = DarkfiMinersRegistry::init(network, &validator).await?;
 
         // Grab blockchain network configured transactions batch size for garbage collection
         let txs_batch_size = match txs_batch_size {
@@ -301,7 +301,8 @@ impl Darkfid {
 
         // Flush sled database data
         info!(target: "darkfid::Darkfid::stop", "Flushing sled database...");
-        let flushed_bytes = self.node.validator.blockchain.sled_db.flush_async().await?;
+        let flushed_bytes =
+            self.node.validator.read().await.blockchain.sled_db.flush_async().await?;
         info!(target: "darkfid::Darkfid::stop", "Flushed {flushed_bytes} bytes");
 
         info!(target: "darkfid::Darkfid::stop", "Darkfi daemon terminated successfully!");

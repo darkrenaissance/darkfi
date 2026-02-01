@@ -152,7 +152,7 @@ impl TestHarness {
             xfer_params.inputs.iter().map(|input| input.value_commit).sum()
         );
 
-        let block_target = dao_wallet.validator.consensus.module.read().await.target;
+        let block_target = dao_wallet.validator.read().await.consensus.module.target;
         let current_blockwindow = blockwindow(block_height, block_target);
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
@@ -276,7 +276,7 @@ impl TestHarness {
 
         // Create the exec call
         let exec_signature_secret = SecretKey::random(&mut OsRng);
-        let block_target = wallet.validator.consensus.module.read().await.target;
+        let block_target = wallet.validator.read().await.consensus.module.target;
         let current_blockwindow = blockwindow(block_height, block_target);
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),

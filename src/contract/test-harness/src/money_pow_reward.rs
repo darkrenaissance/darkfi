@@ -53,7 +53,7 @@ impl TestHarness {
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
 
         // Reference the last block in the holder's blockchain
-        let last_block = wallet.validator.blockchain.last_block()?;
+        let last_block = wallet.validator.read().await.blockchain.last_block()?;
 
         // If there's a set reward recipient, use it, otherwise reward the holder
         let recipient = if let Some(holder) = recipient {
@@ -110,7 +110,8 @@ impl TestHarness {
 
         // Fetch the last block in the blockchain
         let wallet = self.holders.get(miner).unwrap();
-        let previous = wallet.validator.blockchain.last_block()?;
+        let validator = wallet.validator.read().await;
+        let previous = validator.blockchain.last_block()?;
 
         // We increment timestamp so we don't have to use sleep
         let timestamp = previous.header.timestamp.checked_add(1.into())?;
@@ -130,15 +131,16 @@ impl TestHarness {
         block.append_txs(vec![tx]);
 
         // Compute block contracts states monotree root
-        let overlay = BlockchainOverlay::new(&wallet.validator.blockchain)?;
+        let overlay = BlockchainOverlay::new(&validator.blockchain)?;
         let _ = apply_producer_transaction(
             &overlay,
             block.header.height,
-            wallet.validator.consensus.module.read().await.target,
+            validator.consensus.module.target,
             block.txs.last().unwrap(),
             &mut MerkleTree::new(1),
         )
         .await?;
+        drop(validator);
         let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
         block.header.state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
@@ -149,7 +151,7 @@ impl TestHarness {
         let mut found_owncoins = vec![];
         for holder in holders {
             let wallet = self.holders.get_mut(holder).unwrap();
-            wallet.validator.add_test_blocks(&[block.clone()]).await?;
+            wallet.validator.write().await.add_test_blocks(&[block.clone()]).await?;
             wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
 
             // Attempt to decrypt the note to see if this is a coin for the holder

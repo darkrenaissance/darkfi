@@ -63,7 +63,13 @@ impl DarkfiNode {
 
         let block_height = *params[0].get::<f64>().unwrap() as u32;
 
-        let blocks = match self.validator.blockchain.get_blocks_by_heights(&[block_height]) {
+        let blocks = match self
+            .validator
+            .read()
+            .await
+            .blockchain
+            .get_blocks_by_heights(&[block_height])
+        {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_block", "Failed fetching block by height: {e}");
@@ -109,7 +115,7 @@ impl DarkfiNode {
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let txs = match self.validator.blockchain.transactions.get(&[tx_hash], true) {
+        let txs = match self.validator.read().await.blockchain.transactions.get(&[tx_hash], true) {
             Ok(txs) => txs,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {e}");
@@ -152,7 +158,9 @@ impl DarkfiNode {
             return JsonResponse::new(JsonValue::Array(vec![1_f64.into(), 1_f64.into()]), id).into()
         }
 
-        let Ok(diff) = self.validator.blockchain.blocks.get_difficulty(&[height], true) else {
+        let Ok(diff) =
+            self.validator.read().await.blockchain.blocks.get_difficulty(&[height], true)
+        else {
             return server_error(RpcError::UnknownBlockHeight, id, None)
         };
 
@@ -184,7 +192,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let Ok((height, hash)) = self.validator.blockchain.last() else {
+        let Ok((height, hash)) = self.validator.read().await.blockchain.last() else {
             return JsonError::new(InternalError, None, id).into()
         };
 
@@ -221,7 +229,8 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let Ok(next_block_height) = self.validator.best_fork_next_block_height().await else {
+        let Ok(next_block_height) = self.validator.read().await.best_fork_next_block_height().await
+        else {
             return JsonError::new(InternalError, None, id).into()
         };
 
@@ -247,7 +256,7 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let block_target = self.validator.consensus.module.read().await.target;
+        let block_target = self.validator.read().await.consensus.module.target;
 
         JsonResponse::new(JsonValue::Number(block_target as f64), id).into()
     }
@@ -355,14 +364,16 @@ impl DarkfiNode {
             }
         };
 
-        let Ok(zkas_db) = self.validator.blockchain.contracts.lookup(
-            &self.validator.blockchain.sled_db,
+        let validator = self.validator.read().await;
+        let Ok(zkas_db) = validator.blockchain.contracts.lookup(
+            &validator.blockchain.sled_db,
             &contract_id,
             SMART_CONTRACT_ZKAS_DB_NAME,
         ) else {
             error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Did not find zkas db for ContractId: {contract_id}");
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
         };
+        drop(validator);
 
         let mut ret = vec![];
 
@@ -417,7 +428,7 @@ impl DarkfiNode {
             return server_error(RpcError::ParseError, id, None)
         };
 
-        let Ok(bincode) = self.validator.blockchain.contracts.get(contract_id) else {
+        let Ok(bincode) = self.validator.read().await.blockchain.contracts.get(contract_id) else {
             return server_error(RpcError::ContractWasmNotFound, id, None)
         };
 
@@ -457,8 +468,9 @@ impl DarkfiNode {
 
         let tree_name = params[1].get::<String>().unwrap();
 
-        match self.validator.blockchain.contracts.get_state_tree_records(
-            &self.validator.blockchain.sled_db,
+        let validator = self.validator.read().await;
+        match validator.blockchain.contracts.get_state_tree_records(
+            &validator.blockchain.sled_db,
             &contract_id,
             tree_name,
         ) {
@@ -521,8 +533,9 @@ impl DarkfiNode {
             return server_error(RpcError::ParseError, id, None)
         };
 
-        match self.validator.blockchain.contracts.get_state_tree_value(
-            &self.validator.blockchain.sled_db,
+        let validator = self.validator.read().await;
+        match validator.blockchain.contracts.get_state_tree_value(
+            &validator.blockchain.sled_db,
             &contract_id,
             tree_name,
             &key,

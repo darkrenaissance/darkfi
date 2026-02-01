@@ -231,12 +231,13 @@ pub struct PowRewardV1Zk {
 }
 
 impl PowRewardV1Zk {
-    pub fn new(validator: &ValidatorPtr) -> Result<Self> {
+    pub async fn new(validator: &ValidatorPtr) -> Result<Self> {
         info!(
             target: "darkfid::registry::model::PowRewardV1Zk::new",
             "Generating PowRewardV1 ZkCircuit and ProvingKey...",
         );
 
+        let validator = validator.read().await;
         let (zkbin, _) = validator.blockchain.contracts.get_zkas(
             &validator.blockchain.sled_db,
             &MONEY_CONTRACT_ID,

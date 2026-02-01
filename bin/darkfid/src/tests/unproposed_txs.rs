@@ -60,10 +60,10 @@ async fn simulate_unproposed_txs(
     };
 
     // Create chain test harness using created configuration
-    let blockchain_test_harness = Harness::new(config, false, &ex).await?;
+    let th = Harness::new(config, false, &ex).await?;
 
     // Get validator and generate the fork
-    let validator = blockchain_test_harness.alice.validator.clone();
+    let mut validator = th.alice.validator.write().await;
     validator.consensus.generate_empty_fork().await?;
 
     // Create contract test harness
@@ -87,9 +87,8 @@ async fn simulate_unproposed_txs(
     }
 
     // Obtain fork
-    let mut forks = validator.consensus.forks.write().await;
-    let index = best_fork_index(&forks)?;
-    let best_fork = &mut forks[index];
+    let index = best_fork_index(&validator.consensus.forks)?;
+    let best_fork = &mut validator.consensus.forks[index];
 
     // Retrieve unproposed transactions
     let (tx, total_gas_used, _) = best_fork.unproposed_txs(current_block_height, false).await?;

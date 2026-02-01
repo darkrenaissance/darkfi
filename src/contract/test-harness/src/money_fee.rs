@@ -221,12 +221,12 @@ impl TestHarness {
         // First we verify the fee-less transaction to see how much gas it uses for execution
         // and verification.
         let wallet = self.holders.get(holder).unwrap();
-        let gas_used = wallet
-            .validator
+        let validator = wallet.validator.read().await;
+        let gas_used = validator
             .add_test_transactions(
                 &[tx],
                 block_height,
-                wallet.validator.consensus.module.read().await.target,
+                validator.consensus.module.target,
                 false,
                 false,
             )

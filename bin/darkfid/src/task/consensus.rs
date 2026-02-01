@@ -56,11 +56,12 @@ pub async fn consensus_init_task(
     // Check current canonical blockchain for curruption
     // TODO: create a restore method reverting each block backwards
     //       until its healthy again
-    node.validator.consensus.healthcheck().await?;
+    let mut validator = node.validator.write().await;
+    validator.consensus.healthcheck().await?;
 
     // Check if network genesis is in the future.
     let current = Timestamp::current_time().inner();
-    let genesis = node.validator.consensus.module.read().await.genesis.inner();
+    let genesis = validator.consensus.module.genesis.inner();
     if current < genesis {
         let diff = genesis - current;
         info!(target: "darkfid::task::consensus_init_task", "Waiting for network genesis: {diff} seconds");
@@ -69,7 +70,8 @@ pub async fn consensus_init_task(
 
     // Generate a new fork to be able to extend
     info!(target: "darkfid::task::consensus_init_task", "Generating new empty fork...");
-    node.validator.consensus.generate_empty_fork().await?;
+    validator.consensus.generate_empty_fork().await?;
+    drop(validator);
 
     // Sync blockchain
     let comms_timeout =
@@ -99,7 +101,7 @@ pub async fn consensus_init_task(
         }
         checkpoint
     } else {
-        *node.validator.synced.write().await = true;
+        node.validator.write().await.synced = true;
         None
     };
 
@@ -109,7 +111,7 @@ pub async fn consensus_init_task(
             Ok(_) => return Ok(()),
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
-                *node.validator.synced.write().await = false;
+                node.validator.write().await.synced = false;
                 if !config.skip_sync {
                     loop {
                         match sync_task(&node, checkpoint).await {
@@ -122,7 +124,7 @@ pub async fn consensus_init_task(
                         }
                     }
                 } else {
-                    *node.validator.synced.write().await = true;
+                    node.validator.write().await.synced = true;
                 }
             }
             Err(e) => return Err(e),
@@ -181,7 +183,8 @@ async fn consensus_task(
         subscription.receive().await;
 
         // Check if we can confirm anything and broadcast them
-        let confirmed = match node.validator.confirmation().await {
+        let mut validator = node.validator.write().await;
+        let confirmed = match validator.confirmation().await {
             Ok(f) => f,
             Err(e) => {
                 error!(
@@ -193,7 +196,7 @@ async fn consensus_task(
         };
 
         // Refresh mining registry
-        if let Err(e) = node.registry.refresh(&node.validator).await {
+        if let Err(e) = node.registry.refresh(&validator).await {
             error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
         }
 
@@ -204,9 +207,8 @@ async fn consensus_task(
         // Grab the append lock so no other proposal gets processed
         // while the node is purging all unreferenced contract trees
         // from the database.
-        let append_lock = node.validator.consensus.append_lock.write().await;
-        purge_unreferenced_trees(node).await;
-        drop(append_lock);
+        purge_unreferenced_trees(&validator, &node.registry).await;
+        drop(validator);
 
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {

@@ -35,7 +35,7 @@ use darkfi::{
     },
     system::{ExecutorPtr, StoppableTask, StoppableTaskPtr},
     util::encoding::base64,
-    validator::{consensus::Proposal, ValidatorPtr},
+    validator::{consensus::Proposal, Validator, ValidatorPtr},
     Error, Result,
 };
 use darkfi_sdk::{
@@ -91,14 +91,17 @@ pub struct DarkfiMinersRegistry {
 
 impl DarkfiMinersRegistry {
     /// Initialize a DarkFi node miners registry.
-    pub fn init(network: Network, validator: &ValidatorPtr) -> Result<DarkfiMinersRegistryPtr> {
+    pub async fn init(
+        network: Network,
+        validator: &ValidatorPtr,
+    ) -> Result<DarkfiMinersRegistryPtr> {
         info!(
             target: "darkfid::registry::mod::DarkfiMinersRegistry::init",
             "Initializing a new DarkFi node miners registry..."
         );
 
         // Generate the PowRewardV1 ZK data
-        let powrewardv1_zk = PowRewardV1Zk::new(validator)?;
+        let powrewardv1_zk = PowRewardV1Zk::new(validator).await?;
 
         // Generate the stratum JSON-RPC background task and its
         // connections tracker.
@@ -224,7 +227,7 @@ impl DarkfiMinersRegistry {
     /// not needed.
     async fn create_template(
         &self,
-        validator: &ValidatorPtr,
+        validator: &Validator,
         wallet: &String,
         config: &MinerRewardsRecipientConfig,
     ) -> Result<BlockTemplate> {
@@ -272,7 +275,7 @@ impl DarkfiMinersRegistry {
     /// Register a new miner and create its job.
     pub async fn register_miner(
         &self,
-        validator: &ValidatorPtr,
+        validator: &Validator,
         wallet: &String,
         config: &MinerRewardsRecipientConfig,
     ) -> Result<(String, String, JsonValue, JsonSubscriber)> {
@@ -294,7 +297,7 @@ impl DarkfiMinersRegistry {
     /// Register a new merge miner and create its job.
     pub async fn register_merge_miner(
         &self,
-        validator: &ValidatorPtr,
+        validator: &Validator,
         wallet: &String,
         config: &MinerRewardsRecipientConfig,
     ) -> Result<(String, f64)> {
@@ -316,7 +319,7 @@ impl DarkfiMinersRegistry {
     /// Submit provided block to the provided node.
     pub async fn submit(
         &self,
-        validator: &ValidatorPtr,
+        validator: &mut Validator,
         subscribers: &HashMap<&'static str, JsonSubscriber>,
         p2p_handler: &DarkfidP2pHandlerPtr,
         block: BlockInfo,
@@ -353,7 +356,7 @@ impl DarkfiMinersRegistry {
         block_templates: &mut HashMap<String, BlockTemplate>,
         jobs: &mut HashMap<String, MinerClient>,
         mm_jobs: &mut HashMap<String, String>,
-        validator: &ValidatorPtr,
+        validator: &Validator,
     ) -> Result<()> {
         // Find inactive native jobs and drop them
         let mut dropped_jobs = vec![];
@@ -473,7 +476,7 @@ impl DarkfiMinersRegistry {
 
     /// Refresh outdated jobs in the registry based on provided
     /// validator state.
-    pub async fn refresh(&self, validator: &ValidatorPtr) -> Result<()> {
+    pub async fn refresh(&self, validator: &Validator) -> Result<()> {
         // Grab registry locks
         let submit_lock = self.submit_lock.write().await;
         let mut block_templates = self.block_templates.write().await;

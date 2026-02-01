@@ -136,17 +136,18 @@ fn delayed_tx() -> Result<()> {
 
         // First we verify the fee-less transaction to see how much gas it uses for execution
         // and verification.
-        let gas_used = wallet
-            .validator
+        let validator = wallet.validator.read().await;
+        let gas_used = validator
             .add_test_transactions(
                 &[tx],
                 current_block_height,
-                wallet.validator.consensus.module.read().await.target,
+                validator.consensus.module.target,
                 false,
                 false,
             )
             .await?
             .0;
+        drop(validator);
 
         // Compute the required fee
         let required_fee = compute_fee(&(gas_used + FEE_CALL_GAS));

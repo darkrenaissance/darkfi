@@ -102,7 +102,7 @@ impl DarkfiNode {
         }
 
         // Grab genesis block to use as chain identifier
-        let (_, genesis_hash) = match self.validator.blockchain.genesis() {
+        let (_, genesis_hash) = match self.validator.read().await.blockchain.genesis() {
             Ok(v) => v,
             Err(e) => {
                 error!(
@@ -164,7 +164,8 @@ impl DarkfiNode {
     //     }
     pub async fn xmr_merge_mining_get_aux_block(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
-        if !*self.validator.synced.read().await {
+        let validator = self.validator.read().await;
+        if !validator.synced {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
@@ -225,7 +226,7 @@ impl DarkfiNode {
 
         // Register the new merge miner
         let (job_id, difficulty) =
-            match self.registry.register_merge_miner(&self.validator, wallet, &config).await {
+            match self.registry.register_merge_miner(&validator, wallet, &config).await {
                 Ok(p) => p,
                 Err(e) => {
                     error!(
@@ -285,7 +286,8 @@ impl DarkfiNode {
     // <-- {"jsonrpc":"2.0", "result": {"status": "accepted"}, "id": 1}
     pub async fn xmr_merge_mining_submit_solution(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
-        if !*self.validator.synced.read().await {
+        let mut validator = self.validator.write().await;
+        if !validator.synced {
             return miner_status_response(id, "rejected")
         }
 
@@ -423,7 +425,7 @@ impl DarkfiNode {
 
         // Submit the new block through the registry
         if let Err(e) =
-            self.registry.submit(&self.validator, &self.subscribers, &self.p2p_handler, block).await
+            self.registry.submit(&mut validator, &self.subscribers, &self.p2p_handler, block).await
         {
             error!(
                 target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_submit_solution",
@@ -434,7 +436,7 @@ impl DarkfiNode {
             let mut jobs = self.registry.jobs.write().await;
             if let Err(e) = self
                 .registry
-                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &self.validator)
+                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &validator)
                 .await
             {
                 error!(
@@ -448,6 +450,7 @@ impl DarkfiNode {
             drop(jobs);
             drop(mm_jobs);
             drop(submit_lock);
+            drop(validator);
 
             return miner_status_response(id, "rejected")
         }
@@ -459,6 +462,7 @@ impl DarkfiNode {
         drop(block_templates);
         drop(mm_jobs);
         drop(submit_lock);
+        drop(validator);
 
         miner_status_response(id, "accepted")
     }

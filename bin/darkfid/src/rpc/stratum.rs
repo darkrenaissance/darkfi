@@ -122,7 +122,8 @@ impl DarkfiNode {
     //     }
     pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
-        if !*self.validator.synced.read().await {
+        let validator = self.validator.read().await;
+        if !validator.synced {
             return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
         }
 
@@ -190,7 +191,7 @@ impl DarkfiNode {
             "[RPC-STRATUM] Got login from {wallet} ({agent})",
         );
         let (client_id, job_id, job, publisher) =
-            match self.registry.register_miner(&self.validator, wallet, &config).await {
+            match self.registry.register_miner(&validator, wallet, &config).await {
                 Ok(p) => p,
                 Err(e) => {
                     error!(
@@ -240,7 +241,8 @@ impl DarkfiNode {
     // <-- {"jsonrpc": "2.0", "result": {"status": "OK"}, "id": 1}
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
-        if !*self.validator.synced.read().await {
+        let mut validator = self.validator.write().await;
+        if !validator.synced {
             return miner_status_response(id, "rejected")
         }
 
@@ -328,7 +330,7 @@ impl DarkfiNode {
 
         // Submit the new block through the registry
         if let Err(e) =
-            self.registry.submit(&self.validator, &self.subscribers, &self.p2p_handler, block).await
+            self.registry.submit(&mut validator, &self.subscribers, &self.p2p_handler, block).await
         {
             error!(
                 target: "darkfid::rpc::rpc_stratum::stratum_submit",
@@ -339,7 +341,7 @@ impl DarkfiNode {
             let mut mm_jobs = self.registry.mm_jobs.write().await;
             if let Err(e) = self
                 .registry
-                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &self.validator)
+                .refresh_jobs(&mut block_templates, &mut jobs, &mut mm_jobs, &validator)
                 .await
             {
                 error!(

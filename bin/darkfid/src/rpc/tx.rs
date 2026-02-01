@@ -48,7 +48,8 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !*self.validator.synced.read().await {
+        let mut validator = self.validator.write().await;
+        if !validator.synced {
             error!(target: "darkfid::rpc::tx_simulate", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -72,12 +73,8 @@ impl DarkfiNode {
         };
 
         // Simulate state transition
-        let result = self.validator.append_tx(&tx, false).await;
-        if result.is_err() {
-            error!(
-                target: "darkfid::rpc::tx_simulate", "Failed to validate state transition: {}",
-                result.err().unwrap()
-            );
+        if let Err(e) = validator.append_tx(&tx, false).await {
+            error!(target: "darkfid::rpc::tx_simulate", "Failed to validate state transition: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
@@ -101,7 +98,8 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !*self.validator.synced.read().await {
+        let mut validator = self.validator.write().await;
+        if !validator.synced {
             error!(target: "darkfid::rpc::tx_broadcast", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -125,7 +123,7 @@ impl DarkfiNode {
         };
 
         // We'll perform the state transition check here.
-        if let Err(e) = self.validator.append_tx(&tx, true).await {
+        if let Err(e) = validator.append_tx(&tx, true).await {
             error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
@@ -153,12 +151,13 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !*self.validator.synced.read().await {
+        let validator = self.validator.read().await;
+        if !validator.synced {
             error!(target: "darkfid::rpc::tx_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        let pending_txs = match self.validator.blockchain.get_pending_txs() {
+        let pending_txs = match validator.blockchain.get_pending_txs() {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::tx_pending", "Failed fetching pending txs: {e}");
@@ -188,7 +187,8 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !*self.validator.synced.read().await {
+        let mut validator = self.validator.write().await;
+        if !validator.synced {
             error!(target: "darkfid::rpc::tx_clean_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -200,8 +200,7 @@ impl DarkfiNode {
         let mm_jobs = self.registry.mm_jobs.write().await;
 
         // Purge all unproposed pending transactions from the database
-        let result = self
-            .validator
+        let result = validator
             .consensus
             .purge_unproposed_pending_txs(self.registry.proposed_transactions(&block_templates))
             .await;
@@ -236,7 +235,8 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !*self.validator.synced.read().await {
+        let validator = self.validator.read().await;
+        if !validator.synced {
             error!(target: "darkfid::rpc::tx_calculate_fee", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -263,7 +263,7 @@ impl DarkfiNode {
         let include_fee = params[1].get::<bool>().unwrap();
 
         // Simulate state transition
-        let result = self.validator.calculate_fee(&tx, *include_fee).await;
+        let result = validator.calculate_fee(&tx, *include_fee).await;
         if result.is_err() {
             error!(
                 target: "darkfid::rpc::tx_calculate_fee", "Failed to validate state transition: {}",

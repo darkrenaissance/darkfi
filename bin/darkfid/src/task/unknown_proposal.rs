@@ -35,7 +35,7 @@ use darkfi::{
         pow::PoWModule,
         utils::{best_fork_index, header_rank},
         verification::verify_fork_proposal,
-        ValidatorPtr,
+        Validator, ValidatorPtr,
     },
     Error::{Custom, DatabaseError, PoWInvalidOutHash, ProposalAlreadyExists},
     Result,
@@ -132,7 +132,7 @@ async fn handle_unknown_proposal(node: &DarkfiNodePtr, channel: u32, proposal: &
     };
 
     // Grab last known block to create the request and execute it
-    let last = match node.validator.blockchain.last() {
+    let last = match node.validator.read().await.blockchain.last() {
         Ok(l) => l,
         Err(e) => {
             error!(target: "darkfid::task::handle_unknown_proposal", "Blockchain last retriaval failed: {e}");
@@ -193,7 +193,7 @@ async fn handle_unknown_proposal(node: &DarkfiNodePtr, channel: u32, proposal: &
     // Process response proposals
     for proposal in &response.proposals {
         // Append proposal
-        match node.validator.append_proposal(proposal).await {
+        match node.validator.write().await.append_proposal(proposal).await {
             Ok(()) => { /* Do nothing */ }
             // Skip already existing proposals
             Err(ProposalAlreadyExists) => continue,
@@ -261,10 +261,11 @@ async fn handle_reorg(
         };
 
     // Create a new PoW module from last common height
+    let validator = node.validator.read().await;
     let module = match PoWModule::new(
-        node.validator.consensus.blockchain.clone(),
-        node.validator.consensus.module.read().await.target,
-        node.validator.consensus.module.read().await.fixed_difficulty.clone(),
+        validator.consensus.blockchain.clone(),
+        validator.consensus.module.target,
+        validator.consensus.module.fixed_difficulty.clone(),
         Some(last_common_height + 1),
     ) {
         Ok(m) => m,
@@ -277,7 +278,7 @@ async fn handle_reorg(
     // Grab last common height ranks
     let last_difficulty = match last_common_height {
         0 => {
-            let genesis_timestamp = match node.validator.blockchain.genesis_block() {
+            let genesis_timestamp = match validator.blockchain.genesis_block() {
                 Ok(b) => b.header.timestamp,
                 Err(e) => {
                     error!(target: "darkfid::task::handle_reorg", "Retrieving genesis block failed: {e}");
@@ -286,7 +287,7 @@ async fn handle_reorg(
             };
             BlockDifficulty::genesis(genesis_timestamp)
         }
-        _ => match node.validator.blockchain.blocks.get_difficulty(&[last_common_height], true) {
+        _ => match validator.blockchain.blocks.get_difficulty(&[last_common_height], true) {
             Ok(d) => d[0].clone().unwrap(),
             Err(e) => {
                 error!(target: "darkfid::task::handle_reorg", "Retrieving block difficulty failed: {e}");
@@ -294,6 +295,7 @@ async fn handle_reorg(
             }
         },
     };
+    drop(validator);
 
     // Retrieve the headers of the hashes sequence and its ranking
     let (targets_rank, hashes_rank) = match retrieve_peer_headers_sequence_ranking(
@@ -315,20 +317,19 @@ async fn handle_reorg(
         }
     };
 
-    // Grab the append lock so no other proposal gets processed while
-    // we are verifying the sequence.
-    let append_lock = node.validator.consensus.append_lock.write().await;
+    // Grab the validator lock so no other proposal gets processed
+    // while we are verifying the sequence.
+    let mut validator = node.validator.write().await;
 
     // Check if the sequence ranks higher than our current best fork
-    let mut forks = node.validator.consensus.forks.write().await;
-    let index = match best_fork_index(&forks) {
+    let index = match best_fork_index(&validator.consensus.forks) {
         Ok(i) => i,
         Err(e) => {
             debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
             return false
         }
     };
-    let best_fork = &forks[index];
+    let best_fork = &validator.consensus.forks[index];
     if targets_rank < best_fork.targets_rank ||
         (targets_rank == best_fork.targets_rank && hashes_rank <= best_fork.hashes_rank)
     {
@@ -338,7 +339,7 @@ async fn handle_reorg(
 
     // Generate the peer fork and retrieve its ranking
     let peer_fork = match retrieve_peer_fork(
-        &node.validator,
+        &validator,
         (&last_common_height, &module, &last_difficulty),
         channel,
         proposal,
@@ -368,17 +369,15 @@ async fn handle_reorg(
 
     // Execute the reorg
     info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
-    if let Err(e) = node.validator.blockchain.reset_to_height(last_common_height) {
+    if let Err(e) = validator.blockchain.reset_to_height(last_common_height) {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
         return false
     };
-    *node.validator.consensus.module.write().await = module;
-    *forks = vec![peer_fork];
-    drop(forks);
-    drop(append_lock);
+    validator.consensus.module = module;
+    validator.consensus.forks = vec![peer_fork];
 
     // Check if we can confirm anything and broadcast them
-    let confirmed = match node.validator.confirmation().await {
+    let confirmed = match validator.confirmation().await {
         Ok(f) => f,
         Err(e) => {
             error!(target: "darkfid::task::handle_reorg", "Confirmation failed: {e}");
@@ -387,7 +386,7 @@ async fn handle_reorg(
     };
 
     // Refresh mining registry
-    if let Err(e) = node.registry.refresh(&node.validator).await {
+    if let Err(e) = node.registry.refresh(&validator).await {
         error!(target: "darkfid::task::handle_reorg", "Failed refreshing mining block templates: {e}")
     }
 
@@ -444,7 +443,7 @@ async fn retrieve_peer_header_hashes(
         };
 
         // Check if we know this header
-        let headers = match validator.blockchain.blocks.get_order(&[height], false) {
+        let headers = match validator.read().await.blockchain.blocks.get_order(&[height], false) {
             Ok(h) => h,
             Err(e) => return Err(DatabaseError(format!("Retrieving headers failed: {e}"))),
         };
@@ -587,7 +586,7 @@ async fn retrieve_peer_headers_sequence_ranking(
 /// and its ranking, based on provided last common information.
 async fn retrieve_peer_fork(
     // Validator pointer
-    validator: &ValidatorPtr,
+    validator: &Validator,
     // Last common header height, PoW module and difficulty
     last_common_info: (&u32, &PoWModule, &BlockDifficulty),
     // Peer channel and its communications timeout

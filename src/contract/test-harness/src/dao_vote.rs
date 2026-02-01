@@ -74,7 +74,7 @@ impl TestHarness {
             merkle_path: snapshot_money_merkle_tree.witness(vote_owncoin.leaf_position, 0).unwrap(),
         };
 
-        let block_target = wallet.validator.consensus.module.read().await.target;
+        let block_target = wallet.validator.read().await.consensus.module.target;
         let current_blockwindow = blockwindow(block_height, block_target);
         let call = DaoVoteCall {
             money_null_smt: wallet.money_null_smt_snapshot.as_ref().unwrap(),

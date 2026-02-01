@@ -452,7 +452,8 @@ async fn handle_receive_tip_request(
         debug!(target: "darkfid::proto::protocol_sync::handle_receive_tip_request", "Received request: {request:?}");
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
                 "Node still syncing blockchain"
@@ -548,7 +549,8 @@ async fn handle_receive_header_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_header_request",
                 "Node still syncing blockchain, skipping..."
@@ -599,7 +601,8 @@ async fn handle_receive_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_request",
                 "Node still syncing blockchain, skipping..."
@@ -660,7 +663,8 @@ async fn handle_receive_fork_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
                 "Node still syncing blockchain, skipping..."
@@ -715,7 +719,8 @@ async fn handle_receive_fork_header_hash_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
                 "Node still syncing blockchain, skipping..."
@@ -800,7 +805,8 @@ async fn handle_receive_fork_headers_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
                 "Node still syncing blockchain, skipping..."
@@ -897,7 +903,8 @@ async fn handle_receive_fork_proposals_request(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let validator = validator.read().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
                 "Node still syncing blockchain, skipping..."

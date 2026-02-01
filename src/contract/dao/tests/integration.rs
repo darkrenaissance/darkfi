@@ -436,7 +436,7 @@ async fn execute_transfer_proposal(
 
     // Grab creation blockwindow
     let block_target =
-        th.holders.get_mut(&Holder::Dao).unwrap().validator.consensus.module.read().await.target;
+        th.holders.get_mut(&Holder::Dao).unwrap().validator.read().await.consensus.module.target;
     let creation_blockwindow = blockwindow(*current_block_height, block_target);
 
     let (tx, params, fee_params, proposal_info) = th
@@ -609,7 +609,7 @@ async fn execute_generic_proposal(
 
     // Grab creation blockwindow
     let block_target =
-        th.holders.get_mut(&Holder::Dao).unwrap().validator.consensus.module.read().await.target;
+        th.holders.get_mut(&Holder::Dao).unwrap().validator.read().await.consensus.module.target;
     let creation_blockwindow = blockwindow(*current_block_height, block_target);
 
     let (tx, params, fee_params, proposal_info) = th

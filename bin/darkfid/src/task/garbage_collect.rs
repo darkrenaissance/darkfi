@@ -16,11 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
+use darkfi::{
+    error::TxVerifyFailed,
+    validator::{verification::verify_transactions, Validator},
+    Error, Result,
+};
 use darkfi_sdk::crypto::MerkleTree;
 use tracing::{debug, error, info};
 
-use crate::DarkfiNodePtr;
+use crate::{DarkfiMinersRegistryPtr, DarkfiNodePtr};
 
 /// Async task used for purging erroneous pending transactions from the nodes mempool.
 pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
@@ -28,8 +32,9 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
 
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
+    let validator = node.validator.read().await;
     let (mut last_checked, mut txs) =
-        match node.validator.blockchain.transactions.get_after_pending(0, node.txs_batch_size) {
+        match validator.blockchain.transactions.get_after_pending(0, node.txs_batch_size) {
             Ok(pair) => pair,
             Err(e) => {
                 error!(
@@ -46,6 +51,10 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
         return Ok(())
     }
 
+    // Grab configured target
+    let target = validator.consensus.module.target;
+    drop(validator);
+
     while !txs.is_empty() {
         // Verify each one against current forks
         for tx in txs {
@@ -54,10 +63,10 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
             let mut valid = false;
 
             // Grab a lock over current consensus forks state
-            let mut forks = node.validator.consensus.forks.write().await;
+            let mut validator = node.validator.write().await;
 
             // Iterate over them to verify transaction validity in their overlays
-            for fork in forks.iter_mut() {
+            for fork in validator.consensus.forks.iter_mut() {
                 // Clone forks' overlay
                 let overlay = match fork.overlay.lock().unwrap().full_clone() {
                     Ok(o) => o,
@@ -104,7 +113,7 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 let result = verify_transactions(
                     &overlay,
                     next_block_height,
-                    node.validator.consensus.module.read().await.target,
+                    target,
                     &tx_vec,
                     &mut MerkleTree::new(1),
                     false,
@@ -128,13 +137,10 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 }
             }
 
-            // Drop forks lock
-            drop(forks);
-
             // Remove transaction if its invalid for all the forks
             if !valid {
                 debug!(target: "darkfid::task::garbage_collect_task", "Removing invalid transaction: {tx_hash}");
-                if let Err(e) = node.validator.blockchain.remove_pending_txs_hashes(&[tx_hash]) {
+                if let Err(e) = validator.blockchain.remove_pending_txs_hashes(&[tx_hash]) {
                     error!(
                         target: "darkfid::task::garbage_collect_task",
                         "Removing invalid transaction {tx_hash} failed: {e}"
@@ -146,6 +152,8 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
         // Grab next batch
         (last_checked, txs) = match node
             .validator
+            .read()
+            .await
             .blockchain
             .transactions
             .get_after_pending(last_checked + node.txs_batch_size as u64, node.txs_batch_size)
@@ -167,18 +175,17 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
 
 /// Auxiliary function to purge all unreferenced contract trees from
 /// the node database.
-pub async fn purge_unreferenced_trees(node: &DarkfiNodePtr) {
+pub async fn purge_unreferenced_trees(validator: &Validator, registry: &DarkfiMinersRegistryPtr) {
     // Grab node registry locks
-    let submit_lock = node.registry.submit_lock.write().await;
-    let block_templates = node.registry.block_templates.write().await;
-    let jobs = node.registry.jobs.write().await;
-    let mm_jobs = node.registry.mm_jobs.write().await;
+    let submit_lock = registry.submit_lock.write().await;
+    let block_templates = registry.block_templates.write().await;
+    let jobs = registry.jobs.write().await;
+    let mm_jobs = registry.mm_jobs.write().await;
 
     // Purge all unreferenced contract trees from the database
-    if let Err(e) = node
-        .validator
+    if let Err(e) = validator
         .consensus
-        .purge_unreferenced_trees(&mut node.registry.new_trees(&block_templates))
+        .purge_unreferenced_trees(&mut registry.new_trees(&block_templates))
         .await
     {
         error!(target: "darkfid::task::garbage_collect::purge_unreferenced_trees", "Purging unreferenced contract trees from the database failed: {e}");

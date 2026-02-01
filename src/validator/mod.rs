@@ -78,7 +78,7 @@ pub struct ValidatorConfig {
 }
 
 /// Atomic pointer to validator.
-pub type ValidatorPtr = Arc<Validator>;
+pub type ValidatorPtr = Arc<RwLock<Validator>>;
 
 /// This struct represents a DarkFi validator node.
 pub struct Validator {
@@ -87,7 +87,7 @@ pub struct Validator {
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
     /// Flag signalling if the node is synced
-    pub synced: RwLock<bool>,
+    pub synced: bool,
     /// Flag to enable tx fee verification
     pub verify_fees: bool,
 }
@@ -129,12 +129,12 @@ impl Validator {
         )?;
 
         // Create the actual state
-        let state = Arc::new(Self {
+        let state = Arc::new(RwLock::new(Self {
             blockchain,
             consensus,
-            synced: RwLock::new(false),
+            synced: false,
             verify_fees: config.verify_fees,
-        });
+        }));
 
         info!(target: "validator::new", "Finished initializing validator");
         Ok(state)
@@ -149,9 +149,8 @@ impl Validator {
     /// not needed.
     pub async fn calculate_fee(&self, tx: &Transaction, verify_fee: bool) -> Result<u64> {
         // Grab the best fork to verify against
-        let forks = self.consensus.forks.read().await;
-        let fork = forks[best_fork_index(&forks)?].full_clone()?;
-        drop(forks);
+        let index = best_fork_index(&self.consensus.forks)?;
+        let fork = self.consensus.forks[index].full_clone()?;
 
         // Map of ZK proof verifying keys for the transaction
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -166,7 +165,7 @@ impl Validator {
         let verify_result = verify_transaction(
             &fork.overlay,
             next_block_height,
-            self.consensus.module.read().await.target,
+            self.consensus.module.target,
             tx,
             &mut MerkleTree::new(1),
             &mut vks,
@@ -182,7 +181,7 @@ impl Validator {
     ///
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
-    pub async fn append_tx(&self, tx: &Transaction, write: bool) -> Result<()> {
+    pub async fn append_tx(&mut self, tx: &Transaction, write: bool) -> Result<()> {
         let tx_hash = tx.hash();
 
         // Check if we have already seen this tx
@@ -199,11 +198,8 @@ impl Validator {
         let tx_vec = [tx.clone()];
         let mut valid = false;
 
-        // Grab a lock over current consensus forks state
-        let mut forks = self.consensus.forks.write().await;
-
         // Iterate over node forks to verify transaction validity in their overlays
-        for fork in forks.iter_mut() {
+        for fork in self.consensus.forks.iter_mut() {
             // Clone fork state
             let fork_clone = fork.full_clone()?;
 
@@ -214,7 +210,7 @@ impl Validator {
             let verify_result = verify_transactions(
                 &fork_clone.overlay,
                 next_block_height,
-                self.consensus.module.read().await.target,
+                self.consensus.module.target,
                 &tx_vec,
                 &mut MerkleTree::new(1),
                 self.verify_fees,
@@ -236,9 +232,6 @@ impl Validator {
             }
         }
 
-        // Drop forks lock
-        drop(forks);
-
         // Return error if transaction is not valid for any fork
         if !valid {
             return Err(TxVerifyFailed::ErroneousTxs(tx_vec.to_vec()).into())
@@ -258,7 +251,7 @@ impl Validator {
     ///
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
-    pub async fn purge_pending_txs(&self) -> Result<()> {
+    pub async fn purge_pending_txs(&mut self) -> Result<()> {
         info!(target: "validator::purge_pending_txs", "Removing invalid transactions from pending transactions store...");
 
         // Check if any pending transactions exist
@@ -268,9 +261,6 @@ impl Validator {
             return Ok(())
         }
 
-        // Grab a lock over current consensus forks state
-        let mut forks = self.consensus.forks.write().await;
-
         let mut removed_txs = vec![];
         for tx in pending_txs {
             let tx_hash = tx.hash();
@@ -278,7 +268,7 @@ impl Validator {
             let mut valid = false;
 
             // Iterate over node forks to verify transaction validity in their overlays
-            for fork in forks.iter_mut() {
+            for fork in self.consensus.forks.iter_mut() {
                 // Clone fork state
                 let fork_clone = fork.full_clone()?;
 
@@ -289,7 +279,7 @@ impl Validator {
                 let verify_result = verify_transactions(
                     &fork_clone.overlay,
                     next_block_height,
-                    self.consensus.module.read().await.target,
+                    self.consensus.module.target,
                     &tx_vec,
                     &mut MerkleTree::new(1),
                     self.verify_fees,
@@ -316,9 +306,6 @@ impl Validator {
             }
         }
 
-        // Drop forks lock
-        drop(forks);
-
         if removed_txs.is_empty() {
             info!(target: "validator::purge_pending_txs", "No erroneous transactions found");
             return Ok(())
@@ -329,48 +316,31 @@ impl Validator {
         Ok(())
     }
 
-    /// The node locks its consensus state and tries to append provided proposal.
-    pub async fn append_proposal(&self, proposal: &Proposal) -> Result<()> {
-        // Grab append lock so we restrict concurrent calls of this function
-        let append_lock = self.consensus.append_lock.write().await;
-
-        // Execute append
-        let result = self.consensus.append_proposal(proposal, self.verify_fees).await;
-
-        // Release append lock
-        drop(append_lock);
-
-        result
+    /// The node tries to append provided proposal to its consensus
+    /// state.
+    pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
+        self.consensus.append_proposal(proposal, self.verify_fees).await
     }
 
     /// The node checks if best fork can be confirmed.
     /// If proposals can be confirmed, node appends them to canonical,
     /// and resets the current forks.
-    pub async fn confirmation(&self) -> Result<Vec<BlockInfo>> {
-        // Grab append lock so no new proposals can be appended while
-        // we execute confirmation
-        let append_lock = self.consensus.append_lock.write().await;
-
+    pub async fn confirmation(&mut self) -> Result<Vec<BlockInfo>> {
         info!(target: "validator::confirmation", "Performing confirmation check");
 
         // Grab best fork index that can be confirmed
         let confirmed_fork = match self.consensus.confirmation().await {
             Ok(f) => f,
-            Err(e) => {
-                drop(append_lock);
-                return Err(e)
-            }
+            Err(e) => return Err(e),
         };
         if confirmed_fork.is_none() {
             info!(target: "validator::confirmation", "No proposals can be confirmed");
-            drop(append_lock);
             return Ok(vec![])
         }
 
         // Grab the actual best fork
         let confirmed_fork = confirmed_fork.unwrap();
-        let mut forks = self.consensus.forks.write().await;
-        let fork = &mut forks[confirmed_fork];
+        let fork = &mut self.consensus.forks[confirmed_fork];
 
         // Find the excess over confirmation threshold
         let excess = (fork.proposals.len() - self.consensus.confirmation_threshold) + 1;
@@ -388,7 +358,7 @@ impl Validator {
             fork.overlay.lock().unwrap().get_blocks_by_hash(&confirmed_proposals)?;
 
         // Apply confirmed proposals diffs and update PoW module
-        let mut module = self.consensus.module.write().await;
+        let mut module = self.consensus.module.clone();
         let mut confirmed_txs = vec![];
         let mut state_inverse_diffs_heights = vec![];
         let mut state_inverse_diffs = vec![];
@@ -402,8 +372,7 @@ impl Validator {
             state_inverse_diffs_heights.push(confirmed_blocks[index].header.height);
             state_inverse_diffs.push(diffs[index].inverse());
         }
-        drop(module);
-        drop(forks);
+        self.consensus.module = module;
 
         // Store the block inverse diffs
         self.blockchain
@@ -413,9 +382,6 @@ impl Validator {
         // Reset forks starting with the confirmed blocks
         self.consensus.reset_forks(&confirmed_proposals, &confirmed_fork, &confirmed_txs).await?;
         info!(target: "validator::confirmation", "Confirmation completed!");
-
-        // Release append lock
-        drop(append_lock);
 
         Ok(confirmed_blocks)
     }
@@ -432,7 +398,7 @@ impl Validator {
     /// holding the updated module. Always remember to purge new trees
     /// from the database if not needed.
     pub async fn add_checkpoint_blocks(
-        &self,
+        &mut self,
         blocks: &[BlockInfo],
         headers: &[HeaderHash],
     ) -> Result<()> {
@@ -450,7 +416,7 @@ impl Validator {
         let mut current_hashes_rank = last_difficulty.ranks.hashes_rank;
 
         // Grab current PoW module to validate each block
-        let mut module = self.consensus.module.read().await.clone();
+        let mut module = self.consensus.module.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
@@ -525,11 +491,10 @@ impl Validator {
         self.blockchain.remove_pending_txs(&removed_txs)?;
 
         // Update PoW module
-        *self.consensus.module.write().await = module.clone();
+        self.consensus.module = module.clone();
 
         // Update forks
-        *self.consensus.forks.write().await =
-            vec![Fork::new(self.blockchain.clone(), module).await?];
+        self.consensus.forks = vec![Fork::new(self.blockchain.clone(), module).await?];
 
         Ok(())
     }
@@ -540,7 +505,7 @@ impl Validator {
     /// Note: this function should only be used in tests when we don't
     /// want to perform consensus logic and always remember to purge
     /// new trees from the database if not needed.
-    pub async fn add_test_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+    pub async fn add_test_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         debug!(target: "validator::add_test_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
@@ -553,7 +518,7 @@ impl Validator {
         let mut current_hashes_rank = last_difficulty.ranks.hashes_rank;
 
         // Grab current PoW module to validate each block
-        let mut module = self.consensus.module.read().await.clone();
+        let mut module = self.consensus.module.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
@@ -633,7 +598,7 @@ impl Validator {
         self.purge_pending_txs().await?;
 
         // Update PoW module
-        *self.consensus.module.write().await = module;
+        self.consensus.module = module;
 
         Ok(())
     }
@@ -834,21 +799,17 @@ impl Validator {
 
     /// Auxiliary function to retrieve current best fork next block height.
     pub async fn best_fork_next_block_height(&self) -> Result<u32> {
-        let forks = self.consensus.forks.read().await;
-        let fork = &forks[best_fork_index(&forks)?];
+        let index = best_fork_index(&self.consensus.forks)?;
+        let fork = &self.consensus.forks[index];
         let next_block_height = fork.get_next_block_height()?;
-        drop(forks);
 
         Ok(next_block_height)
     }
 
     /// Auxiliary function to reset the validator blockchain and consensus states
     /// to the provided block height.
-    pub async fn reset_to_height(&self, height: u32) -> Result<()> {
+    pub async fn reset_to_height(&mut self, height: u32) -> Result<()> {
         info!(target: "validator::reset_to_height", "Resetting validator to height: {height}");
-        // Grab append lock so no new proposals can be appended while we execute a reset
-        let append_lock = self.consensus.append_lock.write().await;
-
         // Reset our databasse to provided height
         self.blockchain.reset_to_height(height)?;
 
@@ -857,9 +818,6 @@ impl Validator {
 
         // Purge current forks
         self.consensus.purge_forks().await?;
-
-        // Release append lock
-        drop(append_lock);
 
         info!(target: "validator::reset_to_height", "Validator reset successfully!");
 
@@ -875,9 +833,6 @@ impl Validator {
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
         info!(target: "validator::rebuild_block_difficulties", "Rebuilding validator block difficulties...");
-        // Grab append lock so no new proposals can be appended while we execute the rebuild
-        let append_lock = self.consensus.append_lock.write().await;
-
         // Clear the block difficulties tree
         self.blockchain.blocks.difficulty.clear()?;
 
@@ -944,9 +899,6 @@ impl Validator {
 
         // Flush the database
         self.blockchain.sled_db.flush()?;
-
-        // Release append lock
-        drop(append_lock);
 
         info!(target: "validator::rebuild_block_difficulties", "Validator block difficulties rebuilt successfully!");
 

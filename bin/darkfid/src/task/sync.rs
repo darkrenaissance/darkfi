@@ -46,27 +46,29 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     let block_sub = node.subscribers.get("blocks").unwrap();
 
     // Grab last known block header, including existing pending sync ones
-    let mut last = node.validator.blockchain.last()?;
+    let validator = node.validator.read().await;
+    let mut last = validator.blockchain.last()?;
 
     // If checkpoint is not reached, purge headers and start syncing from scratch
     if let Some(checkpoint) = checkpoint {
         if checkpoint.0 > last.0 {
-            node.validator.blockchain.headers.remove_all_sync()?;
+            validator.blockchain.headers.remove_all_sync()?;
         }
     }
 
     // Check sync headers first record is the next one
-    if let Some(next) = node.validator.blockchain.headers.get_first_sync()? {
+    if let Some(next) = validator.blockchain.headers.get_first_sync()? {
         if next.height == last.0 + 1 {
             // Grab last sync header to continue syncing from
-            if let Some(last_sync) = node.validator.blockchain.headers.get_last_sync()? {
+            if let Some(last_sync) = validator.blockchain.headers.get_last_sync()? {
                 last = (last_sync.height, last_sync.hash());
             }
         } else {
             // Purge headers and start syncing from scratch
-            node.validator.blockchain.headers.remove_all_sync()?;
+            validator.blockchain.headers.remove_all_sync()?;
         }
     }
+    drop(validator);
     info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
 
     // Grab the most common tip and the corresponding peers
@@ -76,7 +78,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     // If the most common tip is the empty tip, we skip syncing
     // further and will reorg if needed when a new proposal arrives.
     if common_tip_hash == [0u8; 32] {
-        *node.validator.synced.write().await = true;
+        node.validator.write().await.synced = true;
         info!(target: "darkfid::task::sync_task", "Blockchain synced!");
         return Ok(())
     }
@@ -123,7 +125,8 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     sync_best_fork(node, &common_tip_peers, &last.1).await;
 
     // Perform confirmation
-    let confirmed = node.validator.confirmation().await?;
+    let mut validator = node.validator.write().await;
+    let confirmed = validator.confirmation().await?;
     if !confirmed.is_empty() {
         // Notify subscriber
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
@@ -133,7 +136,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
         block_sub.notify(JsonValue::Array(notif_blocks)).await;
     }
 
-    *node.validator.synced.write().await = true;
+    validator.synced = true;
     info!(target: "darkfid::task::sync_task", "Blockchain synced!");
     Ok(())
 }
@@ -301,6 +304,7 @@ async fn retrieve_headers(
     // We subtract 1 since tip_height is increased by one
     let total = tip_height - last_known - 1;
     let mut last_tip_height = tip_height;
+    let validator = node.validator.read().await;
     'headers_loop: loop {
         // Check if all our peers are failing
         let mut count = 0;
@@ -356,14 +360,14 @@ async fn retrieve_headers(
             }
 
             // Store the headers
-            node.validator.blockchain.headers.insert_sync(&response_headers)?;
+            validator.blockchain.headers.insert_sync(&response_headers)?;
             last_tip_height = response_headers[0].height;
-            info!(target: "darkfid::task::sync::retrieve_headers", "Headers received: {}/{total}", node.validator.blockchain.headers.len_sync());
+            info!(target: "darkfid::task::sync::retrieve_headers", "Headers received: {}/{total}", validator.blockchain.headers.len_sync());
         }
     }
 
     // Check if we retrieved any new headers
-    if node.validator.blockchain.headers.is_empty_sync() {
+    if validator.blockchain.headers.is_empty_sync() {
         return Ok(());
     }
 
@@ -373,19 +377,19 @@ async fn retrieve_headers(
     // to not load them all in memory.
     info!(target: "darkfid::task::sync::retrieve_headers", "Verifying headers sequence...");
     let mut verified_headers = 0;
-    let total = node.validator.blockchain.headers.len_sync();
+    let total = validator.blockchain.headers.len_sync();
     // First we verify the first `BATCH` sequence, using the last known header
     // as the first sync header previous.
-    let last_known = node.validator.consensus.best_fork_last_header().await?;
-    let mut headers = node.validator.blockchain.headers.get_after_sync(0, BATCH)?;
+    let last_known = validator.consensus.best_fork_last_header().await?;
+    let mut headers = validator.blockchain.headers.get_after_sync(0, BATCH)?;
     if headers[0].previous != last_known.1 || headers[0].height != last_known.0 + 1 {
-        node.validator.blockchain.headers.remove_all_sync()?;
+        validator.blockchain.headers.remove_all_sync()?;
         return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
     }
     verified_headers += 1;
     for (index, header) in headers[1..].iter().enumerate() {
         if header.previous != headers[index].hash() || header.height != headers[index].height + 1 {
-            node.validator.blockchain.headers.remove_all_sync()?;
+            validator.blockchain.headers.remove_all_sync()?;
             return Err(Error::BlockIsInvalid(header.hash().as_string()))
         }
         verified_headers += 1;
@@ -394,12 +398,12 @@ async fn retrieve_headers(
 
     // Now we verify the rest sequences
     let mut last_checked = headers.last().unwrap().clone();
-    headers = node.validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
+    headers = validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
     while !headers.is_empty() {
         if headers[0].previous != last_checked.hash() ||
             headers[0].height != last_checked.height + 1
         {
-            node.validator.blockchain.headers.remove_all_sync()?;
+            validator.blockchain.headers.remove_all_sync()?;
             return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
         }
         verified_headers += 1;
@@ -407,13 +411,13 @@ async fn retrieve_headers(
             if header.previous != headers[index].hash() ||
                 header.height != headers[index].height + 1
             {
-                node.validator.blockchain.headers.remove_all_sync()?;
+                validator.blockchain.headers.remove_all_sync()?;
                 return Err(Error::BlockIsInvalid(header.hash().as_string()))
             }
             verified_headers += 1;
         }
         last_checked = headers.last().unwrap().clone();
-        headers = node.validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
+        headers = validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
         info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {verified_headers}/{total}");
     }
 
@@ -444,7 +448,8 @@ async fn retrieve_blocks(
     }
 
     let mut received_blocks = 0;
-    let total = node.validator.blockchain.headers.len_sync();
+    let mut validator = node.validator.write().await;
+    let total = validator.blockchain.headers.len_sync();
     'blocks_loop: loop {
         // Check if all our peers are failing
         let mut count = 0;
@@ -469,7 +474,7 @@ async fn retrieve_blocks(
             };
 
             // Grab first `BATCH` headers
-            let headers = node.validator.blockchain.headers.get_after_sync(0, BATCH)?;
+            let headers = validator.blockchain.headers.get_after_sync(0, BATCH)?;
             if headers.is_empty() {
                 break 'blocks_loop
             }
@@ -508,16 +513,14 @@ async fn retrieve_blocks(
             received_blocks += response.blocks.len();
             if checkpoint_blocks {
                 if let Err(e) =
-                    node.validator.add_checkpoint_blocks(&response.blocks, &headers_hashes).await
+                    validator.add_checkpoint_blocks(&response.blocks, &headers_hashes).await
                 {
                     debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while adding checkpoint blocks: {e}");
                     continue
                 };
             } else {
                 for block in &response.blocks {
-                    if let Err(e) =
-                        node.validator.append_proposal(&Proposal::new(block.clone())).await
-                    {
+                    if let Err(e) = validator.append_proposal(&Proposal::new(block.clone())).await {
                         debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
                         continue 'peers_loop
                     };
@@ -526,7 +529,7 @@ async fn retrieve_blocks(
             last_received = (*synced_headers.last().unwrap(), *headers_hashes.last().unwrap());
 
             // Remove synced headers
-            node.validator.blockchain.headers.remove_sync(&synced_headers)?;
+            validator.blockchain.headers.remove_sync(&synced_headers)?;
 
             if checkpoint_blocks {
                 // Notify subscriber
@@ -540,7 +543,7 @@ async fn retrieve_blocks(
                 block_sub.notify(JsonValue::Array(notif_blocks)).await;
             } else {
                 // Perform confirmation for received blocks
-                let confirmed = node.validator.confirmation().await?;
+                let confirmed = validator.confirmation().await?;
                 if !confirmed.is_empty() {
                     // Notify subscriber
                     let mut notif_blocks = Vec::with_capacity(confirmed.len());
@@ -596,8 +599,9 @@ async fn sync_best_fork(node: &DarkfiNodePtr, peers: &[ChannelPtr], last_tip: &H
 
     // Verify and store retrieved proposals
     debug!(target: "darkfid::task::sync::sync_best_fork", "Processing received proposals");
+    let mut validator = node.validator.write().await;
     for proposal in &response.proposals {
-        if let Err(e) = node.validator.append_proposal(proposal).await {
+        if let Err(e) = validator.append_proposal(proposal).await {
             debug!(target: "darkfid::task::sync::sync_best_fork", "Error while appending proposal: {e}");
             return
         };

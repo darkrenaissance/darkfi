@@ -59,7 +59,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let th = Harness::new(config, true, &ex).await?;
 
     // Generate a fork to create new blocks
-    let mut fork = th.alice.validator.consensus.forks.read().await[0].full_clone()?;
+    let mut fork = th.alice.validator.read().await.consensus.forks[0].full_clone()?;
 
     // Generate next blocks
     let block1 = th.generate_next_block(&mut fork).await?;
@@ -76,31 +76,22 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Extend current fork sequence
     let block5 = th.generate_next_block(&mut fork).await?;
     // Create a new fork extending canonical
-    fork = Fork::new(
-        th.alice.validator.consensus.blockchain.clone(),
-        th.alice.validator.consensus.module.read().await.clone(),
-    )
-    .await?;
+    let alice = th.alice.validator.read().await;
+    fork = Fork::new(alice.consensus.blockchain.clone(), alice.consensus.module.clone()).await?;
     // Append block3 to fork and generate the next one
-    verify_block(
-        &fork.overlay,
-        &fork.diffs,
-        &fork.module,
-        &block3,
-        &block2,
-        th.alice.validator.verify_fees,
-    )
-    .await?;
+    verify_block(&fork.overlay, &fork.diffs, &fork.module, &block3, &block2, alice.verify_fees)
+        .await?;
+    drop(alice);
     let block6 = th.generate_next_block(&mut fork).await?;
     // Add them to nodes
     th.add_blocks(&[block5, block6]).await?;
 
     // Grab current best fork index
-    let forks = th.alice.validator.consensus.forks.read().await;
+    let alice = th.alice.validator.read().await;
     // If index corresponds to the small fork, confirmation
     // did not occur, as it's size is not over the threshold.
-    let small_best = best_fork_index(&forks)? == 1;
-    drop(forks);
+    let small_best = best_fork_index(&alice.consensus.forks)? == 1;
+    drop(alice);
     if small_best {
         // Nodes must have one fork with 3 blocks and one with 2 blocks
         th.validate_fork_chains(2, vec![3, 2]).await;
@@ -125,19 +116,18 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     )
     .await?;
     // Verify node synced
-    let alice = &th.alice.validator;
-    let charlie = &charlie.validator;
-    assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
-    assert!(charlie.blockchain.headers.is_empty_sync());
+    let alice = th.alice.validator.read().await;
+    let charlie_validator = charlie.validator.read().await;
+    assert_eq!(alice.blockchain.len(), charlie_validator.blockchain.len());
+    assert!(charlie_validator.blockchain.headers.is_empty_sync());
     // Node must have just the best fork
-    let forks = alice.consensus.forks.read().await;
-    let best_fork = &forks[best_fork_index(&forks)?];
-    let charlie_forks = charlie.consensus.forks.read().await;
-    assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
-    assert_eq!(charlie_forks[0].diffs.len(), best_fork.diffs.len());
-    drop(forks);
-    drop(charlie_forks);
+    let index = best_fork_index(&alice.consensus.forks)?;
+    let best_fork = &alice.consensus.forks[index];
+    assert_eq!(charlie_validator.consensus.forks.len(), 1);
+    assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), best_fork.proposals.len());
+    assert_eq!(charlie_validator.consensus.forks[0].diffs.len(), best_fork.diffs.len());
+    drop(charlie_validator);
+    drop(alice);
 
     // Extend the small fork sequence and add it to nodes
     th.add_blocks(&[th.generate_next_block(&mut fork).await?]).await?;
@@ -145,23 +135,23 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Nodes must have two forks with 2 blocks each
     th.validate_fork_chains(2, vec![2, 2]).await;
     // Check charlie has the correct forks
-    let charlie_forks = charlie.consensus.forks.read().await;
+    let charlie_validator = charlie.validator.read().await;
     if small_best {
         // If Charlie already had the small fork as its best,
         // it will have a single fork with 3 blocks.
-        assert_eq!(charlie_forks.len(), 1);
-        assert_eq!(charlie_forks[0].proposals.len(), 3);
-        assert_eq!(charlie_forks[0].diffs.len(), 3);
+        assert_eq!(charlie_validator.consensus.forks.len(), 1);
+        assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), 3);
+        assert_eq!(charlie_validator.consensus.forks[0].diffs.len(), 3);
     } else {
         // Charlie didn't originaly have the fork, but it
         // should be synced when its proposal was received
-        assert_eq!(charlie_forks.len(), 2);
-        assert_eq!(charlie_forks[0].proposals.len(), 2);
-        assert_eq!(charlie_forks[0].diffs.len(), 2);
-        assert_eq!(charlie_forks[1].proposals.len(), 2);
-        assert_eq!(charlie_forks[1].diffs.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[0].diffs.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[1].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[1].diffs.len(), 2);
     }
-    drop(charlie_forks);
+    drop(charlie_validator);
 
     // Since the don't know if the second fork was the best,
     // we extend it until it becomes best and a confirmation
@@ -169,34 +159,34 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     loop {
         th.add_blocks(&[th.generate_next_block(&mut fork).await?]).await?;
         // Check if confirmation occured
-        if th.alice.validator.blockchain.len() > 4 {
+        if th.alice.validator.read().await.blockchain.len() > 4 {
             break
         }
     }
 
     // Nodes must have executed confirmation, so we validate their chains
     th.validate_chains(4 + (fork.proposals.len() - 2)).await?;
-    let bob = &th.bob.validator;
-    let last = alice.blockchain.last()?.1;
+    let last = th.alice.validator.read().await.blockchain.last()?.1;
     assert_eq!(last, fork.proposals[fork.proposals.len() - 3]);
-    assert_eq!(last, bob.blockchain.last()?.1);
+    assert_eq!(last, th.bob.validator.read().await.blockchain.last()?.1);
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
-    let last_proposal = alice.consensus.forks.read().await[0].proposals[1];
+    let alice = &th.alice.validator.read().await;
+    let last_proposal = alice.consensus.forks[0].proposals[1];
     assert_eq!(last_proposal, *fork.proposals.last().unwrap());
-    assert_eq!(last_proposal, bob.consensus.forks.read().await[0].proposals[1]);
+    assert_eq!(last_proposal, th.bob.validator.read().await.consensus.forks[0].proposals[1]);
 
     // Same for Charlie
+    let mut charlie = charlie.validator.write().await;
     charlie.confirmation().await?;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     assert!(charlie.blockchain.headers.is_empty_sync());
     assert_eq!(last, charlie.blockchain.last()?.1);
-    let charlie_forks = charlie.consensus.forks.read().await;
-    assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), 2);
-    assert_eq!(charlie_forks[0].diffs.len(), 2);
-    assert_eq!(last_proposal, charlie_forks[0].proposals[1]);
+    assert_eq!(charlie.consensus.forks.len(), 1);
+    assert_eq!(charlie.consensus.forks[0].proposals.len(), 2);
+    assert_eq!(charlie.consensus.forks[0].diffs.len(), 2);
+    assert_eq!(last_proposal, charlie.consensus.forks[0].proposals[1]);
 
     // Thanks for reading
     Ok(())

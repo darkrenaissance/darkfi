@@ -22,7 +22,6 @@ use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use darkfi_serial::{async_trait, deserialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 use sled_overlay::{database::SledDbOverlayStateDiff, sled::IVec};
-use smol::lock::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -51,11 +50,9 @@ pub struct Consensus {
     /// Fork size(length) after which it can be confirmed
     pub confirmation_threshold: usize,
     /// Fork chains containing block proposals
-    pub forks: RwLock<Vec<Fork>>,
+    pub forks: Vec<Fork>,
     /// Canonical blockchain PoW module state
-    pub module: RwLock<PoWModule>,
-    /// Lock to restrict when proposals appends can happen
-    pub append_lock: RwLock<()>,
+    pub module: PoWModule,
 }
 
 impl Consensus {
@@ -66,50 +63,37 @@ impl Consensus {
         pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
-        let forks = RwLock::new(vec![]);
+        let module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, None)?;
 
-        let module = RwLock::new(PoWModule::new(
-            blockchain.clone(),
-            pow_target,
-            pow_fixed_difficulty,
-            None,
-        )?);
-
-        let append_lock = RwLock::new(());
-
-        Ok(Self { blockchain, confirmation_threshold, forks, module, append_lock })
+        Ok(Self { blockchain, confirmation_threshold, forks: vec![], module })
     }
 
     /// Generate a new empty fork.
-    pub async fn generate_empty_fork(&self) -> Result<()> {
+    pub async fn generate_empty_fork(&mut self) -> Result<()> {
         debug!(target: "validator::consensus::generate_empty_fork", "Generating new empty fork...");
-        let mut forks = self.forks.write().await;
         // Check if we already have an empty fork
-        for fork in forks.iter() {
+        for fork in &self.forks {
             if fork.proposals.is_empty() {
                 debug!(target: "validator::consensus::generate_empty_fork", "An empty fork already exists.");
-                drop(forks);
                 return Ok(())
             }
         }
-        let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
-        forks.push(fork);
-        drop(forks);
+        let fork = Fork::new(self.blockchain.clone(), self.module.clone()).await?;
+        self.forks.push(fork);
         debug!(target: "validator::consensus::generate_empty_fork", "Fork generated!");
+
         Ok(())
     }
 
     /// Given a proposal, the node verifys it and finds which fork it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain is created.
-    pub async fn append_proposal(&self, proposal: &Proposal, verify_fees: bool) -> Result<()> {
+    pub async fn append_proposal(&mut self, proposal: &Proposal, verify_fees: bool) -> Result<()> {
         debug!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
 
         // Check if proposal already exists
-        let lock = self.forks.read().await;
-        for fork in lock.iter() {
+        for fork in &self.forks {
             for p in fork.proposals.iter().rev() {
                 if p == &proposal.hash {
-                    drop(lock);
                     debug!(target: "validator::consensus::append_proposal", "Proposal {} already exists", proposal.hash);
                     return Err(Error::ProposalAlreadyExists)
                 }
@@ -120,12 +104,10 @@ impl Consensus {
             self.blockchain.blocks.get_order(&[proposal.block.header.height], true)
         {
             if canonical_headers[0].unwrap() == proposal.hash {
-                drop(lock);
                 debug!(target: "validator::consensus::append_proposal", "Proposal {} already exists", proposal.hash);
                 return Err(Error::ProposalAlreadyExists)
             }
         }
-        drop(lock);
 
         // Verify proposal and grab corresponding fork
         let (mut fork, index) = verify_proposal(self, proposal, verify_fees).await?;
@@ -138,21 +120,20 @@ impl Consensus {
 
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
-        let mut lock = self.forks.write().await;
         match index {
             Some(i) => {
-                if i < lock.len() && lock[i].proposals == fork.proposals[..fork.proposals.len() - 1]
+                if i < self.forks.len() &&
+                    self.forks[i].proposals == fork.proposals[..fork.proposals.len() - 1]
                 {
-                    lock[i] = fork;
+                    self.forks[i] = fork;
                 } else {
-                    lock.push(fork);
+                    self.forks.push(fork);
                 }
             }
             None => {
-                lock.push(fork);
+                self.forks.push(fork);
             }
         }
-        drop(lock);
 
         info!(target: "validator::consensus::append_proposal", "Appended proposal {}", proposal.hash);
 
@@ -165,11 +146,8 @@ impl Consensus {
     /// a new fork is created. Additionally, we return the fork index if a new fork
     /// was not created, so caller can replace the fork.
     pub async fn find_extended_fork(&self, proposal: &Proposal) -> Result<(Fork, Option<usize>)> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Check if proposal extends any fork
-        let found = find_extended_fork_index(&forks, proposal);
+        let found = find_extended_fork_index(&self.forks, proposal);
         if found.is_err() {
             if let Err(Error::ProposalAlreadyExists) = found {
                 return Err(Error::ProposalAlreadyExists)
@@ -184,26 +162,26 @@ impl Consensus {
             }
 
             // Check if we have an empty fork to use
-            for (f_index, fork) in forks.iter().enumerate() {
+            for (f_index, fork) in self.forks.iter().enumerate() {
                 if fork.proposals.is_empty() {
-                    return Ok((forks[f_index].full_clone()?, Some(f_index)))
+                    return Ok((self.forks[f_index].full_clone()?, Some(f_index)))
                 }
             }
 
             // Generate a new fork extending canonical
-            let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+            let fork = Fork::new(self.blockchain.clone(), self.module.clone()).await?;
             return Ok((fork, None))
         }
 
         let (f_index, p_index) = found.unwrap();
-        let original_fork = &forks[f_index];
+        let original_fork = &self.forks[f_index];
         // Check if proposal extends fork at last proposal
         if p_index == (original_fork.proposals.len() - 1) {
             return Ok((original_fork.full_clone()?, Some(f_index)))
         }
 
         // Rebuild fork
-        let mut fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+        let mut fork = Fork::new(self.blockchain.clone(), self.module.clone()).await?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
         fork.diffs = original_fork.diffs[..p_index + 1].to_vec();
 
@@ -227,9 +205,6 @@ impl Consensus {
             fork.hashes_rank += hash_distance_sq;
         }
 
-        // Drop forks lock
-        drop(forks);
-
         Ok((fork, None))
     }
 
@@ -245,20 +220,15 @@ impl Consensus {
         debug!(target: "validator::consensus::confirmation", "Started confirmation check");
 
         // Grab best fork
-        let forks = self.forks.read().await;
-        let index = best_fork_index(&forks)?;
-        let fork = &forks[index];
+        let index = best_fork_index(&self.forks)?;
+        let fork = &self.forks[index];
 
         // Check its length
         let length = fork.proposals.len();
         if length < self.confirmation_threshold {
             debug!(target: "validator::consensus::confirmation", "Nothing to confirme yet, best fork size: {length}");
-            drop(forks);
             return Ok(None)
         }
-
-        // Drop forks lock
-        drop(forks);
 
         Ok(Some(index))
     }
@@ -270,12 +240,9 @@ impl Consensus {
         height: u32,
         fork_header: &HeaderHash,
     ) -> Result<Option<HeaderHash>> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Find the fork containing the provided header
         let mut found = None;
-        'outer: for (index, fork) in forks.iter().enumerate() {
+        'outer: for (index, fork) in self.forks.iter().enumerate() {
             for p in fork.proposals.iter().rev() {
                 if p == fork_header {
                     found = Some(index);
@@ -284,16 +251,13 @@ impl Consensus {
             }
         }
         if found.is_none() {
-            drop(forks);
             return Ok(None)
         }
         let index = found.unwrap();
 
         // Grab header if it exists
-        let header = forks[index].overlay.lock().unwrap().blocks.get_order(&[height], false)?[0];
-
-        // Drop forks lock
-        drop(forks);
+        let header =
+            self.forks[index].overlay.lock().unwrap().blocks.get_order(&[height], false)?[0];
 
         Ok(header)
     }
@@ -306,12 +270,9 @@ impl Consensus {
         headers: &[HeaderHash],
         fork_header: &HeaderHash,
     ) -> Result<Vec<Header>> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Find the fork containing the provided header
         let mut found = None;
-        'outer: for (index, fork) in forks.iter().enumerate() {
+        'outer: for (index, fork) in self.forks.iter().enumerate() {
             for p in fork.proposals.iter().rev() {
                 if p == fork_header {
                     found = Some(index);
@@ -319,16 +280,10 @@ impl Consensus {
                 }
             }
         }
-        let Some(index) = found else {
-            drop(forks);
-            return Ok(vec![])
-        };
+        let Some(index) = found else { return Ok(vec![]) };
 
         // Grab headers
-        let headers = forks[index].overlay.lock().unwrap().get_headers_by_hash(headers)?;
-
-        // Drop forks lock
-        drop(forks);
+        let headers = self.forks[index].overlay.lock().unwrap().get_headers_by_hash(headers)?;
 
         Ok(headers)
     }
@@ -341,12 +296,9 @@ impl Consensus {
         headers: &[HeaderHash],
         fork_header: &HeaderHash,
     ) -> Result<Vec<Proposal>> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Find the fork containing the provided header
         let mut found = None;
-        'outer: for (index, fork) in forks.iter().enumerate() {
+        'outer: for (index, fork) in self.forks.iter().enumerate() {
             for p in fork.proposals.iter().rev() {
                 if p == fork_header {
                     found = Some(index);
@@ -354,20 +306,14 @@ impl Consensus {
                 }
             }
         }
-        let Some(index) = found else {
-            drop(forks);
-            return Ok(vec![])
-        };
+        let Some(index) = found else { return Ok(vec![]) };
 
         // Grab proposals
-        let blocks = forks[index].overlay.lock().unwrap().get_blocks_by_hash(headers)?;
+        let blocks = self.forks[index].overlay.lock().unwrap().get_blocks_by_hash(headers)?;
         let mut proposals = Vec::with_capacity(blocks.len());
         for block in blocks {
             proposals.push(Proposal::new(block));
         }
-
-        // Drop forks lock
-        drop(forks);
 
         Ok(proposals)
     }
@@ -382,9 +328,6 @@ impl Consensus {
         fork_tip: Option<HeaderHash>,
         limit: u32,
     ) -> Result<Vec<Proposal>> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Create return vector
         let mut proposals = vec![];
 
@@ -392,7 +335,7 @@ impl Consensus {
         let index = match fork_tip {
             Some(fork_tip) => {
                 let mut found = None;
-                'outer: for (index, fork) in forks.iter().enumerate() {
+                'outer: for (index, fork) in self.forks.iter().enumerate() {
                     for p in fork.proposals.iter().rev() {
                         if p == &fork_tip {
                             found = Some(index);
@@ -401,25 +344,23 @@ impl Consensus {
                     }
                 }
                 if found.is_none() {
-                    drop(forks);
                     return Ok(proposals)
                 }
                 found.unwrap()
             }
-            None => best_fork_index(&forks)?,
+            None => best_fork_index(&self.forks)?,
         };
 
         // Check tip exists
-        let Ok(existing_tips) = forks[index].overlay.lock().unwrap().get_blocks_by_hash(&[tip])
+        let Ok(existing_tips) =
+            self.forks[index].overlay.lock().unwrap().get_blocks_by_hash(&[tip])
         else {
-            drop(forks);
             return Ok(proposals)
         };
 
         // Check tip is not far behind
-        let last_block_height = forks[index].overlay.lock().unwrap().last()?.0;
+        let last_block_height = self.forks[index].overlay.lock().unwrap().last()?.0;
         if last_block_height - existing_tips[0].header.height >= limit {
-            drop(forks);
             return Ok(proposals)
         }
 
@@ -429,14 +370,14 @@ impl Consensus {
         for block in blocks {
             proposals.push(Proposal::new(block));
         }
-        let blocks =
-            forks[index].overlay.lock().unwrap().get_blocks_by_hash(&forks[index].proposals)?;
+        let blocks = self.forks[index]
+            .overlay
+            .lock()
+            .unwrap()
+            .get_blocks_by_hash(&self.forks[index].proposals)?;
         for block in blocks {
             proposals.push(Proposal::new(block));
         }
-
-        // Drop forks lock
-        drop(forks);
 
         Ok(proposals)
     }
@@ -445,17 +386,15 @@ impl Consensus {
     /// based on next block height.
     /// If no forks exist, returns the canonical key.
     pub async fn current_mining_randomx_key(&self) -> Result<HeaderHash> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Grab next block height and current keys.
         // If no forks exist, use canonical keys
-        let (next_block_height, rx_keys) = if forks.is_empty() {
+        let (next_block_height, rx_keys) = if self.forks.is_empty() {
             let (next_block_height, _) = self.blockchain.last()?;
-            (next_block_height + 1, self.module.read().await.darkfi_rx_keys)
+            (next_block_height + 1, self.module.darkfi_rx_keys)
         } else {
             // Grab best fork and its last proposal
-            let fork = &forks[best_fork_index(&forks)?];
+            let index = best_fork_index(&self.forks)?;
+            let fork = &self.forks[index];
             let last = fork.last_proposal()?;
             (last.block.header.height + 1, fork.module.darkfi_rx_keys)
         };
@@ -474,29 +413,24 @@ impl Consensus {
 
     /// Auxiliary function to grab best current fork full clone.
     pub async fn best_current_fork(&self) -> Result<Fork> {
-        let forks = self.forks.read().await;
-        let index = best_fork_index(&forks)?;
-        forks[index].full_clone()
+        let index = best_fork_index(&self.forks)?;
+        self.forks[index].full_clone()
     }
 
     /// Auxiliary function to retrieve current best fork last header.
     /// If no forks exist, grab the last header from canonical.
     pub async fn best_fork_last_header(&self) -> Result<(u32, HeaderHash)> {
-        // Grab a lock over current forks
-        let forks = self.forks.read().await;
-
         // Check if node has any forks
-        if forks.is_empty() {
-            drop(forks);
+        if self.forks.is_empty() {
             return self.blockchain.last()
         }
 
         // Grab best fork
-        let fork = &forks[best_fork_index(&forks)?];
+        let index = best_fork_index(&self.forks)?;
+        let fork = &self.forks[index];
 
         // Grab its last header
         let last = fork.last_proposal()?;
-        drop(forks);
         Ok((last.block.header.height, last.hash))
     }
 
@@ -510,14 +444,11 @@ impl Consensus {
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
     pub async fn reset_forks(
-        &self,
+        &mut self,
         prefix: &[HeaderHash],
         confirmed_fork_index: &usize,
         confirmed_txs: &[Transaction],
     ) -> Result<()> {
-        // Grab a lock over current forks
-        let mut forks = self.forks.write().await;
-
         // Find all the forks that start with the provided prefix,
         // excluding confirmed fork index, and remove their prefixed
         // proposals, and their corresponding diffs. If the fork is not
@@ -525,10 +456,10 @@ impl Consensus {
         let excess = prefix.len();
         let prefix_last_index = excess - 1;
         let prefix_last = prefix.last().unwrap();
-        let mut keep = vec![true; forks.len()];
+        let mut keep = vec![true; self.forks.len()];
         let confirmed_txs_hashes: Vec<TransactionHash> =
             confirmed_txs.iter().map(|tx| tx.hash()).collect();
-        for (index, fork) in forks.iter_mut().enumerate() {
+        for (index, fork) in self.forks.iter_mut().enumerate() {
             if &index == confirmed_fork_index {
                 // Remove confirmed proposals txs from fork's mempool
                 fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
@@ -559,49 +490,40 @@ impl Consensus {
 
         // Drop invalid forks
         let mut iter = keep.iter();
-        forks.retain(|_| *iter.next().unwrap());
+        self.forks.retain(|_| *iter.next().unwrap());
 
         // Remove confirmed proposals txs from the unporposed txs sled tree
         self.blockchain.remove_pending_txs_hashes(&confirmed_txs_hashes)?;
-
-        // Drop forks lock
-        drop(forks);
 
         Ok(())
     }
 
     /// Auxiliary function to fully purge current forks and leave only a new empty fork.
-    pub async fn purge_forks(&self) -> Result<()> {
+    pub async fn purge_forks(&mut self) -> Result<()> {
         debug!(target: "validator::consensus::purge_forks", "Purging current forks...");
-        let mut forks = self.forks.write().await;
-        *forks = vec![Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?];
-        drop(forks);
+        self.forks = vec![Fork::new(self.blockchain.clone(), self.module.clone()).await?];
         debug!(target: "validator::consensus::purge_forks", "Forks purged!");
+
         Ok(())
     }
 
     /// Auxiliary function to reset PoW module.
-    pub async fn reset_pow_module(&self) -> Result<()> {
+    pub async fn reset_pow_module(&mut self) -> Result<()> {
         debug!(target: "validator::consensus::reset_pow_module", "Resetting PoW module...");
-
-        let mut module = self.module.write().await;
-        *module = PoWModule::new(
+        self.module = PoWModule::new(
             self.blockchain.clone(),
-            module.target,
-            module.fixed_difficulty.clone(),
+            self.module.target,
+            self.module.fixed_difficulty.clone(),
             None,
         )?;
-        drop(module);
         debug!(target: "validator::consensus::reset_pow_module", "PoW module reset successfully!");
+
         Ok(())
     }
 
     /// Auxiliary function to check current contracts states
     /// Monotree(SMT) validity in all active forks and canonical.
     pub async fn healthcheck(&self) -> Result<()> {
-        // Grab a lock over current forks
-        let lock = self.forks.read().await;
-
         // Grab current canonical contracts states monotree root
         let state_root = self.blockchain.contracts.get_state_monotree_root()?;
 
@@ -615,7 +537,7 @@ impl Consensus {
         }
 
         // Check each fork health
-        for fork in lock.iter() {
+        for fork in &self.forks {
             fork.healthcheck()?;
         }
 
@@ -628,18 +550,15 @@ impl Consensus {
         &self,
         referenced_trees: &mut BTreeSet<IVec>,
     ) -> Result<()> {
-        // Grab a lock over current forks
-        let lock = self.forks.read().await;
-
         // Check if we have forks
-        if lock.is_empty() {
+        if self.forks.is_empty() {
             // If no forks exist, build a new one so we retrieve the
             // native/protected trees references.
-            let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+            let fork = Fork::new(self.blockchain.clone(), self.module.clone()).await?;
             fork.referenced_trees(referenced_trees);
         } else {
             // Iterate over current forks to retrieve referenced trees
-            for fork in lock.iter() {
+            for fork in &self.forks {
                 fork.referenced_trees(referenced_trees);
             }
         }
@@ -669,14 +588,11 @@ impl Consensus {
     /// Auxiliary function to purge all unproposed pending
     /// transactions from the database.
     pub async fn purge_unproposed_pending_txs(
-        &self,
+        &mut self,
         mut proposed_txs: HashSet<TransactionHash>,
     ) -> Result<()> {
-        // Grab a lock over current forks
-        let mut forks = self.forks.write().await;
-
         // Iterate over all forks to find proposed txs
-        for fork in forks.iter() {
+        for fork in &self.forks {
             // Grab all current proposals transactions hashes
             let proposals_txs =
                 fork.overlay.lock().unwrap().get_blocks_txs_hashes(&fork.proposals)?;
@@ -687,7 +603,7 @@ impl Consensus {
 
         // Iterate over all forks again to remove unproposed txs from
         // their mempools.
-        for fork in forks.iter_mut() {
+        for fork in self.forks.iter_mut() {
             fork.mempool.retain(|tx| proposed_txs.contains(tx));
         }
 

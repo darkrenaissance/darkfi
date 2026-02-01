@@ -43,7 +43,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let th = Harness::new(config, true, &ex).await?;
 
     // Generate 3 forks
-    let mut fork0 = th.alice.validator.consensus.forks.read().await[0].full_clone()?;
+    let mut fork0 = th.alice.validator.read().await.consensus.forks[0].full_clone()?;
     let mut fork1 = fork0.full_clone()?;
     let mut fork2 = fork1.full_clone()?;
 
@@ -74,36 +74,37 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie = generate_node(&th.vks, &th.validator_config, &settings, &ex, false, None).await?;
 
     // Verify node synced the best fork
-    let forks = th.alice.validator.consensus.forks.read().await;
-    let best_fork = &forks[best_fork_index(&forks)?];
-    let charlie_forks = charlie.validator.consensus.forks.read().await;
-    assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
+    let alice = th.alice.validator.read().await;
+    let index = best_fork_index(&alice.consensus.forks)?;
+    let best_fork = &alice.consensus.forks[index];
+    let charlie_validator = charlie.validator.read().await;
+    assert_eq!(charlie_validator.consensus.forks.len(), 1);
+    assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), best_fork.proposals.len());
     let small_best = best_fork.proposals.len() == 1;
-    drop(forks);
-    drop(charlie_forks);
+    drop(charlie_validator);
+    drop(alice);
 
     // Extend the small fork sequences and add it to nodes
     th.add_blocks(&[th.generate_next_block(&mut fork1).await?]).await?;
     th.add_blocks(&[th.generate_next_block(&mut fork2).await?]).await?;
 
     // Check charlie has the correct forks
-    let charlie_forks = charlie.validator.consensus.forks.read().await;
+    let charlie_validator = charlie.validator.read().await;
     if small_best {
         // If Charlie already had a small fork as its best,
         // it will have two forks with 2 blocks each.
-        assert_eq!(charlie_forks.len(), 2);
-        assert_eq!(charlie_forks[0].proposals.len(), 2);
-        assert_eq!(charlie_forks[1].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[1].proposals.len(), 2);
     } else {
         // Charlie didn't originaly have the forks, but they
         // should be synced when their proposals were received
-        assert_eq!(charlie_forks.len(), 3);
-        assert_eq!(charlie_forks[0].proposals.len(), 3);
-        assert_eq!(charlie_forks[1].proposals.len(), 2);
-        assert_eq!(charlie_forks[2].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks.len(), 3);
+        assert_eq!(charlie_validator.consensus.forks[0].proposals.len(), 3);
+        assert_eq!(charlie_validator.consensus.forks[1].proposals.len(), 2);
+        assert_eq!(charlie_validator.consensus.forks[2].proposals.len(), 2);
     }
-    drop(charlie_forks);
+    drop(charlie_validator);
 
     // Thanks for reading
     Ok(())

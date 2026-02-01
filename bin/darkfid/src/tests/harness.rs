@@ -127,8 +127,8 @@ impl Harness {
     }
 
     pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
-        let alice = &self.alice.validator;
-        let bob = &self.bob.validator;
+        let alice = &self.alice.validator.read().await;
+        let bob = &self.bob.validator.read().await;
 
         alice
             .validate_blockchain(self.config.pow_target, self.config.pow_fixed_difficulty.clone())
@@ -147,8 +147,8 @@ impl Harness {
     }
 
     pub async fn validate_fork_chains(&self, total_forks: usize, fork_sizes: Vec<usize>) {
-        let alice = &self.alice.validator.consensus.forks.read().await;
-        let bob = &self.bob.validator.consensus.forks.read().await;
+        let alice = &self.alice.validator.read().await.consensus.forks;
+        let bob = &self.bob.validator.read().await.consensus.forks;
 
         let alice_forks_len = alice.len();
         assert_eq!(alice_forks_len, bob.len());
@@ -172,7 +172,7 @@ impl Harness {
         // and then we broadcast it to rest nodes
         for block in blocks {
             let proposal = Proposal::new(block.clone());
-            self.alice.validator.append_proposal(&proposal).await?;
+            self.alice.validator.write().await.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.p2p_handler.p2p.broadcast(&message).await;
         }
@@ -180,8 +180,8 @@ impl Harness {
         // Sleep a bit so blocks can be propagated and then
         // trigger confirmation check to Alice and Bob
         sleep(10).await;
-        self.alice.validator.confirmation().await?;
-        self.bob.validator.confirmation().await?;
+        self.alice.validator.write().await.confirmation().await?;
+        self.bob.validator.write().await.confirmation().await?;
 
         Ok(())
     }
@@ -263,7 +263,7 @@ impl Harness {
             &fork.module,
             &block,
             &previous,
-            self.alice.validator.verify_fees,
+            self.alice.validator.read().await.verify_fees,
         )
         .await?;
         fork.append_proposal(&Proposal::new(block.clone())).await?;
@@ -297,22 +297,22 @@ pub async fn generate_node(
     subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
-    let registry = DarkfiMinersRegistry::init(Network::Mainnet, &validator)?;
+    let registry = DarkfiMinersRegistry::init(Network::Mainnet, &validator).await?;
     let node =
         DarkfiNode::new(validator.clone(), p2p_handler.clone(), registry, 50, subscribers.clone())
             .await?;
 
     p2p_handler.start(ex, &node).await?;
 
-    node.validator.consensus.generate_empty_fork().await?;
+    node.validator.write().await.consensus.generate_empty_fork().await?;
 
     if !skip_sync {
         sync_task(&node, checkpoint).await?;
     } else {
-        *node.validator.synced.write().await = true;
+        node.validator.write().await.synced = true;
     }
 
-    node.validator.purge_pending_txs().await?;
+    node.validator.write().await.purge_pending_txs().await?;
 
     Ok(node)
 }

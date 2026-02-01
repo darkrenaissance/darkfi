@@ -220,19 +220,20 @@ impl Wallet {
             let _ = benchmark_wasm_calls(callname, &self.validator, &tx, block_height).await;
         }
 
-        self.validator
+        let validator = self.validator.read().await;
+        validator
             .add_test_transactions(
                 slice::from_ref(&tx),
                 block_height,
-                self.validator.consensus.module.read().await.target,
+                validator.consensus.module.target,
                 true,
-                self.validator.verify_fees,
+                validator.verify_fees,
             )
             .await?;
 
         // Write the data
         {
-            let blockchain = &self.validator.blockchain;
+            let blockchain = &validator.blockchain;
             let txs = &blockchain.transactions;
             txs.insert(slice::from_ref(&tx)).expect("insert tx");
             txs.insert_location(&[tx.hash()], block_height).expect("insert loc");
@@ -329,12 +330,13 @@ impl TestHarness {
 
 async fn benchmark_wasm_calls(
     callname: &str,
-    validator: &Validator,
+    validator: &ValidatorPtr,
     tx: &Transaction,
     block_height: u32,
 ) -> Result<()> {
     let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv")?;
 
+    let validator = validator.read().await;
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
@@ -343,7 +345,7 @@ async fn benchmark_wasm_calls(
             overlay.clone(),
             call.data.contract_id,
             block_height,
-            validator.consensus.module.read().await.target,
+            validator.consensus.module.target,
             tx.hash(),
             idx as u8,
         )

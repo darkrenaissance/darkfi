@@ -189,7 +189,8 @@ async fn handle_receive_proposal(
         };
 
         // Check if node has finished syncing its blockchain
-        if !*validator.synced.read().await {
+        let mut validator = validator.write().await;
+        if !validator.synced {
             debug!(
                 target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
                 "Node still syncing blockchain, skipping..."

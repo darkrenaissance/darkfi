@@ -75,7 +75,7 @@ impl TestHarness {
 
         // Useful code snippet to dump a sled contract DB
         /*{
-            let blockchain = &wallet.validator.blockchain;
+            let blockchain = &wallet.validator.read().await.blockchain;
             let contracts = &blockchain.contracts;
             let tree = contracts
                 .lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "nullifier_roots")
@@ -119,7 +119,7 @@ impl TestHarness {
             },
         ];
 
-        let block_target = wallet.validator.consensus.module.read().await.target;
+        let block_target = wallet.validator.read().await.consensus.module.target;
         let creation_blockwindow = blockwindow(block_height, block_target);
         let proposal = DaoProposal {
             auth_calls,
@@ -215,7 +215,7 @@ impl TestHarness {
 
         // Useful code snippet to dump a sled contract DB
         /*{
-            let blockchain = &wallet.validator.blockchain;
+            let blockchain = &wallet.validator.read().await.blockchain;
             let contracts = &blockchain.contracts;
             let tree = contracts
                 .lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "nullifier_roots")
@@ -237,7 +237,7 @@ impl TestHarness {
                 .unwrap(),
         };
 
-        let block_target = wallet.validator.consensus.module.read().await.target;
+        let block_target = wallet.validator.read().await.consensus.module.target;
         let creation_blockwindow = blockwindow(block_height, block_target);
         let proposal = DaoProposal {
             auth_calls: vec![],
