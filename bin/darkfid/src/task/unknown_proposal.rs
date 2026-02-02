@@ -27,7 +27,7 @@ use tinyjson::JsonValue;
 use tracing::{debug, error, info};
 
 use darkfi::{
-    blockchain::{BlockDifficulty, HeaderHash},
+    blockchain::{BlockDifficulty, BlockchainOverlay, HeaderHash},
     net::ChannelPtr,
     util::{encoding::base64, time::Timestamp},
     validator::{
@@ -338,7 +338,7 @@ async fn handle_reorg(
     }
 
     // Generate the peer fork and retrieve its ranking
-    let peer_fork = match retrieve_peer_fork(
+    let mut peer_fork = match retrieve_peer_fork(
         &validator,
         (&last_common_height, &module, &last_difficulty),
         channel,
@@ -373,6 +373,35 @@ async fn handle_reorg(
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
         return false
     };
+
+    // Update fork diffs to forward-only ones
+    let overlay = match BlockchainOverlay::new(&validator.blockchain) {
+        Ok(o) => o,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Generating a new blockchain overlay failed: {e}");
+            return false
+        }
+    };
+    let mut diffs = Vec::with_capacity(peer_fork.diffs.len());
+    for diff in peer_fork.diffs {
+        let overlay = overlay.lock().unwrap();
+        let mut overlay = overlay.overlay.lock().unwrap();
+        if let Err(e) = overlay.add_diff(&diff) {
+            error!(target: "darkfid::task::handle_reorg", "Applying peer fork diff failed: {e}");
+            return false
+        }
+        match overlay.diff(&diffs) {
+            Ok(diff) => diffs.push(diff),
+            Err(e) => {
+                error!(target: "darkfid::task::handle_reorg", "Generate clean state inverse diff failed: {e}");
+                return false
+            }
+        }
+    }
+    peer_fork.overlay = overlay;
+    peer_fork.diffs = diffs;
+
+    // Update validator consensus state
     validator.consensus.module = module;
     validator.consensus.forks = vec![peer_fork];
 
