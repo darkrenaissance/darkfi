@@ -371,7 +371,7 @@ async fn realmain(
                 let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
 
                 if let Err(e) = rpc_client.subscribe(req, explorer_.blocks_publisher.clone()).await {
-                   rpc_client.stop().await;
+                    rpc_client.stop().await;
                     warn!(target: "explorer::subscribe_blocks", "darkfid RPC connection lost ({e}), retrying...");
                     msleep(500).await;
                 }
