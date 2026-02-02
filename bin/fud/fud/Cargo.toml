@@ -48,7 +48,7 @@ blake2 = "0.10.6"
 equix = "0.5.1"
 
 # Database
-sled-overlay = "0.1.17"
+sled-overlay = "0.1.18"
 
 # Argument parsing
 serde = {version = "1.0.228", features = ["derive"]}
