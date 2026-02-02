@@ -19,7 +19,7 @@ blake3 = "1.8.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
 rand = "0.8.5"
-sled-overlay = "0.1.16"
+sled-overlay = "0.1.17"
 
 [lints]
 workspace = true

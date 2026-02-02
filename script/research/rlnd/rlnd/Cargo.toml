@@ -17,7 +17,7 @@ darkfi-serial = {path = "../../../../src/serial"}
 
 # Misc
 bs58 = "0.5.1"
-sled-overlay = "0.1.16"
+sled-overlay = "0.1.17"
 tracing = "0.1.44"
 
 # JSON-RPC
