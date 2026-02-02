@@ -32,6 +32,14 @@ else
 	verbose=""
 fi
 
+wait_blocks() {
+    while [ "$(sh ./sync-wallet.sh "$1" | grep 'Last confirmed block reported by darkfid:' | awk 'NR==1 {print $7}')" -lt "$2" ]; do
+        sleep 5
+    done
+}
+
+# Start test after 20 blocks are mined
+wait_blocks "$DRK0" 20
 
 echo "=========[Stopping Node1 and Node2]=========="
 # Stop node1 and mine only with node0
