@@ -36,7 +36,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
         settings::RpcSettings,
     },
-    system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
+    system::{msleep, CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
     util::{encoding::base64, path::expand_path},
     verbose, Error, Result, ANSI_LOGO,
 };
@@ -48,7 +48,7 @@ use smol::{
 };
 use tapes::{TapeOpenOptions, Tapes};
 use tinyjson::JsonValue;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 /// Database interfaces
@@ -164,7 +164,7 @@ impl Explorer {
             "Started block subscription, waiting until blockchain is synced",
         );
         let block_subscription = self.blocks_publisher.clone().subscribe().await;
-        self.synced_notifier.wait();
+        self.synced_notifier.wait().await;
         info!(
             target: "explorer::handle_block_sub",
             "Blockchain synced, now waiting for new blocks...",
@@ -186,8 +186,30 @@ impl Explorer {
 
                     info!(target: "explorer::handle_block_sub", "Height {}", incoming_height);
 
-                    // Check if we need to reorg
+                    // Check if we need to reorg or sync
                     let current_height = self.get_height().ok().flatten().unwrap_or(0);
+
+                    if incoming_height > current_height + 1 {
+                        // Sync needed: we have at least one missing block
+                        info!(
+                            target: "explorer::handle_block_sub",
+                            "Sync needed! Incoming height {} > current_height {}.",
+                            incoming_height, current_height,
+                        );
+                        self.synced.store(false, Ordering::SeqCst);
+                        self.sync_blockchain(
+                            rpc_endpoint.clone(),
+                            current_height + 1,
+                            incoming_height - 1,
+                            ex.clone(),
+                        )
+                        .await?;
+                        self.synced.store(true, Ordering::SeqCst);
+                        info!(
+                            target: "explorer::handle_block_sub",
+                            "Synced to height {}", incoming_height - 1,
+                        );
+                    }
 
                     if incoming_height <= current_height {
                         // Reorg needed: incoming block is at or before our current height
@@ -228,7 +250,7 @@ impl Explorer {
 
                     self.append_block(&block, &diff).await.unwrap();
                 }
-                _ => panic!("fixme"),
+                x => unreachable!("{:?}", x),
             }
         }
     }
@@ -301,26 +323,11 @@ async fn realmain(
     // that will handle incoming blocks. It will wait until the blockchain
     // is synced and then proceed to process them.
     let explorer_ = Arc::clone(&explorer);
-    let explorer__ = Arc::clone(&explorer);
     let ex_ = ex.clone();
     let rpc_endpoint_ = rpc_endpoint.clone();
     explorer.rpc_sub_handler.clone().start(
         async move { explorer_.handle_block_sub(rpc_endpoint_, ex_).await },
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) | Err(Error::RpcServerStopped) => {}
-                Err(_) => {
-                    explorer__
-                        .blocks_publisher
-                        .notify(JsonResult::Error(JsonError::new(
-                            ErrorCode::InternalError,
-                            None,
-                            0,
-                        )))
-                        .await;
-                }
-            }
-        },
+        |_| async {},
         Error::RpcServerStopped,
         ex.clone(),
     );
@@ -328,38 +335,49 @@ async fn realmain(
     // Then we subscribe to darkfid's RPC to get new blocks. We should first
     // fetch the current height, so we know how far to sync. Then any blocks
     // that come after that should be queued in the `blocks_publisher`.
-    let rpc_client = Arc::new(RpcClient::new(rpc_endpoint.clone(), ex.clone()).await?);
+    info!(target: "explorer", "Connecting to darkfid RPC...");
+    let rpc_client = loop {
+        let Ok(rpc_client) = RpcClient::new(rpc_endpoint.clone(), ex.clone()).await else {
+            msleep(500).await;
+            continue
+        };
+
+        break rpc_client
+    };
 
     let req = JsonRequest::new("blockchain.last_confirmed_block", JsonValue::Array(vec![]));
     let rep = rpc_client.request(req).await?;
+    rpc_client.stop().await;
     let params = rep.get::<Vec<JsonValue>>().unwrap();
     let confirmed_height = *params[0].get::<f64>().unwrap() as u64;
 
     // Now create the subscription task.
-    let rpc_client_ = Arc::clone(&rpc_client);
     let explorer_ = Arc::clone(&explorer);
-    let explorer__ = Arc::clone(&explorer);
+    let ex_ = Arc::clone(&ex);
+    let rpc_endpoint_ = rpc_endpoint.clone();
     explorer.rpc_sub.clone().start(
         async move {
-            let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
-            rpc_client_.subscribe(req, explorer_.blocks_publisher.clone()).await
-        },
-        |res| async move {
-            rpc_client.stop().await;
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) | Err(Error::RpcServerStopped) => {}
-                Err(_) => {
-                    explorer__
-                        .blocks_publisher
-                        .notify(JsonResult::Error(JsonError::new(
-                            ErrorCode::InternalError,
-                            None,
-                            0,
-                        )))
-                        .await;
+            loop {
+                let rpc_client = match RpcClient::new(rpc_endpoint_.clone(), ex_.clone()).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        warn!(target: "explorer::subscribe_blocks", "darkfid RPC connection lost ({e})), retrying...");
+                        msleep(500).await;
+                        continue
+                    }
+                };
+
+                info!(target: "explorer::subscribe_blocks", "Connected to darkfid RPC");
+                let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
+
+                if let Err(e) = rpc_client.subscribe(req, explorer_.blocks_publisher.clone()).await {
+                   rpc_client.stop().await;
+                    warn!(target: "explorer::subscribe_blocks", "darkfid RPC connection lost ({e}), retrying...");
+                    msleep(500).await;
                 }
             }
         },
+        |_| async {},
         Error::RpcServerStopped,
         ex.clone(),
     );
