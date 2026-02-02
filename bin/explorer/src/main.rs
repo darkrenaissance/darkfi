@@ -66,6 +66,7 @@ Usage: explorer [OPTIONS]
 Options:
   -e <endpoint>  darkfid JSON-RPC endpoint (default: tcp://127.0.0.1:18345)
   -d <path>      Path to database (default: ~/.local/share/darkfi/explorer/db)
+  -r <height>    Revert database to <height>
   -h             Show this help
 "#;
 
@@ -197,12 +198,14 @@ impl Explorer {
                             incoming_height, current_height, blocks_to_revert
                         );
 
-                        if let Err(e) = self.revert_blocks(blocks_to_revert).await {
+                        if let Err(e) = self.revert_to_height(incoming_height - 1).await {
                             error!(
                                 target: "explorer::handle_block_sub",
                                 "Failed to revert blocks during reorg: {e}",
                             );
-                            continue;
+                            // Exit from this task if there's an error.
+                            // It'll let us inspect the db and what happened.
+                            return Err(e.into())
                         }
                     }
 
@@ -281,7 +284,12 @@ impl Explorer {
     }
 }
 
-async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>>) -> Result<()> {
+async fn realmain(
+    rpc_endpoint: Url,
+    db_path: PathBuf,
+    revert_to: u64,
+    ex: Arc<Executor<'static>>,
+) -> Result<()> {
     let explorer = Arc::new(Explorer::new(
         &db_path.join("sled_db"),
         &db_path.join("tapes_metadata"),
@@ -325,7 +333,7 @@ async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>
     let req = JsonRequest::new("blockchain.last_confirmed_block", JsonValue::Array(vec![]));
     let rep = rpc_client.request(req).await?;
     let params = rep.get::<Vec<JsonValue>>().unwrap();
-    let last_confirmed_height = *params[0].get::<f64>().unwrap() as u64;
+    let confirmed_height = *params[0].get::<f64>().unwrap() as u64;
 
     // Now create the subscription task.
     let rpc_client_ = Arc::clone(&rpc_client);
@@ -360,12 +368,20 @@ async fn realmain(rpc_endpoint: Url, db_path: PathBuf, ex: Arc<Executor<'static>
     // the last confirmed height. This will create a new RPC client that
     // is going to request and parse all the necessary blocks, and then
     // apply them to the databases.
-    let sync_from = explorer.get_height()?.unwrap_or(0);
-    explorer
-        .sync_blockchain(rpc_endpoint.clone(), sync_from, last_confirmed_height, ex.clone())
-        .await?;
+    let mut sync_from = explorer.get_height()?.unwrap_or(0);
+    if sync_from > 0 {
+        // If we're not syncing from genesis, account for it.
+        sync_from += 1;
+    }
+
+    explorer.sync_blockchain(rpc_endpoint.clone(), sync_from, confirmed_height, ex.clone()).await?;
     explorer.synced.store(true, Ordering::SeqCst);
     explorer.synced_notifier.notify();
+
+    if revert_to > 0 {
+        info!("Reverting to {}", revert_to);
+        explorer.revert_to_height(revert_to).await?;
+    }
 
     // Start up an RPC server that can be queried for data.
     // This normally serves the data to the Python website frontend.
@@ -380,18 +396,22 @@ fn main() -> Result<()> {
     let mut hflag = false;
     let mut evalue = "tcp://127.0.0.1:18345".to_string();
     let mut dvalue = "~/.local/share/darkfi/explorer/db".to_string();
+    let mut rvalue = "0".to_string();
     let mut verbose = 0;
 
     {
         let mut args = Args::new().with_cb(|args, flag| match flag {
             'e' => evalue = args.eargf().to_string(),
             'd' => dvalue = args.eargf().to_string(),
+            'r' => rvalue = args.eargf().to_string(),
             'v' => verbose += 1,
             _ => hflag = true,
         });
 
         args.parse();
     }
+
+    let revert_to: u64 = rvalue.parse()?;
 
     if hflag {
         usage();
@@ -431,7 +451,7 @@ fn main() -> Result<()> {
         // Run the main future on the current thread
         .finish(|| {
             future::block_on(async {
-                realmain(rpc_endpoint, db_path, ex.clone()).await?;
+                realmain(rpc_endpoint, db_path, revert_to, ex.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
