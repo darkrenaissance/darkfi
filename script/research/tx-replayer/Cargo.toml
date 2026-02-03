@@ -13,7 +13,7 @@ edition = "2024"
 darkfi = {path = "../../../", features = ["validator"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
-sled-overlay = {version = "0.1.18"}
+sled-overlay = {version = "0.1.19"}
 smol = {version = "2.0.2"}
 clap = {version = "4.4.11", features = ["derive"]}
 
