@@ -210,7 +210,9 @@ impl Lilith {
                         debug!(target: "net::refinery:::whitelist_refinery",
                        "Host {url} is not responsive. Downgrading from whitelist");
 
-                        hosts.greylist_host(url, *last_seen).await?;
+                        if let Err(e) = hosts.greylist_host(url, *last_seen).await {
+                            error!(target: "net::refinery::whitelist_refinery", "Could not send {url} to the greylist: {e}");
+                        }
 
                         continue
                     }
@@ -220,8 +222,9 @@ impl Lilith {
 
                     // This node is active. Update the last seen field.
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-                    hosts.whitelist_host(url, last_seen).await?;
+                    if let Err(e) = hosts.whitelist_host(url, last_seen).await {
+                        error!(target: "net::refinery::whitelist_refinery", "Could not send {url} to the whitelist: {e}");
+                    }
                 }
                 None => {
                     debug!(target: "net::refinery::whitelist_refinery",
