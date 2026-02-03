@@ -135,7 +135,7 @@ impl Consensus {
             }
         }
 
-        info!(target: "validator::consensus::append_proposal", "Appended proposal {}", proposal.hash);
+        info!(target: "validator::consensus::append_proposal", "Appended proposal {} - {}", proposal.hash, proposal.block.header.height);
 
         Ok(())
     }
