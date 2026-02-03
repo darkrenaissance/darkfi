@@ -36,7 +36,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};
@@ -300,7 +300,9 @@ impl GreylistRefinery {
                     );
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    hosts.whitelist_host(&url, last_seen).await.unwrap();
+                    if let Err(e) = hosts.whitelist_host(&url, last_seen).await {
+                        error!(target: "net::refinery", "Could not send {url} to the whitelist: {e}");
+                    }
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
 
