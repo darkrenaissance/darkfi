@@ -202,7 +202,7 @@ async fn consensus_task(
             continue
         }
 
-        // Purge all unreferenced contract trees fro the database
+        // Purge all unreferenced contract trees from the database
         if let Err(e) =
             validator.consensus.purge_unreferenced_trees(&mut registry.new_trees()).await
         {

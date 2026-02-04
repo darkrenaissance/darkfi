@@ -89,7 +89,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
             info!(target: "darkfid::task::sync_task", "Syncing until configured checkpoint: {} - {}", checkpoint.0, checkpoint.1);
             // Retrieve all the headers backwards until our last known one and verify them.
             // We use the next height, in order to also retrieve the checkpoint header.
-            retrieve_headers(node, &common_tip_peers, last.0, checkpoint.0 + 1).await?;
+            retrieve_headers(node, &common_tip_peers, last, checkpoint.0 + 1).await?;
 
             // Retrieve all the blocks for those headers and apply them to canonical
             last = retrieve_blocks(node, &common_tip_peers, last, block_sub, true).await?;
@@ -104,7 +104,7 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     loop {
         // Retrieve all the headers backwards until our last known one and verify them.
         // We use the next height, in order to also retrieve the peers tip header.
-        retrieve_headers(node, &common_tip_peers, last.0, common_tip_height + 1).await?;
+        retrieve_headers(node, &common_tip_peers, last, common_tip_height + 1).await?;
 
         // Retrieve all the blocks for those headers and apply them to canonical
         let last_received =
@@ -285,7 +285,7 @@ async fn most_common_tip(
 async fn retrieve_headers(
     node: &DarkfiNodePtr,
     peers: &[ChannelPtr],
-    last_known: u32,
+    last_known: (u32, HeaderHash),
     tip_height: u32,
 ) -> Result<()> {
     info!(target: "darkfid::task::sync::retrieve_headers", "Retrieving missing headers from peers...");
@@ -302,7 +302,7 @@ async fn retrieve_headers(
     }
 
     // We subtract 1 since tip_height is increased by one
-    let total = tip_height - last_known - 1;
+    let total = tip_height - last_known.0 - 1;
     let mut last_tip_height = tip_height;
     let validator = node.validator.read().await;
     'headers_loop: loop {
@@ -353,7 +353,7 @@ async fn retrieve_headers(
 
             // Retain only the headers after our last known
             let mut response_headers = response.headers.to_vec();
-            response_headers.retain(|h| h.height > last_known);
+            response_headers.retain(|h| h.height > last_known.0);
 
             if response_headers.is_empty() {
                 break 'headers_loop
@@ -380,7 +380,6 @@ async fn retrieve_headers(
     let total = validator.blockchain.headers.len_sync();
     // First we verify the first `BATCH` sequence, using the last known header
     // as the first sync header previous.
-    let last_known = validator.consensus.best_fork_last_header().await?;
     let mut headers = validator.blockchain.headers.get_after_sync(0, BATCH)?;
     if headers[0].previous != last_known.1 || headers[0].height != last_known.0 + 1 {
         validator.blockchain.headers.remove_all_sync()?;
@@ -389,7 +388,6 @@ async fn retrieve_headers(
     verified_headers += 1;
     for (index, header) in headers[1..].iter().enumerate() {
         if header.previous != headers[index].hash() || header.height != headers[index].height + 1 {
-            validator.blockchain.headers.remove_all_sync()?;
             return Err(Error::BlockIsInvalid(header.hash().as_string()))
         }
         verified_headers += 1;
@@ -520,10 +518,13 @@ async fn retrieve_blocks(
                 };
             } else {
                 for block in &response.blocks {
-                    if let Err(e) = validator.append_proposal(&Proposal::new(block.clone())).await {
-                        debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
-                        continue 'peers_loop
-                    };
+                    match validator.append_proposal(&Proposal::new(block.clone())).await {
+                        Ok(()) | Err(Error::ProposalAlreadyExists) => continue,
+                        Err(e) => {
+                            debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
+                            continue 'peers_loop
+                        }
+                    }
                 }
             }
             last_received = (*synced_headers.last().unwrap(), *headers_hashes.last().unwrap());
