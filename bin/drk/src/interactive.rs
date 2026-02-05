@@ -2468,7 +2468,7 @@ async fn handle_tx_from_calls(
 /// Auxiliary function to define the inspect command handling.
 async fn handle_inspect(input: &[String], output: &mut Vec<String>) {
     match parse_tx_from_input(input).await {
-        Ok(tx) => output.push(format!("{tx:#?}")),
+        Ok(tx) => output.push(pretty_tx(&tx)),
         Err(e) => output.push(format!("Error while parsing transaction: {e}")),
     }
 }

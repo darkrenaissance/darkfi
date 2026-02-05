@@ -18,16 +18,16 @@
 
 use std::collections::HashMap;
 
-use darkfi::{util::parse::encode_base10, zk::halo2::Field};
+use darkfi::{tx::Transaction, util::parse::encode_base10, zk::halo2::Field};
 use darkfi_money_contract::{client::OwnCoin, model::TokenId};
 use darkfi_sdk::{
     crypto::{
         keypair::{Address, Network, PublicKey, SecretKey, StandardAddress},
-        BaseBlind, ContractId, FuncId,
+        BaseBlind, ContractId, FuncId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::{deserialize, serialize};
 use prettytable::{format, row, Table};
 
 use crate::money::BALANCE_BASE10_DECIMALS;
@@ -217,4 +217,61 @@ pub fn prettytable_scanned_blocks(scanned_blocks: &[(u32, String, String)]) -> T
     }
 
     table
+}
+
+pub fn pretty_tx(tx: &Transaction) -> String {
+    let hash = tx.hash().to_string();
+
+    let mut fees: Vec<String> = vec![];
+    let mut fees_total: u64 = 0;
+    let mut fees_overflow = false;
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.add_row(row!["", "Contract", "Function"]);
+
+    for (i, call) in tx.calls.iter().enumerate() {
+        if call.data.is_money_fee() {
+            if let Ok(fee) = deserialize(&call.data.data[1..9]) {
+                fees.push(format!("{} DRK", encode_base10(fee, BALANCE_BASE10_DECIMALS)));
+                fees_total = fees_total.checked_add(fee).unwrap_or_else(|| {
+                    fees_overflow = true;
+                    u64::MAX
+                });
+            } else {
+                fees.push("invalid".to_string());
+            }
+        }
+
+        let contract_name = match call.data.contract_id {
+            id if id == *MONEY_CONTRACT_ID => "Money",
+            id if id == *DAO_CONTRACT_ID => "DAO",
+            id if id == *DEPLOYOOOR_CONTRACT_ID => "Deployooor",
+            _ => "Custom",
+        };
+
+        let calldata = &call.data.data;
+        table.add_row(row![
+            i.to_string(),
+            format!("{} [{}]", call.data.contract_id.to_string(), contract_name),
+            // Function code
+            if !calldata.is_empty() { calldata[0].to_string() } else { "-".to_string() },
+        ]);
+    }
+
+    let fee = match fees.len() {
+        0 => "-".to_string(),
+        1 => fees[0].clone(),
+        _ => format!(
+            "{} [TOTAL: {}]",
+            fees.join(", "),
+            if fees_overflow {
+                "OVERFLOW".to_string()
+            } else {
+                format!("{} DRK", encode_base10(fees_total, BALANCE_BASE10_DECIMALS))
+            }
+        ),
+    };
+
+    format!("Hash: {hash}\nFee:  {fee}\n\n{table}")
 }
