@@ -21,7 +21,7 @@ pasta_curves = {version = "0.5", optional = true}
 semver = {version = "1", optional = true}
 url = {version = "2", optional = true}
 num-bigint = {version = "0.4", optional = true}
-sled-overlay = {version = "0.1.19", optional = true}
+sled-overlay = {version = "0.1.20", optional = true}
 
 [features]
 default = ["derive", "semver"]

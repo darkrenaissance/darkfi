@@ -28,7 +28,7 @@ darkfi-serial = {path = "../../../src/serial"}
 blake3 = "1.8.2"
 
 # Event Graph DB
-sled-overlay = "0.1.19"
+sled-overlay = "0.1.20"
 
 # Misc
 async-trait = "0.1.89"

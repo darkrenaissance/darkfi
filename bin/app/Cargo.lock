@@ -5508,9 +5508,9 @@ dependencies = [
 
 [[package]]
 name = "sled-overlay"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbc8b3806f0be1a377c15e723bce6df4ec685353bd500970b75a9bb0003424e5"
+checksum = "719b8db2a2b2798bc015c45613040c4dbc552dca6c605d8796248ba587afa7fe"
 dependencies = [
  "sled",
 ]
