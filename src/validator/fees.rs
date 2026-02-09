@@ -30,10 +30,10 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
     let mut accumulator: u64 = 0;
 
     // Constants each with a cost of 10
-    accumulator += 10 * zkbin.constants.len() as u64;
+    accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.constants.len() as u64));
 
     // Literals each with a cost of 10 (for now there's only 1 type of literal)
-    accumulator += 10 * zkbin.literals.len() as u64;
+    accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.literals.len() as u64));
 
     // Witnesses have cost by type
     for witness in &zkbin.witnesses {
@@ -55,7 +55,7 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             VarType::Any => 10,
         };
 
-        accumulator += cost;
+        accumulator = accumulator.saturating_add(cost);
     }
 
     // Opcodes depending on how heavy they are
@@ -69,7 +69,9 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             Opcode::EcMulVarBase => 30,
             Opcode::EcGetX => 5,
             Opcode::EcGetY => 5,
-            Opcode::PoseidonHash => 20 + 10 * opcode.1.len() as u64,
+            Opcode::PoseidonHash => {
+                20u64.saturating_add(10u64.saturating_mul(opcode.1.len() as u64))
+            }
             Opcode::MerkleRoot => 10 * MERKLE_DEPTH_ORCHARD as u64,
             Opcode::SparseMerkleRoot => 10 * SPARSE_MERKLE_DEPTH as u64,
             Opcode::BaseAdd => 15,
@@ -88,7 +90,7 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             Opcode::DebugPrint => 100,
         };
 
-        accumulator += cost;
+        accumulator = accumulator.saturating_add(cost);
     }
 
     accumulator
@@ -115,7 +117,10 @@ pub struct GasData {
 impl GasData {
     /// Calculates the total gas used by summing all individual gas usage fields.
     pub fn total_gas_used(&self) -> u64 {
-        self.wasm + self.zk_circuits + self.signatures + self.deployments
+        self.wasm
+            .saturating_add(self.zk_circuits)
+            .saturating_add(self.signatures)
+            .saturating_add(self.deployments)
     }
 }
 

@@ -19,7 +19,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc,
+        Arc, LazyLock,
     },
     thread,
     time::Instant,
@@ -78,6 +78,9 @@ const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
 pub const RANDOMX_KEY_CHANGING_HEIGHT: u32 = 2048;
 /// RandomX VM key change delay
 pub const RANDOMX_KEY_CHANGE_DELAY: u32 = 64;
+
+/// Max 32 bytes integer, cached to avoid repeated allocation
+static MAX_32_BYTES: LazyLock<BigUint> = LazyLock::new(|| BigUint::from_bytes_le(&[0xFF; 32]));
 
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
@@ -232,13 +235,13 @@ impl PoWModule {
 
     /// Compute the next mine target.
     pub fn next_mine_target(&self) -> Result<BigUint> {
-        Ok(BigUint::from_bytes_le(&[0xFF; 32]) / &self.next_difficulty()?)
+        Ok(&*MAX_32_BYTES / &self.next_difficulty()?)
     }
 
     /// Compute the next mine target and difficulty.
     pub fn next_mine_target_and_difficulty(&self) -> Result<(BigUint, BigUint)> {
         let difficulty = self.next_difficulty()?;
-        let mine_target = BigUint::from_bytes_le(&[0xFF; 32]) / &difficulty;
+        let mine_target = &*MAX_32_BYTES / &difficulty;
         Ok((mine_target, difficulty))
     }
 

@@ -329,10 +329,7 @@ impl Validator {
         info!(target: "validator::confirmation", "Performing confirmation check");
 
         // Grab best fork index that can be confirmed
-        let confirmed_fork = match self.consensus.confirmation().await {
-            Ok(f) => f,
-            Err(e) => return Err(e),
-        };
+        let confirmed_fork = self.consensus.confirmation().await?;
         if confirmed_fork.is_none() {
             info!(target: "validator::confirmation", "No proposals can be confirmed");
             return Ok(vec![])
@@ -642,10 +639,7 @@ impl Validator {
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
 
-        let gas_values = match verify_result {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
+        let gas_values = verify_result?;
 
         if !write {
             debug!(target: "validator::add_transactions", "Skipping apply of state updates because write=false");

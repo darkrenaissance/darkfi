@@ -233,6 +233,19 @@ impl Consensus {
         Ok(Some(index))
     }
 
+    /// Auxiliary function to find the index of a fork containing the provided
+    /// header hash in its proposals.
+    fn find_fork_by_header(&self, fork_header: &HeaderHash) -> Option<usize> {
+        for (index, fork) in self.forks.iter().enumerate() {
+            for p in fork.proposals.iter().rev() {
+                if p == fork_header {
+                    return Some(index)
+                }
+            }
+        }
+        None
+    }
+
     /// Auxiliary function to retrieve the fork header hash of provided height.
     /// The fork is identified by the provided header hash.
     pub async fn get_fork_header_hash(
@@ -241,19 +254,7 @@ impl Consensus {
         fork_header: &HeaderHash,
     ) -> Result<Option<HeaderHash>> {
         // Find the fork containing the provided header
-        let mut found = None;
-        'outer: for (index, fork) in self.forks.iter().enumerate() {
-            for p in fork.proposals.iter().rev() {
-                if p == fork_header {
-                    found = Some(index);
-                    break 'outer
-                }
-            }
-        }
-        if found.is_none() {
-            return Ok(None)
-        }
-        let index = found.unwrap();
+        let Some(index) = self.find_fork_by_header(fork_header) else { return Ok(None) };
 
         // Grab header if it exists
         let header =
@@ -271,16 +272,7 @@ impl Consensus {
         fork_header: &HeaderHash,
     ) -> Result<Vec<Header>> {
         // Find the fork containing the provided header
-        let mut found = None;
-        'outer: for (index, fork) in self.forks.iter().enumerate() {
-            for p in fork.proposals.iter().rev() {
-                if p == fork_header {
-                    found = Some(index);
-                    break 'outer
-                }
-            }
-        }
-        let Some(index) = found else { return Ok(vec![]) };
+        let Some(index) = self.find_fork_by_header(fork_header) else { return Ok(vec![]) };
 
         // Grab headers
         let headers = self.forks[index].overlay.lock().unwrap().get_headers_by_hash(headers)?;
@@ -297,16 +289,7 @@ impl Consensus {
         fork_header: &HeaderHash,
     ) -> Result<Vec<Proposal>> {
         // Find the fork containing the provided header
-        let mut found = None;
-        'outer: for (index, fork) in self.forks.iter().enumerate() {
-            for p in fork.proposals.iter().rev() {
-                if p == fork_header {
-                    found = Some(index);
-                    break 'outer
-                }
-            }
-        }
-        let Some(index) = found else { return Ok(vec![]) };
+        let Some(index) = self.find_fork_by_header(fork_header) else { return Ok(vec![]) };
 
         // Grab proposals
         let blocks = self.forks[index].overlay.lock().unwrap().get_blocks_by_hash(headers)?;
@@ -334,19 +317,8 @@ impl Consensus {
         // Grab fork index to use
         let index = match fork_tip {
             Some(fork_tip) => {
-                let mut found = None;
-                'outer: for (index, fork) in self.forks.iter().enumerate() {
-                    for p in fork.proposals.iter().rev() {
-                        if p == &fork_tip {
-                            found = Some(index);
-                            break 'outer
-                        }
-                    }
-                }
-                if found.is_none() {
-                    return Ok(proposals)
-                }
-                found.unwrap()
+                let Some(found) = self.find_fork_by_header(&fork_tip) else { return Ok(proposals) };
+                found
             }
             None => best_fork_index(&self.forks)?,
         };
@@ -360,7 +332,7 @@ impl Consensus {
 
         // Check tip is not far behind
         let last_block_height = self.forks[index].overlay.lock().unwrap().last()?.0;
-        if last_block_height - existing_tips[0].header.height >= limit {
+        if last_block_height.saturating_sub(existing_tips[0].header.height) >= limit {
             return Ok(proposals)
         }
 
@@ -758,8 +730,8 @@ impl Fork {
         let mut tree = MerkleTree::new(1);
 
         // Total gas accumulators
-        let mut total_gas_used = 0;
-        let mut total_gas_paid = 0;
+        let mut total_gas_used = 0_u64;
+        let mut total_gas_paid = 0_u64;
 
         // Map of ZK proof verifying keys for the current transaction batch
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -817,7 +789,7 @@ impl Fork {
             let tx_gas_used = gas_data.total_gas_used();
 
             // Calculate current accumulated gas usage
-            let accumulated_gas_usage = total_gas_used + tx_gas_used;
+            let accumulated_gas_usage = total_gas_used.saturating_add(tx_gas_used);
 
             // Check gas limit - if accumulated gas used exceeds it, break out of loop
             if accumulated_gas_usage > BLOCK_GAS_LIMIT {
@@ -830,8 +802,8 @@ impl Fork {
             }
 
             // Update accumulated total gas
-            total_gas_used += tx_gas_used;
-            total_gas_paid += gas_data.paid;
+            total_gas_used = total_gas_used.saturating_add(tx_gas_used);
+            total_gas_paid = total_gas_paid.saturating_add(gas_data.paid);
 
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);

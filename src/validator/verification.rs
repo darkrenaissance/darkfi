@@ -791,7 +791,7 @@ pub async fn verify_transaction(
 
             let deploy_gas_used = deploy_runtime.gas_used();
             debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {call:?} of transaction {tx_hash}: {deploy_gas_used}");
-            gas_data.deployments += deploy_gas_used;
+            gas_data.deployments = gas_data.deployments.saturating_add(deploy_gas_used);
         }
 
         // At this point we're done with the call and move on to the next one.
@@ -800,12 +800,13 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {call:?} of transaction {tx_hash}: {wasm_gas_used}");
 
         // Append the used wasm gas
-        gas_data.wasm += wasm_gas_used;
+        gas_data.wasm = gas_data.wasm.saturating_add(wasm_gas_used);
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    gas_data.signatures = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
-        serialize_async(tx).await.len() as u64;
+    gas_data.signatures = PALLAS_SCHNORR_SIGNATURE_FEE
+        .saturating_mul(tx.signatures.len() as u64)
+        .saturating_add(serialize_async(tx).await.len() as u64);
     debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {tx_hash}: {}", gas_data.signatures);
 
     // The ZK circuit fee is calculated using a function in validator/fees.rs
@@ -814,7 +815,7 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {tx_hash}: {zk_circuit_gas_used}", zkbin.namespace);
 
         // Append the used zk circuit gas
-        gas_data.zk_circuits += zk_circuit_gas_used;
+        gas_data.zk_circuits = gas_data.zk_circuits.saturating_add(zk_circuit_gas_used);
     }
 
     // Store the calculated total gas used to avoid recalculating it for subsequent uses
@@ -992,8 +993,8 @@ pub async fn verify_transactions(
     let mut erroneous_txs = vec![];
 
     // Total gas accumulators
-    let mut total_gas_used = 0;
-    let mut total_gas_paid = 0;
+    let mut total_gas_used = 0_u64;
+    let mut total_gas_paid = 0_u64;
 
     // Map of ZK proof verifying keys for the current transaction batch
     let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -1032,7 +1033,7 @@ pub async fn verify_transactions(
         let tx_gas_used = gas_data.total_gas_used();
 
         // Calculate current accumulated gas usage
-        let accumulated_gas_usage = total_gas_used + tx_gas_used;
+        let accumulated_gas_usage = total_gas_used.saturating_add(tx_gas_used);
 
         // Check gas limit - if accumulated gas used exceeds it, break out of loop
         if accumulated_gas_usage > BLOCK_GAS_LIMIT {
@@ -1047,8 +1048,8 @@ pub async fn verify_transactions(
         }
 
         // Update accumulated total gas
-        total_gas_used += tx_gas_used;
-        total_gas_paid += gas_data.paid;
+        total_gas_used = total_gas_used.saturating_add(tx_gas_used);
+        total_gas_paid = total_gas_paid.saturating_add(gas_data.paid);
     }
 
     if !erroneous_txs.is_empty() {

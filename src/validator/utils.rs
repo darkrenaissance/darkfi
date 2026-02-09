@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::LazyLock;
+
 use darkfi_sdk::{
     crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
     tx::TransactionHash,
@@ -33,6 +35,10 @@ use crate::{
     },
     Error, Result,
 };
+
+/// Max 32 bytes integer, used in rank calculations.
+/// Cached to avoid repeated allocation.
+static MAX_32_BYTES: LazyLock<BigUint> = LazyLock::new(|| BigUint::from_bytes_le(&[0xFF; 32]));
 
 /// Deploy DarkFi native wasm contracts to provided blockchain overlay.
 ///
@@ -131,15 +137,12 @@ pub fn header_rank(module: &mut PoWModule, header: &Header) -> Result<(BigUint, 
     // Verify hash is less than the expected mine target
     let out_hash = module.verify_block_target(header, &target)?;
 
-    // Grab the max 32 bytes int
-    let max = BigUint::from_bytes_le(&[0xFF; 32]);
-
     // Compute the squared mining target distance
-    let target_distance = &max - target;
+    let target_distance = &*MAX_32_BYTES - target;
     let target_distance_sq = &target_distance * &target_distance;
 
     // Compute the output hash distance
-    let hash_distance = max - out_hash;
+    let hash_distance = &*MAX_32_BYTES - out_hash;
     let hash_distance_sq = &hash_distance * &hash_distance;
 
     Ok((difficulty, target_distance_sq, hash_distance_sq))
@@ -157,10 +160,10 @@ pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUi
     }
 
     // Grab the max 32 bytes int
-    let max = BigUint::from_bytes_le(&[0xFF; 32]);
+    let max = &*MAX_32_BYTES;
 
     // Compute the squared mining target distance
-    let target_distance = &max - target;
+    let target_distance = max - target;
     let target_distance_sq = &target_distance * &target_distance;
 
     // Setup RandomX verifier
@@ -214,12 +217,12 @@ pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(
         // Traverse fork proposals sequence in reverse
         for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
             // Check we haven't already seen that proposal
-            if &proposal_hash == p_hash {
+            if proposal_hash == *p_hash {
                 return Err(Error::ProposalAlreadyExists)
             }
 
             // Check if proposal extends this fork
-            if &proposal.block.header.previous == p_hash {
+            if proposal.block.header.previous == *p_hash {
                 (fork_index, proposal_index) = (Some(f_index), Some(p_index));
             }
         }
