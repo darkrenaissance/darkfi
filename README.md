@@ -66,7 +66,7 @@ you haven't already done it:
 ```shell
 % git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
-% git checkout v0.5.0
+% git checkout a05956d412a091e8b54c1cd4f4264c33b941203d
 ```
 
 This project requires the Rust compiler to be installed. 
