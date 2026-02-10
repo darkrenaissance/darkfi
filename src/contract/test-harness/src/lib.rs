@@ -66,6 +66,8 @@ use tracing::{debug, warn};
 /// Utility module for caching ZK proof PKs and VKs
 pub mod vks;
 
+/// `Money::Burn` functionality
+mod money_burn;
 /// `Money::Fee` functionality
 mod money_fee;
 /// `Money::GenesisMint` functionality
@@ -530,6 +532,25 @@ impl TestHarness {
         for h in &holders {
             self.execute_transfer_tx(h, tx.clone(), &params, &fee_params, block_height, true)
                 .await?;
+        }
+
+        self.assert_all_trees();
+
+        Ok(())
+    }
+
+    /// Burn given [`OwnCoin`]s and execute the tx on all registered holders.
+    pub async fn burn_to_all(
+        &mut self,
+        holder: &Holder,
+        coins: &[OwnCoin],
+        block_height: u32,
+    ) -> Result<()> {
+        let (tx, (params, fee_params), _spent) = self.burn(holder, coins, block_height).await?;
+
+        let holders = self.holder_keys.clone();
+        for h in &holders {
+            self.execute_burn_tx(h, tx.clone(), &params, &fee_params, block_height, true).await?;
         }
 
         self.assert_all_trees();

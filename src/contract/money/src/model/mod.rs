@@ -270,6 +270,24 @@ pub struct MoneyAuthTokenFreezeUpdateV1 {
     pub token_id: TokenId,
 }
 
+/// Parameters for `Money::BurnV1`
+///
+/// Burns (destroys) coins, removing value from circulation permanently.
+/// The call has inputs but no outputs; the value committed in the inputs
+/// is destroyed. All inputs must use the same token commitment.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyBurnParamsV1 {
+    /// Anonymous inputs
+    pub inputs: Vec<Input>,
+}
+
+/// State update for `Money::BurnV1`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyBurnUpdateV1 {
+    /// Revealed nullifiers from the burned coins
+    pub nullifiers: Vec<Nullifier>,
+}
+
 /// Parameters for `Money::PoWReward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyPoWRewardParamsV1 {

@@ -109,6 +109,9 @@ pub enum MoneyError {
 
     #[error("Children indexes length missmatch")]
     ChildrenIndexesLengthMismatch,
+
+    #[error("Missing inputs in burn call")]
+    BurnMissingInputs,
 }
 
 impl From<MoneyError> for ContractError {
@@ -143,6 +146,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::CoinMerkleRootNotFound => Self::Custom(27),
             MoneyError::RootsValueDataMismatch => Self::Custom(28),
             MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(29),
+            MoneyError::BurnMissingInputs => Self::Custom(30),
         }
     }
 }

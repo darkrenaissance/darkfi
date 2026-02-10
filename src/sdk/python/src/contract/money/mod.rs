@@ -60,6 +60,10 @@ pub use token_mint_v1::MoneyTokenMintParamsV1;
 pub mod transfer_v1;
 pub use transfer_v1::MoneyTransferParamsV1;
 
+/// [`MoneyFunction::BurnV1`] function call parameter's bindings.
+pub mod burn_v1;
+pub use burn_v1::MoneyBurnParamsV1;
+
 /// Decodes the parameters of a Money contract function call.
 pub fn decode_money_function_params(
     function_index: u8,
@@ -92,6 +96,10 @@ pub fn decode_money_function_params(
         }
         MoneyFunction::TokenMintV1 => {
             let params: money_model::MoneyTokenMintParamsV1 = deserialize(&data[1..])?;
+            Box::new(params)
+        }
+        MoneyFunction::BurnV1 => {
+            let params: money_model::MoneyBurnParamsV1 = deserialize(&data[1..])?;
             Box::new(params)
         }
     };
@@ -192,6 +200,7 @@ pub fn create_module(py: Python) -> PyResult<Bound<PyModule>> {
     submod.add_class::<MoneyPoWRewardParamsV1>()?;
     submod.add_class::<MoneyTokenMintParamsV1>()?;
     submod.add_class::<MoneyTransferParamsV1>()?;
+    submod.add_class::<MoneyBurnParamsV1>()?;
     submod.add_class::<Input>()?;
     submod.add_class::<Output>()?;
     submod.add_class::<ClearInput>()?;

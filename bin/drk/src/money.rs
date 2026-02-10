@@ -40,8 +40,8 @@ use darkfi_money_contract::{
         MoneyNote, OwnCoin,
     },
     model::{
-        Coin, Input, MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1,
-        MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenMintParamsV1,
+        Coin, Input, MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenMintParamsV1, MoneyBurnParamsV1,
+        MoneyFeeParamsV1, MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenMintParamsV1,
         MoneyTransferParamsV1, Nullifier, Output, TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
@@ -805,6 +805,13 @@ impl Drk {
                 let child_params: MoneyAuthTokenMintParamsV1 =
                     deserialize_async(&child_call.data.data[1..]).await?;
                 coins.push((params.coin, child_params.enc_note, false));
+            }
+            MoneyFunction::BurnV1 => {
+                scan_cache.log(String::from("[parse_money_call] Found Money::BurnV1 call"));
+                let params: MoneyBurnParamsV1 = deserialize_async(&data[1..]).await?;
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
             }
         }
 

@@ -21,7 +21,7 @@ use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use tracing::info;
 
 #[test]
-fn token_mint() -> Result<()> {
+fn token_mint_burn() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
@@ -43,6 +43,12 @@ fn token_mint() -> Result<()> {
         // Freeze BOB token authority
         info!("Freezing BOB token authority");
         th.token_freeze_to_all(&Bob, block_height).await?;
+
+        // Burn the BOB tokens (single coin supply)
+        info!("Burning BOB token");
+        let bob_coins = th.coins(&Bob).to_vec();
+        th.burn_to_all(&Bob, &bob_coins, block_height).await?;
+        assert!(th.coins(&Bob).is_empty());
 
         // Thanks for reading
         Ok(())

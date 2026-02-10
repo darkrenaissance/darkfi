@@ -36,6 +36,7 @@ pub enum MoneyFunction {
     AuthTokenMintV1 = 0x05,
     AuthTokenFreezeV1 = 0x06,
     TokenMintV1 = 0x07,
+    BurnV1 = 0x08,
 }
 // ANCHOR_END: money-function
 
@@ -52,6 +53,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x05 => Ok(Self::AuthTokenMintV1),
             0x06 => Ok(Self::AuthTokenFreezeV1),
             0x07 => Ok(Self::TokenMintV1),
+            0x08 => Ok(Self::BurnV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

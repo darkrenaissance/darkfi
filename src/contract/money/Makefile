@@ -61,11 +61,11 @@ test-genesis-mint: all
 		--features=no-entrypoint,client \
 		--test genesis_mint
 
-test-token-mint: all
+test-token-mint-burn: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --package $(PKGNAME) \
 		--features=no-entrypoint,client \
-		--test token_mint
+		--test token_mint_burn
 
 test-delayed-tx: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \

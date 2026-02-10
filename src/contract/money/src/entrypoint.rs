@@ -29,8 +29,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::MoneyError,
     model::{
-        MoneyAuthTokenFreezeUpdateV1, MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1,
-        MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyTokenMintUpdateV1,
+        MoneyAuthTokenFreezeUpdateV1, MoneyAuthTokenMintUpdateV1, MoneyBurnUpdateV1,
+        MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyTokenMintUpdateV1,
         MoneyTransferUpdateV1,
     },
     MoneyFunction, EMPTY_COINS_TREE_ROOT, MONEY_CONTRACT_COINS_TREE,
@@ -93,6 +93,12 @@ mod token_mint_v1;
 use token_mint_v1::{
     money_token_mint_get_metadata_v1, money_token_mint_process_instruction_v1,
     money_token_mint_process_update_v1,
+};
+
+/// `Money::Burn` functions
+mod burn_v1;
+use burn_v1::{
+    money_burn_get_metadata_v1, money_burn_process_instruction_v1, money_burn_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -250,6 +256,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             money_auth_token_freeze_get_metadata_v1(cid, call_idx, calls)?
         }
         MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::BurnV1 => money_burn_get_metadata_v1(cid, call_idx, calls)?,
     };
 
     wasm::util::set_return_data(&metadata)
@@ -290,6 +297,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::TokenMintV1 => {
             money_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
+        MoneyFunction::BurnV1 => money_burn_process_instruction_v1(cid, call_idx, calls)?,
     };
 
     wasm::util::set_return_data(&update_data)
@@ -342,6 +350,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::TokenMintV1 => {
             let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_token_mint_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::BurnV1 => {
+            let update: MoneyBurnUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_burn_process_update_v1(cid, update)?)
         }
     }
 }
