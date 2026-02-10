@@ -21,16 +21,12 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::{transfer_v1::make_transfer_call, MoneyNote, OwnCoin},
+    client::{transfer_v1::make_transfer_call, OwnCoin},
     model::{MoneyFeeParamsV1, MoneyTransferParamsV1, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
-use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode},
-    ContractCall,
-};
-use darkfi_serial::AsyncEncodable;
-use tracing::debug;
+use darkfi_sdk::{crypto::contract_id::MONEY_CONTRACT_ID, ContractCall};
+use darkfi_serial::Encodable;
 
 use super::{Holder, TestHarness};
 
@@ -48,8 +44,8 @@ impl TestHarness {
         half_split: bool,
     ) -> Result<(Transaction, (MoneyTransferParamsV1, Option<MoneyFeeParamsV1>), Vec<OwnCoin>)>
     {
-        let wallet = self.holders.get(holder).unwrap();
-        let rcpt = self.holders.get(recipient).unwrap().keypair.public;
+        let wallet = self.wallet(holder);
+        let rcpt = self.wallet(recipient).keypair.public;
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -73,20 +69,21 @@ impl TestHarness {
 
         // Encode the call
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        params.encode_async(&mut data).await?;
+        params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // Create the TransactionBuilder containing the `Transfer` call
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;
 
-        // If we have tx fees enabled, we first have to execute the fee-less tx to gather its
-        // used gas, and then we feed it into the fee-creating function.
-        // We also tell it about any spent coins so we don't accidentally reuse them in the
-        // fee call.
-        // TODO: We have to build a proper coin selection algorithm so that we can utilize
-        // the Money::Transfer to merge any coins which would give us a coin with enough
-        // value for paying the transaction fee.
+        // If we have tx fees enabled, we first have to execute the fee-less
+        // transaction to gather its used gas, and then we feed it into the
+        // fee-creating function.
+        // We also tell it about any spent coins so we don't accidentally
+        // reuse them in the fee call.
+        // TODO: We have to build a proper coin selection algorithm so that we
+        // can utilize the Money::Transfer to merge any coins which would give
+        // us a coin with enough value for paying the transaction fee.
         let mut fee_params = None;
         let mut fee_signature_secrets = None;
         if self.verify_fees {
@@ -118,7 +115,7 @@ impl TestHarness {
 
     /// Execute a `Money::Transfer` transaction for a given [`Holder`].
     ///
-    /// Returns any found [`OwnCoin`]s.
+    /// Returns any found [`OwnCoin`]s
     pub async fn execute_transfer_tx(
         &mut self,
         holder: &Holder,
@@ -128,95 +125,17 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("money::transfer", tx, block_height).await?;
 
-        // Iterate over call inputs to mark any spent coins
-        let nullifiers =
-            call_params.inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
-        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
+        // Always insert nullifiers into SMT (needed for state consistency)
+        wallet.process_inputs(&call_params.inputs, holder);
 
         let mut found_owncoins = vec![];
         if append {
-            for input in &call_params.inputs {
-                if let Some(spent_coin) = wallet
-                    .unspent_money_coins
-                    .iter()
-                    .find(|x| x.nullifier() == input.nullifier)
-                    .cloned()
-                {
-                    debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                    wallet.unspent_money_coins.retain(|x| x.nullifier() != input.nullifier);
-                    wallet.spent_money_coins.push(spent_coin.clone());
-                }
-            }
-
-            // Iterate over call outputs to find any new OwnCoins
-            for output in &call_params.outputs {
-                wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-
-                // Attempt to decrypt the output note to see if this is a coin for the holder.
-                let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                    continue
-                };
-
-                let owncoin = OwnCoin {
-                    coin: output.coin,
-                    note: note.clone(),
-                    secret: wallet.keypair.secret,
-                    leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-                };
-
-                debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-                wallet.unspent_money_coins.push(owncoin.clone());
-                found_owncoins.push(owncoin);
-            }
-        }
-
-        // Handle fee call
-        if let Some(ref fee_params) = fee_params {
-            // Process call input to mark any spent coins
-            let nullifier = fee_params.input.nullifier.inner();
-            wallet
-                .money_null_smt
-                .insert_batch(vec![(nullifier, nullifier)])
-                .expect("smt.insert_batch()");
-
-            if append {
-                if let Some(spent_coin) = wallet
-                    .unspent_money_coins
-                    .iter()
-                    .find(|x| x.nullifier() == fee_params.input.nullifier)
-                    .cloned()
-                {
-                    debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                    wallet
-                        .unspent_money_coins
-                        .retain(|x| x.nullifier() != fee_params.input.nullifier);
-                    wallet.spent_money_coins.push(spent_coin.clone());
-                }
-
-                // Process call output to find any new OwnCoins
-                wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-                // Attempt to decrypt the output note to see if this is a coin for the holder.
-                if let Ok(note) =
-                    fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-                {
-                    let owncoin = OwnCoin {
-                        coin: fee_params.output.coin,
-                        note: note.clone(),
-                        secret: wallet.keypair.secret,
-                        leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-                    };
-
-                    debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-                    wallet.unspent_money_coins.push(owncoin.clone());
-                    found_owncoins.push(owncoin);
-                };
-            }
+            found_owncoins.extend(wallet.process_outputs(&call_params.outputs, holder));
+            found_owncoins.extend(wallet.process_fee(fee_params, holder));
         }
 
         Ok(found_owncoins)

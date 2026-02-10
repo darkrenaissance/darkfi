@@ -36,14 +36,14 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, BaseBlind, Blind, FuncId,
-        MerkleNode, ScalarBlind, SecretKey,
+        ScalarBlind, SecretKey,
     },
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
+use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
-use tracing::{debug, info};
+use tracing::info;
 
 use super::{Holder, TestHarness};
 
@@ -55,7 +55,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
     ) -> Result<(Transaction, MoneyFeeParamsV1)> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
 
         // Compute fee call required fee
         let required_fee = compute_fee(&FEE_CALL_GAS);
@@ -92,7 +92,7 @@ impl TestHarness {
         // Generate an ephemeral signing key
         let signature_secret = SecretKey::random(&mut OsRng);
 
-        info!("Creting FeeV1 ZK proof");
+        info!("Creating FeeV1 ZK proof");
         let (fee_pk, fee_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_FEE_NS_V1).unwrap();
 
         let (proof, public_inputs) = create_fee_proof(
@@ -143,8 +143,8 @@ impl TestHarness {
         };
 
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        required_fee.encode_async(&mut data).await?;
-        params.encode_async(&mut data).await?;
+        required_fee.encode(&mut data)?;
+        params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![proof] }, vec![])?;
@@ -155,7 +155,7 @@ impl TestHarness {
         Ok((tx, params))
     }
 
-    /// Execute the transaction created by `create_empty_fee_call()` for a given [`Holder`]
+    /// Execute the transaction created by `create_empty_fee_call()` for a given [`Holder`].
     ///
     /// Returns any found [`OwnCoin`]s.
     pub async fn execute_empty_fee_call_tx(
@@ -165,44 +165,9 @@ impl TestHarness {
         params: &MoneyFeeParamsV1,
         block_height: u32,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-
-        let nullifier = params.input.nullifier.inner();
-        wallet
-            .money_null_smt
-            .insert_batch(vec![(nullifier, nullifier)])
-            .expect("smt.insert_batch()");
-
+        let wallet = self.wallet_mut(holder);
         wallet.add_transaction("money::fee", tx, block_height).await?;
-        wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-
-        // Attempt to decrypt the output note to see if this is a coin for the holder
-        let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-            return Ok(vec![])
-        };
-
-        let owncoin = OwnCoin {
-            coin: params.output.coin,
-            note: note.clone(),
-            secret: wallet.keypair.secret,
-            leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-        };
-
-        let spent_coin = wallet
-            .unspent_money_coins
-            .iter()
-            .find(|x| x.nullifier() == params.input.nullifier)
-            .unwrap()
-            .clone();
-
-        debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-        debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-
-        wallet.unspent_money_coins.retain(|x| x.nullifier() != params.input.nullifier);
-        wallet.spent_money_coins.push(spent_coin);
-        wallet.unspent_money_coins.push(owncoin.clone());
-
-        Ok(vec![owncoin])
+        Ok(wallet.process_fee(&Some(params.clone()), holder))
     }
 
     /// Create and append a `Money::Fee` call to a given [`Transaction`] for
@@ -218,9 +183,9 @@ impl TestHarness {
         block_height: u32,
         spent_coins: &[OwnCoin],
     ) -> Result<(ContractCall, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>, MoneyFeeParamsV1)> {
-        // First we verify the fee-less transaction to see how much gas it uses for execution
-        // and verification.
-        let wallet = self.holders.get(holder).unwrap();
+        // First we verify the fee-less transaction to see how much gas it
+        // uses for execution and verification.
+        let wallet = self.wallet(holder);
         let validator = wallet.validator.read().await;
         let gas_used = validator
             .add_test_transactions(
@@ -236,8 +201,8 @@ impl TestHarness {
         // Compute the required fee
         let required_fee = compute_fee(&(gas_used + FEE_CALL_GAS));
 
-        // Knowing the total gas, we can now find an OwnCoin of enough value
-        // so that we can create a valid Money::Fee call.
+        // Knowing the total gas, we can now find an OwnCoin of enough
+        // value so that we can create a valid Money::Fee call.
         let spent_coins: HashSet<&OwnCoin, RandomState> = HashSet::from_iter(spent_coins);
         let mut available_coins = wallet.unspent_money_coins.clone();
         available_coins
@@ -325,8 +290,8 @@ impl TestHarness {
 
         // Encode the contract call
         let mut data = vec![MoneyFunction::FeeV1 as u8];
-        required_fee.encode_async(&mut data).await?;
-        params.encode_async(&mut data).await?;
+        required_fee.encode(&mut data)?;
+        params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         Ok((call, vec![proof], vec![signature_secret], vec![coin.clone()], params))

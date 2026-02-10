@@ -21,17 +21,16 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::{genesis_mint_v1::GenesisMintCallBuilder, MoneyNote, OwnCoin},
+    client::{genesis_mint_v1::GenesisMintCallBuilder, OwnCoin},
     model::MoneyGenesisMintParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleNode},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId},
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
-use tracing::debug;
+use darkfi_serial::Encodable;
 
 use super::{Holder, TestHarness};
 
@@ -46,7 +45,7 @@ impl TestHarness {
         spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
 
@@ -65,7 +64,7 @@ impl TestHarness {
 
         // Encode and build the transaction
         let mut data = vec![MoneyFunction::GenesisMintV1 as u8];
-        debris.params.encode_async(&mut data).await?;
+        debris.params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
@@ -89,35 +88,12 @@ impl TestHarness {
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
 
-        // Execute the transaction
         wallet.add_transaction("money::genesis_mint", tx, block_height).await?;
 
         if !append {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
-        // Iterate over call outputs to find any new OwnCoins
-        let mut found_owncoins = vec![];
-        for output in &params.outputs {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-
-            // Attempt to decrypt the output note to see if this is a coin for the holder.
-            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                continue
-            };
-
-            let owncoin = OwnCoin {
-                coin: output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            found_owncoins.push(owncoin);
-        }
-
-        Ok(found_owncoins)
+        Ok(wallet.process_outputs(&params.outputs, holder))
     }
 }

@@ -23,17 +23,9 @@ use darkfi::{
 use darkfi_deployooor_contract::{
     client::lock_v1::LockCallBuilder, model::LockParamsV1, DeployFunction,
 };
-use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::MoneyFeeParamsV1,
-};
-use darkfi_sdk::{
-    crypto::{contract_id::DEPLOYOOOR_CONTRACT_ID, MerkleNode},
-    //deploy::LockParamsV1,
-    ContractCall,
-};
-use darkfi_serial::AsyncEncodable;
-use tracing::debug;
+use darkfi_money_contract::{client::OwnCoin, model::MoneyFeeParamsV1};
+use darkfi_sdk::{crypto::contract_id::DEPLOYOOOR_CONTRACT_ID, ContractCall};
+use darkfi_serial::Encodable;
 
 use super::{Holder, TestHarness};
 
@@ -46,7 +38,7 @@ impl TestHarness {
         holder: &Holder,
         block_height: u32,
     ) -> Result<(Transaction, LockParamsV1, Option<MoneyFeeParamsV1>)> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
         let deploy_keypair = wallet.contract_deploy_authority;
 
         // Build the contract call
@@ -55,7 +47,7 @@ impl TestHarness {
 
         // Encode the call
         let mut data = vec![DeployFunction::LockV1 as u8];
-        debris.params.encode_async(&mut data).await?;
+        debris.params.encode(&mut data)?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
@@ -101,52 +93,14 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("deploy::lock", tx, block_height).await?;
 
         if !append {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
-        if let Some(ref fee_params) = fee_params {
-            let nullifier = fee_params.input.nullifier.inner();
-            wallet
-                .money_null_smt
-                .insert_batch(vec![(nullifier, nullifier)])
-                .expect("smt.insert_batch()");
-
-            if let Some(spent_coin) = wallet
-                .unspent_money_coins
-                .iter()
-                .find(|x| x.nullifier() == fee_params.input.nullifier)
-                .cloned()
-            {
-                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                wallet.unspent_money_coins.retain(|x| x.nullifier() != fee_params.input.nullifier);
-                wallet.spent_money_coins.push(spent_coin.clone());
-            }
-
-            wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-            let Ok(note) = fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-            else {
-                return Ok(vec![])
-            };
-
-            let owncoin = OwnCoin {
-                coin: fee_params.output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            return Ok(vec![owncoin])
-        }
-
-        Ok(vec![])
+        Ok(wallet.process_fee(fee_params, holder))
     }
 }

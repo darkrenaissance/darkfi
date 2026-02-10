@@ -29,21 +29,20 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_EXEC_NS,
 };
 use darkfi_money_contract::{
-    client::{transfer_v1 as xfer, MoneyNote, OwnCoin},
+    client::{transfer_v1 as xfer, OwnCoin},
     model::{CoinAttributes, MoneyFeeParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        pedersen_commitment_u64, Blind, FuncRef, MerkleNode, ScalarBlind, SecretKey,
+        pedersen_commitment_u64, Blind, FuncRef, ScalarBlind, SecretKey,
     },
     dark_tree::DarkTree,
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
+use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
-use tracing::debug;
 
 use super::{Holder, TestHarness};
 
@@ -64,7 +63,7 @@ impl TestHarness {
         all_vote_blind: ScalarBlind,
         block_height: u32,
     ) -> Result<(Transaction, MoneyTransferParamsV1, Option<MoneyFeeParamsV1>)> {
-        let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
+        let dao_wallet = self.wallet(&Holder::Dao);
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -136,7 +135,7 @@ impl TestHarness {
 
         let (xfer_params, xfer_secrets) = xfer_builder.build()?;
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        xfer_params.encode_async(&mut data).await?;
+        xfer_params.encode(&mut data)?;
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // We need to extract stuff from the inputs and outputs that we'll also
@@ -172,7 +171,7 @@ impl TestHarness {
             dao_exec_pk,
         )?;
         let mut data = vec![DaoFunction::Exec as u8];
-        exec_params.encode_async(&mut data).await?;
+        exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // Auth module
@@ -190,7 +189,7 @@ impl TestHarness {
             dao_auth_xfer_enc_coin_pk,
         )?;
         let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
-        auth_xfer_params.encode_async(&mut data).await?;
+        auth_xfer_params.encode(&mut data)?;
         let auth_xfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // We need to construct this tree, where exec is the parent:
@@ -267,7 +266,7 @@ impl TestHarness {
         all_vote_blind: ScalarBlind,
         block_height: u32,
     ) -> Result<(Transaction, Option<MoneyFeeParamsV1>)> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet(holder);
 
         let (dao_exec_pk, dao_exec_zkbin) = match dao_early_exec_secret_key {
             Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_EARLY_EXEC_NS).unwrap(),
@@ -297,7 +296,7 @@ impl TestHarness {
 
         // Encode the call
         let mut data = vec![DaoFunction::Exec as u8];
-        exec_params.encode_async(&mut data).await?;
+        exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // Create the TransactionBuilder containing the `DAO::Exec` call
@@ -348,61 +347,27 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("dao::exec", tx, block_height).await?;
 
         if !append {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
-        let (mut inputs, mut outputs) = match xfer_params {
-            Some(params) => (params.inputs.to_vec(), params.outputs.to_vec()),
-            None => (vec![], vec![]),
-        };
-
-        if let Some(ref fee_params) = fee_params {
-            inputs.push(fee_params.input.clone());
-            outputs.push(fee_params.output.clone());
+        // Combine transfer and fee inputs/outputs, then process uniformly
+        let mut inputs = vec![];
+        let mut outputs = vec![];
+        if let Some(params) = xfer_params {
+            inputs.extend_from_slice(&params.inputs);
+            outputs.extend_from_slice(&params.outputs);
+        }
+        if let Some(ref fp) = fee_params {
+            inputs.push(fp.input.clone());
+            outputs.push(fp.output.clone());
         }
 
-        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
-        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
-
-        for input in inputs {
-            if let Some(spent_coin) = wallet
-                .unspent_money_coins
-                .iter()
-                .find(|x| x.nullifier() == input.nullifier)
-                .cloned()
-            {
-                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                wallet.unspent_money_coins.retain(|x| x.nullifier() != input.nullifier);
-                wallet.spent_money_coins.push(spent_coin.clone());
-            }
-        }
-
-        let mut found_owncoins = vec![];
-        for output in outputs {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-
-            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                continue
-            };
-
-            let owncoin = OwnCoin {
-                coin: output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            found_owncoins.push(owncoin);
-        }
-
-        Ok(found_owncoins)
+        wallet.process_inputs(&inputs, holder);
+        Ok(wallet.process_outputs(&outputs, holder))
     }
 }

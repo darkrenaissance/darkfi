@@ -24,18 +24,17 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::{swap_v1::SwapCallBuilder, MoneyNote, OwnCoin},
+    client::{swap_v1::SwapCallBuilder, OwnCoin},
     model::{MoneyFeeParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, BaseBlind, Blind, FuncId, MerkleNode},
+    crypto::{contract_id::MONEY_CONTRACT_ID, BaseBlind, Blind, FuncId},
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
+use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
-use tracing::debug;
 
 use super::{Holder, TestHarness};
 
@@ -51,8 +50,8 @@ impl TestHarness {
         owncoin1: &OwnCoin,
         block_height: u32,
     ) -> Result<(Transaction, MoneyTransferParamsV1, Option<MoneyFeeParamsV1>)> {
-        let wallet0 = self.holders.get(holder0).unwrap();
-        let wallet1 = self.holders.get(holder1).unwrap();
+        let wallet0 = self.wallet(holder0);
+        let wallet1 = self.wallet(holder1);
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -131,7 +130,7 @@ impl TestHarness {
 
         // Encode the contract call
         let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
-        swap_full_params.encode_async(&mut data).await?;
+        swap_full_params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: swap_full_proofs }, vec![])?;
@@ -185,60 +184,23 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("money::otc_swap", tx, block_height).await?;
 
-        let mut found_owncoins = vec![];
-
         if !append {
-            return Ok(found_owncoins)
+            return Ok(vec![]);
         }
 
+        // Combine swap inputs/outputs with fee inputs/outputs, then process
         let mut inputs = swap_params.inputs.to_vec();
         let mut outputs = swap_params.outputs.to_vec();
-        if let Some(ref fee_params) = fee_params {
-            inputs.push(fee_params.input.clone());
-            outputs.push(fee_params.output.clone());
+        if let Some(ref fp) = fee_params {
+            inputs.push(fp.input.clone());
+            outputs.push(fp.output.clone());
         }
 
-        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
-        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
-
-        for input in inputs {
-            if let Some(spent_coin) = wallet
-                .unspent_money_coins
-                .iter()
-                .find(|x| x.nullifier() == input.nullifier)
-                .cloned()
-            {
-                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                wallet.unspent_money_coins.retain(|x| x.nullifier() != input.nullifier);
-                wallet.spent_money_coins.push(spent_coin.clone());
-            }
-        }
-
-        for output in outputs {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-
-            // Attempt to decrypt the encrypted note
-            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                continue
-            };
-
-            let owncoin = OwnCoin {
-                coin: output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            found_owncoins.push(owncoin);
-        }
-
-        Ok(found_owncoins)
+        wallet.process_inputs(&inputs, holder);
+        Ok(wallet.process_outputs(&outputs, holder))
     }
 }

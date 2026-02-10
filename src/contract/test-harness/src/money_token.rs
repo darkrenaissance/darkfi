@@ -39,7 +39,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
+use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
 use tracing::debug;
 
@@ -63,9 +63,9 @@ impl TestHarness {
         MoneyAuthTokenMintParamsV1,
         Option<MoneyFeeParamsV1>,
     )> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
         let mint_authority = wallet.token_mint_authority;
-        let rcpt = self.holders.get(recipient).unwrap().keypair.public;
+        let rcpt = self.wallet(recipient).keypair.public;
 
         let (token_mint_pk, token_mint_zkbin) =
             self.proving_keys.get(MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
@@ -109,7 +109,7 @@ impl TestHarness {
         };
         let auth_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenMintV1 as u8];
-        auth_debris.params.encode_async(&mut data).await?;
+        auth_debris.params.encode(&mut data)?;
         let auth_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // Create the minting call
@@ -121,7 +121,7 @@ impl TestHarness {
         };
         let mint_debris = builder.build()?;
         let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        mint_debris.params.encode_async(&mut data).await?;
+        mint_debris.params.encode(&mut data)?;
         let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // Create the TransactionBuilder containing above calls
@@ -180,35 +180,17 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("money::token_mint", tx, block_height).await?;
 
-        // Iterate over all inputs to mark any spent coins
-        if let Some(ref fee_params) = fee_params {
-            if append {
-                if let Some(spent_coin) = wallet
-                    .unspent_money_coins
-                    .iter()
-                    .find(|x| x.nullifier() == fee_params.input.nullifier)
-                    .cloned()
-                {
-                    debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                    wallet
-                        .unspent_money_coins
-                        .retain(|x| x.nullifier() != fee_params.input.nullifier);
-                    wallet.spent_money_coins.push(spent_coin.clone());
-                }
-            }
-        }
-
         let mut found_owncoins = vec![];
-
         if append {
-            wallet.money_merkle_tree.append(MerkleNode::from(mint_params.coin.inner()));
+            // Process the fee input (mark spent)
+            found_owncoins.extend(wallet.process_fee(fee_params, holder));
 
-            // Attempt to decrypt the encrypted note of the minted token
+            // Process the minted coin output
+            wallet.money_merkle_tree.append(MerkleNode::from(mint_params.coin.inner()));
             if let Ok(note) = auth_params.enc_note.decrypt::<MoneyNote>(&wallet.keypair.secret) {
                 let owncoin = OwnCoin {
                     coin: mint_params.coin,
@@ -216,30 +198,9 @@ impl TestHarness {
                     secret: wallet.keypair.secret,
                     leaf_position: wallet.money_merkle_tree.mark().unwrap(),
                 };
-
                 debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
                 wallet.unspent_money_coins.push(owncoin.clone());
                 found_owncoins.push(owncoin);
-            };
-
-            if let Some(ref fee_params) = fee_params {
-                wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-                // Attempt to decrypt the encrypted note in the fee output
-                if let Ok(note) =
-                    fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-                {
-                    let owncoin = OwnCoin {
-                        coin: fee_params.output.coin,
-                        note: note.clone(),
-                        secret: wallet.keypair.secret,
-                        leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-                    };
-
-                    debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-                    wallet.unspent_money_coins.push(owncoin.clone());
-                    found_owncoins.push(owncoin);
-                }
             }
         }
 
@@ -252,7 +213,7 @@ impl TestHarness {
         holder: &Holder,
         block_height: u32,
     ) -> Result<(Transaction, MoneyAuthTokenFreezeParamsV1, Option<MoneyFeeParamsV1>)> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
         let mint_authority = wallet.token_mint_authority;
 
         let (auth_mint_pk, auth_mint_zkbin) =
@@ -282,7 +243,7 @@ impl TestHarness {
         };
         let freeze_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];
-        freeze_debris.params.encode_async(&mut data).await?;
+        freeze_debris.params.encode(&mut data)?;
         let freeze_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // Create the TransactionBuilder containing the above call
@@ -332,53 +293,14 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("money::token_freeze", tx, block_height).await?;
 
-        let mut found_owncoins = vec![];
-        if let Some(ref fee_params) = fee_params {
-            if append {
-                let nullifier = fee_params.input.nullifier.inner();
-                wallet
-                    .money_null_smt
-                    .insert_batch(vec![(nullifier, nullifier)])
-                    .expect("smt.insert_batch()");
-
-                if let Some(spent_coin) = wallet
-                    .unspent_money_coins
-                    .iter()
-                    .find(|x| x.nullifier() == fee_params.input.nullifier)
-                    .cloned()
-                {
-                    debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                    wallet
-                        .unspent_money_coins
-                        .retain(|x| x.nullifier() != fee_params.input.nullifier);
-                    wallet.spent_money_coins.push(spent_coin.clone());
-                }
-
-                wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-                // Attempt to decrypt the encrypted note
-                if let Ok(note) =
-                    fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-                {
-                    let owncoin = OwnCoin {
-                        coin: fee_params.output.coin,
-                        note: note.clone(),
-                        secret: wallet.keypair.secret,
-                        leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-                    };
-
-                    debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-                    wallet.unspent_money_coins.push(owncoin.clone());
-                    found_owncoins.push(owncoin);
-                }
-            }
+        if !append {
+            return Ok(vec![]);
         }
 
-        Ok(found_owncoins)
+        Ok(wallet.process_fee(fee_params, holder))
     }
 }

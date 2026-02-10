@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::slice;
+
 use darkfi::{
     blockchain::{BlockInfo, BlockchainOverlay, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
@@ -23,15 +25,15 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::{pow_reward_v1::PoWRewardCallBuilder, MoneyNote, OwnCoin},
+    client::{pow_reward_v1::PoWRewardCallBuilder, OwnCoin},
     model::MoneyPoWRewardParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode, MerkleTree},
+    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleTree},
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
+use darkfi_serial::Encodable;
 use tracing::info;
 
 use super::{Holder, TestHarness};
@@ -39,7 +41,8 @@ use super::{Holder, TestHarness};
 impl TestHarness {
     /// Create a `Money::PoWReward` transaction for a given [`Holder`].
     ///
-    /// Optionally takes a specific reward recipient and a nonstandard reward value.
+    /// Optionally takes a specific reward recipient and a nonstandard
+    /// reward value.
     /// Returns the created [`Transaction`] and [`MoneyPoWRewardParamsV1`].
     async fn pow_reward(
         &mut self,
@@ -48,7 +51,7 @@ impl TestHarness {
         reward: Option<u64>,
         fees: Option<u64>,
     ) -> Result<(Transaction, MoneyPoWRewardParamsV1)> {
-        let wallet = self.holders.get(holder).unwrap();
+        let wallet = self.wallet(holder);
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
 
@@ -56,11 +59,7 @@ impl TestHarness {
         let last_block = wallet.validator.read().await.blockchain.last_block()?;
 
         // If there's a set reward recipient, use it, otherwise reward the holder
-        let recipient = if let Some(holder) = recipient {
-            Some(self.holders.get(holder).unwrap().keypair.public)
-        } else {
-            None
-        };
+        let recipient = recipient.map(|holder| self.wallet(holder).keypair.public);
 
         // If there's fees paid, use them, otherwise set to zero
         let fees = fees.unwrap_or_default();
@@ -84,7 +83,7 @@ impl TestHarness {
 
         // Encode the transaction
         let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
-        debris.params.encode_async(&mut data).await?;
+        debris.params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
@@ -95,7 +94,7 @@ impl TestHarness {
         Ok((tx, debris.params))
     }
 
-    /// Generate and add an empty block to the given [`Holder`]s blockchains.
+    /// Generate and add an empty block to the given [`Holder`]'s blockchains.
     /// The `miner` holder will produce the block and receive the reward.
     ///
     /// Returns any found [`OwnCoin`]s.
@@ -109,7 +108,7 @@ impl TestHarness {
         let (tx, params) = self.pow_reward(miner, None, None, None).await?;
 
         // Fetch the last block in the blockchain
-        let wallet = self.holders.get(miner).unwrap();
+        let wallet = self.wallet(miner);
         let validator = wallet.validator.read().await;
         let previous = validator.blockchain.last_block()?;
 
@@ -141,33 +140,19 @@ impl TestHarness {
         )
         .await?;
         drop(validator);
+
         let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
         block.header.state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
 
         // Attach signature
         block.sign(&wallet.keypair.secret);
 
-        // For all holders, append the block
+        // For all holders, append the block and process the reward output
         let mut found_owncoins = vec![];
         for holder in holders {
-            let wallet = self.holders.get_mut(holder).unwrap();
+            let wallet = self.wallet_mut(holder);
             wallet.validator.write().await.add_test_blocks(&[block.clone()]).await?;
-            wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-
-            // Attempt to decrypt the note to see if this is a coin for the holder
-            let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                continue
-            };
-
-            let owncoin = OwnCoin {
-                coin: params.output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            wallet.unspent_money_coins.push(owncoin.clone());
-            found_owncoins.push(owncoin);
+            found_owncoins.extend(wallet.process_outputs(slice::from_ref(&params.output), holder));
         }
 
         Ok(found_owncoins)

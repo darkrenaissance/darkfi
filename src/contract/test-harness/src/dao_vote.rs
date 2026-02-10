@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2020-2026 Dyne.org foundation
  *
- * This program is free software: you can redistributemoney it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
@@ -26,16 +26,9 @@ use darkfi_dao_contract::{
     model::{Dao, DaoProposal, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_VOTE_MAIN_NS,
 };
-use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::MoneyFeeParamsV1,
-};
-use darkfi_sdk::{
-    crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode},
-    ContractCall,
-};
-use darkfi_serial::AsyncEncodable;
-use tracing::debug;
+use darkfi_money_contract::{client::OwnCoin, model::MoneyFeeParamsV1};
+use darkfi_sdk::{crypto::contract_id::DAO_CONTRACT_ID, ContractCall};
+use darkfi_serial::Encodable;
 
 use super::{Holder, TestHarness};
 
@@ -49,7 +42,7 @@ impl TestHarness {
         proposal: &DaoProposal,
         block_height: u32,
     ) -> Result<(Transaction, DaoVoteParams, Option<MoneyFeeParamsV1>)> {
-        let wallet = self.holders.get(voter).unwrap();
+        let wallet = self.wallet(voter);
 
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_VOTE_INPUT_NS).unwrap();
@@ -94,7 +87,7 @@ impl TestHarness {
 
         // Encode the call
         let mut data = vec![DaoFunction::Vote as u8];
-        params.encode_async(&mut data).await?;
+        params.encode(&mut data)?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
 
@@ -138,52 +131,14 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("dao::vote", tx, block_height).await?;
 
         if !append {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
-        if let Some(ref fee_params) = fee_params {
-            let nullifier = fee_params.input.nullifier.inner();
-            wallet
-                .money_null_smt
-                .insert_batch(vec![(nullifier, nullifier)])
-                .expect("smt.insert_batch()");
-
-            if let Some(spent_coin) = wallet
-                .unspent_money_coins
-                .iter()
-                .find(|x| x.nullifier() == fee_params.input.nullifier)
-                .cloned()
-            {
-                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                wallet.unspent_money_coins.retain(|x| x.nullifier() != fee_params.input.nullifier);
-                wallet.spent_money_coins.push(spent_coin.clone());
-            }
-
-            wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-            let Ok(note) = fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-            else {
-                return Ok(vec![])
-            };
-
-            let owncoin = OwnCoin {
-                coin: fee_params.output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            return Ok(vec![owncoin])
-        }
-
-        Ok(vec![])
+        Ok(wallet.process_fee(fee_params, holder))
     }
 }

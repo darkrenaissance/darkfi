@@ -25,16 +25,12 @@ use darkfi_dao_contract::{
     model::{Dao, DaoMintParams},
     DaoFunction, DAO_CONTRACT_ZKAS_MINT_NS,
 };
-use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::MoneyFeeParamsV1,
-};
+use darkfi_money_contract::{client::OwnCoin, model::MoneyFeeParamsV1};
 use darkfi_sdk::{
     crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode, SecretKey},
     ContractCall,
 };
-use darkfi_serial::AsyncEncodable;
-use tracing::debug;
+use darkfi_serial::Encodable;
 
 use super::{Holder, TestHarness};
 
@@ -74,7 +70,7 @@ impl TestHarness {
 
         // Encode the call
         let mut data = vec![DaoFunction::Mint as u8];
-        params.encode_async(&mut data).await?;
+        params.encode(&mut data)?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
 
@@ -119,56 +115,19 @@ impl TestHarness {
         block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        let wallet = self.wallet_mut(holder);
 
-        // Execute the transaction
         wallet.add_transaction("dao::mint", tx, block_height).await?;
 
         if !append {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
+        // Track the DAO bulla in the DAO Merkle tree
         wallet.dao_merkle_tree.append(MerkleNode::from(params.dao_bulla.inner()));
         let leaf_pos = wallet.dao_merkle_tree.mark().unwrap();
         wallet.dao_leafs.insert(params.dao_bulla, leaf_pos);
 
-        if let Some(ref fee_params) = fee_params {
-            let nullifier = fee_params.input.nullifier.inner();
-            wallet
-                .money_null_smt
-                .insert_batch(vec![(nullifier, nullifier)])
-                .expect("smt.insert_batch()");
-
-            if let Some(spent_coin) = wallet
-                .unspent_money_coins
-                .iter()
-                .find(|x| x.nullifier() == fee_params.input.nullifier)
-                .cloned()
-            {
-                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
-                wallet.unspent_money_coins.retain(|x| x.nullifier() != fee_params.input.nullifier);
-                wallet.spent_money_coins.push(spent_coin.clone());
-            }
-
-            wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
-
-            let Ok(note) = fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
-            else {
-                return Ok(vec![])
-            };
-
-            let owncoin = OwnCoin {
-                coin: fee_params.output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
-
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            return Ok(vec![owncoin])
-        }
-
-        Ok(vec![])
+        Ok(wallet.process_fee(fee_params, holder))
     }
 }
