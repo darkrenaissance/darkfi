@@ -34,84 +34,50 @@ fn genesis_mint() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Holders this test will use
-        const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
+        init_logger();
 
-        // Some numbers we want to assert
-        const ALICE_INITIAL: [u64; 1] = [100];
-        const BOB_INITIAL: [u64; 2] = [100, 100];
+        use Holder::{Alice, Bob};
 
-        // Block height to verify against
-        let current_block_height = 0;
+        const ALICE_INITIAL: u64 = 100;
+        const BOB_AMOUNTS: [u64; 2] = [100, 100];
 
-        // Initialize harness
-        let mut th = TestHarness::new(&HOLDERS, false).await?;
+        let block_height = 0;
 
-        info!(target: "money", "[Alice] ========================");
-        info!(target: "money", "[Alice] Building genesis mint tx");
-        info!(target: "money", "[Alice] ========================");
-        let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Alice, &ALICE_INITIAL, None, None).await?;
+        let mut th = TestHarness::new(&[Alice, Bob], false).await?;
 
-        info!(target: "money", "[Malicious] =============================================");
-        info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis block");
-        info!(target: "money", "[Malicious] =============================================");
+        // Build Alice's genesis mint
+        info!(target: "money", "Building Alice genesis mint tx");
+        let (genesis_tx, genesis_params) =
+            th.genesis_mint(&Alice, &[ALICE_INITIAL], None, None).await?;
+
+        // Malicious: verify genesis mint fails on non-genesis block
+        info!(target: "money", "Checking genesis mint tx not on genesis block");
         assert!(th
             .execute_genesis_mint_tx(
-                &Holder::Alice,
-                genesis_mint_tx.clone(),
-                &genesis_mint_params,
-                current_block_height + 1,
+                &Alice,
+                genesis_tx.clone(),
+                &genesis_params,
+                block_height + 1,
                 true,
             )
             .await
             .is_err());
 
-        for holder in &HOLDERS {
-            info!(target: "money", "[{holder:?}] ================================");
-            info!(target: "money", "[{holder:?}] Executing Alice genesis mint tx");
-            info!(target: "money", "[{holder:?}] ================================");
-            th.execute_genesis_mint_tx(
-                holder,
-                genesis_mint_tx.clone(),
-                &genesis_mint_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
+        // Execute on all holders
+        info!(target: "money", "Executing Alice genesis mint tx on all holders");
+        th.genesis_mint_to_all_with(genesis_tx, &genesis_params, block_height).await?;
 
-        th.assert_trees(&HOLDERS);
+        // Build and execute Bob's genesis mint
+        info!(target: "money", "Building and executing Bob genesis mint tx");
+        let (genesis_tx, genesis_params) = th.genesis_mint(&Bob, &BOB_AMOUNTS, None, None).await?;
+        th.genesis_mint_to_all_with(genesis_tx, &genesis_params, block_height).await?;
 
-        info!(target: "money", "[Bob] ========================");
-        info!(target: "money", "[Bob] Building genesis mint tx");
-        info!(target: "money", "[Bob] ========================");
-        let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Bob, &BOB_INITIAL, None, None).await?;
-
-        for holder in &HOLDERS {
-            info!(target: "money", "[{holder:?}] =============================");
-            info!(target: "money", "[{holder:?}] Executing Bob genesis mint tx");
-            info!(target: "money", "[{holder:?}] =============================");
-            th.execute_genesis_mint_tx(
-                holder,
-                genesis_mint_tx.clone(),
-                &genesis_mint_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
-
-        th.assert_trees(&HOLDERS);
-
-        let alice_owncoins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
-        let bob_owncoins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
-        assert!(alice_owncoins.len() == 1);
-        assert!(alice_owncoins[0].note.value == ALICE_INITIAL[0]);
-        assert!(bob_owncoins.len() == 2);
-        assert!(bob_owncoins[0].note.value == BOB_INITIAL[0]);
-        assert!(bob_owncoins[1].note.value == BOB_INITIAL[1]);
+        // Assert final state
+        assert_eq!(th.coins(&Alice).len(), 1);
+        assert_eq!(th.coins(&Alice)[0].note.value, ALICE_INITIAL);
+        assert_eq!(th.coins(&Bob).len(), 2);
+        assert_eq!(th.coins(&Bob)[0].note.value, BOB_AMOUNTS[0]);
+        assert_eq!(th.coins(&Bob)[1].note.value, BOB_AMOUNTS[1]);
 
         // Thanks for reading
         Ok(())

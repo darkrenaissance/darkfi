@@ -25,64 +25,36 @@ fn money_integration() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Holders this test will use
-        const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
+        use Holder::{Alice, Bob};
 
-        // Initialize harness
-        let mut th = TestHarness::new(&HOLDERS, true).await?;
+        let mut th = TestHarness::new(&[Alice, Bob], true).await?;
 
-        // Generate two new blocks mined by Alice
-        th.generate_block(&Holder::Alice, &HOLDERS).await?;
-        th.generate_block(&Holder::Alice, &HOLDERS).await?;
-
-        // Generate two new blocks mined by Bob
-        th.generate_block(&Holder::Bob, &HOLDERS).await?;
-        th.generate_block(&Holder::Bob, &HOLDERS).await?;
+        // Mine 2 blocks each
+        th.generate_block_all(&Alice).await?;
+        th.generate_block_all(&Alice).await?;
+        th.generate_block_all(&Bob).await?;
+        th.generate_block_all(&Bob).await?;
 
         // Assert correct rewards
-        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
-        let bob_coins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
-        assert!(alice_coins.len() == 2);
-        assert!(bob_coins.len() == 2);
-        assert!(alice_coins[0].note.value == expected_reward(1));
-        assert!(alice_coins[1].note.value == expected_reward(2));
-        assert!(bob_coins[0].note.value == expected_reward(3));
-        assert!(bob_coins[1].note.value == expected_reward(4));
+        assert_eq!(th.coins(&Alice).len(), 2);
+        assert_eq!(th.coins(&Bob).len(), 2);
+        assert_eq!(th.coins(&Alice)[0].note.value, expected_reward(1));
+        assert_eq!(th.coins(&Alice)[1].note.value, expected_reward(2));
+        assert_eq!(th.coins(&Bob)[0].note.value, expected_reward(3));
+        assert_eq!(th.coins(&Bob)[1].note.value, expected_reward(4));
 
-        let current_block_height = 4;
+        let block_height = 4;
+        let native_token = th.coins(&Alice)[0].note.token_id;
 
-        // Alice transfers some tokens to Bob
-        let (tx, (xfer_params, fee_params), _spent_soins) = th
-            .transfer(
-                alice_coins[0].note.value,
-                &Holder::Alice,
-                &Holder::Bob,
-                &[alice_coins[0].clone()],
-                alice_coins[0].note.token_id,
-                current_block_height,
-                false,
-            )
-            .await?;
+        // Alice transfers her first block reward to Bob
+        let transfer_amount = expected_reward(1);
+        th.transfer_to_all(transfer_amount, &Alice, &Bob, native_token, block_height).await?;
 
-        // Execute the transaction
-        for holder in &HOLDERS {
-            th.execute_transfer_tx(
-                holder,
-                tx.clone(),
-                &xfer_params,
-                &fee_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
-
-        // Assert coins in wallets
-        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
-        let bob_coins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
-        assert!(alice_coins.len() == 1); // Change from fee
-        assert!(bob_coins.len() == 3);
-        assert!(bob_coins[2].note.value == expected_reward(1));
+        // Alice: 1 coin (fee change from reward(2))
+        // Bob:   3 coins (reward(3) + reward(4) + received reward(1))
+        assert_eq!(th.coins(&Alice).len(), 1);
+        assert_eq!(th.coins(&Bob).len(), 3);
+        assert_eq!(th.coins(&Bob)[2].note.value, transfer_amount);
 
         // Thanks for reading
         Ok(())
