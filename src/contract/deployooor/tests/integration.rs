@@ -16,6 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Integration test for the Deployooor contract.
+//!
+//! Tests the deploy/lock lifecycle with a single holder:
+//!   1. Deploy a WASM contract (DAO)
+//!   2. Replace the deployed contract with different WASM (Money)
+//!   3. Lock the contract to prevent further changes
+//!   4. Negative: locking an already-locked contract fails
+//!   5. Negative: deploying to a locked contract fails
+
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use tracing::info;
@@ -25,94 +34,45 @@ fn deploy_integration() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Block height to verify against
-        let current_block_height = 0;
+        use Holder::Alice;
 
-        // Initialize harness
-        let mut th = TestHarness::new(&[Holder::Alice], false).await?;
+        let block_height = 0;
+        let mut th = TestHarness::new(&[Alice], false).await?;
 
-        // WASM bincode to deploy
-        let wasm_bincode = include_bytes!("../../dao/darkfi_dao_contract.wasm");
+        let dao_wasm = include_bytes!("../../dao/darkfi_dao_contract.wasm");
+        let money_wasm = include_bytes!("../../money/darkfi_money_contract.wasm");
 
-        info!(target: "deploy", "[Alice] Building deploy tx");
-        let (deploy_tx, deploy_params, fee_params) =
-            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
+        // Deploy a contract
+        info!(target: "deploy", "Deploying DAO contract");
+        let (tx, params, fee_params) =
+            th.deploy_contract(&Alice, dao_wasm.to_vec(), block_height).await?;
+        th.execute_deploy_tx(&Alice, tx, &params, &fee_params, block_height, true).await?;
 
-        info!(target: "deploy", "[Alice] Executing deploy tx");
-        th.execute_deploy_tx(
-            &Holder::Alice,
-            deploy_tx,
-            &deploy_params,
-            &fee_params,
-            current_block_height,
-            true,
-        )
-        .await?;
+        // Replace the deployed contract with different WASM
+        info!(target: "deploy", "Replacing with Money contract");
+        let (tx, params, fee_params) =
+            th.deploy_contract(&Alice, money_wasm.to_vec(), block_height).await?;
+        th.execute_deploy_tx(&Alice, tx, &params, &fee_params, block_height, true).await?;
 
-        // WASM bincode to deploy as a replacement
-        let wasm_bincode = include_bytes!("../../money/darkfi_money_contract.wasm");
+        // Lock the contract
+        info!(target: "deploy", "Locking contract");
+        let (tx, params, fee_params) = th.lock_contract(&Alice, block_height).await?;
+        th.execute_lock_tx(&Alice, tx, &params, &fee_params, block_height, true).await?;
 
-        info!(target: "deploy", "[Alice] Building deploy replacement tx");
-        let (deploy_tx, deploy_params, fee_params) =
-            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
-
-        info!(target: "deploy", "[Alice] Executing deploy replacement tx");
-        th.execute_deploy_tx(
-            &Holder::Alice,
-            deploy_tx,
-            &deploy_params,
-            &fee_params,
-            current_block_height,
-            true,
-        )
-        .await?;
-
-        info!(target: "deploy", "[Alice] Building deploy lock tx");
-        let (lock_tx, lock_params, fee_params) =
-            th.lock_contract(&Holder::Alice, current_block_height).await?;
-
-        info!(target: "deploy", "[Alice] Executing deploy lock tx");
-        th.execute_lock_tx(
-            &Holder::Alice,
-            lock_tx,
-            &lock_params,
-            &fee_params,
-            current_block_height,
-            true,
-        )
-        .await?;
-
-        info!(target: "deploy", "[Malicious] ===============================");
-        info!(target: "deploy", "[Malicious] Checking locking contract again");
-        info!(target: "deploy", "[Malicious] ===============================");
-        let (lock_tx, lock_params, fee_params) =
-            th.lock_contract(&Holder::Alice, current_block_height).await?;
+        // Negative: locking an already-locked contract must fail
+        info!(target: "deploy", "Verifying double-lock is rejected");
+        let (tx, params, fee_params) = th.lock_contract(&Alice, block_height).await?;
         assert!(th
-            .execute_lock_tx(
-                &Holder::Alice,
-                lock_tx,
-                &lock_params,
-                &fee_params,
-                current_block_height,
-                true,
-            )
+            .execute_lock_tx(&Alice, tx, &params, &fee_params, block_height, true)
             .await
             .is_err());
 
-        info!(target: "deploy", "[Malicious] ====================================");
-        info!(target: "deploy", "[Malicious] Checking deploy on a locked contract");
-        info!(target: "deploy", "[Malicious] ====================================");
-        let (deploy_tx, deploy_params, fee_params) =
-            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
+        // Negative: deploying to a locked contract must fail
+        info!(target: "deploy", "Verifying deploy-after-lock is rejected");
+        let (tx, params, fee_params) =
+            th.deploy_contract(&Alice, money_wasm.to_vec(), block_height).await?;
         assert!(th
-            .execute_deploy_tx(
-                &Holder::Alice,
-                deploy_tx,
-                &deploy_params,
-                &fee_params,
-                current_block_height,
-                true,
-            )
+            .execute_deploy_tx(&Alice, tx, &params, &fee_params, block_height, true)
             .await
             .is_err());
 
