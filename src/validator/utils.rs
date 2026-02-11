@@ -196,10 +196,9 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     v.sort_unstable();
 
     if v.len().is_multiple_of(2) {
-        v[n]
-    } else {
-        get_mid(v[n - 1], v[n])
+        return get_mid(v[n - 1], v[n])
     }
+    v[n]
 }
 
 /// Given a proposal, find the index of a fork chain it extends, along with the specific
