@@ -21,7 +21,8 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::zkas::{Opcode, VarType, ZkBinary};
 
-/// Fixed fee for verifying Schnorr signatures using the Pallas elliptic curve
+/// Fixed fee for verifying Schnorr signatures using the Pallas
+/// elliptic curve.
 pub const PALLAS_SCHNORR_SIGNATURE_FEE: u64 = 1000;
 
 /// Calculate the gas use for verifying a given zkas circuit.
@@ -32,7 +33,8 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
     // Constants each with a cost of 10
     accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.constants.len() as u64));
 
-    // Literals each with a cost of 10 (for now there's only 1 type of literal)
+    // Literals each with a cost of 10 (for now there's only 1 type of
+    // literal).
     accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.literals.len() as u64));
 
     // Witnesses have cost by type
@@ -96,10 +98,11 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
     accumulator
 }
 
-/// Auxiliary struct representing the full gas usage breakdown of a transaction.
+/// Auxiliary struct representing the full gas usage breakdown of a
+/// transaction.
 ///
-/// This data is used for accounting of fees, providing details relating to
-/// resource consumption across different transactions.
+/// This data is used for accounting of fees, providing details
+/// relating to resource consumption across different transactions.
 #[derive(Default, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct GasData {
     /// Wasm calls gas consumption
@@ -115,7 +118,8 @@ pub struct GasData {
 }
 
 impl GasData {
-    /// Calculates the total gas used by summing all individual gas usage fields.
+    /// Calculates the total gas used by summing all individual gas
+    /// usage fields.
     pub fn total_gas_used(&self) -> u64 {
         self.wasm
             .saturating_add(self.zk_circuits)
@@ -124,7 +128,8 @@ impl GasData {
     }
 }
 
-/// Implements custom debug trait to include [`GasData::total_gas_used`].
+/// Implements custom debug trait to include
+/// [`GasData::total_gas_used`].
 impl std::fmt::Debug for GasData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GasData")

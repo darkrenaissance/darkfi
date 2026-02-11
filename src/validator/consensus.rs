@@ -43,7 +43,8 @@ use crate::{
 /// Gas limit for total block transactions(50 full transactions).
 pub const BLOCK_GAS_LIMIT: u64 = GAS_LIMIT * MAX_TX_CALLS as u64 * 50;
 
-/// This struct represents the information required by the consensus algorithm
+/// This struct represents the information required by the consensus
+/// algorithm.
 pub struct Consensus {
     /// Canonical (confirmed) blockchain
     pub blockchain: Blockchain,
@@ -182,10 +183,11 @@ impl Consensus {
         Ok(())
     }
 
-    /// Given a proposal, find the fork chain it extends, and return its full clone.
-    /// If the proposal extends the fork not on its tail, a new fork is created and
-    /// we re-apply the proposals up to the extending one. If proposal extends canonical,
-    /// a new fork is created. Additionally, we return the fork index if a new fork
+    /// Given a proposal, find the fork chain it extends, and return
+    /// its full clone. If the proposal extends the fork not on its
+    /// tail, a new fork is created and we re-apply the proposals up to
+    /// the extending one. If proposal extends canonical, a new fork is
+    /// created. Additionally, we return the fork index if a new fork
     /// was not created, so caller can replace the fork.
     pub async fn find_extended_fork(&self, proposal: &Proposal) -> Result<(Fork, Option<usize>)> {
         // Check if proposal extends any fork
@@ -252,12 +254,13 @@ impl Consensus {
 
     /// Check if best fork proposals can be confirmed.
     /// Consensus confirmation logic:
-    /// - If the current best fork has reached greater length than the security threshold,
-    ///   and no other fork exist with same rank, first proposal(s) in that fork can be
-    ///   appended to canonical/confirmed blockchain.
+    /// - If the current best fork has reached greater length than the
+    ///   security threshold, and no other fork exist with same rank,
+    ///   first proposal(s) in that fork can be appended to
+    ///   canonical/confirmed blockchain.
     ///
-    /// When best fork can be confirmed, first block(s) should be appended to canonical,
-    /// and forks should be rebuilt.
+    /// When best fork can be confirmed, first block(s) should be
+    /// appended to canonical, and forks should be rebuilt.
     pub async fn confirmation(&self) -> Result<Option<usize>> {
         debug!(target: "validator::consensus::confirmation", "Started confirmation check");
 
@@ -292,8 +295,8 @@ impl Consensus {
         Ok(Some(index))
     }
 
-    /// Auxiliary function to find the index of a fork containing the provided
-    /// header hash in its proposals.
+    /// Auxiliary function to find the index of a fork containing the
+    /// provided header hash in its proposals.
     fn find_fork_by_header(&self, fork_header: &HeaderHash) -> Option<usize> {
         for (index, fork) in self.forks.iter().enumerate() {
             for p in fork.proposals.iter().rev() {
@@ -305,8 +308,8 @@ impl Consensus {
         None
     }
 
-    /// Auxiliary function to retrieve the fork header hash of provided height.
-    /// The fork is identified by the provided header hash.
+    /// Auxiliary function to retrieve the fork header hash of provided
+    /// height. The fork is identified by the provided header hash.
     pub async fn get_fork_header_hash(
         &self,
         height: u32,
@@ -322,9 +325,9 @@ impl Consensus {
         Ok(header)
     }
 
-    /// Auxiliary function to retrieve the fork headers of provided hashes.
-    /// The fork is identified by the provided header hash. If fork doesn't
-    /// exists, an empty vector is returned.
+    /// Auxiliary function to retrieve the fork headers of provided
+    /// hashes. The fork is identified by the provided header hash. If
+    /// fork doesn't exists, an empty vector is returned.
     pub async fn get_fork_headers(
         &self,
         headers: &[HeaderHash],
@@ -339,9 +342,9 @@ impl Consensus {
         Ok(headers)
     }
 
-    /// Auxiliary function to retrieve the fork proposals of provided hashes.
-    /// The fork is identified by the provided header hash. If fork doesn't
-    /// exists, an empty vector is returned.
+    /// Auxiliary function to retrieve the fork proposals of provided
+    /// hashes. The fork is identified by the provided header hash. If
+    /// fork doesn't exists, an empty vector is returned.
     pub async fn get_fork_proposals(
         &self,
         headers: &[HeaderHash],
@@ -360,10 +363,11 @@ impl Consensus {
         Ok(proposals)
     }
 
-    /// Auxiliary function to retrieve a fork proposals, starting from provided tip.
-    /// If provided tip is too far behind, unknown, or fork doesn't exists, an empty
-    /// vector is returned. The fork is identified by the optional provided header hash.
-    /// If its `None`, we use our best fork.
+    /// Auxiliary function to retrieve a fork proposals, starting from
+    /// provided tip. If provided tip is too far behind, unknown, or
+    /// fork doesn't exists, an empty vector is returned. The fork is
+    /// identified by the optional provided header hash. If its `None`,
+    /// we use our best fork.
     pub async fn get_fork_proposals_after(
         &self,
         tip: HeaderHash,
@@ -530,13 +534,15 @@ impl Consensus {
         let mut iter = keep.iter();
         self.forks.retain(|_| *iter.next().unwrap());
 
-        // Remove confirmed proposals txs from the unporposed txs sled tree
+        // Remove confirmed proposals txs from the unporposed txs sled
+        // tree.
         self.blockchain.remove_pending_txs_hashes(&confirmed_txs_hashes)?;
 
         Ok(())
     }
 
-    /// Auxiliary function to fully purge current forks and leave only a new empty fork.
+    /// Auxiliary function to fully purge current forks and leave only
+    /// a new empty fork.
     pub async fn purge_forks(&mut self) -> Result<()> {
         debug!(target: "validator::consensus::purge_forks", "Purging current forks...");
         self.forks = vec![Fork::new(self.blockchain.clone(), self.module.clone()).await?];
@@ -721,7 +727,8 @@ impl Fork {
         })
     }
 
-    /// Auxiliary function to append a proposal and update current fork rank.
+    /// Auxiliary function to append a proposal and update current fork
+    /// rank.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
         // Grab next mine target and difficulty
         let (next_target, next_difficulty) = self.module.next_mine_target_and_difficulty()?;
@@ -799,17 +806,20 @@ impl Fork {
         let mut total_gas_used = 0_u64;
         let mut total_gas_paid = 0_u64;
 
-        // Map of ZK proof verifying keys for the current transaction batch
+        // Map of ZK proof verifying keys for the current transaction
+        // batch.
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
         // Grab all current proposals transactions hashes
         let proposals_txs = self.overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
 
-        // Iterate through all pending transactions in the forks' mempool
+        // Iterate through all pending transactions in the forks'
+        // mempool.
         let mut unproposed_txs = vec![];
         let mut erroneous_txs = vec![];
         for tx in &self.mempool {
-            // If the hash is contained in the proposals transactions vec, skip it
+            // If the hash is contained in the proposals transactions
+            // vec, skip it.
             if proposals_txs.contains(tx) {
                 continue
             }
@@ -857,7 +867,8 @@ impl Fork {
             // Calculate current accumulated gas usage
             let accumulated_gas_usage = total_gas_used.saturating_add(tx_gas_used);
 
-            // Check gas limit - if accumulated gas used exceeds it, break out of loop
+            // Check gas limit - if accumulated gas used exceeds it,
+            // break out of loop.
             if accumulated_gas_usage > BLOCK_GAS_LIMIT {
                 warn!(
                     target: "validator::consensus::unproposed_txs",

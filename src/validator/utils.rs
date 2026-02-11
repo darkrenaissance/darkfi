@@ -44,13 +44,14 @@ pub static MAX_32_BYTES: LazyLock<BigUint> = LazyLock::new(|| BigUint::from_byte
 ///
 /// If overlay already contains the contracts, it will just open the
 /// necessary db and trees, and give back what it has. This means that
-/// on subsequent runs, our native contracts will already be in a deployed
-/// state, so what we actually do here is a redeployment. This kind of
-/// operation should only modify the contract's state in case it wasn't
-/// deployed before (meaning the initial run). Otherwise, it shouldn't
-/// touch anything, or just potentially update the db schemas or whatever
-/// is necessary. This logic should be handled in the init function of
-/// the actual contract, so make sure the native contracts handle this well.
+/// on subsequent runs, our native contracts will already be in a
+/// deployed state, so what we actually do here is a redeployment. This
+/// kind of operation should only modify the contract's state in case
+/// it wasn't deployed before (meaning the initial run). Otherwise, it
+/// shouldn't touch anything, or just potentially update the db schemas
+/// or whatever is necessary. This logic should be handled in the init
+/// function of the actual contract, so make sure the native contracts
+/// handle this well.
 pub async fn deploy_native_contracts(
     overlay: &BlockchainOverlayPtr,
     block_target: u32,
@@ -148,11 +149,12 @@ pub fn header_rank(module: &mut PoWModule, header: &Header) -> Result<(BigUint, 
     Ok((difficulty, target_distance_sq, hash_distance_sq))
 }
 
-/// Compute a block's rank, assuming that its valid, based on provided mining target.
+/// Compute a block's rank, assuming that its valid, based on provided
+/// mining target.
 ///
-/// Block's rank is the tuple of its squared mining target distance from max 32 bytes int,
-/// along with its squared RandomX hash number distance from max 32 bytes int.
-/// Genesis block has rank (0, 0).
+/// Block's rank is the tuple of its squared mining target distance
+/// from max 32 bytes int, along with its squared RandomX hash number
+/// distance from max 32 bytes int. Genesis block has rank (0, 0).
 pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUint)> {
     // Genesis block has rank 0
     if block.header.height == 0 {
@@ -177,7 +179,8 @@ pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUi
     Ok((target_distance_sq, hash_distance_sq))
 }
 
-/// Auxiliary function to calculate the middle value between provided u64 numbers
+/// Auxiliary function to calculate the middle value between provided
+/// u64 numbers.
 pub fn get_mid(a: u64, b: u64) -> u64 {
     (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
 }
@@ -198,9 +201,9 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     v[n]
 }
 
-/// Given a proposal, find the index of a fork chain it extends, along with the specific
-/// extended proposal index. Additionally, check that proposal doesn't already exists in any
-/// fork chain.
+/// Given a proposal, find the index of a fork chain it extends, along
+/// with the specific extended proposal index. Additionally, check that
+/// proposal doesn't already exists in any fork chain.
 pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(usize, usize)> {
     // Grab provided proposal hash
     let proposal_hash = proposal.hash;

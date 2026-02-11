@@ -82,7 +82,8 @@ pub const RANDOMX_KEY_CHANGING_HEIGHT: u32 = 2048;
 /// RandomX VM key change delay
 pub const RANDOMX_KEY_CHANGE_DELAY: u32 = 64;
 
-/// This struct represents the information required by the PoW algorithm
+/// This struct represents the information required by the PoW
+/// algorithm.
 #[derive(Clone)]
 pub struct PoWModule {
     /// Genesis block timestamp
@@ -109,8 +110,9 @@ pub struct PoWModule {
 }
 
 impl PoWModule {
-    // Initialize a new `PowModule` for provided target over provided `Blockchain`.
-    // Optionally, a fixed difficulty can be set and/or initialize before some height.
+    /// Initialize a new `PowModule` for provided target over provided
+    /// `Blockchain`. Optionally, a fixed difficulty can be set and/or
+    /// initialize before some height.
     pub fn new(
         blockchain: Blockchain,
         target: u32,
@@ -120,7 +122,8 @@ impl PoWModule {
         // Retrieve genesis block timestamp
         let genesis = blockchain.genesis_block()?.header.timestamp;
 
-        // Retrieving last BUF_SIZE difficulties from blockchain to build the buffers
+        // Retrieving last BUF_SIZE difficulties from blockchain to
+        // build the buffers.
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
         let mut cumulative_difficulty = BigUint::zero();
@@ -134,7 +137,8 @@ impl PoWModule {
             cumulative_difficulty = difficulty.cumulative_difficulty;
         }
 
-        // If a fixed difficulty has been set, assert its greater than zero
+        // If a fixed difficulty has been set, assert its greater than
+        // zero.
         if let Some(diff) = &fixed_difficulty {
             assert!(diff > &BigUint::zero());
         }
@@ -162,12 +166,13 @@ impl PoWModule {
         })
     }
 
-    /// Compute the next mining difficulty, based on current ring buffers.
-    /// If ring buffers contain 2 or less items, difficulty 1 is returned.
-    /// If a fixed difficulty has been set, this function will always
-    /// return that after first 2 difficulties.
+    /// Compute the next mining difficulty, based on current ring
+    /// buffers. If ring buffers contain 2 or less items, difficulty 1
+    /// is returned. If a fixed difficulty has been set, this function
+    /// will always return that after first 2 difficulties.
     pub fn next_difficulty(&self) -> Result<BigUint> {
-        // Retrieve first DIFFICULTY_WINDOW timestamps from the ring buffer
+        // Retrieve first DIFFICULTY_WINDOW timestamps from the ring
+        // buffer.
         let mut timestamps: Vec<Timestamp> =
             self.timestamps.iter().take(DIFFICULTY_WINDOW).cloned().collect();
 
@@ -260,7 +265,8 @@ impl PoWModule {
         Ok(self.verify_timestamp_by_median(timestamp))
     }
 
-    /// Verify provided block timestamp is valid and matches certain criteria.
+    /// Verify provided block timestamp is valid and matches certain
+    /// criteria.
     pub fn verify_timestamp_by_median(&self, timestamp: Timestamp) -> bool {
         // Check timestamp is after genesis one
         if timestamp <= self.genesis {
@@ -567,8 +573,8 @@ pub fn generate_mining_vms(
     Ok(vms)
 }
 
-/// Mine provided header, based on provided PoW module next mine target,
-/// using provided RandomX VMs setup.
+/// Mine provided header, based on provided PoW module next mine
+/// target, using provided RandomX VMs setup.
 pub fn mine_block(
     vms: &[Arc<RandomXVM>],
     target: &BigUint,
@@ -640,7 +646,8 @@ pub fn mine_block(
                 let out_hash = BigUint::from_bytes_le(&out_hash);
                 if out_hash <= target {
                     found_header.store(true, Ordering::SeqCst);
-                    thread_header.nonce = last_nonce; // Since out hash refers to previous run nonce
+                    // Since out hash refers to previous run nonce
+                    thread_header.nonce = last_nonce;
                     found_nonce.store(thread_header.nonce, Ordering::SeqCst);
                     debug!(target: "validator::pow::randomx_vms_mine", "[MINER] Thread #{t} found block header using nonce {}",
                         thread_header.nonce

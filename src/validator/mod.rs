@@ -101,7 +101,8 @@ impl Validator {
         info!(target: "validator::new", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
 
-        // Create an overlay over whole blockchain so we can write stuff
+        // Create an overlay over whole blockchain so we can write
+        // stuff.
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
@@ -201,7 +202,8 @@ impl Validator {
         let tx_vec = [tx.clone()];
         let mut valid = false;
 
-        // Iterate over node forks to verify transaction validity in their overlays
+        // Iterate over node forks to verify transaction validity in
+        // their overlays.
         for fork in self.consensus.forks.iter_mut() {
             // Clone fork state
             let fork_clone = fork.full_clone()?;
@@ -270,7 +272,8 @@ impl Validator {
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
-            // Iterate over node forks to verify transaction validity in their overlays
+            // Iterate over node forks to verify transaction validity
+            // in their overlays.
             for fork in self.consensus.forks.iter_mut() {
                 // Clone fork state
                 let fork_clone = fork.full_clone()?;
@@ -303,7 +306,8 @@ impl Validator {
                 fork.mempool.retain(|x| *x != tx_hash);
             }
 
-            // Remove pending transaction if it's not valid for canonical or any fork
+            // Remove pending transaction if it's not valid for
+            // canonical or any fork.
             if !valid {
                 removed_txs.push(tx)
             }
@@ -418,10 +422,12 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.clone();
 
-        // Keep track of all blocks transactions to remove them from pending txs store
+        // Keep track of all blocks transactions to remove them from
+        // pending txs store.
         let mut removed_txs = vec![];
 
-        // Keep track of all block database state diffs and their inverse
+        // Keep track of all block database state diffs and their
+        // inverse.
         let mut diffs_heights = vec![];
         let mut diffs = vec![];
         let mut inverse_diffs = vec![];
@@ -520,10 +526,12 @@ impl Validator {
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.clone();
 
-        // Keep track of all blocks transactions to remove them from pending txs store
+        // Keep track of all blocks transactions to remove them from
+        // pending txs store.
         let mut removed_txs = vec![];
 
-        // Keep track of all block database state diffs and their inverse
+        // Keep track of all block database state diffs and their
+        // inverse.
         let mut diffs_heights = vec![];
         let mut diffs = vec![];
         let mut inverse_diffs = vec![];
@@ -603,7 +611,8 @@ impl Validator {
         // Store the block diffs
         self.blockchain.blocks.insert_state_inverse_diff(&diffs_heights, &inverse_diffs)?;
 
-        // Purge pending erroneous txs since canonical state has been changed
+        // Purge pending erroneous txs since canonical state has been
+        // changed.
         self.blockchain.remove_pending_txs(&removed_txs)?;
         self.purge_pending_txs().await?;
 
@@ -812,7 +821,8 @@ impl Validator {
         self.consensus.best_current_fork().await
     }
 
-    /// Auxiliary function to retrieve current best fork next block height.
+    /// Auxiliary function to retrieve current best fork next block
+    /// height.
     pub async fn best_fork_next_block_height(&self) -> Result<u32> {
         let index = best_fork_index(&self.consensus.forks)?;
         let fork = &self.consensus.forks[index];
@@ -821,8 +831,8 @@ impl Validator {
         Ok(next_block_height)
     }
 
-    /// Auxiliary function to reset the validator blockchain and consensus states
-    /// to the provided block height.
+    /// Auxiliary function to reset the validator blockchain and
+    /// consensus states to the provided block height.
     pub async fn reset_to_height(&mut self, height: u32) -> Result<()> {
         info!(target: "validator::reset_to_height", "Resetting validator to height: {height}");
         // Reset our databasse to provided height

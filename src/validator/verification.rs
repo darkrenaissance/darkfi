@@ -86,12 +86,14 @@ pub async fn verify_genesis_block(
         _ => return Err(Error::BlockIsInvalid(block_hash)),
     }
 
-    // Verify transactions vector contains at least one(producers) transaction
+    // Verify transactions vector contains at least one(producers)
+    // transaction.
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
-    // Genesis producer transaction must be the Transaction::default() one(empty)
+    // Genesis producer transaction must be the Transaction::default()
+    // one(empty).
     let producer_tx = block.txs.last().unwrap();
     if producer_tx != &Transaction::default() {
         error!(target: "validator::verification::verify_genesis_block", "Genesis producer transaction is not default one");
@@ -112,14 +114,16 @@ pub async fn verify_genesis_block(
         return Err(e)
     }
 
-    // Append producer transaction to the tree and check tree matches header one
+    // Append producer transaction to the tree and check tree matches
+    // header one.
     append_tx_to_merkle_tree(&mut tree, producer_tx);
     if tree.root(0).unwrap() != block.header.transactions_root {
         error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
         return Err(Error::BlockIsInvalid(block_hash))
     }
 
-    // Update the contracts states monotree and verify header contracts states root
+    // Update the contracts states monotree and verify header contracts
+    // states root.
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
     let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
@@ -129,7 +133,8 @@ pub async fn verify_genesis_block(
         ));
     }
 
-    // Genesis producer signature must be the Signature::dummy() one(empty)
+    // Genesis producer signature must be the Signature::dummy()
+    // one(empty).
     if block.signature != Signature::dummy() {
         error!(target: "validator::verification::verify_genesis_block", "Genesis producer signature is not dummy one");
         return Err(Error::InvalidSignature)
@@ -146,7 +151,8 @@ pub async fn verify_genesis_block(
 ///
 /// A block is considered valid when the following rules apply:
 ///     1. Block version is correct for its height
-///     2. Previous hash is equal to the hash of the provided previous block
+///     2. Previous hash is equal to the hash of the provided previous
+///        block
 ///     3. Block height increments previous block height by 1
 ///     4. Timestamp is valid based on PoWModule validation
 ///     5. Block header Proof of Work data are valid
@@ -242,7 +248,8 @@ pub async fn verify_block(
     // Validate block, using its previous
     validate_block(block, previous, module, is_new)?;
 
-    // Verify transactions vector contains at least one(producers) transaction
+    // Verify transactions vector contains at least one(producers)
+    // transaction.
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
     }
@@ -283,7 +290,8 @@ pub async fn verify_block(
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
-    // Update the contracts states monotree and verify header contracts states root
+    // Update the contracts states monotree and verify header contracts
+    // states root.
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
     let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
@@ -329,7 +337,8 @@ pub async fn verify_checkpoint_block(
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
-    // Verify transactions vector contains at least one(producers) transaction
+    // Verify transactions vector contains at least one(producers)
+    // transaction.
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
     }
@@ -363,7 +372,8 @@ pub async fn verify_checkpoint_block(
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
-    // Update the contracts states monotree and verify header contracts states root
+    // Update the contracts states monotree and verify header contracts
+    // states root.
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(diffs)?;
     let state_root = overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     if state_root != block.header.state_root {
@@ -383,8 +393,8 @@ pub async fn verify_checkpoint_block(
     Ok(())
 }
 
-/// Verify block proposer signature, using the producer transaction signature as signing key
-/// over blocks header hash.
+/// Verify block proposer signature, using the producer transaction
+/// signature as signing key over blocks header hash.
 pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> Result<()> {
     if !public_key.verify(block.header.hash().inner(), &block.signature) {
         warn!(target: "validator::verification::verify_producer_signature", "Proposer {public_key} signature could not be verified");
@@ -396,9 +406,9 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 
 /// Verify provided producer [`Transaction`].
 ///
-/// Verify WASM execution, signatures, and ZK proofs and apply it to the provided,
-/// provided overlay. Returns transaction signature public key. Additionally,
-/// append its hash to the provided Merkle tree.
+/// Verify WASM execution, signatures, and ZK proofs and apply it to
+/// the provided overlay. Returns transaction signature public key.
+/// Additionally, append its hash to the provided Merkle tree.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -487,28 +497,32 @@ pub async fn verify_producer_transaction(
     let signature_public_key = *sig_pub.last().unwrap();
     sig_table.push(sig_pub);
 
-    // After getting the metadata, we run the "exec" function with the same runtime
-    // and the same payload. We keep the returned state update in a buffer, prefixed
-    // by the call function ID, enforcing the state update function in the contract.
+    // After getting the metadata, we run the "exec" function with the
+    // same runtime and the same payload. We keep the returned state
+    // update in a buffer, prefixed by the call function ID, enforcing
+    // the state update function in the contract.
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"exec\" call");
     let mut state_update = vec![call.data.data[0]];
     state_update.append(&mut runtime.exec(&payload)?);
     debug!(target: "validator::verification::verify_producer_transaction", "Successfully executed \"exec\" call");
 
-    // If that was successful, we apply the state update in the ephemeral overlay.
+    // If that was successful, we apply the state update in the
+    // ephemeral overlay.
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"apply\" call");
     runtime.apply(&state_update)?;
     debug!(target: "validator::verification::verify_producer_transaction", "Successfully executed \"apply\" call");
 
-    // When we're done executing over the tx's contract call, we now move on with verification.
-    // First we verify the signatures as that's cheaper, and then finally we verify the ZK proofs.
+    // When we're done executing over the tx's contract call, we now
+    // move on with verification. First we verify the signatures as
+    // that's cheaper, and then finally we verify the ZK proofs.
     debug!(target: "validator::verification::verify_producer_transaction", "Verifying signatures for transaction {tx_hash}");
     if sig_table.len() != tx.signatures.len() {
         error!(target: "validator::verification::verify_producer_transaction", "Incorrect number of signatures in tx {tx_hash}");
         return Err(TxVerifyFailed::MissingSignatures.into())
     }
 
-    // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
+    // TODO: Go through the ZK circuits that have to be verified and
+    // account for the opcodes.
 
     if let Err(e) = tx.verify_sigs(sig_table) {
         error!(target: "validator::verification::verify_producer_transaction", "Signature verification for tx {tx_hash} failed: {e}");
@@ -532,8 +546,9 @@ pub async fn verify_producer_transaction(
     Ok(signature_public_key)
 }
 
-/// Apply given producer [`Transaction`] to the provided overlay, without formal verification.
-/// Returns transaction signature public key. Additionally, append its hash to the provided Merkle tree.
+/// Apply given producer [`Transaction`] to the provided overlay,
+/// without formal verification. Returns transaction signature public
+/// key. Additionally, append its hash to the provided Merkle tree.
 pub async fn apply_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -588,15 +603,17 @@ pub async fn apply_producer_transaction(
 
     let signature_public_key = *sig_pub.last().unwrap();
 
-    // After getting the metadata, we run the "exec" function with the same runtime
-    // and the same payload. We keep the returned state update in a buffer, prefixed
-    // by the call function ID, enforcing the state update function in the contract.
+    // After getting the metadata, we run the "exec" function with the
+    // same runtime and the same payload. We keep the returned state
+    // update in a buffer, prefixed by the call function ID, enforcing
+    // the state update function in the contract.
     debug!(target: "validator::verification::apply_producer_transaction", "Executing \"exec\" call");
     let mut state_update = vec![call.data.data[0]];
     state_update.append(&mut runtime.exec(&payload)?);
     debug!(target: "validator::verification::apply_producer_transaction", "Successfully executed \"exec\" call");
 
-    // If that was successful, we apply the state update in the ephemeral overlay.
+    // If that was successful, we apply the state update in the
+    // ephemeral overlay.
     debug!(target: "validator::verification::apply_producer_transaction", "Executing \"apply\" call");
     runtime.apply(&state_update)?;
     debug!(target: "validator::verification::apply_producer_transaction", "Successfully executed \"apply\" call");
@@ -609,9 +626,9 @@ pub async fn apply_producer_transaction(
     Ok(signature_public_key)
 }
 
-/// Verify WASM execution, signatures, and ZK proofs for a given [`Transaction`],
-/// and apply it to the provided overlay. Additionally, append its hash to the
-/// provided Merkle tree.
+/// Verify WASM execution, signatures, and ZK proofs for a given
+/// [`Transaction`], and apply it to the provided overlay.
+/// Additionally, append its hash to the provided Merkle tree.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -647,7 +664,8 @@ pub async fn verify_transaction(
     let mut fee_call_idx = 0;
 
     if verify_fee {
-        // Verify that there is a single money fee call in the transaction
+        // Verify that there is a single money fee call in the
+        // transaction.
         let mut found_fee = false;
         for (call_idx, call) in tx.calls.iter().enumerate() {
             if !call.data.is_money_fee() {
@@ -679,10 +697,12 @@ pub async fn verify_transaction(
     let mut payload = vec![];
     tx.calls.encode_async(&mut payload).await?;
 
-    // Define a buffer in case we want to use a different payload in a specific call
+    // Define a buffer in case we want to use a different payload in a
+    // specific call.
     let mut _call_payload = vec![];
 
-    // We'll also take note of all the circuits in a Vec so we can calculate their verification cost.
+    // We'll also take note of all the circuits in a Vec so we can
+    // calculate their verification cost.
     let mut circuits_to_verify = vec![];
 
     // Iterate over all calls to get the metadata
@@ -737,15 +757,19 @@ pub async fn verify_transaction(
 
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
-        // Here we'll look up verifying keys and insert them into the per-contract map.
-        // TODO: This vk map can potentially use a lot of RAM. Perhaps load keys on-demand at verification time?
+        // Here we'll look up verifying keys and insert them into the
+        // per-contract map.
+        // TODO: This vk map can potentially use a lot of RAM. Perhaps
+        // load keys on-demand at verification time?
         debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
             let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
 
-            // TODO: This will be a problem in case of ::deploy, unless we force a different
-            // namespace and disable updating existing circuit. Might be a smart idea to do
-            // so in order to have to care less about being able to verify historical txs.
+            // TODO: This will be a problem in case of ::deploy, unless
+            // we force a different namespace and disable updating
+            // existing circuit. Might be a smart idea to do so in
+            // order to have to care less about being able to verify
+            // historical txs.
             if inner_vk_map.contains_key(zkas_ns.as_str()) {
                 continue
             }
@@ -760,21 +784,23 @@ pub async fn verify_transaction(
         zkp_table.push(zkp_pub);
         sig_table.push(sig_pub);
 
-        // After getting the metadata, we run the "exec" function with the same runtime
-        // and the same payload. We keep the returned state update in a buffer, prefixed
-        // by the call function ID, enforcing the state update function in the contract.
+        // After getting the metadata, we run the "exec" function with
+        // the same runtime and the same payload. We keep the returned
+        // state update in a buffer, prefixed by the call function ID,
+        // enforcing the state update function in the contract.
         debug!(target: "validator::verification::verify_transaction", "Executing \"exec\" call");
         let mut state_update = vec![call.data.data[0]];
         state_update.append(&mut runtime.exec(call_payload)?);
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"exec\" call");
 
-        // If that was successful, we apply the state update in the ephemeral overlay.
+        // If that was successful, we apply the state update in the
+        // ephemeral overlay.
         debug!(target: "validator::verification::verify_transaction", "Executing \"apply\" call");
         runtime.apply(&state_update)?;
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"apply\" call");
 
-        // If this call is supposed to deploy a new contract, we have to instantiate
-        // a new `Runtime` and run its deploy function.
+        // If this call is supposed to deploy a new contract, we have
+        // to instantiate a new `Runtime` and run its deploy function.
         if call.data.is_deployment()
         /* DeployV1 */
         {
@@ -801,8 +827,8 @@ pub async fn verify_transaction(
             gas_data.deployments = gas_data.deployments.saturating_add(deploy_gas_used);
         }
 
-        // At this point we're done with the call and move on to the next one.
-        // Accumulate the WASM gas used.
+        // At this point we're done with the call and move on to the
+        // next one. Accumulate the WASM gas used.
         let wasm_gas_used = runtime.gas_used();
         debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {call:?} of transaction {tx_hash}: {wasm_gas_used}");
 
@@ -816,7 +842,8 @@ pub async fn verify_transaction(
         .saturating_add(serialize_async(tx).await.len() as u64);
     debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {tx_hash}: {}", gas_data.signatures);
 
-    // The ZK circuit fee is calculated using a function in validator/fees.rs
+    // The ZK circuit fee is calculated using a function in
+    // validator/fees.rs.
     for zkbin in circuits_to_verify.iter() {
         let zk_circuit_gas_used = circuit_gas_use(zkbin);
         debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {tx_hash}: {zk_circuit_gas_used}", zkbin.namespace);
@@ -825,7 +852,8 @@ pub async fn verify_transaction(
         gas_data.zk_circuits = gas_data.zk_circuits.saturating_add(zk_circuit_gas_used);
     }
 
-    // Store the calculated total gas used to avoid recalculating it for subsequent uses
+    // Store the calculated total gas used to avoid recalculating it
+    // for subsequent uses.
     let total_gas_used = gas_data.total_gas_used();
 
     if verify_fee {
@@ -844,7 +872,8 @@ pub async fn verify_transaction(
         // Compute the required fee for this transaction
         let required_fee = compute_fee(&total_gas_used);
 
-        // Check that enough fee has been paid for the used gas in this transaction
+        // Check that enough fee has been paid for the used gas in this
+        // transaction.
         if required_fee > fee {
             error!(
                 target: "validator::verification::verify_transaction",
@@ -858,10 +887,10 @@ pub async fn verify_transaction(
         gas_data.paid = fee;
     }
 
-    // When we're done looping and executing over the tx's contract calls and
-    // (optionally) made sure that enough fee was paid, we now move on with
-    // verification. First we verify the transaction signatures and then we
-    // verify any accompanying ZK proofs.
+    // When we're done looping and executing over the tx's contract
+    // calls and (optionally) made sure that enough fee was paid, we
+    // now move on with verification. First we verify the transaction
+    // signatures and then we verify any accompanying ZK proofs.
     debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {tx_hash}");
     if sig_table.len() != tx.signatures.len() {
         error!(
@@ -930,20 +959,22 @@ pub async fn apply_transaction(
             idx as u8,
         )?;
 
-        // Run the "exec" function. We keep the returned state update in a buffer, prefixed
-        // by the call function ID, enforcing the state update function in the contract.
+        // Run the "exec" function. We keep the returned state update
+        // in a buffer, prefixed by the call function ID, enforcing the
+        // state update function in the contract.
         debug!(target: "validator::verification::apply_transaction", "Executing \"exec\" call");
         let mut state_update = vec![call.data.data[0]];
         state_update.append(&mut runtime.exec(&payload)?);
         debug!(target: "validator::verification::apply_transaction", "Successfully executed \"exec\" call");
 
-        // If that was successful, we apply the state update in the ephemeral overlay
+        // If that was successful, we apply the state update in the
+        // ephemeral overlay.
         debug!(target: "validator::verification::apply_transaction", "Executing \"apply\" call");
         runtime.apply(&state_update)?;
         debug!(target: "validator::verification::apply_transaction", "Successfully executed \"apply\" call");
 
-        // If this call is supposed to deploy a new contract, we have to instantiate
-        // a new `Runtime` and run its deploy function.
+        // If this call is supposed to deploy a new contract, we have
+        // to instantiate a new `Runtime` and run its deploy function.
         if call.data.is_deployment()
         /* DeployV1 */
         {
@@ -1042,7 +1073,8 @@ pub async fn verify_transactions(
         // Calculate current accumulated gas usage
         let accumulated_gas_usage = total_gas_used.saturating_add(tx_gas_used);
 
-        // Check gas limit - if accumulated gas used exceeds it, break out of loop
+        // Check gas limit - if accumulated gas used exceeds it, break
+        // out of loop.
         if accumulated_gas_usage > BLOCK_GAS_LIMIT {
             warn!(
                 target: "validator::verification::verify_transactions",
@@ -1066,9 +1098,10 @@ pub async fn verify_transactions(
     Ok((total_gas_used, total_gas_paid))
 }
 
-/// Apply given set of [`Transaction`] in sequence, without formal verification.
-/// In case any of the transactions fail, they will be returned to the caller as an error.
-/// Additionally, their hash is appended to the provided Merkle tree.
+/// Apply given set of [`Transaction`] in sequence, without formal
+/// verification. In case any of the transactions fail, they will be
+/// returned to the caller as an error. Additionally, their hash is
+/// appended to the provided Merkle tree.
 async fn apply_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,

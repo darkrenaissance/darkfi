@@ -41,7 +41,8 @@ impl Default for RandomXFactory {
 }
 
 impl RandomXFactory {
-    /// Create a new RandomXFactory with the specified maximum number of VMs.
+    /// Create a new RandomXFactory with the specified maximum number
+    /// of VMs.
     pub fn new(max_vms: usize) -> Self {
         Self { vms: HashMap::new(), max_vms }
     }
