@@ -19,7 +19,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc, LazyLock,
+        Arc,
     },
     thread,
     time::Instant,
@@ -41,7 +41,10 @@ use crate::{
         Blockchain, BlockchainOverlayPtr,
     },
     util::{ringbuffer::RingBuffer, time::Timestamp},
-    validator::{utils::median, RandomXFactory},
+    validator::{
+        utils::{median, MAX_32_BYTES},
+        RandomXFactory,
+    },
     Error, Result,
 };
 
@@ -78,9 +81,6 @@ const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
 pub const RANDOMX_KEY_CHANGING_HEIGHT: u32 = 2048;
 /// RandomX VM key change delay
 pub const RANDOMX_KEY_CHANGE_DELAY: u32 = 64;
-
-/// Max 32 bytes integer, cached to avoid repeated allocation
-static MAX_32_BYTES: LazyLock<BigUint> = LazyLock::new(|| BigUint::from_bytes_le(&[0xFF; 32]));
 
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
