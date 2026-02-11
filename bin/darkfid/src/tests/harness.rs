@@ -60,6 +60,7 @@ pub struct HarnessConfig {
     pub pow_target: u32,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub confirmation_threshold: usize,
+    pub max_forks: usize,
     pub alice_url: String,
     pub bob_url: String,
 }
@@ -102,6 +103,7 @@ impl Harness {
         // don't get circular dependencies.
         let validator_config = ValidatorConfig {
             confirmation_threshold: config.confirmation_threshold,
+            max_forks: config.max_forks,
             pow_target: config.pow_target,
             pow_fixed_difficulty: config.pow_fixed_difficulty.clone(),
             genesis_block,

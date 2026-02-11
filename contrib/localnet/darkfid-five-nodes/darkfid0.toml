@@ -17,6 +17,9 @@ database = "darkfid0"
 # Confirmation threshold, denominated by number of blocks
 threshold = 6
 
+# Max in-memory forks to maintain
+max_forks = 8
+
 # PoW block production target, in seconds
 pow_target = 60
 

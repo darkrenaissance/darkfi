@@ -37,6 +37,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         confirmation_threshold: 6,
+        max_forks: 8,
         alice_url: "tcp+tls://127.0.0.1:18440".to_string(),
         bob_url: "tcp+tls://127.0.0.1:18441".to_string(),
     };

@@ -67,6 +67,8 @@ use utils::{best_fork_index, block_rank, deploy_native_contracts};
 pub struct ValidatorConfig {
     /// Currently configured confirmation security threshold
     pub confirmation_threshold: usize,
+    /// Currently configured max in-memory forks to maintain.
+    pub max_forks: usize,
     /// Currently configured PoW target
     pub pow_target: u32,
     /// Optional fixed difficulty, for testing purposes
@@ -124,6 +126,7 @@ impl Validator {
         let consensus = Consensus::new(
             blockchain.clone(),
             config.confirmation_threshold,
+            config.max_forks,
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
         )?;

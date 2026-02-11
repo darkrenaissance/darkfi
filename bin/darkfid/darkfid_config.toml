@@ -20,6 +20,9 @@ database = "~/.local/share/darkfi/darkfid/testnet"
 # Confirmation threshold, denominated by number of blocks
 threshold = 6
 
+# Max in-memory forks to maintain
+max_forks = 32
+
 # PoW block production target, in seconds
 pow_target = 120
 
@@ -215,6 +218,9 @@ database = "~/.local/share/darkfi/darkfid/mainnet"
 # Confirmation threshold, denominated by number of blocks
 threshold = 11
 
+# Max in-memory forks to maintain
+max_forks = 32
+
 # PoW block production target, in seconds
 pow_target = 120
 
@@ -403,6 +409,9 @@ database = "~/.local/share/darkfi/darkfid/localnet"
 
 # Confirmation threshold, denominated by number of blocks
 threshold = 3
+
+# Max in-memory forks to maintain
+max_forks = 8
 
 # PoW block production target, in seconds
 pow_target = 10

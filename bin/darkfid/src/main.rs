@@ -99,6 +99,10 @@ pub struct BlockchainNetwork {
     /// Confirmation threshold, denominated by number of blocks
     threshold: usize,
 
+    #[structopt(long, default_value = "8")]
+    /// Max in-memory forks to maintain
+    max_forks: usize,
+
     #[structopt(long, default_value = "120")]
     /// PoW block production target, in seconds
     pow_target: u32,
@@ -187,6 +191,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     let config = ValidatorConfig {
         confirmation_threshold: blockchain_config.threshold,
+        max_forks: blockchain_config.max_forks,
         pow_target: blockchain_config.pow_target,
         pow_fixed_difficulty,
         genesis_block,

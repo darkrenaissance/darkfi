@@ -237,11 +237,10 @@ pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(
 
 /// Auxiliary function to find best ranked fork.
 ///
-/// The best ranked fork is the one with the highest sum of
-/// its blocks squared mining target distances, from max 32
-/// bytes int. In case of a tie, the fork with the highest
-/// sum of its blocks squared RandomX hash number distances,
-/// from max 32 bytes int, wins.
+/// The best ranked fork is the one with the highest sum of its blocks
+/// squared mining target distances, from max 32 bytes int. In case of
+/// a tie, the fork with the highest sum of its blocks squared RandomX
+/// hash number distances, from max 32 bytes int, wins.
 pub fn best_fork_index(forks: &[Fork]) -> Result<usize> {
     // Check if node has any forks
     if forks.is_empty() {
@@ -284,4 +283,54 @@ pub fn best_fork_index(forks: &[Fork]) -> Result<usize> {
     }
 
     Ok(best_index)
+}
+
+/// Auxiliary function to find worst ranked fork.
+///
+/// The worst ranked fork is the one with the lowest sum of its blocks
+/// squared mining target distances, from max 32 bytes int. In case of
+/// a tie, the fork with the lowest sum of its blocks squared RandomX
+/// hash number distances, from max 32 bytes int, wins.
+pub fn worst_fork_index(forks: &[Fork]) -> Result<usize> {
+    // Check if node has any forks
+    if forks.is_empty() {
+        return Err(Error::ForksNotFound)
+    }
+
+    // Find the worst ranked forks
+    let mut worst = &BigUint::from(0u64);
+    let mut indexes = vec![];
+    for (f_index, fork) in forks.iter().enumerate() {
+        let rank = &fork.targets_rank;
+
+        // Fork ranks higher that current worst
+        if rank > worst {
+            continue
+        }
+
+        // Fork has same rank as current worst
+        if rank == worst {
+            indexes.push(f_index);
+            continue
+        }
+
+        // Fork ranks lower that current worst
+        worst = rank;
+        indexes = vec![f_index];
+    }
+
+    // If a single worst ranking fork exists, return it
+    if indexes.len() == 1 {
+        return Ok(indexes[0])
+    }
+
+    // Break tie using their hash distances rank
+    let mut worst_index = indexes[0];
+    for index in &indexes[1..] {
+        if forks[*index].hashes_rank < forks[worst_index].hashes_rank {
+            worst_index = *index;
+        }
+    }
+
+    Ok(worst_index)
 }

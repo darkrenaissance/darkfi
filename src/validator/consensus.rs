@@ -33,7 +33,7 @@ use crate::{
     tx::{Transaction, MAX_TX_CALLS},
     validator::{
         pow::{PoWModule, RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
-        utils::{best_fork_index, block_rank, find_extended_fork_index},
+        utils::{best_fork_index, block_rank, find_extended_fork_index, worst_fork_index},
         verification::{verify_proposal, verify_transaction},
     },
     zk::VerifyingKey,
@@ -51,6 +51,8 @@ pub struct Consensus {
     pub confirmation_threshold: usize,
     /// Fork chains containing block proposals
     pub forks: Vec<Fork>,
+    /// Max in-memory forks to maintain.
+    max_forks: usize,
     /// Canonical blockchain PoW module state
     pub module: PoWModule,
 }
@@ -60,15 +62,19 @@ impl Consensus {
     pub fn new(
         blockchain: Blockchain,
         confirmation_threshold: usize,
+        max_forks: usize,
         pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
+        let max_forks = if max_forks == 0 { 1 } else { max_forks };
         let module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, None)?;
 
-        Ok(Self { blockchain, confirmation_threshold, forks: vec![], module })
+        Ok(Self { blockchain, confirmation_threshold, forks: vec![], max_forks, module })
     }
 
-    /// Generate a new empty fork.
+    /// Try to generate a new empty fork. If the forks bound has been
+    /// reached, try to replace the worst ranking one with the new
+    /// empty fork.
     pub async fn generate_empty_fork(&mut self) -> Result<()> {
         debug!(target: "validator::consensus::generate_empty_fork", "Generating new empty fork...");
         // Check if we already have an empty fork
@@ -79,14 +85,48 @@ impl Consensus {
             }
         }
         let fork = Fork::new(self.blockchain.clone(), self.module.clone()).await?;
-        self.forks.push(fork);
+        self.push_fork(fork);
         debug!(target: "validator::consensus::generate_empty_fork", "Fork generated!");
 
         Ok(())
     }
 
-    /// Given a proposal, the node verifys it and finds which fork it extends.
-    /// If the proposal extends the canonical blockchain, a new fork chain is created.
+    /// Auxiliary function to push a fork into the forks vector
+    /// respecting the bounding confirguration. The fork will be
+    /// inserted iff the bound has not be reached or it ranks higher
+    /// than the lowest ranking existing fork.
+    fn push_fork(&mut self, fork: Fork) {
+        // Check if we have reached the bound
+        if self.forks.len() < self.max_forks {
+            self.forks.push(fork);
+            return
+        }
+
+        // Grab worst fork. We don't care about competing forks since
+        // any of them can be replaced. It's safe to unwrap here since
+        // we already checked forks length. `best_fork_index` returns
+        // an error iff we pass an empty forks vector.
+        let index = worst_fork_index(&self.forks).unwrap();
+
+        // Check if the provided one ranks lower
+        if fork.targets_rank < self.forks[index].targets_rank {
+            return
+        }
+
+        // Break tie using their hash distances rank
+        if fork.targets_rank == self.forks[index].targets_rank &&
+            fork.hashes_rank <= self.forks[index].hashes_rank
+        {
+            return
+        }
+
+        // Replace the current worst fork with the provided one
+        self.forks[index] = fork;
+    }
+
+    /// Given a proposal, the node verifys it and finds which fork it
+    /// extends. If the proposal extends the canonical blockchain, a
+    /// new fork chain is created.
     pub async fn append_proposal(&mut self, proposal: &Proposal, verify_fees: bool) -> Result<()> {
         debug!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
 
@@ -115,11 +155,8 @@ impl Consensus {
         // Append proposal to the fork
         fork.append_proposal(proposal).await?;
 
-        // TODO: to keep memory usage low, we should only append forks that
-        // are higher ranking than our current best one
-
-        // If a fork index was found, replace forks with the mutated one,
-        // otherwise push the new fork.
+        // If a fork index was found, replace fork with the mutated
+        // one, otherwise try to push the new fork.
         match index {
             Some(i) => {
                 if i < self.forks.len() &&
@@ -127,11 +164,11 @@ impl Consensus {
                 {
                     self.forks[i] = fork;
                 } else {
-                    self.forks.push(fork);
+                    self.push_fork(fork);
                 }
             }
             None => {
-                self.forks.push(fork);
+                self.push_fork(fork);
             }
         }
 

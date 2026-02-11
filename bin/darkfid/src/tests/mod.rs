@@ -53,6 +53,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         confirmation_threshold: 3,
+        max_forks: 8,
         alice_url: "tcp+tls://127.0.0.1:18340".to_string(),
         bob_url: "tcp+tls://127.0.0.1:18341".to_string(),
     };
@@ -254,6 +255,7 @@ fn darkfid_programmatic_control() -> Result<()> {
                     overlay.lock().unwrap().contracts.update_state_monotree(&diff).unwrap();
                 let config = darkfi::validator::ValidatorConfig {
                     confirmation_threshold: 1,
+                    max_forks: 8,
                     pow_target: 20,
                     pow_fixed_difficulty: Some(BigUint::one()),
                     genesis_block,

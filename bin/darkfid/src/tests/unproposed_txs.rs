@@ -55,6 +55,7 @@ async fn simulate_unproposed_txs(
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         confirmation_threshold: 6,
+        max_forks: 8,
         alice_url,
         bob_url,
     };
