@@ -249,22 +249,39 @@ impl Consensus {
     /// Consensus confirmation logic:
     /// - If the current best fork has reached greater length than the security threshold,
     ///   and no other fork exist with same rank, first proposal(s) in that fork can be
-    ///   appended to canonical blockchain (confirme).
+    ///   appended to canonical/confirmed blockchain.
     ///
     /// When best fork can be confirmed, first block(s) should be appended to canonical,
     /// and forks should be rebuilt.
     pub async fn confirmation(&self) -> Result<Option<usize>> {
         debug!(target: "validator::consensus::confirmation", "Started confirmation check");
 
-        // Grab best fork
+        // Grab best fork index
         let index = best_fork_index(&self.forks)?;
-        let fork = &self.forks[index];
 
         // Check its length
-        let length = fork.proposals.len();
-        if length < self.confirmation_threshold {
-            debug!(target: "validator::consensus::confirmation", "Nothing to confirme yet, best fork size: {length}");
+        if self.forks[index].proposals.len() < self.confirmation_threshold {
+            debug!(target: "validator::consensus::confirmation", "Nothing to confirm yet, best fork size: {}", self.forks[index].proposals.len());
             return Ok(None)
+        }
+
+        // Ensure no other fork exists with same rank
+        for (f_index, fork) in self.forks.iter().enumerate() {
+            // Skip best fork
+            if f_index == index {
+                continue
+            }
+
+            // Skip lower ranking forks
+            if fork.targets_rank != self.forks[index].targets_rank {
+                continue
+            }
+
+            // Check hash distances rank
+            if fork.hashes_rank == self.forks[index].hashes_rank {
+                debug!(target: "validator::consensus::confirmation", "Competing best forks found");
+                return Ok(None)
+            }
         }
 
         Ok(Some(index))
