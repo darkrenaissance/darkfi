@@ -317,11 +317,45 @@ async fn handle_reorg(
         }
     };
 
+    // Check if the sequence ranks higher than our current best fork
+    let validator = node.validator.read().await;
+    let index = match best_fork_index(&validator.consensus.forks) {
+        Ok(i) => i,
+        Err(e) => {
+            debug!(target: "darkfid::task::handle_reorg", "Retrieving best fork index failed: {e}");
+            return false
+        }
+    };
+    let best_fork = &validator.consensus.forks[index];
+    if targets_rank < best_fork.targets_rank ||
+        (targets_rank == best_fork.targets_rank && hashes_rank <= best_fork.hashes_rank)
+    {
+        info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks lower than our current best fork, skipping...");
+        return true
+    }
+    drop(validator);
+
+    // Retrieve the proposals of the hashes sequence
+    info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", peer_header_hashes.len());
+    let peer_proposals = match retrieve_peer_proposals_sequence(
+        channel,
+        proposal,
+        &peer_header_hashes,
+    )
+    .await
+    {
+        Ok(p) => p,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Retrieving peer proposals failed: {e}");
+            return true
+        }
+    };
+
     // Grab the validator lock so no other proposal gets processed
     // while we are verifying the sequence.
     let mut validator = node.validator.write().await;
 
-    // Check if the sequence ranks higher than our current best fork
+    // Check if the sequence still ranks higher than our current best fork
     let index = match best_fork_index(&validator.consensus.forks) {
         Ok(i) => i,
         Err(e) => {
@@ -338,37 +372,27 @@ async fn handle_reorg(
     }
 
     // Generate the peer fork and retrieve its ranking
-    let mut peer_fork = match retrieve_peer_fork(
+    info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, generating its fork...");
+    let mut peer_fork = match generate_peer_fork(
         &validator,
         (&last_common_height, &module, &last_difficulty),
-        channel,
-        proposal,
-        &peer_header_hashes,
+        &peer_proposals,
     )
     .await
     {
-        Ok(p) => p,
+        Ok(f) => f,
         Err(DatabaseError(e)) => {
             error!(target: "darkfid::task::handle_reorg", "Internal error while retrieving peer fork: {e}");
             return false
         }
         Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "Retrieving peer fork failed: {e}");
+            error!(target: "darkfid::task::handle_reorg", "Generatating peer fork failed: {e}");
             return true
         }
     };
 
-    // Check if the peer fork ranks higher than our current best fork
-    if peer_fork.targets_rank < best_fork.targets_rank ||
-        (peer_fork.targets_rank == best_fork.targets_rank &&
-            peer_fork.hashes_rank <= best_fork.hashes_rank)
-    {
-        info!(target: "darkfid::task::handle_reorg", "Peer fork ranks lower than our current best fork, skipping...");
-        return true
-    }
-
     // Execute the reorg
-    info!(target: "darkfid::task::handle_reorg", "Peer fork ranks higher than our current best fork, executing reorg...");
+    info!(target: "darkfid::task::handle_reorg", "Executing reorg...");
     if let Err(e) = validator.blockchain.reset_to_height(last_common_height) {
         error!(target: "darkfid::task::handle_reorg", "Applying full inverse diff failed: {e}");
         return false
@@ -611,64 +635,22 @@ async fn retrieve_peer_headers_sequence_ranking(
     Ok((targets_rank, hashes_rank))
 }
 
-/// Auxiliary function to generate provided peer headers hashes fork
-/// and its ranking, based on provided last common information.
-async fn retrieve_peer_fork(
-    // Validator pointer
-    validator: &Validator,
-    // Last common header height, PoW module and difficulty
-    last_common_info: (&u32, &PoWModule, &BlockDifficulty),
+/// Auxiliary function to retrieve provided peer proposals hashes
+/// sequence.
+async fn retrieve_peer_proposals_sequence(
     // Peer channel and its communications timeout
     channel: &(&ChannelPtr, &u64),
     // Peer fork trigger proposal
     proposal: &Proposal,
     // Peer header hashes sequence
     header_hashes: &[HeaderHash],
-) -> Result<Fork> {
+) -> Result<Vec<Proposal>> {
     // Communication setup
     let response_sub = channel.0.subscribe_msg::<ForkProposalsResponse>().await?;
 
-    // Create a fork from last common height
-    let mut peer_fork =
-        match Fork::new(validator.consensus.blockchain.clone(), last_common_info.1.clone()).await {
-            Ok(f) => f,
-            Err(e) => return Err(DatabaseError(format!("Generating peer fork failed: {e}"))),
-        };
-    peer_fork.targets_rank = last_common_info.2.ranks.targets_rank.clone();
-    peer_fork.hashes_rank = last_common_info.2.ranks.hashes_rank.clone();
-
-    // Grab all state inverse diffs after last common height, and add them to the fork
-    let inverse_diffs =
-        match validator.blockchain.blocks.get_state_inverse_diffs_after(*last_common_info.0) {
-            Ok(i) => i,
-            Err(e) => {
-                return Err(DatabaseError(format!("Retrieving state inverse diffs failed: {e}")))
-            }
-        };
-    for inverse_diff in inverse_diffs.iter().rev() {
-        let result =
-            peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff);
-        if let Err(e) = result {
-            return Err(DatabaseError(format!("Applying state inverse diff failed: {e}")))
-        }
-    }
-
-    // Grab current overlay diff and use it as the first diff of the
-    // peer fork, so all consecutive diffs represent just the proposal
-    // changes.
-    let diff = peer_fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]);
-    let diff = match diff {
-        Ok(d) => d,
-        Err(e) => {
-            return Err(DatabaseError(format!("Generate full state inverse diff failed: {e}")))
-        }
-    };
-    peer_fork.diffs = vec![diff];
-
     // Retrieve the proposals of the hashes sequence, in batches
-    info!(target: "darkfid::task::handle_reorg", "Peer sequence ranks higher than our current best fork, retrieving {} proposals from peer...", header_hashes.len());
     let mut batch = Vec::with_capacity(BATCH);
-    let mut total_processed = 0;
+    let mut proposals = Vec::with_capacity(header_hashes.len());
     for (index, hash) in header_hashes.iter().enumerate() {
         // Add hash in batch sequence
         batch.push(*hash);
@@ -695,8 +677,6 @@ async fn retrieve_peer_fork(
 
         // Process retrieved proposal
         for (peer_proposal_index, peer_proposal) in response.proposals.iter().enumerate() {
-            info!(target: "darkfid::task::handle_reorg", "Processing proposal: {} - {}", peer_proposal.hash, peer_proposal.block.header.height);
-
             // Validate its the proposal we requested
             if peer_proposal.hash != batch[peer_proposal_index] {
                 return Err(Custom(format!(
@@ -704,29 +684,80 @@ async fn retrieve_peer_fork(
                     batch[peer_proposal_index], peer_proposal.hash
                 )))
             }
-
-            // Verify proposal
-            verify_fork_proposal(&mut peer_fork, peer_proposal, validator.verify_fees).await?;
-
-            // Append proposal
-            peer_fork.append_proposal(peer_proposal).await?;
+            proposals.push(peer_proposal.clone());
         }
 
-        total_processed += response.proposals.len();
-        info!(target: "darkfid::task::handle_reorg", "Proposals received and verified: {total_processed}/{}", header_hashes.len());
+        info!(target: "darkfid::task::handle_reorg", "Proposals received: {}/{}", proposals.len(), header_hashes.len());
 
         // Reset batch
         batch = Vec::with_capacity(BATCH);
     }
 
-    // Verify trigger proposal
-    verify_fork_proposal(&mut peer_fork, proposal, validator.verify_fees).await?;
+    // Insert trigger proposal
+    proposals.push(proposal.clone());
 
-    // Append trigger proposal
-    peer_fork.append_proposal(proposal).await?;
+    Ok(proposals)
+}
+
+/// Auxiliary function to generate provided peer proposals sequence
+/// fork and its ranking, based on provided last common information.
+async fn generate_peer_fork(
+    // Validator pointer
+    validator: &Validator,
+    // Last common header height, PoW module and difficulty
+    last_common_info: (&u32, &PoWModule, &BlockDifficulty),
+    // Peer proposals sequence
+    proposals: &[Proposal],
+) -> Result<Fork> {
+    // Create a fork from last common height
+    let mut fork =
+        match Fork::new(validator.consensus.blockchain.clone(), last_common_info.1.clone()).await {
+            Ok(f) => f,
+            Err(e) => return Err(DatabaseError(format!("Generating peer fork failed: {e}"))),
+        };
+    fork.targets_rank = last_common_info.2.ranks.targets_rank.clone();
+    fork.hashes_rank = last_common_info.2.ranks.hashes_rank.clone();
+
+    // Grab all state inverse diffs after last common height, and add them to the fork
+    let inverse_diffs =
+        match validator.blockchain.blocks.get_state_inverse_diffs_after(*last_common_info.0) {
+            Ok(i) => i,
+            Err(e) => {
+                return Err(DatabaseError(format!("Retrieving state inverse diffs failed: {e}")))
+            }
+        };
+    for inverse_diff in inverse_diffs.iter().rev() {
+        let result = fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(inverse_diff);
+        if let Err(e) = result {
+            return Err(DatabaseError(format!("Applying state inverse diff failed: {e}")))
+        }
+    }
+
+    // Grab current overlay diff and use it as the first diff of the
+    // peer fork, so all consecutive diffs represent just the proposal
+    // changes.
+    let diff = fork.overlay.lock().unwrap().overlay.lock().unwrap().diff(&[]);
+    let diff = match diff {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(DatabaseError(format!("Generate full state inverse diff failed: {e}")))
+        }
+    };
+    fork.diffs = vec![diff];
+
+    // Process the proposals sequence
+    for proposal in proposals {
+        info!(target: "darkfid::task::handle_reorg", "Processing proposal: {} - {}", proposal.hash, proposal.block.header.height);
+
+        // Verify proposal
+        verify_fork_proposal(&mut fork, proposal, validator.verify_fees).await?;
+
+        // Append proposal
+        fork.append_proposal(proposal).await?;
+    }
 
     // Remove the reorg diff from the fork
-    peer_fork.diffs.remove(0);
+    fork.diffs.remove(0);
 
-    Ok(peer_fork)
+    Ok(fork)
 }
