@@ -127,7 +127,12 @@ impl Consensus {
     /// Given a proposal, the node verifys it and finds which fork it
     /// extends. If the proposal extends the canonical blockchain, a
     /// new fork chain is created.
-    pub async fn append_proposal(&mut self, proposal: &Proposal, verify_fees: bool) -> Result<()> {
+    pub async fn append_proposal(
+        &mut self,
+        proposal: &Proposal,
+        is_new: bool,
+        verify_fees: bool,
+    ) -> Result<()> {
         debug!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
 
         // Check if proposal already exists
@@ -150,7 +155,7 @@ impl Consensus {
         }
 
         // Verify proposal and grab corresponding fork
-        let (mut fork, index) = verify_proposal(self, proposal, verify_fees).await?;
+        let (mut fork, index) = verify_proposal(self, proposal, is_new, verify_fees).await?;
 
         // Append proposal to the fork
         fork.append_proposal(proposal).await?;

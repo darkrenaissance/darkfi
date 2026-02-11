@@ -322,7 +322,7 @@ impl Validator {
     /// The node tries to append provided proposal to its consensus
     /// state.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
-        self.consensus.append_proposal(proposal, self.verify_fees).await
+        self.consensus.append_proposal(proposal, self.synced, self.verify_fees).await
     }
 
     /// The node checks if best fork can be confirmed.
@@ -531,8 +531,16 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Verify block
-            match verify_block(&overlay, &diffs, &mut module, block, previous, self.verify_fees)
-                .await
+            match verify_block(
+                &overlay,
+                &diffs,
+                &mut module,
+                block,
+                previous,
+                true,
+                self.verify_fees,
+            )
+            .await
             {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
@@ -759,9 +767,16 @@ impl Validator {
             let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
 
             // Verify block
-            if let Err(e) =
-                verify_block(&overlay, &diffs, &mut module, &block, &previous, self.verify_fees)
-                    .await
+            if let Err(e) = verify_block(
+                &overlay,
+                &diffs,
+                &mut module,
+                &block,
+                &previous,
+                false,
+                self.verify_fees,
+            )
+            .await
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set: {e}");
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))

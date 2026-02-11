@@ -265,6 +265,7 @@ impl Harness {
             &mut fork.module,
             &block,
             &previous,
+            true,
             self.alice.validator.read().await.verify_fees,
         )
         .await?;
