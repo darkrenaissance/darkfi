@@ -385,7 +385,10 @@ impl Consensus {
             .unwrap()
             .get_blocks_by_hash(&self.forks[index].proposals)?;
         for block in blocks {
-            proposals.push(Proposal::new(block));
+            // Add fork proposals after the requested one height
+            if block.header.height > existing_tips[0].header.height {
+                proposals.push(Proposal::new(block));
+            }
         }
 
         Ok(proposals)
