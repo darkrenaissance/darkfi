@@ -475,6 +475,11 @@ impl Consensus {
                 continue
             }
 
+            // If a fork is empty, has less proposals than the prefix
+            // or it doesn't start with the provided prefix we mark it
+            // for removal. It's sufficient to check the prefix last
+            // as the hashes sequence matching is enforced by it, since
+            // it contains all previous ones.
             if fork.proposals.is_empty() ||
                 prefix_last_index >= fork.proposals.len() ||
                 &fork.proposals[prefix_last_index] != prefix_last
