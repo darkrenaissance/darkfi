@@ -413,8 +413,7 @@ impl Consensus {
         if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
             next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
         {
-            // Its safe to unwrap here since we know the key has been set
-            Ok(rx_keys.1.unwrap())
+            Ok(rx_keys.1.ok_or_else(|| Error::ParseFailed("darkfi_rx_keys.1 unwrap() error"))?)
         } else {
             Ok(rx_keys.0)
         }

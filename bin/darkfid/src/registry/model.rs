@@ -39,7 +39,7 @@ use darkfi::{
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -270,8 +270,14 @@ pub async fn generate_next_block_template(
     let randomx_keys = if next_block_height > RANDOMX_KEY_CHANGING_HEIGHT &&
         next_block_height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
     {
-        // Its safe to unwrap here since we know the key has been set
-        (extended_fork.module.darkfi_rx_keys.1.unwrap(), None)
+        (
+            extended_fork
+                .module
+                .darkfi_rx_keys
+                .1
+                .ok_or_else(|| Error::ParseFailed("darkfi_rx_keys.1 unwrap() error"))?,
+            None,
+        )
     } else {
         extended_fork.module.darkfi_rx_keys
     };

@@ -308,8 +308,10 @@ impl PoWModule {
                 let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
                     header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
                 {
-                    // Its safe to unwrap here since we know the key has been set
-                    &self.darkfi_rx_keys.1.unwrap()
+                    &self
+                        .darkfi_rx_keys
+                        .1
+                        .ok_or_else(|| Error::ParseFailed("darkfi_rx_keys.1 unwrap() error"))?
                 } else {
                     &self.darkfi_rx_keys.0
                 };
@@ -382,8 +384,10 @@ impl PoWModule {
 
         // Check if need to rotate keys
         if header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY {
-            // Its safe to unwrap here since we know the key has been set
-            self.darkfi_rx_keys.0 = self.darkfi_rx_keys.1.unwrap();
+            self.darkfi_rx_keys.0 = self
+                .darkfi_rx_keys
+                .1
+                .ok_or_else(|| Error::ParseFailed("darkfi_rx_keys.1 unwrap() error"))?;
             self.darkfi_rx_keys.1 = None;
         }
 
@@ -416,8 +420,10 @@ impl PoWModule {
         let randomx_key = if header.height > RANDOMX_KEY_CHANGING_HEIGHT &&
             header.height % RANDOMX_KEY_CHANGING_HEIGHT == RANDOMX_KEY_CHANGE_DELAY
         {
-            // Its safe to unwrap here since we know the key has been set
-            &self.darkfi_rx_keys.1.unwrap()
+            &self
+                .darkfi_rx_keys
+                .1
+                .ok_or_else(|| Error::ParseFailed("darkfi_rx_keys.1 unwrap() error"))?
         } else {
             &self.darkfi_rx_keys.0
         };
