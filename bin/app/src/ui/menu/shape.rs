@@ -50,8 +50,8 @@ pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
 }
 
 pub fn make_hammy(renderer: &Renderer, font_size: f32) -> DrawMesh {
-    let ham_size = font_size * 0.6;
-    let gap_size = font_size * 0.2;
+    let ham_size = font_size * 0.25;
+    let gap_size = font_size * 0.8;
 
     let mut mesh = MeshBuilder::new(gfxtag!("menu_x"));
 
