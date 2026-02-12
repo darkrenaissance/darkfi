@@ -254,7 +254,7 @@ impl Menu {
 
     async fn handle_interaction(
         &self,
-        y: f32,
+        pos: Point,
         is_tap: bool,
         is_long_press_tap: bool,
         elapsed_ms: u128,
@@ -266,7 +266,27 @@ impl Menu {
             let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
             self.redraw(atom);
         } else if is_tap {
-            if let Some(item_idx) = self.get_selected_item_index(y) {
+            let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
+
+            if is_edit_mode {
+                let font_size = self.font_size.get();
+                let handle_padding = self.handle_padding.get();
+                let x_half_size = font_size * 0.7;
+                let x_center = handle_padding / 2.;
+
+                if let Some(item_idx) = self.get_selected_item_index(pos.y) {
+                    let item_name = self.items.get_str(item_idx).unwrap();
+
+                    let x_min = x_center - x_half_size;
+                    let x_max = x_center + x_half_size;
+
+                    if pos.x >= x_min && pos.x <= x_max {
+                        info!(target: "app::menu", "X clicked for item: {item_name}");
+                    } else {
+                        self.handle_selection(item_idx).await;
+                    }
+                }
+            } else if let Some(item_idx) = self.get_selected_item_index(pos.y) {
                 self.handle_selection(item_idx).await;
             }
         }
@@ -687,7 +707,7 @@ impl UIObject for Menu {
         let is_long_press_tap = movement_dist < LONG_PRESS_EPSILON;
         let elapsed = info.start_instant.elapsed().as_millis();
 
-        self.handle_interaction(mouse_pos.y, is_click, is_long_press_tap, elapsed).await;
+        self.handle_interaction(mouse_pos, is_click, is_long_press_tap, elapsed).await;
 
         true
     }
@@ -788,7 +808,7 @@ impl UIObject for Menu {
                     (is_tap, is_long_press_tap, elapsed)
                 };
 
-                self.handle_interaction(touch_pos.y, is_tap, is_long_press_tap, elapsed).await;
+                self.handle_interaction(touch_pos, is_tap, is_long_press_tap, elapsed).await;
 
                 self.end_touch_phase(touch_pos.y);
                 true
