@@ -325,7 +325,8 @@ impl Menu {
             let item_center_y = item_height / 2.0;
             edit_instrs.push(DrawInstruction::Move(Point::new(handle_padding / 2., item_center_y)));
             edit_instrs.push(DrawInstruction::Draw(shape::make_x(&self.renderer, font_size)));
-            edit_instrs.push(DrawInstruction::Move(Point::new(-handle_padding / 2., -item_center_y)));
+            edit_instrs
+                .push(DrawInstruction::Move(Point::new(-handle_padding / 2., -item_center_y)));
 
             let rhs = rect.w - handle_padding / 2.;
             edit_instrs.push(DrawInstruction::Move(Point::new(rhs, item_center_y)));

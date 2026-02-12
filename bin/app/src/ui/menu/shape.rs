@@ -17,100 +17,58 @@
  */
 
 use crate::{
-    gfx::{gfxtag, DrawMesh, Renderer, Vertex},
+    gfx::{gfxtag, DrawMesh, Point, Renderer, Vertex},
     mesh::{Color, MeshBuilder, COLOR_GREEN},
 };
 
-const X_COLOR: Color = [1.0, 0.0, 0.0, 1.0];
+const X_COLOR: Color = [0.9, 0.2, 0.34, 1.0];
+const HAM_COLOR: Color = [0., 0.94, 1., 1.0];
+const THICKNESS: f32 = 1.;
 
 pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
     let x_size = font_size * 0.8;
     let half_size = x_size / 2.0;
-    let thickness = 2.0;
-    let half_thick = thickness / 2.0;
 
     let mut mesh = MeshBuilder::new(gfxtag!("menu_x"));
 
     // First diagonal line (top-left to bottom-right)
     // Diagonal from (-half_size, -half_size) to (half_size, half_size)
     // Normal vector is (1, -1) normalized
-    let mut diag_start = [-half_size - half_thick, -half_size + half_thick];
-    let mut diag_end = [half_size - half_thick, half_size + half_thick];
-    let mut diag_start2 = [-half_size + half_thick, -half_size - half_thick];
-    let mut diag_end2 = [half_size + half_thick, half_size - half_thick];
+    let mut diag_start = Point::new(-half_size, -half_size);
+    let mut diag_end = Point::new(half_size, half_size);
 
-    let verts = vec![
-        Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
-    ];
-    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
+    mesh.draw_line(diag_start, diag_end, X_COLOR, THICKNESS);
 
     // Second diagonal line (bottom-left to top-right)
     // Diagonal from (-half_size, half_size) to (half_size, -half_size)
-    diag_start[0] *= -1.;
-    diag_end[0] *= -1.;
-    diag_start2[0] *= -1.;
-    diag_end2[0] *= -1.;
+    diag_start.x *= -1.;
+    diag_end.x *= -1.;
 
-    let verts = vec![
-        Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
-    ];
-    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
-
-    let verts = vec![
-        Vertex { pos: [-5., -5.], color: COLOR_GREEN, uv: [0., 0.] },
-        Vertex { pos: [-5., 5.], color: COLOR_GREEN, uv: [0., 0.] },
-        Vertex { pos: [5., -5.], color: COLOR_GREEN, uv: [0., 0.] },
-        Vertex { pos: [5., 5.], color: COLOR_GREEN, uv: [0., 0.] },
-    ];
-    mesh.append(verts, vec![0, 2, 1, 1, 2, 3]);
+    mesh.draw_line(diag_start, diag_end, X_COLOR, THICKNESS);
 
     mesh.alloc(renderer).draw_untextured()
 }
 
 pub fn make_hammy(renderer: &Renderer, font_size: f32) -> DrawMesh {
-    let x_size = font_size * 0.8;
-    let half_size = x_size / 2.0;
-    let thickness = 2.0;
-    let half_thick = thickness / 2.0;
+    let ham_size = font_size * 0.6;
+    let gap_size = font_size * 0.2;
 
     let mut mesh = MeshBuilder::new(gfxtag!("menu_x"));
 
-    // First diagonal line (top-left to bottom-right)
-    // Diagonal from (-half_size, -half_size) to (half_size, half_size)
-    // Normal vector is (1, -1) normalized
-    let mut diag_start = [-half_size - half_thick, -half_size + half_thick];
-    let mut diag_end = [half_size - half_thick, half_size + half_thick];
-    let mut diag_start2 = [-half_size + half_thick, -half_size - half_thick];
-    let mut diag_end2 = [half_size + half_thick, half_size - half_thick];
+    for i in 0..2 {
+        for j in -1..2 {
+            let center = Point::new(gap_size * i as f32, gap_size * j as f32);
+            let lhs = center - Point::new(ham_size, 0.);
+            let rhs = center + Point::new(ham_size, 0.);
+            let top = center - Point::new(0., ham_size);
+            let bot = center + Point::new(0., ham_size);
 
-    let verts1 = vec![
-        Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
-    ];
-    mesh.append(verts1, vec![0, 2, 1, 1, 2, 3]);
-
-    // Second diagonal line (bottom-left to top-right)
-    // Diagonal from (-half_size, half_size) to (half_size, -half_size)
-    diag_start[0] *= -1.;
-    diag_end[0] *= -1.;
-    diag_start2[0] *= -1.;
-    diag_end2[0] *= -1.;
-
-    let verts2 = vec![
-        Vertex { pos: diag_start, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_start2, color: X_COLOR, uv: [0., 0.] },
-        Vertex { pos: diag_end2, color: X_COLOR, uv: [0., 0.] },
-    ];
-    mesh.append(verts2, vec![0, 2, 1, 1, 2, 3]);
+            mesh.draw_line(lhs, top, HAM_COLOR, THICKNESS);
+            mesh.draw_line(top, rhs, HAM_COLOR, THICKNESS);
+            mesh.draw_line(rhs, bot, HAM_COLOR, THICKNESS);
+            mesh.draw_line(bot, lhs, HAM_COLOR, THICKNESS);
+        }
+    }
 
     mesh.alloc(renderer).draw_untextured()
 }
