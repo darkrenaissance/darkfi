@@ -297,9 +297,9 @@ pub fn worst_fork_index(forks: &[Fork]) -> Result<usize> {
     }
 
     // Find the worst ranked forks
-    let mut worst = &BigUint::from(0u64);
-    let mut indexes = vec![];
-    for (f_index, fork) in forks.iter().enumerate() {
+    let mut worst = &forks[0].targets_rank;
+    let mut indexes = vec![0];
+    for (f_index, fork) in forks[1..].iter().enumerate() {
         let rank = &fork.targets_rank;
 
         // Fork ranks higher that current worst
@@ -309,13 +309,13 @@ pub fn worst_fork_index(forks: &[Fork]) -> Result<usize> {
 
         // Fork has same rank as current worst
         if rank == worst {
-            indexes.push(f_index);
+            indexes.push(f_index + 1);
             continue
         }
 
         // Fork ranks lower that current worst
         worst = rank;
-        indexes = vec![f_index];
+        indexes = vec![f_index + 1];
     }
 
     // If a single worst ranking fork exists, return it
