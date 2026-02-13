@@ -75,6 +75,12 @@ struct MouseClickInfo {
     start_instant: std::time::Instant,
 }
 
+#[derive(Clone)]
+struct DragInfo {
+    item_idx: usize,
+    insert_idx: usize,
+}
+
 impl TouchInfo {
     fn new(start_scroll: f32, pos: Point) -> Self {
         Self {
@@ -133,6 +139,7 @@ pub struct Menu {
     mouse_pos: SyncMutex<Point>,
     touch_info: SyncMutex<Option<TouchInfo>>,
     mouse_click_info: SyncMutex<Option<MouseClickInfo>>,
+    drag_info: SyncMutex<Option<DragInfo>>,
     long_press_task: SyncMutex<Option<smol::Task<()>>>,
     weak_self: SyncMutex<Option<Weak<Self>>>,
     ex: SyncMutex<Option<ExecutorPtr>>,
@@ -202,6 +209,7 @@ impl Menu {
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
             mouse_click_info: SyncMutex::new(None),
+            drag_info: SyncMutex::new(None),
             long_press_task: SyncMutex::new(None),
             weak_self: SyncMutex::new(None),
             ex: SyncMutex::new(None),
@@ -282,6 +290,9 @@ impl Menu {
 
                     if pos.x >= x_min && pos.x <= x_max {
                         info!(target: "app::menu", "X clicked for item: {item_name}");
+                        let atom = &mut self.renderer.make_guard(gfxtag!("Menu::delete_item"));
+                        self.items.remove_str(atom, Role::App, item_idx).unwrap();
+                        self.redraw(atom);
                     } else {
                         self.handle_selection(item_idx).await;
                     }
@@ -317,6 +328,22 @@ impl Menu {
         let window_scale = self.window_scale.get();
 
         let num_items = self.items.get_len();
+
+        // Get items and reorder if dragging
+        let mut items_list = {
+            let mut items = vec![];
+            for idx in 0..num_items {
+                items.push(self.items.get_str(idx).unwrap());
+            }
+            items
+        };
+
+        if let Some(ref drag_info) = self.drag_info.lock().as_ref() {
+            if drag_info.item_idx != drag_info.insert_idx {
+                let item = items_list.remove(drag_info.item_idx);
+                items_list.insert(drag_info.insert_idx, item);
+            }
+        }
 
         // Draw single background mesh for the entire menu
         let content_height = num_items as f32 * item_height;
@@ -355,7 +382,7 @@ impl Menu {
         }
 
         for idx in 0..num_items {
-            let item_text = self.items.get_str(idx).unwrap();
+            let item_text = items_list[idx].clone();
 
             let color = match item_states.get(&item_text) {
                 Some(ItemStatus::Active) => active_color,
@@ -650,6 +677,25 @@ impl UIObject for Menu {
             return false
         }
 
+        let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
+
+        if is_edit_mode {
+            let font_size = self.font_size.get();
+            let handle_padding = self.handle_padding.get();
+            let hammy_half_size = font_size * 0.7;
+            let hammy_center = rect.w - handle_padding / 2.;
+
+            let hammy_min = hammy_center - hammy_half_size;
+            let hammy_max = hammy_center + hammy_half_size;
+
+            if mouse_pos.x >= hammy_min && mouse_pos.x <= hammy_max {
+                if let Some(item_idx) = self.get_selected_item_index(mouse_pos.y) {
+                    *self.drag_info.lock() = Some(DragInfo { item_idx, insert_idx: item_idx });
+                    info!(target: "app::menu", "Dragging item: {}", item_idx);
+                }
+            }
+        }
+
         *self.mouse_click_info.lock() =
             Some(MouseClickInfo { start_pos: mouse_pos, start_instant: std::time::Instant::now() });
 
@@ -691,6 +737,20 @@ impl UIObject for Menu {
             return false
         }
 
+        // Apply drag reorder if we were dragging
+        let drag = self.drag_info.lock().take();
+        if let Some(drag_info) = drag {
+            if drag_info.item_idx != drag_info.insert_idx {
+                let item = self.items.get_str(drag_info.item_idx).unwrap();
+                let atom = &mut self.renderer.make_guard(gfxtag!("Menu::reorder_item"));
+                self.items.remove_str(atom, Role::App, drag_info.item_idx).unwrap();
+                let insert_idx = drag_info.insert_idx;
+                self.items.insert_str(atom, Role::App, insert_idx, &item).unwrap();
+                info!(target: "app::menu", "Reordered item {} to {}", drag_info.item_idx, insert_idx);
+            }
+            return true
+        }
+
         // Cancel the long press detection task
         let task = self.long_press_task.lock().take();
         if let Some(task) = task {
@@ -726,6 +786,27 @@ impl UIObject for Menu {
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         *self.mouse_pos.lock() = mouse_pos;
+
+        let mut should_redraw = false;
+
+        if self.drag_info.lock().is_some() {
+            if let Some(insert_idx) = self.get_selected_item_index(mouse_pos.y) {
+                let mut drag = self.drag_info.lock();
+                if let Some(d) = drag.as_mut() {
+                    if d.insert_idx != insert_idx {
+                        d.insert_idx = insert_idx;
+                        info!(target: "app::menu", "insert_idx changed to: {}", insert_idx);
+                        should_redraw = true;
+                    }
+                }
+            }
+        }
+
+        if should_redraw {
+            let atom = &mut self.renderer.make_guard(gfxtag!("Menu::drag_update"));
+            self.redraw(atom);
+        }
+
         false
     }
 
@@ -748,12 +829,52 @@ impl UIObject for Menu {
                     return false
                 }
 
+                let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
+
+                if is_edit_mode {
+                    let font_size = self.font_size.get();
+                    let handle_padding = self.handle_padding.get();
+                    let hammy_half_size = font_size * 0.7;
+                    let hammy_center = rect.w - handle_padding / 2.;
+
+                    let hammy_min = hammy_center - hammy_half_size;
+                    let hammy_max = hammy_center + hammy_half_size;
+
+                    if touch_pos.x >= hammy_min && touch_pos.x <= hammy_max {
+                        if let Some(item_idx) = self.get_selected_item_index(touch_pos.y) {
+                            *self.drag_info.lock() =
+                                Some(DragInfo { item_idx, insert_idx: item_idx });
+                            info!(target: "app::menu", "Dragging item: {}", item_idx);
+                        }
+                    }
+                }
+
                 *self.touch_info.lock() =
                     Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos));
                 true
             }
 
             TouchPhase::Moved => {
+                let mut should_redraw = false;
+
+                if self.drag_info.lock().is_some() {
+                    if let Some(insert_idx) = self.get_selected_item_index(touch_pos.y) {
+                        let mut drag = self.drag_info.lock();
+                        if let Some(d) = drag.as_mut() {
+                            if d.insert_idx != insert_idx {
+                                d.insert_idx = insert_idx;
+                                info!(target: "app::menu", "insert_idx changed to: {}", insert_idx);
+                                should_redraw = true;
+                            }
+                        }
+                    }
+                }
+
+                if should_redraw {
+                    let atom = &mut self.renderer.make_guard(gfxtag!("Menu::drag_update"));
+                    self.redraw(atom);
+                }
+
                 let scroll = {
                     let mut touch_info = self.touch_info.lock();
                     let Some(info) = &mut *touch_info else { return false };
@@ -795,6 +916,19 @@ impl UIObject for Menu {
             TouchPhase::Started | TouchPhase::Moved => false,
 
             TouchPhase::Ended | TouchPhase::Cancelled => {
+                let drag = self.drag_info.lock().take();
+                if let Some(drag_info) = drag {
+                    if drag_info.item_idx != drag_info.insert_idx {
+                        let item = self.items.get_str(drag_info.item_idx).unwrap();
+                        let atom = &mut self.renderer.make_guard(gfxtag!("Menu::reorder_item"));
+                        self.items.remove_str(atom, Role::App, drag_info.item_idx).unwrap();
+                        let insert_idx = drag_info.insert_idx;
+                        self.items.insert_str(atom, Role::App, insert_idx, &item).unwrap();
+                        info!(target: "app::menu", "Reordered item {} to {}", drag_info.item_idx, insert_idx);
+                    }
+                    return true
+                }
+
                 let (is_tap, is_long_press_tap, elapsed) = {
                     let touch_info = self.touch_info.lock();
                     let Some(info) = &*touch_info else { return true };
