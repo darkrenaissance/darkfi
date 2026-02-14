@@ -686,6 +686,11 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("fade_zone", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Fade Zone", "Fade out items in the last X pixels");
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("items", PropertyType::Str, PropertySubType::Null);
     prop.set_ui_text("Items", "Menu items");
     prop.set_unbounded();

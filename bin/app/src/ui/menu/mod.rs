@@ -134,6 +134,7 @@ pub struct Menu {
     sep_color: PropertyColor,
     active_color: PropertyColor,
     alert_color: PropertyColor,
+    fade_zone: PropertyFloat32,
     window_scale: PropertyFloat32,
 
     mouse_pos: SyncMutex<Point>,
@@ -177,6 +178,8 @@ impl Menu {
         let active_color = PropertyColor::wrap(node_ref, Role::Internal, "active_color").unwrap();
         let alert_color = PropertyColor::wrap(node_ref, Role::Internal, "alert_color").unwrap();
 
+        let fade_zone = PropertyFloat32::wrap(node_ref, Role::Internal, "fade_zone", 0).unwrap();
+
         let scroll_start_accel =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
         let scroll_resist =
@@ -205,6 +208,7 @@ impl Menu {
             sep_color,
             active_color,
             alert_color,
+            fade_zone,
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
             touch_info: SyncMutex::new(None),
@@ -325,6 +329,7 @@ impl Menu {
         let bg_color = self.bg_color.get();
         let sep_size = self.sep_size.get();
         let sep_color = self.sep_color.get();
+        let fade_distance = self.fade_zone.get();
         let window_scale = self.window_scale.get();
 
         let num_items = self.items.get_len();
@@ -384,10 +389,23 @@ impl Menu {
         for idx in 0..num_items {
             let item_text = items_list[idx].clone();
 
-            let color = match item_states.get(&item_text) {
+            let base_color = match item_states.get(&item_text) {
                 Some(ItemStatus::Active) => active_color,
                 Some(ItemStatus::Alert) => alert_color,
                 _ => text_color,
+            };
+
+            // Apply fade effect in the configured fade zone
+            let item_y = idx as f32 * item_height - scroll;
+            let fade_zone_start = rect.h - fade_distance;
+            let color = if item_y >= fade_zone_start {
+                let fade_factor =
+                    1.0 - ((item_y - fade_zone_start) / fade_distance).clamp(0.0, 1.0);
+                let mut faded = base_color;
+                faded[3] *= fade_factor;
+                faded
+            } else {
+                base_color
             };
 
             instrs.append(&mut edit_instrs.clone());
