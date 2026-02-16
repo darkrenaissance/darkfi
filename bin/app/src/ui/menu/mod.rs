@@ -275,6 +275,8 @@ impl Menu {
 
         if is_long_press {
             self.is_edit_mode.store(true, Ordering::Release);
+            let node = self.node.upgrade().unwrap();
+            node.trigger("edit_active", vec![]).await.unwrap();
             let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
             self.redraw(atom);
         } else if is_tap {
@@ -726,19 +728,20 @@ impl UIObject for Menu {
             darkfi::system::msleep(500).await;
 
             let Some(arc_self) = weak_self.upgrade() else { return };
-            let current_mouse_pos = *arc_self.mouse_pos.lock();
-            let click_info = arc_self.mouse_click_info.lock();
+            let current_mouse_pos = arc_self.mouse_pos.lock().clone();
+            let click_info = arc_self.mouse_click_info.lock().clone();
 
             // Check if button is still held and movement is within threshold
-            if let Some(info) = &*click_info {
+            if let Some(info) = click_info {
                 let movement_dist = ((current_mouse_pos.x - start_pos.x).powi(2) +
                     (current_mouse_pos.y - start_pos.y).powi(2))
                 .sqrt();
 
                 if movement_dist < LONG_PRESS_EPSILON {
                     // Long press detected, trigger edit mode
-                    drop(click_info);
                     arc_self.is_edit_mode.store(true, Ordering::Release);
+                    let node = arc_self.node.upgrade().unwrap();
+                    node.trigger("edit_active", vec![]).await.unwrap();
                     let atom = &mut arc_self.renderer.make_guard(gfxtag!("Menu::long_press"));
                     arc_self.redraw(atom);
                 }

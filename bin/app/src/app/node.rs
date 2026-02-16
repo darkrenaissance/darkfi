@@ -703,6 +703,8 @@ pub fn create_menu(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_signal("edit_active", "Edit mode activated", vec![]).unwrap();
+
     node.add_method("mark_active", vec![("item_name", "Item name", CallArgType::Str)], None)
         .unwrap();
 
