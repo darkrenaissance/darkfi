@@ -711,5 +711,9 @@ pub fn create_menu(name: &str) -> SceneNode {
     node.add_method("mark_alert", vec![("item_name", "Item name", CallArgType::Str)], None)
         .unwrap();
 
+    node.add_method("cancel_edit", vec![], None).unwrap();
+
+    node.add_method("done_edit", vec![], None).unwrap();
+
     node
 }

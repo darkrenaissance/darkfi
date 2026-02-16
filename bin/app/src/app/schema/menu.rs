@@ -192,6 +192,72 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let version_block_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
     layer_node.link(node);
 
+    // Make buttons for cancel and done
+
+    let node = create_layer("editbtn_layer");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
+    let code = cc.compile("h - 100 - 50").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("w - 100").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
+    let editlayer_node = node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    layer_node.link(editlayer_node.clone());
+
+    let editlayer_is_visible =
+        PropertyBool::wrap(&editlayer_node, Role::App, "is_visible", 0).unwrap();
+
+    let node = create_vector_art("btns_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(200.),
+        expr::load_var("h"),
+        [[0., 0., 0., 1.], [0., 0., 0., 1.], [0.1, 0., 0., 1.], [0.1, 0., 0., 1.]],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(200.),
+        expr::load_var("h"),
+        1.,
+        [1., 0., 0., 1.],
+    );
+
+    shape.add_gradient_box(
+        cc.compile("w - 200").unwrap(),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]],
+    );
+    shape.add_outline(
+        cc.compile("w - 200").unwrap(),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0., 0.94, 1., 1.],
+    );
+
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    editlayer_node.link(node);
+
+    // Menu
+
     let node = create_menu("main_menu");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -200,6 +266,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let code = cc.compile("h - CHANNEL_LABEL_LINESPACE").unwrap();
     prop.set_expr(atom, Role::App, 3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
     node.set_property_f32(atom, Role::App, "padding", CHANNEL_LABEL_LINESPACE).unwrap();
 
     let prop = node.get_property("bg_color").unwrap();
@@ -273,9 +340,6 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    // Debug thing
-    version_block_is_visible.set(atom, false);
-
     // Subscribe to edit_active signal to hide version block
     let (edit_slot, edit_recvr) = Slot::new("edit_activated");
     node.register("edit_active", edit_slot).unwrap();
@@ -285,72 +349,14 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             debug!(target: "app::menu", "menu edit active");
             let atom = &mut renderer.make_guard(gfxtag!("edit_active"));
             version_block_is_visible.set(atom, false);
+            editlayer_is_visible.set(atom, true);
         }
     });
     app.tasks.lock().unwrap().push(edit_listen);
 
-    let node = node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
-    layer_node.link(node);
-
-    // Make buttons for cancel and done
-
-    let editlayer_node = create_layer("editbtn_layer");
-    let prop = editlayer_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
-    let code = cc.compile("h - 100 - 50").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    let code = cc.compile("w - 100").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
-    editlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    editlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let editlayer_node = editlayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    layer_node.link(editlayer_node.clone());
-
-    let node = create_vector_art("btns_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-
-    let mut shape = VectorShape::new();
-
-    shape.add_gradient_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(200.),
-        expr::load_var("h"),
-        [[0., 0., 0., 1.], [0., 0., 0., 1.], [0.1, 0., 0., 1.], [0.1, 0., 0., 1.]],
-    );
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(200.),
-        expr::load_var("h"),
-        1.,
-        [1., 0., 0., 1.],
-    );
-
-    shape.add_gradient_box(
-        cc.compile("w - 200").unwrap(),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]],
-    );
-    shape.add_outline(
-        cc.compile("w - 200").unwrap(),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        1.,
-        [0., 0.94, 1., 1.],
-    );
-
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
-    editlayer_node.link(node);
+    let menu_node =
+        node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
+    layer_node.link(menu_node.clone());
 
     // Create the cancel button
     let node = create_button("cancel_btn");
@@ -363,9 +369,10 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let (slot, recvr) = Slot::new("cancel_clicked");
     node.register("click", slot).unwrap();
+    let menu_node2 = menu_node.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            info!("cancel");
+            menu_node2.call_method("cancel_edit", vec![]).await.unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -385,9 +392,10 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let (slot, recvr) = Slot::new("done_clicked");
     node.register("click", slot).unwrap();
+    let menu_node2 = menu_node.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            info!("done");
+            menu_node2.call_method("done_edit", vec![]).await.unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

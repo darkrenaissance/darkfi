@@ -612,6 +612,48 @@ impl Menu {
 
         true
     }
+
+    /// Cancels edit mode changes, reverting any modifications made during edit mode
+    async fn process_cancel_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        d!("method called: cancel({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        let Some(self_) = me.upgrade() else {
+            d!("Self destroyed");
+            return true
+        };
+
+        // TODO: Implement cancel logic - revert edit mode changes
+        d!("cancel: stub - will revert edit mode changes");
+
+        true
+    }
+
+    /// Accepts edit mode changes, finalizing any modifications made during edit mode
+    async fn process_done_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        d!("method called: done({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        let Some(self_) = me.upgrade() else {
+            d!("Self destroyed");
+            return true
+        };
+
+        // TODO: Implement done logic - accept edit mode changes
+        d!("done: stub - will accept edit mode changes");
+
+        true
+    }
 }
 
 #[async_trait]
@@ -653,6 +695,16 @@ impl UIObject for Menu {
                 async move { while Self::process_mark_alert_method(&me2, &method_sub).await {} },
             );
 
+        let method_sub = node_ref.subscribe_method_call("cancel_edit").unwrap();
+        let me2 = me.clone();
+        let cancel_task =
+            ex.spawn(async move { while Self::process_cancel_method(&me2, &method_sub).await {} });
+
+        let method_sub = node_ref.subscribe_method_call("done_edit").unwrap();
+        let me2 = me.clone();
+        let done_task =
+            ex.spawn(async move { while Self::process_done_method(&me2, &method_sub).await {} });
+
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         async fn redraw(self_: Arc<Menu>, batch: BatchGuardPtr) {
@@ -669,7 +721,8 @@ impl UIObject for Menu {
         on_modify.when_change(self.sep_size.prop(), redraw);
         on_modify.when_change(self.sep_color.prop(), redraw);
 
-        let mut tasks = vec![motion_task, mark_active_task, mark_alert_task];
+        let mut tasks =
+            vec![motion_task, mark_active_task, mark_alert_task, cancel_task, done_task];
         tasks.append(&mut on_modify.tasks);
         *self.tasks.lock() = tasks;
     }
