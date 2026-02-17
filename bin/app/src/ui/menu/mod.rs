@@ -152,6 +152,8 @@ pub struct Menu {
 
     parent_rect: SyncMutex<Option<Rectangle>>,
     item_states: SyncMutex<HashMap<String, ItemStatus>>,
+
+    saved_items: SyncMutex<Option<Vec<String>>>,
 }
 
 impl Menu {
@@ -224,6 +226,7 @@ impl Menu {
             is_edit_mode: AtomicBool::new(false),
             parent_rect: SyncMutex::new(None),
             item_states: SyncMutex::new(HashMap::new()),
+            saved_items: SyncMutex::new(None),
         });
 
         Pimpl::Menu(self_)
@@ -232,6 +235,17 @@ impl Menu {
     /// Height of a single item
     fn get_item_height(&self) -> f32 {
         self.font_size.get() + self.padding.get_f32(1).unwrap() * 2.0
+    }
+
+    /// Save the current menu items layout
+    fn save_items_layout(&self) {
+        let num_items = self.items.get_len();
+        let mut items = Vec::with_capacity(num_items);
+        for idx in 0..num_items {
+            items.push(self.items.get_str(idx).unwrap());
+        }
+        *self.saved_items.lock() = Some(items);
+        d!("Saved menu layout with {} items", num_items);
     }
 
     /// Height of the content without the overscroll
@@ -274,6 +288,7 @@ impl Menu {
         let is_long_press = is_long_press_tap && elapsed_ms >= 500;
 
         if is_long_press {
+            self.save_items_layout();
             self.is_edit_mode.store(true, Ordering::Release);
             let node = self.node.upgrade().unwrap();
             node.trigger("edit_active", vec![]).await.unwrap();
@@ -628,8 +643,29 @@ impl Menu {
             return true
         };
 
-        // TODO: Implement cancel logic - revert edit mode changes
-        d!("cancel: stub - will revert edit mode changes");
+        // Restore the saved items if they exist
+        let saved = self_.saved_items.lock().take();
+        if let Some(items) = saved {
+            let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
+
+            // Clear current items
+            let current_len = self_.items.get_len();
+            for _ in 0..current_len {
+                self_.items.remove_str(atom, Role::App, 0).unwrap();
+            }
+
+            // Restore saved items
+            for (idx, item) in items.iter().enumerate() {
+                self_.items.insert_str(atom, Role::App, idx, item).unwrap();
+            }
+
+            d!("cancel: restored {} items", items.len());
+        }
+
+        // Exit edit mode
+        self_.is_edit_mode.store(false, Ordering::Release);
+        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
+        self_.redraw(atom);
 
         true
     }
@@ -648,6 +684,9 @@ impl Menu {
             d!("Self destroyed");
             return true
         };
+
+        // Clear the saved items since we're finalizing the changes
+        *self_.saved_items.lock() = None;
 
         self_.is_edit_mode.store(false, Ordering::Release);
         let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::done_edit"));
@@ -793,6 +832,7 @@ impl UIObject for Menu {
 
                 if movement_dist < LONG_PRESS_EPSILON {
                     // Long press detected, trigger edit mode
+                    arc_self.save_items_layout();
                     arc_self.is_edit_mode.store(true, Ordering::Release);
                     let node = arc_self.node.upgrade().unwrap();
                     node.trigger("edit_active", vec![]).await.unwrap();
