@@ -649,8 +649,9 @@ impl Menu {
             return true
         };
 
-        // TODO: Implement done logic - accept edit mode changes
-        d!("done: stub - will accept edit mode changes");
+        self_.is_edit_mode.store(false, Ordering::Release);
+        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::done_edit"));
+        self_.redraw(atom);
 
         true
     }

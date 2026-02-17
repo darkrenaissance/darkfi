@@ -344,12 +344,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (edit_slot, edit_recvr) = Slot::new("edit_activated");
     node.register("edit_active", edit_slot).unwrap();
     let renderer = app.renderer.clone();
+    let editlayer_is_visible2 = editlayer_is_visible.clone();
     let edit_listen = app.ex.spawn(async move {
         while let Ok(_) = edit_recvr.recv().await {
             debug!(target: "app::menu", "menu edit active");
             let atom = &mut renderer.make_guard(gfxtag!("edit_active"));
             version_block_is_visible.set(atom, false);
-            editlayer_is_visible.set(atom, true);
+            editlayer_is_visible2.set(atom, true);
         }
     });
     app.tasks.lock().unwrap().push(edit_listen);
@@ -370,9 +371,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (slot, recvr) = Slot::new("cancel_clicked");
     node.register("click", slot).unwrap();
     let menu_node2 = menu_node.clone();
+    let renderer = app.renderer.clone();
+    let editlayer_is_visible2 = editlayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             menu_node2.call_method("cancel_edit", vec![]).await.unwrap();
+            let atom = &mut renderer.make_guard(gfxtag!("cancel_clicked"));
+            editlayer_is_visible2.set(atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -393,9 +398,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (slot, recvr) = Slot::new("done_clicked");
     node.register("click", slot).unwrap();
     let menu_node2 = menu_node.clone();
+    let renderer = app.renderer.clone();
+    let editlayer_is_visible2 = editlayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             menu_node2.call_method("done_edit", vec![]).await.unwrap();
+            let atom = &mut renderer.make_guard(gfxtag!("done_clicked"));
+            editlayer_is_visible2.set(atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
