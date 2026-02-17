@@ -83,6 +83,7 @@
 - [DEP 0004: Client wallet WASM modules (draft)](dep/0004.md)
 - [DEP 0006: App Identifier for Version and Verack Messages (draft)](dep/0006.md)
 - [DEP 0007: Network profiles (accepted)](dep/0007.md)
+- [DEP 0008: Transaction-local State (draft)](dep/0008.md)
 
 # Specs
 
