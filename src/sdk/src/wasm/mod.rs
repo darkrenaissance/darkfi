@@ -27,3 +27,6 @@ pub mod merkle;
 
 /// Utility functions
 pub mod util;
+
+/// Transaction-local state
+pub mod tx_local;

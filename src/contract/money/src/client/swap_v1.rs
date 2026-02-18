@@ -162,6 +162,7 @@ impl SwapCallBuilder {
             merkle_root: public_inputs.merkle_root,
             user_data_enc: public_inputs.user_data_enc,
             signature_public: public_inputs.signature_public,
+            intra_tx: false,
         });
 
         proofs.push(proof);
@@ -203,6 +204,7 @@ impl SwapCallBuilder {
             token_commit: public_inputs.token_commit,
             coin: public_inputs.coin,
             note: encrypted_note,
+            intra_tx: false,
         });
 
         // Now we should have all the params, zk proofs, and signature secrets.

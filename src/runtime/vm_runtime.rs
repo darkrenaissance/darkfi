@@ -22,9 +22,11 @@ use std::{
 };
 
 use darkfi_sdk::{
-    crypto::contract_id::{
-        ContractId, SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME,
+    crypto::{
+        contract_id::{ContractId, SMART_CONTRACT_MONOTREE_DB_NAME, SMART_CONTRACT_ZKAS_DB_NAME},
+        MerkleNode, MerkleTree,
     },
+    pasta::pallas,
     tx::TransactionHash,
     wasm, AsHex,
 };
@@ -78,6 +80,24 @@ impl ContractSection {
     }
 }
 
+/// Transaction-local state.
+///
+/// This gets initialized for every transaction.
+pub struct TxLocal {
+    /// Merkle tree for intra-tx coins
+    pub(crate) coins_tree: MerkleTree,
+    /// Merkle roots for intra-tx coins
+    pub(crate) coin_roots: Vec<MerkleNode>,
+    /// New intra-tx coins
+    pub(crate) new_coins: Vec<pallas::Base>,
+}
+
+impl Default for TxLocal {
+    fn default() -> Self {
+        Self { coins_tree: MerkleTree::new(1), coin_roots: vec![], new_coins: vec![] }
+    }
+}
+
 /// The WASM VM runtime environment instantiated for every smart contract that runs.
 pub struct Env {
     /// Blockchain overlay access
@@ -98,6 +118,8 @@ pub struct Env {
     pub memory: Option<Memory>,
     /// Object store for transferring memory from the host to VM
     pub objects: RefCell<Vec<Vec<u8>>>,
+    /// Transaction-local state
+    pub tx_local: RefCell<TxLocal>,
     /// Block height number runtime verifies against.
     /// For unconfirmed txs, this will be the current max height in the chain.
     pub verifying_block_height: u32,
@@ -213,6 +235,7 @@ impl Runtime {
                 logs,
                 memory: Some(memory.clone()),
                 objects: RefCell::new(vec![]),
+                tx_local: RefCell::new(TxLocal::default()),
                 verifying_block_height,
                 block_target,
                 tx_hash,
@@ -349,6 +372,24 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::get_tx_location,
+                ),
+
+                "txlocal_coin_roots_contains_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::tx_local::coin_roots_contains,
+                ),
+
+                "txlocal_new_coins_contains_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::tx_local::new_coins_contains,
+                ),
+
+                "txlocal_append_coin_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::tx_local::append_coin,
                 ),
             }
         };

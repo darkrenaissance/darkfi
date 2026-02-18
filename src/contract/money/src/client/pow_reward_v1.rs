@@ -143,6 +143,7 @@ impl PoWRewardCallBuilder {
             token_commit: public_inputs.token_commit,
             coin: public_inputs.coin,
             note: encrypted_note,
+            intra_tx: false,
         };
 
         let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output };

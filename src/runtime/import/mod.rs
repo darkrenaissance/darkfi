@@ -30,3 +30,6 @@ pub(crate) mod smt;
 
 /// Host functions for utilities
 pub(crate) mod util;
+
+/// Host functions for tx-local state operations
+pub(crate) mod tx_local;

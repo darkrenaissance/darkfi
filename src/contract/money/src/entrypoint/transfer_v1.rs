@@ -166,9 +166,18 @@ pub(crate) fn money_transfer_process_instruction_v1(
     for (i, input) in params.inputs.iter().enumerate() {
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
-        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[TransferV1] Error: Merkle root not found in previous state (input {})", i);
-            return Err(MoneyError::TransferMerkleRootNotFound.into())
+        if input.intra_tx {
+            // In an intra-tx input, we check the tx local state
+            if !wasm::tx_local::coin_roots_contains(&input.merkle_root)? {
+                msg!("[TransferV1] Error: Merkle root not found in tx-local state (input {})", i);
+                return Err(MoneyError::TransferMerkleRootNotFound.into())
+            }
+        } else {
+            // In a normal input, we check the global state
+            if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                msg!("[TransferV1] Error: Merkle root not found in previous state (input {})", i);
+                return Err(MoneyError::TransferMerkleRootNotFound.into())
+            }
         }
 
         // The nullifiers should not already exist. It is the double-spend protection.
@@ -196,6 +205,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
     msg!("[TransferV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
         if new_coins.contains(&output.coin) ||
+            wasm::tx_local::new_coins_contains(&output.coin.inner())? ||
             wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
@@ -208,8 +218,16 @@ pub(crate) fn money_transfer_process_instruction_v1(
             return Err(MoneyError::TokenMismatch.into())
         }
 
-        // Append this new coin to seen coins, and subtract the value commitment
-        new_coins.push(output.coin);
+        // Append this new coin to seen coins
+        if output.intra_tx {
+            // In intra-tx, it'll exist during the transaction lifetime.
+            wasm::tx_local::append_coin(&output.coin.inner())?;
+        } else {
+            // Otherwise, it'll be added globally.
+            new_coins.push(output.coin);
+        }
+
+        // Subtract the value commitment
         valcom_total -= output.value_commit;
     }
 

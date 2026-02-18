@@ -148,6 +148,8 @@ pub struct Input {
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,
+    /// Marker if this input is intra-tx (DEP-0008)
+    pub intra_tx: bool,
 }
 // ANCHOR_END: money-input
 
@@ -163,6 +165,8 @@ pub struct Output {
     pub coin: Coin,
     /// AEAD encrypted note
     pub note: AeadEncryptedNote,
+    /// Marker if this output is intra-tx (DEP-0008)
+    pub intra_tx: bool,
 }
 // ANCHOR_END: money-output
 
