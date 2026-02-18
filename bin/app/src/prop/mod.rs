@@ -199,6 +199,7 @@ impl Encodable for PropertyValue {
 pub enum ModifyAction {
     Clear,
     Set(usize),
+    SetVec,
     SetCache(Vec<usize>),
     Push(usize),
     Insert(usize),
@@ -544,16 +545,85 @@ impl Property {
         Ok(())
     }
 
+    fn set_value_vec<T, F>(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<T>,
+        f: F,
+    ) -> Result<()>
+    where
+        F: Fn(T) -> PropertyValue,
+    {
+        if self.is_bounded() {
+            return Err(Error::PropertyIsBounded)
+        }
+
+        {
+            let mut vals = self.vals.lock().unwrap();
+            vals.clear();
+            vals.extend(val.into_iter().map(f));
+        }
+
+        atom.add(self.clone(), role, ModifyAction::SetVec);
+        Ok(())
+    }
+
+    pub fn set_bool_vec(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<bool>,
+    ) -> Result<()> {
+        self.set_value_vec(atom, role, val, PropertyValue::Bool)
+    }
+
+    pub fn set_u32_vec(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<u32>,
+    ) -> Result<()> {
+        self.set_value_vec(atom, role, val, PropertyValue::Uint32)
+    }
+
     pub fn set_f32_vec(
         self: &Arc<Self>,
         atom: &mut PropertyAtomicGuard,
         role: Role,
         val: Vec<f32>,
     ) -> Result<()> {
-        for (i, &val) in val.iter().enumerate() {
-            self.clone().set_f32(atom, role, i, val)?;
+        self.set_value_vec(atom, role, val, PropertyValue::Float32)
+    }
+
+    pub fn set_str_vec<S: Into<String>>(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<S>,
+    ) -> Result<()> {
+        self.set_value_vec(atom, role, val, |v| PropertyValue::Str(v.into()))
+    }
+
+    pub fn set_enum_vec<S: Into<String>>(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<S>,
+    ) -> Result<()> {
+        if self.typ != PropertyType::Enum {
+            return Err(Error::PropertyWrongType)
         }
-        Ok(())
+        self.set_value_vec(atom, role, val, |v| PropertyValue::Enum(v.into()))
+    }
+
+    pub fn set_node_id_vec(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        val: Vec<SceneNodeId>,
+    ) -> Result<()> {
+        self.set_value_vec(atom, role, val, PropertyValue::SceneNodeId)
     }
 
     fn set_cache(&self, i: usize, val: PropertyValue) -> Result<()> {
@@ -1033,6 +1103,67 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         Ok(cache[i].clone())
+    }
+
+    fn get_value_vec<T, F>(&self, f: F) -> Result<Vec<T>>
+    where
+        F: Fn(&PropertyValue) -> Option<T>,
+    {
+        if self.is_bounded() {
+            return Err(Error::PropertyIsBounded)
+        }
+
+        let vals = self.vals.lock().unwrap();
+        let mut result = Vec::with_capacity(vals.len());
+        for val in vals.iter() {
+            match f(val) {
+                Some(v) => result.push(v),
+                None => return Err(Error::PropertyWrongType),
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn get_bool_vec(&self) -> Result<Vec<bool>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::Bool(v) => Some(*v),
+            _ => None,
+        })
+    }
+
+    pub fn get_u32_vec(&self) -> Result<Vec<u32>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::Uint32(v) => Some(*v),
+            _ => None,
+        })
+    }
+
+    pub fn get_f32_vec(&self) -> Result<Vec<f32>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::Float32(v) => Some(*v),
+            _ => None,
+        })
+    }
+
+    pub fn get_str_vec(&self) -> Result<Vec<String>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::Str(v) => Some(v.clone()),
+            _ => None,
+        })
+    }
+
+    pub fn get_enum_vec(&self) -> Result<Vec<String>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::Enum(v) => Some(v.clone()),
+            _ => None,
+        })
+    }
+
+    pub fn get_node_id_vec(&self) -> Result<Vec<SceneNodeId>> {
+        self.get_value_vec(|val| match val {
+            PropertyValue::SceneNodeId(v) => Some(*v),
+            _ => None,
+        })
     }
 
     // Subs

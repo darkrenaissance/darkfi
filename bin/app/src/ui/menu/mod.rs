@@ -239,13 +239,8 @@ impl Menu {
 
     /// Save the current menu items layout
     fn save_items_layout(&self) {
-        let num_items = self.items.get_len();
-        let mut items = Vec::with_capacity(num_items);
-        for idx in 0..num_items {
-            items.push(self.items.get_str(idx).unwrap());
-        }
+        let items = self.items.get_str_vec().unwrap();
         *self.saved_items.lock() = Some(items);
-        d!("Saved menu layout with {} items", num_items);
     }
 
     /// Height of the content without the overscroll
@@ -647,19 +642,7 @@ impl Menu {
         let saved = self_.saved_items.lock().take();
         if let Some(items) = saved {
             let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
-
-            // Clear current items
-            let current_len = self_.items.get_len();
-            for _ in 0..current_len {
-                self_.items.remove_str(atom, Role::App, 0).unwrap();
-            }
-
-            // Restore saved items
-            for (idx, item) in items.iter().enumerate() {
-                self_.items.insert_str(atom, Role::App, idx, item).unwrap();
-            }
-
-            d!("cancel: restored {} items", items.len());
+            self_.items.set_str_vec(atom, Role::App, items).unwrap();
         }
 
         // Exit edit mode
