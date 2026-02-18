@@ -359,6 +359,19 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
     layer_node.link(menu_node.clone());
 
+    // Subscribe to edit_done signal to log deleted items
+    let (edit_done_slot, edit_done_recvr) = Slot::new("edit_done");
+    menu_node.register("edit_done", edit_done_slot).unwrap();
+    let edit_done_listen = app.ex.spawn(async move {
+        while let Ok(data) = edit_done_recvr.recv().await {
+            let deleted_items: Vec<String> = deserialize(&data).unwrap();
+            for item in deleted_items {
+                debug!(target: "app::menu", "deleted item: {item}");
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(edit_done_listen);
+
     // Create the cancel button
     let node = create_button("cancel_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();

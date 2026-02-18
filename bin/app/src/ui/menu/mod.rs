@@ -638,16 +638,15 @@ impl Menu {
             return true
         };
 
-        // Restore the saved items if they exist
-        let saved = self_.saved_items.lock().take();
-        if let Some(items) = saved {
-            let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
-            self_.items.set_str_vec(atom, Role::App, items).unwrap();
-        }
+        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
+
+        // Restore the saved items
+        // It must exist otherwise theres a logic err
+        let saved_items = self_.saved_items.lock().take().unwrap();
+        self_.items.set_str_vec(atom, Role::App, saved_items).unwrap();
 
         // Exit edit mode
         self_.is_edit_mode.store(false, Ordering::Release);
-        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
         self_.redraw(atom);
 
         true
@@ -668,8 +667,17 @@ impl Menu {
             return true
         };
 
-        // Clear the saved items since we're finalizing the changes
-        *self_.saved_items.lock() = None;
+        // Calculate deleted items by diffing saved and current items
+        let saved_items = self_.saved_items.lock().take().unwrap();
+        let current_items = self_.items.get_str_vec().unwrap();
+
+        let deleted_items: Vec<String> =
+            saved_items.into_iter().filter(|item| !current_items.contains(item)).collect();
+
+        // Send the edit_done signal with deleted items
+        let node = self_.node.upgrade().unwrap();
+        let data = serialize(&deleted_items);
+        node.trigger("edit_done", data).await.unwrap();
 
         self_.is_edit_mode.store(false, Ordering::Release);
         let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::done_edit"));
