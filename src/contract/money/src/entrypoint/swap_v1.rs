@@ -114,11 +114,17 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
     msg!("[OtcSwapV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
-        // The Merkle root is used to know whether this coin
-        // has existed in a previous state.
-        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[OtcSwapV1] Error: Merkle root not found in previous state (input {})", i);
-            return Err(MoneyError::SwapMerkleRootNotFound.into())
+        // The Merkle root is used to know whether this coin existed in a previous state.
+        if input.intra_tx {
+            if !wasm::tx_local::coin_roots_contains(&input.merkle_root)? {
+                msg!("[OtcSwapV1] Error: Merkle root not found in tx-local state (input {})", i);
+                return Err(MoneyError::SwapMerkleRootNotFound.into())
+            }
+        } else {
+            if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                msg!("[OtcSwapV1] Error: Merkle root not found in previous state (input {})", i);
+                return Err(MoneyError::SwapMerkleRootNotFound.into())
+            }
         }
 
         // The nullifiers should not already exist. It is the double-spend protection.
@@ -135,13 +141,20 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // Newly created coins for this call are in the outputs
     for (i, output) in params.outputs.iter().enumerate() {
         if new_coins.contains(&output.coin) ||
+            wasm::tx_local::new_coins_contains(&output.coin.inner())? ||
             wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[OtcSwapV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
         }
 
-        new_coins.push(output.coin);
+        if output.intra_tx {
+            // In intra-tx, it'll exist during the transaction lifetime.
+            wasm::tx_local::append_coin(&output.coin.inner())?;
+        } else {
+            // Otherwise, it'll be added globally.
+            new_coins.push(output.coin);
+        }
     }
 
     // Create a state update. We also use `MoneyTransferUpdateV1` because
