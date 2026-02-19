@@ -293,3 +293,57 @@ seeds = [
     "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
 ]
 ```
+
+#### UPnP
+
+UPnP (Universal Plug and Play) automatically configures port forwarding
+on compatible routers using the UPnP IGD protocol. This is particularly
+useful for home users behind NAT who cannot manually configure port
+forwarding, or mobile devices which often roam between different networks.
+
+> Note:
+>
+> UPnP IGD support must be enabled at compile time using the
+> `upnp-igd` feature flag. For example, when compiling `darkirc`:
+>
+> ```shell
+> % cp bin/darkirc/Cargo.toml bin/darkirc/Cargo.toml.back
+> % sed -i -e 's|default = \[\]|default = ["upnp-igd"]|' bin/darkirc/Cargo.toml
+> % make darkirc
+> % mv bin/darkirc/Cargo.toml.back bin/darkirc/Cargo.toml
+> ```
+
+To enable UPnP IGD just add `?upnp_igd=true` to your inbound address.
+UPnP IGD will also auto-discover your external address.
+
+```toml
+[net.profiles."tcp+tls"]
+## P2P accept addresses with UPnP enabled
+inbound = ["tcp+tls://0.0.0.0:9600?upnp_igd=true"]
+
+## Seed nodes to connect to
+seeds = ["tcp+tls://lilith1.dark.fi:9600"]
+```
+
+DarkFi's UPnP implementation supports these optional configuration parameters:
+
+- `upnp_igd_lease_duration` - Port mapping lease duration in seconds
+- `upnp_igd_timeout` - Gateway discovery timeout in seconds
+- `upnp_igd_description` - Description shown in router admin panel
+- `upnp_igd_ext_addr_refresh` - External address refresh interval in seconds
+
+Example with custom options:
+
+```toml
+inbound = ["tcp+tls://0.0.0.0:9600?upnp_igd=true&upnp_igd_lease_duration=600&upnp_igd_description=MyDarkFiNode"]
+```
+
+> Tip:
+>
+> When running multiple applications or nodes, use different `upnp_igd_description`
+> values for each one. This makes it easier to identify them in your router's
+> admin panel.
+
+> Tip:
+>
+> When possible verify that UPnP is enabled in your router's admin panel.
