@@ -132,9 +132,16 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !wasm::db::db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
-        msg!("[FeeV1] Error: Input Merkle root not found in previous state");
-        return Err(MoneyError::CoinMerkleRootNotFound.into())
+    if params.input.intra_tx {
+        if !wasm::tx_local::coin_roots_contains(&params.input.merkle_root)? {
+            msg!("[FeeV1] Error: Input Merkle root not found in tx-local state");
+            return Err(MoneyError::CoinMerkleRootNotFound.into())
+        }
+    } else {
+        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
+            msg!("[FeeV1] Error: Input Merkle root not found in previous state");
+            return Err(MoneyError::CoinMerkleRootNotFound.into())
+        }
     }
 
     let hasher = PoseidonFp::new();
@@ -149,7 +156,9 @@ pub(crate) fn money_fee_process_instruction_v1(
     }
 
     // The new coin should not exist
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
+    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? ||
+        wasm::tx_local::new_coins_contains(&params.output.coin.inner())?
+    {
         msg!("[FeeV1] Error: Duplicate coin found");
         return Err(MoneyError::DuplicateCoin.into())
     }
@@ -183,9 +192,18 @@ pub(crate) fn money_fee_process_instruction_v1(
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.
+    let coin = if params.output.intra_tx {
+        // An intra-tx coin will be appended to the tx-local state
+        wasm::tx_local::append_coin(&params.output.coin.inner())?;
+        None
+    } else {
+        // Otherwise, we pass it to the global state update
+        Some(params.output.coin)
+    };
+
     let update = MoneyFeeUpdateV1 {
         nullifier: params.input.nullifier,
-        coin: params.output.coin,
+        coin,
         height: verifying_block_height,
         fee: paid_fee,
     };
@@ -216,15 +234,18 @@ pub(crate) fn money_fee_process_update_v1(
         &[update.nullifier.inner()],
     )?;
 
-    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
+    // If there is a coin, it's not intra-tx, so we append it globally.
+    if let Some(coin) = update.coin {
+        wasm::db::db_set(coins_db, &serialize(&coin), &[])?;
 
-    wasm::merkle::merkle_add(
-        info_db,
-        coin_roots_db,
-        MONEY_CONTRACT_LATEST_COIN_ROOT,
-        MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &[MerkleNode::from(update.coin.inner())],
-    )?;
+        wasm::merkle::merkle_add(
+            info_db,
+            coin_roots_db,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &[MerkleNode::from(coin.inner())],
+        )?;
+    }
 
     Ok(())
 }

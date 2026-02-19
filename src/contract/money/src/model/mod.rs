@@ -189,7 +189,7 @@ pub struct MoneyFeeUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// Minted coin
-    pub coin: Coin,
+    pub coin: Option<Coin>,
     /// Block height the fee was verified against
     pub height: u32,
     /// Height accumulated fee paid
