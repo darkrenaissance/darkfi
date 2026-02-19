@@ -237,13 +237,15 @@ pub struct MoneyGenesisMintUpdateV1 {
 pub struct MoneyTokenMintParamsV1 {
     /// The newly minted coin
     pub coin: Coin,
+    /// Marker if the coin is used intra-tx
+    pub intra_tx: bool,
 }
 
 /// State update for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenMintUpdateV1 {
     /// The newly minted coin
-    pub coin: Coin,
+    pub coin: Option<Coin>,
 }
 
 /// Parameters for `Money::AuthTokenMint`

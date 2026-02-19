@@ -93,13 +93,22 @@ pub(crate) fn money_token_mint_process_instruction_v1(
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? {
+    if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? ||
+        wasm::tx_local::new_coins_contains(&params.coin.inner())?
+    {
         msg!("[TokenMintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyTokenMintUpdateV1 { coin: params.coin };
+    let coin = if params.intra_tx {
+        wasm::tx_local::append_coin(&params.coin.inner())?;
+        None
+    } else {
+        Some(params.coin)
+    };
+
+    let update = MoneyTokenMintUpdateV1 { coin };
     Ok(serialize(&update))
 }
 
@@ -125,18 +134,20 @@ pub(crate) fn money_token_mint_process_update_v1(
         &[],
     )?;
 
-    msg!("[TokenMintV1] Adding new coin to the set");
-    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
+    if let Some(coin) = update.coin {
+        msg!("[TokenMintV1] Adding new coin to the set");
+        wasm::db::db_set(coins_db, &serialize(&coin), &[])?;
 
-    msg!("[TokenMintV1] Adding new coin to the Merkle tree");
-    let coins = vec![MerkleNode::from(update.coin.inner())];
-    wasm::merkle::merkle_add(
-        info_db,
-        coin_roots_db,
-        MONEY_CONTRACT_LATEST_COIN_ROOT,
-        MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &coins,
-    )?;
+        msg!("[TokenMintV1] Adding new coin to the Merkle tree");
+        let coins = vec![MerkleNode::from(coin.inner())];
+        wasm::merkle::merkle_add(
+            info_db,
+            coin_roots_db,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &coins,
+        )?;
+    }
 
     Ok(())
 }

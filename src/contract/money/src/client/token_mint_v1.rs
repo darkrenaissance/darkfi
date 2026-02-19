@@ -70,7 +70,7 @@ impl TokenMintCallBuilder {
         let circuit = ZkCircuit::new(prover_witnesses, &self.mint_zkbin);
         let proof = Proof::create(&self.mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
 
-        let params = MoneyTokenMintParamsV1 { coin };
+        let params = MoneyTokenMintParamsV1 { coin, intra_tx: false };
         let debris = TokenMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
