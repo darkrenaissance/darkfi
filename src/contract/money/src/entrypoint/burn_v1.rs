@@ -142,9 +142,16 @@ pub(crate) fn money_burn_process_instruction_v1(
     for (i, input) in params.inputs.iter().enumerate() {
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
-        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[BurnV1] Error: Merkle root not found in previous state (input {})", i);
-            return Err(MoneyError::TransferMerkleRootNotFound.into())
+        if input.intra_tx {
+            if !wasm::tx_local::coin_roots_contains(&input.merkle_root)? {
+                msg!("[BurnV1] Error: Merkle root not found in tx-local state (input {})", i);
+                return Err(MoneyError::TransferMerkleRootNotFound.into())
+            }
+        } else {
+            if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                msg!("[BurnV1] Error: Merkle root not found in previous state (input {})", i);
+                return Err(MoneyError::TransferMerkleRootNotFound.into())
+            }
         }
 
         // The nullifiers should not already exist. It is the double-spend protection.
