@@ -67,23 +67,28 @@ pub async fn deploy_native_contracts(
     // The Deployooor contract uses an empty payload to deploy itself.
     let deployooor_contract_deploy_payload = vec![];
 
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
+    let money_contract_bytes = std::fs::read(format!("{manifest_dir}/src/contract/money/darkfi_money_contract.wasm"))?;
+    let dao_contract_bytes = std::fs::read(format!("{manifest_dir}/src/contract/dao/darkfi_dao_contract.wasm"))?;
+    let deployooor_contract_bytes = std::fs::read(format!("{manifest_dir}/src/contract/deployooor/darkfi_deployooor_contract.wasm"))?;
+
     let native_contracts = vec![
         (
             "Money Contract",
             *MONEY_CONTRACT_ID,
-            include_bytes!("../contract/money/darkfi_money_contract.wasm").to_vec(),
+            money_contract_bytes,
             money_contract_deploy_payload,
         ),
         (
             "DAO Contract",
             *DAO_CONTRACT_ID,
-            include_bytes!("../contract/dao/darkfi_dao_contract.wasm").to_vec(),
+            dao_contract_bytes,
             dao_contract_deploy_payload,
         ),
         (
             "Deployooor Contract",
             *DEPLOYOOOR_CONTRACT_ID,
-            include_bytes!("../contract/deployooor/darkfi_deployooor_contract.wasm").to_vec(),
+            deployooor_contract_bytes,
             deployooor_contract_deploy_payload,
         ),
     ];
