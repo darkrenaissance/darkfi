@@ -377,7 +377,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", &("#".to_string() + channel)).unwrap();
+    node.set_property_str(atom, Role::App, "text", channel).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();

@@ -116,7 +116,7 @@ mod ui_consts {
 pub use ui_consts::*;
 
 pub static CHANNELS: &'static [&str] =
-    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
+    &["#dev", "#media", "#hackers", "#memes", "#philosophy", "#markets", "#math", "#random"];
 
 #[derive(PartialEq)]
 enum ColorScheme {

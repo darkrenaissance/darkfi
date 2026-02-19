@@ -200,6 +200,22 @@ impl SceneNode {
         children.push(child);
     }
 
+    pub fn unlink(&self) {
+        // Try to read the parent
+        let Some(parent_weak) = self.parent.read().unwrap().clone() else { return };
+        // Try to upgrade to an Arc
+        let Some(parent) = parent_weak.upgrade() else { return };
+        // Delete ourself from the parent
+        let mut children = parent.children.write().unwrap();
+        for i in 0..children.len() {
+            if children[i].id == self.id {
+                children.remove(i);
+                return
+            }
+        }
+        panic!("child not found");
+    }
+
     pub fn get_children(&self) -> Vec<SceneNodePtr> {
         self.children.read().unwrap().clone()
     }
@@ -442,6 +458,12 @@ impl std::fmt::Debug for SceneNode {
         } else {
             write!(f, "{}:{}", self.name, self.id)
         }
+    }
+}
+
+impl Drop for SceneNode {
+    fn drop(&mut self) {
+        t!("Drop {}:{}", self.name, self.id);
     }
 }
 

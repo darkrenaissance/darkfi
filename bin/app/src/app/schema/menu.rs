@@ -311,12 +311,12 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let prop = node.get_property("items").unwrap();
     for channel in CHANNELS {
-        let label = "#".to_string() + channel;
-        prop.push_str(atom, Role::App, label).unwrap();
+        prop.push_str(atom, Role::App, *channel).unwrap();
     }
-    for channel in
-        ["john", "stacy", "barry", "steve", "obombo", "xyz", "lunar", "fren", "anon", "anon1"]
-    {
+    for channel in [
+        "@john", "@stacy", "@barry", "@steve", "@obombo", "@xyz", "@lunar", "@fren", "@anon",
+        "@anon1",
+    ] {
         prop.push_str(atom, Role::App, channel).unwrap();
     }
 
@@ -327,14 +327,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let renderer = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let item_name: String = deserialize(&data).unwrap();
-            let Some(channel) = item_name.strip_prefix('#') else { continue };
-            let chatview_path = format!("/window/content/{}_chat_layer", channel);
-            let chatview_node = sg_root.lookup_node(chatview_path).unwrap();
+            let channel: String = deserialize(&data).unwrap();
+            let path = format!("/window/content/{}_chat_layer", channel);
+            let node = sg_root.lookup_node(path).unwrap();
 
             let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
             info!(target: "app::menu", "clicked: {channel}!");
-            chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             menu_is_visible.set(atom, false);
         }
     });
@@ -362,11 +361,15 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Subscribe to edit_done signal to log deleted items
     let (edit_done_slot, edit_done_recvr) = Slot::new("edit_done");
     menu_node.register("edit_done", edit_done_slot).unwrap();
+    let sg_root = app.sg_root.clone();
     let edit_done_listen = app.ex.spawn(async move {
         while let Ok(data) = edit_done_recvr.recv().await {
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
             for item in deleted_items {
+                let path = format!("/window/content/{}_chat_layer", item);
+                let node = sg_root.lookup_node(path).unwrap();
                 debug!(target: "app::menu", "deleted item: {item}");
+                node.unlink();
             }
         }
     });
