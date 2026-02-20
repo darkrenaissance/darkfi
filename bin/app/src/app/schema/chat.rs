@@ -18,7 +18,7 @@
 
 use darkfi_serial::Encodable;
 use sled_overlay::sled;
-use std::time::UNIX_EPOCH;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use crate::{
     app::{
@@ -317,14 +317,15 @@ pub async fn make(
     // Menu doesn't exist yet ;)
     // So look it up in the callback.
     let sg_root = app.sg_root.clone();
-    let layer_node2 = layer_node.clone();
+    let layer_node_weak = Arc::downgrade(&layer_node);
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
         let atom = &mut renderer.make_guard(gfxtag!("goback action"));
 
-        let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
+        let layer_node = layer_node_weak.upgrade().unwrap();
+        let editz_node = layer_node.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
 
         let menu_node = sg_root.lookup_node("/window/content/menu_layer").unwrap();
@@ -846,11 +847,12 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("emoji_selected");
     emoji_picker_node.register("emoji_select", slot).unwrap();
-    let chatedit_node2 = chatedit_node.clone();
+    let chatedit_node_weak = Arc::downgrade(&chatedit_node);
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             // No need to decode the data. Just pass it straight along
-            chatedit_node2.call_method("insert_text", data).await.unwrap();
+            let chatedit_node = chatedit_node_weak.upgrade().unwrap();
+            chatedit_node.call_method("insert_text", data).await.unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

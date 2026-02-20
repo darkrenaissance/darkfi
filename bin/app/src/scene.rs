@@ -463,7 +463,7 @@ impl std::fmt::Debug for SceneNode {
 
 impl Drop for SceneNode {
     fn drop(&mut self) {
-        t!("Drop {}:{}", self.name, self.id);
+        println!("Drop {}:{}", self.name, self.id);
     }
 }
 
