@@ -317,15 +317,14 @@ pub async fn make(
     // Menu doesn't exist yet ;)
     // So look it up in the callback.
     let sg_root = app.sg_root.clone();
-    let layer_node_weak = Arc::downgrade(&layer_node);
+    let layer_node2 = layer_node.clone();
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
         let atom = &mut renderer.make_guard(gfxtag!("goback action"));
 
-        let layer_node = layer_node_weak.upgrade().unwrap();
-        let editz_node = layer_node.lookup_node("/content/editz").unwrap();
+        let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
 
         let menu_node = sg_root.lookup_node("/window/content/menu_layer").unwrap();
@@ -342,7 +341,7 @@ pub async fn make(
             goback2().await;
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     let node = node.setup(Button::new).await;
     layer_node.link(node);
@@ -365,7 +364,7 @@ pub async fn make(
             goback().await;
         }
     });
-    app.tasks.lock().unwrap().push(listen_enter);
+    layer_node.push_task(listen_enter);
 
     let node = node.setup(|me| Shortcut::new(me)).await;
     layer_node.link(node);
@@ -580,7 +579,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_fileurl);
+    layer_node.push_task(listen_fileurl);
 
     let (slot, recvr) = Slot::new("file_download_request");
     chatview_node.register("file_download_request", slot).unwrap();
@@ -592,7 +591,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_file_download);
+    layer_node.push_task(listen_file_download);
 
     if is_first_time {
         let chatview = match chatview_node.pimpl() {
@@ -847,15 +846,14 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("emoji_selected");
     emoji_picker_node.register("emoji_select", slot).unwrap();
-    let chatedit_node_weak = Arc::downgrade(&chatedit_node);
+    let chatedit_node2 = chatedit_node.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             // No need to decode the data. Just pass it straight along
-            let chatedit_node = chatedit_node_weak.upgrade().unwrap();
-            chatedit_node.call_method("insert_text", data).await.unwrap();
+            chatedit_node2.call_method("insert_text", data).await.unwrap();
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     // No way to get the top of the editbox until eval has been called.
     // But this is on top so it happens before the eval. So the value is 0.
@@ -982,7 +980,7 @@ pub async fn make(
             sendmsg2().await;
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     let node = node.setup(Button::new).await;
     layer_node.link(node);
@@ -998,7 +996,7 @@ pub async fn make(
             sendmsg().await;
         }
     });
-    app.tasks.lock().unwrap().push(listen_enter);
+    layer_node.push_task(listen_enter);
 
     let node = node.setup(|me| Shortcut::new(me)).await;
     layer_node.link(node);
@@ -1026,7 +1024,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     // Emoji button is clicked
     let (slot, recvr) = Slot::new("emoji_clicked");
@@ -1086,7 +1084,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     let node = node.setup(Button::new).await;
     layer_node.link(node);
@@ -1133,7 +1131,7 @@ pub async fn make(
             editz_text2.set(atom, "/nick ");
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    layer_node.push_task(listen_click);
 
     let node = node.setup(Button::new).await;
     cmd_layer_node.link(node);
@@ -1250,7 +1248,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(editz_text_task);
+    layer_node.push_task(editz_text_task);
 }
 
 // Just for testing

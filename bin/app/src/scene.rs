@@ -20,6 +20,7 @@ use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use darkfi_serial::{FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::{stream::FuturesUnordered, StreamExt};
+use parking_lot::Mutex as SyncMutex;
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
@@ -132,6 +133,7 @@ pub struct SceneNode {
     pub sigs: SyncRwLock<Vec<SignalPtr>>,
     pub methods: Vec<Method>,
     pub pimpl: OnceLock<Pimpl>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 }
 
 impl SceneNode {
@@ -150,6 +152,7 @@ impl SceneNode {
             sigs: SyncRwLock::new(vec![]),
             methods: vec![],
             pimpl: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
         }
     }
 
@@ -448,6 +451,13 @@ impl SceneNode {
         }
 
         Some(parent.get_full_path()? + &subpath)
+    }
+
+    pub fn push_task(&self, task: smol::Task<()>) {
+        self.tasks.lock().push(task);
+    }
+    pub fn clear_tasks(&self) {
+        self.tasks.lock().clear();
     }
 }
 

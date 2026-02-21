@@ -368,6 +368,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             for item in deleted_items {
                 let path = format!("/window/content/{}_chat_layer", item);
                 let node = sg_root.lookup_node(path).unwrap();
+                node.clear_tasks();
                 debug!(target: "app::menu", "deleted item: {item}");
                 node.unlink();
             }
