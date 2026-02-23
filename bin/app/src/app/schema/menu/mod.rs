@@ -82,12 +82,6 @@ use ui_consts::*;
 mod contact;
 
 pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
-    let contact_layer = contact::make(app, content.clone(), i18n_fish).await;
-
-    let mut cc = expr::Compiler::new();
-    cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
-    cc.add_const_f32("CHANNEL_LABEL_LINESPACE", CHANNEL_LABEL_LINESPACE);
-
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/setting/scale").unwrap(),
         Role::Internal,
@@ -95,6 +89,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         0,
     )
     .unwrap();
+
+    let contact_layer = contact::make(app, content.clone(), i18n_fish, window_scale.clone()).await;
+
+    let mut cc = expr::Compiler::new();
+    cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
+    cc.add_const_f32("CHANNEL_LABEL_LINESPACE", CHANNEL_LABEL_LINESPACE);
+
     let atom = &mut PropertyAtomicGuard::none();
 
     // Main view
@@ -193,7 +194,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let mainlayer_node = node.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    let mainlayer_is_visible = PropertyBool::wrap(&mainlayer_node, Role::App, "is_visible", 0).unwrap();
+    let mainlayer_is_visible =
+        PropertyBool::wrap(&mainlayer_node, Role::App, "is_visible", 0).unwrap();
     layer_node.link(mainlayer_node.clone());
 
     let node = create_vector_art("version_block");
@@ -254,7 +256,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let (slot, recvr) = Slot::new("write_clicked");
     node.register("click", slot).unwrap();
     let renderer = app.renderer.clone();
-    let contact_is_visible = PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
+    let contact_is_visible =
+        PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("write_click"));
