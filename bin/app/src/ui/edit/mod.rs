@@ -1338,6 +1338,9 @@ impl BaseEdit {
         };
 
         self_.editor.lock().focus();
+        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));
+        self_.is_focused.set(atom, true);
+        self_.redraw(atom);
         true
     }
     async fn process_unfocus_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -1356,6 +1359,9 @@ impl BaseEdit {
         };
 
         self_.editor.lock().unfocus();
+        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_unfocus_method"));
+        self_.is_focused.set(atom, false);
+        self_.redraw(atom);
         true
     }
 

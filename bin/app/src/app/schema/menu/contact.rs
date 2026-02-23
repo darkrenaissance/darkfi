@@ -18,7 +18,7 @@
 
 use darkfi_serial::deserialize;
 
-use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
+use super::{edit_switch::edit_switch, ColorScheme, CHANNELS, COLOR_SCHEME};
 use crate::{
     app::{
         node::{
@@ -299,7 +299,7 @@ pub async fn make(
             )
         })
         .await;
-    let chatedit_node = node.clone();
+    let nickedit_node = node.clone();
     layer_node.link(node);
 
     let node = create_singleline_edit("secret_edit");
@@ -395,8 +395,18 @@ pub async fn make(
             )
         })
         .await;
-    let chatedit_node = node.clone();
+    let secedit_node = node.clone();
     layer_node.link(node);
+
+    {
+        let mut app_tasks = app.tasks.lock().unwrap();
+        edit_switch(
+            &mut app_tasks,
+            &[nickedit_node, secedit_node],
+            app.renderer.clone(),
+            app.ex.clone(),
+        );
+    }
 
     // Make buttons for cancel and done
 

@@ -80,6 +80,7 @@ mod ui_consts {
 use ui_consts::*;
 
 mod contact;
+mod edit_switch;
 
 pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
