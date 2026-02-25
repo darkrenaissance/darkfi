@@ -43,6 +43,21 @@ use crate::{
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
+/// Helper function to find or create a group for a given token ID
+/// commitment.
+/// Returns a mutable reference to the accumulator.
+fn get_or_insert_group(
+    groups: &mut Vec<(pallas::Base, pallas::Point)>,
+    tokcom: pallas::Base,
+) -> &mut pallas::Point {
+    if let Some(pos) = groups.iter().position(|(tc, _)| *tc == tokcom) {
+        &mut groups[pos].1
+    } else {
+        groups.push((tokcom, pallas::Point::identity()));
+        &mut groups.last_mut().unwrap().1
+    }
+}
+
 /// `get_metadata` function for `Money::TransferV1`
 pub(crate) fn money_transfer_get_metadata_v1(
     _cid: ContractId,
@@ -139,21 +154,16 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
-    // Accumulator for the value commitments. We add inputs to it, and subtract
-    // outputs from it. For the commitments to be valid, the accumulator must
-    // be in its initial state after performing the arithmetics.
-    let mut valcom_total = pallas::Point::identity();
-
     let hasher = PoseidonFp::new();
     let empty_leaf = pallas::Base::ZERO;
     let smt_store = SmtWasmDbStorage::new(nullifiers_db);
     let smt = SmtWasmFp::new(smt_store, hasher, &EMPTY_NODES_FP);
 
-    // Grab the expected token commitment. In the basic transfer,
-    // we only allow the same token type to be transfered. For
-    // exchanging, we use another functionality of this contract
-    // called `OtcSwap`.
-    let tokcom = params.outputs[0].token_commit;
+    // Collect all distinct token commitments and build per-token accumulators.
+    // We track (token_commit -> value_commit accumulator) pairs.
+    // For each token group, inputs and outputs subtract.
+    // Every group must independently sum to identity.
+    let mut token_groups: Vec<(pallas::Base, pallas::Point)> = vec![];
 
     // ===================================
     // Perform the actual state transition
@@ -179,15 +189,12 @@ pub(crate) fn money_transfer_process_instruction_v1(
             return Err(MoneyError::DuplicateNullifier.into())
         }
 
-        // Verify the token commitment is the expected one
-        if tokcom != input.token_commit {
-            msg!("[TransferV1] Error: Token commitment mismatch in input {}", i);
-            return Err(MoneyError::TokenMismatch.into())
-        }
+        // Accumulate the value commitment
+        let acc = get_or_insert_group(&mut token_groups, input.token_commit);
+        *acc += input.value_commit;
 
-        // Append this new nullifier to seen nullifiers, and accumulate the value commitment
+        // Append this new nullifier to seen nullifiers
         new_nullifiers.push(input.nullifier);
-        valcom_total += input.value_commit;
     }
 
     // Newly created coins for this call are in the outputs. Here we gather them,
@@ -202,22 +209,22 @@ pub(crate) fn money_transfer_process_instruction_v1(
             return Err(MoneyError::DuplicateCoin.into())
         }
 
-        // Verify the token commitment is the expected one
-        if tokcom != output.token_commit {
-            msg!("[TransferV1] Error: Token commitment mismatch in output {}", i);
-            return Err(MoneyError::TokenMismatch.into())
-        }
+        // Subtract the value commitment
+        let acc = get_or_insert_group(&mut token_groups, output.token_commit);
+        *acc -= output.value_commit;
 
-        // Append this new coin to seen coins, and subtract the value commitment
+        // Append this new coin to seen coins
         new_coins.push(output.coin);
-        valcom_total -= output.value_commit;
     }
 
-    // If the accumulator is not back in its initial state, that means there
-    // is a value mismatch between inputs and outputs.
-    if valcom_total != pallas::Point::identity() {
-        msg!("[TransferV1] Error: Value commitments do not result in identity");
-        return Err(MoneyError::ValueMismatch.into())
+    // Verify all token groups balance. The accumulators should be back
+    // in their initial state, otherwise it means there is a value mismatch
+    // between inputs and outputs.
+    for (i, (_tokcom, acc)) in token_groups.iter().enumerate() {
+        if *acc != pallas::Point::identity() {
+            msg!("[TransferV1] Error: Value commitments for token group {} do not balance", i);
+            return Err(MoneyError::ValueMismatch.into())
+        }
     }
 
     // At this point the state transition has passed, so we create a state update

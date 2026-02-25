@@ -73,7 +73,7 @@ test-delayed-tx: all
 		--features=no-entrypoint,client \
 		--test delayed_tx
 
-test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint test-delayed-tx
+test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint-burn test-delayed-tx
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
