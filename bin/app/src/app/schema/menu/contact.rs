@@ -579,7 +579,10 @@ pub async fn make(
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
             for item in deleted_items {
                 let path = format!("/window/content/{}_chat_layer", item);
-                let node = sg_root.lookup_node(path).unwrap();
+                let Some(node) = sg_root.lookup_node(path) else {
+                    // Not shown in the main menu
+                    continue
+                };
                 node.clear_tasks();
                 debug!(target: "app::menu", "deleted item: {item}");
                 node.unlink();
@@ -637,6 +640,9 @@ pub async fn make(
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(Button::new).await;
+    editlayer_node.link(node);
 
     layer_node
 }
