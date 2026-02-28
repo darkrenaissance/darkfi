@@ -20,6 +20,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
 rand = "0.8.5"
 sled-overlay = "0.1.20"
+parking_lot = "0.12.5"
 
 [lints]
 workspace = true
