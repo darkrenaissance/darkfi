@@ -1416,7 +1416,7 @@ impl BaseEdit {
             self.redraw(atom);
         } else if is_select_changed {
             // Redrawing the entire text just for select changes is expensive
-            self.redraw_cursor(&self.renderer, atom.batch_id);
+            self.redraw_cursor(&self.renderer);
             //t!("handle_android_event calling redraw_select");
             self.redraw_select(&self.renderer, atom.batch_id);
         }
