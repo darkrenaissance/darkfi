@@ -71,7 +71,7 @@ lazy_static! {
 }
 
 /// ContractId represents an on-chain identifier for a certain smart contract.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, SerialEncodable, SerialDecodable)]
 pub struct ContractId(pallas::Base);
 
 impl ContractId {

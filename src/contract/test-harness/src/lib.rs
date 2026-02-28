@@ -21,12 +21,13 @@ use std::{
     fs::OpenOptions,
     io::{Cursor, Write},
     slice,
+    sync::Arc,
     time::Instant,
 };
 
 use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, TxLocalState},
     tx::Transaction,
     util::{
         logger::{setup_test_logger, Level},
@@ -59,6 +60,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{serialize, Encodable};
 use num_bigint::BigUint;
+use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use sled_overlay::sled;
 use tracing::{debug, warn};
@@ -915,13 +917,19 @@ async fn benchmark_wasm_calls(
 ) -> Result<()> {
     let mut file = OpenOptions::new().create(true).append(true).open("bench.csv")?;
 
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     let validator = validator.read().await;
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+
+        tx_local_state.lock().entry(call.data.contract_id).or_default();
+
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             block_height,
             validator.consensus.module.target,

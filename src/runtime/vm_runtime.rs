@@ -18,6 +18,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    collections::BTreeMap,
     sync::Arc,
 };
 
@@ -29,6 +30,7 @@ use darkfi_sdk::{
     wasm, AsHex,
 };
 use darkfi_serial::serialize;
+use parking_lot::Mutex;
 use tracing::{debug, error, info};
 use wasmer::{
     imports, sys::CompilerConfig, wasmparser::Operator, AsStoreMut, AsStoreRef, Function,
@@ -78,12 +80,23 @@ impl ContractSection {
     }
 }
 
+/// Transaction-local state db.
+///
+/// This is an in-memory BTreeMap that works equivalently to the existing
+/// blockchain DB in contracts, except its lifetime is during a single
+/// transaction execution.
+pub type TxLocalState = BTreeMap<ContractId, BTreeMap<[u8; 32], BTreeMap<Vec<u8>, Vec<u8>>>>;
+
 /// The WASM VM runtime environment instantiated for every smart contract that runs.
 pub struct Env {
     /// Blockchain overlay access
     pub blockchain: BlockchainOverlayPtr,
     /// Overlay tree handles used with `db_*`
     pub db_handles: RefCell<Vec<DbHandle>>,
+    /// Transaction-local db handles used with `db_*_local`
+    pub local_db_handles: RefCell<Vec<DbHandle>>,
+    /// Transaction-local state
+    pub tx_local: Arc<Mutex<TxLocalState>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
     /// The compiled wasm bincode being executed,
@@ -157,9 +170,11 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         wasm_bytes: &[u8],
         blockchain: BlockchainOverlayPtr,
+        tx_local: Arc<Mutex<TxLocalState>>,
         contract_id: ContractId,
         verifying_block_height: u32,
         block_target: u32,
@@ -197,6 +212,7 @@ impl Runtime {
 
         // Initialize data
         let db_handles = RefCell::new(vec![]);
+        let local_db_handles = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
 
         debug!(target: "runtime::vm_runtime", "Importing functions");
@@ -206,6 +222,8 @@ impl Runtime {
             Env {
                 blockchain,
                 db_handles,
+                local_db_handles,
+                tx_local,
                 contract_id,
                 contract_bincode: wasm_bytes.to_vec(),
                 contract_section: ContractSection::Null,

@@ -16,19 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use darkfi_sdk::{
     crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
     tx::TransactionHash,
 };
 use num_bigint::BigUint;
+use parking_lot::Mutex;
 use randomx::{RandomXCache, RandomXFlags, RandomXVM};
 use tracing::info;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr, Header},
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, TxLocalState},
     validator::{
         consensus::{Fork, Proposal},
         pow::PoWModule,
@@ -98,9 +99,15 @@ pub async fn deploy_native_contracts(
     for (call_idx, nc) in native_contracts.into_iter().enumerate() {
         info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
+        // Create tx-local state
+        let mut tx_local_state = TxLocalState::new();
+        tx_local_state.entry(nc.1).or_default();
+        let tx_local_state = Arc::new(Mutex::new(tx_local_state));
+
         let mut runtime = Runtime::new(
             &nc.2[..],
             overlay.clone(),
+            tx_local_state,
             nc.1,
             verifying_block_height,
             block_target,

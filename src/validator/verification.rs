@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use darkfi_sdk::{
     blockchain::block_version,
@@ -30,6 +30,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
 use num_bigint::BigUint;
+use parking_lot::Mutex;
 use sled_overlay::SledDbOverlayStateDiff;
 use smol::io::Cursor;
 use tracing::{debug, error, warn};
@@ -40,7 +41,7 @@ use crate::{
         Blockchain, BlockchainOverlayPtr, HeaderHash,
     },
     error::TxVerifyFailed,
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, TxLocalState},
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
@@ -447,9 +448,14 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
     let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
+    // Create tx-local state
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+    tx_local_state.lock().entry(call.data.contract_id).or_default();
+
     let mut runtime = Runtime::new(
         &wasm,
         overlay.clone(),
+        tx_local_state,
         call.data.contract_id,
         verifying_block_height,
         block_target,
@@ -574,9 +580,14 @@ pub async fn apply_producer_transaction(
     let call = &tx.calls[0];
     let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
+    // Create tx-local state
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+    tx_local_state.lock().entry(call.data.contract_id).or_default();
+
     let mut runtime = Runtime::new(
         &wasm,
         overlay.clone(),
+        tx_local_state,
         call.data.contract_id,
         verifying_block_height,
         block_target,
@@ -705,6 +716,10 @@ pub async fn verify_transaction(
     // calculate their verification cost.
     let mut circuits_to_verify = vec![];
 
+    // Create the transaction-local state instance
+    // This state exists only during the single transaction verification.
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         debug!(target: "validator::verification::verify_transaction", "Executing contract call {idx}");
@@ -724,11 +739,15 @@ pub async fn verify_transaction(
             (idx as u8, &payload)
         };
 
+        // Create a local state for this contract call if it doesn't exist.
+        tx_local_state.lock().entry(call.data.contract_id).or_default();
+
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             verifying_block_height,
             block_target,
@@ -808,11 +827,13 @@ pub async fn verify_transaction(
             // Deserialize the deployment parameters
             let deploy_params: DeployParamsV1 = deserialize_async(&call.data.data[1..]).await?;
             let deploy_cid = ContractId::derive_public(deploy_params.public_key);
+            tx_local_state.lock().entry(deploy_cid).or_default();
 
             // Instantiate the new deployment runtime
             let mut deploy_runtime = Runtime::new(
                 &deploy_params.wasm_bincode,
                 overlay.clone(),
+                tx_local_state.clone(),
                 deploy_cid,
                 verifying_block_height,
                 block_target,
@@ -943,15 +964,22 @@ pub async fn apply_transaction(
     let mut payload = vec![];
     tx.calls.encode_async(&mut payload).await?;
 
+    // Create tx-local state
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         debug!(target: "validator::verification::apply_transaction", "Executing contract call {idx}");
 
         debug!(target: "validator::verification::apply_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+
+        tx_local_state.lock().entry(call.data.contract_id).or_default();
+
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             verifying_block_height,
             block_target,
@@ -987,6 +1015,7 @@ pub async fn apply_transaction(
             let mut deploy_runtime = Runtime::new(
                 &deploy_params.wasm_bincode,
                 overlay.clone(),
+                tx_local_state.clone(),
                 deploy_cid,
                 verifying_block_height,
                 block_target,
