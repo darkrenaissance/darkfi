@@ -36,7 +36,36 @@ use super::util::wasm_mem_read;
 /// * `ContractSection::Deploy`
 /// * `ContractSection::Metadata`
 /// * `ContractSection::Exec`
-pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_get_internal(ctx, ptr, ptr_len, false)
+}
+
+/// Reads a value by key from the tx-local key-value store.
+///
+/// On success, returns the length of the `objects` Vector in the environment.
+/// Otherwise, returns an error code.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Metadata`
+/// * `ContractSection::Exec`
+pub(crate) fn db_get_local(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_get_internal(ctx, ptr, ptr_len, true)
+}
+
+/// Internal `db_get` function which branches to either on-chain or tx-local.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Metadata`
+/// * `ContractSection::Exec`
+pub(crate) fn db_get_internal(
+    mut ctx: FunctionEnvMut<Env>,
+    ptr: WasmPtr<u8>,
+    ptr_len: u32,
+    local: bool,
+) -> i64 {
+    let lt = if local { "db_get_local" } else { "db_get" };
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
@@ -45,22 +74,22 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
-            target: "runtime::db::db_get",
-            "[WASM] [{cid}] db_get(): Called in unauthorized section: {e}",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Called in unauthorized section: {e}",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Reading is free.
+    // Subtract used gas.
     env.subtract_gas(&mut store, 1);
 
-    // Get the wasm memory reader
+    // Get the WASM memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_get",
-                "[WASM] [{cid}] db_get(): Failed to read wasm memory: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to read wasm memory: {e}",
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -71,8 +100,8 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_get",
-                "[WASM] [{cid}] db_get(): Failed to decode DbHandle: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode DbHandle: {e}",
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -95,19 +124,20 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // Make sure there are no trailing bytes in the buffer.
     if buf_reader.position() != ptr_len as u64 {
         error!(
-            target: "runtime::db::db_get",
-            "[WASM] [{cid}] db_get(): Trailing bytes in argument stream",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Trailing bytes in argument stream",
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
 
-    let db_handles = env.db_handles.borrow();
+    // Fetch requested db handles
+    let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
 
     // Ensure that the index is within bounds
     if db_handles.len() <= db_handle_index {
         error!(
-            target: "runtime::db::db_get",
-            "[WASM] [{cid}] db_get(): Requested DbHandle that is out of bounds",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Requested DbHandle that is out of bounds",
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
@@ -116,24 +146,47 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     let db_handle = &db_handles[db_handle_index];
 
     // Retrieve data using the `key`
-    let ret =
+    let ret: Option<Vec<u8>> = if local {
+        // tx-local db
+        let db = env.tx_local.lock();
+        let Some(db_cid) = db.get(&db_handle.contract_id) else {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Could not find db for {}",
+                db_handle.contract_id,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        };
+
+        let Some(tree) = db_cid.get(&db_handle.tree) else {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Could not find db tree for {}",
+                db_handle.contract_id,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        };
+
+        tree.get(&key).cloned()
+    } else {
         match env.blockchain.lock().unwrap().overlay.lock().unwrap().get(&db_handle.tree, &key) {
-            Ok(v) => v,
+            Ok(v) => v.map(|iv| iv.to_vec()),
             Err(e) => {
                 error!(
-                    target: "runtime::db::db_get",
-                    "[WASM] [{cid}] db_get(): Internal error getting from tree: {e}",
+                    target: "runtime::db::{lt}",
+                    "[WASM] [{cid}] {lt}(): Internal error getting from tree: {e}",
                 );
                 return darkfi_sdk::error::DB_GET_FAILED
             }
-        };
+        }
+    };
     drop(db_handles);
 
     // Return special error if the data is empty
     let Some(return_data) = ret else {
         debug!(
-            target: "runtime::db::db_get",
-            "[WASM] [{cid}] db_get(): Return data is empty",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Return data is empty",
         );
         return darkfi_sdk::error::DB_GET_EMPTY
     };

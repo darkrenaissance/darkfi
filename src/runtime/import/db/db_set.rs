@@ -38,15 +38,44 @@ use super::util::wasm_mem_read;
 /// ## Permissions
 /// * `ContractSection::Deploy`
 /// * `ContractSection::Update`
-pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_set_internal(ctx, ptr, ptr_len, false)
+}
+
+/// Set a value in the tx-local database for the given DbHandle.
+///
+/// * `ptr` must contain the DbHandle index and the key-value pair.
+/// * The DbHandle must match the ContractId.
+///
+/// Returns `SUCCESS` on success, otherwise returns an error value.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Update`
+pub(crate) fn db_set_local(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_set_internal(ctx, ptr, ptr_len, true)
+}
+
+/// Internal `db_set` function which branches to either on-chain or tx-local.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Update`
+fn db_set_internal(
+    mut ctx: FunctionEnvMut<Env>,
+    ptr: WasmPtr<u8>,
+    ptr_len: u32,
+    local: bool,
+) -> i64 {
+    let lt = if local { "db_set_local" } else { "db_set" };
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Called in unauthorized section: {e}",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Called in unauthorized section: {e}",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -61,8 +90,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_set",
-                "[WASM] [{cid}] db_set(): Failed to read wasm memory: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to read wasm memory: {e}",
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -73,8 +102,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_set",
-                "[WASM] [{cid}] db_set(): Failed to decode DbHandle: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode DbHandle: {e}",
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -86,8 +115,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // We should disallow writing with this.
     if env.contract_section == ContractSection::Deploy && db_handle_index == 0 {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Tried to write to zkas db",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Tried to write to zkas db",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -97,8 +126,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_set",
-                "[WASM] [{cid}] db_set(): Failed to decode key vec: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode key vec: {e}",
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -108,8 +137,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_set",
-                "[WASM] [{cid}] db_set(): Failed to decode value vec: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode value vec: {e}",
             );
             return darkfi_sdk::error::DB_SET_FAILED
         }
@@ -118,19 +147,20 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // Make sure we've read the entire buffer
     if buf_reader.position() != ptr_len as u64 {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Trailing bytes in argument stream",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Trailing bytes in argument stream",
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
 
-    let db_handles = env.db_handles.borrow();
+    // Fetch requested db handles
+    let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
 
     // Check DbHandle index is within bounds
     if db_handles.len() <= db_handle_index {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Requested DbHandle that is out of bounds",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Requested DbHandle that is out of bounds",
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
@@ -141,14 +171,27 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // Validate that the DbHandle matches the contract ID
     if db_handle.contract_id != env.contract_id {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Unauthorized to write to DbHandle",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Unauthorized to write to DbHandle",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
     // Insert key-value pair into the database corresponding to this contract
-    if env
+    if local {
+        // Safe to unwrap here.
+        let mut db = env.tx_local.lock();
+        let db_cid = db.get_mut(&cid).unwrap();
+        let Some(tree) = db_cid.get_mut(&db_handle.tree) else {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Could not insert to tx-local tree",
+            );
+            return darkfi_sdk::error::DB_SET_FAILED
+        };
+
+        tree.insert(key, value);
+    } else if env
         .blockchain
         .lock()
         .unwrap()
@@ -159,8 +202,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         .is_err()
     {
         error!(
-            target: "runtime::db::db_set",
-            "[WASM] [{cid}] db_set(): Couldn't insert to db_handle tree",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Couldn't insert to on-chain tree",
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
