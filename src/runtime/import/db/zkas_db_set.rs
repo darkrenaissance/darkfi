@@ -23,14 +23,12 @@ use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
     runtime::{
-        import::acl::acl_allow,
+        import::{acl::acl_allow, util::wasm_mem_read},
         vm_runtime::{ContractSection, Env},
     },
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
 };
-
-use super::util::wasm_mem_read;
 
 /// Given a zkas circuit, create a VerifyingKey and insert them both into
 /// the on-chain db.

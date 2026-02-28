@@ -24,11 +24,11 @@ use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::{
-    import::acl::acl_allow,
+    import::{acl::acl_allow, util::wasm_mem_read},
     vm_runtime::{ContractSection, Env},
 };
 
-use super::{util::wasm_mem_read, DbHandle};
+use super::DbHandle;
 
 /// Create a new on-chain database instance for the calling contract.
 /// When created, push it to the list of db_handles.
