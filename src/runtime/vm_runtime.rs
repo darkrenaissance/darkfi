@@ -267,10 +267,22 @@ impl Runtime {
                     import::db::db_lookup,
                 ),
 
+                "db_lookup_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_lookup_local,
+                ),
+
                 "db_get_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::db::db_get,
+                ),
+
+                "db_get_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_get_local,
                 ),
 
                 "db_contains_key_" => Function::new_typed_with_env(
@@ -279,16 +291,34 @@ impl Runtime {
                     import::db::db_contains_key,
                 ),
 
+                "db_contains_key_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_contains_key_local,
+                ),
+
                 "db_set_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::db::db_set,
                 ),
 
+                "db_set_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_set_local,
+                ),
+
                 "db_del_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::db::db_del,
+                ),
+
+                "db_del_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_del_local,
                 ),
 
                 "zkas_db_set_" => Function::new_typed_with_env(

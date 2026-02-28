@@ -28,36 +28,63 @@ use crate::runtime::{
 
 use super::util::wasm_mem_read;
 
-/// Remove a key from an on-chain database.
+/// Remove a key from the on-chain database.
 ///
 /// Returns `SUCCESS` on success, otherwise returns an error value.
 ///
 /// ## Permissions
 /// * `ContractSection::Deploy`
 /// * `ContractSection::Update`
-pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_del_internal(ctx, ptr, ptr_len, false)
+}
+
+/// Remove a key from the tx-local database.
+///
+/// Returns `SUCCESS` on success, otherwise returns an error value.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Update`
+pub(crate) fn db_del_local(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    db_del_internal(ctx, ptr, ptr_len, true)
+}
+
+/// Internal `db_del` function which branches to either on-chain or tx-local.
+///
+/// ## Permissions
+/// * `ContractSection::Deploy`
+/// * `ContractSection::Update`
+fn db_del_internal(
+    mut ctx: FunctionEnvMut<Env>,
+    ptr: WasmPtr<u8>,
+    ptr_len: u32,
+    local: bool,
+) -> i64 {
+    let lt = if local { "db_del_local" } else { "db_del" };
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Called in unauthorized section: {e}",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Called in unauthorized section: {e}",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. We make deletion free.
+    // Subtract used gas.
+    // We make deletion free.
     env.subtract_gas(&mut store, 1);
 
-    // Get the wasm memory reader
+    // Get the WASM memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_del",
-                "[WASM] [{cid}] db_del(): Failed to read WASM memory: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to read WASM memory: {e}",
             );
             return darkfi_sdk::error::DB_DEL_FAILED
         }
@@ -68,8 +95,8 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_del",
-                "[WASM] [{cid}] db_del(): Failed to decode DbHandle: {e}"
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode DbHandle: {e}",
             );
             return darkfi_sdk::error::DB_DEL_FAILED
         }
@@ -81,8 +108,8 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // We should disallow writing with this.
     if env.contract_section == ContractSection::Deploy && db_handle_index == 0 {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Tried to write to zkas db",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Tried to write to zkas db",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -92,8 +119,8 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         Ok(v) => v,
         Err(e) => {
             error!(
-                target: "runtime::db::db_del",
-                "[WASM] [{cid}] db_del(): Failed to decode key vec: {e}",
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Failed to decode key Vec: {e}",
             );
             return darkfi_sdk::error::DB_DEL_FAILED
         }
@@ -102,41 +129,64 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
     // Make sure we've read the entire buffer
     if buf_reader.position() != ptr_len as u64 {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Trailing bytes in argument stream",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Trailing bytes in argument stream",
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }
 
-    let db_handles = env.db_handles.borrow();
+    // Fetch requested db handles
+    let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
 
     // Check DbHandle index is within bounds
     if db_handles.len() <= db_handle_index {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Requested DbHandle that is out of bounds",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Requested DbHandle out of bounds",
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }
 
-    // Retrive DbHandle using the index
+    // Retrieve DbHandle using the index
     let db_handle = &db_handles[db_handle_index];
 
-    // Validate that the DbHandle matches the contract ID
+    // Validate that the DbHandle matches the contract ID.
+    // We're not letting foreign contracts write to others' dbs.
     if db_handle.contract_id != cid {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Unauthorized to write to DbHandle",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Unauthorized write to DbHandle",
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Remove key-value pair from the database corresponding to this contract
-    if env.blockchain.lock().unwrap().overlay.lock().unwrap().remove(&db_handle.tree, &key).is_err()
+    // Delete from appropriate db
+    if local {
+        // Safe to unwrap here.
+        let mut db = env.tx_local.lock();
+        let db_cid = db.get_mut(&cid).unwrap();
+        let Some(tree) = db_cid.get_mut(&db_handle.tree) else {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Could not remove key from tx-local tree",
+            );
+            return darkfi_sdk::error::DB_DEL_FAILED
+        };
+
+        tree.remove(&key);
+    } else if env
+        .blockchain
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .remove(&db_handle.tree, &key)
+        .is_err()
     {
         error!(
-            target: "runtime::db::db_del",
-            "[WASM] [{cid}] db_del(): Couldn't remove key from db_handle tree",
+            target: "runtime::db::{lt}",
+            "[WASM] [{cid}] {lt}(): Could not remove key from on-chain tree",
         );
         return darkfi_sdk::error::DB_DEL_FAILED
     }

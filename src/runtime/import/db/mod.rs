@@ -35,19 +35,19 @@ pub(crate) mod db_init;
 pub(crate) use db_init::db_init;
 
 pub(crate) mod db_lookup;
-pub(crate) use db_lookup::db_lookup;
+pub(crate) use db_lookup::{db_lookup, db_lookup_local};
 
 pub(crate) mod db_set;
-pub(crate) use db_set::db_set;
+pub(crate) use db_set::{db_set, db_set_local};
 
 pub(crate) mod db_del;
-pub(crate) use db_del::db_del;
+pub(crate) use db_del::{db_del, db_del_local};
 
 pub(crate) mod db_get;
-pub(crate) use db_get::db_get;
+pub(crate) use db_get::{db_get, db_get_local};
 
 pub(crate) mod db_contains_key;
-pub(crate) use db_contains_key::db_contains_key;
+pub(crate) use db_contains_key::{db_contains_key, db_contains_key_local};
 
 pub(crate) mod zkas_db_set;
 pub(crate) use zkas_db_set::zkas_db_set;
