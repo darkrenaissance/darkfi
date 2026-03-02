@@ -19,8 +19,9 @@
 use std::io::Cursor;
 
 use darkfi_sdk::{
-    crypto::{MerkleNode, MerkleTree},
+    crypto::{pasta_prelude::Field, MerkleNode, MerkleTree},
     hex::AsHex,
+    pasta::pallas,
     wasm,
 };
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
@@ -206,7 +207,7 @@ pub(crate) fn merkle_add_internal(
 
     // Read the current Merkle tree.
     let tree_bytes = if local {
-        let Some(db_cid) = tx_local_db.get(&db_info.contract_id) else {
+        let Some(db_cid) = tx_local_db.get_mut(&db_info.contract_id) else {
             error!(
                 target: "runtime::db::{lt}",
                 "[WASM] [{cid}] {lt}(): Could not find db for {}",
@@ -215,16 +216,22 @@ pub(crate) fn merkle_add_internal(
             return darkfi_sdk::error::INTERNAL_ERROR
         };
 
-        let Some(tree) = db_cid.get(&db_info.tree) else {
-            error!(
-                target: "runtime::db::{lt}",
-                "[WASM] [{cid}] {lt}(): Could not find db tree for {}",
-                db_info.contract_id,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        };
+        // Fetch or initialize this db tree
+        let tree = db_cid.entry(db_info.tree).or_default();
 
-        tree.get(&tree_key).cloned()
+        match tree.get(&tree_key) {
+            Some(v) => Some(v).cloned(),
+            None => {
+                // If our tx-local db does not contain the Merkle tree,
+                // initialize it with a "zero" leaf.
+                let mut merkle_tree = MerkleTree::new(1);
+                merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
+                let mut merkle_tree_data = vec![];
+                merkle_tree_data.write_u32(0).unwrap();
+                merkle_tree.encode(&mut merkle_tree_data).unwrap();
+                Some(merkle_tree_data)
+            }
+        }
     } else {
         match overlay.get(&db_info.tree, &tree_key) {
             Ok(v) => v.map(|iv| iv.to_vec()),
@@ -338,7 +345,7 @@ pub(crate) fn merkle_add_internal(
         let info_tree = db_cid.get_mut(&db_info.tree).unwrap();
         info_tree.insert(root_key, latest_root_data.clone());
 
-        let roots_tree = db_cid.get_mut(&db_roots.tree).unwrap();
+        let roots_tree = db_cid.entry(db_roots.tree).or_default();
         roots_tree.insert(latest_root_data, value_data);
     } else {
         if let Err(e) = overlay.insert(&db_roots.tree, &latest_root_data, &value_data) {

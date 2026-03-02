@@ -25,7 +25,7 @@ use crate::{
     wasm::db::DbHandle,
 };
 
-/// Add given elements into a Merkle tree. Used for inclusion proofs.
+/// Add given elements into an on-chain Merkle tree. Used for inclusion proofs.
 ///
 /// * `db_info` is a handle for a database where the Merkle tree is stored.
 /// * `db_roots` is a handle for a database where all the new Merkle roots are stored.
@@ -54,18 +54,73 @@ pub fn merkle_add(
     tree_key: &[u8],
     elements: &[MerkleNode],
 ) -> GenericResult<()> {
+    merkle_add_internal(db_info, db_roots, root_key, tree_key, elements, false)
+}
+
+/// Add given elements into a tx-local Merkle tree. Used for inclusion proofs.
+///
+/// * `db_info` is a handle for a database where the Merkle tree is stored.
+/// * `db_roots` is a handle for a database where all the new Merkle roots are stored.
+/// * `root_key` is the serialized key pointing to the latest Merkle root in `db_info`
+/// * `tree_key` is the serialized key pointing to the Merkle tree in `db_info`.
+/// * `elements` are the items we want to add to the Merkle tree.
+///
+/// There are 2 databases:
+///
+/// * `db_info` stores general metadata or info.
+/// * `db_roots` stores a log of all the merkle roots.
+///
+/// Inside `db_info` we store:
+///
+/// * The \[latest root hash:32\] under `root_key`.
+/// * The incremental merkle tree under `tree_key`.
+///
+/// Inside `db_roots` we store:
+///
+/// * All \[merkle root:32\]s as keys. The value is the current \[tx_hash:32\]\[call_idx:1\].
+///   If no new values are added, then the root key is updated to the current (tx_hash, call_idx).
+pub fn merkle_add_local(
+    db_info: DbHandle,
+    db_roots: DbHandle,
+    root_key: &[u8],
+    tree_key: &[u8],
+    elements: &[MerkleNode],
+) -> GenericResult<()> {
+    merkle_add_internal(db_info, db_roots, root_key, tree_key, elements, true)
+}
+
+/// Internal function for `merkle_add` which branches to either on-chain or
+/// transaction-local.
+pub fn merkle_add_internal(
+    db_info: DbHandle,
+    db_roots: DbHandle,
+    root_key: &[u8],
+    tree_key: &[u8],
+    elements: &[MerkleNode],
+    local: bool,
+) -> GenericResult<()> {
     let mut buf = vec![];
     let mut len = 0;
     len += db_info.encode(&mut buf)?;
     len += db_roots.encode(&mut buf)?;
-    len += root_key.to_vec().encode(&mut buf)?;
-    len += tree_key.to_vec().encode(&mut buf)?;
-    len += elements.to_vec().encode(&mut buf)?;
+    len += root_key.encode(&mut buf)?;
+    len += tree_key.encode(&mut buf)?;
+    len += elements.encode(&mut buf)?;
 
-    match unsafe { merkle_add_(buf.as_ptr(), len as u32) } {
+    let ret = unsafe {
+        if local {
+            merkle_add_local_(buf.as_ptr(), len as u32)
+        } else {
+            merkle_add_(buf.as_ptr(), len as u32)
+        }
+    };
+
+    if ret < 0 {
+        return Err(ContractError::from(ret))
+    }
+
+    match ret {
         0 => Ok(()),
-        -1 => Err(ContractError::CallerAccessDenied),
-        -2 => Err(ContractError::DbSetFailed),
         _ => unreachable!(),
     }
 }
@@ -103,8 +158,8 @@ pub fn sparse_merkle_insert_batch(
     len += db_info.encode(&mut buf)?;
     len += db_smt.encode(&mut buf)?;
     len += db_roots.encode(&mut buf)?;
-    len += root_key.to_vec().encode(&mut buf)?;
-    len += elements.to_vec().encode(&mut buf)?;
+    len += root_key.encode(&mut buf)?;
+    len += elements.encode(&mut buf)?;
 
     match unsafe { sparse_merkle_insert_batch_(buf.as_ptr(), len as u32) } {
         0 => Ok(()),
@@ -116,5 +171,6 @@ pub fn sparse_merkle_insert_batch(
 
 extern "C" {
     fn merkle_add_(ptr: *const u8, len: u32) -> i64;
+    fn merkle_add_local_(ptr: *const u8, len: u32) -> i64;
     fn sparse_merkle_insert_batch_(ptr: *const u8, len: u32) -> i64;
 }
