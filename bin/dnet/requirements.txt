@@ -1,2 +1,4 @@
 toml==0.10.2
-urwid==2.6.15
+typing_extensions==4.15.0
+urwid==3.0.5
+wcwidth==0.6.0
