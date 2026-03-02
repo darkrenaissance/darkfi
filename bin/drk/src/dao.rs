@@ -520,10 +520,10 @@ impl DaoParams {
             ## Minimal threshold of participating total tokens needed for a proposal to pass\n\
             quorum = \"{}\"\n\n\
             ## Minimal threshold of participating total tokens needed for a proposal to\n\
-            ## be considered as strongly supported, enabling early execution.\n\
-            ## Must be greater or equal to normal quorum.\n\
+            ## be considered strongly supported, enabling early execution.\n\
+            ## Must be greater than or equal to normal quorum.\n\
             early_exec_quorum = \"{}\"\n\n\
-            ## The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)\n\
+            ## The ratio of yes votes/total votes needed for a proposal to pass (2 decimals)\n\
             approval_ratio = {}\n\n\
             ## DAO's governance token ID\n\
             gov_token_id = \"{}\"\n\n\

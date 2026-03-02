@@ -306,10 +306,10 @@ enum DaoSubcmd {
         /// Minimal threshold of participating total tokens needed for a proposal to pass
         quorum: String,
         /// Minimal threshold of participating total tokens needed for a proposal to
-        /// be considered as strongly supported, enabling early execution.
-        /// Must be greater or equal to normal quorum.
+        /// be considered strongly supported, enabling early execution.
+        /// Must be greater than or equal to normal quorum.
         early_exec_quorum: String,
-        /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)
+        /// The ratio of yes votes/total votes needed for a proposal to pass (2 decimals)
         approval_ratio: f64,
         /// DAO's governance token ID
         gov_token_id: String,

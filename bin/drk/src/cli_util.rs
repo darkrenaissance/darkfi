@@ -289,10 +289,10 @@ pub fn generate_completions(shell: &str) -> Result<String> {
         .help("Minimal threshold of participating total tokens needed for a proposal to pass");
 
     let early_exec_quorum = Arg::with_name("early-exec-quorum")
-        .help("Minimal threshold of participating total tokens needed for a proposal to be considered as strongly supported, enabling early execution. Must be greater or equal to normal quorum.");
+        .help("Minimal threshold of participating total tokens needed for a proposal to be considered strongly supported, enabling early execution. Must be greater than or equal to normal quorum.");
 
     let approval_ratio = Arg::with_name("approval-ratio")
-        .help("The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)");
+        .help("The ratio of yes votes/total votes needed for a proposal to pass (2 decimals)");
 
     let gov_token_id = Arg::with_name("gov-token-id").help("DAO's governance token ID");
 

@@ -42,10 +42,10 @@ pub struct Dao {
     /// Minimal threshold of participating total tokens needed for a proposal to pass
     pub quorum: u64,
     /// Minimal threshold of participating total tokens needed for a proposal to
-    /// be considered as strongly supported, enabling early execution.
-    /// Must be greater or equal to normal quorum.
+    /// be considered strongly supported, enabling early execution.
+    /// Must be greater than or equal to normal quorum.
     pub early_exec_quorum: u64,
-    /// The ratio of winning/total votes needed for a proposal to pass
+    /// The ratio of yes/total votes needed for a proposal to pass
     pub approval_ratio_quot: u64,
     pub approval_ratio_base: u64,
     /// DAO's governance token ID
