@@ -510,6 +510,18 @@ impl<T: Encodable> Encodable for Vec<T> {
     }
 }
 
+impl<T: Encodable> Encodable for &[T] {
+    #[inline]
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(s)?;
+        for val in self.iter() {
+            len += val.encode(s)?;
+        }
+        Ok(len)
+    }
+}
+
 impl<T: Decodable> Decodable for Vec<T> {
     #[inline]
     fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
