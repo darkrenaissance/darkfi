@@ -50,12 +50,12 @@ fn get_or_insert_group(
     groups: &mut Vec<(pallas::Base, pallas::Point)>,
     tokcom: pallas::Base,
 ) -> &mut pallas::Point {
-    if let Some(pos) = groups.iter().position(|(tc, _)| *tc == tokcom) {
-        &mut groups[pos].1
-    } else {
+    let pos = groups.iter().position(|(tc, _)| *tc == tokcom).unwrap_or_else(|| {
         groups.push((tokcom, pallas::Point::identity()));
-        &mut groups.last_mut().unwrap().1
-    }
+        groups.len() - 1
+    });
+
+    &mut groups[pos].1
 }
 
 /// `get_metadata` function for `Money::TransferV1`
