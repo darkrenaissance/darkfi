@@ -50,14 +50,14 @@ no longer vote on the proposal, and it is considered *expired*.
 
 ### Quorum
 
-Quorum is defined as the minimal threshold of participating total governance tokens need for
+Quorum is defined as the minimal threshold of participating total governance tokens needed for
 a proposal to pass. Normally this is implemented as min % of voting power, but we do this in
 absolute value.
 
 ### Early Execution Quorum
-Early execytuib quorum is defined as the minimal threshold of participating total tokens needed
-for a proposal to be considered as strongly supported, enabling early execution. Must be greater
-or equal to normal quorum.
+Early execution quorum is defined as the minimal threshold of participating total tokens needed
+for a proposal to be considered strongly supported, enabling early execution. Must be greater
+than or equal to normal quorum.
 
 ### Approval Ratio
 

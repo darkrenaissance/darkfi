@@ -1,7 +1,10 @@
 # Payments
 
 Using the tokens we minted, we can make payments to other addresses.
-We will use a dummy recepient, but you can also test this with friends.
+For this tutorial we will use a dummy recipient, but you can also test
+this with friends by replacing the recipient address with your friend's
+address.
+
 Let's try to send some `ANON` tokens to
 `DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf`:
 
@@ -15,14 +18,13 @@ Broadcasting transaction...
 Transaction ID: 47b4818caec22470427922f506d72788233001a79113907fd1a93b7756b07395
 ```
 
-On success we'll see a transaction ID. Now again the same confirmation
-process has to occur and
+On success we'll see a transaction ID. Once confirmed within a block,
 `DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf` will receive
 the tokens you've sent.
 
 ![pablo-waiting1](img/pablo1.jpg)
 
-We can see the spent coin in our wallet.
+We can now see the spent coin in our wallet.
 
 ```shell
 drk> wallet coins
@@ -36,8 +38,8 @@ drk> wallet coins
  EEneNB...m6mxTC | false | 241vAN...KcLssb | DRK     | 1999442971 (19.97253683) | -          | -         | -
 ```
 
-We have to wait until the next block to see our change balance reappear
-in our wallet.
+We have to wait until the next block to see our change reappear in
+our wallet.
 
 ```shell
 drk> wallet balance

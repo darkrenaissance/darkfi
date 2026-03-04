@@ -11,7 +11,7 @@ stop a running one to start another.
 
 Each command to execute will be inside a codeblock, on its first line,
 marked by the user `$` symbol, followed by the expected output. For
-longer command outputs, some lines will be emmited to keep the guide
+longer command outputs, some lines will be emitted to keep the guide
 simple.
 
 We also strongly suggest to first execute next guide steps on a
@@ -146,7 +146,7 @@ wallet_pass = "changeme"
 Once you've changed the default password for your testnet wallet, we
 can proceed with the wallet initialization. We simply have to
 initialize a wallet, and create a keypair. The wallet address shown in
-the outputs is examplatory and will different from the one you get.
+the outputs is explanatory and will be different from the one you get.
 
 ```shell
 $ ./drk wallet initialize
@@ -262,7 +262,7 @@ rpc_listen = "tcp://127.0.0.1:18347"
 > endpoints, so your traffic is not plaintext, as it contains your
 > wallet address used for the block rewards.
 
-To mine on DarkFI we need to add a recipient to `xmrig` that specifies
+To mine on DarkFi we need to add a recipient to `xmrig` that specifies
 where the mining rewards will be minted to. You now have to configure
 `xmrig` to use your wallet address as the rewards recipient, when it
 retrieves blocks from `darkfid` to mine. Make sure you have

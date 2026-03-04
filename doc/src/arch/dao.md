@@ -47,9 +47,9 @@ Brief description of the DAO bulla params:
   a proposal to pass. Normally this is implemented as min % of voting
   power, but we do this in absolute value
 * **early_exec_quorum**: minimal threshold of participating total
-  tokens needed for a proposal to be considered as strongly supported,
-  enabling early execution. Must be greater or equal to normal quorum.
-* **approval_ratio**: the ratio of winning/total votes needed for a
+  tokens needed for a proposal to be considered strongly supported,
+  enabling early execution. Must be greater than or equal to normal quorum.
+* **approval_ratio**: the ratio of yes/total votes needed for a
   proposal to pass.
 * **gov_token_id**: DAO's governance token ID.
 * **notes_public_key**: notes(coins) decryption public key
@@ -421,8 +421,8 @@ it can be executed early. We should add this option to DarkFi DAO params.
 > The full voting period must pass in order to be able to execute a
 > proposal. A new configuration parameter was introduced, called early
 > exec quorum, where we can define the quorum for a proposal to be
-> considered as strongly supported/voted on, which should always be
-> greater or equal to normal quorum. With this addition, we can execute
+> considered strongly supported/voted on, which should always be
+> greater than or equal to normal quorum. With this addition, we can execute
 > proposals before the voting period has passed, if they were accepted.
 
 ~~Currently the DAO public key is used for:~~

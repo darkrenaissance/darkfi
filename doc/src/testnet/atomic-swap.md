@@ -1,17 +1,22 @@
 # Atomic Swaps
 
-In order to do an atomic swap with someone, you will first have to
-agree on what tokens you wish to swap. For example purposes, let's say
-you want to swap `40` `ANON` (which is the balance you should have left
-over after doing the payment from the previous page) for your
-counterparty's `20` `DAWN`. For this tutorial the counterparty is
-yourself.
+In order to do an atomic swap with someone, you will first have to agree
+on what tokens you wish to swap. For example, let's say you want to swap
+`40` `ANON` for your counterparty's `20` `DAWN`. You can do this tutorial
+with a real counterparty or with yourself. This tutorial assumes the
+counterparty is yourself, but we will indicate which steps differ so
+you should be able to do the tutorial with a real counterparty as well.
 
-To protect your anonymity from the counterparty, the swap can only send
-entire coins. To create a smaller coin denomination, send yourself the
-amount you want to swap. Then check you have a spendable coin to swap
-with. Note that the coin overview might look very different depending
-on your activity:
+The swap uses one coin per party so the counterparty only sees the
+single coin you're using, not your other coins.
+
+Note: A "coin" is a single cryptographic record. Your wallet balance is
+the sum of all coins you own, and each coin must be spent entirely.
+
+You must use a coin worth the exact amount you want to swap. To create a
+smaller coin denomination, send yourself the amount you want to swap. Then
+check you have a spendable coin to swap with. Note that the coin overview
+might look very different depending on your activity:
 
 ```shell
 drk> wallet coins
@@ -28,19 +33,24 @@ drk> wallet coins
 
 You'll have to initiate the swap and build your half of the swap tx:
 
+
 ```shell
 drk> otc init 40.0:20.0 ANON:DAWN > half_swap
 ```
 
-Then you can send this `half_swap` file to your counterparty and they
+Then you can send this `half_swap` file to the counterparty and they
 can create the other half and sign it by running:
 
 ```shell
 drk> otc join < half_swap > full_swap
 ```
 
-They can now send it back to you. Finally, to make the swap transaction
-valid, you need to sign it as well
+The counterparty can now send it back to you. Finally, to make the swap
+transaction valid, you need to sign it as well.
+
+Note: If you are doing this tutorial by yourself, you don't need to send
+the `half_swap` or `full_swap` file anywhere, and can just create the
+`full_swap` followed by the `signed_swap` directly.
 
 ```shell
 drk> otc sign < full_swap > signed_swap
@@ -68,7 +78,7 @@ Party B:
 drk> otc sign < signed_full_swap_with_fee > swap.tx
 ```
 
-Now the complete swap transaction can be broadcasted:
+Now the complete swap transaction can be broadcast:
 
 ```shell
 drk> broadcast < swap.tx
@@ -81,7 +91,7 @@ Transaction ID: d2a5e288e6ba44583ee12db9c7a0ed154c736d1aa841d70c7d3fa121c92dfc69
 ```
 
 On success, you should see a transaction ID. This transaction will now
-also be in the mempool, so you should wait again until it's confirmed.
+be in the mempool, and you should wait until it's confirmed.
 
 ![pablo-waiting2](img/pablo2.jpg)
 
@@ -121,7 +131,7 @@ swap: `40.00` `ANON` and `20.00` `DAWN` . The first entry shows the
 `Spent` flag as `true` and the second entry shows the `Spent` flag as
 `false`. This means the transaction was successful. Since we are
 swapping with ourself, we successfully spent the coins in the first
-half of the transaction, and re-minted to ourselves them in the second
+half of the transaction, and re-minted them to ourselves in the second
 half of the transaction.
 
 If you're testing atomic swaps with a counterparty and you can see

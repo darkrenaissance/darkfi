@@ -11,7 +11,7 @@ don't stop a running one to start another.
 
 Each command to execute will be inside a codeblock, on its first line,
 marked by the user `$` symbol, followed by the expected output. For
-longer command outputs, some lines will be emmited to keep the guide
+longer command outputs, some lines will be emitted to keep the guide
 simple.
 
 ## Build binaries from source
