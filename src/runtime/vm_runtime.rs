@@ -348,6 +348,12 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
+                "merkle_add_local_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::merkle::merkle_add_local,
+                ),
+
                 "sparse_merkle_insert_batch_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

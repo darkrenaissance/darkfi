@@ -21,11 +21,9 @@ use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::{
-    import::acl::acl_allow,
+    import::{acl::acl_allow, util::wasm_mem_read},
     vm_runtime::{ContractSection, Env},
 };
-
-use super::util::wasm_mem_read;
 
 /// Reads a value by key from the on-chain key-value store.
 ///

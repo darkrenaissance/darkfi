@@ -22,11 +22,9 @@ use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::{
-    import::acl::acl_allow,
+    import::{acl::acl_allow, util::wasm_mem_read},
     vm_runtime::{ContractSection, Env},
 };
-
-use super::util::wasm_mem_read;
 
 /// Set a value in the on-chain database for the given DbHandle.
 ///

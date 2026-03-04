@@ -21,10 +21,13 @@ use std::io::Cursor;
 use darkfi_sdk::wasm;
 use darkfi_serial::Decodable;
 use tracing::{debug, error};
-use wasmer::{FunctionEnvMut, WasmPtr};
+use wasmer::{FunctionEnvMut, StoreMut, WasmPtr};
 
 use super::acl::acl_allow;
-use crate::runtime::vm_runtime::{ContractSection, Env};
+use crate::{
+    runtime::vm_runtime::{ContractSection, Env},
+    Result,
+};
 
 /// Host function for logging strings.
 pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
@@ -48,6 +51,26 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
             );
         }
     }
+}
+
+/// Create a mem slice of the WASM VM memory given a pointer and its length,
+/// and return a `Cursor` from which callers are able to read as a stream.
+pub(crate) fn wasm_mem_read(
+    env: &Env,
+    store: &StoreMut<'_>,
+    ptr: WasmPtr<u8>,
+    ptr_len: u32,
+) -> Result<Cursor<Vec<u8>>> {
+    let memory_view = env.memory_view(&store);
+    let mem_slice = ptr.slice(&memory_view, ptr_len)?;
+
+    // Allocate a buffer and copy all the data from the pointer
+    // into the buffer
+    let mut buf = vec![0u8; ptr_len as usize];
+    mem_slice.read_slice(&mut buf)?;
+
+    // Once the data is copied, we'll return a Cursor over it
+    Ok(Cursor::new(buf))
 }
 
 /// Writes data to the `contract_return_data` field of [`Env`].

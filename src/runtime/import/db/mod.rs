@@ -51,5 +51,3 @@ pub(crate) use db_contains_key::{db_contains_key, db_contains_key_local};
 
 pub(crate) mod zkas_db_set;
 pub(crate) use zkas_db_set::zkas_db_set;
-
-mod util;
