@@ -43,7 +43,11 @@ use darkfi_money_contract::{
     client::genesis_mint_v1::GenesisMintCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleTree, PublicKey, SecretKey},
+    crypto::{
+        contract_id::MONEY_CONTRACT_ID,
+        keypair::{Address, PublicKey, SecretKey},
+        FuncId, MerkleTree,
+    },
     pasta::{group::ff::PrimeField, pallas},
     ContractCall,
 };
@@ -220,8 +224,8 @@ fn main() -> Result<()> {
                 }
 
                 let recipient = match recipient {
-                    Some(r) => match PublicKey::from_str(&r) {
-                        Ok(r) => Some(r),
+                    Some(r) => match Address::from_str(&r) {
+                        Ok(r) => Some(*r.public_key()),
                         Err(e) => {
                             eprintln!("Invalid recipient: {e:?}");
                             exit(2);
