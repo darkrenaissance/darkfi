@@ -196,8 +196,8 @@ Apps should be able to configure:
 
 * Reject hosts, for example based off current overall resource
   utilization or the host addr.
-    * Note: we have a configurable setting called `blacklist` which
-      allows us to reject hosts by addr.
+> Note: we have a configurable setting called `blacklist` which allows
+> us to reject hosts by addr.
 * Accounting abstraction for scoring connections.
 
 ## Swarming

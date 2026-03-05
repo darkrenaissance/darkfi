@@ -1,22 +1,24 @@
 # Atomic Swaps
 
-In order to do an atomic swap with someone, you will first have to agree
-on what tokens you wish to swap. For example, let's say you want to swap
-`40` `ANON` for your counterparty's `20` `DAWN`. You can do this tutorial
-with a real counterparty or with yourself. This tutorial assumes the
-counterparty is yourself, but we will indicate which steps differ so
-you should be able to do the tutorial with a real counterparty as well.
+In order to do an atomic swap with someone, you will first have to
+agree on what tokens you wish to swap. For example, let's say you want
+to swap `40` `ANON` for your counterparty's `20` `DAWN`. You can do
+this tutorial with a real counterparty or with yourself. This tutorial
+assumes the counterparty is yourself, but we will indicate which steps
+differ so you should be able to do the tutorial with a real
+counterparty as well.
 
 The swap uses one coin per party so the counterparty only sees the
 single coin you're using, not your other coins.
 
-Note: A "coin" is a single cryptographic record. Your wallet balance is
-the sum of all coins you own, and each coin must be spent entirely.
+> Note: A "coin" is a single cryptographic record. Your wallet balance
+> is the sum of all coins you own, and each coin must be spent
+> entirely.
 
-You must use a coin worth the exact amount you want to swap. To create a
-smaller coin denomination, send yourself the amount you want to swap. Then
-check you have a spendable coin to swap with. Note that the coin overview
-might look very different depending on your activity:
+You must use a coin worth the exact amount you want to swap. To create
+a smaller coin denomination, send yourself the amount you want to swap.
+Then check you have a spendable coin to swap with. Note that the coin
+overview might look very different depending on your activity:
 
 ```shell
 drk> wallet coins
@@ -33,7 +35,6 @@ drk> wallet coins
 
 You'll have to initiate the swap and build your half of the swap tx:
 
-
 ```shell
 drk> otc init 40.0:20.0 ANON:DAWN > half_swap
 ```
@@ -48,9 +49,9 @@ drk> otc join < half_swap > full_swap
 The counterparty can now send it back to you. Finally, to make the swap
 transaction valid, you need to sign it as well.
 
-Note: If you are doing this tutorial by yourself, you don't need to send
-the `half_swap` or `full_swap` file anywhere, and can just create the
-`full_swap` followed by the `signed_swap` directly.
+> Note: If you are doing this tutorial by yourself, you don't need to
+> send the `half_swap` or `full_swap` file anywhere, and can just
+> create the `full_swap` followed by the `signed_swap` directly.
 
 ```shell
 drk> otc sign < full_swap > signed_swap

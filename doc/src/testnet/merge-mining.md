@@ -156,7 +156,7 @@ or press `p` to pause mining.
 
 ## p2pool setup with merge-mining
 
-> NOTE: `p2pool` uses plain `http` connections for RPC calls, as its
+> Note: `p2pool` uses plain `http` connections for RPC calls, as its
 > assumed to be running on a localnet. Don't run a `p2pool` instance
 > with a `darkfid` instance outside of your network, since someone
 > snooping your traffic can see your wallet address used for the block

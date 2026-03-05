@@ -66,8 +66,9 @@ $$ \mathcal{X}((x, y)) = x $$
 $$ \mathcal{Y}(∞_{Eₚ}) = 0 $$
 $$ \mathcal{Y}((x, y)) = y $$
 
-**Note:** There is no $P = (0, y) ∈ Eₚ$ so $\mathcal{X}(P) = 0 ⟹  P = ∞$.
-Likewise there is no $P = (x, 0) ∈ Eₚ$ so $\mathcal{Y}(P) = 0 ⟹  P = ∞$.
+> Note: There is no $P = (0, y) ∈ Eₚ$ so $\mathcal{X}(P) = 0 ⟹  P = ∞$.
+> Likewise there is no $P = (x, 0) ∈ Eₚ$ so
+> $\mathcal{Y}(P) = 0 ⟹  P = ∞$.
 
 ### Hashing to $𝔽ₚ$
 
@@ -112,10 +113,10 @@ $$ ℙₚ2𝔹³² = \begin{cases}
 ℕ2𝔹³²(\mathcal{X}(P) + 2²⁵⁵\t{sgn}(\mathcal{Y}(P)) & \text{otherwise}
 \end{cases} $$
 
-**Security note:** apart from the case when $P = ∞$, this function is mostly
-constant time. In cases such as key agreement, where constant time decryption
-is desirable and $P ≠ ∞$ is mostly guaranteed, this provides a strong
-approximation.
+> Security note: apart from the case when $P = ∞$, this function is
+> mostly constant time. In cases such as key agreement, where constant
+> time decryption is desirable and $P ≠ ∞$ is mostly guaranteed, this
+> provides a strong approximation.
 
 ## Group Hash
 

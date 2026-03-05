@@ -150,9 +150,9 @@ Wallet Address: DX7N6v...5Lz8Pp
 
 ## Minting
 
-The parameters shown confirm the DAO was successfully imported. We use the
-DAO name to reference it. Now we can create and broadcast a transaction to
-mint the DAO on-chain (requires holding all its keys):
+The parameters shown confirm the DAO was successfully imported. We use
+the DAO name to reference it. Now we can create and broadcast a
+transaction to mint the DAO on-chain (requires holding all its keys):
 
 ```shell
 drk> dao mint AnonDAO | broadcast
@@ -163,9 +163,9 @@ Broadcasting transaction...
 Transaction ID: 2e7931f200c1485ea7752076e199708b011a504d71e69d60ed606817c5ff4bd5
 ```
 
-Now the transaction has been broadcast to the network. After confirmation
-you should see a leaf position, a mint height and a transaction hash
-when running:
+Now the transaction has been broadcast to the network. After
+confirmation you should see a leaf position, a mint height and a
+transaction hash when running:
 
 ```shell
 drk> dao list AnonDAO
@@ -271,8 +271,8 @@ drk> dao balance AnonDAO
 Now that the DAO has funds, we can create a transfer proposal to send
 tokens somewhere. The proposal will be open to vote for 1 [block
 period][blockwindow](~4h), if we hold the DAO proposer key. Let's
-propose sending 5 of the 10 tokens to our address (we can find that with
-`wallet address`):
+propose sending 5 of the 10 tokens to our address (we can find that
+with `wallet address`):
 
 [blockwindow]: ../spec/contract/dao/model.md#blockwindow
 

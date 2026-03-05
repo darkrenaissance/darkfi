@@ -108,8 +108,8 @@ Source code is under `src/` subdirectory. Main interesting modules are:
       are anonymous including the token weighted vote amount, and user
       identity. You cannot see who is in the DAO.
 
-NOTE: We try to minimize external dependencies in our code as much as
-possible. We even try to limit dependencies within submodules.
+> Note: We try to minimize external dependencies in our code as much as
+> possible. We even try to limit dependencies within submodules.
 
 Inside `bin/` contains utilities and applications:
 

@@ -425,11 +425,11 @@ following properties:
 2. *One-way*, for any $y ∈ 𝕀$, we are unable to construct an $x ∈ ℕ$
    such that $H(x) = y$.
 
-Note: the above notions rely on purely algebraic properties of $H$
-without requiring the machinery of probability. The second property of
-being one-way is a stronger notion than $\ran(H)$ being statistically
-random. Indeed if the probability is non-zero then we could find such
-an $(x, y)$ which breaks the one-way property.
+> Note: the above notions rely on purely algebraic properties of $H$
+> without requiring the machinery of probability. The second property
+> of being one-way is a stronger notion than $\ran(H)$ being
+> statistically random. Indeed if the probability is non-zero then we
+> could find such an $(x, y)$ which breaks the one-way property.
 
 **Theorem:** *given a hash function $H : ℕ → 𝕀$ as defined above, it's
 impossible to construct two distinct sequences $𝐚 = (a₁, …, aₘ)$ and

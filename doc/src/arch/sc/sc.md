@@ -314,8 +314,8 @@ which simulates the previous trace.
 ~~State changes occur linearly after all `process()` calls have passed
 successfully.~~
 
-NOTE: we can iterate depth first through the tree to simulate the normal
-calling pattern.
+> Note: we can iterate depth first through the tree to simulate the
+> normal calling pattern.
 
 An upside of this strict separation, is that it makes reentrancy attacks
 impossible. Say for example we have this code:

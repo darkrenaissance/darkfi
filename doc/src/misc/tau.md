@@ -106,7 +106,7 @@ for a description which allows entering multiline text.
 
 #### Modify tasks
 
-Note: mod commands are: start, open, pause, stop and modify.
+> Note: mod commands are: start, open, pause, stop and modify.
 
 ```shell
 % tau 5 stop                    # will stop task 5

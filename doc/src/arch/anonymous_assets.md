@@ -98,4 +98,4 @@ blinding factor for the amounts.
 
 ![](diagram-dkzk.png)
 
-*Note: In the diagram $s$ correspond to the $\rho$*
+> Note: In the diagram $s$ correspond to the $\rho$*

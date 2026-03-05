@@ -2,9 +2,9 @@
 
 Now that you have your wallet set up, you will need some native `DRK`
 in order to be able to perform transactions, since `DRK` is used to pay
-the transaction fees. You can obtain `DRK` either by successfully mining
-a block that gets confirmed or by asking for some from the community on
-`darkirc`.
+the transaction fees. You can obtain `DRK` either by successfully
+mining a block that gets confirmed or by asking for some from the
+community on `darkirc`.
 
 If the latter, don't forget to tell them to add the `--half-split` flag
 when they create the transfer, so you get more than one coin to play
@@ -12,8 +12,8 @@ with. Once your friend has submitted a transaction to the network, it
 should be in the consensus' mempool, waiting for inclusion in the next
 block(s). Depending on your network configuration, confirmation of the
 blocks could take some time. You'll have to wait for this to happen. If
-your `drk` subscription is running, then after some time your new balance
-should be in your wallet.
+your `drk` subscription is running, then after some time your new
+balance should be in your wallet.
 
 ![pablo-waiting0](img/pablo0.jpg)
 
@@ -29,14 +29,14 @@ drk> wallet balance
 
 # Creating tokens
 
-On the DarkFi network, we can mint custom tokens with a given supply. To
-do this, we first need to generate a mint authority keypair, and derive a
-token ID from it.
+On the DarkFi network, we can mint custom tokens with a given supply.
+To do this, we first need to generate a mint authority keypair, and
+derive a token ID from it.
 
-Note: The token data shown in the outputs (Token ID, Mint Authority,
-Token Blind) are placeholders for the data that will be created by
-you. For the rest of the guide, replace the placeholder token data with the
-data that you generate.
+> Note: The token data shown in the outputs (Token ID, Mint Authority,
+> Token Blind) are placeholders for the data that will be created by
+> you. For the rest of the guide, replace the placeholder token data
+> with the data that you generate.
 
 For this tutorial we will be minting two sets of tokens. For each token
 we will create the mint authority keypair that sets the token ID and
@@ -61,8 +61,8 @@ drk> token list
 
 ```
 
-Now execute the command again to generate the mint authority for a second
-set of tokens.
+Now execute the command again to generate the mint authority for a
+second set of tokens.
 
 ```shell
 drk> token generate-mint
@@ -84,9 +84,9 @@ drk> token list
 
 ## Aliases
 
-To make our life easier, we can create token ID aliases, which we can use
-instead of the token ID when performing transactions. Multiple aliases
-per token ID are supported.
+To make our life easier, we can create token ID aliases, which we can
+use instead of the token ID when performing transactions. Multiple
+aliases per token ID are supported.
 
 The native token alias `DRK` should already exist, and we can use that
 to refer to `DRK` when executing transactions using it.
@@ -101,8 +101,8 @@ drk> alias show
  DRK   | 241vANigf1Cy3ytjM1KHXiVECxgxdK4yApddL8KcLssb
 ```
 
-Note: these aliases are local to your machine. When exchanging with
-other users, always verify that your aliases' token IDs match.
+> Note: these aliases are local to your machine. When exchanging with
+> other users, always verify that your aliases' token IDs match.
 
 Now let's create aliases for the two token IDs generated earlier:
 
@@ -130,8 +130,9 @@ drk> alias show
 
 ## Mint transaction
 
-Now let's mint some tokens for ourselves. First grab your wallet address,
-then create the token mint transaction, and finally - broadcast it:
+Now let's mint some tokens for ourselves. First grab your wallet
+address, then create the token mint transaction,
+and finally - broadcast it:
 
 ```shell
 drk> wallet address
