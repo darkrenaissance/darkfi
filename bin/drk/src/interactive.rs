@@ -2434,14 +2434,17 @@ async fn handle_tx_from_calls(
             return
         }
     };
-    let sigs = match tx.create_sigs(&signature_secrets) {
-        Ok(s) => s,
-        Err(e) => {
-            output.push(format!("Failed to create the transaction signatures: {e}"));
-            return
-        }
-    };
-    tx.signatures.push(sigs);
+
+    for secrets in &signature_secrets {
+        let sigs = match tx.create_sigs(secrets) {
+            Ok(s) => s,
+            Err(e) => {
+                output.push(format!("Failed to create the transaction signatures: {e}"));
+                return
+            }
+        };
+        tx.signatures.push(sigs);
+    }
 
     // Attach its fee and grab its signature
     if let Err(e) = drk.read().await.attach_fee(&mut tx).await {
@@ -2453,14 +2456,18 @@ async fn handle_tx_from_calls(
     let fee_signature = tx.signatures.last().unwrap().clone();
 
     // Re-sign the tx using the calls secrets
-    let sigs = match tx.create_sigs(&signature_secrets) {
-        Ok(s) => s,
-        Err(e) => {
-            output.push(format!("Failed to create the transaction signatures: {e}"));
-            return
-        }
-    };
-    tx.signatures = vec![sigs, fee_signature];
+    tx.signatures = vec![];
+    for secrets in &signature_secrets {
+        let sigs = match tx.create_sigs(secrets) {
+            Ok(s) => s,
+            Err(e) => {
+                output.push(format!("Failed to create the transaction signatures: {e}"));
+                return
+            }
+        };
+        tx.signatures.push(sigs);
+    }
+    tx.signatures.push(fee_signature);
 
     output.push(base64::encode(&serialize_async(&tx).await));
 }

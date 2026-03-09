@@ -2087,8 +2087,9 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             // Now build the fee-less tx
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&signature_secrets)?;
-            tx.signatures.push(sigs);
+            for secrets in &signature_secrets {
+                tx.signatures.push(tx.create_sigs(secrets)?);
+            }
 
             // Attach its fee and grab its signature
             let drk = new_wallet(
@@ -2110,8 +2111,11 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
             let fee_signature = tx.signatures.last().unwrap().clone();
 
             // Re-sign the tx using the calls secrets
-            let sigs = tx.create_sigs(&signature_secrets)?;
-            tx.signatures = vec![sigs, fee_signature];
+            tx.signatures = vec![];
+            for secrets in &signature_secrets {
+                tx.signatures.push(tx.create_sigs(secrets)?);
+            }
+            tx.signatures.push(fee_signature);
 
             println!("{}", base64::encode(&serialize_async(&tx).await));
 
