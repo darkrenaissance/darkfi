@@ -102,6 +102,9 @@
     - [Concepts](spec/contract/deploy/concepts.md)
     - [Scheme](spec/contract/deploy/scheme.md)
   - [Vesting](spec/contract/vesting/vesting.md)
+    - [Concepts](spec/contract/vesting/concepts.md)
+    - [Model](spec/contract/vesting/model.md)
+    - [Scheme](spec/contract/vesting/scheme.md)
 
 # P2P API Tutorial
 

@@ -1,67 +1,48 @@
 # Vesting
 
+```
+status: draft
+```
+
 ## Abstract
 
-We want to create a fully anonymous vesting contract, in which all the vesting information is private.
-What we need, is a vesting authority, which initially submits coins to be vested, along with the vesting
-configuration. When this happens, all input coins, which must be for the same token, get burned, and a new
-coin is minted for the vested public key, which uses the spend hook of the vesting contract, effectivelly
-becoming usable only withing the vesting contract context. After some time has passed, the vestee can
-withdraw some coins, which is done by burning the existing vested coin, and creates two output coins;
-one representing the remaining balance using the spend hook of the vesting contract and a second one
-which will be a normal coin for a withdrawal address(DAOs can be recipients too).
+This contract implements fully anonymous vesting, in which all the
+vesting information is private. Anyone can become a vesting authority,
+submitting coins to-be-vested for another user(or a DAO), the vestee.
+After some time has passed, the vestee can withdraw a chunk of the
+vested coin value. The vesting authority is also able to forfeit a
+vesting at any time, retrieving the remaining vested coin balance.
 
-The vesting authority must also be able to forfeit the configured vesting. There is a limitation though;
-the vested coin can only be controlled by a single address. To overcome this, when the vesting authority
-creates the vested coin, instead of using the recipients actual address, it generates a new random one,
-which is shared with the vestee(in a safe off-chain manner), so the coin can be controlled by both parties.
-When the vestee withdraws some funds, the new remaining balance token must use the same shared secret key.
-We don't care if that becomes a zero value coin, since it won't be usable anymore, and we want all our
-outputs to look the same, so the final withdrawl cannot be tracked.
+- [Concepts](concepts.md)
+- [Model](model.md)
+- [Scheme](scheme.md)
 
-## Vesting configuration
-
-The vesting contract uses 1 day block windows as its time measurement, similar to the DAO contract.
-
-The configuration structure contains the following:
-    1. auth_public_x: The vesting autority public key X coord
-    2. auth_public_y: The vesting autority public key Y coord
-    3. shared_public_x: The shared vestee public key X coord
-    4. shared_public_y: The shared vestee public key Y coord
-    5. cliff: Amount unlocked at the cliff timestamp.
-    6. cliff_window: Vesting contract cliff block window.
-    7. start_window: Block window when the tokens start vesting.
-    8. end_window: Block window when all the tokens are fully vested.
-
-The above information get hashed by poseidon to produce the VestingBulla, which is used as the on-chain
-identifier of this specific configuration.
-
-## Contract calls
-
-TODO: describe all the checks for each call
-
-### Vest
-Vesting authority submits a vesting configuration on-chain, burns the to-be-vested input coins and mints
-a new coin with their total amount for the shared secret address, using the contracts' spend-hook.
-
-### Withdraw
-This call is responsible to define the available to withdraw amount, along with checking the first output
-correctly represents the shared secret and uses contract spend-hook. In this call, input coin value
-commitment must match the addition of the output coin value commitments. Also we check the next call is a
-normal money transfer call, which executes the actual burn and mint functions.
-
-### ExecWithdraw
-This is an overlay function, acting as the parent of a Withdraw and money Transfer calls combination, to
-bound them together into a single atomic action, and define the input spendhook that must be used in the
-transfer call.
-
-### Forfeit
-With this call, the vest autority is able to forfeit a specific vesting, by removing the configuration,
-burning the existing vest coin and mint a new one to a recipient address, using a normal money transfer.
-Input and output coin values must be identical.
-
-### ExecForfeit
-This is an overlay function, acting as the parent of a Forfeit and money Transfer calls combination, to
-bound them together into a single atomic action, and define the input spendhook that must be used in the
-transfer call.
-
+> Open questions:
+> 1. Do we need a separate cliff time? If its set thats the start time
+> so no real need to keep them both we can assume start == cliff.
+> 2. Is using the shared key for signatures safe and needed?
+> 3. Should vesting configurations be grouped by authority so is easier
+> UX to manage them?
+> 4. Is the vested coin encryption verification formula correct?
+> 5. Do we need to check both coins in withdraw transfer in the proof or
+> its fine since transfer itself enforces them?
+> 6. Vesting requires 1-1 vested coin to config matching, which means
+> vested coin is trackable as they are used during the vesting process.
+> Does that break any anonymity properties? Withdrawed coins cannot be
+> tracked, just the vested coin.
+> 7. We need to figure out a way to handle withdrawls after end
+> blockwindow has passed. We can use `cond_select` where both prover
+> and verifier pass the condition checl `current >= end` and in the
+> proof we pick current blockwindow or end blockwindow based on that.
+> But this require the verifier to know the end blockwindow, unless we
+> find a way the condition check can be done without revealing it.
+> Another option is to have an explicit `WithdrawAfterEnd` to withdraw
+> remaining balance after end blockwindow has passed. We already have
+> the metadata leak of ending tracking assumption, so perhaps its
+> worthy to sacrifice it.
+> 8. Withdrawl calcs correctness? They can also be simplified further
+> for proof optimization.
+> 9. All calls use the same parameters. Unless we need something in any
+> of them they will be the same structure in the final code.
+> 10. Do we need to check both coins in forfeit transfer in the proof or
+> its fine since transfer itself enforces them?
