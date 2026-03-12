@@ -57,33 +57,29 @@ tracked.
 Let $E, S, V, C, T$ be the vesting configuration parameters as defined
 in [Vesting Configuration](model.md#vesting-configuration).
 
-Let $t₀ = \t{BlockWindow} ∈ 𝔽ₚ$ be the current blockwindow as defined
+Let $t_0 = \t{BlockWindow} \in \mathbb{F}_p$ be the current blockwindow as defined
 in [Blockwindow](model.md#blockwindow).
 
-Let $Bv ∈ ℕ₆₄$ be the burned coin.
+Let $Bv \in \mathbb{N}_{64}$ be the burned coin.
 
 The core formula to compute amounts corresponding to the current block
 window is:
 
-$$ \begin{aligned}
-CurrentBlockwindow = CondSelect(BlockwindowCond, t₀, E); \\
-BlockwindowsPassed = CurrentBlockwindow - S; \\
-Available = (BlockwindowsPassed * V) + C; \\
-Withdrawn = T - Bv; \\
-WithdrawCoinValue = Available - Withdrawn; \\
-VestingChangeValue = T - (Withdrawn + WithdrawCoinValue);
-\end{aligned} $$
+$$ \text{CurrentBlockwindow} = \text{CondSelect}(\text{BlockwindowCond}, t_0, E) $$
+$$ \text{BlockwindowsPassed} = \text{CurrentBlockwindow} - S $$
+$$ \text{Available} = (\text{BlockwindowsPassed} * V) + C $$
+$$ \text{Withdrawn} = T - Bv $$
+$$ \text{WithdrawCoinValue} = \text{Available} - \text{Withdrawn} $$
+$$ \text{VestingChangeValue} = T - (\text{Withdrawn} + \text{WithdrawCoinValue}) $$
 
 The vesting schedule model says that any blockwindow $t$ where
-$S <= t <= E$, the total amount that should have been unlocked is:
+$S \leq t \leq E$, the total amount that should have been unlocked is:
 
-$$ \begin{aligned}
-Available(t) = (t - S) * V + C;
-\end{aligned} $$
+$$ \text{Available}(t) = (t - S) * V + C $$
 
 And we know from the vest proof's constraint that $T = (E-S) * V + C$,
-so $Available(E) = T$. The schedule is linear between $S$ and $E$ with
-a cliff C at the start.
+so $\text{Available}(E) = T$. The schedule is linear between $S$ and $E$ with
+a cliff $C$ at the start.
 
 The burned vested coin has value $Bv$ which represents the remaining
 balance in the vested coin. Initially (right after vest) $Bv = T$.
@@ -92,66 +88,52 @@ After each withdrawal it shrinks.
 So "total withdrawn so far" is $T - Bv$ and the formula computes how
 much new value the vestee can take:
 
-$$ \begin{aligned}
-WithdrawCoinValue = Available - (T - Bv) = Available - T + Bv; \\
-VestingChangeValue = Bv - WithdrawCoinValue;
-\end{aligned} $$
+$$ \text{WithdrawCoinValue} = \text{Available} - (T - Bv) = \text{Available} - T + Bv $$
+$$ \text{VestingChangeValue} = Bv - \text{WithdrawCoinValue} $$
 
 Concrete example:
 
 Let:
 
-$$ \begin{aligned}
-T = 1000; \\
-C = 100; \\
-S = 10; \\
-E = 20; \\
-V = 90; \\
-(20 - 10) * 90 + 100 = 1000;
-\end{aligned} $$
+$$ T = 1000 $$
+$$ C = 100 $$
+$$ S = 10 $$
+$$ E = 20 $$
+$$ V = 90 $$
+$$ (20 - 10) * 90 + 100 = 1000 $$
 
 First withdrawal at $t = 12$ with $Bv = 100$ as the initial vested coin:
 
-$$ \begin{aligned}
-Available = (12 - 10) * 90 + 100 = 280; \\
-Withdrawn = 1000 - 1000 = 0; \\
-WithdrawCoinValue = 280 - 0 = 280; \\
-VestingChangeValue = 1000 - 280 = 720;
-\end{aligned} $$
-
-Conservation: $280 + 720 = 1000 = Bv$
+$$ \text{Available} = (12 - 10) * 90 + 100 = 280 $$
+$$ \text{Withdrawn} = 1000 - 1000 = 0 $$
+$$ \text{WithdrawCoinValue} = 280 - 0 = 280 $$
+$$ \text{VestingChangeValue} = 1000 - 280 = 720 $$
+$$ \text{Conservation: } 280 + 720 = 1000 = Bv $$
 
 Second withdrawal at $t = 15$ with $Bv = 720$ from previous change coin:
 
-$$ \begin{aligned}
-Available = (15 - 10) * 90 + 100 = 550; \\
-Withdrawn = 1000 - 720 = 280; \\
-WithdrawCoinValue = 550 - 280 = 270; \\
-VestingChangeValue = 720 - 270 = 450;
-\end{aligned} $$
-
-Conservation: $270 + 450 = 720 = Bv$
-
-Cumulative withdrawn: $280 + 270 = 550 = Available(15)$
+$$ \text{Available} = (15 - 10) * 90 + 100 = 550 $$
+$$ \text{Withdrawn} = 1000 - 720 = 280 $$
+$$ \text{WithdrawCoinValue} = 550 - 280 = 270 $$
+$$ \text{VestingChangeValue} = 720 - 270 = 450 $$
+$$ \text{Conservation: } 270 + 450 = 720 = Bv $$
+$$ \text{Cumulative withdrawn: } 280 + 270 = 550 = \text{Available}(15) $$
 
 Final withdrawal at $t = 20$ (end) with $Bv = 450$ from previous change
 coin:
 
-$$ \begin{aligned}
-Available = (20 - 10) * 90 + 100 = 1000; \\
-Withdrawn = 1000 - 450 = 550; \\
-WithdrawCoinValue = 1000 - 550 = 450; \\
-VestingChangeValue = 450 - 450 = 0;
-\end{aligned} $$
+$$ \text{Available} = (20 - 10) * 90 + 100 = 1000 $$
+$$ \text{Withdrawn} = 1000 - 450 = 550 $$
+$$ \text{WithdrawCoinValue} = 1000 - 550 = 450 $$
+$$ \text{VestingChangeValue} = 450 - 450 = 0 $$
+$$ \text{Cumulative: } 280 + 270 + 450 = 1000 = T $$
 
-Cumulative: $280 + 270 + 450 = 1000 = T$
-
-Expanding $VestingChangeValue$:
+Expanding $\text{VestingChangeValue}$:
 
 $$ \begin{aligned}
-VestingChangeValue = Bv - WithdrawCoinValue; \\
-VestingChangeValue = Bv - (Available - T + Bv); \\
-VestingChangeValue = T - Available;
+\text{VestingChangeValue} = Bv - \text{WithdrawCoinValue} \\
+= Bv - (\text{Available} - T + Bv) \\
+= T - \text{Available} \\
 \end{aligned} $$
 
 at $t = 12$, $change=1000-280=720$
@@ -160,18 +142,22 @@ at $t = 15$, $change=1000-550=450$
 
 at $t = 20$, $change=1000-1000=0$
 
-^ This means $WithdrawCoinValue = Bv - (T - Available) = Bv -
-VestingChangeValue$ which is just the difference between what the coin
-held and what must remain locked.
+This means 
 
-We can compute $VestingChangeValue = T - Available$ then derive
-$WithdrawCoinValue = Bv - VestingChangeValue$.
+$$ \text{WithdrawCoinValue} = Bv - (T - \text{Available}) = Bv - \text{VestingChangeValue} $$
+
+which is just the difference between what the coin held and what must
+remain locked.
+
+We can compute
+$$ \text{VestingChangeValue} = T - \text{Available} $$
+
+then derive
+$$ \text{WithdrawCoinValue} = Bv - \text{VestingChangeValue} $$
 
 Proof simplification:
-$$ \begin{aligned}
-VestingChangeValue = BaseSub(T, Available); \\
-WithdrawCoinValue = BaseSub(Bv, VestingChangeValue)
-\end{aligned} $$
+$$ \text{VestingChangeValue} = \text{BaseSub}(T, \text{Available}) $$
+$$ \text{WithdrawCoinValue} = \text{BaseSub}(Bv, \text{VestingChangeValue}) $$
 
 ## Forfeit
 
