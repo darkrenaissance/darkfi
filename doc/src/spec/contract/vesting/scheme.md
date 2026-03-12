@@ -291,9 +291,12 @@ ForfeitValue, t, \t{CID}_\t{V}, \t{SH}_\t{V}, ℬ, b_\t{Coin})$
 **Burned vested coin nullifier integrity** &emsp; $\cN =
 \t{PoseidonHash}(x_c, BCoin)$
 
-**Minted coin integrity** &emsp; $Coin =
-\t{PoseidonHash}(\mathcal{X}(p.\t{SPK}), \mathcal{Y}(p.\t{SPK}),
-ForfeitValue, t, \t{CID}_\t{V}, \t{SH}_\t{V}, ℬ, b_\t{Coin})$
+**Minted coin integrity** &emsp;
+let $c.\t{CID}, c.\t{SH}, c.\t{UD}$ be the vesting authority
+chosen Contract ID, spend hook and user data for the minted coin,
+and verify $Coin = \t{PoseidonHash}(\mathcal{X}(p.\t{VAPK}),
+\mathcal{Y}(p.\t{VAPK}), ForfeitValue, t, \t{CID}, \t{SH},
+\t{UD}, b_\t{Coin})$
 
 ### Signatures
 
