@@ -57,10 +57,10 @@ tracked.
 Let $E, S, V, C, T$ be the vesting configuration parameters as defined
 in [Vesting Configuration](model.md#vesting-configuration).
 
-Let $t_0 = \t{BlockWindow} \in \mathbb{F}_p$ be the current blockwindow as defined
-in [Blockwindow](model.md#blockwindow).
+Let $t_0 = \t{BlockWindow} \in [0, 2^{64})$ be the current blockwindow
+as defined in [Blockwindow](model.md#blockwindow).
 
-Let $Bv \in \mathbb{N}_{64}$ be the burned coin.
+Let $Bv \ in [0, 2^{64})$ be the burned coin value.
 
 The core formula to compute amounts corresponding to the current block
 window is:
