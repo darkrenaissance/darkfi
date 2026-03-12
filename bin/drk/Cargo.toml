@@ -8,6 +8,10 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 # Darkfi
 darkfi = {path = "../../", features = ["async-daemonize", "bs58", "rpc", "validator"]}

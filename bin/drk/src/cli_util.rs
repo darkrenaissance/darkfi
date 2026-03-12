@@ -24,19 +24,28 @@ use std::{
 };
 
 use rodio::{Decoder, OutputStreamBuilder, Sink};
-use smol::channel::Sender;
-use structopt_toml::clap::{App, Arg, Shell, SubCommand};
+use smol::{channel::Sender, fs::read_to_string};
+use structopt_toml::{
+    clap::{App, Arg, Shell, SubCommand},
+    structopt::StructOpt,
+    StructOptToml,
+};
+use url::Url;
 
 use darkfi::{
     cli_desc,
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    util::{encoding::base64, parse::decode_base10},
+    util::{encoding::base64, parse::decode_base10, path::get_config_path},
     zk::Proof,
     Error, Result,
 };
 use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::{
-    crypto::{keypair::Address, pasta_prelude::PrimeField, FuncId, SecretKey},
+    crypto::{
+        keypair::{Address, Network},
+        pasta_prelude::PrimeField,
+        FuncId, SecretKey,
+    },
     dark_tree::DarkTree,
     pasta::pallas,
     ContractCallImport,
@@ -44,6 +53,83 @@ use darkfi_sdk::{
 use darkfi_serial::deserialize_async;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
+
+/// Defines a blockchain network configuration.
+/// Default values correspond to a local network.
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
+#[structopt()]
+pub struct BlockchainNetwork {
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/cache")]
+    /// Path to blockchain cache database
+    pub cache_path: String,
+
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/wallet.db")]
+    /// Path to wallet database
+    pub wallet_path: String,
+
+    #[structopt(long, default_value = "changeme")]
+    /// Password for the wallet database
+    pub wallet_pass: String,
+
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:28345")]
+    /// darkfid JSON-RPC endpoint
+    pub endpoint: Url,
+
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/history.txt")]
+    /// Path to interactive shell history file
+    pub history_path: String,
+}
+
+/// Auxiliary function to parse darkfid configuration file and extract requested
+/// blockchain network config.
+pub async fn parse_blockchain_config(
+    config: Option<String>,
+    network: &str,
+    fallback: &str,
+) -> Result<(Network, BlockchainNetwork)> {
+    // Grab network
+    let used_net = match network {
+        "mainnet" | "localnet" => Network::Mainnet,
+        "testnet" => Network::Testnet,
+        _ => return Err(Error::ParseFailed("Invalid blockchain network")),
+    };
+
+    // Grab config path
+    let config_path = get_config_path(config, fallback)?;
+
+    // Parse TOML file contents
+    let contents = read_to_string(&config_path).await?;
+    let contents: toml::Value = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed parsing TOML config: {e}");
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        }
+    };
+
+    // Grab requested network config
+    let Some(table) = contents.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
+    let Some(network_configs) = table.get("network_config") else {
+        return Err(Error::ParseFailed("TOML does not contain network configurations"))
+    };
+    let Some(network_configs) = network_configs.as_table() else {
+        return Err(Error::ParseFailed("`network_config` not a map"))
+    };
+    let Some(network_config) = network_configs.get(network) else {
+        return Err(Error::ParseFailed("TOML does not contain requested network configuration"))
+    };
+    let network_config = toml::to_string(&network_config).unwrap();
+    let network_config =
+        match BlockchainNetwork::from_iter_with_toml::<Vec<String>>(&network_config, vec![]) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Failed parsing requested network configuration: {e}");
+                return Err(Error::ParseFailed("Failed parsing requested network configuration"))
+            }
+        };
+
+    Ok((used_net, network_config))
+}
 
 /// Auxiliary function to parse a base64 encoded transaction from stdin.
 pub async fn parse_tx_from_stdin() -> Result<Transaction> {

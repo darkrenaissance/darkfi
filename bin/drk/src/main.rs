@@ -24,7 +24,7 @@ use std::{
 
 use prettytable::{format, row, Table};
 use rand::rngs::OsRng;
-use smol::{channel::unbounded, fs::read_to_string, stream::StreamExt};
+use smol::{channel::unbounded, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tracing::info;
 use tracing_appender::non_blocking;
@@ -37,7 +37,7 @@ use darkfi::{
         encoding::base64,
         logger::{set_terminal_writer, ChannelWriter},
         parse::{decode_base10, encode_base10},
-        path::{expand_path, get_config_path},
+        path::expand_path,
     },
     zk::halo2::Field,
     Error, Result,
@@ -57,9 +57,9 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use drk::{
     cli_util::{
-        display_mining_config, generate_completions, kaching, parse_calls_from_stdin,
-        parse_mining_config_from_stdin, parse_token_pair, parse_tree, parse_tx_from_stdin,
-        parse_value_pair, print_output, tx_from_calls_mapped,
+        display_mining_config, generate_completions, kaching, parse_blockchain_config,
+        parse_calls_from_stdin, parse_mining_config_from_stdin, parse_token_pair, parse_tree,
+        parse_tx_from_stdin, parse_value_pair, print_output, tx_from_calls_mapped,
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
@@ -585,82 +585,6 @@ enum ContractSubcmd {
     },
 }
 
-/// Defines a blockchain network configuration.
-/// Default values correspond to a local network.
-#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
-#[structopt()]
-struct BlockchainNetwork {
-    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/cache")]
-    /// Path to blockchain cache database
-    cache_path: String,
-
-    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/wallet.db")]
-    /// Path to wallet database
-    wallet_path: String,
-
-    #[structopt(long, default_value = "changeme")]
-    /// Password for the wallet database
-    wallet_pass: String,
-
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:28345")]
-    /// darkfid JSON-RPC endpoint
-    endpoint: Url,
-
-    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/history.txt")]
-    /// Path to interactive shell history file
-    history_path: String,
-}
-
-/// Auxiliary function to parse darkfid configuration file and extract requested
-/// blockchain network config.
-async fn parse_blockchain_config(
-    config: Option<String>,
-    network: &str,
-) -> Result<(Network, BlockchainNetwork)> {
-    // Grab network
-    let used_net = match network {
-        "mainnet" | "localnet" => Network::Mainnet,
-        "testnet" => Network::Testnet,
-        _ => return Err(Error::ParseFailed("Invalid blockchain network")),
-    };
-
-    // Grab config path
-    let config_path = get_config_path(config, CONFIG_FILE)?;
-
-    // Parse TOML file contents
-    let contents = read_to_string(&config_path).await?;
-    let contents: toml::Value = match toml::from_str(&contents) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Failed parsing TOML config: {e}");
-            return Err(Error::ParseFailed("Failed parsing TOML config"))
-        }
-    };
-
-    // Grab requested network config
-    let Some(table) = contents.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
-    let Some(network_configs) = table.get("network_config") else {
-        return Err(Error::ParseFailed("TOML does not contain network configurations"))
-    };
-    let Some(network_configs) = network_configs.as_table() else {
-        return Err(Error::ParseFailed("`network_config` not a map"))
-    };
-    let Some(network_config) = network_configs.get(network) else {
-        return Err(Error::ParseFailed("TOML does not contain requested network configuration"))
-    };
-    let network_config = toml::to_string(&network_config).unwrap();
-    let network_config =
-        match BlockchainNetwork::from_iter_with_toml::<Vec<String>>(&network_config, vec![]) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("Failed parsing requested network configuration: {e}");
-                return Err(Error::ParseFailed("Failed parsing requested network configuration"))
-            }
-        };
-
-    Ok((used_net, network_config))
-}
-
 /// Auxiliary function to create a `Drk` wallet for provided configuration.
 async fn new_wallet(
     network: Network,
@@ -690,9 +614,9 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     // Grab blockchain network configuration
     let (network, blockchain_config) = match args.network.as_str() {
-        "localnet" => parse_blockchain_config(args.config, "localnet").await?,
-        "testnet" => parse_blockchain_config(args.config, "testnet").await?,
-        "mainnet" => parse_blockchain_config(args.config, "mainnet").await?,
+        "localnet" => parse_blockchain_config(args.config, "localnet", CONFIG_FILE).await?,
+        "testnet" => parse_blockchain_config(args.config, "testnet", CONFIG_FILE).await?,
+        "mainnet" => parse_blockchain_config(args.config, "mainnet", CONFIG_FILE).await?,
         _ => {
             eprintln!("Unsupported chain `{}`", args.network);
             return Err(Error::UnsupportedChain)
