@@ -28,7 +28,6 @@ use rusqlite::types::Value;
 use darkfi::{
     tx::Transaction,
     util::encoding::base64,
-    validator::fees::compute_fee,
     zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses, Proof},
     zkas::ZkBinary,
     Error, Result,
@@ -47,6 +46,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
+    blockchain::compute_fee,
     bridgetree::Position,
     crypto::{
         keypair::{Address, Keypair, PublicKey, SecretKey, StandardAddress},

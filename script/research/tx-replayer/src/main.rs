@@ -29,12 +29,13 @@ use darkfi::{
     tx::{MAX_TX_CALLS, MIN_TX_CALLS, Transaction},
     util::path::expand_path,
     validator::{
-        fees::{GasData, PALLAS_SCHNORR_SIGNATURE_FEE, circuit_gas_use, compute_fee},
+        fees::{GasData, PALLAS_SCHNORR_SIGNATURE_FEE, circuit_gas_use},
         verification::verify_transaction,
     },
     zk::VerifyingKey,
 };
 use darkfi_sdk::{
+    blockchain::compute_fee,
     crypto::{ContractId, MerkleTree, PublicKey},
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,

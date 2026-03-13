@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi_sdk::{
-    blockchain::block_version,
+    blockchain::{block_version, compute_fee},
     crypto::{
         schnorr::{SchnorrPublic, Signature},
         ContractId, MerkleTree, PublicKey,
@@ -44,7 +44,7 @@ use crate::{
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
-        fees::{circuit_gas_use, compute_fee, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
+        fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
     },
     zk::VerifyingKey,

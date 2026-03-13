@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use darkfi_sdk::crypto::MerkleTree;
+use darkfi_sdk::{blockchain::compute_fee, crypto::MerkleTree};
 use num_bigint::BigUint;
 use sled_overlay::sled;
 use smol::lock::RwLock;
@@ -56,7 +56,6 @@ use verification::{
 
 /// Fee calculation helpers
 pub mod fees;
-use fees::compute_fee;
 
 /// Helper utilities
 pub mod utils;

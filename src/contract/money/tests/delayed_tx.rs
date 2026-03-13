@@ -18,7 +18,6 @@
 
 use darkfi::{
     tx::{ContractCallLeaf, TransactionBuilder},
-    validator::fees::compute_fee,
     zk::halo2::Field,
     Result,
 };
@@ -35,7 +34,7 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    blockchain::expected_reward,
+    blockchain::{compute_fee, expected_reward},
     crypto::{
         contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, BaseBlind, FuncId, MerkleNode,
         ScalarBlind, SecretKey,

@@ -67,3 +67,11 @@ pub fn expected_reward(height: u32) -> u64 {
         _ => 100_000_000,   // 1 DRK
     }
 }
+
+/// Auxiliary function to compute the corresponding fee value
+/// for the provided gas.
+///
+/// Currently we simply divide the gas value by 100.
+pub fn compute_fee(gas: &u64) -> u64 {
+    gas / 100
+}

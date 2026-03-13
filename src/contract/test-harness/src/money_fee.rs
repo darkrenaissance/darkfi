@@ -20,7 +20,6 @@ use std::{collections::HashSet, hash::RandomState};
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    validator::fees::compute_fee,
     zk::{halo2::Field, Proof},
     Result,
 };
@@ -34,6 +33,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
+    blockchain::compute_fee,
     crypto::{
         contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, BaseBlind, Blind, FuncId,
         ScalarBlind, SecretKey,
