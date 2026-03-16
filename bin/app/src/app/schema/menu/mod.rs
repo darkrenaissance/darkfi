@@ -40,8 +40,9 @@ use crate::{
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
     pub const CHANNEL_LABEL_Y: f32 = 35.;
-    pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
-    pub const CHANNEL_LABEL_FONTSIZE: f32 = 44.;
+    pub const CHANNEL_HEADER_HEIGHT: f32 = 140.;
+    pub const CHANNEL_ITEM_HEIGHT: f32 = 115.;
+    pub const CHANNEL_LABEL_FONTSIZE: f32 = 46.;
     pub const MENU_SEP_SIZE: f32 = 3.;
     pub const MENU_HANDLE_PAD: f32 = 200.;
     pub const MENU_FADE: f32 = 1200.;
@@ -67,8 +68,9 @@ mod ui_consts {
 mod ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 20.;
     pub const CHANNEL_LABEL_Y: f32 = 14.;
-    pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
-    pub const CHANNEL_LABEL_FONTSIZE: f32 = 22.;
+    pub const CHANNEL_HEADER_HEIGHT: f32 = 60.;
+    pub const CHANNEL_ITEM_HEIGHT: f32 = 40.;
+    pub const CHANNEL_LABEL_FONTSIZE: f32 = 18.;
     pub const MENU_SEP_SIZE: f32 = 1.;
     pub const MENU_HANDLE_PAD: f32 = 100.;
     pub const MENU_FADE: f32 = 600.;
@@ -95,7 +97,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
-    cc.add_const_f32("CHANNEL_LABEL_LINESPACE", CHANNEL_LABEL_LINESPACE);
+    cc.add_const_f32("CHANNEL_HEADER_HEIGHT", CHANNEL_HEADER_HEIGHT);
+    cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -119,7 +122,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHANNEL_LABEL_LINESPACE).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHANNEL_HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -127,7 +130,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let x1 = expr::const_f32(0.);
     let y1 = expr::const_f32(0.);
     let x2 = expr::load_var("w");
-    let y2 = expr::const_f32(CHANNEL_LABEL_LINESPACE);
+    let y2 = expr::const_f32(CHANNEL_HEADER_HEIGHT);
     let (color1, color2) = match COLOR_SCHEME {
         ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0., 0., 1.]),
         ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
@@ -144,9 +147,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     shape.add_filled_box(
         expr::const_f32(0.),
-        expr::const_f32(CHANNEL_LABEL_LINESPACE - 1.),
+        expr::const_f32(CHANNEL_HEADER_HEIGHT - 1.),
         expr::load_var("w"),
-        expr::const_f32(CHANNEL_LABEL_LINESPACE),
+        expr::const_f32(CHANNEL_HEADER_HEIGHT),
         [0.15, 0.2, 0.19, 1.],
     );
 
@@ -336,17 +339,16 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     editlayer_node.link(node);
 
     // Menu
-
     let node = create_menu("main_menu");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_LINESPACE).unwrap();
+    prop.set_f32(atom, Role::App, 1, CHANNEL_HEADER_HEIGHT).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    let code = cc.compile("h - CHANNEL_LABEL_LINESPACE").unwrap();
+    let code = cc.compile("h - CHANNEL_HEADER_HEIGHT").unwrap();
     prop.set_expr(atom, Role::App, 3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "padding", CHANNEL_LABEL_LINESPACE).unwrap();
+    node.set_property_f32(atom, Role::App, "padding", CHANNEL_ITEM_HEIGHT).unwrap();
 
     let prop = node.get_property("bg_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -383,7 +385,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let prop = node.get_property("padding").unwrap();
     prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_LINESPACE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, CHANNEL_ITEM_HEIGHT / 2.).unwrap();
 
     node.set_property_f32(atom, Role::App, "handle_padding", MENU_HANDLE_PAD).unwrap();
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();

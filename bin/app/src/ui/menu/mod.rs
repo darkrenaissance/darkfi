@@ -51,6 +51,12 @@ const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
 const LONG_PRESS_EPSILON: f32 = 5.0;
 
+#[cfg(target_os = "android")]
+const MENU_ICON_OFFSET: f32 = 55.;
+
+#[cfg(not(target_os = "android"))]
+const MENU_ICON_OFFSET: f32 = 24.;
+
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -387,12 +393,13 @@ impl Menu {
         let mut edit_instrs = vec![];
         if is_edit_mode {
             let item_center_y = item_height / 2.0;
-            edit_instrs.push(DrawInstruction::Move(Point::new(handle_padding / 2., item_center_y)));
-            edit_instrs.push(DrawInstruction::Draw(shape::make_x(&self.renderer, font_size)));
-            edit_instrs
-                .push(DrawInstruction::Move(Point::new(-handle_padding / 2., -item_center_y)));
+            let x_center = MENU_ICON_OFFSET + font_size * 0.4;
+            let rhs = rect.w - MENU_ICON_OFFSET - font_size * 0.56;
 
-            let rhs = rect.w - handle_padding / 2.;
+            edit_instrs.push(DrawInstruction::Move(Point::new(x_center, item_center_y)));
+            edit_instrs.push(DrawInstruction::Draw(shape::make_x(&self.renderer, font_size)));
+            edit_instrs.push(DrawInstruction::Move(Point::new(-x_center, -item_center_y)));
+
             edit_instrs.push(DrawInstruction::Move(Point::new(rhs, item_center_y)));
             edit_instrs.push(DrawInstruction::Draw(shape::make_hammy(&self.renderer, font_size)));
             edit_instrs.push(DrawInstruction::Move(Point::new(-rhs, -item_center_y)));
@@ -435,10 +442,13 @@ impl Menu {
 
             let text_instr = text::render_layout(&layout, &self.renderer, gfxtag!("menu_text"));
 
-            instrs.push(DrawInstruction::Move(Point::new(padding_x + edit_offset, padding_y)));
+            // Use a fraction of edit_offset for the label position to reduce gap from X icon
+            let label_edit_offset = edit_offset * 0.62;
+            instrs
+                .push(DrawInstruction::Move(Point::new(padding_x + label_edit_offset, padding_y)));
             instrs.extend(text_instr);
             instrs.push(DrawInstruction::Move(Point::new(
-                -padding_x - edit_offset,
+                -padding_x - label_edit_offset,
                 font_size + padding_y,
             )));
 

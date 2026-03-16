@@ -18,11 +18,11 @@
 
 use crate::{
     gfx::{gfxtag, DrawMesh, Point, Renderer, Vertex},
-    mesh::{Color, MeshBuilder, COLOR_GREEN},
+    mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED},
 };
 
-const X_COLOR: Color = [0.9, 0.2, 0.34, 1.0];
-const HAM_COLOR: Color = [0., 0.94, 1., 1.0];
+const X_COLOR: Color = COLOR_RED;
+const HAM_COLOR: Color = COLOR_CYAN;
 const THICKNESS: f32 = 1.;
 
 pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
@@ -50,8 +50,8 @@ pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
 }
 
 pub fn make_hammy(renderer: &Renderer, font_size: f32) -> DrawMesh {
-    let ham_size = font_size * 0.25;
-    let gap_size = font_size * 0.8;
+    let ham_size = font_size * 0.14;
+    let gap_size = font_size * 0.42;
 
     let mut mesh = MeshBuilder::new(gfxtag!("menu_x"));
 
