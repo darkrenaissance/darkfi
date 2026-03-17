@@ -29,7 +29,14 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    wasm, ContractCall,
+    wasm::{
+        self,
+        db::{
+            db_contains_key, db_contains_key_local, db_lookup, db_lookup_local, db_set,
+            db_set_local,
+        },
+    },
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
 
@@ -150,10 +157,15 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
 
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coin_roots_db_local = db_lookup_local(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+
+    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+
+    // Initialize the sparse Merkle tree for nullifier storage
     let hasher = PoseidonFp::new();
     let empty_leaf = pallas::Base::ZERO;
     let smt_store = SmtWasmDbStorage::new(nullifiers_db);
@@ -169,19 +181,32 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // Perform the actual state transition
     // ===================================
 
-    // For anonymous inputs, we must also gather all the new nullifiers
-    // that are introduced, and verify their token commitments.
+    // Keep track of new introduced nullifiers
     let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
+
+    // For anonymous inputs, we must gather all the new nullifiers
+    // that are introduced, and verify their token commitments.
     msg!("[TransferV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
-        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[TransferV1] Error: Merkle root not found in previous state (input {})", i);
+        //
+        // If the input was created from a tx-local output, we will check
+        // it against the tx-local Merkle tree, otherwise we will check
+        // it against the on-chain Merkle tree.
+        let merkle_root_ser = serialize(&input.merkle_root);
+        if input.tx_local {
+            if !db_contains_key_local(coin_roots_db_local, &merkle_root_ser)? {
+                msg!("[TransferV1] Error: Merkle root not found in tx-local state (input {})", i);
+                return Err(MoneyError::TransferMerkleRootNotFound.into())
+            }
+        } else if !db_contains_key(coin_roots_db, &merkle_root_ser)? {
+            msg!("[TransferV1] Error: Merkle root not found in on-chain state (input {})", i);
             return Err(MoneyError::TransferMerkleRootNotFound.into())
         }
 
-        // The nullifiers should not already exist. It is the double-spend protection.
+        // The nullifier should not already exist. It's the double-spend protection.
+        // Nullifiers are always written on-chain regardless if tx-local or not.
         if new_nullifiers.contains(&input.nullifier) ||
             smt.get_leaf(&input.nullifier.inner()) != empty_leaf
         {
@@ -197,13 +222,18 @@ pub(crate) fn money_transfer_process_instruction_v1(
         new_nullifiers.push(input.nullifier);
     }
 
-    // Newly created coins for this call are in the outputs. Here we gather them,
-    // check that they haven't existed before and their token commitment is valid.
-    let mut new_coins = Vec::with_capacity(params.outputs.len());
+    // Newly created coins for this call are in the outputs.
+    // Here we gather them, check that they haven't existed before and their
+    // token commitment is valid.
+    let mut new_global_coins = Vec::new();
+    let mut new_local_coins = Vec::new();
     msg!("[TransferV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
-        if new_coins.contains(&output.coin) ||
-            wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
+        let coin_ser = serialize(&output.coin);
+        if new_global_coins.contains(&output.coin) ||
+            new_local_coins.contains(&output.coin) ||
+            db_contains_key(coins_db, &coin_ser)? ||
+            db_contains_key_local(coins_db_local, &coin_ser)?
         {
             msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
@@ -214,7 +244,11 @@ pub(crate) fn money_transfer_process_instruction_v1(
         *acc -= output.value_commit;
 
         // Append this new coin to seen coins
-        new_coins.push(output.coin);
+        if output.tx_local {
+            new_local_coins.push(output.coin);
+        } else {
+            new_global_coins.push(output.coin);
+        }
     }
 
     // Verify all token groups balance. The accumulators should be back
@@ -227,9 +261,14 @@ pub(crate) fn money_transfer_process_instruction_v1(
         }
     }
 
-    // At this point the state transition has passed, so we create a state update
-    let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
-    // and return it
+    // At this point the state transition has passed. Create a state update.
+    let update = MoneyTransferUpdateV1 {
+        nullifiers: new_nullifiers,
+        global_coins: new_global_coins,
+        local_coins: new_local_coins,
+    };
+
+    // Return it
     Ok(serialize(&update))
 }
 
@@ -239,11 +278,17 @@ pub(crate) fn money_transfer_process_update_v1(
     update: MoneyTransferUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let info_db_local = db_lookup_local(cid, MONEY_CONTRACT_INFO_TREE)?;
+
+    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
+
+    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coin_roots_db_local = db_lookup_local(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     msg!("[TransferV1] Adding new nullifiers to the set");
     wasm::merkle::sparse_merkle_insert_batch(
@@ -255,20 +300,43 @@ pub(crate) fn money_transfer_process_update_v1(
     )?;
 
     msg!("[TransferV1] Adding new coins to the set");
-    let mut new_coins = Vec::with_capacity(update.coins.len());
-    for coin in &update.coins {
-        wasm::db::db_set(coins_db, &serialize(coin), &[])?;
-        new_coins.push(MerkleNode::from(coin.inner()));
+    for coin in &update.global_coins {
+        db_set(coins_db, &serialize(coin), &[])?;
     }
 
-    msg!("[TransferV1] Adding new coins to the Merkle tree");
-    wasm::merkle::merkle_add(
-        info_db,
-        coin_roots_db,
-        MONEY_CONTRACT_LATEST_COIN_ROOT,
-        MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &new_coins,
-    )?;
+    for coin in &update.local_coins {
+        db_set_local(coins_db_local, &serialize(coin), &[])?;
+    }
+
+    if !update.global_coins.is_empty() {
+        msg!("[TransferV1] Adding new coins to on-chain Merkle tree");
+        wasm::merkle::merkle_add(
+            info_db,
+            coin_roots_db,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &update
+                .global_coins
+                .iter()
+                .map(|c| MerkleNode::from(c.inner()))
+                .collect::<Vec<MerkleNode>>(),
+        )?;
+    }
+
+    if !update.local_coins.is_empty() {
+        msg!("[TransferV1] Adding new coins to tx-local Merkle tree");
+        wasm::merkle::merkle_add_local(
+            info_db_local,
+            coin_roots_db_local,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &update
+                .local_coins
+                .iter()
+                .map(|c| MerkleNode::from(c.inner()))
+                .collect::<Vec<MerkleNode>>(),
+        )?;
+    }
 
     Ok(())
 }

@@ -148,6 +148,8 @@ pub struct Input {
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,
+    /// Marker if the input used is transaction-local
+    pub tx_local: bool,
 }
 // ANCHOR_END: money-input
 
@@ -163,6 +165,8 @@ pub struct Output {
     pub coin: Coin,
     /// AEAD encrypted note
     pub note: AeadEncryptedNote,
+    /// Marker if the output used is transaction-local
+    pub tx_local: bool,
 }
 // ANCHOR_END: money-output
 
@@ -186,6 +190,8 @@ pub struct MoneyFeeUpdateV1 {
     pub nullifier: Nullifier,
     /// Minted coin
     pub coin: Coin,
+    /// Marker whether the output will be used tx-local
+    pub tx_local: bool,
     /// Block height the fee was verified against
     pub height: u32,
     /// Height accumulated fee paid
@@ -208,8 +214,10 @@ pub struct MoneyTransferParamsV1 {
 pub struct MoneyTransferUpdateV1 {
     /// Revealed nullifiers
     pub nullifiers: Vec<Nullifier>,
-    /// Minted coins
-    pub coins: Vec<Coin>,
+    /// Minted global-state coins
+    pub global_coins: Vec<Coin>,
+    /// Minted transaction-local-state coins
+    pub local_coins: Vec<Coin>,
 }
 
 /// Parameters for `Money::GenesisMint`

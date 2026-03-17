@@ -84,6 +84,7 @@ impl BurnCallBuilder {
                 merkle_root: public_inputs.merkle_root,
                 user_data_enc: public_inputs.user_data_enc,
                 signature_public: public_inputs.signature_public,
+                tx_local: false,
             });
 
             proofs.push(proof);

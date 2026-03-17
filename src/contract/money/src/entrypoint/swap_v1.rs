@@ -147,7 +147,11 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // Create a state update. We also use `MoneyTransferUpdateV1` because
     // they're essentially the same thing, just with a different transition
     // ruleset.
-    let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
+    let update = MoneyTransferUpdateV1 {
+        nullifiers: new_nullifiers,
+        global_coins: new_coins,
+        local_coins: vec![],
+    };
     Ok(serialize(&update))
 }
 

@@ -30,7 +30,14 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    wasm, ContractCall,
+    wasm::{
+        self,
+        db::{
+            db_contains_key, db_contains_key_local, db_get, db_lookup, db_lookup_local, db_set,
+            db_set_local,
+        },
+    },
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
 
@@ -107,10 +114,14 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
+
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coin_roots_db_local = db_lookup_local(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+
+    let fees_db = db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
 
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
@@ -132,8 +143,13 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !wasm::db::db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
-        msg!("[FeeV1] Error: Input Merkle root not found in previous state");
+    if params.input.tx_local {
+        if !db_contains_key_local(coin_roots_db_local, &serialize(&params.input.merkle_root))? {
+            msg!("[FeeV1] Error: Input Merkle root not found in tx-local state");
+            return Err(MoneyError::CoinMerkleRootNotFound.into())
+        }
+    } else if !db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
+        msg!("[FeeV1] Error: Input Merkle root not found in on-chain state");
         return Err(MoneyError::CoinMerkleRootNotFound.into())
     }
 
@@ -149,8 +165,13 @@ pub(crate) fn money_fee_process_instruction_v1(
     }
 
     // The new coin should not exist
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
-        msg!("[FeeV1] Error: Duplicate coin found");
+    if params.output.tx_local {
+        if db_contains_key_local(coins_db_local, &serialize(&params.output.coin))? {
+            msg!("[FeeV1] Error: Duplicate tx-local coin found");
+            return Err(MoneyError::DuplicateCoin.into())
+        }
+    } else if db_contains_key(coins_db, &serialize(&params.output.coin))? {
+        msg!("[FeeV1] Error: Duplicate on-chain coin found");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
@@ -179,13 +200,14 @@ pub(crate) fn money_fee_process_instruction_v1(
     // Accumulate the height paid fee
     let verifying_block_height = wasm::util::get_verifying_block_height()?;
     let mut paid_fee: u64 =
-        deserialize(&wasm::db::db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
+        deserialize(&db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.
     let update = MoneyFeeUpdateV1 {
         nullifier: params.input.nullifier,
         coin: params.output.coin,
+        tx_local: params.output.tx_local,
         height: verifying_block_height,
         fee: paid_fee,
     };
@@ -199,14 +221,21 @@ pub(crate) fn money_fee_process_update_v1(
     update: MoneyFeeUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
-    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let info_db_local = db_lookup_local(cid, MONEY_CONTRACT_INFO_TREE)?;
 
-    wasm::db::db_set(fees_db, &serialize(&update.height), &serialize(&update.fee))?;
+    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
+
+    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coin_roots_db_local = db_lookup_local(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+
+    let fees_db = db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+
+    db_set(fees_db, &serialize(&update.height), &serialize(&update.fee))?;
 
     wasm::merkle::sparse_merkle_insert_batch(
         info_db,
@@ -216,15 +245,27 @@ pub(crate) fn money_fee_process_update_v1(
         &[update.nullifier.inner()],
     )?;
 
-    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
+    if update.tx_local {
+        db_set_local(coins_db_local, &serialize(&update.coin), &[])?;
 
-    wasm::merkle::merkle_add(
-        info_db,
-        coin_roots_db,
-        MONEY_CONTRACT_LATEST_COIN_ROOT,
-        MONEY_CONTRACT_COIN_MERKLE_TREE,
-        &[MerkleNode::from(update.coin.inner())],
-    )?;
+        wasm::merkle::merkle_add_local(
+            info_db_local,
+            coin_roots_db_local,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &[MerkleNode::from(update.coin.inner())],
+        )?;
+    } else {
+        db_set(coins_db, &serialize(&update.coin), &[])?;
+
+        wasm::merkle::merkle_add(
+            info_db,
+            coin_roots_db,
+            MONEY_CONTRACT_LATEST_COIN_ROOT,
+            MONEY_CONTRACT_COIN_MERKLE_TREE,
+            &[MerkleNode::from(update.coin.inner())],
+        )?;
+    }
 
     Ok(())
 }
