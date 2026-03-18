@@ -50,7 +50,6 @@ use crate::{
     },
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
-    zk::{ProvingKey, VerifyingKey},
     Error, Result,
 };
 
@@ -371,14 +370,8 @@ pub struct EventGraph {
     deg_publisher: PublisherPtr<DegEvent>,
     /// Run in fast mode where if set we sync only headers.
     fast_mode: bool,
-    /// Registering verify key
-    register_vk: VerifyingKey,
-    /// Signaling verify key
-    signal_vk: VerifyingKey,
-    /// Slashing proving key
-    slash_pk: ProvingKey,
-    /// Slashing verify key
-    slash_vk: VerifyingKey,
+    /// sled DB
+    sled_db: sled::Db,
     /// RLN identity storage
     pub rln_identity_tree: RwLock<SmtMemoryFp>,
 }
@@ -405,12 +398,13 @@ impl EventGraph {
         hours_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
-        let register_vk = build_register_vk(&sled_db)?;
-        let signal_vk = build_signal_vk(&sled_db)?;
-        let slash_pk = build_slash_pk(&sled_db)?;
-        let slash_vk = build_slash_vk(&sled_db)?;
+        let _register_vk = build_register_vk(&sled_db)?;
+        let _signal_vk = build_signal_vk(&sled_db)?;
+        let _slash_pk = build_slash_pk(&sled_db)?;
+        let _slash_vk = build_slash_vk(&sled_db)?;
 
         let hasher = PoseidonFp::new();
+        // let store = AccountStorage::new(&sled_db, "name".to_owned());
         let store = MemoryStorageFp::new();
         let identity_tree = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
@@ -429,7 +423,7 @@ impl EventGraph {
         .new(sled_db.clone(), hours_rotation)
         .await;
 
-        let static_dag = Self::static_new(sled_db).await?;
+        let static_dag = Self::static_new(&sled_db).await?;
 
         let self_ = Arc::new(Self {
             p2p,
@@ -447,10 +441,7 @@ impl EventGraph {
             synced: RwLock::new(false),
             deg_enabled: RwLock::new(false),
             deg_publisher: Publisher::new(),
-            register_vk,
-            signal_vk,
-            slash_pk,
-            slash_vk,
+            sled_db,
             rln_identity_tree: RwLock::new(identity_tree),
         });
 
@@ -1256,7 +1247,7 @@ impl EventGraph {
         Ok(result)
     }
 
-    pub async fn static_new(sled_db: sled::Db) -> Result<sled::Tree> {
+    pub async fn static_new(sled_db: &sled::Db) -> Result<sled::Tree> {
         let static_dag = sled_db.open_tree("static-dag")?;
 
         let genesis = generate_genesis(0);

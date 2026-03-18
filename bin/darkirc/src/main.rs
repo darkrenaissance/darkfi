@@ -95,10 +95,10 @@ struct Args {
     irc_tls_secret: Option<String>,
 
     /// How many DAGs to sync.
-    #[structopt(short, long, default_value = "8")]
+    #[structopt(long, default_value = "8")]
     dags_count: usize,
 
-    #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc_db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
 
@@ -192,6 +192,13 @@ impl DarkIrc {
         }
     }
 }
+
+// #[global_allocator]
+// static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+// #[allow(non_upper_case_globals)]
+// #[export_name = "malloc_conf"]
+// pub static malloc_conf: &[u8] = b"dirty_decay_ms:1000,muzzy_decay_ms:1000\0";
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {

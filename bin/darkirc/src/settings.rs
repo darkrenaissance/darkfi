@@ -23,12 +23,12 @@ use std::{
 };
 
 use crypto_box::PublicKey;
-use darkfi::{Error::ParseFailed, Result};
+use darkfi::{event_graph::rln::closest_epoch, Error::ParseFailed, Result};
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use tracing::info;
 
 use crate::{
-    crypto::rln::{closest_epoch, RlnIdentity},
+    crypto::rln::RlnIdentity,
     irc::{IrcChannel, IrcContact},
 };
 

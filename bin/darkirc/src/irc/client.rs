@@ -29,7 +29,7 @@ use std::{
 use darkfi::{
     event_graph::{
         proto::EventPut,
-        rln::{process_commitment, RLNNode},
+        rln::{closest_epoch, process_commitment, Blob, RLNNode},
         Event, NULL_ID,
     },
     system::Subscription,
@@ -53,7 +53,7 @@ use super::{
     server::{IrcServer, MAX_MSG_LEN},
     NickServ, Privmsg, SERVER_NAME,
 };
-use crate::crypto::rln::{closest_epoch, RlnIdentity, RLN2_SIGNAL_ZKBIN};
+use crate::crypto::rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN};
 
 const PENALTY_LIMIT: usize = 5;
 
@@ -216,34 +216,34 @@ impl Client {
                                         return Err(e)
                                     }
 
-                                    // If we have a RLN identity, now we'll build a ZK proof.
-                                    // Also I really want GOTO in Rust... Fags.
-                                    if let Some(ref mut rln_identity) = *self.server.rln_identity.write().await {
-                                        // If the current epoch is different, we can reset the message counter
-                                        if rln_identity.last_epoch != closest_epoch(event.header.timestamp) {
-                                            rln_identity.last_epoch = closest_epoch(event.header.timestamp);
-                                            rln_identity.message_id = 0;
-                                        }
-
-                                        rln_identity.message_id += 1;
-
-                                        let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(&rln_identity, &event).await {
-                                            Ok(v) => v,
-                                            Err(e) => {
-                                                // TODO: Send a message to the IRC client telling that sending went wrong
-                                                error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
-                                                // Just use an empty "proof"
-                                                (Proof::new(vec![]), pallas::Base::from(0), pallas::Base::from(0), 0)
+                                    let blob = {
+                                        // If we have a RLN identity, now we'll build a ZK proof.
+                                        // Also I really want GOTO in Rust... Fags.
+                                        if let Some(ref mut rln_identity) = *self.server.rln_identity.write().await {
+                                            if rln_identity.last_epoch != closest_epoch(event.header.timestamp) {
+                                                rln_identity.last_epoch = closest_epoch(event.header.timestamp);
+                                                rln_identity.message_id = 0;
                                             }
-                                        };
 
-                                        let blob = serialize_async(&(proof, y, internal_nullifier, user_msg_limit)).await;
+                                            rln_identity.message_id += 1;
 
-                                        self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
-                                    } else {
-                                        // Broadcast it
-                                        self.server.darkirc.p2p.broadcast(&EventPut(event, vec![])).await;
-                                    }
+                                            let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(&rln_identity, &event).await {
+                                                Ok(v) => v,
+                                                Err(e) => {
+                                                    // TODO: Send a message to the IRC client telling that sending went wrong
+                                                    error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
+                                                    return Err(e)
+                                                }
+                                            };
+
+                                            let blob = Blob{ proof, y, internal_nullifier, user_msg_limit };
+                                            serialize_async(&blob).await
+                                        } else {
+                                            vec![]
+                                        }
+                                    };
+
+                                    self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
                                 }
                             }
                         }
@@ -596,14 +596,18 @@ impl Client {
         // Retrieve the ZK proving key from the db
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
         let signal_circuit = ZkCircuit::new(empty_witnesses(&signal_zkbin)?, &signal_zkbin);
-        let Some(proving_key) = self.server.server_store.get("rlnv2-diff-signal-pk")? else {
-            return Err(Error::DatabaseError(
-                "RLN signal proving key not found in server store".to_string(),
-            ))
+        let signal_pk = {
+            let Some(proving_key) = self.server.server_store.get("rlnv2-diff-signal-pk")? else {
+                return Err(Error::DatabaseError(
+                    "RLN signal proving key not found in server store".to_string(),
+                ))
+            };
+            let mut reader = Cursor::new(&*proving_key);
+            let pk = ProvingKey::read(&mut reader, signal_circuit)?;
+            drop(proving_key);
+            pk
         };
-        let mut reader = Cursor::new(proving_key);
-        let proving_key = ProvingKey::read(&mut reader, signal_circuit)?;
 
-        rln_identity.create_signal_proof(event, &identity_tree, &proving_key)
+        rln_identity.create_signal_proof(event, &identity_tree, &signal_pk)
     }
 }

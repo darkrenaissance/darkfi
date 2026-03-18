@@ -34,7 +34,7 @@ use crate::{
     event_graph::Event,
     zk::{empty_witnesses, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 
 pub const RLN2_REGISTER_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-register.zk.bin");
@@ -45,6 +45,64 @@ pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-slash.zk.bi
 pub const RLN_GENESIS: u64 = 1_738_688_400_000;
 /// RLN epoch length in millis
 pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct Blob {
+    pub proof: Proof,
+    pub y: pallas::Base,
+    pub internal_nullifier: pallas::Base,
+    pub user_msg_limit: u64,
+}
+
+// pub type SmtAccntFp = SparseMerkleTree<
+//     'static,
+//     SMT_FP_DEPTH,
+//     { SMT_FP_DEPTH + 1 },
+//     pallas::Base,
+//     PoseidonFp,
+//     AccountStorage,
+// >;
+
+// #[derive(Clone)]
+// pub struct AccountStorage {
+//     pub tree: sled::Tree,
+// }
+
+// impl AccountStorage {
+//     pub fn new(sled_db: &sled::Db, name: String) -> Self {
+//         Self { tree: sled_db.open_tree(name).unwrap() }
+//     }
+// }
+
+// impl StorageAdapter for AccountStorage {
+//     type Value = pallas::Base;
+
+//     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
+//         self.tree.insert(key.to_bytes_le(), &value.to_repr()).unwrap();
+//         Ok(())
+//     }
+
+//     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
+//         let value = match self.tree.get(&key.to_bytes_le()) {
+//             Ok(v) => v,
+//             Err(e) => {
+//                 error!("SledStorage::get(): Fetching key {:?} from Accounts tree: {}", key, e,);
+//                 return None
+//             }
+//         };
+
+//         let value = value?;
+//         let mut repr = [0; 32];
+//         repr.copy_from_slice(&value);
+
+//         pallas::Base::from_repr(repr).into()
+//     }
+
+//     fn del(&mut self, key: &BigUint) -> ContractResult {
+//         self.tree.remove(key.to_bytes_le()).unwrap();
+//         Ok(())
+//     }
+// }
 
 /// Hash message/event modulo `Fp`
 pub fn hash_event(event: &Event) -> pallas::Base {
@@ -222,87 +280,123 @@ pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
 }
 
 /// Helper function to read or build register verifying key
-pub(super) fn build_register_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+pub(super) fn build_register_vk(sled_db: &sled::Db) -> Result<()> {
+    // sanity check
+    if sled_db.get("rlnv2-diff-register-vk")?.is_some() {
+        return Ok(())
+    }
     let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
     let register_empty_circuit =
         ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
 
-    match sled_db.get("rlnv2-diff-register-vk")? {
-        Some(vk) => {
-            let mut reader = Cursor::new(vk);
-            Ok(VerifyingKey::read(&mut reader, register_empty_circuit)?)
-        }
-        None => {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
-            let verifyingkey = VerifyingKey::build(register_zkbin.k, &register_empty_circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            sled_db.insert("rlnv2-diff-register-vk", buf)?;
-            Ok(verifyingkey)
-        }
+    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
+    let verifyingkey = VerifyingKey::build(register_zkbin.k, &register_empty_circuit);
+    let mut buf = vec![];
+    verifyingkey.write(&mut buf)?;
+    sled_db.insert("rlnv2-diff-register-vk", buf)?;
+    Ok(())
+}
+
+/// Helper function to read register verifying key
+pub(super) fn read_register_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+    if let Some(vk) = sled_db.get("rlnv2-diff-register-vk")? {
+        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
+        let register_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
+        let mut reader = Cursor::new(vk);
+        Ok(VerifyingKey::read(&mut reader, register_empty_circuit)?)
+    } else {
+        Err(Error::Custom("Error reading register verifying key".to_owned()))
     }
 }
 
-/// Helper function to read or build signal verifying key
-pub(super) fn build_signal_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+/// Helper function to build signal verifying key
+pub(super) fn build_signal_vk(sled_db: &sled::Db) -> Result<()> {
+    // sanity check
+    if sled_db.get("rlnv2-diff-signal-vk")?.is_some() {
+        return Ok(())
+    }
     let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
     let signal_empty_circuit =
         ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
 
-    match sled_db.get("rlnv2-diff-signal-vk")? {
-        Some(vk) => {
-            let mut reader = Cursor::new(vk);
-            Ok(VerifyingKey::read(&mut reader, signal_empty_circuit)?)
-        }
-        None => {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-            let verifyingkey = VerifyingKey::build(signal_zkbin.k, &signal_empty_circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            sled_db.insert("rlnv2-diff-signal-vk", buf)?;
-            Ok(verifyingkey)
-        }
+    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
+    let verifyingkey = VerifyingKey::build(signal_zkbin.k, &signal_empty_circuit);
+    let mut buf = vec![];
+    verifyingkey.write(&mut buf)?;
+    sled_db.insert("rlnv2-diff-signal-vk", buf)?;
+    Ok(())
+}
+
+/// Helper function to read signal verifying key
+pub(super) fn read_signal_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+    if let Some(vk) = sled_db.get("rlnv2-diff-signal-vk")? {
+        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
+        let signal_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
+        let mut reader = Cursor::new(vk);
+        Ok(VerifyingKey::read(&mut reader, signal_empty_circuit)?)
+    } else {
+        Err(Error::Custom("Error Reading signal verifying key".to_owned()))
     }
 }
 
-/// Helper function to read or build slash proving key
-pub(super) fn build_slash_pk(sled_db: &sled::Db) -> Result<ProvingKey> {
+/// Helper function to build slash proving key
+pub(super) fn build_slash_pk(sled_db: &sled::Db) -> Result<()> {
+    // sanity check
+    if sled_db.get("rlnv2-diff-slash-pk")?.is_some() {
+        return Ok(())
+    }
     let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
     let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
 
-    match sled_db.get("rlnv2-diff-slash-pk")? {
-        Some(pk) => {
-            let mut reader = Cursor::new(pk);
-            Ok(ProvingKey::read(&mut reader, slash_empty_circuit)?)
-        }
-        None => {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
-            let provingkey = ProvingKey::build(slash_zkbin.k, &slash_empty_circuit);
-            let mut buf = vec![];
-            provingkey.write(&mut buf)?;
-            sled_db.insert("rlnv2-diff-slash-pk", buf)?;
-            Ok(provingkey)
-        }
+    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
+    let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
+    let mut buf = vec![];
+    verifyingkey.write(&mut buf)?;
+    sled_db.insert("rlnv2-diff-slash-pk", buf)?;
+    Ok(())
+}
+
+/// Helper function to read slash proving key
+pub(super) fn read_slash_pk(sled_db: &sled::Db) -> Result<ProvingKey> {
+    if let Some(vk) = sled_db.get("rlnv2-diff-slash-pk")? {
+        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
+        let slash_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
+        let mut reader = Cursor::new(vk);
+        Ok(ProvingKey::read(&mut reader, slash_empty_circuit)?)
+    } else {
+        Err(Error::Custom("Error Reading slash proving key".to_owned()))
     }
 }
 
-/// Helper function to read or build slash verifying key
-pub(super) fn build_slash_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+/// Helper function to build slash verifying key
+pub(super) fn build_slash_vk(sled_db: &sled::Db) -> Result<()> {
+    // sanity check
+    if sled_db.get("rlnv2-diff-slash-vk")?.is_some() {
+        return Ok(())
+    }
     let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
     let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
 
-    match sled_db.get("rlnv2-diff-slash-vk")? {
-        Some(vk) => {
-            let mut reader = Cursor::new(vk);
-            Ok(VerifyingKey::read(&mut reader, slash_empty_circuit)?)
-        }
-        None => {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-            let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
-            let mut buf = vec![];
-            verifyingkey.write(&mut buf)?;
-            sled_db.insert("rlnv2-diff-slash-vk", buf)?;
-            Ok(verifyingkey)
-        }
+    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
+    let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
+    let mut buf = vec![];
+    verifyingkey.write(&mut buf)?;
+    sled_db.insert("rlnv2-diff-slash-vk", buf)?;
+    Ok(())
+}
+
+/// Helper function to read slash proving key
+pub(super) fn read_slash_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
+    if let Some(vk) = sled_db.get("rlnv2-diff-slash-pk")? {
+        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
+        let slash_empty_circuit =
+            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
+        let mut reader = Cursor::new(vk);
+        Ok(VerifyingKey::read(&mut reader, slash_empty_circuit)?)
+    } else {
+        Err(Error::Custom("Error Reading slash verifying key".to_owned()))
     }
 }

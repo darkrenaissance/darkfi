@@ -43,6 +43,7 @@ use super::{
     Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
 };
 use crate::{
+    event_graph::rln::{read_register_vk, read_signal_vk, read_slash_pk, read_slash_vk, Blob},
     impl_p2p_message,
     net::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
@@ -309,12 +310,7 @@ impl ProtocolEventGraph {
                 if blob.is_empty() {
                     break
                 }
-                let (proof, y, internal_nullifier, user_msg_limit): (
-                    Proof,
-                    pallas::Base,
-                    pallas::Base,
-                    u64,
-                ) = match deserialize_async_partial(&blob).await {
+                let rcvd_blob: Blob = match deserialize_async_partial(&blob).await {
                     Ok((v, _)) => v,
                     Err(e) => {
                         error!(target: "event_graph::protocol::handle_event_put()","[EVENTGRAPH] Failed deserializing event ephemeral data: {}", e);
@@ -333,30 +329,42 @@ impl ProtocolEventGraph {
                 let external_nullifier = poseidon_hash([epoch, rln_app_identifier]);
                 let x = hash_event(&event);
                 let identity_root = self.event_graph.rln_identity_tree.read().await.root();
-                let public_inputs =
-                    vec![identity_root, external_nullifier, x, y, internal_nullifier];
+                let public_inputs = vec![
+                    identity_root,
+                    external_nullifier,
+                    x,
+                    rcvd_blob.y,
+                    rcvd_blob.internal_nullifier,
+                ];
 
-                if metadata.is_duplicate(&external_nullifier, &internal_nullifier, &x, &y) {
+                if metadata.is_duplicate(
+                    &external_nullifier,
+                    &rcvd_blob.internal_nullifier,
+                    &x,
+                    &rcvd_blob.y,
+                ) {
                     error!(target: "event_graph::protocol::handle_event_put()", "[RLN] Duplicate Message!");
                     verification_failed = true;
                     break
                 }
 
-                if metadata.is_reused(&external_nullifier, &internal_nullifier) {
+                if metadata.is_reused(&external_nullifier, &rcvd_blob.internal_nullifier) {
                     info!(target: "event_graph::protocol::handle_event_put()", "[RLN] Metadata is reused.. slashing..");
-                    let shares = metadata.get_shares(&external_nullifier, &internal_nullifier);
+                    let shares =
+                        metadata.get_shares(&external_nullifier, &rcvd_blob.internal_nullifier);
                     let secret = sss_recover(&shares);
 
                     // Broadcast slashing event
-                    let slash_pk = &self.event_graph.slash_pk;
+                    let slash_pk = read_slash_pk(&self.event_graph.sled_db)?;
+                    // let slash_pk = &self.event_graph.slash_pk;
                     let mut identity_tree = self.event_graph.rln_identity_tree.write().await;
 
                     info!("[RLN] Creating slashing proof");
                     let (proof, identity_root) = match create_slash_proof(
                         secret,
-                        user_msg_limit,
+                        rcvd_blob.user_msg_limit,
                         &mut identity_tree,
-                        slash_pk,
+                        &slash_pk,
                     ) {
                         Ok(v) => v,
                         Err(e) => {
@@ -368,10 +376,12 @@ impl ProtocolEventGraph {
                     drop(identity_tree);
 
                     let blob =
-                        serialize_async(&(proof, secret, user_msg_limit, identity_root)).await;
+                        serialize_async(&(proof, secret, rcvd_blob.user_msg_limit, identity_root))
+                            .await;
 
                     let evgr = &self.event_graph;
-                    let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
+                    let identity_secret_hash =
+                        poseidon_hash([secret, rcvd_blob.user_msg_limit.into()]);
                     let identity_commitment = poseidon_hash([identity_secret_hash]);
                     let rln_commitment = RLNNode::Slashing(identity_commitment);
                     let st_event =
@@ -384,11 +394,16 @@ impl ProtocolEventGraph {
                 }
 
                 // At this point we can safely add the shares
-                metadata.add_share(external_nullifier, internal_nullifier, x, y)?;
+                metadata.add_share(
+                    external_nullifier,
+                    rcvd_blob.internal_nullifier,
+                    x,
+                    rcvd_blob.y,
+                )?;
 
                 info!(target: "event_graph::protocol::handle_event_put()", "[RLN] Verifying incoming Event RLN proof");
-                verification_failed =
-                    proof.verify(&self.event_graph.signal_vk, &public_inputs).is_err();
+                let signal_vk = read_signal_vk(&self.event_graph.sled_db)?;
+                verification_failed = rcvd_blob.proof.verify(&signal_vk, &public_inputs).is_err();
 
                 break
             }
@@ -707,7 +722,8 @@ impl ProtocolEventGraph {
                     info!("registering account: {:?}", commitment);
                     let public_inputs = vec![commitment, user_msg_limit.into()];
 
-                    if proof.verify(&self.event_graph.register_vk, &public_inputs).is_err() {
+                    let register_vk = read_register_vk(&self.event_graph.sled_db)?;
+                    if proof.verify(&register_vk, &public_inputs).is_err() {
                         error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Registration proof verification failed");
                         continue
                     }
@@ -728,8 +744,8 @@ impl ProtocolEventGraph {
 
                     let public_inputs =
                         vec![secret, pallas::Base::from(user_msg_limit), identity_root];
-
-                    if proof.verify(&self.event_graph.slash_vk, &public_inputs).is_err() {
+                    let slash_vk = read_slash_vk(&self.event_graph.sled_db)?;
+                    if proof.verify(&slash_vk, &public_inputs).is_err() {
                         error!(target: "event_graph::protocol::handle_static_put()", "[RLN] Incoming Event RLN Slashing proof verification failed");
                         continue
                     }

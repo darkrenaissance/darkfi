@@ -19,7 +19,10 @@
 use std::time::UNIX_EPOCH;
 
 use darkfi::{
-    event_graph::Event,
+    event_graph::{
+        rln::{closest_epoch, hash_event},
+        Event,
+    },
     zk::{
         halo2::{Field, Value},
         Proof, ProvingKey, Witness, ZkCircuit,
@@ -28,7 +31,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::FromUniformBytes, poseidon_hash, smt::SmtMemoryFp},
+    crypto::{poseidon_hash, smt::SmtMemoryFp},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -38,11 +41,6 @@ use tracing::info;
 pub const RLN_TRAPDOOR_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4211, 0, 0, 0]);
 pub const RLN_NULLIFIER_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4212, 0, 0, 0]);
 
-/// RLN epoch genesis in millis
-pub const RLN_GENESIS: u64 = 1_738_688_400_000;
-/// RLN epoch length in millis
-pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
-
 pub const RLN2_REGISTER_ZKBIN: &[u8] =
     include_bytes!("../../../../src/event_graph/proof/rlnv2-diff-register.zk.bin");
 pub const RLN2_SIGNAL_ZKBIN: &[u8] =
@@ -50,21 +48,6 @@ pub const RLN2_SIGNAL_ZKBIN: &[u8] =
 
 /// TODO: this is arbitrary it should be based on stake
 pub const MAX_MSG_LIMIT: u64 = 100;
-
-/// Find closest epoch to given timestamp
-pub fn closest_epoch(timestamp: u64) -> u64 {
-    let time_diff = timestamp - RLN_GENESIS;
-    let epoch_idx = time_diff as f64 / RLN_EPOCH_LEN as f64;
-    let rounded = epoch_idx.round() as i64;
-    RLN_GENESIS + (rounded * RLN_EPOCH_LEN as i64) as u64
-}
-
-/// Hash message/event modulo `Fp`
-pub fn hash_event(event: &Event) -> pallas::Base {
-    let mut buf = [0u8; 64];
-    buf[..blake3::OUT_LEN].copy_from_slice(event.header.id().as_bytes());
-    pallas::Base::from_uniform_bytes(&buf)
-}
 
 #[derive(Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct RlnIdentity {
@@ -118,8 +101,7 @@ impl RlnIdentity {
         let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
         let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
 
-        let proof =
-            Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng).unwrap();
+        let proof = Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng)?;
 
         let leaf = vec![commitment];
         let leaf: Vec<_> = leaf.into_iter().map(|l| (l, l)).collect();
@@ -168,7 +150,7 @@ impl RlnIdentity {
 
         info!(target: "crypto::rln::create_signal_proof", "[RLN] Creating signal proof for event {}", event.header.id());
         let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-        let signal_circuit = ZkCircuit::new(witnesses.clone(), &signal_zkbin);
+        let signal_circuit = ZkCircuit::new(witnesses, &signal_zkbin);
 
         let proof = Proof::create(signal_pk, &[signal_circuit], &public_inputs, &mut OsRng)?;
         Ok((proof, y, internal_nullifier, self.user_message_limit))

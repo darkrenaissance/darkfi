@@ -19,7 +19,10 @@
 use std::{io::Cursor, str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
 
 use darkfi::{
-    event_graph::{rln::RLNNode, Event},
+    event_graph::{
+        rln::{closest_epoch, RLNNode},
+        Event,
+    },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -30,7 +33,7 @@ use smol::lock::RwLock;
 
 use super::super::{client::ReplyType, rpl::*};
 use crate::{
-    crypto::rln::{closest_epoch, RlnIdentity, RLN2_REGISTER_ZKBIN},
+    crypto::rln::{RlnIdentity, RLN2_REGISTER_ZKBIN},
     IrcServer,
 };
 
