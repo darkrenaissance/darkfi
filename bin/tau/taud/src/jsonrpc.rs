@@ -254,7 +254,7 @@ impl JsonRpcInterface {
 
         let params = params[0].get::<HashMap<String, JsonValue>>().unwrap();
 
-        if params.len() != 9 {
+        if params.len() != 10 {
             return Err(TaudError::InvalidData("Invalid parameters".to_string()))
         }
 

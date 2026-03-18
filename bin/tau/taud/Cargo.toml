@@ -22,6 +22,7 @@ darkfi = { path = "../../../", features = [
     "async-daemonize",
     "event-graph",
     "rpc",
+    "zk"
 ] }
 
 darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}

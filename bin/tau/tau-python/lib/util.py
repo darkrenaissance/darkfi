@@ -36,6 +36,7 @@ task_template = {
     "project": list,
     "due": int,
     "rank": float,
+    "bounty": int,
     "created_at": int,
     "state": str,
     "events": list,
