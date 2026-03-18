@@ -32,10 +32,6 @@ use darkfi_serial::async_trait;
 use super::poseidon_hash;
 
 lazy_static! {
-    // Is this even needed? Not used elsewhere except here.
-    /// Derivation prefix for `TokenId`
-    pub static ref TOKEN_ID_PREFIX: pallas::Base = pallas::Base::from(69);
-
     /// Native DARK token ID.
     /// It does not correspond to any real commitment since we only rely on this value as
     /// a constant.

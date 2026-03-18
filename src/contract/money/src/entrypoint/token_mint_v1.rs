@@ -88,11 +88,9 @@ pub(crate) fn money_token_mint_process_instruction_v1(
     let self_ = &calls[call_idx].data;
     let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
-    // We have to check if the token mint is frozen, and if by some chance
-    // the minted coin has existed already.
+    // Check that the coin from the output hasn't existed before
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
 
-    // Check that the coin from the output hasn't existed before
     if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? {
         msg!("[TokenMintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
