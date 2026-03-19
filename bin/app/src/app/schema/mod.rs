@@ -39,6 +39,7 @@ mod chat;
 mod menu;
 //mod settings;
 pub mod test;
+pub mod test_scroll_layer;
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }

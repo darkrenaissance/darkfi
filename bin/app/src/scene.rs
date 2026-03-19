@@ -568,6 +568,7 @@ pub enum Pimpl {
     Null,
     Window(ui::WindowPtr),
     Layer(ui::LayerPtr),
+    ScrollLayer(ui::ScrollLayerPtr),
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
     Edit(ui::BaseEditPtr),

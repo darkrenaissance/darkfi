@@ -76,6 +76,7 @@ enable-netdebug = []
 schema-app = []
 # Dev schema for testing
 schema-test = []
+schema-test-scroll-layer = []
 
 [patch.crates-io]
 halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v032" }

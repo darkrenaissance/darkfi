@@ -141,6 +141,9 @@ impl App {
         #[cfg(feature = "schema-test")]
         schema::test::make(&self, window.clone(), &i18n_fish).await;
 
+        #[cfg(feature = "schema-test-scroll-layer")]
+        schema::test_scroll_layer::make(&self, window.clone(), &i18n_fish).await;
+
         #[cfg(all(feature = "schema-app", feature = "schema-test"))]
         compile_error!("Only one schema can be selected");
 

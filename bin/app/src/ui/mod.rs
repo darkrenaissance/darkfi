@@ -52,6 +52,8 @@ pub use vector_art::{
 };
 mod layer;
 pub use layer::{Layer, LayerPtr};
+mod scroll_layer;
+pub use scroll_layer::{ScrollLayer, ScrollLayerPtr};
 mod shortcut;
 pub use shortcut::{Shortcut, ShortcutPtr};
 mod menu;
@@ -209,6 +211,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
 pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
     match node.pimpl() {
         Pimpl::Layer(obj) => obj.clone(),
+        Pimpl::ScrollLayer(obj) => obj.clone(),
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
         Pimpl::Edit(obj) => obj.clone(),
@@ -226,6 +229,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
 pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
     match node.pimpl() {
         Pimpl::Layer(obj) => obj.as_ref(),
+        Pimpl::ScrollLayer(obj) => obj.as_ref(),
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
         Pimpl::Edit(obj) => obj.as_ref(),
