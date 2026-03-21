@@ -222,10 +222,18 @@ pub fn create_text(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("height", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("lineheight", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Line Height", "Line height/lead (em)");
     prop.set_defaults_f32(vec![1.2]).unwrap();
     prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_align", PropertyType::Enum, PropertySubType::Null);
+    prop.set_enum_items(vec!["start", "end", "left", "center", "right", "justify"]).unwrap();
+    prop.set_defaults_str(vec!["start".to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
     let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
@@ -237,6 +245,11 @@ pub fn create_text(name: &str) -> SceneNode {
     let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("overflow_wrap", PropertyType::Enum, PropertySubType::Null);
+    prop.set_enum_items(vec!["normal", "anywhere", "break-word"]).unwrap();
+    prop.set_defaults_str(vec!["normal".to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);

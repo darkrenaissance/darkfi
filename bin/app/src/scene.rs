@@ -311,6 +311,15 @@ impl SceneNode {
     ) -> Result<()> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(atom, role, 0, val)
     }
+    pub fn set_property_enum<S: Into<String>>(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: S,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_enum(atom, role, 0, val)
+    }
     pub fn set_property_node_id(
         &self,
         atom: &mut PropertyAtomicGuard,

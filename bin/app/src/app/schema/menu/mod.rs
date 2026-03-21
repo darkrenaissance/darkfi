@@ -265,11 +265,12 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let renderer = app.renderer.clone();
     let contact_is_visible =
         PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
+    let menulayer_is_visible1 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("write_click"));
             contact_is_visible.set(atom, true);
-            menulayer_is_visible.set(atom, false);
+            menulayer_is_visible1.set(atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -413,12 +414,12 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
             let path = format!("/window/content/{}_chat_layer", channel);
-            let node = sg_root.lookup_node(path).unwrap();
-
-            let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
-            info!(target: "app::menu", "clicked: {channel}!");
-            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-            menu_is_visible.set(atom, false);
+            if let Some(node) = sg_root.lookup_node(path) {
+                let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
+                info!(target: "app::menu", "clicked: {channel}!");
+                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                menu_is_visible.set(atom, false);
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -517,4 +518,83 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
+}
+
+pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+    let atom = &mut PropertyAtomicGuard::none();
+    let mut cc = expr::Compiler::new();
+
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.lookup_node("/window").unwrap(),
+        Role::Internal,
+        "scale",
+        0,
+    )
+    .unwrap();
+
+    let menulayer_is_visible = PropertyBool::wrap(&menu_layer, Role::App, "is_visible", 0).unwrap();
+
+    let mainlayer_node = app.sg_root.lookup_node("/window/content/menu_layer/mainbtn_layer").unwrap();
+
+    // Wallet button
+    let node = create_vector_art("walletbtn_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 260").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h - 150").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0., 0.94, 1., 1.],
+    );
+
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    mainlayer_node.link(node);
+
+    let node = create_button("wallet_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 260").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h - 150").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+
+    let (slot, recvr) = Slot::new("wallet_clicked");
+    node.register("click", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let wallet_is_visible =
+        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet_main_layer").unwrap(), Role::App, "is_visible", 0).unwrap();
+    let renderer = app.renderer.clone();
+    let menulayer_is_visible2 = menulayer_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let atom = &mut renderer.make_guard(gfxtag!("wallet_click"));
+            wallet_is_visible.set(atom, true);
+            menulayer_is_visible2.set(atom, false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let renderer = app.renderer.clone();
+    let node = node.setup(|me| Button::new(me, renderer)).await;
+    mainlayer_node.link(node);
 }

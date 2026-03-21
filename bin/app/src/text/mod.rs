@@ -65,7 +65,7 @@ pub fn make_layout(
     width: Option<f32>,
     underlines: &[Range<usize>],
 ) -> parley::Layout<Color> {
-    make_layout2(text, text_color, font_size, lineheight, window_scale, width, underlines, &[])
+    make_layout2(text, text_color, font_size, lineheight, window_scale, width, underlines, &[], "start", "normal")
 }
 
 pub fn make_layout2(
@@ -77,8 +77,26 @@ pub fn make_layout2(
     width: Option<f32>,
     underlines: &[Range<usize>],
     foreground_colors: &[(Range<usize>, Color)],
+    text_align: &str,
+    overflow_wrap: &str,
 ) -> parley::Layout<Color> {
     THREAD_LAYOUT_CTX.with(|layout_ctx| {
+        let text_align = match text_align {
+            "start" => parley::Alignment::Start,
+            "end" => parley::Alignment::End,
+            "left" => parley::Alignment::Left,
+            "center" => parley::Alignment::Center,
+            "right" => parley::Alignment::Right,
+            "justify" => parley::Alignment::Justify,
+            _ => parley::Alignment::Start,
+        };
+        let overflow_wrap = match overflow_wrap {
+            "normal" => parley::OverflowWrap::Normal,
+            "anywhere" => parley::OverflowWrap::Anywhere,
+            "break-word" => parley::OverflowWrap::BreakWord,
+            _ => parley::OverflowWrap::Normal,
+        };
+
         let mut layout_ctx = layout_ctx.borrow_mut();
         let mut font_ctx = GLOBAL_FONT_CTX.clone();
 
@@ -87,7 +105,7 @@ pub fn make_layout2(
         builder.push_default(parley::StyleProperty::FontSize(font_size));
         builder.push_default(parley::StyleProperty::from(FONT_STACK));
         builder.push_default(parley::StyleProperty::Brush(text_color));
-        builder.push_default(parley::StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere));
+        builder.push_default(parley::StyleProperty::OverflowWrap(overflow_wrap));
 
         for underline in underlines {
             builder.push(parley::StyleProperty::Underline(true), underline.clone());
@@ -99,7 +117,7 @@ pub fn make_layout2(
 
         let mut layout: parley::Layout<Color> = builder.build(text);
         layout.break_all_lines(width);
-        layout.align(width, parley::Alignment::Start, parley::AlignmentOptions::default());
+        layout.align(width, text_align, parley::AlignmentOptions::default());
         layout
     })
 }

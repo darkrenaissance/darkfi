@@ -35,6 +35,7 @@ pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_PINK: Color = [0.8, 0.3, 0.8, 1.];
 pub const COLOR_CYAN: Color = [0., 1., 1., 1.];
+pub const COLOR_TEAL: Color = [0.0784, 0.6824, 0.7216, 1.];
 #[allow(dead_code)]
 pub const COLOR_PURPLE: Color = [1., 0., 1., 1.];
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];

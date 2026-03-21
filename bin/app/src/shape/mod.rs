@@ -38,6 +38,9 @@ pub use netlogo3::create_netlogo3;
 mod version_block;
 pub use version_block::create_version_block;
 
+mod copy;
+pub use copy::create_copy;
+
 //mod settings;
 //pub use settings::{create_right_border, create_settings};
 

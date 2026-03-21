@@ -141,9 +141,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     cc.add_const_f32("SEARCH_PADDING_X", SEARCH_PADDING_X);
     cc.add_const_f32("X_RATIO", 1. / 2.);
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/setting/scale").unwrap(),
+        &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
-        "value",
+        "scale",
         0,
     )
     .unwrap();

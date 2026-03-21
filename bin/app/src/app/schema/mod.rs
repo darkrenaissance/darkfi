@@ -38,6 +38,7 @@ use crate::{
 mod chat;
 mod menu;
 //mod settings;
+mod wallet;
 pub mod test;
 pub mod test_scroll_layer;
 
@@ -602,6 +603,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .await;
     }
     menu::make(app, content.clone(), i18n_fish).await;
+    wallet::make(app, content.clone(), i18n_fish).await;
+
+    // Setup wallet button after wallet layer is created
+    let menu_layer = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
+    menu::setup_wallet_button(app, menu_layer, i18n_fish).await;
 
     // @@@ Debug stuff @@@
     //let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();

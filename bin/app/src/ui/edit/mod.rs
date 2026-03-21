@@ -397,6 +397,18 @@ impl BaseEdit {
         self.node.upgrade().unwrap()
     }
 
+    /// Reset the horizontal scroll to 0.
+    /// Useful when the input width is dynamically changed and scrolling is not desired.
+    pub fn reset_scroll(&self) {
+        self.scroll.store(0., Ordering::Release);
+    }
+
+    /// Update the editor when the text property was changed externally.
+    /// This should be called after setting the text property directly.
+    pub fn on_text_prop_changed(&self) {
+        self.editor.lock().on_text_prop_changed();
+    }
+
     fn abs_to_local(&self, point: &mut Point) {
         let rect = self.rect.get();
         *point -= rect.pos();

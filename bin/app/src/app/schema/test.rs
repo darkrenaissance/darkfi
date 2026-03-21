@@ -66,9 +66,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let atom = &mut PropertyAtomicGuard::none();
 
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/setting/scale").unwrap(),
+        &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
-        "value",
+        "scale",
         0,
     )
     .unwrap();

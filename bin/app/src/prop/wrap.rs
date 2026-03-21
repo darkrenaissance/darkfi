@@ -17,10 +17,7 @@
  */
 
 use crate::{
-    error::{Error, Result},
-    expr::{SExprMachine, SExprVal},
-    gfx::{Dimension, Rectangle},
-    scene::SceneNode as SceneNode3,
+    error::{Error, Result}, expr::{SExprMachine, SExprVal}, gfx::{Dimension, Rectangle}, prop::PropertyType, scene::SceneNode as SceneNode3
 };
 
 use super::{PropertyAtomicGuard, PropertyPtr, Role};
@@ -236,6 +233,47 @@ impl PropertyDimension {
     }
 }
 
+#[derive(Clone)]
+pub struct PropertyEnum {
+    prop: PropertyPtr,
+    role: Role,
+    idx: usize,
+}
+
+impl PropertyEnum {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+        let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Verify property type is Enum
+        if prop.typ != PropertyType::Enum {
+            return Err(Error::PropertyWrongType)
+        }
+
+        Ok(Self { prop, role, idx })
+    }
+
+    pub fn get(&self) -> String {
+        // Handle both PropertyValue::Str (defaults) and PropertyValue::Enum (set values)
+        match self.prop.get_value(self.idx) {
+            Ok(val) => {
+                match val.as_str() {
+                    Ok(s) => s,
+                    Err(_) => val.as_enum().unwrap(),
+                }
+            }
+            Err(_) => self.prop.get_enum(self.idx).unwrap(),
+        }
+    }
+
+    pub fn set<S: Into<String>>(&self, atom: &mut PropertyAtomicGuard, val: S) {
+        self.prop().set_enum(atom, self.role, self.idx, val.into()).unwrap()
+    }
+
+    #[inline]
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
+}
 /*
 #[derive(Clone)]
 pub struct PropertyPoint {

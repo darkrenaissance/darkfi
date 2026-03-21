@@ -23,16 +23,10 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
-    mesh::MeshBuilder,
-    prop::{
+    ExecutorPtr, gfx::{DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer, gfxtag}, mesh::{Color, MeshBuilder}, prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
-        PropertyRect, PropertyStr, PropertyUint32, Role,
-    },
-    scene::{Pimpl, SceneNodeWeak},
-    text,
-    util::i18n::I18nBabelFish,
-    ExecutorPtr,
+        PropertyRect, PropertyStr, PropertyUint32, PropertyEnum, Role,
+    }, scene::{Pimpl, SceneNodeWeak}, text, util::i18n::I18nBabelFish
 };
 
 use super::{DrawUpdate, OnModify, UIObject};
@@ -48,12 +42,15 @@ pub struct Text {
     dc_key: u64,
 
     rect: PropertyRect,
+    height: PropertyFloat32,
     z_index: PropertyUint32,
     priority: PropertyUint32,
     text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     lineheight: PropertyFloat32,
+    text_align: PropertyEnum,
+    overflow_wrap: PropertyEnum,
     use_i18n: PropertyBool,
     debug: PropertyBool,
 
@@ -70,12 +67,15 @@ impl Text {
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let height = PropertyFloat32::wrap(node_ref, Role::Internal, "height", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
+        let text_align = PropertyEnum::wrap(node_ref, Role::Internal, "text_align", 0).unwrap();
+        let overflow_wrap = PropertyEnum::wrap(node_ref, Role::Internal, "overflow_wrap", 0).unwrap();
         let use_i18n = PropertyBool::wrap(node_ref, Role::Internal, "use_i18n", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
@@ -87,12 +87,15 @@ impl Text {
             dc_key: OsRng.gen(),
 
             rect,
+            height,
             z_index,
             priority,
             text,
             font_size,
             text_color,
             lineheight,
+            text_align,
+            overflow_wrap,
             use_i18n,
             debug,
 
@@ -103,12 +106,15 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    fn regen_mesh(&self) -> Vec<DrawInstruction> {
+    fn make_layout(&self) -> parley::Layout<Color> {
         let text = self.text.get();
         let font_size = self.font_size.get();
         let lineheight = self.lineheight.get();
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
+        let width = self.rect.get_width();
+        let text_align = self.text_align.get();
+        let overflow_wrap = self.overflow_wrap.get();
 
         let text = if self.use_i18n.get() {
             if let Some(trans) = self.i18n_fish.tr(&text) {
@@ -121,15 +127,16 @@ impl Text {
             text
         };
 
-        let layout =
-            text::make_layout(&text, text_color, font_size, lineheight, window_scale, None, &[]);
+        text::make_layout2(&text, text_color, font_size, lineheight, window_scale, Some(width), &[], &[], &text_align, &overflow_wrap)
+    }
 
+    fn regen_mesh(&self, layout: &parley::Layout<Color>) -> Vec<DrawInstruction> {
         let mut debug_opts = text::DebugRenderOptions::OFF;
         if self.debug.get() {
             debug_opts |= text::DebugRenderOptions::BASELINE;
         }
 
-        text::render_layout_with_opts(&layout, debug_opts, &self.renderer, gfxtag!("text"))
+        text::render_layout_with_opts(layout, debug_opts, &self.renderer, gfxtag!("text"))
     }
 
     #[instrument(target = "ui::text")]
@@ -155,8 +162,11 @@ impl Text {
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
 
+        let layout = self.make_layout();
+        self.height.set(atom, layout.height());
+
         let mut instrs = vec![DrawInstruction::Move(rect.pos())];
-        instrs.append(&mut self.regen_mesh());
+        instrs.append(&mut self.regen_mesh(&layout));
 
         if self.debug.get() {
             let rect = self.rect.get().with_zero_pos();

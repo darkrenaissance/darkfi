@@ -155,6 +155,8 @@ impl PrivMessage {
                 Some(clip.w - timestamp_width),
                 &[],
                 &[(0..nick_end, nick_color)],
+                "start",
+                "normal",
             )
         };
         self.txt_layout = Some(txt_layout);
