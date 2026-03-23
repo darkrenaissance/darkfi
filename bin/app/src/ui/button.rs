@@ -18,6 +18,7 @@
 
 use async_trait::async_trait;
 use miniquad::{MouseButton, TouchPhase};
+use rand::{rngs::OsRng, Rng};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -25,7 +26,8 @@ use std::sync::{
 use tracing::instrument;
 
 use crate::{
-    gfx::{Point, Rectangle},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer},
+    mesh::MeshBuilder,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
 };
@@ -39,26 +41,36 @@ pub type ButtonPtr = Arc<Button>;
 
 pub struct Button {
     node: SceneNodeWeak,
+    renderer: Renderer,
 
     is_active: PropertyBool,
     rect: PropertyRect,
     priority: PropertyUint32,
+    z_index: PropertyUint32,
+    debug: PropertyBool,
+    dc_key: u64,
 
     mouse_btn_held: AtomicBool,
 }
 
 impl Button {
-    pub async fn new(node: SceneNodeWeak) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
+            renderer,
             is_active,
             rect,
             priority,
+            z_index,
+            debug,
+            dc_key: OsRng.gen(),
             mouse_btn_held: AtomicBool::new(false),
         });
 
@@ -81,7 +93,27 @@ impl UIObject for Button {
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
             warn!(target: "ui::button", "Rect eval failure: {e}");
         }
-        None
+
+        if !self.debug.get() {
+            return None;
+        }
+
+        let rect = self.rect.get();
+        let mut mesh = MeshBuilder::new(gfxtag!("button_debug"));
+        mesh.draw_outline(&rect, [1., 0., 0., 1.], 1.);
+
+        Some(DrawUpdate {
+            key: self.dc_key,
+            draw_calls: vec![(
+                self.dc_key,
+                DrawCall::new(
+                    vec![DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured())],
+                    vec![],
+                    self.z_index.get(),
+                    "button_debug",
+                ),
+            )],
+        })
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {

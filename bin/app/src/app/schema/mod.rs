@@ -473,7 +473,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(reconnect_task);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     netlayer_node.link(node);
 
     // Navbar Settings Button
@@ -563,7 +563,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     settingslayer_node.link(node);
     */
 

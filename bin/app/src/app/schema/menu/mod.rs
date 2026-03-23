@@ -256,6 +256,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     prop.set_f32(atom, Role::App, 2, 100.).unwrap();
     prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    // Uncomment this to see the button outline
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let (slot, recvr) = Slot::new("write_clicked");
     node.register("click", slot).unwrap();
@@ -271,7 +274,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     mainlayer_node.link(node);
 
     // Make buttons for cancel and done
@@ -483,7 +486,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
 
     // Create the done button
@@ -512,6 +515,6 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
 }

@@ -110,6 +110,9 @@ pub fn create_button(name: &str) -> SceneNode {
     let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     node.add_signal("click", "Button clicked event", vec![]).unwrap();
 
     node

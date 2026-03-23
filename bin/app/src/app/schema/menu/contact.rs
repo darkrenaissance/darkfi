@@ -203,7 +203,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     layer_node.link(node);
 
     let node = create_singleline_edit("nick_edit");
@@ -614,7 +614,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
 
     // Create the done button
@@ -641,7 +641,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
 
     layer_node

@@ -343,7 +343,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create shortcut to go back as well
@@ -982,7 +982,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Create shortcut to send as well
@@ -1086,7 +1086,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     layer_node.link(node);
 
     // Commands help hint
@@ -1133,7 +1133,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(Button::new).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     cmd_layer_node.link(node);
 
     // Create the actionbar bg
