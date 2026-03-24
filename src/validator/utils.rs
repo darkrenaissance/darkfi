@@ -23,7 +23,6 @@ use darkfi_sdk::{
     tx::TransactionHash,
 };
 use num_bigint::BigUint;
-use randomx::{RandomXCache, RandomXFlags, RandomXVM};
 use tracing::info;
 
 use crate::{
@@ -142,41 +141,44 @@ pub fn header_rank(module: &mut PoWModule, header: &Header) -> Result<(BigUint, 
     let target_distance = &*MAX_32_BYTES - target;
     let target_distance_sq = &target_distance * &target_distance;
 
-    // Compute the output hash distance
+    // Compute the squared output hash distance
     let hash_distance = &*MAX_32_BYTES - out_hash;
     let hash_distance_sq = &hash_distance * &hash_distance;
 
     Ok((difficulty, target_distance_sq, hash_distance_sq))
 }
 
-/// Compute a block's rank, assuming that its valid, based on provided
-/// mining target.
+/// Compute a block's rank, assuming that its valid, for provided PoW
+/// module.
+/// Returns next mine difficulty, along with the computed rank.
 ///
 /// Block's rank is the tuple of its squared mining target distance
 /// from max 32 bytes int, along with its squared RandomX hash number
 /// distance from max 32 bytes int. Genesis block has rank (0, 0).
-pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUint)> {
+pub fn block_rank(
+    module: &mut PoWModule,
+    block: &BlockInfo,
+) -> Result<(BigUint, BigUint, BigUint)> {
+    // Grab next mine target and difficulty
+    let (target, difficulty) = module.next_mine_target_and_difficulty()?;
+
     // Genesis block has rank 0
     if block.header.height == 0 {
-        return Ok((0u64.into(), 0u64.into()))
+        return Ok((difficulty, 0u64.into(), 0u64.into()))
     }
+
+    // Compute the block header hash based on its PoW data
+    let out_hash = module.calculate_hash(&block.header)?;
 
     // Compute the squared mining target distance
     let target_distance = &*MAX_32_BYTES - target;
     let target_distance_sq = &target_distance * &target_distance;
 
-    // Setup RandomX verifier
-    let flags = RandomXFlags::get_recommended_flags();
-    let cache = RandomXCache::new(flags, block.header.previous.inner())?;
-    let vm = RandomXVM::new(flags, Some(cache), None)?;
-
-    // Compute the output hash distance
-    let out_hash = vm.calculate_hash(block.hash().inner())?;
-    let out_hash = BigUint::from_bytes_le(&out_hash);
+    // Compute the squared output hash distance
     let hash_distance = &*MAX_32_BYTES - out_hash;
     let hash_distance_sq = &hash_distance * &hash_distance;
 
-    Ok((target_distance_sq, hash_distance_sq))
+    Ok((difficulty, target_distance_sq, hash_distance_sq))
 }
 
 /// Auxiliary function to calculate the middle value between provided

@@ -301,12 +301,11 @@ impl PoWModule {
         self.verify_block_hash(header)
     }
 
-    /// Verify provided block hash is less than provided mine target.
-    pub fn verify_block_target(&mut self, header: &Header, target: &BigUint) -> Result<BigUint> {
-        let verifier_setup = Instant::now();
-
-        // Grab verifier output hash based on block PoW data
-        let (out_hash, verification_time) = match &header.pow_data {
+    /// Compute provided block header hash based on its PoW data.
+    pub fn calculate_hash(&mut self, header: &Header) -> Result<BigUint> {
+        // Grab corresponding VM based on block PoW data
+        let vm_setup = Instant::now();
+        let (pow_type, vm, blob) = match &header.pow_data {
             DarkFi => {
                 // Check which VM key should be used.
                 // We only use the next key when the next block is the
@@ -322,33 +321,33 @@ impl PoWModule {
                     &self.darkfi_rx_keys.0
                 };
 
-                let vm = self.darkfi_rx_factory.create(&randomx_key.inner()[..])?;
-
-                debug!(
-                    target: "validator::pow::verify_block_target",
-                    "[VERIFIER] DarkFi PoW setup time: {:?}",
-                    verifier_setup.elapsed(),
-                );
-
-                let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(&header.to_block_hashing_blob())?;
-                (BigUint::from_bytes_le(&out_hash), verification_time)
+                (
+                    "DarkFi",
+                    self.darkfi_rx_factory.create(&randomx_key.inner()[..])?,
+                    header.to_block_hashing_blob(),
+                )
             }
-            Monero(powdata) => {
-                let vm = self.monero_rx_factory.create(powdata.randomx_key())?;
-
-                debug!(
-                    target: "validator::pow::verify_block_target",
-                    "[VERIFIER] Monero PoW setup time: {:?}",
-                    verifier_setup.elapsed(),
-                );
-
-                let verification_time = Instant::now();
-                let out_hash = vm.calculate_hash(&powdata.to_block_hashing_blob())?;
-                (BigUint::from_bytes_le(&out_hash), verification_time)
-            }
+            Monero(powdata) => (
+                "Monero",
+                self.monero_rx_factory.create(powdata.randomx_key())?,
+                powdata.to_block_hashing_blob(),
+            ),
         };
-        debug!(target: "validator::pow::verify_block_target", "[VERIFIER] Verification time: {:?}", verification_time.elapsed());
+        debug!(target: "validator::pow::calculate_hash", "[VERIFIER] {pow_type} PoW setup time: {:?}", vm_setup.elapsed());
+
+        // Compute the hash and convert it to `BigUint`
+        let compute_time = Instant::now();
+        let out_hash = vm.calculate_hash(&blob)?;
+        let out_hash = BigUint::from_bytes_le(&out_hash);
+        debug!(target: "validator::pow::calculate_hash", "[VERIFIER] Hash compute time: {:?}", compute_time.elapsed());
+
+        Ok(out_hash)
+    }
+
+    /// Verify provided block hash is less than provided mine target.
+    pub fn verify_block_target(&mut self, header: &Header, target: &BigUint) -> Result<BigUint> {
+        // Grab verifier output hash based on block PoW data
+        let out_hash = self.calculate_hash(header)?;
 
         // Verify hash is less than the provided mine target
         if out_hash > *target {

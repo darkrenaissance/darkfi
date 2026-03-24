@@ -235,11 +235,9 @@ impl Consensus {
             // Apply block diffs
             fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(&fork.diffs[index])?;
 
-            // Grab next mine target and difficulty
-            let (next_target, next_difficulty) = fork.module.next_mine_target_and_difficulty()?;
-
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (next_difficulty, target_distance_sq, hash_distance_sq) =
+                block_rank(&mut fork.module, block)?;
 
             // Update PoW module
             fork.module.append(&block.header, &next_difficulty)?;
@@ -730,11 +728,9 @@ impl Fork {
     /// Auxiliary function to append a proposal and update current fork
     /// rank.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
-        // Grab next mine target and difficulty
-        let (next_target, next_difficulty) = self.module.next_mine_target_and_difficulty()?;
-
         // Calculate block rank
-        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
+        let (next_difficulty, target_distance_sq, hash_distance_sq) =
+            block_rank(&mut self.module, &proposal.block)?;
 
         // Update fork ranks
         self.targets_rank += target_distance_sq.clone();

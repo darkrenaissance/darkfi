@@ -446,11 +446,9 @@ impl Validator {
                 }
             };
 
-            // Grab next mine target and difficulty
-            let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
-
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (next_difficulty, target_distance_sq, hash_distance_sq) =
+                block_rank(&mut module, block)?;
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
@@ -561,11 +559,9 @@ impl Validator {
                 }
             };
 
-            // Grab next mine target and difficulty
-            let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
-
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (next_difficulty, target_distance_sq, hash_distance_sq) =
+                block_rank(&mut module, block)?;
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
@@ -886,11 +882,9 @@ impl Validator {
             // Grab block
             let block = self.blockchain.get_blocks_by_heights(&[index])?[0].clone();
 
-            // Grab next mine target and difficulty
-            let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
-
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(&block, &next_target)?;
+            let (next_difficulty, target_distance_sq, hash_distance_sq) =
+                block_rank(&mut module, &block)?;
 
             // Update chain ranks
             targets_rank += target_distance_sq.clone();
