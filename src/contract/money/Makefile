@@ -67,13 +67,13 @@ test-token-mint-burn: all
 		--features=no-entrypoint,client \
 		--test token_mint_burn
 
-test-delayed-tx: all
+test-dep8: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --package $(PKGNAME) \
 		--features=no-entrypoint,client \
-		--test delayed_tx
+		--test dep8
 
-test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint-burn test-delayed-tx
+test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint-burn test-dep8
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \

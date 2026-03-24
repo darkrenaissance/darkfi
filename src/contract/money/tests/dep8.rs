@@ -37,7 +37,7 @@ use darkfi_sdk::{
     blockchain::{compute_fee, expected_reward},
     crypto::{
         contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, BaseBlind, FuncId, MerkleNode,
-        ScalarBlind, SecretKey,
+        MerkleTree, ScalarBlind, SecretKey,
     },
     pasta::pallas,
     ContractCall,
@@ -46,47 +46,65 @@ use darkfi_serial::AsyncEncodable;
 use rand::rngs::OsRng;
 
 #[test]
-#[ignore]
-fn delayed_tx() -> Result<()> {
+fn dep8() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Holders this test will use
-        const HOLDERS: [Holder; 3] = [Holder::Alice, Holder::Bob, Holder::Charlie];
+        // Showcase DEP-0008 and how tx-local state works.
 
-        // Initialize harness
-        let mut th = TestHarness::new(&HOLDERS, true).await?;
+        // Initialize test harness
+        use Holder::{Alice, Bob, Charlie};
+        let mut th = TestHarness::new(&[Alice, Bob, Charlie], true).await?;
 
         // Generate one new block mined by Alice
-        th.generate_block(&Holder::Alice, &HOLDERS).await?;
+        th.generate_block_all(&Alice).await?;
 
         // Generate two new blocks mined by Bob
-        th.generate_block(&Holder::Bob, &HOLDERS).await?;
-        th.generate_block(&Holder::Bob, &HOLDERS).await?;
-
-        // Assert correct rewards
-        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
-        let bob_coins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
-        assert!(alice_coins.len() == 1);
-        assert!(bob_coins.len() == 2);
-        assert!(alice_coins[0].note.value == expected_reward(1));
-        assert!(bob_coins[0].note.value == expected_reward(2));
-        assert!(bob_coins[1].note.value == expected_reward(3));
+        th.generate_block_all(&Bob).await?;
+        th.generate_block_all(&Bob).await?;
 
         let current_block_height = 4;
 
-        // Manually create an Alice to Charlie transfer call,
-        // where the output is used to pay the fee
-        let wallet = th.holders.get(&Holder::Alice).unwrap();
-        let rcpt = th.holders.get(&Holder::Charlie).unwrap().keypair.public;
-        let mut money_merkle_tree = wallet.money_merkle_tree.clone();
+        // Assert correct rewards
+        let alice_coins = th.coins(&Alice);
+        let bob_coins = th.coins(&Bob);
+        assert_eq!(alice_coins.len(), 1);
+        assert_eq!(bob_coins.len(), 2);
+        assert_eq!(alice_coins[0].note.value, expected_reward(1));
+        assert_eq!(bob_coins[0].note.value, expected_reward(2));
+        assert_eq!(bob_coins[1].note.value, expected_reward(3));
 
+        // Now we create an Alice to Charlie transfer call, where the
+        // output is used to pay the fee.
+        //
+        // The transfer call change-output will be marked as tx-local.
+        // which will allow it to be used as the fee call input which
+        // is also marked as tx-local, signalling the correct verification
+        // path in the contract's functions. The fee call output will
+        // not be used further in the transaction, so it will not be
+        // marked as tx-local - meaning it will get added to the global
+        // on-chain state.
+
+        // We'll clone the on-chain Merkle tree because we're creating
+        // calls manually here.
+        let alice_wallet = th.wallet(&Alice);
+        let money_merkle_tree = alice_wallet.money_merkle_tree.clone();
+        // For the tx-local tree, we'll initialize a new one.
+        // It gets created the same way like the on-chain one, initialized
+        // with a zero-leaf.
+        let mut money_merkle_tree_local = MerkleTree::new(1);
+        money_merkle_tree_local.append(MerkleNode::from(pallas::Base::ZERO));
+
+        // TODO: Might be worth implementing an abstraction in test-harness
+        // but also the contract client-side API should be more powerful.
         let (mint_pk, mint_zkbin) = th.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = th.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
-        // Create the transfer call
-        let (alice_xfer_params, secrets, _) = make_transfer_call(
-            wallet.keypair,
+        let rcpt = th.wallet(&Charlie).keypair.public;
+
+        // Manually create the call
+        let (mut alice_xfer_params, secrets, _) = make_transfer_call(
+            alice_wallet.keypair,
             rcpt,
             alice_coins[0].note.value / 2,
             alice_coins[0].note.token_id,
@@ -101,31 +119,44 @@ fn delayed_tx() -> Result<()> {
             false,
         )?;
 
-        let mut output_coins = vec![];
-        for output in &alice_xfer_params.outputs {
-            money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+        // The idea is to use this call's output to pay the tx fee.
+        // So we'll change the `Output` to `tx_Local = true`, and add
+        // it to our tx-local Merkle tree so we can create the correct
+        // inclusion proof.
+        assert_eq!(alice_xfer_params.inputs.len(), 1);
+        assert_eq!(alice_xfer_params.outputs.len(), 2);
 
-            // Attempt to decrypt the output note to see if this is a coin for the holder.
-            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+        // Find the change output by trial and error. We do this because
+        // in `make_transfer_call()` the outputs are shuffled.
+        // Initialize output_coin with another coin to workaround the compiler.
+        let mut output_coin = alice_coins[0].clone();
+        for output in alice_xfer_params.outputs.iter_mut() {
+            let Ok(note) = output.note.decrypt::<MoneyNote>(&alice_wallet.keypair.secret) else {
                 continue
             };
 
-            let owncoin = OwnCoin {
+            // In this tx, we want to use this change output to pay for
+            // the transaction fee. We have to add it to the tx-local
+            // Merkle tree in order to be able to provide a valid
+            // inclusion proof.
+            output.tx_local = true;
+            money_merkle_tree_local.append(MerkleNode::from(output.coin.inner()));
+
+            output_coin = OwnCoin {
                 coin: output.coin,
                 note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: money_merkle_tree.mark().unwrap(),
+                secret: alice_wallet.keypair.secret,
+                leaf_position: money_merkle_tree_local.mark().unwrap(),
             };
-
-            output_coins.push(owncoin);
+            break
         }
 
-        // Encode the call
+        // Encode the Transfer call
         let mut data = vec![MoneyFunction::TransferV1 as u8];
         alice_xfer_params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-        // Create the TransactionBuilder containing the `Transfer` call
+        // Create the TransactionBuilder containing the Transfer call.
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;
 
@@ -133,9 +164,9 @@ fn delayed_tx() -> Result<()> {
         let sigs = tx.create_sigs(&secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
 
-        // First we verify the fee-less transaction to see how much gas it uses for execution
-        // and verification.
-        let validator = wallet.validator.read().await;
+        // First we verify the fee-less transaction to see how much gas it
+        // uses for execution and verification.
+        let validator = alice_wallet.validator().read().await;
         let gas_used = validator
             .add_test_transactions(
                 &[tx],
@@ -150,21 +181,21 @@ fn delayed_tx() -> Result<()> {
 
         // Compute the required fee
         let required_fee = compute_fee(&(gas_used + FEE_CALL_GAS));
+        let change_value = output_coin.note.value - required_fee;
 
-        let coin = &output_coins[0];
-        let change_value = coin.note.value - required_fee;
-
-        // Input and output setup
+        // Input and output setup.
         let input = FeeCallInput {
-            coin: coin.clone(),
-            merkle_path: money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
+            coin: output_coin.clone(),
+            merkle_path: money_merkle_tree_local.witness(output_coin.leaf_position, 0).unwrap(),
             user_data_blind: BaseBlind::random(&mut OsRng),
         };
 
+        // The output will not be used further in the transaction so
+        // it will not be marked as tx-local.
         let output = FeeCallOutput {
-            public_key: wallet.keypair.public,
+            public_key: alice_wallet.keypair.public,
             value: change_value,
-            token_id: coin.note.token_id,
+            token_id: output_coin.note.token_id,
             blind: BaseBlind::random(&mut OsRng),
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
@@ -217,13 +248,17 @@ fn delayed_tx() -> Result<()> {
                 merkle_root: public_inputs.merkle_root,
                 user_data_enc: public_inputs.input_user_data_enc,
                 signature_public: public_inputs.signature_public,
-                tx_local: false,
+                // Here we mark the Input tx-local since the Ouput it
+                // comes from (the previous Transfer call) creates it.
+                tx_local: true,
             },
             output: Output {
                 value_commit: public_inputs.output_value_commit,
                 token_commit: public_inputs.token_commit,
                 coin: public_inputs.output_coin,
                 note: encrypted_note,
+                // We don't use this Output further in the tx, so we
+                // don't mark it tx-local.
                 tx_local: false,
             },
             fee_value_blind,
@@ -240,61 +275,42 @@ fn delayed_tx() -> Result<()> {
         tx_builder.append(ContractCallLeaf { call: fee_call, proofs: vec![proof] }, vec![])?;
         let alice_fee_params = Some(fee_call_params);
 
-        // Now build the actual transaction and sign it with all necessary keys.
+        // Now build the actual transaction and sign it with all necessary keys
         let mut alice_tx = tx_builder.build()?;
         let sigs = alice_tx.create_sigs(&secrets.signature_secrets)?;
         alice_tx.signatures = vec![sigs];
         let sigs = alice_tx.create_sigs(&[signature_secret])?;
         alice_tx.signatures.push(sigs);
 
-        // Bob transfers some tokens to Charlie
-        let (bob_tx, (bob_xfer_params, bob_fee_params), _spent_soins) = th
-            .transfer(
-                bob_coins[0].note.value,
-                &Holder::Bob,
-                &Holder::Charlie,
-                &[bob_coins[0].clone()],
-                bob_coins[0].note.token_id,
-                current_block_height,
-                false,
-            )
-            .await?;
+        th.execute_transfer_tx(
+            &Alice,
+            alice_tx.clone(),
+            &alice_xfer_params,
+            &alice_fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
 
-        // Bob->Charlie transaction gets in first
-        for holder in &HOLDERS {
-            th.execute_transfer_tx(
-                holder,
-                bob_tx.clone(),
-                &bob_xfer_params,
-                &bob_fee_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
+        th.execute_transfer_tx(
+            &Bob,
+            alice_tx.clone(),
+            &alice_xfer_params,
+            &alice_fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
 
-        // Execute the Alice->Charlie transaction
-        for holder in &HOLDERS {
-            th.execute_transfer_tx(
-                holder,
-                alice_tx.clone(),
-                &alice_xfer_params,
-                &alice_fee_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
-
-        // Assert coins in wallets
-        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
-        let bob_coins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
-        let charlie_coins = &th.holders.get(&Holder::Charlie).unwrap().unspent_money_coins;
-        assert!(alice_coins.len() == 1);
-        assert!(bob_coins.len() == 1);
-        assert!(charlie_coins.len() == 2);
-        assert!(charlie_coins[0].note.value == expected_reward(2));
-        assert!(charlie_coins[1].note.value == expected_reward(1) / 2);
+        th.execute_transfer_tx(
+            &Charlie,
+            alice_tx.clone(),
+            &alice_xfer_params,
+            &alice_fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
 
         // Thanks for reading
         Ok(())

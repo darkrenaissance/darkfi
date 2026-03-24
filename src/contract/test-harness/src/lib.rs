@@ -317,6 +317,11 @@ impl Wallet {
         self.mark_spent_nullifier(fp.input.nullifier, holder);
         self.process_outputs(slice::from_ref(&fp.output), holder)
     }
+
+    /// Return a reference to the Holder's `Validator` instance
+    pub fn validator(&self) -> &ValidatorPtr {
+        &self.validator
+    }
 }
 
 /// Native contract test harness instance
