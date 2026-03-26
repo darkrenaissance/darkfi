@@ -36,7 +36,7 @@ pub use builder::{
     TransferCallSecrets,
 };
 
-pub(crate) mod proof;
+pub mod proof;
 
 /// Select coins from `coins` of at least `min_value` in total.
 /// Different strategies can be used. This function uses the dumb strategy
