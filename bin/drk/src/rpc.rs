@@ -434,7 +434,7 @@ impl Drk {
     }
 
     // Queries darkfid for last confirmed block.
-    async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
+    pub async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
         let rep = self
             .darkfid_daemon_request("blockchain.last_confirmed_block", &JsonValue::Array(vec![]))
             .await?;
@@ -446,7 +446,7 @@ impl Drk {
     }
 
     // Queries darkfid for a block with given height.
-    async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
+    pub async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let params = self
             .darkfid_daemon_request(
                 "blockchain.get_block",
