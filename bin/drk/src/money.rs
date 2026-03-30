@@ -747,19 +747,25 @@ impl Drk {
                 scan_cache.log(String::from("[parse_money_call] Found Money::FeeV1 call"));
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
-                coins.push((params.output.coin, params.output.note, false));
+                if !params.output.tx_local {
+                    coins.push((params.output.coin, params.output.note, false));
+                }
             }
             MoneyFunction::GenesisMintV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::GenesisMintV1 call"));
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 for output in params.outputs {
-                    coins.push((output.coin, output.note, false));
+                    if !output.tx_local {
+                        coins.push((output.coin, output.note, false));
+                    }
                 }
             }
             MoneyFunction::PoWRewardV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::PoWRewardV1 call"));
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push((params.output.coin, params.output.note, true));
+                if !params.output.tx_local {
+                    coins.push((params.output.coin, params.output.note, true));
+                }
             }
             MoneyFunction::TransferV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::TransferV1 call"));
@@ -770,7 +776,9 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push((output.coin, output.note, false));
+                    if !output.tx_local {
+                        coins.push((output.coin, output.note, false));
+                    }
                 }
             }
             MoneyFunction::OtcSwapV1 => {
@@ -782,7 +790,9 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    coins.push((output.coin, output.note, false));
+                    if !output.tx_local {
+                        coins.push((output.coin, output.note, false));
+                    }
                 }
             }
             MoneyFunction::AuthTokenMintV1 => {

@@ -285,6 +285,10 @@ impl Wallet {
         let mut found = vec![];
 
         for output in outputs {
+            if output.tx_local {
+                continue
+            }
+
             self.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
 
             let Ok(note) = output.note.decrypt::<MoneyNote>(&self.keypair.secret) else { continue };
