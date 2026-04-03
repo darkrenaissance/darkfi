@@ -38,6 +38,8 @@ use darkfi::{
 };
 use darkfi_serial::serialize_async;
 
+use crate::registry::DarkfiMinersRegistryStatePtr;
+
 /// Atomic pointer to the `ProtocolTx` handler.
 pub type ProtocolTxHandlerPtr = Arc<ProtocolTxHandler>;
 
@@ -66,6 +68,7 @@ impl ProtocolTxHandler {
         &self,
         executor: &ExecutorPtr,
         validator: &ValidatorPtr,
+        registry_state: &DarkfiMinersRegistryStatePtr,
         subscriber: JsonSubscriber,
     ) -> Result<()> {
         debug!(
@@ -74,7 +77,7 @@ impl ProtocolTxHandler {
         );
 
         self.handler.task.clone().start(
-            handle_receive_tx(self.handler.clone(), validator.clone(), subscriber),
+            handle_receive_tx(self.handler.clone(), validator.clone(), registry_state.clone(), subscriber),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -105,6 +108,7 @@ impl ProtocolTxHandler {
 async fn handle_receive_tx(
     handler: ProtocolGenericHandlerPtr<Transaction, Transaction>,
     validator: ValidatorPtr,
+    registry_state: DarkfiMinersRegistryStatePtr,
     subscriber: JsonSubscriber,
 ) -> Result<()> {
     debug!(target: "darkfid::proto::protocol_tx::handle_receive_tx", "START");
@@ -133,7 +137,21 @@ async fn handle_receive_tx(
         }
 
         // Append transaction
-        if let Err(e) = validator.append_tx(&tx, true).await {
+        let result = validator.append_tx(&tx, true).await;
+
+        // Purge all unreferenced contract trees from the database
+        if let Err(e) = validator
+            .consensus
+            .purge_unreferenced_trees(&mut registry_state.read().await.new_trees())
+            .await
+        {
+            error!(target: "darkfid::proto::protocol_tx::handle_receive_tx", "Purging unreferenced contract trees from the database failed: {e}");
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Handle result
+        if let Err(e) = result {
             debug!(
                 target: "darkfid::proto::protocol_tx::handle_receive_tx",
                 "append_tx fail: {e}"
