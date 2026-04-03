@@ -450,6 +450,11 @@ impl TxStoreOverlay {
         Ok(())
     }
 
+    /// Check if the overlay's main tree contains a given transaction hash.
+    pub fn contains(&self, tx_hash: &TransactionHash) -> Result<bool> {
+        Ok(self.0.lock().unwrap().contains_key(SLED_TX_TREE, tx_hash.inner())?)
+    }
+
     /// Fetch given tx hashes from the overlay's main tree.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the overlay, and otherwise it is `None`, if it has not.

@@ -180,70 +180,57 @@ impl Validator {
     }
 
     /// The node retrieves a transaction, validates its state
-    /// transition, and appends it to the pending txs store.
+    /// transition agains best fork, and appends it to the pending txs
+    /// store if its valid.
     ///
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
     pub async fn append_tx(&mut self, tx: &Transaction, write: bool) -> Result<()> {
         let tx_hash = tx.hash();
 
-        // Check if we have already seen this tx
-        let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
-        let tx_in_pending_txs_store = self.blockchain.transactions.contains_pending(&tx_hash)?;
+        // Check if we have already seen this tx in the pending store
+        if self.blockchain.transactions.contains_pending(&tx_hash)? {
+            debug!(target: "validator::append_tx", "We have already seen pending tx: {tx_hash}");
+            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.as_string()).into())
+        }
 
-        if tx_in_txstore || tx_in_pending_txs_store {
+        // Grab the best fork to verify against
+        let index = best_fork_index(&self.consensus.forks)?;
+        let fork = self.consensus.forks[index].full_clone()?;
+
+        // Check if we have already seen this tx. This checks both the
+        // fork cache and the actual database.
+        if fork.overlay.lock().unwrap().transactions.contains(&tx_hash)? {
             debug!(target: "validator::append_tx", "We have already seen tx: {tx_hash}");
             return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.as_string()).into())
         }
 
         // Verify state transition
         info!(target: "validator::append_tx", "Starting state transition validation for tx: {tx_hash}");
-        let tx_vec = [tx.clone()];
-        let mut valid = false;
-
-        // Iterate over node forks to verify transaction validity in
-        // their overlays.
-        for fork in self.consensus.forks.iter_mut() {
-            // Clone fork state
-            let fork_clone = fork.full_clone()?;
-
-            // Grab forks' next block height
-            let next_block_height = fork_clone.get_next_block_height()?;
-
-            // Verify transaction
-            let verify_result = verify_transactions(
-                &fork_clone.overlay,
-                next_block_height,
-                self.consensus.module.target,
-                &tx_vec,
-                &mut MerkleTree::new(1),
-                self.verify_fees,
-            )
-            .await;
-
-            // Handle response
-            match verify_result {
-                Ok(_) => {}
-                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
-                Err(e) => return Err(e),
-            }
-
-            valid = true;
-
-            // Store transaction hash in forks' mempool
-            if write {
-                fork.mempool.push(tx_hash);
-            }
+        // Map of ZK proof verifying keys for the transaction
+        let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+        for call in &tx.calls {
+            vks.insert(call.data.contract_id.to_bytes(), HashMap::new());
         }
 
-        // Return error if transaction is not valid for any fork
-        if !valid {
-            return Err(TxVerifyFailed::ErroneousTxs(tx_vec.to_vec()).into())
-        }
+        // Grab forks' next block height
+        let next_block_height = fork.get_next_block_height()?;
+
+        // Verify transaction
+        verify_transaction(
+            &fork.overlay,
+            next_block_height,
+            self.consensus.module.target,
+            tx,
+            &mut MerkleTree::new(1),
+            &mut vks,
+            self.verify_fees,
+        )
+        .await?;
 
         // Add transaction to pending txs store
         if write {
-            self.blockchain.add_pending_txs(&tx_vec)?;
+            self.blockchain.add_pending_txs(std::slice::from_ref(tx))?;
             info!(target: "validator::append_tx", "Appended tx {tx_hash} to pending txs store");
         }
 
