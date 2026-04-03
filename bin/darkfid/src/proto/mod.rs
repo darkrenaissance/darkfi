@@ -105,7 +105,7 @@ impl DarkfidP2pHandler {
 
         // Start the `ProtocolTx` messages handler
         let subscriber = node.subscribers.get("txs").unwrap().clone();
-        self.txs.start(executor, &node.validator, subscriber).await?;
+        self.txs.start(executor, &node.validator, &node.registry.state, subscriber).await?;
 
         // Start the P2P instance
         self.p2p.clone().start().await?;

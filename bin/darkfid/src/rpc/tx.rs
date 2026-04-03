@@ -73,7 +73,20 @@ impl DarkfiNode {
         };
 
         // Simulate state transition
-        if let Err(e) = validator.append_tx(&tx, false).await {
+        let result = validator.append_tx(&tx, false).await;
+
+        // Purge all unreferenced contract trees from the database
+        if let Err(e) = validator
+            .consensus
+            .purge_unreferenced_trees(&mut self.registry.state.read().await.new_trees())
+            .await
+        {
+            error!(target: "darkfid::rpc::tx_simulate", "Purging unreferenced contract trees from the database failed: {e}");
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        // Handle result
+        if let Err(e) = result {
             error!(target: "darkfid::rpc::tx_simulate", "Failed to validate state transition: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
@@ -123,7 +136,20 @@ impl DarkfiNode {
         };
 
         // We'll perform the state transition check here.
-        if let Err(e) = validator.append_tx(&tx, true).await {
+        let result = validator.append_tx(&tx, true).await;
+
+        // Purge all unreferenced contract trees from the database
+        if let Err(e) = validator
+            .consensus
+            .purge_unreferenced_trees(&mut self.registry.state.read().await.new_trees())
+            .await
+        {
+            error!(target: "darkfid::rpc::tx_broadcast", "Purging unreferenced contract trees from the database failed: {e}");
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        // Handle result
+        if let Err(e) = result {
             error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool: {e}");
             return server_error(RpcError::TxSimulationFail, id, None)
         };
@@ -249,11 +275,20 @@ impl DarkfiNode {
 
         // Simulate state transition
         let result = validator.calculate_fee(&tx, *include_fee).await;
-        if result.is_err() {
-            error!(
-                target: "darkfid::rpc::tx_calculate_fee", "Failed to validate state transition: {}",
-                result.err().unwrap()
-            );
+
+        // Purge all unreferenced contract trees from the database
+        if let Err(e) = validator
+            .consensus
+            .purge_unreferenced_trees(&mut self.registry.state.read().await.new_trees())
+            .await
+        {
+            error!(target: "darkfid::rpc::tx_calculate_fee", "Purging unreferenced contract trees from the database failed: {e}");
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        // Handle result
+        if let Err(e) = result {
+            error!(target: "darkfid::rpc::tx_calculate_fee", "Failed to validate state transition: {e}");
             return server_error(RpcError::TxGasCalculationFail, id, None)
         };
 
