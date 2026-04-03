@@ -127,10 +127,6 @@ pub struct BlockchainNetwork {
     /// Optional sync checkpoint hash
     checkpoint: Option<String>,
 
-    #[structopt(long)]
-    /// Garbage collection task transactions batch size
-    txs_batch_size: Option<usize>,
-
     #[structopt(flatten)]
     /// P2P network settings
     net: SettingsOpt,
@@ -246,15 +242,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), blockchain_config.net).try_into()?;
 
     // Generate the daemon
-    let daemon = Darkfid::init(
-        network,
-        &sled_db,
-        &config,
-        &p2p_settings,
-        &blockchain_config.txs_batch_size,
-        &ex,
-    )
-    .await?;
+    let daemon = Darkfid::init(network, &sled_db, &config, &p2p_settings, &ex).await?;
 
     // Start the daemon
     let config = ConsensusInitTaskConfig {

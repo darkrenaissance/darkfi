@@ -38,9 +38,6 @@ skip_fees = false
 # Optional sync checkpoint hash
 #checkpoint = ""
 
-# Garbage collection task transactions batch size
-txs_batch_size = 50
-
 ## Testnet JSON-RPC settings
 [network_config."testnet".rpc]
 # JSON-RPC listen URL
@@ -236,9 +233,6 @@ skip_fees = false
 # Optional sync checkpoint hash
 #checkpoint = ""
 
-# Garbage collection task transactions batch size
-txs_batch_size = 50
-
 ## Mainnet JSON-RPC settings
 [network_config."mainnet".rpc]
 # JSON-RPC listen URL
@@ -430,9 +424,6 @@ skip_fees = false
 
 # Optional sync checkpoint hash
 #checkpoint = ""
-
-# Garbage collection task transactions batch size
-txs_batch_size = 50
 
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]

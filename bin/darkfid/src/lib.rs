@@ -49,7 +49,7 @@ use rpc::{management::ManagementRpcHandler, DefaultRpcHandler};
 
 /// Validator async tasks
 pub mod task;
-use task::{consensus::ConsensusInitTaskConfig, consensus_init_task};
+use task::{consensus::ConsensusInitTaskConfig, consensus_init_task, garbage_collect_task};
 
 /// P2P net protocols
 mod proto;
@@ -70,8 +70,6 @@ pub struct DarkfiNode {
     p2p_handler: DarkfidP2pHandlerPtr,
     /// Node miners registry pointer
     registry: DarkfiMinersRegistryPtr,
-    /// Garbage collection task transactions batch size
-    txs_batch_size: usize,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
     /// Main JSON-RPC connection tracker
@@ -85,14 +83,12 @@ impl DarkfiNode {
         validator: ValidatorPtr,
         p2p_handler: DarkfidP2pHandlerPtr,
         registry: DarkfiMinersRegistryPtr,
-        txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
     ) -> Result<DarkfiNodePtr> {
         Ok(Arc::new(Self {
             validator,
             p2p_handler,
             registry,
-            txs_batch_size,
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
             management_rpc_connections: Mutex::new(HashSet::new()),
@@ -115,6 +111,8 @@ pub struct Darkfid {
     management_rpc_task: StoppableTaskPtr,
     /// Consensus protocol background task
     consensus_task: StoppableTaskPtr,
+    /// Node garbage collection background task
+    gc_task: StoppableTaskPtr,
 }
 
 impl Darkfid {
@@ -127,7 +125,6 @@ impl Darkfid {
         sled_db: &sled_overlay::sled::Db,
         config: &ValidatorConfig,
         net_settings: &Settings,
-        txs_batch_size: &Option<usize>,
         ex: &ExecutorPtr,
     ) -> Result<DarkfidPtr> {
         info!(target: "darkfid::Darkfid::init", "Initializing a Darkfi daemon...");
@@ -140,18 +137,6 @@ impl Darkfid {
         // Initialize the miners registry
         let registry = DarkfiMinersRegistry::init(network, &validator).await?;
 
-        // Grab blockchain network configured transactions batch size for garbage collection
-        let txs_batch_size = match txs_batch_size {
-            Some(b) => {
-                if *b > 0 {
-                    *b
-                } else {
-                    50
-                }
-            }
-            None => 50,
-        };
-
         // Here we initialize various subscribers that can export live blockchain/consensus data.
         let mut subscribers = HashMap::new();
         subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
@@ -160,18 +145,25 @@ impl Darkfid {
         subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
         // Initialize node
-        let node =
-            DarkfiNode::new(validator, p2p_handler, registry, txs_batch_size, subscribers).await?;
+        let node = DarkfiNode::new(validator, p2p_handler, registry, subscribers).await?;
 
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
         let rpc_task = StoppableTask::new();
         let management_rpc_task = StoppableTask::new();
         let consensus_task = StoppableTask::new();
+        let gc_task = StoppableTask::new();
 
         info!(target: "darkfid::Darkfid::init", "Darkfi daemon initialized successfully!");
 
-        Ok(Arc::new(Self { node, dnet_task, rpc_task, management_rpc_task, consensus_task }))
+        Ok(Arc::new(Self {
+            node,
+            dnet_task,
+            rpc_task,
+            management_rpc_task,
+            consensus_task,
+            gc_task,
+        }))
     }
 
     /// Start the DarkFi daemon in the given executor, using the
@@ -249,13 +241,16 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::start", "Starting P2P network");
         self.node.p2p_handler.start(executor, &self.node).await?;
 
+        // Generate the signal queue smol channel
+        let (sender, receiver) = smol::channel::unbounded::<()>();
+
         // Start the consensus protocol
         info!(target: "darkfid::Darkfid::start", "Starting consensus protocol task");
         self.consensus_task.clone().start(
             consensus_init_task(
                 self.node.clone(),
                 config.clone(),
-                executor.clone(),
+                sender,
             ),
             |res| async move {
                 match res {
@@ -264,6 +259,22 @@ impl Darkfid {
                 }
             },
             Error::ConsensusTaskStopped,
+            executor.clone(),
+        );
+
+        // Start the garbage collection task
+        info!(target: "darkfid::Darkfid::start", "Starting garbage collection task");
+        self.gc_task.clone().start(
+            garbage_collect_task(receiver, self.node.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "darkfid", "Failed starting garbage collection task: {e}")
+                    }
+                }
+            },
+            Error::GarbageCollectionTaskStopped,
             executor.clone(),
         );
 
@@ -294,6 +305,10 @@ impl Darkfid {
         // Stop the P2P network
         info!(target: "darkfid::Darkfid::stop", "Stopping P2P network protocols handler...");
         self.node.p2p_handler.stop().await;
+
+        // Stop the garbage collection task
+        info!(target: "darkfid::Darkfid::stop", "Stopping garbage collection task...");
+        self.gc_task.stop().await;
 
         // Stop the consensus task
         info!(target: "darkfid::Darkfid::stop", "Stopping consensus task...");
