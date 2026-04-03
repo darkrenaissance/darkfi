@@ -24,12 +24,11 @@ use sled_overlay::sled;
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
+use super::{parse_record, SledDbOverlayPtr};
 
 pub const SLED_TX_TREE: &[u8] = b"_transactions";
 pub const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
 pub const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
-pub const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
 
 /// The `TxStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's transactions information.
@@ -48,10 +47,6 @@ pub struct TxStore {
     /// the key is the transaction hash, and the value is the serialized
     /// transaction.
     pub pending: sled::Tree,
-    /// The `sled` tree storing the order of all the node pending transactions,
-    /// where the key is an incremental value, and the value is the serialized
-    /// transaction.
-    pub pending_order: sled::Tree,
 }
 
 impl TxStore {
@@ -60,8 +55,7 @@ impl TxStore {
         let main = db.open_tree(SLED_TX_TREE)?;
         let location = db.open_tree(SLED_TX_LOCATION_TREE)?;
         let pending = db.open_tree(SLED_PENDING_TX_TREE)?;
-        let pending_order = db.open_tree(SLED_PENDING_TX_ORDER_TREE)?;
-        Ok(Self { main, location, pending, pending_order })
+        Ok(Self { main, location, pending })
     }
 
     /// Insert a slice of [`Transaction`] into the store's main tree.
@@ -83,13 +77,6 @@ impl TxStore {
         let (batch, ret) = self.insert_batch_pending(transactions);
         self.pending.apply_batch(batch)?;
         Ok(ret)
-    }
-
-    /// Insert a slice of [`TransactionHash`] into the store's pending txs order tree.
-    pub fn insert_pending_order(&self, txs_hashes: &[TransactionHash]) -> Result<()> {
-        let batch = self.insert_batch_pending_order(txs_hashes)?;
-        self.pending_order.apply_batch(batch)?;
-        Ok(())
     }
 
     /// Generate the sled batch corresponding to an insert to the main tree,
@@ -155,28 +142,6 @@ impl TxStore {
         }
 
         (batch, ret)
-    }
-
-    /// Generate the sled batch corresponding to an insert to the pending txs
-    /// order tree, so caller can handle the write operation.
-    pub fn insert_batch_pending_order(&self, tx_hashes: &[TransactionHash]) -> Result<sled::Batch> {
-        let mut batch = sled::Batch::default();
-
-        let mut next_index = match self.pending_order.last()? {
-            Some(n) => {
-                let prev_bytes: [u8; 8] = n.0.as_ref().try_into().unwrap();
-                let prev = u64::from_be_bytes(prev_bytes);
-                prev + 1
-            }
-            None => 0,
-        };
-
-        for tx_hash in tx_hashes {
-            batch.insert(&next_index.to_be_bytes(), tx_hash.inner());
-            next_index += 1;
-        }
-
-        Ok(batch)
     }
 
     /// Check if the store's main tree contains a given transaction hash.
@@ -311,52 +276,26 @@ impl TxStore {
         Ok(txs)
     }
 
-    /// Retrieve all transactions from the store's pending txs order tree in
-    /// the form of a tuple (`u64`, `TransactionHash`).
-    /// Be careful as this will try to load everything in memory.
-    pub fn get_all_pending_order(&self) -> Result<Vec<(u64, TransactionHash)>> {
+    /// Fetch n transactions after given transaction hash.
+    pub fn get_after_pending(
+        &self,
+        tx_hash: &TransactionHash,
+        n: usize,
+    ) -> Result<Vec<Transaction>> {
         let mut txs = vec![];
-
-        for tx in self.pending_order.iter() {
-            txs.push(parse_u64_key_record(tx.unwrap())?);
-        }
-
-        Ok(txs)
-    }
-
-    /// Fetch n transactions after given order([order..order+n)). In the iteration,
-    /// if a transaction order is not found, the iteration stops and the function
-    /// returns what it has found so far in the store's pending order tree.
-    pub fn get_after_pending(&self, order: u64, n: usize) -> Result<(u64, Vec<Transaction>)> {
-        let mut hashes = vec![];
-
-        // First we grab the order itself
-        if let Some(found) = self.pending_order.get(order.to_be_bytes())? {
-            let hash = deserialize(&found)?;
-            hashes.push(hash);
-        }
-
-        // Then whatever comes after it
-        let mut key = order;
+        let mut key = tx_hash.inner().into();
         let mut counter = 0;
         while counter < n {
-            if let Some(found) = self.pending_order.get_gt(key.to_be_bytes())? {
-                let (order, hash) = parse_u64_key_record(found)?;
-                key = order;
-                hashes.push(hash);
+            if let Some((tx_hash, tx)) = self.pending.get_gt(key)? {
+                key = tx_hash;
+                txs.push(deserialize(&tx)?);
                 counter += 1;
                 continue
             }
             break
         }
 
-        if hashes.is_empty() {
-            return Ok((key, vec![]))
-        }
-
-        let txs = self.get_pending(&hashes, true)?.iter().map(|tx| tx.clone().unwrap()).collect();
-
-        Ok((key, txs))
+        Ok(txs)
     }
 
     /// Retrieve records count of the store's main tree.
@@ -373,13 +312,6 @@ impl TxStore {
     pub fn remove_pending(&self, txs_hashes: &[TransactionHash]) -> Result<()> {
         let batch = self.remove_batch_pending(txs_hashes);
         self.pending.apply_batch(batch)?;
-        Ok(())
-    }
-
-    /// Remove a slice of [`u64`] from the store's pending txs order tree.
-    pub fn remove_pending_order(&self, indexes: &[u64]) -> Result<()> {
-        let batch = self.remove_batch_pending_order(indexes);
-        self.pending_order.apply_batch(batch)?;
         Ok(())
     }
 

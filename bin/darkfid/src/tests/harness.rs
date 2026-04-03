@@ -315,7 +315,5 @@ pub async fn generate_node(
         node.validator.write().await.synced = true;
     }
 
-    node.validator.write().await.purge_pending_txs().await?;
-
     Ok(node)
 }

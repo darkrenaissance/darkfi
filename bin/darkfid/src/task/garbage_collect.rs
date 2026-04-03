@@ -17,7 +17,7 @@
  */
 
 use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
-use darkfi_sdk::crypto::MerkleTree;
+use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use tracing::{debug, error, info};
 
 use crate::DarkfiNodePtr;
@@ -29,17 +29,21 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let validator = node.validator.read().await;
-    let (mut last_checked, mut txs) =
-        match validator.blockchain.transactions.get_after_pending(0, node.txs_batch_size) {
-            Ok(pair) => pair,
-            Err(e) => {
-                error!(
-                    target: "darkfid::task::garbage_collect_task",
-                    "Uproposed transactions retrieval failed: {e}"
-                );
-                return Ok(())
-            }
-        };
+    let mut last_checked = TransactionHash::none();
+    let mut txs = match validator
+        .blockchain
+        .transactions
+        .get_after_pending(&last_checked, node.txs_batch_size)
+    {
+        Ok(txs) => txs,
+        Err(e) => {
+            error!(
+                target: "darkfid::task::garbage_collect_task",
+                "Uproposed transactions retrieval failed: {e}"
+            );
+            return Ok(())
+        }
+    };
 
     // Check if we have transactions to process
     if txs.is_empty() {
@@ -54,7 +58,7 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
     while !txs.is_empty() {
         // Verify each one against current forks
         for tx in txs {
-            let tx_hash = tx.hash();
+            last_checked = tx.hash();
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
@@ -89,7 +93,7 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                     };
 
                 // If the hash is contained in the proposals transactions vec, skip it
-                if proposals_txs.contains(&tx_hash) {
+                if proposals_txs.contains(&last_checked) {
                     continue
                 }
 
@@ -121,12 +125,12 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                     Ok(_) => valid = true,
                     Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {
                         // Remove transaction from fork's mempool
-                        fork.mempool.retain(|tx| *tx != tx_hash);
+                        fork.mempool.retain(|tx| *tx != last_checked);
                     }
                     Err(e) => {
                         error!(
                             target: "darkfid::task::garbage_collect_task",
-                            "Verifying transaction {tx_hash} failed: {e}"
+                            "Verifying transaction {last_checked} failed: {e}"
                         );
                         return Err(e)
                     }
@@ -135,26 +139,26 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
 
             // Remove transaction if its invalid for all the forks
             if !valid {
-                debug!(target: "darkfid::task::garbage_collect_task", "Removing invalid transaction: {tx_hash}");
-                if let Err(e) = validator.blockchain.remove_pending_txs_hashes(&[tx_hash]) {
+                debug!(target: "darkfid::task::garbage_collect_task", "Removing invalid transaction: {last_checked}");
+                if let Err(e) = validator.blockchain.remove_pending_txs_hashes(&[last_checked]) {
                     error!(
                         target: "darkfid::task::garbage_collect_task",
-                        "Removing invalid transaction {tx_hash} failed: {e}"
+                        "Removing invalid transaction {last_checked} failed: {e}"
                     );
                 };
             }
         }
 
         // Grab next batch
-        (last_checked, txs) = match node
+        txs = match node
             .validator
             .read()
             .await
             .blockchain
             .transactions
-            .get_after_pending(last_checked + node.txs_batch_size as u64, node.txs_batch_size)
+            .get_after_pending(&last_checked, node.txs_batch_size)
         {
-            Ok(pair) => pair,
+            Ok(txs) => txs,
             Err(e) => {
                 error!(
                     target: "darkfid::task::garbage_collect_task",

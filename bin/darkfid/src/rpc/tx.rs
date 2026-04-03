@@ -198,8 +198,8 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Queries the node pending transactions store to reset all
-    // transactions. Unproposed transactions are removed.
+    // Queries the node pending transactions store to remove all
+    // transactions.
     // Returns `true` if the operation was successful, otherwise, a
     // corresponding error.
     //
@@ -213,18 +213,15 @@ impl DarkfiNode {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let mut validator = self.validator.write().await;
+        let validator = self.validator.write().await;
         if !validator.synced {
             error!(target: "darkfid::rpc::tx_clean_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        // Retrieve registry transactions
-        let registry_txs = self.registry.state.read().await.proposed_transactions();
-
-        // Purge all unproposed pending transactions from the database
-        if let Err(e) = validator.consensus.purge_unproposed_pending_txs(registry_txs).await {
-            error!(target: "darkfid::rpc::tx_clean_pending", "Failed removing pending txs: {e}");
+        // Purge all pending transactions from the database
+        if let Err(e) = validator.blockchain.transactions.pending.clear() {
+            error!(target: "darkfid::rpc::tx_clean_pending", "Failed cleaning pending txs: {e}");
             return JsonError::new(InternalError, None, id).into()
         };
 
