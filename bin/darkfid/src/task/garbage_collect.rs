@@ -124,8 +124,7 @@ pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
                 match result {
                     Ok(_) => valid = true,
                     Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {
-                        // Remove transaction from fork's mempool
-                        fork.mempool.retain(|tx| *tx != last_checked);
+                        /* Do nothing */
                     }
                     Err(e) => {
                         error!(

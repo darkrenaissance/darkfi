@@ -27,7 +27,8 @@ use tracing::{debug, info, warn};
 use crate::{
     blockchain::{
         block_store::{BlockDifficulty, BlockRanks},
-        BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header, HeaderHash,
+        parse_record, BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
+        HeaderHash,
     },
     runtime::vm_runtime::GAS_LIMIT,
     tx::{Transaction, MAX_TX_CALLS},
@@ -176,6 +177,11 @@ impl Consensus {
             None => {
                 self.push_fork(fork);
             }
+        }
+
+        // Remove proposal transactions from mempool
+        if !proposal.block.txs.is_empty() {
+            self.blockchain.remove_pending_txs(&proposal.block.txs)?;
         }
 
         info!(target: "validator::consensus::append_proposal", "Appended proposal {} - {}", proposal.hash, proposal.block.header.height);
@@ -472,9 +478,9 @@ impl Consensus {
     /// Auxiliary function to purge current forks and reset the ones
     /// starting with the provided prefix, excluding provided confirmed
     /// fork. Additionally, remove confirmed transactions from the
-    /// forks mempools. This function assumes that the prefix blocks
-    /// have already been appended to canonical chain from the
-    /// confirmed fork.
+    /// mempool. This function assumes that the prefix blocks have
+    /// already been appended to canonical chain from the confirmed
+    /// fork.
     ///
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
@@ -496,8 +502,6 @@ impl Consensus {
             confirmed_txs.iter().map(|tx| tx.hash()).collect();
         for (index, fork) in self.forks.iter_mut().enumerate() {
             if &index == confirmed_fork_index {
-                // Remove confirmed proposals txs from fork's mempool
-                fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
                 continue
             }
 
@@ -513,9 +517,6 @@ impl Consensus {
                 keep[index] = false;
                 continue
             }
-
-            // Remove confirmed proposals txs from fork's mempool
-            fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
 
             // Remove the commited differences
             let rest_proposals = fork.proposals.split_off(excess);
@@ -668,8 +669,6 @@ pub struct Fork {
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
     pub diffs: Vec<SledDbOverlayStateDiff>,
-    /// Valid pending transaction hashes
-    pub mempool: Vec<TransactionHash>,
     /// Current fork mining targets rank, cached for better performance
     pub targets_rank: BigUint,
     /// Current fork hashes rank, cached for better performance
@@ -678,7 +677,6 @@ pub struct Fork {
 
 impl Fork {
     pub async fn new(blockchain: Blockchain, module: PoWModule) -> Result<Self> {
-        let mempool = blockchain.get_pending_txs()?.iter().map(|tx| tx.hash()).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
         // Retrieve last block difficulty to access current ranks
         let last_difficulty = blockchain.last_block_difficulty()?;
@@ -690,7 +688,6 @@ impl Fork {
             module,
             proposals: vec![],
             diffs: vec![],
-            mempool,
             targets_rank,
             hashes_rank,
         })
@@ -752,7 +749,8 @@ impl Fork {
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions,
-    /// along with their total gas used and total paid fees.
+    /// along with their total gas used and total paid fees. Erroneous
+    /// transactions will be removed from the database.
     ///
     /// Note: Always remember to purge new trees from the database if
     /// not needed.
@@ -761,8 +759,8 @@ impl Fork {
         verifying_block_height: u32,
         verify_fees: bool,
     ) -> Result<(Vec<Transaction>, u64, u64)> {
-        // Check if our mempool is not empty
-        if self.mempool.is_empty() {
+        // Check if our mempool is empty
+        if self.blockchain.transactions.pending.is_empty() {
             return Ok((vec![], 0, 0))
         }
 
@@ -777,32 +775,20 @@ impl Fork {
         // batch.
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
-        // Grab all current proposals transactions hashes
-        let proposals_txs = self.overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
-
-        // Iterate through all pending transactions in the forks'
-        // mempool.
+        // Iterate through all pending transactions in the mempool
         let mut unproposed_txs = vec![];
         let mut erroneous_txs = vec![];
-        for tx in &self.mempool {
-            // If the hash is contained in the proposals transactions
-            // vec, skip it.
-            if proposals_txs.contains(tx) {
+        for record in self.blockchain.transactions.pending.iter() {
+            // Parse the transaction record
+            let (tx_hash, tx) = parse_record::<TransactionHash, Transaction>(record?)?;
+
+            // If the transaction has already been proposed, skip it
+            if self.overlay.lock().unwrap().transactions.contains(&tx_hash)? {
                 continue
             }
 
-            // Retrieve the actual unproposed transaction
-            let unproposed_tx = match self.blockchain.transactions.get_pending(&[*tx], true) {
-                Ok(txs) => txs[0].clone().unwrap(),
-                Err(e) => {
-                    debug!(target: "validator::consensus::unproposed_txs", "Transaction retrieval failed: {e}");
-                    erroneous_txs.push(*tx);
-                    continue
-                }
-            };
-
             // Update the verifying keys map
-            for call in &unproposed_tx.calls {
+            for call in &tx.calls {
                 vks.entry(call.data.contract_id.to_bytes()).or_default();
             }
 
@@ -812,7 +798,7 @@ impl Fork {
                 &self.overlay,
                 verifying_block_height,
                 self.module.target,
-                &unproposed_tx,
+                &tx,
                 &mut tree,
                 &mut vks,
                 verify_fees,
@@ -823,7 +809,7 @@ impl Fork {
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {e}");
                     self.overlay.lock().unwrap().revert_to_checkpoint();
-                    erroneous_txs.push(*tx);
+                    erroneous_txs.push(tx_hash);
                     continue
                 }
             };
@@ -839,7 +825,7 @@ impl Fork {
             if accumulated_gas_usage > BLOCK_GAS_LIMIT {
                 warn!(
                     target: "validator::consensus::unproposed_txs",
-                    "Retrieving transaction {tx} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
+                    "Retrieving transaction {tx_hash} would exceed configured unproposed transaction gas limit: {accumulated_gas_usage} - {BLOCK_GAS_LIMIT}"
                 );
                 self.overlay.lock().unwrap().revert_to_checkpoint();
                 break
@@ -850,11 +836,11 @@ impl Fork {
             total_gas_paid = total_gas_paid.saturating_add(gas_data.paid);
 
             // Push the tx hash into the unproposed transactions vector
-            unproposed_txs.push(unproposed_tx);
+            unproposed_txs.push(tx);
         }
 
-        // Remove erroneous transactions txs from fork's mempool
-        self.mempool.retain(|tx| !erroneous_txs.contains(tx));
+        // Remove erroneous transactions from mempool
+        self.blockchain.remove_pending_txs_hashes(&erroneous_txs)?;
 
         Ok((unproposed_txs, total_gas_used, total_gas_paid))
     }
@@ -869,20 +855,10 @@ impl Fork {
         let module = self.module.clone();
         let proposals = self.proposals.clone();
         let diffs = self.diffs.clone();
-        let mempool = self.mempool.clone();
         let targets_rank = self.targets_rank.clone();
         let hashes_rank = self.hashes_rank.clone();
 
-        Ok(Self {
-            blockchain,
-            overlay,
-            module,
-            proposals,
-            diffs,
-            mempool,
-            targets_rank,
-            hashes_rank,
-        })
+        Ok(Self { blockchain, overlay, module, proposals, diffs, targets_rank, hashes_rank })
     }
 
     /// Auxiliary function to check current contracts states
