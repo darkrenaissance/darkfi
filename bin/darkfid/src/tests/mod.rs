@@ -289,7 +289,6 @@ fn darkfid_programmatic_control() -> Result<()> {
                     &sled_db,
                     &config,
                     &darkfi::net::Settings::default(),
-                    &None,
                     &ex,
                 )
                 .await

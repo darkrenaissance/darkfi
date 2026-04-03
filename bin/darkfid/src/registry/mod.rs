@@ -327,7 +327,7 @@ impl DarkfiMinersRegistryState {
         Ok(())
     }
 
-    /// Auxilliary function to retrieve all current block templates
+    /// Auxiliary function to retrieve all current block templates
     /// newly opened trees.
     pub fn new_trees(&self) -> BTreeSet<IVec> {
         let mut new_trees = BTreeSet::new();
@@ -339,7 +339,7 @@ impl DarkfiMinersRegistryState {
         new_trees
     }
 
-    /// Auxilliary function to retrieve all current block templates
+    /// Auxiliary function to retrieve all current block templates
     /// transactions hashes.
     pub fn proposed_transactions(&self) -> HashSet<TransactionHash> {
         let mut proposed_txs = HashSet::new();

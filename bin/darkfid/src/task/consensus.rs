@@ -21,17 +21,15 @@ use std::str::FromStr;
 use darkfi::{
     blockchain::HeaderHash,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::{sleep, ExecutorPtr, StoppableTask, Subscription},
+    system::{sleep, Subscription},
     util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
 use darkfi_serial::serialize_async;
+use smol::channel::Sender;
 use tracing::{error, info};
 
-use crate::{
-    task::{garbage_collect::garbage_collect_task, sync_task},
-    DarkfiNodePtr,
-};
+use crate::{task::sync_task, DarkfiNodePtr};
 
 /// Auxiliary structure representing node consensus init task configuration.
 #[derive(Clone)]
@@ -48,7 +46,7 @@ pub struct ConsensusInitTaskConfig {
 pub async fn consensus_init_task(
     node: DarkfiNodePtr,
     config: ConsensusInitTaskConfig,
-    ex: ExecutorPtr,
+    sender: Sender<()>,
 ) -> Result<()> {
     // Check current canonical blockchain for curruption
     // TODO: create a restore method reverting each block backwards
@@ -104,7 +102,7 @@ pub async fn consensus_init_task(
 
     // Gracefully handle network disconnections
     loop {
-        match listen_to_network(&node, &ex).await {
+        match listen_to_network(&node, &sender).await {
             Ok(_) => return Ok(()),
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
@@ -130,7 +128,7 @@ pub async fn consensus_init_task(
 }
 
 /// Async task to start the consensus task, while monitoring for a network disconnections.
-async fn listen_to_network(node: &DarkfiNodePtr, ex: &ExecutorPtr) -> Result<()> {
+async fn listen_to_network(node: &DarkfiNodePtr, sender: &Sender<()>) -> Result<()> {
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let prop_subscription = proposals_sub.publisher.clone().subscribe().await;
@@ -140,7 +138,7 @@ async fn listen_to_network(node: &DarkfiNodePtr, ex: &ExecutorPtr) -> Result<()>
 
     let result = smol::future::or(
         monitor_network(&net_subscription),
-        consensus_task(node, &prop_subscription, ex),
+        consensus_task(node, &prop_subscription, sender),
     )
     .await;
 
@@ -160,23 +158,15 @@ async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
 async fn consensus_task(
     node: &DarkfiNodePtr,
     subscription: &Subscription<JsonNotification>,
-    ex: &ExecutorPtr,
+    sender: &Sender<()>,
 ) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
 
-    // Create the garbage collection task using a dummy task
-    let gc_task = StoppableTask::new();
-    gc_task.clone().start(
-        async { Ok(()) },
-        |_| async { /* Do nothing */ },
-        Error::GarbageCollectionTaskStopped,
-        ex.clone(),
-    );
-
     loop {
+        // Wait for a new proposal
         subscription.receive().await;
 
         // Check if we can confirm anything and broadcast them
@@ -193,42 +183,28 @@ async fn consensus_task(
         };
 
         // Refresh mining registry
-        let mut registry = node.registry.state.write().await;
-        if let Err(e) = registry.refresh(&validator).await {
-            error!(target: "darkfid", "Failed refreshing mining block templates: {e}")
+        if let Err(e) = node.registry.state.write().await.refresh(&validator).await {
+            error!(target: "darkfid::task::consensus_task", "Failed refreshing mining block templates: {e}")
         }
 
+        // Notify the garbage collection task
+        if let Err(e) = sender.send(()).await {
+            error!(
+                target: "darkfid::task::consensus_task",
+                "Garbage collection channel send fail: {e}"
+            );
+        };
+
+        // Check if something was confirmed
         if confirmed.is_empty() {
             continue
         }
 
-        // Purge all unreferenced contract trees from the database
-        if let Err(e) =
-            validator.consensus.purge_unreferenced_trees(&mut registry.new_trees()).await
-        {
-            error!(target: "darkfid::task::garbage_collect::purge_unreferenced_trees", "Purging unreferenced contract trees from the database failed: {e}");
-        }
-
+        // Broadcast confirmed blocks to subscribers
         let mut notif_blocks = Vec::with_capacity(confirmed.len());
         for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
         }
         block_sub.notify(JsonValue::Array(notif_blocks)).await;
-
-        // Invoke the detached garbage collection task
-        gc_task.clone().stop().await;
-        gc_task.clone().start(
-            garbage_collect_task(node.clone()),
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
-                    Err(e) => {
-                        error!(target: "darkfid", "Failed starting garbage collection task: {e}")
-                    }
-                }
-            },
-            Error::GarbageCollectionTaskStopped,
-            ex.clone(),
-        );
     }
 }
