@@ -237,78 +237,6 @@ impl Validator {
         Ok(())
     }
 
-    /// The node removes invalid transactions from the pending txs
-    /// store.
-    ///
-    /// Note: Always remember to purge new trees from the database if
-    /// not needed.
-    pub async fn purge_pending_txs(&mut self) -> Result<()> {
-        info!(target: "validator::purge_pending_txs", "Removing invalid transactions from pending transactions store...");
-
-        // Check if any pending transactions exist
-        let pending_txs = self.blockchain.get_pending_txs()?;
-        if pending_txs.is_empty() {
-            info!(target: "validator::purge_pending_txs", "No pending transactions found");
-            return Ok(())
-        }
-
-        let mut removed_txs = vec![];
-        for tx in pending_txs {
-            let tx_hash = tx.hash();
-            let tx_vec = [tx.clone()];
-            let mut valid = false;
-
-            // Iterate over node forks to verify transaction validity
-            // in their overlays.
-            for fork in self.consensus.forks.iter_mut() {
-                // Clone fork state
-                let fork_clone = fork.full_clone()?;
-
-                // Grab forks' next block height
-                let next_block_height = fork_clone.get_next_block_height()?;
-
-                // Verify transaction
-                let verify_result = verify_transactions(
-                    &fork_clone.overlay,
-                    next_block_height,
-                    self.consensus.module.target,
-                    &tx_vec,
-                    &mut MerkleTree::new(1),
-                    self.verify_fees,
-                )
-                .await;
-
-                // Handle response
-                match verify_result {
-                    Ok(_) => {
-                        valid = true;
-                        continue
-                    }
-                    Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
-                    Err(e) => return Err(e),
-                }
-
-                // Remove erroneous transaction from forks' mempool
-                fork.mempool.retain(|x| *x != tx_hash);
-            }
-
-            // Remove pending transaction if it's not valid for
-            // canonical or any fork.
-            if !valid {
-                removed_txs.push(tx)
-            }
-        }
-
-        if removed_txs.is_empty() {
-            info!(target: "validator::purge_pending_txs", "No erroneous transactions found");
-            return Ok(())
-        }
-        info!(target: "validator::purge_pending_txs", "Removing {} erroneous transactions...", removed_txs.len());
-        self.blockchain.remove_pending_txs(&removed_txs)?;
-
-        Ok(())
-    }
-
     /// The node tries to append provided proposal to its consensus
     /// state.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
@@ -593,10 +521,8 @@ impl Validator {
         // Store the block diffs
         self.blockchain.blocks.insert_state_inverse_diff(&diffs_heights, &inverse_diffs)?;
 
-        // Purge pending erroneous txs since canonical state has been
-        // changed.
+        // Remove blocks transactions from pending txs store
         self.blockchain.remove_pending_txs(&removed_txs)?;
-        self.purge_pending_txs().await?;
 
         // Update PoW module
         self.consensus.module = module;

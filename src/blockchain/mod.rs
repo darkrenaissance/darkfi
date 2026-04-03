@@ -50,8 +50,7 @@ pub use header_store::{
 /// Transactions related storage implementations
 pub mod tx_store;
 pub use tx_store::{
-    TxStore, TxStoreOverlay, SLED_PENDING_TX_ORDER_TREE, SLED_PENDING_TX_TREE,
-    SLED_TX_LOCATION_TREE, SLED_TX_TREE,
+    TxStore, TxStoreOverlay, SLED_PENDING_TX_TREE, SLED_TX_LOCATION_TREE, SLED_TX_TREE,
 };
 
 /// Contracts and Wasm storage implementations
@@ -289,29 +288,17 @@ impl Blockchain {
     /// On success, the function returns the transaction hashes in the same order
     /// as the input transactions.
     pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<TransactionHash>> {
-        let (txs_batch, txs_hashes) = self.transactions.insert_batch_pending(txs);
-        let txs_order_batch = self.transactions.insert_batch_pending_order(&txs_hashes)?;
-
-        // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
-        let batches = [txs_batch, txs_order_batch];
-        self.atomic_write(&trees, &batches)?;
-
-        Ok(txs_hashes)
+        self.transactions.insert_pending(txs)
     }
 
     /// Retrieve all transactions from the pending tx store.
     /// Be careful as this will try to load everything in memory.
     pub fn get_pending_txs(&self) -> Result<Vec<Transaction>> {
         let txs = self.transactions.get_all_pending()?;
-        let indexes = self.transactions.get_all_pending_order()?;
-        if txs.len() != indexes.len() {
-            return Err(Error::InvalidInputLengths)
-        }
 
         let mut ret = Vec::with_capacity(txs.len());
-        for index in indexes {
-            ret.push(txs.get(&index.1).unwrap().clone());
+        for (_, tx) in txs {
+            ret.push(tx);
         }
 
         Ok(ret)
@@ -325,56 +312,7 @@ impl Blockchain {
 
     /// Remove a given slice of pending transactions hashes from the blockchain database.
     pub fn remove_pending_txs_hashes(&self, txs: &[TransactionHash]) -> Result<()> {
-        let indexes = self.transactions.get_all_pending_order()?;
-        // We could do indexes.iter().map(|x| txs.contains(x.1)).collect.map(|x| x.0).collect
-        // but this is faster since we don't do the second iteration
-        let mut removed_indexes = vec![];
-        for index in indexes {
-            if txs.contains(&index.1) {
-                removed_indexes.push(index.0);
-            }
-        }
-
-        let txs_batch = self.transactions.remove_batch_pending(txs);
-        let txs_order_batch = self.transactions.remove_batch_pending_order(&removed_indexes);
-
-        // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
-        let batches = [txs_batch, txs_order_batch];
-        self.atomic_write(&trees, &batches)?;
-
-        Ok(())
-    }
-
-    /// Remove all transactions from the pending tx store not in the
-    /// provided vector and rebuild the remaining ones order.
-    pub fn reset_pending_txs(&self, exclude_txs: &[TransactionHash]) -> Result<()> {
-        let mut txs = vec![];
-        let mut removed_txs = vec![];
-        for tx in self.transactions.get_all_pending()?.keys() {
-            if exclude_txs.contains(tx) {
-                txs.push(*tx);
-                continue
-            }
-            removed_txs.push(*tx);
-        }
-        let indexes: Vec<u64> =
-            self.transactions.get_all_pending_order()?.iter().map(|(k, _)| *k).collect();
-
-        let txs_batch = self.transactions.remove_batch_pending(&removed_txs);
-        let txs_order_batch = self.transactions.remove_batch_pending_order(&indexes);
-        let txs_new_order_batch = self.transactions.insert_batch_pending_order(&txs)?;
-
-        // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [
-            self.transactions.pending.clone(),
-            self.transactions.pending_order.clone(),
-            self.transactions.pending_order.clone(),
-        ];
-        let batches = [txs_batch, txs_order_batch, txs_new_order_batch];
-        self.atomic_write(&trees, &batches)?;
-
-        Ok(())
+        self.transactions.remove_pending(txs)
     }
 
     /// Auxiliary function to write to multiple trees completely atomic.
@@ -559,7 +497,6 @@ impl BlockchainOverlay {
             SLED_TX_TREE,
             SLED_TX_LOCATION_TREE,
             SLED_PENDING_TX_TREE,
-            SLED_PENDING_TX_ORDER_TREE,
             SLED_CONTRACTS_TREE,
             SLED_CONTRACTS_TREES_TREE,
             SLED_BINCODE_TREE,
