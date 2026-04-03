@@ -198,6 +198,55 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
+    // Queries the node pending transactions store to rebroadcast all
+    // transactions.
+    // Returns `true` if the operation was successful, otherwise, a
+    // corresponding error.
+    //
+    // --> {"jsonrpc": "2.0", "method": "tx.rebroadcast_pending", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    pub async fn tx_rebroadcast_pending(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let validator = self.validator.read().await;
+        if !validator.synced {
+            error!(target: "darkfid::rpc::tx_rebroadcast_pending", "Blockchain is not synced");
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        // Grab an iterator over pending transactions so we don't hold
+        // the validator lock.
+        let pending = validator.blockchain.transactions.pending.iter();
+        drop(validator);
+
+        // Rebroadcast all pending transactions
+        for value in pending.values() {
+            let value = match value {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "darkfid::rpc::tx_rebroadcast_pending", "Failed retrieving pending tx: {e}");
+                    return JsonError::new(InternalError, None, id).into()
+                }
+            };
+            let tx = match deserialize_async::<Transaction>(&value).await {
+                Ok(tx) => tx,
+                Err(e) => {
+                    error!(target: "darkfid::rpc::tx_rebroadcast_pending", "Failed deserialized pending tx: {e}");
+                    return JsonError::new(InternalError, None, id).into()
+                }
+            };
+            self.p2p_handler.p2p.broadcast(&tx).await;
+        }
+
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
     // Queries the node pending transactions store to remove all
     // transactions.
     // Returns `true` if the operation was successful, otherwise, a
