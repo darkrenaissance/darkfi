@@ -31,8 +31,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, deserialize_async_partial, serialize_async, SerialDecodable,
-    SerialEncodable,
+    async_trait, deserialize_async_partial, serialize_async, SerialDecodable, SerialEncodable,
 };
 use smol::Executor;
 use tracing::{debug, error, info, trace, warn};
@@ -40,7 +39,7 @@ use tracing::{debug, error, info, trace, warn};
 use super::{
     event::Header,
     rln::{closest_epoch, create_slash_proof, hash_event, sss_recover, MessageMetadata, RLNNode},
-    Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
+    Event, EventGraphPtr, LayerUTips, NULL_ID,
 };
 use crate::{
     event_graph::rln::{read_register_vk, read_signal_vk, read_slash_pk, read_slash_vk, Blob},
@@ -696,7 +695,7 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            let rln_account: RLNNode = match deserialize_async_partial(&event.content()).await {
+            let rln_account: RLNNode = match deserialize_async_partial(event.content()).await {
                 Ok((v, _)) => v,
                 Err(e) => {
                     error!(target: "event_graph::protocol::handle_static_put()","[RLN] Failed deserializing event ephemeral data: {}", e);

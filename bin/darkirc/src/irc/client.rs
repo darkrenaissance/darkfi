@@ -227,7 +227,7 @@ impl Client {
 
                                             rln_identity.message_id += 1;
 
-                                            let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(&rln_identity, &event).await {
+                                            let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(rln_identity, &event).await {
                                                 Ok(v) => v,
                                                 Err(e) => {
                                                     // TODO: Send a message to the IRC client telling that sending went wrong

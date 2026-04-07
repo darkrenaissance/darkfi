@@ -148,7 +148,7 @@ impl MessageMetadata {
         x: pallas::Base,
         y: pallas::Base,
     ) -> Result<()> {
-        let inner_map = self.data.entry(external_nullifier).or_insert_with(BTreeMap::new);
+        let inner_map = self.data.entry(external_nullifier).or_default();
         let share_data = inner_map.entry(internal_nullifier).or_insert_with(ShareData::new);
 
         share_data.x_shares.push(x);
@@ -256,7 +256,7 @@ pub fn create_slash_proof(
     let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
     let slash_circuit = ZkCircuit::new(witnesses, &slash_zkbin);
 
-    let proof = Proof::create(&slash_pk, &[slash_circuit], &public_inputs, &mut OsRng).unwrap();
+    let proof = Proof::create(slash_pk, &[slash_circuit], &public_inputs, &mut OsRng).unwrap();
 
     Ok((proof, identity_root))
 }

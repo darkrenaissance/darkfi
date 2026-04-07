@@ -4890,7 +4890,7 @@ dependencies = [
  "getifaddrs",
  "quick-xml",
  "smol",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "tracing",
  "url",
 ]
@@ -5529,7 +5529,7 @@ dependencies = [
  "derive-deftly",
  "libc",
  "paste",
- "thiserror 2.0.17",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

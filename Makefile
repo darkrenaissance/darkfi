@@ -13,9 +13,10 @@ RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 # If building natively, this might give you more speed
 #RUSTFLAGS = -C target_cpu=native
 
-# List of zkas circuits to compile, used for tests
+# List of zkas circuits to compile
 PROOFS_SRC = \
-	$(shell find proof -type f -name '*.zk')
+	$(shell find proof -type f -name '*.zk') \
+	$(shell find src/event_graph/proof -type f -name '*.zk')
 
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
@@ -34,7 +35,7 @@ BINS = \
 	fud \
 	fu
 
-all: $(BINS)
+all: $(PROOFS_BIN) $(BINS)
 
 zkas:
 	$(MAKE) -C bin/$@ \
@@ -65,21 +66,21 @@ drk: contracts
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
-darkirc: zkas
+darkirc: $(PROOFS_BIN) zkas
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
-genev:
+genev: $(PROOFS_BIN)
 	$(MAKE) -C bin/genev/genev-cli \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
-genevd:
+genevd: $(PROOFS_BIN)
 	$(MAKE) -C bin/genev/genevd \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
@@ -93,7 +94,7 @@ lilith:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
-taud:
+taud: $(PROOFS_BIN)
 	$(MAKE) -C bin/tau/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
@@ -134,39 +135,39 @@ fmt:
 	$(CARGO) +nightly fmt --all
 
 # cargo install cargo-hack
-check: contracts $(PROOFS_BIN)
+check: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --target=$(RUST_TARGET) \
 		--release --feature-powerset --workspace
 
-clippy: contracts $(PROOFS_BIN)
+clippy: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests
 
-fix: contracts $(PROOFS_BIN)
+fix: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
 		--release --all-features --workspace --tests --fix --allow-dirty
 
-rustdoc: contracts $(PROOFS_BIN)
+rustdoc: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --target=$(RUST_TARGET) \
 		--release --all-features --workspace --document-private-items --no-deps
 
-test: contracts $(PROOFS_BIN)
+test: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --all-features --workspace
 
-bench-zk-from-json: contracts $(PROOFS_BIN)
+bench-zk-from-json: $(PROOFS_BIN) contracts
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--bench zk_from_json --all-features --workspace \
 		-- --save-baseline master
 
-bench: contracts $(PROOFS_BIN)
+bench: $(PROOFS_BIN) contracts
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--all-features --workspace \
 		-- --save-baseline master
 
-coverage: contracts $(PROOFS_BIN)
+coverage: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) llvm-cov --target=$(RUST_TARGET) \
 		--release --all-features --workspace --html
 

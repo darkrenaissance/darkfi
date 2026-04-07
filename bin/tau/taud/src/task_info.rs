@@ -327,6 +327,7 @@ impl From<JsonValue> for TaskInfo {
 }
 
 impl TaskInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workspace: String,
         title: &str,

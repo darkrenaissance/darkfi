@@ -175,7 +175,7 @@ impl NickServ {
                     return Ok(vec![ReplyType::Notice((
                         "NickServ".to_string(),
                         nick.to_string(),
-                        format!("Invalid identity_nullifier"),
+                        "Invalid identity_nullifier".to_string(),
                     ))])
                 }
             };
@@ -188,7 +188,7 @@ impl NickServ {
                     return Ok(vec![ReplyType::Notice((
                         "NickServ".to_string(),
                         nick.to_string(),
-                        format!("Invalid identity_trapdoor"),
+                        "Invalid identity_trapdoor".to_string(),
                     ))])
                 }
             };

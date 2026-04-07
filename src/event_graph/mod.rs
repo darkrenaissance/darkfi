@@ -71,7 +71,7 @@ pub mod proto;
 use proto::{EventRep, EventReq, HeaderRep, HeaderReq, TipRep, TipReq};
 
 pub mod rln;
-use rln::{build_register_vk, build_signal_vk, build_slash_pk, build_slash_vk};
+//use rln::{build_register_vk, build_signal_vk, build_slash_pk, build_slash_vk};
 
 /// Utility functions
 pub mod util;
@@ -316,9 +316,8 @@ impl DAGStore {
         event_id: &blake3::Hash,
         dag: &sled::Tree,
     ) -> Result<Option<Event>> {
-        let Some(bytes) = dag.get(event_id.as_bytes())? else {
-            return Ok(None);
-        };
+        let Some(bytes) = dag.get(event_id.as_bytes())? else { return Ok(None) };
+
         let event: Event = deserialize_async(&bytes).await?;
 
         Ok(Some(event))
@@ -398,10 +397,12 @@ impl EventGraph {
         hours_rotation: u64,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        /*
         let _register_vk = build_register_vk(&sled_db)?;
         let _signal_vk = build_signal_vk(&sled_db)?;
         let _slash_pk = build_slash_pk(&sled_db)?;
         let _slash_vk = build_slash_vk(&sled_db)?;
+        */
 
         let hasher = PoseidonFp::new();
         // let store = AccountStorage::new(&sled_db, "name".to_owned());
@@ -673,7 +674,7 @@ impl EventGraph {
 
                 // We don't have any channels we can assign to or wait to get response from
                 if free_channels.is_empty() && busy_channels == 0 {
-                    return Err(Error::DagSyncFailed);
+                    return Err(Error::DagSyncFailed)
                 }
 
                 // We will distribute the remaining chunks to each channel
@@ -729,9 +730,7 @@ impl EventGraph {
         for dag in dags_to_sync {
             match self.dag_sync(dag, fast_mode).await {
                 Ok(()) => continue,
-                Err(e) => {
-                    return Err(e);
-                }
+                Err(e) => return Err(e),
             }
         }
 
@@ -1380,12 +1379,11 @@ impl EventGraph {
     }
 
     pub async fn static_fetch(&self, event_id: &Hash) -> Result<Option<Event>> {
-        let Some(bytes) = self.static_dag.get(event_id.as_bytes())? else {
-            return Ok(None);
-        };
+        let Some(bytes) = self.static_dag.get(event_id.as_bytes())? else { return Ok(None) };
+
         let event: Event = deserialize_async(&bytes).await?;
 
-        return Ok(Some(event))
+        Ok(Some(event))
     }
 
     pub async fn static_fetch_all(&self) -> Result<Vec<Event>> {

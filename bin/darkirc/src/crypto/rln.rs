@@ -101,7 +101,7 @@ impl RlnIdentity {
         let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
         let register_circuit = ZkCircuit::new(witnesses, &register_zkbin);
 
-        let proof = Proof::create(&register_pk, &[register_circuit], &public_inputs, &mut OsRng)?;
+        let proof = Proof::create(register_pk, &[register_circuit], &public_inputs, &mut OsRng)?;
 
         let leaf = vec![commitment];
         let leaf: Vec<_> = leaf.into_iter().map(|l| (l, l)).collect();
