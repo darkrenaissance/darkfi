@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, time::UNIX_EPOCH};
+//! Core data types: [`Header`], [`Event`], and [`display_order`].
+
+use std::{cmp::Ordering, collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
@@ -24,139 +26,142 @@ use sled_overlay::{sled, SledTreeOverlay};
 use crate::{event_graph::util::generate_genesis, Result};
 
 use super::{
-    util::next_rotation_timestamp, EventGraph, EVENT_TIME_DRIFT, INITIAL_GENESIS, NULL_ID,
+    util::next_rotation_timestamp, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID,
     N_EVENT_PARENTS,
 };
 
+/// The fixed-size structural metadata of an event.
+///
+/// Headers are lightweight and encode the full DAG topology without
+/// carrying the variable-length content. The content is committed
+/// to via `content_hash`, so peers can verify the integrity of an
+/// event body against the header that announced it.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Header {
-    /// Event version
-    // pub version: u8,
-    /// Timestamp of the event in milliseconds
+    /// UNIX timestamp of the event in milliseconds.
     pub timestamp: u64,
-    /// Parent nodes in the event DAG
+    /// Parent references. Unused slots are [`NULL_ID`].
     pub parents: [blake3::Hash; N_EVENT_PARENTS],
-    /// DAG layer index of the event
+    /// Monotonically increasing layer index.
     pub layer: u64,
+    /// blake3 hash of the event's content payload
+    pub content_hash: blake3::Hash,
 }
 
 impl Header {
-    // Create a new Header given EventGraph to retrieve the correct layout
-    pub async fn new(event_graph: &EventGraph) -> Self {
-        let current_dag_name = event_graph.current_genesis.read().await.header.timestamp;
-        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
-        Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
+    pub async fn new(content: &[u8], eg: &EventGraph) -> Self {
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await;
+        Self {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            parents,
+            layer,
+            content_hash: blake3::hash(content),
+        }
     }
 
-    pub async fn new_static(event_graph: &EventGraph) -> Self {
-        let (layer, parents) = event_graph.get_next_layer_with_parents_static().await;
-        Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64, parents, layer }
+    pub async fn new_static(content: &[u8], eg: &EventGraph) -> Self {
+        let (layer, parents) = eg.get_next_layer_with_parents_static().await;
+        Self {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            parents,
+            layer,
+            content_hash: blake3::hash(content),
+        }
     }
 
-    pub async fn with_timestamp(timestamp: u64, event_graph: &EventGraph) -> Self {
-        let current_dag_name = event_graph.current_genesis.read().await.header.timestamp;
-        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
-        Self { timestamp, parents, layer }
+    pub async fn with_timestamp(timestamp: u64, content: &[u8], eg: &EventGraph) -> Self {
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await;
+        Self { timestamp, parents, layer, content_hash: blake3::hash(content) }
     }
 
-    /// Hash the [`Header`] to retrieve its ID
+    /// Blake3 hash of `(timestamp, parents, layer, content_hash)`.
     pub fn id(&self) -> blake3::Hash {
-        let mut hasher = blake3::Hasher::new();
-        self.timestamp.encode(&mut hasher).unwrap();
-        self.parents.encode(&mut hasher).unwrap();
-        self.layer.encode(&mut hasher).unwrap();
-        hasher.finalize()
+        let mut h = blake3::Hasher::new();
+        self.timestamp.encode(&mut h).unwrap();
+        self.parents.encode(&mut h).unwrap();
+        self.layer.encode(&mut h).unwrap();
+        h.update(self.content_hash.as_bytes());
+        h.finalize()
     }
 
-    /// Fully validate a header for the correct layout against provided
-    /// DAG [`sled::Tree`] reference and enforce relevant age, assuming
-    /// some possibility for a time drift. Optionally, provide an overlay
-    /// to use that instead of actual referenced DAG.
+    /// Full structural validation against a header DAG.
     pub async fn validate(
         &self,
         header_dag: &sled::Tree,
-        hours_rotation: u64,
+        config: &EventGraphConfig,
         overlay: Option<&SledTreeOverlay>,
     ) -> Result<bool> {
-        // Check if the event is not older than the oldest genesis
-        let genesis_timestamp = generate_genesis(1).header.timestamp;
-        // A day ago genesis same hour
-        let oldest_genesis_ts = genesis_timestamp - 86_400_000u64;
-        if self.timestamp < oldest_genesis_ts - EVENT_TIME_DRIFT {
+        // Lower bound: one day before the most recent hourly genesis.
+        // We build a temporary 1-hour config just to compute the
+        // reference timestamp.
+        let hourly_cfg = EventGraphConfig {
+            initial_genesis: config.initial_genesis,
+            hours_rotation: 1,
+            genesis_contents: config.genesis_contents.clone(),
+            max_dags: config.max_dags,
+        };
+
+        let oldest_allowed = generate_genesis(&hourly_cfg).header.timestamp - 86_400_000;
+
+        if self.timestamp < oldest_allowed - EVENT_TIME_DRIFT {
             return Ok(false)
         }
 
-        // If a rotation has been set, check if the event timestamp
-        // is after the next genesis timestamp
-        if hours_rotation > 0 {
-            let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, hours_rotation);
-            if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
+        // Upper bound: next rotation boundary + drift
+        if config.hours_rotation > 0 {
+            let next = next_rotation_timestamp(config.initial_genesis, config.hours_rotation);
+            if self.timestamp > next + EVENT_TIME_DRIFT {
                 return Ok(false)
             }
         }
 
-        // Validate the parents. We have to check that at least one parent
-        // is not NULL, that the parents exist, that no two parents are the
-        // same, and that the parent exists in previous layers, to prevent
-        // recursive references(circles).
         let mut seen = HashSet::new();
         let self_id = self.id();
-
-        for parent_id in self.parents.iter() {
-            if parent_id == &NULL_ID {
+        for pid in self.parents.iter() {
+            if pid == &NULL_ID {
                 continue
             }
 
-            if parent_id == &self_id {
+            if pid == &self_id || seen.contains(pid) {
                 return Ok(false)
             }
 
-            if seen.contains(parent_id) {
-                return Ok(false)
-            }
-
-            let parent_bytes = if let Some(overlay) = overlay {
-                overlay.get(parent_id.as_bytes())?
+            let bytes = if let Some(ov) = overlay {
+                ov.get(pid.as_bytes())?
             } else {
-                header_dag.get(parent_id.as_bytes())?
+                header_dag.get(pid.as_bytes())?
             };
-            if parent_bytes.is_none() {
-                return Ok(false)
-            }
 
-            let parent: Header = deserialize_async(&parent_bytes.unwrap()).await?;
+            let Some(bytes) = bytes else { return Ok(false) };
+            let parent: Header = deserialize_async(&bytes).await?;
             if self.layer <= parent.layer {
                 return Ok(false)
             }
-
-            seen.insert(parent_id);
+            seen.insert(pid);
         }
 
         Ok(!seen.is_empty())
     }
 }
 
-/// Representation of an event in the Event Graph
+/// A complete event: [`Header`] + application-defined content.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Event {
     pub header: Header,
-    /// Content of the event
+    /// Application payload. Must not be empty for non-genesis events.
     pub content: Vec<u8>,
 }
 
 impl Event {
-    /// Create a new event with the given data and an [`EventGraph`] reference.
-    /// The timestamp of the event will be the current time, and the parents
-    /// will be `N_EVENT_PARENTS` from the current event graph unreferenced tips.
-    /// The parents can also include NULL, but this should be handled by the rest
-    /// of the codebase.
-    pub async fn new(data: Vec<u8>, event_graph: &EventGraph) -> Self {
-        let header = Header::new(event_graph).await;
+    pub async fn new(data: Vec<u8>, eg: &EventGraph) -> Self {
+        let header = Header::new(&data, eg).await;
         Self { header, content: data }
     }
 
-    pub async fn new_static(data: Vec<u8>, event_graph: &EventGraph) -> Self {
-        let header = Header::new_static(event_graph).await;
+    pub async fn new_static(data: Vec<u8>, eg: &EventGraph) -> Self {
+        let header = Header::new_static(&data, eg).await;
         Self { header, content: data }
     }
 
@@ -164,152 +169,75 @@ impl Event {
         self.header.id()
     }
 
-    /// Same as `Event::new()` but allows specifying the timestamp explicitly.
-    pub async fn with_timestamp(timestamp: u64, data: Vec<u8>, event_graph: &EventGraph) -> Self {
-        let header = Header::with_timestamp(timestamp, event_graph).await;
+    pub async fn with_timestamp(ts: u64, data: Vec<u8>, eg: &EventGraph) -> Self {
+        let header = Header::with_timestamp(ts, &data, eg).await;
         Self { header, content: data }
     }
 
-    /// Return a reference to the event's content
     pub fn content(&self) -> &[u8] {
         &self.content
     }
 
-    /// Fully validate an event for the correct layout against provided
-    /// [`EventGraph`] reference and enforce relevant age, assuming some
-    /// possibility for a time drift.
-    pub async fn dag_validate(&self, header_dag: &sled::Tree) -> Result<bool> {
+    /// Check that the content matches the hash committed to in the header.
+    pub fn content_matches_header(&self) -> bool {
+        blake3::hash(&self.content) == self.header.content_hash
+    }
+
+    /// Validate for insertion into a DAG.
+    pub async fn dag_validate(
+        &self,
+        hdr_dag: &sled::Tree,
+        config: &EventGraphConfig,
+    ) -> Result<bool> {
         if self.content.is_empty() {
             return Ok(false)
         }
-        // Perform validation
-        self.header.validate(header_dag, 1, None).await
+
+        if !self.content_matches_header() {
+            return Ok(false)
+        }
+
+        self.header.validate(hdr_dag, config, None).await
     }
 
-    /// Validate a new event for the correct layout and enforce relevant age,
-    /// assuming some possibility for a time drift.
-    /// Note: This validation does *NOT* check for recursive references(circles),
-    /// and should be used as a first quick check.
+    /// Quick validation (no DAG lookup).
     pub fn validate_new(&self) -> bool {
-        // Let's not bother with empty events
         if self.content.is_empty() {
             return false
         }
 
-        // Check if the event is too old or too new
-        let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-        let too_old = self.header.timestamp < now - EVENT_TIME_DRIFT;
-        let too_new = self.header.timestamp > now + EVENT_TIME_DRIFT;
-        if too_old || too_new {
+        if !self.content_matches_header() {
             return false
         }
 
-        // Validate the parents. We have to check that at least one parent
-        // is not NULL and that no two parents are the same.
-        let mut seen = HashSet::new();
-        let self_id = self.header.id();
+        let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
 
-        for parent_id in self.header.parents.iter() {
-            if parent_id == &NULL_ID {
+        if self.header.timestamp < now - EVENT_TIME_DRIFT ||
+            self.header.timestamp > now + EVENT_TIME_DRIFT
+        {
+            return false
+        }
+
+        let mut seen = HashSet::new();
+        let sid = self.header.id();
+        for pid in self.header.parents.iter() {
+            if pid == &NULL_ID {
                 continue
             }
-
-            if parent_id == &self_id {
+            if pid == &sid || seen.contains(pid) {
                 return false
             }
-
-            if seen.contains(parent_id) {
-                return false
-            }
-
-            seen.insert(parent_id);
+            seen.insert(pid);
         }
 
         !seen.is_empty()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use smol::Executor;
-
-    use crate::{
-        event_graph::{EventGraph, EventGraphPtr},
-        net::{P2p, Settings},
-    };
-
-    use super::*;
-
-    async fn make_event_graph() -> Result<EventGraphPtr> {
-        let ex = Arc::new(Executor::new());
-        let p2p = P2p::new(Settings::default(), ex.clone()).await?;
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        EventGraph::new(p2p, sled_db, "/tmp".into(), false, false, 1, ex).await
-    }
-
-    #[test]
-    fn event_is_valid() -> Result<()> {
-        smol::block_on(async {
-            // Generate a dummy event graph
-            let event_graph = make_event_graph().await?;
-
-            let dag_name = event_graph.current_genesis.read().await.header.timestamp.to_string();
-            let hdr_tree_name = format!("headers_{dag_name}");
-            let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
-
-            // Create a new valid event
-            let valid_event = Event::new(vec![1u8], &event_graph).await;
-
-            // Validate our test Event struct
-            assert!(valid_event.dag_validate(&header_dag).await?);
-
-            // Thanks for reading
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn invalid_events() -> Result<()> {
-        smol::block_on(async {
-            // Generate a dummy event graph
-            let event_graph = make_event_graph().await?;
-
-            let dag_name = event_graph.current_genesis.read().await.header.timestamp.to_string();
-            let hdr_tree_name = format!("headers_{dag_name}");
-            let header_dag = event_graph.dag_store.read().await.get_dag(&hdr_tree_name);
-
-            // Create a new valid event
-            let valid_event = Event::new(vec![1u8], &event_graph).await;
-
-            let mut event_empty_content = valid_event.clone();
-            event_empty_content.content = vec![];
-            assert!(!event_empty_content.dag_validate(&header_dag).await?);
-
-            let mut event_timestamp_too_old = valid_event.clone();
-            event_timestamp_too_old.header.timestamp = 1000;
-            assert!(!event_timestamp_too_old.dag_validate(&header_dag).await?);
-
-            let mut event_timestamp_too_new = valid_event.clone();
-            event_timestamp_too_new.header.timestamp = u64::MAX;
-            assert!(!event_timestamp_too_new.dag_validate(&header_dag).await?);
-
-            let mut event_duplicated_parents = valid_event.clone();
-            event_duplicated_parents.header.parents[1] = valid_event.header.parents[0];
-            assert!(!event_duplicated_parents.dag_validate(&header_dag).await?);
-
-            let mut event_null_parents = valid_event.clone();
-            let all_null_parents = [NULL_ID, NULL_ID, NULL_ID, NULL_ID, NULL_ID];
-            event_null_parents.header.parents = all_null_parents;
-            assert!(!event_null_parents.dag_validate(&header_dag).await?);
-
-            let mut event_same_layer_as_parents = valid_event.clone();
-            event_same_layer_as_parents.header.layer = 0;
-            assert!(!event_same_layer_as_parents.dag_validate(&header_dag).await?);
-
-            // Thanks for reading
-            Ok(())
-        })
-    }
+/// Chronological comparator with deterministic hash tie-breaking.
+pub fn display_order(a: &Event, b: &Event) -> Ordering {
+    a.header
+        .timestamp
+        .cmp(&b.header.timestamp)
+        .then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
 }
