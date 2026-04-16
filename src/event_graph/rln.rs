@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2025 Dyne.org foundation
+ * Copyright (C) 2020-2026 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,15 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeMap;
+//! Rate-Limit Nullifier (RLN) v2 integration for the Event Graph.
+//!
+//! RLN lets anonymous users post to the DAG at a configurable rate.
+//! If a user exceeds their rate limit (by reusing a message slot
+//! within the same epoch), their shares reveal their secret key via
+//! Shamir's Secret Sharing, and anyone can produce a slashing proof
+//! to remove them from the identity tree.
 
-use async_trait::async_trait;
-use darkfi_sdk::pasta::pallas;
+use std::{collections::BTreeMap, io::Cursor};
 
-use std::io::Cursor;
-
-use darkfi_sdk::crypto::{pasta_prelude::FromUniformBytes, poseidon_hash, smt::SmtMemoryFp};
-use darkfi_serial::{FutAsyncWriteExt, SerialDecodable, SerialEncodable};
+use darkfi_sdk::{
+    crypto::{
+        pasta_prelude::{FromUniformBytes, PrimeField},
+        poseidon_hash,
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
+    },
+    pasta::pallas,
+};
+use darkfi_serial::{async_trait, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use rand::rngs::OsRng;
 use sled_overlay::sled;
@@ -41,96 +51,199 @@ pub const RLN2_REGISTER_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-register
 pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-signal.zk.bin");
 pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-slash.zk.bin");
 
-/// RLN epoch genesis in millis
+/// RLN epoch genesis in millis.
+/// Used as the time-zero reference for epoch numbering.
 pub const RLN_GENESIS: u64 = 1_738_688_400_000;
-/// RLN epoch length in millis
-pub const RLN_EPOCH_LEN: u64 = 600_000; // 10 min
 
+/// Duration of one RLN epoch in millis (10 minutes).
+pub const RLN_EPOCH_LEN: u64 = 600_000;
+
+/// Ephemeral data attached to an [`EventPut`] when RLN is active.
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Blob {
+    /// The RLN signal proof.
     pub proof: Proof,
+    /// The `y` share value: `y = a_0 + x * a_1`.
     pub y: pallas::Base,
+    /// Nullifier derived from `(identity, epoch, message_id)`.
     pub internal_nullifier: pallas::Base,
+    /// The user's per-registration message limit.
     pub user_msg_limit: u64,
 }
 
-// pub type SmtAccntFp = SparseMerkleTree<
-//     'static,
-//     SMT_FP_DEPTH,
-//     { SMT_FP_DEPTH + 1 },
-//     pallas::Base,
-//     PoseidonFp,
-//     AccountStorage,
-// >;
+/// An entry in the static DAG representing an identity event.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub enum RLNNode {
+    /// A new identity commitment being registered.
+    Registration(pallas::Base),
+    /// An identity commitment being slashed (removed).
+    Slashing(pallas::Base),
+}
 
-// #[derive(Clone)]
-// pub struct AccountStorage {
-//     pub tree: sled::Tree,
-// }
+/// ZK key cache.
+pub struct ZkKeys {
+    /// Verifying key for identity registration proofs.
+    pub register_vk: VerifyingKey,
+    /// Verifying key for signal (rate-limit) proofs.
+    pub signal_vk: VerifyingKey,
+    /// Verifying key for slash proofs.
+    pub slash_vk: VerifyingKey,
+    /// Reference to the sled DB so we can lazy-load the proving keys.
+    sled_db: sled::Db,
+}
 
-// impl AccountStorage {
-//     pub fn new(sled_db: &sled::Db, name: String) -> Self {
-//         Self { tree: sled_db.open_tree(name).unwrap() }
-//     }
-// }
+impl ZkKeys {
+    /// Ensure all keys exist in sled and load only the verifying
+    /// keys into memory.
+    pub fn build_and_load(sled_db: &sled::Db) -> Result<Self> {
+        ensure_key(sled_db, "rlnv2-diff-register-vk", RLN2_REGISTER_ZKBIN, KeyKind::Vk)?;
+        ensure_key(sled_db, "rlnv2-diff-signal-vk", RLN2_SIGNAL_ZKBIN, KeyKind::Vk)?;
+        ensure_key(sled_db, "rlnv2-diff-slash-pk", RLN2_SLASH_ZKBIN, KeyKind::Pk)?;
+        ensure_key(sled_db, "rlnv2-diff-slash-vk", RLN2_SLASH_ZKBIN, KeyKind::Vk)?;
 
-// impl StorageAdapter for AccountStorage {
-//     type Value = pallas::Base;
+        Ok(Self {
+            register_vk: read_vk(sled_db, "rlnv2-diff-register-vk", RLN2_REGISTER_ZKBIN)?,
+            signal_vk: read_vk(sled_db, "rlnv2-diff-signal-vk", RLN2_SIGNAL_ZKBIN)?,
+            slash_vk: read_vk(sled_db, "rlnv2-diff-slash-vk", RLN2_SLASH_ZKBIN)?,
+            sled_db: sled_db.clone(),
+        })
+    }
 
-//     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
-//         self.tree.insert(key.to_bytes_le(), &value.to_repr()).unwrap();
-//         Ok(())
-//     }
+    /// Load the slash proving key from sled.
+    /// This is expensive memory-wise and should only be called when
+    /// a slash proof is about to be created.
+    pub fn load_slash_pk(&self) -> Result<ProvingKey> {
+        read_pk(&self.sled_db, "rlnv2-diff-slash-pk", RLN2_SLASH_ZKBIN)
+    }
+}
 
-//     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
-//         let value = match self.tree.get(&key.to_bytes_le()) {
-//             Ok(v) => v,
-//             Err(e) => {
-//                 error!("SledStorage::get(): Fetching key {:?} from Accounts tree: {}", key, e,);
-//                 return None
-//             }
-//         };
+/// Mutable RLN state shared across all protocol instances via
+/// `EventGraph::rln_state`. Each peer connection's protocol handler
+/// accesses this through a write lock so that duplicate/reuse
+/// detection works regardless of which peer relayed the event.
+pub struct RlnState {
+    /// Per-nullifier share tracking for the current epoch.
+    pub metadata: MessageMetadata,
+    /// The epoch for which `metadata` is valid. When the epoch
+    /// changes, the metadata is reset.
+    pub current_epoch: u64,
+}
 
-//         let value = value?;
-//         let mut repr = [0; 32];
-//         repr.copy_from_slice(&value);
+impl RlnState {
+    pub fn new() -> Self {
+        Self { metadata: MessageMetadata::new(), current_epoch: 0 }
+    }
+}
 
-//         pallas::Base::from_repr(repr).into()
-//     }
+impl Default for RlnState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-//     fn del(&mut self, key: &BigUint) -> ContractResult {
-//         self.tree.remove(key.to_bytes_le()).unwrap();
-//         Ok(())
-//     }
-// }
+/// The set of currently registered RLN identities, stored as a Sparse
+/// Merkle Tree (SMT).
+///
+/// Persistence model: leaf commitments are stored in a dedicated sled
+/// tree (`rln-identity-leaves`). The in-memory SMT is rebuilt from
+/// these leaves on startup.
+pub struct IdentityState {
+    /// In-memory SMT for fast root computation and membership proofs.
+    smt: SmtMemoryFp,
+    /// Sled tree holding the persisted leaf set.
+    leaves: sled::Tree,
+}
 
-/// Hash message/event modulo `Fp`
+impl IdentityState {
+    /// Create a new identity state, restoring leaves from sled if present.
+    pub fn new(sled_db: &sled::Db) -> Result<Self> {
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let mut smt = SmtMemoryFp::new(store, hasher, &EMPTY_NODES_FP);
+
+        let leaves = sled_db.open_tree("rln-identity-leaves")?;
+
+        // Rebuild SMT from persisted leaves
+        let mut batch = vec![];
+        for item in leaves.iter() {
+            let (_, val) = item?;
+            let mut repr = [0u8; 32];
+            repr.copy_from_slice(&val);
+            if let Some(c) = pallas::Base::from_repr(repr).into() {
+                batch.push((c, c));
+            }
+        }
+
+        if !batch.is_empty() {
+            info!(
+                target: "event_graph::rln",
+                "[RLN] Restoring {} identities from sled", batch.len(),
+            );
+            smt.insert_batch(batch)?;
+        }
+
+        Ok(Self { smt, leaves })
+    }
+
+    /// Register a new identity. Writes to both the in-memory SMT
+    /// and the sled persistence tree.
+    pub fn register(&mut self, commitment: pallas::Base) -> Result<()> {
+        self.leaves.insert(commitment.to_repr(), commitment.to_repr().as_ref())?;
+        self.smt.insert_batch(vec![(commitment, commitment)])?;
+        Ok(())
+    }
+
+    /// Slash (remove) an identity.
+    pub fn slash(&mut self, commitment: pallas::Base) -> Result<()> {
+        self.leaves.remove(commitment.to_repr())?;
+        self.smt.remove_leaves(vec![(commitment, commitment)])?;
+        Ok(())
+    }
+
+    /// Current Merkle root of the identity tree.
+    pub fn root(&self) -> pallas::Base {
+        self.smt.root()
+    }
+
+    /// Generate a membership proof for `commitment`.
+    pub fn prove_membership(&self, commitment: &pallas::Base) -> darkfi_sdk::crypto::smt::PathFp {
+        self.smt.prove_membership(commitment)
+    }
+}
+
+/// Hash an event's header ID into a field element suitable for use
+/// as the `x` coordinate in the RLN polynomial evaluation.
 pub fn hash_event(event: &Event) -> pallas::Base {
     let mut buf = [0u8; 64];
     buf[..blake3::OUT_LEN].copy_from_slice(event.header.id().as_bytes());
     pallas::Base::from_uniform_bytes(&buf)
 }
 
-/// Find closest epoch to given timestamp
+/// Map a UNIX-millis timestamp to the nearest RLN epoch boundary.
+///
+/// Returns `0` if the timestamp predates [`RLN_GENESIS`], avoiding
+/// underflow panics on malicious timestamps.
 pub fn closest_epoch(timestamp: u64) -> u64 {
-    let time_diff = timestamp - RLN_GENESIS;
-    let epoch_idx = time_diff as f64 / RLN_EPOCH_LEN as f64;
-    let rounded = epoch_idx.round() as i64;
-    RLN_GENESIS + (rounded * RLN_EPOCH_LEN as i64) as u64
+    let Some(diff) = timestamp.checked_sub(RLN_GENESIS) else { return 0 };
+    let idx = (diff as f64 / RLN_EPOCH_LEN as f64).round() as u64;
+    RLN_GENESIS.saturating_add(idx.saturating_mul(RLN_EPOCH_LEN))
 }
 
 #[derive(Debug, Clone)]
 struct ShareData {
-    pub x_shares: Vec<pallas::Base>,
-    pub y_shares: Vec<pallas::Base>,
+    /// Collected `(x, y)` share pairs for a single internal nullifier.
+    shares: Vec<(pallas::Base, pallas::Base)>,
 }
 
-impl ShareData {
-    fn new() -> Self {
-        Self { x_shares: vec![], y_shares: vec![] }
-    }
-}
-
+/// Per-epoch tracking of RLN shares, keyed by nullifier pairs.
+///
+/// Each `(external_nullifier, internal_nullifier)` maps to the set
+/// of `(x, y)` shares seen so far.
+/// This allows detecting:
+/// * **Duplicates** - the exact same `(x, y)` pair arriving twice
+///   (the event is just dropped).
+/// * **Slot reuse** - a different `(x, y)` for the same internal
+///   nullifier (the user reused a message slot, triggering slashing).
 #[derive(Debug, Default)]
 pub struct MessageMetadata {
     data: BTreeMap<pallas::Base, BTreeMap<pallas::Base, ShareData>>,
@@ -138,265 +251,170 @@ pub struct MessageMetadata {
 
 impl MessageMetadata {
     pub fn new() -> Self {
-        Self { data: BTreeMap::new() }
+        Self::default()
     }
 
+    /// Record a new share.
     pub fn add_share(
         &mut self,
-        external_nullifier: pallas::Base,
-        internal_nullifier: pallas::Base,
+        ext_null: pallas::Base,
+        int_null: pallas::Base,
         x: pallas::Base,
         y: pallas::Base,
     ) -> Result<()> {
-        let inner_map = self.data.entry(external_nullifier).or_default();
-        let share_data = inner_map.entry(internal_nullifier).or_insert_with(ShareData::new);
-
-        share_data.x_shares.push(x);
-        share_data.y_shares.push(y);
-
+        self.data
+            .entry(ext_null)
+            .or_default()
+            .entry(int_null)
+            .or_insert_with(|| ShareData { shares: vec![] })
+            .shares
+            .push((x, y));
         Ok(())
     }
 
+    /// Retrieve all shares for a given nullifier pair.
     pub fn get_shares(
         &self,
-        external_nullifier: &pallas::Base,
-        internal_nullifier: &pallas::Base,
+        ext_null: &pallas::Base,
+        int_null: &pallas::Base,
     ) -> Vec<(pallas::Base, pallas::Base)> {
-        if let Some(inner_map) = self.data.get(external_nullifier) {
-            if let Some(share_data) = inner_map.get(internal_nullifier) {
-                return share_data
-                    .x_shares
-                    .iter()
-                    .cloned()
-                    .zip(share_data.y_shares.iter().cloned())
-                    .collect()
-            }
-        }
-
-        vec![]
+        self.data
+            .get(ext_null)
+            .and_then(|m| m.get(int_null))
+            .map(|sd| sd.shares.clone())
+            .unwrap_or_default()
     }
 
-    /// Check if the recieved message and its metadata are duplicated
+    /// Check whether the exact `(x, y)` pair is already recorded.
+    ///
+    /// This compares pairs - not independent coordinates - to avoid
+    /// false positives from cross-matching different shares.
     pub fn is_duplicate(
         &self,
-        external_nullifier: &pallas::Base,
-        internal_nullifier: &pallas::Base,
+        ext_null: &pallas::Base,
+        int_null: &pallas::Base,
         x: &pallas::Base,
         y: &pallas::Base,
     ) -> bool {
-        if let Some(inner_map) = self.data.get(external_nullifier) {
-            if let Some(share_data) = inner_map.get(internal_nullifier) {
-                return share_data.x_shares.contains(x) && share_data.y_shares.contains(y);
-            }
-        }
-
-        false
+        self.data
+            .get(ext_null)
+            .and_then(|m| m.get(int_null))
+            .map(|sd| sd.shares.iter().any(|(sx, sy)| sx == x && sy == y))
+            .unwrap_or(false)
     }
 
-    /// Check if the message has reused the nullifiers
-    pub fn is_reused(
-        &self,
-        external_nullifier: &pallas::Base,
-        internal_nullifier: &pallas::Base,
-    ) -> bool {
-        if let Some(inner_map) = self.data.get(external_nullifier) {
-            return inner_map.get(internal_nullifier).is_some()
-        }
-        false
+    /// Check whether any share has been recorded for this nullifier
+    /// pair in the current epoch.
+    ///
+    /// In RLNv2, each `message_id` produces a unique `internal_nullifier`.
+    /// A repeated `internal_nullifier` means the user reused the same
+    /// message slot, which is a protocol violation that enables secret
+    /// recovery via SSS.
+    pub fn is_reused(&self, ext_null: &pallas::Base, int_null: &pallas::Base) -> bool {
+        self.data.get(ext_null).map(|m| m.contains_key(int_null)).unwrap_or(false)
     }
 }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub enum RLNNode {
-    Registration(pallas::Base),
-    Slashing(pallas::Base),
-}
-
-pub fn process_commitment(node: RLNNode, identity_tree: &mut SmtMemoryFp) -> Result<()> {
-    match node {
-        RLNNode::Registration(commitment) => {
-            // Add to smt
-            let commitment = vec![commitment];
-            let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
-            identity_tree.insert_batch(commitment)?;
-        }
-        RLNNode::Slashing(commitment) => {
-            // Remove from smt
-            let commitment = vec![commitment];
-            let commitment: Vec<_> = commitment.into_iter().map(|l| (l, l)).collect();
-            identity_tree.remove_leaves(commitment)?;
-        }
-    }
-
-    Ok(())
-}
-
+/// Create a ZK proof that a user's secret has been recovered (via SSS)
+/// and they should be slashed from the identity tree.
 pub fn create_slash_proof(
     secret: pallas::Base,
     user_msg_limit: u64,
-    identities_tree: &mut SmtMemoryFp,
+    identity_state: &mut IdentityState,
     slash_pk: &ProvingKey,
 ) -> Result<(Proof, pallas::Base)> {
-    let identity_secret_hash = poseidon_hash([secret, user_msg_limit.into()]);
-    let commitment = poseidon_hash([identity_secret_hash]);
-
-    let identity_root = identities_tree.root();
-    let identity_path = identities_tree.prove_membership(&commitment);
-    // TODO: Delete me later
-    assert!(identity_path.verify(&identity_root, &commitment, &commitment));
+    let ish = poseidon_hash([secret, user_msg_limit.into()]);
+    let commitment = poseidon_hash([ish]);
+    let root = identity_state.root();
+    let path = identity_state.prove_membership(&commitment);
 
     let witnesses = vec![
         Witness::Base(Value::known(secret)),
         Witness::Base(Value::known(pallas::Base::from(user_msg_limit))),
-        Witness::SparseMerklePath(Value::known(identity_path.path)),
+        Witness::SparseMerklePath(Value::known(path.path)),
     ];
-
-    let public_inputs = vec![secret, pallas::Base::from(user_msg_limit), identity_root];
-
-    let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
-    let slash_circuit = ZkCircuit::new(witnesses, &slash_zkbin);
-
-    let proof = Proof::create(slash_pk, &[slash_circuit], &public_inputs, &mut OsRng).unwrap();
-
-    Ok((proof, identity_root))
+    let pi = vec![secret, pallas::Base::from(user_msg_limit), root];
+    let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
+    let circuit = ZkCircuit::new(witnesses, &zkbin);
+    let proof = Proof::create(slash_pk, &[circuit], &pi, &mut OsRng)
+        .map_err(|e| Error::Custom(format!("Slash proof creation failed: {e}")))?;
+    Ok((proof, root))
 }
 
-/// Recover secret using Shamir's secret sharing scheme
-pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
-    let mut secret = pallas::Base::zero();
-    for (j, share_j) in shares.iter().enumerate() {
-        let mut prod = pallas::Base::one();
-        for (i, share_i) in shares.iter().enumerate() {
-            if i != j {
-                prod *= share_i.0 * (share_i.0 - share_j.0).invert().unwrap();
+/// Recover the secret from two or more `(x, y)` Shamir shares using
+/// Lagrange interpolation.
+///
+/// Returns an error if fewer than 2 shares are provided or if any two
+/// shares have the same x-coordinate (which would cause a zero
+/// division).
+pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> Result<pallas::Base> {
+    if shares.len() < 2 {
+        return Err(Error::Custom("Need >1 share for SSS recovery".into()))
+    }
+
+    // Guard against duplicate x-coordinates
+    for i in 0..shares.len() {
+        for j in (i + 1)..shares.len() {
+            if shares[i].0 == shares[j].0 {
+                return Err(Error::Custom("Duplicate x-coordinates in SSS shares".into()))
             }
         }
-
-        prod *= share_j.1;
-        secret += prod;
     }
 
-    secret
+    let mut secret = pallas::Base::zero();
+    for (j, sj) in shares.iter().enumerate() {
+        let mut basis = pallas::Base::one();
+        for (i, si) in shares.iter().enumerate() {
+            if i != j {
+                basis *= si.0 * (si.0 - sj.0).invert().unwrap();
+            }
+        }
+        secret += basis * sj.1;
+    }
+
+    Ok(secret)
 }
 
-/// Helper function to read or build register verifying key
-pub(super) fn build_register_vk(sled_db: &sled::Db) -> Result<()> {
-    // sanity check
-    if sled_db.get("rlnv2-diff-register-vk")?.is_some() {
+enum KeyKind {
+    Pk,
+    Vk,
+}
+
+/// Build a key into sled if it doesn't already exist.
+fn ensure_key(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8], kind: KeyKind) -> Result<()> {
+    if sled_db.get(key)?.is_some() {
         return Ok(())
     }
-    let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
-    let register_empty_circuit =
-        ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
 
-    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register VerifyingKey");
-    let verifyingkey = VerifyingKey::build(register_zkbin.k, &register_empty_circuit);
+    let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+    info!(target: "event_graph::rln", "[RLN] Building {key}");
+
     let mut buf = vec![];
-    verifyingkey.write(&mut buf)?;
-    sled_db.insert("rlnv2-diff-register-vk", buf)?;
+    match kind {
+        KeyKind::Pk => {
+            let pk = ProvingKey::build(zkbin.k, &circuit);
+            pk.write(&mut buf)?;
+        }
+        KeyKind::Vk => {
+            let vk = VerifyingKey::build(zkbin.k, &circuit);
+            vk.write(&mut buf)?;
+        }
+    }
+    sled_db.insert(key, buf)?;
     Ok(())
 }
 
-/// Helper function to read register verifying key
-pub(super) fn read_register_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
-    if let Some(vk) = sled_db.get("rlnv2-diff-register-vk")? {
-        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false).unwrap();
-        let register_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&register_zkbin).unwrap(), &register_zkbin);
-        let mut reader = Cursor::new(vk);
-        Ok(VerifyingKey::read(&mut reader, register_empty_circuit)?)
-    } else {
-        Err(Error::Custom("Error reading register verifying key".to_owned()))
-    }
+fn read_vk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<VerifyingKey> {
+    let bytes = sled_db.get(key)?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
+    let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+    Ok(VerifyingKey::read(&mut Cursor::new(bytes), circuit)?)
 }
 
-/// Helper function to build signal verifying key
-pub(super) fn build_signal_vk(sled_db: &sled::Db) -> Result<()> {
-    // sanity check
-    if sled_db.get("rlnv2-diff-signal-vk")?.is_some() {
-        return Ok(())
-    }
-    let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
-    let signal_empty_circuit =
-        ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
-
-    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal VerifyingKey");
-    let verifyingkey = VerifyingKey::build(signal_zkbin.k, &signal_empty_circuit);
-    let mut buf = vec![];
-    verifyingkey.write(&mut buf)?;
-    sled_db.insert("rlnv2-diff-signal-vk", buf)?;
-    Ok(())
-}
-
-/// Helper function to read signal verifying key
-pub(super) fn read_signal_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
-    if let Some(vk) = sled_db.get("rlnv2-diff-signal-vk")? {
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false).unwrap();
-        let signal_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&signal_zkbin).unwrap(), &signal_zkbin);
-        let mut reader = Cursor::new(vk);
-        Ok(VerifyingKey::read(&mut reader, signal_empty_circuit)?)
-    } else {
-        Err(Error::Custom("Error Reading signal verifying key".to_owned()))
-    }
-}
-
-/// Helper function to build slash proving key
-pub(super) fn build_slash_pk(sled_db: &sled::Db) -> Result<()> {
-    // sanity check
-    if sled_db.get("rlnv2-diff-slash-pk")?.is_some() {
-        return Ok(())
-    }
-    let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
-    let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
-
-    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash ProvingKey");
-    let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
-    let mut buf = vec![];
-    verifyingkey.write(&mut buf)?;
-    sled_db.insert("rlnv2-diff-slash-pk", buf)?;
-    Ok(())
-}
-
-/// Helper function to read slash proving key
-pub(super) fn read_slash_pk(sled_db: &sled::Db) -> Result<ProvingKey> {
-    if let Some(vk) = sled_db.get("rlnv2-diff-slash-pk")? {
-        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
-        let slash_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
-        let mut reader = Cursor::new(vk);
-        Ok(ProvingKey::read(&mut reader, slash_empty_circuit)?)
-    } else {
-        Err(Error::Custom("Error Reading slash proving key".to_owned()))
-    }
-}
-
-/// Helper function to build slash verifying key
-pub(super) fn build_slash_vk(sled_db: &sled::Db) -> Result<()> {
-    // sanity check
-    if sled_db.get("rlnv2-diff-slash-vk")?.is_some() {
-        return Ok(())
-    }
-    let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
-    let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
-
-    info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Slash VerifyingKey");
-    let verifyingkey = VerifyingKey::build(slash_zkbin.k, &slash_empty_circuit);
-    let mut buf = vec![];
-    verifyingkey.write(&mut buf)?;
-    sled_db.insert("rlnv2-diff-slash-vk", buf)?;
-    Ok(())
-}
-
-/// Helper function to read slash proving key
-pub(super) fn read_slash_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
-    if let Some(vk) = sled_db.get("rlnv2-diff-slash-pk")? {
-        let slash_zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false).unwrap();
-        let slash_empty_circuit =
-            ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
-        let mut reader = Cursor::new(vk);
-        Ok(VerifyingKey::read(&mut reader, slash_empty_circuit)?)
-    } else {
-        Err(Error::Custom("Error Reading slash verifying key".to_owned()))
-    }
+fn read_pk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<ProvingKey> {
+    let bytes = sled_db.get(key)?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
+    let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+    Ok(ProvingKey::read(&mut Cursor::new(bytes), circuit)?)
 }

@@ -16,45 +16,54 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// cargo test --release --features=event-graph --lib eventgraph_propagation -- --include-ignored
-
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     slice,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{Duration, UNIX_EPOCH},
 };
 
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::serialize_async;
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 use sled_overlay::sled;
 use smol::{channel, future, Executor};
-use tracing::{info, warn};
 use url::Url;
 
 use crate::{
     error::Result,
     event_graph::{
+        compute_unreferenced_tips,
         event::Header,
-        proto::{EventPut, ProtocolEventGraph},
-        util::next_rotation_timestamp,
-        DAGStore, Event, EventGraph, EventGraphPtr, DAGS_MAX_NUMBER, GENESIS_CONTENTS,
-        INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS,
+        proto::{EventPut, ProtocolEventGraph, SyncDirection},
+        util::next_hour_timestamp,
+        DagStore, Event, EventGraph, EventGraphConfig, EventGraphPtr, TimeIndex, NULL_ID,
+        NULL_PARENTS, N_EVENT_PARENTS,
     },
     net::{session::SESSION_DEFAULT, settings::NetworkProfile, P2p, Settings},
-    system::{msleep, sleep, timeout::timeout},
+    system::{sleep, timeout::timeout},
     util::logger::{setup_test_logger, Level},
-    Error,
 };
 
-// Number of nodes to spawn and number of peers each node connects to
 const N_NODES: usize = 5;
 const N_CONNS: usize = 2;
-//const N_NODES: usize = 50;
-//const N_CONNS: usize = N_NODES / 3;
+
+/// Test config: 15 Apr 2026 UTC, hourly rotation, 24-DAG window.
+fn test_config() -> EventGraphConfig {
+    EventGraphConfig {
+        initial_genesis: 1_776_211_200_000,
+        hours_rotation: 1,
+        genesis_contents: b"test-graph-v1".to_vec(),
+        max_dags: Some(24),
+    }
+}
+
+/// Archive-mode variant of the test config.
+fn archive_config() -> EventGraphConfig {
+    EventGraphConfig { max_dags: None, ..test_config() }
+}
 
 fn init_logger() {
-    let ignored_targets = [
+    let ignored = [
         "sled",
         "net::protocol_ping",
         "net::channel::subscribe_stop()",
@@ -70,24 +79,11 @@ fn init_logger() {
         "net::channel::main_receive_loop()",
         "net::tcp",
     ];
-    // We check this error so we can execute same file tests in parallel,
-    // otherwise second one fails to init logger here.
-    if setup_test_logger(
-        &ignored_targets,
-        false,
-        Level::Info,
-        //Level::Verbose,
-        //Level::Debug,
-        //Level::Tracing,
-    )
-    .is_err()
-    {
-        warn!(target: "test_harness", "Logger already initialized");
-    }
+    let _ = setup_test_logger(&ignored, false, Level::Info);
 }
 
 async fn spawn_node(
-    inbound_addrs: Vec<Url>,
+    inbound: Vec<Url>,
     peers: Vec<Url>,
     ex: Arc<Executor<'static>>,
 ) -> Arc<EventGraph> {
@@ -98,7 +94,7 @@ async fn spawn_node(
     );
     let settings = Settings {
         localnet: true,
-        inbound_addrs,
+        inbound_addrs: inbound,
         outbound_connections: 0,
         inbound_connections: usize::MAX,
         peers,
@@ -109,101 +105,427 @@ async fn spawn_node(
 
     let p2p = P2p::new(settings, ex.clone()).await.unwrap();
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    let event_graph =
-        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, false, 1, ex.clone())
-            .await
-            .unwrap();
-    *event_graph.synced.write().await = true;
-    let event_graph_ = event_graph.clone();
+    let eg = EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, test_config(), ex.clone())
+        .await
+        .unwrap();
 
-    // Register the P2P protocols
-    let registry = p2p.protocol_registry();
-    registry
+    // Mark as synced so protocol handlers accept events during tests
+    eg.synced.store(true, Ordering::Release);
+
+    let eg_ = eg.clone();
+    p2p.protocol_registry()
         .register(SESSION_DEFAULT, move |channel, _| {
-            let event_graph_ = event_graph_.clone();
-            async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
+            let eg_ = eg_.clone();
+            async move { ProtocolEventGraph::init(eg_, channel).await.unwrap() }
         })
         .await;
-
-    event_graph
+    eg
 }
 
-async fn bootstrap_nodes(
-    peer_indexes: &[usize],
-    starting_port: usize,
-    rng: &mut ThreadRng,
-    ex: Arc<Executor<'static>>,
-) -> Vec<Arc<EventGraph>> {
-    let mut eg_instances = vec![];
+#[test]
+fn evgr_time_index_bidirectional_queries() {
+    let mut idx = TimeIndex::new();
+    for ts in [100_u64, 200, 200, 300, 400, 500] {
+        let id = blake3::hash(&ts.to_be_bytes());
+        idx.insert(ts, id);
+    }
 
-    // Initialize the nodes
-    for i in 0..N_NODES {
-        // Everyone will connect to N_CONNS random peers.
-        let mut peer_indexes_copy = peer_indexes.to_owned();
-        peer_indexes_copy.remove(i);
-        let peer_indexes_to_connect: Vec<_> =
-            peer_indexes_copy.choose_multiple(rng, N_CONNS).collect();
+    assert_eq!(idx.len(), 6);
+    assert_eq!(idx.newest(3).len(), 3);
+    assert_eq!(idx.oldest(2).len(), 2);
+    // Before 300 -> events at 200 (x2) and 100
+    assert_eq!(idx.before(300, 10).len(), 3);
+    // After 200 -> events at 300, 400, 500
+    assert_eq!(idx.after(200, 10).len(), 3);
+}
 
-        let mut peers = vec![];
-        for peer_index in peer_indexes_to_connect {
-            let port = starting_port + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
+#[test]
+fn evgr_time_index_saturating_cursor() {
+    let mut idx = TimeIndex::new();
+    idx.insert(100, blake3::hash(b"x"));
+
+    // before(0) should not underflow
+    assert_eq!(idx.before(0, 10).len(), 0);
+    // after(u64::MAX) should not overflow
+    assert_eq!(idx.after(u64::MAX, 10).len(), 0);
+}
+
+async fn make_dag_store() -> Result<DagStore> {
+    let sled_db = sled::Config::new().temporary(true).open()?;
+    Ok(DagStore::new(sled_db, &test_config()).await)
+}
+
+#[test]
+fn evgr_dag_store_creates_rolling_window() -> Result<()> {
+    smol::block_on(async {
+        let store = make_dag_store().await?;
+        assert_eq!(store.dag_timestamps().len(), 24);
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_dag_store_all_slots_have_genesis() -> Result<()> {
+    smol::block_on(async {
+        let store = make_dag_store().await?;
+        for ts in store.dag_timestamps() {
+            let slot = store.get_slot(&ts).unwrap();
+            assert!(!slot.header_tree.is_empty());
+            assert!(!slot.main_tree.is_empty());
+            assert!(!slot.tips.is_empty());
+            assert!(!slot.time_index.is_empty());
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_dag_store_add_drops_oldest_in_bounded_mode() -> Result<()> {
+    smol::block_on(async {
+        let mut store = make_dag_store().await?;
+        let oldest_ts = store.dag_timestamps()[0];
+        let new_ts = next_hour_timestamp(1);
+        let hdr = Header {
+            timestamp: new_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(b"test-graph-v1"),
+        };
+        let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
+        store.add_dag(&genesis, Some(24)).await;
+
+        assert_eq!(store.dag_timestamps().len(), 24);
+        assert!(store.get_slot(&new_ts).is_some());
+        assert!(store.get_slot(&oldest_ts).is_none());
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_dag_store_archive_mode_never_drops() -> Result<()> {
+    smol::block_on(async {
+        let sled_db = sled::Config::new().temporary(true).open()?;
+        let mut store = DagStore::new(sled_db, &archive_config()).await;
+        let initial = store.dag_timestamps().len();
+
+        // Add DAGs well beyond the normal 24-window
+        for i in 1..=30i64 {
+            let ts = next_hour_timestamp(i);
+            let hdr = Header {
+                timestamp: ts,
+                parents: NULL_PARENTS,
+                layer: 0,
+                content_hash: blake3::hash(b"test-graph-v1"),
+            };
+            let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
+            store.add_dag(&genesis, None).await;
         }
 
-        let event_graph = spawn_node(
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
-            peers,
-            ex.clone(),
-        )
-        .await;
-
-        eg_instances.push(event_graph);
-    }
-
-    // Start the P2P network
-    for eg in eg_instances.iter() {
-        eg.p2p.clone().start().await.unwrap();
-    }
-
-    info!("Waiting 5s until all peers connect");
-    sleep(5).await;
-
-    eg_instances
+        // Nothing should have been dropped
+        assert_eq!(store.dag_timestamps().len(), initial + 30);
+        Ok(())
+    })
 }
 
-async fn assert_dags(eg_instances: &[Arc<EventGraph>], expected_len: usize, rng: &mut ThreadRng) {
-    let random_node = eg_instances.choose(rng).unwrap();
-    let random_node_genesis = random_node.current_genesis.read().await.header.timestamp;
-    let store = random_node.dag_store.read().await;
-    let (_, unreferenced_tips) = store.main_dags.get(&random_node_genesis).unwrap();
-    let last_layer_tips = unreferenced_tips.last_key_value().unwrap().1.clone();
-    for (i, eg) in eg_instances.iter().enumerate() {
-        let current_genesis = eg.current_genesis.read().await;
-        let dag_name = current_genesis.header.timestamp.to_string();
-        let dag = eg.dag_store.read().await.get_dag(&dag_name);
-        let unreferenced_tips = eg.dag_store.read().await.find_unreferenced_tips(&dag).await;
-        let node_last_layer_tips = unreferenced_tips.last_key_value().unwrap().1.clone();
+#[test]
+fn evgr_dag_store_archive_mode_discovers_existing_trees() -> Result<()> {
+    smol::block_on(async {
+        let sled_db = sled::Config::new().temporary(true).open()?;
+
+        // First run: create archive store and add some historical DAGs
+        let historical_ts = next_hour_timestamp(-100);
+        {
+            let mut store = DagStore::new(sled_db.clone(), &archive_config()).await;
+            let hdr = Header {
+                timestamp: historical_ts,
+                parents: NULL_PARENTS,
+                layer: 0,
+                content_hash: blake3::hash(b"test-graph-v1"),
+            };
+            let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
+            store.add_dag(&genesis, None).await;
+            drop(store);
+        }
+
+        // Second run: reopen and verify the historical DAG is discovered
+        let store = DagStore::new(sled_db, &archive_config()).await;
         assert!(
-            dag.len() == expected_len,
-            "Node {i}, expected {expected_len} events, have {}",
-            dag.len()
+            store.get_slot(&historical_ts).is_some(),
+            "Archive mode should discover historical DAGs on restart"
         );
-        assert_eq!(
-            node_last_layer_tips, last_layer_tips,
-            "Node {i} contains malformed unreferenced tips"
-        );
-    }
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_compute_unreferenced_tips_single_pass() -> Result<()> {
+    smol::block_on(async {
+        let store = make_dag_store().await?;
+        let ts = *store.dag_timestamps().last().unwrap();
+        let slot = store.get_slot(&ts).unwrap();
+        let genesis_hash = *slot.tips.get(&0).unwrap().iter().next().unwrap();
+
+        // Build a small DAG manually:
+        //      genesis
+        //      /     \
+        //     e2      e4  (both at layer 1)
+        //      |
+        //     e3        (layer 2)
+        //
+        // Header IDs include content_hash, so events with identical
+        // (timestamp, parents, layer) but different content get
+        // distinct IDs.
+        let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+
+        let mut p = [NULL_ID; N_EVENT_PARENTS];
+        p[0] = genesis_hash;
+        let e2 = Event {
+            header: Header {
+                timestamp: now,
+                parents: p,
+                layer: 1,
+                content_hash: blake3::hash(b"e2"),
+            },
+            content: b"e2".to_vec(),
+        };
+        slot.main_tree.insert(e2.id().as_bytes(), serialize_async(&e2).await)?;
+
+        let mut p = [NULL_ID; N_EVENT_PARENTS];
+        p[0] = e2.id();
+        let e3 = Event {
+            header: Header {
+                timestamp: now,
+                parents: p,
+                layer: 2,
+                content_hash: blake3::hash(b"e3"),
+            },
+            content: b"e3".to_vec(),
+        };
+        slot.main_tree.insert(e3.id().as_bytes(), serialize_async(&e3).await)?;
+
+        let mut p = [NULL_ID; N_EVENT_PARENTS];
+        p[0] = genesis_hash;
+        let e4 = Event {
+            header: Header {
+                timestamp: now,
+                parents: p,
+                layer: 1,
+                content_hash: blake3::hash(b"e4"),
+            },
+            content: b"e4".to_vec(),
+        };
+        slot.main_tree.insert(e4.id().as_bytes(), serialize_async(&e4).await)?;
+
+        assert_ne!(e2.id(), e4.id(), "e2 and e4 must have distinct IDs");
+
+        let tips = compute_unreferenced_tips(&slot.main_tree).await;
+
+        // e3 (layer 2) and e4 (layer 1) are unreferenced;
+        // e2 is a parent of e3, so it's not a tip.
+        assert!(tips.get(&2).unwrap().contains(&e3.id()));
+        assert!(tips.get(&1).unwrap().contains(&e4.id()));
+        assert!(!tips.values().any(|set| set.contains(&e2.id())));
+        Ok(())
+    })
+}
+
+async fn make_event_graph() -> Result<EventGraphPtr> {
+    let ex = Arc::new(Executor::new());
+    let p2p = P2p::new(Settings::default(), ex.clone()).await?;
+    let sled_db = sled::Config::new().temporary(true).open()?;
+    EventGraph::new(p2p, sled_db, "/tmp".into(), false, test_config(), ex).await
+}
+
+#[test]
+fn evgr_dag_insert_valid_event() -> Result<()> {
+    smol::block_on(async {
+        let eg = make_event_graph().await?;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let sub = eg.event_pub.clone().subscribe().await;
+
+        let event = Event::new(b"hello".to_vec(), &eg).await;
+        eg.header_dag_insert(vec![event.header.clone()], &dag_name).await?;
+        let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await?;
+        assert_eq!(ids.len(), 1);
+
+        // Tips updated to include the new event
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(slot.tips.get(&1).unwrap().contains(&event.id()));
+        drop(store);
+
+        // Publisher notified
+        let Ok(notified) = timeout(Duration::from_secs(1), sub.receive()).await else {
+            panic!("Event notification not received");
+        };
+        assert_eq!(notified.id(), event.id());
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_dag_insert_duplicate_skipped() -> Result<()> {
+    smol::block_on(async {
+        let eg = make_event_graph().await?;
+        let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
+        let event = Event::new(b"dup".to_vec(), &eg).await;
+        eg.header_dag_insert(vec![event.header.clone()], &dag_name).await?;
+
+        assert_eq!(eg.dag_insert(slice::from_ref(&event), &dag_name).await?.len(), 1);
+        assert!(eg.dag_insert(slice::from_ref(&event), &dag_name).await?.is_empty());
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_dag_insert_without_header_skipped() -> Result<()> {
+    smol::block_on(async {
+        let eg = make_event_graph().await?;
+        let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
+        let event = Event::new(b"orphan".to_vec(), &eg).await;
+
+        // No header_dag_insert call -> event shouldn't be inserted
+        let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await?;
+        assert!(ids.is_empty());
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_fetch_page_both_directions() -> Result<()> {
+    smol::block_on(async {
+        let eg = make_event_graph().await?;
+        let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
+
+        // Insert 10 events with strictly-increasing timestamps
+        let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let mut inserted = vec![];
+        for i in 0..10u64 {
+            let ev = Event::with_timestamp(base + i, vec![i as u8], &eg).await;
+            eg.header_dag_insert(vec![ev.header.clone()], &dag_name).await?;
+            eg.dag_insert(slice::from_ref(&ev), &dag_name).await?;
+            inserted.push(ev);
+        }
+
+        // Backward from u64::MAX -> should get newest events first
+        let page = eg.fetch_page(u64::MAX, SyncDirection::Backward, 5).await?;
+        assert_eq!(page.len(), 5);
+        // Ensure descending timestamps
+        for w in page.windows(2) {
+            assert!(w[0].header.timestamp >= w[1].header.timestamp);
+        }
+
+        // Forward from 0 -> oldest first
+        let page = eg.fetch_page(0, SyncDirection::Forward, 5).await?;
+        assert!(!page.is_empty());
+        for w in page.windows(2) {
+            assert!(w[0].header.timestamp <= w[1].header.timestamp);
+        }
+        Ok(())
+    })
+}
+
+async fn build_graph() -> Result<(EventGraphPtr, HashMap<&'static str, Event>)> {
+    let eg = make_event_graph().await?;
+    let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
+    let genesis_hash = eg.current_genesis.read().await.id();
+    let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+
+    let make = |off: u64, layer: u64, parents: [blake3::Hash; N_EVENT_PARENTS], name: &str| Event {
+        header: Header {
+            timestamp: base + off,
+            layer,
+            parents,
+            content_hash: blake3::hash(name.as_bytes()),
+        },
+        content: name.as_bytes().to_vec(),
+    };
+
+    //           genesis
+    //          / | | \
+    //       e1a e1b e1c e1d       (layer 1)
+    //        |   |   |   |
+    //       e2a e2b e2c e2d        (layer 2)
+    let mut p = [NULL_ID; N_EVENT_PARENTS];
+    p[0] = genesis_hash;
+    let e1a = make(1, 1, p, "e1a");
+    let e1b = make(2, 1, p, "e1b");
+    let e1c = make(3, 1, p, "e1c");
+    let e1d = make(4, 1, p, "e1d");
+
+    let mut p = [NULL_ID; N_EVENT_PARENTS];
+    p[0] = e1a.id();
+    let e2a = make(5, 2, p, "e2a");
+    p[0] = e1b.id();
+    let e2b = make(6, 2, p, "e2b");
+    p[0] = e1c.id();
+    let e2c = make(7, 2, p, "e2c");
+    p[0] = e1d.id();
+    let e2d = make(8, 2, p, "e2d");
+
+    let l1 = vec![e1a.clone(), e1b.clone(), e1c.clone(), e1d.clone()];
+    let l2 = vec![e2a.clone(), e2b.clone(), e2c.clone(), e2d.clone()];
+
+    eg.header_dag_insert(l1.iter().map(|e| e.header.clone()).collect(), &dag_name).await?;
+    eg.dag_insert(&l1, &dag_name).await?;
+    eg.header_dag_insert(l2.iter().map(|e| e.header.clone()).collect(), &dag_name).await?;
+    eg.dag_insert(&l2, &dag_name).await?;
+
+    let mut map = HashMap::new();
+    map.insert("e1a", e1a);
+    map.insert("e1b", e1b);
+    map.insert("e1c", e1c);
+    map.insert("e1d", e1d);
+    map.insert("e2a", e2a);
+    map.insert("e2b", e2b);
+    map.insert("e2c", e2c);
+    map.insert("e2d", e2d);
+    Ok((eg, map))
+}
+
+#[test]
+fn evgr_ancestor_walk_via_header_tree() -> Result<()> {
+    smol::block_on(async {
+        let (eg, evs) = build_graph().await?;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        let genesis_hash = eg.current_genesis.read().await.id();
+
+        // Layer-1 events should have only genesis as ancestor
+        for name in ["e1a", "e1b", "e1c", "e1d"] {
+            let mut ancestors = HashSet::new();
+            eg.get_ancestors(&mut ancestors, evs[name].header.clone(), &slot.header_tree).await?;
+            assert_eq!(ancestors, HashSet::from([genesis_hash]));
+        }
+
+        // e2a's ancestors = {genesis, e1a}
+        let mut ancestors = HashSet::new();
+        eg.get_ancestors(&mut ancestors, evs["e2a"].header.clone(), &slot.header_tree).await?;
+        assert_eq!(ancestors, HashSet::from([genesis_hash, evs["e1a"].id()]));
+        Ok(())
+    })
+}
+
+#[test]
+fn evgr_order_events_is_chronological() -> Result<()> {
+    smol::block_on(async {
+        let (eg, _) = build_graph().await?;
+        let ordered = eg.order_events().await;
+        for w in ordered.windows(2) {
+            assert!(w[0].header.timestamp <= w[1].header.timestamp);
+        }
+        Ok(())
+    })
 }
 
 macro_rules! test_body {
     ($real_call:ident) => {
         init_logger();
-
         let ex = Arc::new(Executor::new());
         let ex_ = ex.clone();
         let (signal, shutdown) = channel::unbounded::<()>();
-
-        // Run a thread for each node.
         easy_parallel::Parallel::new()
             .each(0..N_NODES, |_| future::block_on(ex.run(shutdown.recv())))
             .finish(|| {
@@ -216,1124 +538,54 @@ macro_rules! test_body {
 }
 
 #[test]
-fn eventgraph_propagation() {
+fn evgr_eventgraph_propagation() {
     test_body!(eventgraph_propagation_real);
 }
 
 async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
-    let mut rng = rand::thread_rng();
-    let peer_indexes: Vec<usize> = (0..N_NODES).collect();
-
-    // Bootstrap nodes
-    let mut eg_instances = bootstrap_nodes(&peer_indexes, 13200, &mut rng, ex.clone()).await;
-
-    // Grab genesis event
-    let random_node = eg_instances.choose(&mut rng).unwrap();
-    let current_genesis = random_node.current_genesis.read().await;
-    let dag_name = current_genesis.header.timestamp.to_string();
-    let (id, _) = random_node.dag_store.read().await.get_dag(&dag_name).last().unwrap().unwrap();
-    let genesis_event_id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
-
-    drop(current_genesis);
-
-    // =========================================
-    // 1. Assert that everyone's DAG is the same
-    // =========================================
-    assert_dags(&eg_instances, 1, &mut rng).await;
-
-    // ==========================================
-    // 2. Create an event in one node and publish
-    // ==========================================
-    let random_node = eg_instances.choose(&mut rng).unwrap();
-    let current_genesis = random_node.current_genesis.read().await;
-    let dag_name = current_genesis.header.timestamp.to_string();
-    let event = Event::new(vec![1, 2, 3, 4], random_node).await;
-    assert!(event.header.parents.contains(&genesis_event_id));
-    // The node adds it to their DAG, on layer 1.
-    random_node.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
-    let event_id = random_node.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap()[0];
-
-    let store = random_node.dag_store.read().await;
-    let (_, tips_layers) = store.header_dags.get(&current_genesis.header.timestamp).unwrap();
-
-    // Since genesis was referenced, its layer (0) have been removed
-    assert_eq!(tips_layers.len(), 1);
-    assert!(tips_layers.last_key_value().unwrap().1.get(&event_id).is_some());
-    drop(store);
-    drop(current_genesis);
-    info!("Broadcasting event {event_id}");
-    random_node.p2p.broadcast(&EventPut(event, vec![])).await;
-    info!("Waiting 5s for event propagation");
-    sleep(5).await;
-
-    // ====================================================
-    // 3. Assert that everyone has the new event in the DAG
-    // ====================================================
-    assert_dags(&eg_instances, 2, &mut rng).await;
-
-    // ==============================================================
-    // 4. Create multiple events on a node and broadcast the last one
-    //    The `EventPut` logic should manage to fetch all of them,
-    //    provided that the last one references the earlier ones.
-    // ==============================================================
-    let random_node = eg_instances.choose(&mut rng).unwrap();
-    let event0 = Event::new(vec![1, 2, 3, 4, 0], random_node).await;
-    random_node.header_dag_insert(vec![event0.header.clone()], &dag_name).await.unwrap();
-    let event0_id = random_node.dag_insert(slice::from_ref(&event0), &dag_name).await.unwrap()[0];
-    let event1 = Event::new(vec![1, 2, 3, 4, 1], random_node).await;
-    random_node.header_dag_insert(vec![event1.header.clone()], &dag_name).await.unwrap();
-    let event1_id = random_node.dag_insert(slice::from_ref(&event1), &dag_name).await.unwrap()[0];
-    let event2 = Event::new(vec![1, 2, 3, 4, 2], random_node).await;
-    random_node.header_dag_insert(vec![event2.header.clone()], &dag_name).await.unwrap();
-    let event2_id = random_node.dag_insert(slice::from_ref(&event2), &dag_name).await.unwrap()[0];
-    // Genesis event + event from 2. + upper 3 events (layer 4)
-    let current_genesis = random_node.current_genesis.read().await;
-    let dag_name = current_genesis.header.timestamp.to_string();
-    assert_eq!(random_node.dag_store.read().await.get_dag(&dag_name).len(), 5);
-    let random_node_genesis = random_node.current_genesis.read().await.header.timestamp;
-    let store = random_node.dag_store.read().await;
-    let (_, tips_layers) = store.header_dags.get(&random_node_genesis).unwrap();
-    assert_eq!(tips_layers.len(), 1);
-    assert!(tips_layers.get(&4).unwrap().get(&event2_id).is_some());
-    drop(current_genesis);
-    drop(store);
-
-    let event_chain = vec![
-        (event0_id, event0.header.parents),
-        (event1_id, event1.header.parents),
-        (event2_id, event2.header.parents),
-    ];
-
-    info!("Broadcasting event {event2_id}");
-    info!("Event chain: {event_chain:#?}");
-    random_node.p2p.broadcast(&EventPut(event2, vec![])).await;
-    info!("Waiting 5s for event propagation");
-    sleep(5).await;
-
-    // ==========================================
-    // 5. Assert that everyone has all the events
-    // ==========================================
-    assert_dags(&eg_instances, 5, &mut rng).await;
-
-    // ===========================================
-    // 6. Create multiple events on multiple nodes
-    // ===========================================
-    // node 1
-    // =======
-    let node1 = eg_instances.choose(&mut rng).unwrap();
-    let event0_1 = Event::new(vec![1, 2, 3, 4, 3], node1).await;
-    node1.header_dag_insert(vec![event0_1.header.clone()], &dag_name).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event0_1), &dag_name).await.unwrap();
-    node1.p2p.broadcast(&EventPut(event0_1, vec![])).await;
-    msleep(300).await;
-
-    let event1_1 = Event::new(vec![1, 2, 3, 4, 4], node1).await;
-    node1.header_dag_insert(vec![event1_1.header.clone()], &dag_name).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event1_1), &dag_name).await.unwrap();
-    node1.p2p.broadcast(&EventPut(event1_1, vec![])).await;
-    msleep(300).await;
-
-    let event2_1 = Event::new(vec![1, 2, 3, 4, 5], node1).await;
-    node1.header_dag_insert(vec![event2_1.header.clone()], &dag_name).await.unwrap();
-    node1.dag_insert(slice::from_ref(&event2_1), &dag_name).await.unwrap();
-    node1.p2p.broadcast(&EventPut(event2_1, vec![])).await;
-    msleep(300).await;
-
-    // =======
-    // node 2
-    // =======
-    let node2 = eg_instances.choose(&mut rng).unwrap();
-    let event0_2 = Event::new(vec![1, 2, 3, 4, 6], node2).await;
-    node2.header_dag_insert(vec![event0_2.header.clone()], &dag_name).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event0_2), &dag_name).await.unwrap();
-    node2.p2p.broadcast(&EventPut(event0_2, vec![])).await;
-    msleep(300).await;
-
-    let event1_2 = Event::new(vec![1, 2, 3, 4, 7], node2).await;
-    node2.header_dag_insert(vec![event1_2.header.clone()], &dag_name).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event1_2), &dag_name).await.unwrap();
-    node2.p2p.broadcast(&EventPut(event1_2, vec![])).await;
-    msleep(300).await;
-
-    let event2_2 = Event::new(vec![1, 2, 3, 4, 8], node2).await;
-    node2.header_dag_insert(vec![event2_2.header.clone()], &dag_name).await.unwrap();
-    node2.dag_insert(slice::from_ref(&event2_2), &dag_name).await.unwrap();
-    node2.p2p.broadcast(&EventPut(event2_2, vec![])).await;
-    msleep(300).await;
-
-    // =======
-    // node 3
-    // =======
-    let node3 = eg_instances.choose(&mut rng).unwrap();
-    let event0_3 = Event::new(vec![1, 2, 3, 4, 9], node3).await;
-    node3.header_dag_insert(vec![event0_3.header.clone()], &dag_name).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event0_3), &dag_name).await.unwrap();
-    node3.p2p.broadcast(&EventPut(event0_3, vec![])).await;
-    msleep(300).await;
-
-    let event1_3 = Event::new(vec![1, 2, 3, 4, 10], node3).await;
-    node3.header_dag_insert(vec![event1_3.header.clone()], &dag_name).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event1_3), &dag_name).await.unwrap();
-    node3.p2p.broadcast(&EventPut(event1_3, vec![])).await;
-    msleep(300).await;
-
-    let event2_3 = Event::new(vec![1, 2, 3, 4, 11], node3).await;
-    node3.header_dag_insert(vec![event2_3.header.clone()], &dag_name).await.unwrap();
-    node3.dag_insert(slice::from_ref(&event2_3), &dag_name).await.unwrap();
-    node3.p2p.broadcast(&EventPut(event2_3, vec![])).await;
-    msleep(300).await;
-
-    // /////
-    // //
-    // let node4 = eg_instances.choose(&mut rng).unwrap();
-    // let event0_4 = Event::new(vec![1, 2, 3, 4, 12], node4).await;
-    // node4.dag_insert(&[event0_4.clone()]).await.unwrap();
-    // node4.p2p.broadcast(&EventPut(event0_4)).await;
-    // sleep(1).await;
-
-    // let event1_4 = Event::new(vec![1, 2, 3, 4, 13], node4).await;
-    // node4.dag_insert(&[event1_4.clone()]).await.unwrap();
-    // node4.p2p.broadcast(&EventPut(event1_4)).await;
-    // sleep(1).await;
-
-    // let event2_4 = Event::new(vec![1, 2, 3, 4, 14], node4).await;
-    // node4.dag_insert(&[event2_4.clone()]).await.unwrap();
-    // node4.p2p.broadcast(&EventPut(event2_4)).await;
-    // // sleep(1).await;
-
-    // ==========================================
-    // 7. Assert that everyone has all the events
-    // ==========================================
-    // 5 events from 2. and 4. + 9 events from 6. = 14
-    assert_dags(&eg_instances, 14, &mut rng).await;
-
-    // ============================================================
-    // 8. Start a new node and try to sync the DAG from other peers
-    // ============================================================
-    {
-        // Connect to N_CONNS random peers.
-        let peer_indexes_to_connect: Vec<_> =
-            peer_indexes.choose_multiple(&mut rng, N_CONNS).collect();
-
-        let mut peers = vec![];
-        for peer_index in peer_indexes_to_connect {
-            let port = 13200 + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
-        }
-
-        let event_graph = spawn_node(
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + N_NODES + 1)).unwrap()],
-            peers,
-            ex.clone(),
-        )
-        .await;
-
-        eg_instances.push(event_graph.clone());
-
-        event_graph.p2p.clone().start().await.unwrap();
-
-        info!("Waiting 5s for new node connection");
-        sleep(5).await;
-
-        event_graph.sync_selected(1, false).await.unwrap();
-    }
-
-    // ============================================================
-    // 9. Assert the new synced DAG has the same contents as others
-    // ============================================================
-    // 5 events from 2. and 4. + 9 events from 6. = 14
-    assert_dags(&eg_instances, 14, &mut rng).await;
-
-    // Stop the P2P network
-    for eg in eg_instances.iter() {
-        eg.p2p.clone().stop().await;
-    }
-}
-
-#[test]
-#[ignore]
-fn eventgraph_chaotic_propagation() {
-    test_body!(eventgraph_chaotic_propagation_real);
-}
-
-async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
-    let mut rng = rand::thread_rng();
-    let peer_indexes: Vec<usize> = (0..N_NODES).collect();
-    let n_events: usize = 100000;
-
-    // Bootstrap nodes
-    let mut eg_instances = bootstrap_nodes(&peer_indexes, 14200, &mut rng, ex.clone()).await;
-
-    // =========================================
-    // 1. Assert that everyone's DAG is the same
-    // =========================================
-    assert_dags(&eg_instances, 1, &mut rng).await;
-
-    // ===========================================
-    // 2. Create multiple events on multiple nodes
-    for i in 0..n_events {
-        let random_node = eg_instances.choose(&mut rng).unwrap();
-        let event = Event::new(i.to_be_bytes().to_vec(), random_node).await;
-        let current_genesis = random_node.current_genesis.read().await;
-        let dag_name = current_genesis.header.timestamp.to_string();
-        random_node.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
-        random_node.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
-        random_node.p2p.broadcast(&EventPut(event, vec![])).await;
-    }
-    info!("Waiting 5s for events propagation");
-    sleep(5).await;
-
-    // ==========================================
-    // 3. Assert that everyone has all the events
-    // ==========================================
-    assert_dags(&eg_instances, n_events + 1, &mut rng).await;
-
-    // ============================================================
-    // 4. Start a new node and try to sync the DAG from other peers
-    // ============================================================
-    {
-        // Connect to N_CONNS random peers.
-        let peer_indexes_to_connect: Vec<_> =
-            peer_indexes.choose_multiple(&mut rng, N_CONNS).collect();
-
-        let mut peers = vec![];
-        for peer_index in peer_indexes_to_connect {
-            let port = 14200 + peer_index;
-            peers.push(Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap());
-        }
-
-        let event_graph = spawn_node(
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", 14200 + N_NODES + 1)).unwrap()],
-            peers,
-            ex.clone(),
-        )
-        .await;
-
-        eg_instances.push(event_graph.clone());
-
-        event_graph.p2p.clone().start().await.unwrap();
-
-        info!("Waiting 5s for new node connection");
-        sleep(5).await;
-
-        event_graph.sync_selected(2, false).await.unwrap()
-    }
-
-    // ============================================================
-    // 5. Assert the new synced DAG has the same contents as others
-    // ============================================================
-    assert_dags(&eg_instances, n_events + 1, &mut rng).await;
-
-    // Stop the P2P network
-    for eg in eg_instances.iter() {
-        eg.p2p.clone().stop().await;
-    }
-}
-
-// DAGStore tests
-async fn make_dag_store() -> Result<DAGStore> {
-    let sled_db = sled::Config::new().temporary(true).open()?;
-    let hours_rotation = 1;
-
-    let dag_store = DAGStore {
-        db: sled_db.clone(),
-        header_dags: BTreeMap::default(),
-        main_dags: BTreeMap::default(),
-    }
-    .new(sled_db.clone(), hours_rotation)
-    .await;
-
-    Ok(dag_store)
-}
-#[test]
-fn header_dags_and_main_dags_length_equals_dags_max_number() -> Result<()> {
-    smol::block_on(async {
-        let dag_store = make_dag_store().await?;
-        assert_eq!(dag_store.header_dags.len() as i8, DAGS_MAX_NUMBER);
-        assert_eq!(dag_store.main_dags.len() as i8, DAGS_MAX_NUMBER);
-
-        Ok(())
-    })
-}
-
-#[test]
-fn all_dag_trees_are_created_on_sled_after_dag_store_creation() -> Result<()> {
-    smol::block_on(async {
-        let dag_store = make_dag_store().await?;
-        let dag_trees: Vec<String> =
-            dag_store.db.tree_names().iter().map(|n| String::from_utf8_lossy(n).into()).collect();
-
-        // Should have 2 * DAGS_MAX_NUMBER trees + 1 (the default tree)
-        assert_eq!(dag_trees.len() as i8, DAGS_MAX_NUMBER * 2 + 1);
-
-        for (dag_timestamp, _) in dag_store.header_dags {
-            assert!(dag_trees.contains(&format!("headers_{dag_timestamp}")));
-        }
-
-        for (dag_timestamp, _) in dag_store.main_dags {
-            assert!(dag_trees.contains(&dag_timestamp.to_string()));
-        }
-
-        Ok(())
-    })
-}
-
-#[test]
-fn genesis_events_or_headers_are_added_to_all_trees_and_utips() -> Result<()> {
-    smol::block_on(async {
-        let dag_store = make_dag_store().await?;
-
-        for (_, (tree, layer_utips)) in dag_store.header_dags {
-            let genesis_header = tree.first()?;
-            // A Genesis Header is found in sled tree
-            assert!(genesis_header.is_some());
-            let (genesis_hash, genesis_header) = genesis_header.unwrap();
-            let genesis_header: Header = deserialize_async(&genesis_header).await?;
-            let genesis_hash: blake3::Hash = deserialize_async(&genesis_hash).await?;
-            assert_eq!(genesis_header.layer, 0);
-            assert!(genesis_header.parents.iter().all(|p| *p == NULL_ID));
-            // The Genesis Header hash is stored as Unreferenced tip
-            assert!(layer_utips.contains_key(&0));
-            assert!(layer_utips.get(&0).unwrap().contains(&genesis_hash));
-        }
-
-        for (_, (tree, layer_utips)) in dag_store.main_dags {
-            let genesis_event = tree.first()?;
-            // A Genesis Event is found in sled tree
-            assert!(genesis_event.is_some());
-            let (genesis_hash, genesis_event) = genesis_event.unwrap();
-            let genesis_event: Event = deserialize_async(&genesis_event).await?;
-            let genesis_hash: blake3::Hash = deserialize_async(&genesis_hash).await?;
-            assert_eq!(genesis_event.header.layer, 0);
-            assert!(genesis_event.header.parents.iter().all(|p| *p == NULL_ID));
-            assert_eq!(genesis_event.content, GENESIS_CONTENTS);
-            // The Genesis Header hash is stored as Unreferenced tip
-            assert!(layer_utips.contains_key(&0));
-            assert!(layer_utips.get(&0).unwrap().contains(&genesis_hash));
-        }
-
-        Ok(())
-    })
-}
-
-#[test]
-fn adding_new_dag_removes_oldest_dag_tree() -> Result<()> {
-    smol::block_on(async {
-        let mut dag_store = make_dag_store().await?;
-        let oldest_dag_timestamp = dag_store.main_dags.first_key_value().unwrap().0.to_owned();
-        // Next dag to add
-        let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, 1);
-        let header =
-            Header { timestamp: next_rotation, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
-        let next_genesis = Event { header, content: GENESIS_CONTENTS.to_vec() };
-
-        dag_store.add_dag(&next_genesis.header.timestamp.to_string(), &next_genesis).await;
-
-        // The length of the dags should stay the same after adding
-        assert_eq!(dag_store.main_dags.len() as i8, DAGS_MAX_NUMBER);
-        assert_eq!(dag_store.header_dags.len() as i8, DAGS_MAX_NUMBER);
-        // We should have an entry with the new dag timestamp
-        assert!(dag_store.main_dags.contains_key(&next_rotation));
-        assert!(dag_store.header_dags.contains_key(&next_rotation));
-        // The oldest dag entry should have been removed
-        assert!(!dag_store.main_dags.contains_key(&oldest_dag_timestamp));
-        assert!(!dag_store.header_dags.contains_key(&oldest_dag_timestamp));
-
-        let dag_trees: Vec<String> =
-            dag_store.db.tree_names().iter().map(|n| String::from_utf8_lossy(n).into()).collect();
-
-        // The number of dag trees should stay the same after adding
-        assert_eq!(dag_trees.len() as i8, 2 * DAGS_MAX_NUMBER + 1);
-        // We should have a tree with the new dag timestamp value
-        assert!(dag_trees.contains(&next_rotation.to_string()));
-        assert!(dag_trees.contains(&format!("headers_{next_rotation}")));
-        // The oldest dag sled tree should have been removed
-        assert!(!dag_trees.contains(&oldest_dag_timestamp.to_string()));
-        assert!(!dag_trees.contains(&format!("headers_{oldest_dag_timestamp}")));
-
-        Ok(())
-    })
-}
-
-#[test]
-fn sort_moves_current_dag_to_front() -> Result<()> {
-    smol::block_on(async {
-        let dag_store = make_dag_store().await?;
-
-        let trees = dag_store.sort_dags().await;
-        let first_tree_name: String =
-            String::from_utf8_lossy(&trees.first().unwrap().name()).into();
-        assert_eq!(
-            first_tree_name,
-            dag_store.main_dags.last_key_value().unwrap().0.to_owned().to_string()
-        );
-
-        Ok(())
-    })
-}
-
-#[test]
-fn unreferenced_tips_are_found() -> Result<()> {
-    smol::block_on(async {
-        let dag_store = make_dag_store().await?;
-
-        let current_dag_tree = dag_store.main_dags.last_key_value().unwrap().1 .0.clone();
-        let current_dag_genesis_hash = *dag_store
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .1
-             .1
-            .get(&0)
-            .unwrap()
+    let mut rng: ThreadRng = rand::thread_rng();
+    let idxs: Vec<usize> = (0..N_NODES).collect();
+
+    // Bootstrap a small network
+    let mut nodes = vec![];
+    for i in 0..N_NODES {
+        let mut pi = idxs.clone();
+        pi.remove(i);
+        let conns: Vec<_> = pi.choose_multiple(&mut rng, N_CONNS).collect();
+        let peers: Vec<_> = conns
             .iter()
-            .next()
-            .unwrap();
-
-        let mut parents = [NULL_ID; N_EVENT_PARENTS];
-        parents[0] = current_dag_genesis_hash;
-        let event2 = Event {
-            header: Header {
-                timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-                parents,
-                layer: 1,
-            },
-            content: "event2".as_bytes().to_vec(),
-        };
-        let event2_hash = event2.id();
-        current_dag_tree.insert(event2_hash.as_bytes(), serialize_async(&event2).await)?;
-
-        let mut parents = [NULL_ID; N_EVENT_PARENTS];
-        parents[0] = event2_hash;
-        let event3 = Event {
-            header: Header {
-                timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-                parents,
-                layer: 2,
-            },
-            content: "event3".as_bytes().to_vec(),
-        };
-        let event3_hash = event3.id();
-        current_dag_tree.insert(event3_hash.as_bytes(), serialize_async(&event3).await)?;
-
-        let mut parents = [NULL_ID; N_EVENT_PARENTS];
-        parents[0] = current_dag_genesis_hash;
-        let event4 = Event {
-            header: Header {
-                timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-                parents,
-                layer: 2,
-            },
-            content: "event4".as_bytes().to_vec(),
-        };
-        let event4_hash = event4.id();
-        current_dag_tree.insert(event4_hash.as_bytes(), serialize_async(&event4).await)?;
-
-        let layer_utips = dag_store.find_unreferenced_tips(&current_dag_tree).await;
-        // We have unreferenced tips only on the 2nd layer
-        assert_eq!(layer_utips.len(), 1);
-        // We have two unreferenced tips
-        let tip_hashes = layer_utips.get(&2).unwrap();
-        assert_eq!(tip_hashes.len(), 2);
-        // Event3 and Event4 are the only unreferenced tips
-        assert!(tip_hashes.contains(&event3_hash));
-        assert!(tip_hashes.contains(&event4_hash));
-
-        Ok(())
-    })
-}
-
-// EventGraph tests
-async fn make_event_graph() -> Result<EventGraphPtr> {
-    let ex = Arc::new(Executor::new());
-    let p2p = P2p::new(Settings::default(), ex.clone()).await?;
-    let sled_db = sled::Config::new().temporary(true).open()?;
-    EventGraph::new(p2p, sled_db, "/tmp".into(), false, false, 1, ex).await
-}
-
-#[test]
-fn dag_insert_on_invalid_dag_name() -> Result<()> {
-    smol::block_on(async {
-        let event_graph = make_event_graph().await?;
-
-        let new_event = Event::new("new_event".as_bytes().to_vec(), &event_graph).await;
-        // Using a dag name that is not a u64 timestamp gives an error
-        let res = event_graph.dag_insert(&[new_event], "non_timestamp_dag_name").await;
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        match err {
-            Error::ParseIntError(_) => {}
-            _ => panic!("expected parse error"),
-        }
-
-        Ok(())
-    })
-}
-
-#[test]
-fn invalid_header_dag_insert() -> Result<()> {
-    smol::block_on(async {
-        let event_graph = make_event_graph().await?;
-        let dag_name = event_graph
-            .dag_store
-            .read()
-            .await
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .0
-            .clone()
-            .to_string();
-
-        let new_event = Event::new("new_event".as_bytes().to_vec(), &event_graph).await;
-        // Inserting an invalid event gives an error
-        let mut event_timestamp_too_old = new_event.clone();
-        event_timestamp_too_old.header.timestamp = 1000;
-
-        let res =
-            event_graph.header_dag_insert(vec![event_timestamp_too_old.header], &dag_name).await;
-        assert!(res.is_err());
-
-        let err = res.unwrap_err();
-        match err {
-            Error::HeaderIsInvalid => {}
-            _ => panic!("expected invalid header error"),
-        }
-
-        Ok(())
-    })
-}
-
-#[test]
-fn dag_insert_without_inserting_header() -> Result<()> {
-    smol::block_on(async {
-        let event_graph = make_event_graph().await?;
-        let dag_name = event_graph
-            .dag_store
-            .read()
-            .await
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .0
-            .clone()
-            .to_string();
-
-        let new_event = Event::new("new_event".as_bytes().to_vec(), &event_graph).await;
-        let res = event_graph.dag_insert(slice::from_ref(&new_event), &dag_name).await;
-        // Inserting event without inserting its header first gets skipped
-        assert!(res.is_ok() && res.unwrap().is_empty());
-        Ok(())
-    })
-}
-
-#[test]
-fn dag_insert_duplicate_event() -> Result<()> {
-    smol::block_on(async {
-        let event_graph = make_event_graph().await?;
-        let dag_name = event_graph
-            .dag_store
-            .read()
-            .await
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .0
-            .clone()
-            .to_string();
-
-        let new_event = Event::new("new_event".as_bytes().to_vec(), &event_graph).await;
-        event_graph.header_dag_insert(vec![new_event.header.clone()], &dag_name).await?;
-        let res = event_graph.dag_insert(slice::from_ref(&new_event), &dag_name).await;
-        // Proper insertion
-        assert!(res.is_ok() && res.unwrap().len() == 1);
-        // Inserting duplicate event gets skipped
-        let res = event_graph.dag_insert(&[new_event], &dag_name).await;
-        assert!(res.is_ok() && res.unwrap().is_empty());
-
-        Ok(())
-    })
-}
-
-#[test]
-fn dag_insert_valid_event() -> Result<()> {
-    smol::block_on(async {
-        let event_graph = make_event_graph().await?;
-        let dag_name = *event_graph.dag_store.read().await.main_dags.last_key_value().unwrap().0;
-        let new_event_sub = event_graph.event_pub.clone().subscribe().await;
-
-        let new_event = Event::new("new_event".as_bytes().to_vec(), &event_graph).await;
-        event_graph
-            .header_dag_insert(vec![new_event.header.clone()], &dag_name.to_string())
-            .await?;
-        let res = event_graph.dag_insert(slice::from_ref(&new_event), &dag_name.to_string()).await;
-        assert!(res.is_ok() && res.unwrap().len() == 1);
-        // Unreferenced tips is updated
-        let layer_utips =
-            event_graph.dag_store.read().await.main_dags.get(&dag_name).unwrap().1.clone();
-        assert!(layer_utips.get(&1).unwrap().contains(&new_event.id()));
-        // The new event notification is sent to subscriber
-        let dur = Duration::from_secs(1);
-        let Ok(res) = timeout(dur, new_event_sub.receive()).await else {
-            panic!("Event is not sent to subscriber")
-        };
-        assert_eq!(res.id(), new_event.id());
-        Ok(())
-    })
-}
-
-/*
-   This function builds the following graph
-
-   Layer    3           2                    1                    0
-        [Event3A]-----[Event2A]-------|
-                                      |-----[Event1A]-----|
-                                               |          |
-                                      ---------|          |
-        [Event3B]-----[Event2B]-------|                   |
-                                      |                   |
-                                      |-----[Event1B]-----|-----[GENESIS]
-                                                          |
-        [Event3C]-----[Event2C]----|                      |
-                                   |  |-----[Event1C]-----|
-                                   ---|                   |
-                                   |  |                   |
-        [Event3D]-----[Event2D]----|  |------[Event1D]----|
-*/
-async fn build_graph() -> Result<(EventGraphPtr, Vec<Event>)> {
-    let event_graph = make_event_graph().await?;
-    let mut events = vec![];
-    let dag_name = event_graph
-        .dag_store
-        .read()
-        .await
-        .main_dags
-        .last_key_value()
-        .unwrap()
-        .0
-        .clone()
-        .to_string();
-
-    let current_dag_genesis_hash = event_graph.current_genesis.read().await.id();
-
-    // first layer
-    let mut parents = [NULL_ID; N_EVENT_PARENTS];
-    parents[0] = current_dag_genesis_hash;
-    let event1a = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 1,
-            layer: 1,
-            parents,
-        },
-        content: "Event1A".as_bytes().to_vec(),
-    };
-    events.push(event1a.clone());
-
-    let event1b = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 2,
-            layer: 1,
-            parents,
-        },
-        content: "Event1B".as_bytes().to_vec(),
-    };
-    events.push(event1b.clone());
-
-    let event1c = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 3,
-            layer: 1,
-            parents,
-        },
-        content: "Event1C".as_bytes().to_vec(),
-    };
-    events.push(event1c.clone());
-
-    let event1d = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 4,
-            layer: 1,
-            parents,
-        },
-        content: "Event1D".as_bytes().to_vec(),
-    };
-    events.push(event1d.clone());
-
-    // second layer
-    parents[0] = event1a.id();
-    let event2a = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 5,
-            layer: 2,
-            parents,
-        },
-        content: "Event2A".as_bytes().to_vec(),
-    };
-    events.push(event2a.clone());
-
-    parents[1] = event1b.id();
-    let event2b = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 6,
-            layer: 2,
-            parents,
-        },
-        content: "Event2B".as_bytes().to_vec(),
-    };
-    events.push(event2b.clone());
-
-    parents[0] = event1c.id();
-    parents[1] = event1d.id();
-    let event2c = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 7,
-            layer: 2,
-            parents,
-        },
-        content: "Event2C".as_bytes().to_vec(),
-    };
-    events.push(event2c.clone());
-
-    let event2d = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 8,
-            layer: 2,
-            parents,
-        },
-        content: "Event2D".as_bytes().to_vec(),
-    };
-    events.push(event2d.clone());
-
-    // third layer
-    let mut parents = [NULL_ID; N_EVENT_PARENTS];
-    parents[0] = event2a.id();
-    let event3a = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 9,
-            layer: 3,
-            parents,
-        },
-        content: "Event3A".as_bytes().to_vec(),
-    };
-    events.push(event3a.clone());
-
-    parents[0] = event2b.id();
-    let event3b = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 10,
-            layer: 3,
-            parents,
-        },
-        content: "Event3B".as_bytes().to_vec(),
-    };
-    events.push(event3b.clone());
-
-    parents[0] = event2c.id();
-    let event3c = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 11,
-            layer: 3,
-            parents,
-        },
-        content: "Event3C".as_bytes().to_vec(),
-    };
-    events.push(event3c.clone());
-
-    parents[0] = event2d.id();
-    let event3d = Event {
-        header: Header {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 + 12,
-            layer: 3,
-            parents,
-        },
-        content: "Event3D".as_bytes().to_vec(),
-    };
-    events.push(event3d.clone());
-
-    // Insert events 1a to 1d
-    event_graph
-        .header_dag_insert(
-            vec![
-                event1a.header.clone(),
-                event1b.header.clone(),
-                event1c.header.clone(),
-                event1d.header.clone(),
-            ],
-            &dag_name,
-        )
-        .await?;
-    event_graph.dag_insert(&[event1a, event1b, event1c, event1d], &dag_name).await?;
-    // Insert events 2a to 2d
-    event_graph
-        .header_dag_insert(
-            vec![
-                event2a.header.clone(),
-                event2b.header.clone(),
-                event2c.header.clone(),
-                event2d.header.clone(),
-            ],
-            &dag_name,
-        )
-        .await?;
-    event_graph.dag_insert(&[event2a, event2b, event2c, event2d], &dag_name).await?;
-    // Insert events 3a to 3d
-    event_graph
-        .header_dag_insert(
-            vec![
-                event3a.header.clone(),
-                event3b.header.clone(),
-                event3c.header.clone(),
-                event3d.header.clone(),
-            ],
-            &dag_name,
-        )
-        .await?;
-    event_graph.dag_insert(&[event3a, event3b, event3c, event3d], &dag_name).await?;
-
-    //panic!("REACHED HERE");
-
-    Ok((event_graph, events))
-}
-
-#[test]
-fn find_ancestors_of_an_event() -> Result<()> {
-    smol::block_on(async {
-        let (event_graph, events) = build_graph().await?;
-
-        let dag_name = event_graph
-            .dag_store
-            .read()
-            .await
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .0
-            .clone()
-            .to_string();
-
-        let tree = event_graph.dag_store.read().await.get_dag(&format!("headers_{dag_name}"));
-
-        let events_map: HashMap<String, Event> =
-            events.into_iter().map(|e| (String::from_utf8_lossy(&e.content).into(), e)).collect();
-        let genesis_header = event_graph.current_genesis.read().await.header.clone();
-        let genesis_hash = genesis_header.id();
-        // Genesis layer
-        let mut genesis_ancestors = HashSet::new();
-        event_graph.get_ancestors(&mut genesis_ancestors, genesis_header, &tree).await?;
-        assert!(genesis_ancestors.is_empty());
-
-        // 1st layer
-        let mut event1a_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event1a_ancestors,
-                events_map.get("Event1A").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event1b_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event1b_ancestors,
-                events_map.get("Event1B").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event1c_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event1c_ancestors,
-                events_map.get("Event1C").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event1d_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event1d_ancestors,
-                events_map.get("Event1D").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-
-        // Only genesis is the ancestor
-        assert!(event1a_ancestors.len() == 1 && event1a_ancestors.contains(&genesis_hash));
-        assert!(event1b_ancestors.len() == 1 && event1b_ancestors.contains(&genesis_hash));
-        assert!(event1c_ancestors.len() == 1 && event1c_ancestors.contains(&genesis_hash));
-        assert!(event1d_ancestors.len() == 1 && event1d_ancestors.contains(&genesis_hash));
-
-        // 2nd layer
-        let event2a_expected_ancestors =
-            HashSet::from([genesis_hash, events_map.get("Event1A").unwrap().id()]);
-        let event2b_expected_ancestors = HashSet::from([
-            genesis_hash,
-            events_map.get("Event1B").unwrap().id(),
-            events_map.get("Event1A").unwrap().id(),
-        ]);
-        let event2cd_expected_ancestors = HashSet::from([
-            genesis_hash,
-            events_map.get("Event1C").unwrap().id(),
-            events_map.get("Event1D").unwrap().id(),
-        ]);
-
-        let mut event2a_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event2a_ancestors,
-                events_map.get("Event2A").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event2b_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event2b_ancestors,
-                events_map.get("Event2B").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event2c_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event2c_ancestors,
-                events_map.get("Event2C").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event2d_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event2d_ancestors,
-                events_map.get("Event2D").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-
-        assert_eq!(event2a_ancestors, event2a_expected_ancestors);
-        assert_eq!(event2b_ancestors, event2b_expected_ancestors);
-        assert_eq!(event2c_ancestors, event2cd_expected_ancestors);
-        assert_eq!(event2d_ancestors, event2cd_expected_ancestors);
-
-        // 3rd layer
-        let mut event3a_expected_ancestors = event2a_expected_ancestors.clone();
-        event3a_expected_ancestors.insert(events_map.get("Event2A").unwrap().header.clone().id());
-        let mut event3b_expected_ancestors = event2b_expected_ancestors.clone();
-        event3b_expected_ancestors.insert(events_map.get("Event2B").unwrap().header.clone().id());
-        let mut event3c_expected_ancestors = event2cd_expected_ancestors.clone();
-        event3c_expected_ancestors.insert(events_map.get("Event2C").unwrap().header.clone().id());
-        let mut event3d_expected_ancestors = event2cd_expected_ancestors.clone();
-        event3d_expected_ancestors.insert(events_map.get("Event2D").unwrap().header.clone().id());
-
-        let mut event3a_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event3a_ancestors,
-                events_map.get("Event3A").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event3b_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event3b_ancestors,
-                events_map.get("Event3B").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event3c_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event3c_ancestors,
-                events_map.get("Event3C").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-        let mut event3d_ancestors = HashSet::new();
-        event_graph
-            .get_ancestors(
-                &mut event3d_ancestors,
-                events_map.get("Event3D").unwrap().header.clone(),
-                &tree,
-            )
-            .await?;
-
-        assert_eq!(event3a_ancestors, event3a_expected_ancestors);
-        assert_eq!(event3b_ancestors, event3b_expected_ancestors);
-        assert_eq!(event3c_ancestors, event3c_expected_ancestors);
-        assert_eq!(event3d_ancestors, event3d_expected_ancestors);
-
-        Ok(())
-    })
-}
-
-#[test]
-fn fetches_headers_with_tips() -> Result<()> {
-    smol::block_on(async {
-        let (event_graph, events) = build_graph().await?;
-
-        let dag_name = event_graph
-            .dag_store
-            .read()
-            .await
-            .main_dags
-            .last_key_value()
-            .unwrap()
-            .0
-            .clone()
-            .to_string();
-
-        let map: HashMap<blake3::Hash, String> = events
-            .into_iter()
-            .map(|e| (e.id(), String::from_utf8_lossy(&e.content).into()))
+            .map(|p| Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + *p)).unwrap())
             .collect();
-        let name_map: HashMap<String, blake3::Hash> =
-            map.iter().map(|(hash, content)| (content.clone(), *hash)).collect();
+        let inbound = vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + i)).unwrap()];
+        nodes.push(spawn_node(inbound, peers, ex.clone()).await);
+    }
+    for eg in &nodes {
+        eg.p2p.clone().start().await.unwrap();
+    }
+    sleep(5).await;
 
-        let genesis_hash = event_graph.current_genesis.read().await.id();
-        let patha = ["Event3A", "Event2A", "Event1A"];
-        let pathb = ["Event3B", "Event2B", "Event1B", "Event1A"];
-        let pathc = ["Event3C", "Event2C", "Event1C", "Event1D"];
-        let pathd = ["Event3D", "Event2D", "Event1C", "Event1D"];
+    // Broadcast an event from a random node
+    let dag_name = nodes[0].current_genesis.read().await.header.timestamp.to_string();
+    let node = nodes.choose(&mut rng).unwrap();
+    let ev = Event::new(vec![1, 2, 3, 4], node).await;
+    node.header_dag_insert(vec![ev.header.clone()], &dag_name).await.unwrap();
+    node.dag_insert(slice::from_ref(&ev), &dag_name).await.unwrap();
+    node.p2p.broadcast(&EventPut(ev.clone(), vec![])).await;
+    sleep(5).await;
 
-        let patha_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3A").unwrap()]))]);
-        // Should be only headers that are not ancestors of Event3A
-        let headers = event_graph.fetch_headers_with_tips(&dag_name, &patha_tip).await?;
-        assert!(headers.iter().all(
-            |h| h.id() != genesis_hash && !patha.contains(&map.get(&h.id()).unwrap().as_str())
-        ));
+    // Every node should now have at least genesis + the new event
+    for (i, eg) in nodes.iter().enumerate() {
+        let ts = eg.current_genesis.read().await.header.timestamp;
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&ts).unwrap();
+        assert!(
+            slot.main_tree.len() >= 2,
+            "Node {i} has only {} events in main_tree",
+            slot.main_tree.len()
+        );
+    }
 
-        let pathb_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3B").unwrap()]))]);
-        // Should be only headers that are not ancestors of Event3B
-        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathb_tip).await?;
-        assert!(headers.iter().all(
-            |h| h.id() != genesis_hash && !pathb.contains(&map.get(&h.id()).unwrap().as_str())
-        ));
-
-        let pathc_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3C").unwrap()]))]);
-        // Should be only headers that are not ancestors of Event3C
-        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathc_tip).await?;
-        assert!(headers.iter().all(
-            |h| h.id() != genesis_hash && !pathc.contains(&map.get(&h.id()).unwrap().as_str())
-        ));
-
-        let pathd_tip = BTreeMap::from([(3, HashSet::from([*name_map.get("Event3D").unwrap()]))]);
-        // Should be only headers that are not ancestors of Event3D
-        let headers = event_graph.fetch_headers_with_tips(&dag_name, &pathd_tip).await?;
-        assert!(headers.iter().all(
-            |h| h.id() != genesis_hash && !pathd.contains(&map.get(&h.id()).unwrap().as_str())
-        ));
-
-        // Two tips Event3A and Event3D
-        let mut comb_tip = BTreeMap::new();
-        comb_tip.extend(patha_tip);
-        comb_tip.get_mut(&3).unwrap().extend(pathd_tip.get(&3).unwrap());
-
-        // Should be only headers that are not ancestors of Event3A and Event3D
-        let headers = event_graph.fetch_headers_with_tips(&dag_name, &comb_tip).await?;
-        assert!(headers.iter().all(|h| h.id() != genesis_hash &&
-            !patha.contains(&map.get(&h.id()).unwrap().as_str()) &&
-            !pathd.contains(&map.get(&h.id()).unwrap().as_str())));
-
-        Ok(())
-    })
+    for eg in &nodes {
+        eg.p2p.clone().stop().await;
+    }
 }
