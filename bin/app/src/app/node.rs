@@ -41,6 +41,11 @@ pub fn create_window(name: &str) -> SceneNode {
     prop.set_defaults_f32(vec![0., 0., 0., 0.]).unwrap();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Scale", "Window scale factor for DPI scaling");
+    prop.set_defaults_f32(vec![1.0]).unwrap();
+    node.add_property(prop).unwrap();
+
     node.add_signal("start", "App UI started", vec![]).unwrap();
     node.add_signal("stop", "App UI stopped", vec![]).unwrap();
 

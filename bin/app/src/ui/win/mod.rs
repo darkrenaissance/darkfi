@@ -42,6 +42,9 @@ use crate::{android, prop::PropertyRect};
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
+mod gesture;
+pub use gesture::{GestureEvent, GestureType, GestureProcessor};
+
 macro_rules! i { ($($arg:tt)*) => { info!(target: "ui::window", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::window", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::window", $($arg)*); } }
@@ -65,6 +68,8 @@ pub struct Window {
     scale: PropertyFloat32,
     #[cfg(target_os = "android")]
     insets: PropertyRect,
+    /// Gesture processor for recognizing gestures
+    gesture_proc: SyncMutex<GestureProcessor>,
 }
 
 impl Window {
@@ -72,18 +77,12 @@ impl Window {
         node: SceneNodeWeak,
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
-        setting_root: SceneNodePtr,
+        _setting_root: SceneNodePtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
-        let scale = PropertyFloat32::wrap(
-            &setting_root.lookup_node("/scale").unwrap(),
-            Role::Internal,
-            "value",
-            0,
-        )
-        .unwrap();
+        let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
@@ -96,6 +95,7 @@ impl Window {
             scale,
             #[cfg(target_os = "android")]
             insets: PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap(),
+            gesture_proc: SyncMutex::new(GestureProcessor::new()),
         });
 
         Pimpl::Window(self_)
@@ -459,6 +459,21 @@ impl Window {
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) {
         self.local_scale(&mut touch_pos);
+
+        // Process through gesture recognizer
+        let gesture_event = {
+            let mut gesture_proc = self.gesture_proc.lock();
+            gesture_proc.process_touch_event(phase, id, touch_pos)
+        };
+
+        if let Some(gesture_event) = gesture_event {
+            if self.handle_gesture(gesture_event).await {
+                // Gesture was handled, stop propagation
+                return
+            }
+        }
+
+        // Fallback to raw touch event (backwards compat)
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_touch(phase, id, touch_pos).await {
@@ -478,6 +493,16 @@ impl Window {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_touch_sync(renderer, phase, id, touch_pos) {
+                return true
+            }
+        }
+        false
+    }
+
+    async fn handle_gesture(&self, gesture: GestureEvent) -> bool {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_gesture(gesture.clone()).await {
                 return true
             }
         }

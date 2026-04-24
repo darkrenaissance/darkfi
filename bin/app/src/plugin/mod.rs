@@ -25,7 +25,6 @@ pub use darkirc::DarkIrcPtr;
 pub mod fud;
 pub use fud::FudPluginPtr as FudPtr;
 
-#[cfg(feature = "enable-plugins")]
 pub use {darkirc::DarkIrc, fud::FudPlugin};
 
 use darkfi::net::Settings as NetSettings;

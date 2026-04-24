@@ -31,11 +31,12 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    plugin,
     prop::{Property, PropertyAtomicGuard, PropertyPtr, Role},
     pubsub::{Publisher, PublisherPtr, Subscription},
     ui,
 };
+#[cfg(feature = "enable-plugins")]
+use crate::plugin;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene", $($arg)*); } }
 
@@ -580,7 +581,9 @@ pub enum Pimpl {
     Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
     Menu(ui::MenuPtr),
+    #[cfg(feature = "enable-plugins")]
     DarkIrc(plugin::DarkIrcPtr),
+    #[cfg(feature = "enable-plugins")]
     Fud(plugin::FudPtr),
 }
 

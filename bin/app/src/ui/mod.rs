@@ -61,7 +61,7 @@ pub use menu::{Menu, MenuPtr};
 mod text;
 pub use text::{Text, TextPtr};
 mod win;
-pub use win::{Window, WindowPtr};
+pub use win::{GestureEvent, GestureType, Window, WindowPtr};
 
 macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
@@ -109,6 +109,9 @@ pub trait UIObject: Sync {
         false
     }
     async fn handle_touch(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
+        false
+    }
+    async fn handle_gesture(&self, _gesture: GestureEvent) -> bool {
         false
     }
 

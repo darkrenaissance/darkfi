@@ -26,13 +26,14 @@ use crate::android;
 use crate::{
     error::Error,
     gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
-    plugin::PluginSettings,
     prop::{PropertyAtomicGuard, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
     ui::Window,
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
+#[cfg(feature = "enable-plugins")]
+use crate::plugin::PluginSettings;
 
 pub mod locale;
 use locale::read_locale_ftl;
@@ -82,11 +83,17 @@ impl App {
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree("settings").unwrap();
+        // Commenting this out since it doesnt compile when enable-plugins isnt enabled.
+        /*
         let settings = Arc::new(PluginSettings {
             setting_root: setting_root.clone(),
             sled_tree: settings_tree,
         });
+        */
 
+        let i18n_fish = self.setup_locale();
+
+        let window = create_window("window");
         #[cfg(target_os = "android")]
         let window_scale = {
             let screen_density = android::get_screen_density();
@@ -97,31 +104,15 @@ impl App {
         let window_scale = 1.;
 
         d!("Setting window scale to {window_scale}");
+        let prop = window.get_property("scale").unwrap();
+        let atom = &mut PropertyAtomicGuard::none();
+        prop.set_f32(atom, Role::App, 0, window_scale).unwrap();
 
-        settings.add_setting("scale", PropertyValue::Float32(window_scale));
-        //settings.load_settings();
-
-        // Save app settings in sled when they change
-        for setting_node in settings.setting_root.get_children().iter() {
-            let setting_sub = setting_node.get_property("value").unwrap().subscribe_modify();
-            let settings2 = settings.clone();
-            let setting_task = self.ex.spawn(async move {
-                while let Ok(_) = setting_sub.receive().await {
-                    settings2.save_settings();
-                }
-            });
-            self.tasks.lock().unwrap().push(setting_task);
-        }
-
-        let i18n_fish = self.setup_locale();
-
-        let window = create_window("window");
         #[cfg(target_os = "android")]
         {
             let insets = android::insets::get_insets();
             d!("Setting window insets to {insets:?}");
             let prop = window.get_property("insets").unwrap();
-            let atom = &mut PropertyAtomicGuard::none();
             for i in 0..4 {
                 prop.set_f32(atom, Role::App, i, insets[i]).unwrap();
             }

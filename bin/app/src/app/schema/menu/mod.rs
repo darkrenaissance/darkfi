@@ -86,9 +86,9 @@ mod edit_switch;
 
 pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/setting/scale").unwrap(),
+        &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
-        "value",
+        "scale",
         0,
     )
     .unwrap();

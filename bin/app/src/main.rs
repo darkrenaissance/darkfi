@@ -38,6 +38,7 @@ mod logger;
 mod mesh;
 #[cfg(feature = "enable-netdebug")]
 mod net;
+#[cfg(feature = "enable-plugins")]
 mod plugin;
 mod prop;
 mod pubsub;

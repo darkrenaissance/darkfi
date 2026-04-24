@@ -30,7 +30,6 @@ use crate::{
     },
     expr::{self, Compiler},
     gfx::gfxtag,
-    plugin::darkirc,
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
         PropertyType, Role,
@@ -43,6 +42,8 @@ use crate::{
     },
     util::{i18n::I18nBabelFish, unixtime},
 };
+#[cfg(feature = "enable-plugins")]
+use crate::plugin::darkirc;
 
 use super::{ColorScheme, COLOR_SCHEME};
 
@@ -187,9 +188,9 @@ pub async fn make(
     is_first_time: bool,
 ) {
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/setting/scale").unwrap(),
+        &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
-        "value",
+        "scale",
         0,
     )
     .unwrap();
@@ -955,20 +956,15 @@ pub async fn make(
 
             let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
             let nick = darkirc.get_property_str("nick").unwrap();
-            let msg = darkirc::Privmsg::new(channel, nick, text);
-
-            //let mut data = vec![];
-            //timest.encode(&mut data).unwrap();
-            //msg.msg_id(timest).encode(&mut data).unwrap();
-            //msg.nick.encode(&mut data).unwrap();
-            //msg.msg.encode(&mut data).unwrap();
-            //chatview_node.call_method("insert_unconf_line", data).await.unwrap();
-
-            let mut data = vec![];
-            timest.encode(&mut data).unwrap();
-            msg.channel.encode(&mut data).unwrap();
-            msg.msg.encode(&mut data).unwrap();
-            darkirc.call_method("send", data).await.unwrap();
+            #[cfg(feature = "enable-plugins")]
+            {
+                let msg = darkirc::Privmsg::new(channel, nick, text);
+                let mut data = vec![];
+                timest.encode(&mut data).unwrap();
+                msg.channel.encode(&mut data).unwrap();
+                msg.msg.encode(&mut data).unwrap();
+                darkirc.call_method("send", data).await.unwrap();
+            }
         }
     };
 
