@@ -22,7 +22,7 @@ setup_mac() {
 		bash -c "$(curl -fL "${brew_sh}")" || return 1
 	fi
 
-	for i in cmake gcc pkgconf llvm@13; do
+	for i in cmake gcc pkgconf llvm sqlcipher; do
 		echo "Installing $i with brew..." >&2
 		brew install "$i" || return 1
 	done
