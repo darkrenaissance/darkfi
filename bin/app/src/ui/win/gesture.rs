@@ -17,128 +17,183 @@
  */
 
 use miniquad::TouchPhase;
+use std::{
+    collections::{HashMap, VecDeque},
+    time::Instant,
+};
 
-use crate::gfx::Point;
-
-/// Maximum number of simultaneous touch points to track
-const MAX_TOUCH_POINTS: usize = 10;
+use crate::gfx::{Point, Segment, Vector};
 
 /// Gesture recognition thresholds
 const TAP_MAX_MOVEMENT: f32 = 10.0;
-const TAP_MAX_DURATION: u64 = 300;
+const TAP_MAX_DURATION: f32 = 300.;
 const DRAG_MIN_MOVEMENT: f32 = 15.0;
 const FLICK_MIN_VELOCITY: f32 = 500.0;
-const LONG_PRESS_MIN_DURATION: u64 = 500;
+const LONG_PRESS_MIN_DURATION: f32 = 500.;
 const LONG_PRESS_MAX_MOVEMENT: f32 = 20.0;
 
 /// Types of gestures that can be recognized
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GestureType {
+#[derive(Debug, Clone, Copy)]
+pub enum GestureAction {
     /// A quick tap without significant movement
-    Tap,
+    Tap(Point),
     /// Continuous drag gesture
-    Drag,
+    Drag(Segment),
     /// Quick flick with velocity
-    Flick,
+    Flick { start: Point, vel: Vector },
     /// Long press without movement
-    LongPress,
+    LongPress(Point),
 }
 
-/// High-level gesture event with relevant data
-#[derive(Debug, Clone)]
-pub struct GestureEvent {
-    /// Type of gesture recognized
-    pub gesture_type: GestureType,
-    /// Touch ID that generated this gesture
-    pub touch_id: u64,
-    /// Current position of the gesture
-    pub position: Point,
-    /// Starting position (for drag/flick)
-    pub start_position: Point,
-    /// Time elapsed since touch started (milliseconds)
-    pub duration_ms: u64,
-    /// Velocity in pixels per second (for flick)
-    pub velocity: Option<Point>,
-    /// Total displacement from start (for drag)
-    pub displacement: Option<Point>,
-}
-
-/// State for tracking a single touch point
-#[derive(Debug, Clone)]
-struct TouchTracker {
-    /// Start position
+/// Internal state tracking for an active touch point
+struct TouchState {
     start_pos: Point,
-    /// Current position
+    start_time: Instant,
     curr_pos: Point,
-    /// Previous position (for velocity calculation)
-    prev_pos: Option<Point>,
-    /// Start timestamp
-    start_instant: std::time::Instant,
-    /// Last update timestamp
-    last_update: std::time::Instant,
-    /// Current phase
-    phase: TouchPhase,
-    /// Gesture recognized for this touch
-    recognized_gesture: Option<GestureType>,
+    is_dragging: bool,
+    long_press_emitted: bool,
+    /// Used for flick scrolling - stores (time, position) samples
+    samples: VecDeque<(Instant, Point)>,
+}
+
+impl TouchState {
+    fn push_sample(&mut self, pos: Point) {
+        self.samples.push_back((Instant::now(), pos));
+
+        // Drop all old samples older than 40ms
+        while let Some((instant, _)) = self.samples.front() {
+            if instant.elapsed().as_micros() <= 40_000 {
+                break;
+            }
+            self.samples.pop_front();
+        }
+    }
+
+    fn first_sample(&self) -> Option<(f32, Point)> {
+        self.samples.front().map(|(t, p)| (t.elapsed().as_micros() as f32 / 1000., *p))
+    }
 }
 
 /// Main gesture processor maintaining state for all touch points
 pub struct GestureProcessor {
-    /// Active touch trackers
-    touches: [Option<TouchTracker>; MAX_TOUCH_POINTS],
+    touches: HashMap<u64, TouchState>,
 }
 
 impl GestureProcessor {
     /// Create a new gesture processor with default thresholds
     pub fn new() -> Self {
-        Self {
-            touches: Default::default(),
-        }
+        Self { touches: Default::default() }
     }
 
-    /// Process a raw touch event and return gesture event if recognized
-    /// Returns None if no gesture recognized yet, or if should fall back to raw touch
-    pub fn process_touch_event(
-        &mut self,
-        phase: TouchPhase,
-        id: u64,
-        pos: Point,
-    ) -> Option<GestureEvent> {
-        // STUB: Route to appropriate handler based on phase
-        // TODO: Implement in next phase
+    pub fn process(&mut self, phase: TouchPhase, id: u64, pos: Point) -> Option<GestureAction> {
         match phase {
-            TouchPhase::Started => self.handle_touch_started(id as usize, pos),
-            TouchPhase::Moved => self.handle_touch_moved(id as usize, pos),
-            TouchPhase::Ended => self.handle_touch_ended(id as usize, pos),
-            TouchPhase::Cancelled => self.handle_touch_cancelled(id as usize),
+            TouchPhase::Started => self.handle_touch_start(id, pos),
+            TouchPhase::Moved => self.handle_touch_move(id, pos),
+            TouchPhase::Ended => self.handle_touch_end(id, pos),
+            TouchPhase::Cancelled => self.handle_touch_cancel(id),
         }
     }
 
-    /// Handle touch start - initialize tracker
-    fn handle_touch_started(&mut self, id: usize, pos: Point) -> Option<GestureEvent> {
-        // STUB: Initialize touch tracker
-        // TODO: Implement in next phase
+    fn handle_touch_start(&mut self, id: u64, pos: Point) -> Option<GestureAction> {
+        let state = TouchState {
+            start_pos: pos,
+            start_time: Instant::now(),
+            curr_pos: pos,
+            is_dragging: false,
+            long_press_emitted: false,
+            samples: VecDeque::new(),
+        };
+        self.touches.insert(id, state);
         None
     }
 
-    /// Handle touch move - update tracker, check for gesture recognition
-    fn handle_touch_moved(&mut self, id: usize, pos: Point) -> Option<GestureEvent> {
-        // STUB: Update position, calculate displacement/velocity
-        // TODO: Implement gesture recognition logic in next phase
+    fn check_long_press(state: &mut TouchState, pos: Point) -> Option<GestureAction> {
+        if state.long_press_emitted {
+            return None;
+        }
+        // Once drag starts no long press can be emitted
+        if state.is_dragging {
+            return None;
+        }
+
+        let dur = state.start_time.elapsed().as_millis() as f32;
+        if dur >= LONG_PRESS_MIN_DURATION && pos.dist(state.start_pos) <= LONG_PRESS_MAX_MOVEMENT {
+            state.long_press_emitted = true;
+            return Some(GestureAction::LongPress(pos))
+        }
+
         None
     }
 
-    /// Handle touch end - finalize gesture
-    fn handle_touch_ended(&mut self, id: usize, pos: Point) -> Option<GestureEvent> {
-        // STUB: Check final gesture state
-        // TODO: Implement final gesture determination in next phase
+    fn handle_touch_move(&mut self, id: u64, pos: Point) -> Option<GestureAction> {
+        let Some(state) = self.touches.get_mut(&id) else { return None };
+
+        if let Some(gesture) = Self::check_long_press(state, pos) {
+            return Some(gesture);
+        }
+
+        state.curr_pos = pos;
+
+        // Collect sample for flick detection
+        state.push_sample(pos);
+
+        let dist = pos.dist(state.start_pos);
+        if dist >= DRAG_MIN_MOVEMENT {
+            state.is_dragging = true;
+        }
+
+        if state.is_dragging {
+            return Some(GestureAction::Drag(Segment { start: state.start_pos, end: pos }))
+        }
+
         None
     }
 
-    /// Handle touch cancel - clean up
-    fn handle_touch_cancelled(&mut self, id: usize) -> Option<GestureEvent> {
-        // STUB: Clean up touch tracker
-        // TODO: Implement cleanup in next phase
+    fn handle_touch_end(&mut self, id: u64, pos: Point) -> Option<GestureAction> {
+        let mut state = self.touches.remove(&id)?;
+
+        // Update current position one last time
+        state.curr_pos = pos;
+        state.push_sample(pos);
+
+        // Calculate velocity from samples
+        if let Some((dt_ms, start_pos)) = state.first_sample() {
+            let dt_sec = dt_ms / 1000.0;
+
+            if dt_sec > 0.001 {
+                // Calculate velocity using Point operations, convert to Vector
+                let vel: Vector = ((pos - start_pos) / dt_sec).into();
+
+                // Check for flick (high velocity movement)
+                if vel.mag() >= FLICK_MIN_VELOCITY && !state.long_press_emitted {
+                    return Some(GestureAction::Flick { start: state.start_pos, vel });
+                }
+            }
+        }
+
+        // Then check for drag
+        if state.is_dragging {
+            return Some(GestureAction::Drag(Segment { start: state.start_pos, end: pos }))
+        }
+
+        // Then check for long press
+        if let Some(gesture) = Self::check_long_press(&mut state, pos) {
+            return Some(gesture);
+        }
+
+        // Finally check for tap
+        let dur = state.start_time.elapsed().as_millis() as f32;
+        let dist = pos.dist(state.start_pos);
+
+        if dist <= TAP_MAX_MOVEMENT && dur <= TAP_MAX_DURATION {
+            Some(GestureAction::Tap(pos))
+        } else {
+            None
+        }
+    }
+
+    fn handle_touch_cancel(&mut self, id: u64) -> Option<GestureAction> {
+        self.touches.remove(&id);
         None
     }
 }

@@ -341,3 +341,27 @@ impl From<parley::BoundingBox> for Rectangle {
         Self::new(rect.x0 as f32, rect.y0 as f32, rect.width() as f32, rect.height() as f32)
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Segment {
+    pub start: Point,
+    pub end: Point,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Vector {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Vector {
+    pub fn mag(&self) -> f32 {
+        (self.x * self.x + self.y * self.y).sqrt()
+    }
+}
+
+impl From<Point> for Vector {
+    fn from(point: Point) -> Self {
+        Vector { x: point.x, y: point.y }
+    }
+}

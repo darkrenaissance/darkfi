@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex as SyncMutex};
 #[cfg(target_os = "android")]
 use crate::android;
 
+#[cfg(feature = "enable-plugins")]
+use crate::plugin::PluginSettings;
 use crate::{
     error::Error,
     gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
@@ -32,8 +34,6 @@ use crate::{
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
-#[cfg(feature = "enable-plugins")]
-use crate::plugin::PluginSettings;
 
 pub mod locale;
 use locale::read_locale_ftl;

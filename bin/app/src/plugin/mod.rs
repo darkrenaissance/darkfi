@@ -25,7 +25,8 @@ pub use darkirc::DarkIrcPtr;
 pub mod fud;
 pub use fud::FudPluginPtr as FudPtr;
 
-pub use {darkirc::DarkIrc, fud::FudPlugin};
+pub use darkirc::DarkIrc;
+pub use fud::FudPlugin;
 
 use darkfi::net::Settings as NetSettings;
 

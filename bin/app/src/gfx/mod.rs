@@ -56,7 +56,7 @@ mod favico;
 mod prune;
 use prune::PruneMethodHeap;
 mod linalg;
-pub use linalg::{Dimension, Point, Rectangle};
+pub use linalg::{Dimension, Point, Rectangle, Segment, Vector};
 mod shader;
 mod trax;
 use trax::get_trax;

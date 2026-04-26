@@ -43,7 +43,7 @@ use crate::{android, prop::PropertyRect};
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
 mod gesture;
-pub use gesture::{GestureEvent, GestureType, GestureProcessor};
+pub use gesture::{GestureAction, GestureProcessor};
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "ui::window", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::window", $($arg)*); } }
@@ -461,13 +461,14 @@ impl Window {
         self.local_scale(&mut touch_pos);
 
         // Process through gesture recognizer
-        let gesture_event = {
+        let gesture = {
             let mut gesture_proc = self.gesture_proc.lock();
-            gesture_proc.process_touch_event(phase, id, touch_pos)
+            gesture_proc.process(phase, id, touch_pos)
         };
+        d!("Touch generated gesture: {gesture:?}");
 
-        if let Some(gesture_event) = gesture_event {
-            if self.handle_gesture(gesture_event).await {
+        if let Some(gesture) = gesture {
+            if self.handle_gesture(gesture).await {
                 // Gesture was handled, stop propagation
                 return
             }
@@ -499,7 +500,7 @@ impl Window {
         false
     }
 
-    async fn handle_gesture(&self, gesture: GestureEvent) -> bool {
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_gesture(gesture.clone()).await {

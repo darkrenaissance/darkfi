@@ -20,6 +20,8 @@ use darkfi_serial::Encodable;
 use sled_overlay::sled;
 use std::{sync::Arc, time::UNIX_EPOCH};
 
+#[cfg(feature = "enable-plugins")]
+use crate::plugin::darkirc;
 use crate::{
     app::{
         node::{
@@ -42,8 +44,6 @@ use crate::{
     },
     util::{i18n::I18nBabelFish, unixtime},
 };
-#[cfg(feature = "enable-plugins")]
-use crate::plugin::darkirc;
 
 use super::{ColorScheme, COLOR_SCHEME};
 
