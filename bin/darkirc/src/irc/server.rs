@@ -19,17 +19,12 @@
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
 use darkfi::{
-    event_graph::{
-        rln::{process_commitment, RLNNode},
-        Event,
-    },
+    event_graph::Event,
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
-    zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_serial::{deserialize_async, deserialize_async_partial};
+use darkfi_serial::deserialize_async;
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
@@ -51,10 +46,7 @@ use super::{
     IrcChannel, IrcContact,
 };
 use crate::{
-    crypto::{
-        rln::{RlnIdentity, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN},
-        saltbox,
-    },
+    crypto::{rln::RlnIdentity, saltbox},
     pad,
     settings::{
         parse_autojoin_channels, parse_configured_channels, parse_configured_contacts,
@@ -149,54 +141,6 @@ impl IrcServer {
 
         // Open persistent dbs
         let server_store = darkirc.sled.open_tree("server_store")?;
-
-        // Generate RLN proving and verifying keys, if needed
-        let rln_register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
-        let rln_register_circuit =
-            ZkCircuit::new(empty_witnesses(&rln_register_zkbin)?, &rln_register_zkbin);
-
-        if server_store.get("rlnv2-diff-register-pk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Register ProvingKey");
-            let provingkey = ProvingKey::build(rln_register_zkbin.k, &rln_register_circuit);
-            let mut buf = vec![];
-            provingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-register-pk", buf)?;
-        }
-
-        // Generate RLN proving and verifying keys, if needed
-        let rln_signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-        let rln_signal_circuit =
-            ZkCircuit::new(empty_witnesses(&rln_signal_zkbin)?, &rln_signal_zkbin);
-
-        if server_store.get("rlnv2-diff-signal-pk")?.is_none() {
-            info!(target: "irc::server", "[RLN] Creating RlnV2_Diff_Signal ProvingKey");
-            let provingkey = ProvingKey::build(rln_signal_zkbin.k, &rln_signal_circuit);
-            let mut buf = vec![];
-            provingkey.write(&mut buf)?;
-            server_store.insert("rlnv2-diff-signal-pk", buf)?;
-        }
-
-        // Construct SMT from static DAG
-        let mut identity_tree = darkirc.event_graph.rln_identity_tree.write().await;
-        let mut events = darkirc.event_graph.static_fetch_all().await?;
-        events.sort_by_key(|a| a.header.timestamp);
-
-        for event in events.iter() {
-            // info!("event: {}", event.id());
-            let fetched_rln_commitment: RLNNode = match deserialize_async_partial(event.content())
-                .await
-            {
-                Ok((v, _)) => v,
-                Err(e) => {
-                    error!(target: "irc::server", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
-                    continue
-                }
-            };
-
-            process_commitment(fetched_rln_commitment, &mut identity_tree)?;
-        }
-
-        drop(identity_tree);
 
         // Set the default RLN account if any
         let default_db = darkirc.sled.open_tree(format!("{}default", ACCOUNTS_DB_PREFIX))?;

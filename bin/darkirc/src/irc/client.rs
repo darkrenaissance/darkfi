@@ -18,7 +18,6 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    io::Cursor,
     slice,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
@@ -27,17 +26,10 @@ use std::{
 };
 
 use darkfi::{
-    event_graph::{
-        proto::EventPut,
-        rln::{closest_epoch, process_commitment, Blob, RLNNode},
-        Event, NULL_ID,
-    },
+    event_graph::{proto::EventPut, Event, NULL_ID},
     system::Subscription,
-    zk::{empty_witnesses, Proof, ProvingKey, ZkCircuit},
-    zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::pasta::pallas;
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
 use sled_overlay::sled;
@@ -220,27 +212,50 @@ impl Client {
                                     }
 
                                     let blob = {
-                                        // If we have a RLN identity, now we'll build a ZK proof.
-                                        // Also I really want GOTO in Rust... Fags.
-                                        if let Some(ref mut rln_identity) = *self.server.rln_identity.write().await {
-                                            if rln_identity.last_epoch != closest_epoch(event.header.timestamp) {
-                                                rln_identity.last_epoch = closest_epoch(event.header.timestamp);
-                                                rln_identity.message_id = 0;
-                                            }
-
-                                            rln_identity.message_id += 1;
-
-                                            let (proof, y, internal_nullifier, user_msg_limit) = match self.create_rln_signal_proof(rln_identity, &event).await {
-                                                Ok(v) => v,
-                                                Err(e) => {
-                                                    // TODO: Send a message to the IRC client telling that sending went wrong
-                                                    error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
-                                                    return Err(e)
+                                        // If we have a configured RLN identity,
+                                        // produce a signal blob through the
+                                        // EventGraph's canonical RLN path. The
+                                        // EG owns the SMT root, the proving key,
+                                        // and the slot bookkeeping; we just
+                                        // hand it the (event, message_id) pair
+                                        // and get back a fully-formed `Blob`.
+                                        //
+                                        // If the per-epoch budget is exhausted,
+                                        // `next_message_id` returns None and we
+                                        // drop the message rather than emit a
+                                        // signal that would cause a slash.
+                                        if let Some(ref mut rln_identity) =
+                                            *self.server.rln_identity.write().await
+                                        {
+                                            match rln_identity
+                                                .next_message_id(event.header.timestamp)
+                                            {
+                                                Some(mid) => match rln_identity
+                                                    .create_signal(
+                                                        &event,
+                                                        mid,
+                                                        &self.server.darkirc.event_graph,
+                                                    )
+                                                    .await
+                                                {
+                                                    Ok(blob) => serialize_async(&blob).await,
+                                                    Err(e) => {
+                                                        error!(
+                                                            "[IRC CLIENT] Failed creating RLN \
+                                                             signal proof: {e}"
+                                                        );
+                                                        return Err(e)
+                                                    }
+                                                },
+                                                None => {
+                                                    warn!(
+                                                        "[IRC CLIENT] RLN message budget \
+                                                         exhausted for this epoch; dropping \
+                                                         message to avoid slash"
+                                                    );
+                                                    continue
                                                 }
-                                            };
-
-                                            let blob = Blob{ proof, y, internal_nullifier, user_msg_limit };
-                                            serialize_async(&blob).await
+                                            }
                                         } else {
                                             vec![]
                                         }
@@ -369,19 +384,14 @@ impl Client {
                         }
                     }
 
-                    // Update SMT
-                    let fetched_rln_commitment: RLNNode = match deserialize_async_partial(r.content()).await
-                    {
-                        Ok((v, _)) => v,
-                        Err(e) => {
-                            error!(target: "irc::client", "[RLN] Failed deserializing incoming RLN Identity events: {}", e);
-                            continue
-                        }
-                    };
-
-                    let mut identities_tree = self.server.darkirc.event_graph.rln_identity_tree.write().await;
-                    process_commitment(fetched_rln_commitment, &mut identities_tree)?;
-                    drop(identities_tree);
+                    // Static-event arrival path. Under the new
+                    // EventGraph, by the time `static_pub` notifies us
+                    // here the SMT mutation has ALREADY been applied
+                    // (see `handle_static_put` in event_graph::proto:
+                    // it calls `apply_rln_static_event` BEFORE
+                    // `static_insert`, and `static_insert` is what
+                    // pushes onto `static_pub`). So all we need to do
+                    // is bookkeeping for this client's seen-set.
 
                     // Mark the message as seen for this USER
                     if let Err(e) = self.mark_seen(&event_id).await {
@@ -511,7 +521,7 @@ impl Client {
         if cmd.as_str() == "PRIVMSG" && replies.is_empty() {
             // If the DAG is not synced yet, queue client lines
             // Once synced, send queued lines and continue as normal
-            if !*self.server.darkirc.event_graph.synced.read().await {
+            if !self.server.darkirc.event_graph.is_synced() {
                 debug!("DAG is still syncing, queuing and skipping...");
                 let privmsg = self.args_to_privmsg(args).await;
                 args_queue.push_back(privmsg);
@@ -586,31 +596,5 @@ impl Client {
             .await;
 
         Ok(db.contains_key(event_id.as_bytes())?)
-    }
-
-    /// Abstraction for RLN signal proof creation
-    async fn create_rln_signal_proof(
-        &self,
-        rln_identity: &RlnIdentity,
-        event: &Event,
-    ) -> Result<(Proof, pallas::Base, pallas::Base, u64)> {
-        let identity_tree = self.server.darkirc.event_graph.rln_identity_tree.read().await;
-
-        // Retrieve the ZK proving key from the db
-        let signal_zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-        let signal_circuit = ZkCircuit::new(empty_witnesses(&signal_zkbin)?, &signal_zkbin);
-        let signal_pk = {
-            let Some(proving_key) = self.server.server_store.get("rlnv2-diff-signal-pk")? else {
-                return Err(Error::DatabaseError(
-                    "RLN signal proving key not found in server store".to_string(),
-                ))
-            };
-            let mut reader = Cursor::new(&*proving_key);
-            let pk = ProvingKey::read(&mut reader, signal_circuit)?;
-            drop(proving_key);
-            pk
-        };
-
-        rln_identity.create_signal_proof(event, &identity_tree, &signal_pk)
     }
 }

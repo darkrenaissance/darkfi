@@ -16,26 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::Cursor, str::SplitAsciiWhitespace, sync::Arc, time::UNIX_EPOCH};
+use std::{str::SplitAsciiWhitespace, sync::Arc};
 
 use darkfi::{
-    event_graph::{
-        rln::{closest_epoch, RLNNode},
-        Event,
-    },
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
-    zkas::ZkBinary,
-    Error, Result,
+    event_graph::{rln::RLNNode, Event},
+    Result,
 };
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::serialize_async;
 use smol::lock::RwLock;
 
 use super::super::{client::ReplyType, rpl::*};
-use crate::{
-    crypto::rln::{RlnIdentity, RLN2_REGISTER_ZKBIN},
-    IrcServer,
-};
+use crate::{crypto::rln::RlnIdentity, IrcServer};
 
 pub const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
 pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
@@ -193,13 +185,16 @@ impl NickServ {
                 }
             };
 
-        // Create a new RLN identity and insert it into the db tree
+        // Create a new RLN identity and insert it into the db tree.
+        // `last_epoch` is initialised to 0 deterministically - the
+        // first call to `next_message_id` will detect the rollover
+        // to the current wall-clock epoch.
         let new_rln_identity = RlnIdentity {
             nullifier: identity_nullifier,
             trapdoor: identity_trapdoor,
             user_message_limit: user_msg_limit,
-            message_id: 0, // TODO
-            last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_millis() as u64),
+            message_id: 0,
+            last_epoch: 0,
         };
 
         // Store account
@@ -212,32 +207,36 @@ impl NickServ {
 
         *self.server.rln_identity.write().await = Some(new_rln_identity);
 
-        // Update SMT, DAG and broadcast
-        let rln_commitment = new_rln_identity.commitment();
-        let rln_commitment = RLNNode::Registration(rln_commitment);
+        // Build the static-DAG event and the registration blob.
+        // The blob format is now `RegistrationBlob` (proof +
+        // user_message_limit + max_message_limit + attestation),
+        // verified by the EG via `rln_verify_static_event`.
         let evgr = &self.server.darkirc.event_graph;
-        let event = Event::new_static(serialize_async(&rln_commitment).await, evgr).await;
+        let rln_node = RLNNode::Registration(new_rln_identity.commitment());
+        let event = Event::new_static(serialize_async(&rln_node).await, evgr).await;
 
-        // Retrieve the register ZK proving key from the db
-        let register_zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
-        let register_circuit = ZkCircuit::new(empty_witnesses(&register_zkbin)?, &register_zkbin);
-        let Some(proving_key) = self.server.server_store.get("rlnv2-diff-register-pk")? else {
-            return Err(Error::DatabaseError(
-                "RLN register proving key not found in server store".to_string(),
-            ))
-        };
-        let mut reader = Cursor::new(proving_key);
-        let proving_key = ProvingKey::read(&mut reader, register_circuit)?;
-        let mut identity_tree = self.server.darkirc.event_graph.rln_identity_tree.write().await;
+        let registration_blob = new_rln_identity.create_registration(evgr)?;
+        let blob_bytes = serialize_async(&registration_blob).await;
 
-        let proof =
-            new_rln_identity.create_register_proof(&event, &mut identity_tree, &proving_key)?;
-
-        drop(identity_tree);
-
-        let blob = serialize_async(&(proof, user_msg_limit)).await;
+        // Apply the registration through the canonical pipeline:
+        //
+        // 1. `apply_rln_static_event` mutates the SMT and records
+        //    the post-mutation root in the historical-roots table.
+        //    This is the SAME entry point that
+        //    `proto.rs::handle_static_put` calls for events arriving
+        //    over the wire, so locally-originated and remote
+        //    registrations end up in the same canonical state.
+        // 2. `static_blob_store` persists the blob alongside the
+        //    event so a future late-joiner can re-verify the proof
+        //    during `static_sync`.
+        // 3. `static_insert` writes the event to the static DAG
+        //    and notifies `static_pub` (which the IRC client
+        //    subscription picks up for its own bookkeeping).
+        // 4. `static_broadcast` re-emits to peers.
+        evgr.apply_rln_static_event(&event, &rln_node).await?;
+        evgr.static_blob_store(&event.id(), &blob_bytes)?;
         evgr.static_insert(&event).await?;
-        evgr.static_broadcast(event, blob).await?;
+        evgr.static_broadcast(event, blob_bytes).await?;
 
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),

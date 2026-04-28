@@ -16,16 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::Write, sync::Arc};
+use std::{
+    io::Write,
+    sync::{atomic::Ordering, Arc},
+};
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
+    event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphConfig, EventGraphPtr},
     net::{session::SESSION_DEFAULT, settings::SettingsOpt, P2p, P2pPtr},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
         settings::{RpcSettings, RpcSettingsOpt},
+        util::JsonValue,
     },
     system::{sleep, StoppableTask, Subscription},
     util::path::{expand_path, get_config_path},
@@ -36,6 +40,7 @@ use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 use irc2::{
     crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity},
     irc::server::IrcServer,
+    rpc,
     settings::list_configured_contacts,
     DarkIrc,
 };
@@ -49,6 +54,31 @@ use url::Url;
 
 const CONFIG_FILE: &str = "darkirc_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkirc_config.toml");
+
+// =====================================================================
+// DarkIRC consensus parameters.
+//
+// These define the EventGraph configuration that EVERY DarkIRC node
+// in the network must agree on. Changing any of them is a hard fork.
+// They are passed verbatim to `EventGraph::new` at startup.
+// =====================================================================
+
+/// Epoch origin for DAG rotation (UTC midnight, 1 March 2025).
+/// Rotation boundaries are computed as offsets from this point.
+const DARKIRC_INITIAL_GENESIS: u64 = 1_740_787_200_000;
+
+/// DAG rotation period, in hours.
+const DARKIRC_HOURS_ROTATION: u64 = 1;
+
+/// Genesis payload. Two protocols MUST use distinct values; this
+/// also feeds into `RlnAppId::from_genesis` so RLN signals from one
+/// deployment never appear valid on another.
+const DARKIRC_GENESIS_CONTENTS: &[u8] = b"darkirc-v1";
+
+/// How many rotation periods to keep in the rolling DAG window.
+/// With `hours_rotation = 1` and `max_dags = 24`, this gives a
+/// 24-hour history window. Older events are evicted from sled.
+const DARKIRC_MAX_DAGS: usize = 24;
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
@@ -302,7 +332,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
     };
     let replay_mode = args.replay_mode;
-    let fast_mode = args.fast_mode;
 
     info!("Instantiating event DAG");
     let sled_db = match sled::open(datastore.clone()) {
@@ -321,13 +350,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             return Err(e);
         }
     };
+    // Consensus config. Every node must use exactly these values.
+    let eg_config = EventGraphConfig {
+        initial_genesis: DARKIRC_INITIAL_GENESIS,
+        hours_rotation: DARKIRC_HOURS_ROTATION,
+        genesis_contents: DARKIRC_GENESIS_CONTENTS.to_vec(),
+        max_dags: Some(DARKIRC_MAX_DAGS),
+    };
     let event_graph = match EventGraph::new(
         p2p.clone(),
         sled_db.clone(),
         replay_datastore.clone(),
         replay_mode,
-        fast_mode,
-        1,
+        eg_config,
         ex.clone(),
     )
     .await
@@ -339,6 +374,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
     };
 
+    // The prune task is only spawned when `hours_rotation > 0`. We
+    // require rotation here, so the unwrap is safe.
     let prune_task = event_graph.prune_task.get().unwrap();
 
     info!("Registering EventGraph P2P protocol");
@@ -386,7 +423,33 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             loop {
                 let event = deg_sub.receive().await;
                 debug!("Got deg event: {event:?}");
-                deg_sub_.notify(vec![event.into()].into()).await;
+                let json = deg_event_to_json(&event);
+                deg_sub_.notify(vec![json].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{e}"),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!("Starting Gource subs task");
+    let gource_sub = JsonSubscriber::new("gource.subscribe_events");
+    let gource_sub_ = gource_sub.clone();
+    let event_graph_gource = event_graph.clone();
+    let gource_task = StoppableTask::new();
+    gource_task.clone().start(
+        async move {
+            let event_pub = event_graph_gource.event_pub.clone().subscribe().await;
+            loop {
+                let ev = event_pub.receive().await;
+                if let Some(json) = rpc::privmsg_event_to_gource(&ev).await {
+                    gource_sub_.notify(vec![json].into()).await;
+                }
             }
         },
         |res| async {
@@ -407,6 +470,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         event_graph.clone(),
         dnet_sub,
         deg_sub,
+        gource_sub,
         replay_datastore.clone(),
     ));
     let darkirc_ = Arc::clone(&darkirc);
@@ -509,6 +573,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     rpc_task.stop().await;
     dnet_task.stop().await;
     deg_task.stop().await;
+    gource_task.stop().await;
 
     info!("Stopping IRC server");
     irc_task.stop().await;
@@ -550,11 +615,20 @@ async fn sync_task(
                     Err(e) => {
                         error!("Failed syncing static graph: {e}");
                         p2p.stop().await;
-                        return Err(Error::StaticDagSyncFailed)
+                        return Err(Error::DagSyncFailed)
                     }
                 }
                 info!("Syncing event DAG");
-                match event_graph.sync_selected(dags_count, fast_mode).await {
+                // Sync mode is per-call: full sync replays
+                // every event (heavy, used by archival nodes), fast
+                // sync only fetches headers (light, used by clients
+                // that don't need to re-verify history).
+                let sync_result = if fast_mode {
+                    event_graph.sync_selected_headers(dags_count).await
+                } else {
+                    event_graph.sync_selected(dags_count).await
+                };
+                match sync_result {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
@@ -564,7 +638,7 @@ async fn sync_task(
                     }
                 }
             } else {
-                *event_graph.synced.write().await = true;
+                event_graph.synced.store(true, Ordering::Release);
                 break;
             }
         } else {
@@ -594,10 +668,35 @@ async fn sync_and_monitor(
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
                 info!("Network disconnection detected, resyncing...");
-                *event_graph.synced.write().await = false;
+                event_graph.synced.store(false, Ordering::Release);
                 sync_task(&p2p, &event_graph, skip_dag_sync, fast_mode, dags_count).await?;
             }
             Err(e) => return Err(e),
         }
+    }
+}
+
+fn deg_event_to_json(ev: &darkfi::event_graph::deg::DegEvent) -> JsonValue {
+    use darkfi::{
+        event_graph::deg::{DegEvent, MessageInfo},
+        rpc::util::json_map,
+    };
+
+    fn info_to_json(direction: &str, info: &MessageInfo) -> JsonValue {
+        let info_arr: Vec<JsonValue> = info.info.iter().cloned().map(JsonValue::String).collect();
+        json_map([
+            ("direction", JsonValue::String(direction.into())),
+            ("cmd", JsonValue::String(info.cmd.clone())),
+            // NanoTimestamp's Display is the human-readable form;
+            // emit it as a string to avoid losing precision through
+            // the JSON number type (f64 can't hold nanos cleanly).
+            ("time", JsonValue::String(format!("{}", info.time))),
+            ("info", JsonValue::Array(info_arr)),
+        ])
+    }
+
+    match ev {
+        DegEvent::SendMessage(info) => info_to_json("send", info),
+        DegEvent::RecvMessage(info) => info_to_json("recv", info),
     }
 }
