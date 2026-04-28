@@ -4,16 +4,29 @@ field = "pallas";
 constant "Rlnv2Diff_Slash" {}
 
 witness "Rlnv2Diff_Slash" {
-	Base secret_key,
-	Base user_message_limit,
+	# This is identity_secret_hash from the spec (i.e. the value that
+	# is recovered via Shamir's Secret Sharing when a user is slashed).
+	# Per RLN-V1 Appendix B: this does NOT contain identity_nullifier
+	# or identity_trapdoor, so revealing it does not break Semaphore
+	# proofs that share the same root identity.
+	Base identity_secret_hash,
 	# Inclusion proof, the leaf is the identity_commitment
 	SparseMerklePath path,
 }
 
 circuit "Rlnv2Diff_Slash" {
-	constrain_instance(secret_key);
-	constrain_instance(user_message_limit);
-	identity_secret_hash = poseidon_hash(secret_key, user_message_limit);
+	# Public inputs (order matches the verifier in proto.rs):
+	#   identity_secret_hash, root
+	#
+	# Note: `user_message_limit` is no longer present here. With the
+	# updated signal circuit, the recovered value (identity_secret_hash)
+	# already implicitly encodes the user_message_limit - it was
+	# bound at registration via:
+	#     identity_secret_hash = poseidon(identity_secret, user_message_limit)
+	# So the recipient just hashes once more to get the commitment and
+	# checks tree membership. No brute-force search required.
+	constrain_instance(identity_secret_hash);
+
 	identity_commitment = poseidon_hash(identity_secret_hash);
 	root = sparse_merkle_root(identity_commitment, path, identity_commitment);
 	constrain_instance(root);

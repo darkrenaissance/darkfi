@@ -16,19 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! Core data types: [`Header`], [`Event`], and [`display_order`].
-
 use std::{cmp::Ordering, collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
 
-use crate::{event_graph::util::generate_genesis, Result};
-
 use super::{
-    util::next_rotation_timestamp, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID,
-    N_EVENT_PARENTS,
+    util::{generate_genesis, next_rotation_timestamp},
+    EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS,
 };
+use crate::Result;
 
 /// The fixed-size structural metadata of an event.
 ///

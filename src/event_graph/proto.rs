@@ -42,8 +42,8 @@ use tracing::{error, warn};
 
 use super::{
     event::Header,
-    rln::{closest_epoch, create_slash_proof, hash_event, sss_recover, Blob, RLNNode, RlnState},
-    Event, EventGraphPtr, LayerUTips, NULL_ID,
+    rln::{self, create_slash_proof, sss_recover, RLNNode, SlashBlob},
+    Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
 };
 use crate::{
     impl_p2p_message,
@@ -54,7 +54,6 @@ use crate::{
     },
     system::msleep,
     util::time::NanoTimestamp,
-    zk::Proof,
     Error, Result,
 };
 
@@ -73,7 +72,7 @@ const WINDOW_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(60);
 const RATELIMIT_EXPIRY_TIME: NanoTimestamp = NanoTimestamp::from_secs(10);
 /// Rate limiter activates above this many broadcasts in the window.
 const RATELIMIT_MIN_COUNT: usize = 6;
-/// Reference point for computing sleep time: when count = this value…
+/// Reference point for computing sleep time: when count = this value...
 const RATELIMIT_SAMPLE_IDX: usize = 10;
 /// Sleep this many milliseconds before broadcasting.
 const RATELIMIT_SAMPLE_SLEEP: usize = 1000;
@@ -130,7 +129,7 @@ impl MovingWindow {
                 }
                 Err(_) => {
                     self.times.pop_front();
-                } // future timestamp — remove
+                } // future timestamp - remove
                 _ => break,
             }
         }
@@ -161,9 +160,19 @@ impl_p2p_message!(StaticPut, "EventGraph::StaticPut", 0, 0, DEFAULT_METERING_CON
 pub struct EventReq(pub Vec<blake3::Hash>);
 impl_p2p_message!(EventReq, "EventGraph::EventReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
-/// Reply with full events.
+/// Reply with full events, plus optional aligned blobs.
+///
+/// `events` and `blobs` are aligned by index: `blobs[i]` is the
+/// original RLN blob for `events[i]`. For non-genesis events,
+/// peers MUST supply a non-empty blob - the recipient's
+/// `dag_insert_with_blobs` rejects events without one. An empty
+/// blob is acceptable only for genesis-shaped events.
+///
+/// `blobs.len() != events.len()` is wire-compatible: missing
+/// trailing entries are treated as empty, which on non-genesis
+/// events means rejection.
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct EventRep(pub Vec<Event>);
+pub struct EventRep(pub Vec<Event>, pub Vec<Vec<u8>>);
 impl_p2p_message!(EventRep, "EventGraph::EventRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Broadcast a single header (unused in current flow, reserved).
@@ -362,8 +371,26 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // RLN: verify proof BEFORE recording shares
-            if !blob.is_empty() && self.verify_rln_signal(&event, &blob).await {
+            // RLN: every non-genesis event MUST carry a valid signal
+            // proof. The only exception is genesis-shaped events
+            // (parents == NULL_PARENTS), which are produced by
+            // `dag_prune` on rotation and don't represent user
+            // signals. An empty blob on a non-genesis event is an
+            // unauthenticated injection attempt - strike the peer
+            // and drop the event.
+            if event.header.parents != NULL_PARENTS {
+                if blob.is_empty() {
+                    self.clone().strike().await?;
+                    continue
+                }
+                if self.verify_rln_signal(&event, &blob).await {
+                    continue
+                }
+            } else if !blob.is_empty() {
+                // A genesis-shaped event with a non-empty blob is
+                // also misbehavior - genesis events are deterministic
+                // and don't carry signals. Strike.
+                self.clone().strike().await?;
                 continue
             }
 
@@ -425,7 +452,18 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // Insert the event itself
+            // Insert the event itself. We use plain dag_insert
+            // (not dag_insert_with_blobs) because the blob has
+            // already been verified above (the verify_rln_signal
+            // gate). Re-verifying via dag_insert_with_blobs would
+            // produce a spurious "duplicate share" rejection,
+            // because rln_verify_signal recorded the share on the
+            // first call.
+            //
+            // We store the blob in the side-table separately, so
+            // future late-joiners can re-verify it during sync.
+            // This mirrors the originator path in nickserv.rs that
+            // calls static_blob_store after static_insert.
             if self
                 .event_graph
                 .header_dag_insert(vec![event.header.clone()], &dag_name)
@@ -441,6 +479,10 @@ impl ProtocolEventGraph {
                 continue
             }
 
+            // Persist the verified blob alongside the event for
+            // sync-time re-verification by future late-joiners.
+            let _ = self.event_graph.dag_blob_store(&event.id(), &blob);
+
             // Relay to other peers (bounded - drops if channel full)
             let _ = self.broadcaster_push.try_send(EventPut(event, blob));
         }
@@ -455,7 +497,12 @@ impl ProtocolEventGraph {
         dag_name: &str,
         dag_ts: u64,
     ) -> bool {
-        let mut received: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
+        // received[layer] = Vec<(event, blob)> - keeping events
+        // paired with their blobs through the layer ordering so we
+        // can re-verify proofs at insert time. An empty blob means
+        // the serving peer didn't have one; dag_insert_with_blobs
+        // treats that as the trust-the-quorum fallback.
+        let mut received: BTreeMap<u64, Vec<(Event, Vec<u8>)>> = BTreeMap::new();
         let mut known = HashSet::new();
         let mut depth = 0usize;
 
@@ -483,14 +530,19 @@ impl ProtocolEventGraph {
                 return false
             };
 
-            for parent in rep.0.clone() {
+            // Pair each returned event with its corresponding blob.
+            let parents = rep.0.clone();
+            let blobs_in = rep.1.clone();
+            let blobs_aligned = blobs_in.len() == parents.len();
+            for (i, parent) in parents.into_iter().enumerate() {
                 let pid = parent.id();
                 if !missing.contains(&pid) {
                     // Peer sent an event we didn't ask for
                     self.channel.stop().await;
                     return false
                 }
-                received.entry(parent.header.layer).or_default().push(parent.clone());
+                let blob = if blobs_aligned { blobs_in[i].clone() } else { Vec::new() };
+                received.entry(parent.header.layer).or_default().push((parent.clone(), blob));
                 known.insert(pid);
                 missing.remove(&pid);
 
@@ -510,22 +562,21 @@ impl ProtocolEventGraph {
             }
         }
 
-        // Insert in layer order. We insert into both header_tree and
-        // main_tree - inserting into header_tree alone would create
-        // an inconsistent state where an event E exists in main_tree
-        // but its parent P does not, even though both have headers.
-        // Any future ancestor walk via main_tree.get() would hit a
-        // None and fail. If the node wants to discard bodies for
-        // space, that should be a separate pruning pass, not a
-        // sync-time partial-insert.
-        let events: Vec<Event> = received.into_values().flatten().collect();
+        // Flatten in layer order so parents are inserted before
+        // children (dag_insert structurally validates parents).
+        let pairs: Vec<(Event, Vec<u8>)> = received.into_values().flatten().collect();
+        let events: Vec<Event> = pairs.iter().map(|(e, _)| e.clone()).collect();
+        let blobs: Vec<Vec<u8>> = pairs.iter().map(|(_, b)| b.clone()).collect();
         let headers: Vec<Header> = events.iter().map(|e| e.header.clone()).collect();
 
         if self.event_graph.header_dag_insert(headers, dag_name).await.is_err() {
             return false
         }
 
-        if self.event_graph.dag_insert(&events, dag_name).await.is_err() {
+        // dag_insert_with_blobs verifies each event's blob (when
+        // present) and skips events that fail RLN re-verification.
+        // This closes sync-time injection via fetch_parents.
+        if self.event_graph.dag_insert_with_blobs(&events, &blobs, dag_name).await.is_err() {
             return false
         }
 
@@ -534,94 +585,92 @@ impl ProtocolEventGraph {
 
     /// Verify an RLN signal proof. Returns `true` if the event
     /// should be rejected (proof invalid, duplicate, or slashable).
+    ///
+    /// The actual verification logic lives on
+    /// [`EventGraph::rln_verify_signal`] - this method is a thin
+    /// wrapper that translates the [`rln::SignalCheck`] outcome
+    /// into "accept or reject" plus the slash side effect.
     async fn verify_rln_signal(&self, event: &Event, blob: &[u8]) -> bool {
-        let rcvd: Blob = match deserialize_async_partial(blob).await {
-            Ok((v, _)) => v,
-            Err(_) => return true, // unparseable blob -> reject
-        };
-
-        let epoch = closest_epoch(event.header.timestamp);
-        let ext_null = poseidon_hash([pallas::Base::from(epoch), pallas::Base::from(1000)]);
-        let x = hash_event(event);
-        let root = self.event_graph.identity_state.read().await.root();
-        let pi = vec![root, ext_null, x, rcvd.y, rcvd.internal_nullifier];
-
-        // Global metadata check
-        {
-            let mut rln = self.event_graph.rln_state.write().await;
-            if rln.current_epoch != epoch {
-                *rln = RlnState::new();
-                rln.current_epoch = epoch;
-            }
-
-            if rln.metadata.is_duplicate(&ext_null, &rcvd.internal_nullifier, &x, &rcvd.y) {
-                return true
-            }
-
-            if rln.metadata.is_reused(&ext_null, &rcvd.internal_nullifier) {
-                let shares = rln.metadata.get_shares(&ext_null, &rcvd.internal_nullifier);
-                drop(rln);
-                self.slash(shares, rcvd.user_msg_limit).await;
-                return true
+        match self.event_graph.rln_verify_signal(event, blob).await {
+            rln::SignalCheck::Accepted => false,
+            rln::SignalCheck::Rejected => true,
+            rln::SignalCheck::Slashable(shares) => {
+                self.slash(shares).await;
+                true
             }
         }
-
-        // Verify proof using cached VK
-        if rcvd.proof.verify(&self.event_graph.zk_keys.signal_vk, &pi).is_err() {
-            return true
-        }
-
-        // Proof valid -> record share
-        let mut rln = self.event_graph.rln_state.write().await;
-        let _ = rln.metadata.add_share(ext_null, rcvd.internal_nullifier, x, rcvd.y);
-        false
     }
 
-    /// Execute the slashing procedure: recover the secret, load the
-    /// slash proving key from sled, produce a slash proof, and
-    /// broadcast the slashing event.
-    async fn slash(&self, shares: Vec<(pallas::Base, pallas::Base)>, limit: u64) {
-        let secret = match sss_recover(&shares) {
+    /// Execute the slashing procedure: SSS-recover `identity_secret_hash`
+    /// from the conflicting shares, derive the corresponding commitment
+    /// directly, and broadcast the slash proof.
+    ///
+    /// With the spec-aligned signal circuit (`a_0 = identity_secret_hash`),
+    /// the recovered value uniquely determines the commitment via a
+    /// single Poseidon hash. The previous brute-force loop over
+    /// `1..=MAX_MSG_LIMIT` is gone - `user_message_limit` is already
+    /// baked into `identity_secret_hash`, so the verifier doesn't
+    /// need to know it explicitly.
+    async fn slash(&self, shares: Vec<(pallas::Base, pallas::Base)>) {
+        let identity_secret_hash = match sss_recover(&shares) {
             Ok(s) => s,
             Err(e) => {
-                error!(
-                    target: "event_graph::slash",
-                    "[RLN] SSS recovery failed: {e}",
-                );
+                error!(target: "event_graph::protocol", "[RLN] SSS recovery failed: {e}");
                 return
             }
         };
 
-        // Lazy-load the slash PK from sled
+        let commitment = poseidon_hash([identity_secret_hash]);
+
+        // Sanity check: the commitment we recovered must be in the
+        // tree. If it isn't, something has gone wrong (the proofs
+        // were against a stale root we no longer have, or we have a
+        // bug). Either way, do not broadcast a bogus slash.
+        {
+            let id_state = self.event_graph.identity_state.read().await;
+            if !id_state.contains(&commitment) {
+                warn!(
+                    target: "event_graph::protocol",
+                    "[RLN] Recovered commitment is not a current tree leaf; skipping slash",
+                );
+                return
+            }
+        }
+
         let slash_pk = match self.event_graph.zk_keys.load_slash_pk() {
             Ok(pk) => pk,
             Err(e) => {
-                error!(
-                    target: "event_graph::slash",
-                    "[RLN] Failed to load slash PK: {e}",
-                );
+                error!(target: "event_graph::protocol", "[RLN] Failed to load slash PK: {e}");
                 return
             }
         };
 
         let mut id = self.event_graph.identity_state.write().await;
-        let (proof, root) = match create_slash_proof(secret, limit, &mut id, &slash_pk) {
+        let (proof, root) = match create_slash_proof(identity_secret_hash, &mut id, &slash_pk) {
             Ok(v) => v,
             Err(e) => {
-                error!(
-                    target: "event_graph::slash",
-                    "[RLN] Slash proof creation failed: {e}",
-                );
+                error!(target: "event_graph::protocol", "[RLN] Slash proof creation failed: {e}");
                 return
             }
         };
+        // Note: create_slash_proof itself does NOT mutate the SMT -
+        // it only reads the membership path. The actual removal happens
+        // when `static_insert` propagates the slashing event through
+        // `handle_static_put`, the same code path remote slashes use.
         drop(id);
 
-        let blob = serialize_async(&(proof, secret, limit, root)).await;
-        let commitment = poseidon_hash([poseidon_hash([secret, limit.into()])]);
+        let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
+        let blob = serialize_async(&slash_blob).await;
         let node = RLNNode::Slashing(commitment);
         let ev = Event::new_static(serialize_async(&node).await, &self.event_graph).await;
         let _ = self.event_graph.static_insert(&ev).await;
+        // Apply the slash to our own SMT and historical-roots
+        // tables. Like the nickserv originator path, the slasher
+        // doesn't receive its own broadcast back, so we'd never
+        // see the SMT update otherwise. apply_rln_static_event
+        // canonicalizes the SMT mutation and the root recording.
+        let _ = self.event_graph.apply_rln_static_event(&ev, &node).await;
+        let _ = self.event_graph.static_blob_store(&ev.id(), &blob);
         let _ = self.event_graph.static_broadcast(ev, blob).await;
     }
 
@@ -640,72 +689,8 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            let rln_node: RLNNode = match deserialize_async_partial(event.content()).await {
-                Ok((v, _)) => v,
-                Err(_) => continue,
-            };
-            if blob.is_empty() {
-                continue
-            }
-
-            match rln_node {
-                RLNNode::Registration(commitment) => {
-                    let (proof, msg_limit): (Proof, u64) =
-                        match deserialize_async_partial(&blob).await {
-                            Ok((v, _)) => v,
-                            Err(_) => continue,
-                        };
-                    if proof
-                        .verify(
-                            &self.event_graph.zk_keys.register_vk,
-                            &[commitment, msg_limit.into()],
-                        )
-                        .is_err()
-                    {
-                        continue
-                    }
-                    // Persist the new identity
-                    if let Err(e) =
-                        self.event_graph.identity_state.write().await.register(commitment)
-                    {
-                        error!("[RLN] Register: {e}");
-                        continue
-                    }
-                }
-                RLNNode::Slashing(commitment) => {
-                    let (proof, secret, msg_limit, root): (Proof, pallas::Base, u64, pallas::Base) =
-                        match deserialize_async_partial(&blob).await {
-                            Ok((v, _)) => v,
-                            Err(_) => continue,
-                        };
-                    if proof
-                        .verify(
-                            &self.event_graph.zk_keys.slash_vk,
-                            &[secret, msg_limit.into(), root],
-                        )
-                        .is_err()
-                    {
-                        continue
-                    }
-                    let rebuilt = poseidon_hash([poseidon_hash([secret, msg_limit.into()])]);
-                    if commitment != rebuilt {
-                        self.clone().strike().await?;
-                        continue
-                    }
-                    if let Err(e) = self.event_graph.identity_state.write().await.slash(rebuilt) {
-                        error!("[RLN] Slash: {e}");
-                        continue
-                    }
-                }
-            }
-
-            // Validate parents exist in static DAG
-            for p in event.header.parents.iter() {
-                if *p != NULL_ID && !self.event_graph.static_dag.contains_key(p.as_bytes())? {
-                    return Err(Error::EventNotFound("Orphan static event".into()))
-                }
-            }
-
+            // Validate event structure and parents BEFORE touching
+            // the identity tree.
             bantimes.ticktock();
             if bantimes.count() > WINDOW_MAXSIZE {
                 self.channel.ban().await;
@@ -715,6 +700,64 @@ impl ProtocolEventGraph {
                 self.clone().strike().await?;
                 continue
             }
+            let mut orphan = false;
+            for p in event.header.parents.iter() {
+                if *p != NULL_ID && !self.event_graph.static_dag.contains_key(p.as_bytes())? {
+                    orphan = true;
+                    break
+                }
+            }
+            if orphan {
+                self.clone().strike().await?;
+                continue
+            }
+
+            let rln_node: RLNNode = match deserialize_async_partial(event.content()).await {
+                Ok((v, _)) => v,
+                Err(_) => continue,
+            };
+            if blob.is_empty() {
+                continue
+            }
+
+            // Decision is made by EventGraph::rln_verify_static_event,
+            // a pure verification function (no state mutation). We
+            // translate the outcome to: SMT mutation via apply_rln_static_event
+            // (which also records the post-mutation root), or strike,
+            // or drop silently.
+            //
+            // The unified `apply_rln_static_event` is essential to
+            // keep the SMT and historical-roots tables in lockstep.
+            // Bypassing it (e.g. calling .register() directly) would
+            // break sync-time signal verification because the
+            // historical-roots table wouldn't get the new entry.
+            match self
+                .event_graph
+                .rln_verify_static_event(&rln_node, &blob, event.header.timestamp)
+                .await
+            {
+                rln::StaticEventCheck::AcceptedRegistration(_) |
+                rln::StaticEventCheck::AcceptedSlash(_) => {
+                    if let Err(e) = self.event_graph.apply_rln_static_event(&event, &rln_node).await
+                    {
+                        warn!(
+                            target: "event_graph::protocol",
+                            "[RLN] apply_rln_static_event failed: {e}",
+                        );
+                        continue
+                    }
+                }
+                rln::StaticEventCheck::Rejected => continue,
+                rln::StaticEventCheck::Malicious => {
+                    self.clone().strike().await?;
+                    continue
+                }
+            }
+
+            // Persist the original RLN blob (proof + public inputs +
+            // attestation) alongside the event so `static_sync` on
+            // a future late-joiner can re-verify the proof.
+            self.event_graph.static_blob_store(&event.id(), &blob)?;
 
             self.event_graph.static_insert(&event).await?;
             self.event_graph.static_broadcast(event, blob).await?;
@@ -732,16 +775,39 @@ impl ProtocolEventGraph {
             }
 
             // Only serve IDs we've previously broadcast (prevents
-            // arbitrary DAG enumeration by malicious peers).
+            // arbitrary DAG enumeration by malicious peers). The
+            // static DAG is exempt from this check because its
+            // contents are public consensus state (RLN registrations
+            // and slashes) - serving those freely has no privacy
+            // cost, and it's required so that a peer performing
+            // `static_sync` can walk ancestry via EventReq.
+            //
+            // For both static and rotating-DAG events, we include
+            // the original RLN blob (proof + public inputs + ...)
+            // so the requester can re-verify the proof at sync time.
+            // The blobs vector is index-aligned with `events`; an
+            // empty entry means we don't have the blob, which can
+            // legitimately happen for events inserted before the
+            // current blob-storage code paths existed.
             let bcast = self.event_graph.broadcasted_ids.read().await;
             let mut events = vec![];
+            let mut blobs: Vec<Vec<u8>> = vec![];
             for id in &ids {
-                if !bcast.contains(id) {
+                let in_static =
+                    self.event_graph.static_dag.contains_key(id.as_bytes()).unwrap_or(false);
+                if !in_static && !bcast.contains(id) {
                     self.clone().strike().await?;
                     continue
                 }
                 if let Some(ev) = self.event_graph.fetch_event_from_dags(id).await? {
+                    // Best effort blob lookup - missing is not an error.
+                    let blob = if in_static {
+                        self.event_graph.static_blob_fetch(id).unwrap_or(None).unwrap_or_default()
+                    } else {
+                        self.event_graph.dag_blob_fetch(id).unwrap_or(None).unwrap_or_default()
+                    };
                     events.push(ev);
+                    blobs.push(blob);
                 }
             }
             drop(bcast);
@@ -756,7 +822,7 @@ impl ProtocolEventGraph {
                     }
                 }
                 drop(b);
-                self.channel.send(&EventRep(events)).await?;
+                self.channel.send(&EventRep(events, blobs)).await?;
             }
         }
     }
