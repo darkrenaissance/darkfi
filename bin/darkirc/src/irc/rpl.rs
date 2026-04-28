@@ -79,7 +79,7 @@ pub const RPL_LISTSTART: u16 = 321;
 /// Sent as a reply to the LIST command, this numeric sends information
 /// about a channel to the client. `<channel>` is the name of the channel.
 /// `<client count>` is an integer indicating how many clients are joined
-/// to that channel. `<topic>` is the channel’s topic.
+/// to that channel. `<topic>` is the channel's topic.
 pub const RPL_LIST: u16 = 322;
 
 /// `<client> :End of /LIST`
@@ -172,13 +172,13 @@ pub const ERR_NOORIGIN: u16 = 409;
 
 /// `<client> :No recipient given (<command>)`
 ///
-/// Returned by the PRIVMSG command to indicate the message wasn’t
+/// Returned by the PRIVMSG command to indicate the message wasn't
 /// delivered because there was no recipient given.
 pub const ERR_NORECIPIENT: u16 = 411;
 
 /// `<client> :No text to send`
 ///
-/// Returned by the PRIVMSG command to indicate the message wasn’t
+/// Returned by the PRIVMSG command to indicate the message wasn't
 /// delivered because there was no text to send.
 pub const ERR_NOTEXTTOSEND: u16 = 412;
 

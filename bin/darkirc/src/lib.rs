@@ -63,6 +63,8 @@ pub struct DarkIrc {
     dnet_sub: JsonSubscriber,
     /// deg JSON-RPC subscriber
     deg_sub: JsonSubscriber,
+    /// Gource visualization JSON-RPC subscriber
+    gource_sub: JsonSubscriber,
     /// Replay logs (DB) path
     replay_datastore: PathBuf,
 }
@@ -74,6 +76,7 @@ impl DarkIrc {
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
+        gource_sub: JsonSubscriber,
         replay_datastore: PathBuf,
     ) -> Self {
         Self {
@@ -83,6 +86,7 @@ impl DarkIrc {
             rpc_connections: Mutex::new(HashSet::new()),
             dnet_sub,
             deg_sub,
+            gource_sub,
             replay_datastore,
         }
     }

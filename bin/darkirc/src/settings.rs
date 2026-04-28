@@ -19,11 +19,10 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::UNIX_EPOCH,
 };
 
 use crypto_box::PublicKey;
-use darkfi::{event_graph::rln::closest_epoch, Error::ParseFailed, Result};
+use darkfi::{Error::ParseFailed, Result};
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use tracing::info;
 
@@ -236,10 +235,12 @@ pub fn parse_rln_identity(data: &toml::Value) -> Result<Option<RlnIdentity>> {
         nullifier: identity_nullifier,
         trapdoor: identity_trapdoor,
         user_message_limit,
-        // TODO: FIXME: We should probably keep track of these rather than
-        // resetting here
+        // Per-epoch counters start fresh on load. The first call to
+        // `next_message_id` will detect the epoch transition (from
+        // 0 to whatever the current wall-clock epoch is) and reset
+        // `message_id` accordingly.
         message_id: 0,
-        last_epoch: closest_epoch(UNIX_EPOCH.elapsed().unwrap().as_secs()),
+        last_epoch: 0,
     }))
 }
 
