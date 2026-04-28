@@ -30,8 +30,11 @@ use darkfi_serial::{deserialize, deserialize_async, serialize};
 use sled_overlay::sled;
 use tinyjson::JsonValue;
 
+use super::{
+    event::{Event, Header},
+    EventGraphConfig, NULL_ID, N_EVENT_PARENTS,
+};
 use crate::{
-    event_graph::{Event, EventGraphConfig, NULL_ID, N_EVENT_PARENTS},
     util::{encoding::base64, file::load_file},
     Result,
 };
@@ -41,8 +44,6 @@ use crate::rpc::{
     jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
     util::json_map,
 };
-
-use super::event::Header;
 
 /// Milliseconds in one hour.
 pub(super) const HOUR: i64 = 3_600_000;
@@ -92,8 +93,8 @@ pub fn millis_until_next_rotation(next_rotation: u64) -> u64 {
 /// Generate the deterministic genesis event for the current rotation
 /// period, using the caller-provided [`EventGraphConfig`].
 ///
-/// * `hours_rotation == 0` → timestamp is `initial_genesis`.
-/// * `hours_rotation > 0`  → timestamp is the most recent
+/// * `hours_rotation == 0` -> timestamp is `initial_genesis`.
+/// * `hours_rotation > 0`  -> timestamp is the most recent
 ///   multiple-of-N boundary since `initial_genesis`.
 pub fn generate_genesis(config: &EventGraphConfig) -> Event {
     let timestamp = if config.hours_rotation == 0 {
@@ -150,4 +151,59 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
     let values = json_map([("dag", JsonValue::Object(json_graph))]);
     JsonResponse::new(JsonValue::Object(HashMap::from([("eventgraph_info".into(), values)])), 1)
         .into()
+}
+
+/// Which DAG an event came from. Used by [`event_to_gource`] to
+/// pick the appropriate path prefix when formatting visualization
+/// output.
+#[derive(Copy, Clone, Debug)]
+pub enum DagKind {
+    /// A rotating-DAG event (regular IRC traffic, etc.)
+    Rotating,
+    /// A static-DAG event (RLN registration or slash)
+    Static,
+}
+
+impl DagKind {
+    fn path_prefix(self) -> &'static str {
+        match self {
+            DagKind::Rotating => "rotating",
+            DagKind::Static => "static",
+        }
+    }
+}
+
+/// Format an [`Event`] as a single Gource custom-log line.
+///
+/// Output format (Gource custom log, pipe-delimited):
+///
+/// ```text
+///     <unix-seconds>|<username>|A|/<dag-kind>/<layer>/<event-id-prefix>
+/// ```
+pub fn event_to_gource(ev: &Event, kind: DagKind) -> String {
+    let unix_secs = ev.header.timestamp / 1_000;
+
+    // First non-NULL parent -> 8-char hex prefix; otherwise "genesis".
+    let username = ev
+        .header
+        .parents
+        .iter()
+        .find(|p| **p != NULL_ID)
+        .map(|p| {
+            let hex = p.to_hex();
+            hex[..8.min(hex.len())].to_string()
+        })
+        .unwrap_or_else(|| "genesis".to_string());
+
+    let id_hex = ev.id().to_hex();
+    let id_prefix = &id_hex[..16.min(id_hex.len())];
+
+    format!(
+        "{}|{}|A|/{}/{:06}/{}",
+        unix_secs,
+        username,
+        kind.path_prefix(),
+        ev.header.layer,
+        id_prefix,
+    )
 }

@@ -29,44 +29,49 @@ use std::{
     },
 };
 
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::{deserialize_async, serialize_async};
-use event::Header;
 use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
     lock::{OnceCell, RwLock},
     Executor,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use url::Url;
 
 use crate::{
-    event_graph::{
-        proto::StaticPut,
-        util::{next_hour_timestamp, next_rotation_timestamp, replayer_log},
-    },
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
 
 pub mod event;
-pub use event::{display_order, Event};
+pub use event::{display_order, Event, Header};
 
 pub mod proto;
-use proto::{EventRep, EventReq, HeaderRep, HeaderReq, SyncDirection, TipRep, TipReq};
+use proto::{EventRep, EventReq, HeaderRep, HeaderReq, StaticPut, SyncDirection, TipRep, TipReq};
 
 pub mod rln;
 use rln::{IdentityState, RlnState, ZkKeys};
 
 pub mod util;
-use util::{generate_genesis, millis_until_next_rotation};
+use util::{
+    generate_genesis, millis_until_next_rotation, next_hour_timestamp, next_rotation_timestamp,
+    replayer_log,
+};
 
 pub mod deg;
 use deg::DegEvent;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_rln;
+
+#[cfg(test)]
+mod test_helpers;
 
 /// Number of parent references each event carries.
 pub const N_EVENT_PARENTS: usize = 5;
@@ -79,6 +84,10 @@ pub const NULL_ID: blake3::Hash = blake3::Hash::from_bytes([0x00; blake3::OUT_LE
 
 /// Array of null parents (used by genesis events).
 pub const NULL_PARENTS: [blake3::Hash; N_EVENT_PARENTS] = [NULL_ID; N_EVENT_PARENTS];
+
+/// Maximum number of static-DAG events `static_sync` will pull in
+/// one invocation. Defends against malicious deep-ancestry chains.
+const SYNC_MAX_STATIC_EVENTS: usize = 100_000;
 
 /// Runtime configuration for an Event Graph instance.
 #[derive(Clone, Debug)]
@@ -397,7 +406,45 @@ enum PeerStatus {
 pub struct EventGraph {
     pub(crate) p2p: P2pPtr,
     pub(crate) dag_store: RwLock<DagStore>,
+    /// Side-table mapping `event_id -> original RLN signal blob` for
+    /// rotating-DAG events. Mirror of [`Self::static_dag_blobs`] but
+    /// for the rotating DAGs.
+    ///
+    /// Populated by `handle_event_put` after successful RLN
+    /// verification, and by `dag_insert_with_blobs` during sync when
+    /// the serving peer included the blob in its `EventRep`. Read
+    /// by `handle_event_req` to forward blobs to syncing peers.
+    /// Pruned by `dag_prune` when the corresponding rotating DAG
+    /// rolls out of the retention window.
+    pub(crate) dag_blobs: sled::Tree,
+    /// Historical SMT roots, in canonical apply order.
+    ///
+    /// Key: `(layer:u64_be, event_id:32) = 40 bytes`. Value:
+    /// `(root:32, timestamp:u64_be:8) = 40 bytes`.
+    ///
+    /// Big-endian layer encoding makes lexicographic byte order
+    /// match canonical apply order, so `Tree::range` iterates
+    /// chronologically and `Tree::get_lt` / `get_gt` give cheap
+    /// neighbor lookups (used to find the timestamp interval during
+    /// which a given root was the live root).
+    ///
+    /// See [`Self::apply_rln_static_event`] for the canonical-order
+    /// rationale and [`Self::is_root_valid_at`] for how this is
+    /// consulted during signal verification.
+    pub(crate) rln_historical_roots_ordered: sled::Tree,
+    /// Reverse index: `root:32 -> (layer:u64_be, event_id:32) = 40 bytes`.
+    ///
+    /// Lets us answer "is this root historical?" with a single
+    /// `Tree::get(root)`, then chase the returned key into
+    /// `rln_historical_roots_ordered` to get the timestamp interval.
+    pub(crate) rln_historical_roots_by_value: sled::Tree,
     pub(crate) static_dag: sled::Tree,
+    /// Side-table mapping `event_id -> original RLN blob` for static
+    /// events. Used by [`Self::static_sync`] to re-verify the ZK
+    /// proof of historical events at sync time. Every static-DAG
+    /// event MUST have a corresponding entry - `static_sync` rejects
+    /// events whose blob isn't available rather than falling through.
+    pub(crate) static_dag_blobs: sled::Tree,
     datastore: PathBuf,
     replay_mode: bool,
     pub(crate) broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
@@ -409,10 +456,14 @@ pub struct EventGraph {
     pub synced: AtomicBool,
     pub deg_enabled: AtomicBool,
     deg_publisher: PublisherPtr<DegEvent>,
-    pub(crate) sled_db: sled::Db,
-    pub(crate) zk_keys: ZkKeys,
-    pub(crate) identity_state: RwLock<IdentityState>,
-    pub(crate) rln_state: RwLock<RlnState>,
+    pub sled_db: sled::Db,
+    pub zk_keys: Arc<ZkKeys>,
+    pub identity_state: RwLock<IdentityState>,
+    pub rln_state: RwLock<RlnState>,
+    /// App identifier mixed into the RLN external nullifier. Derived
+    /// from `config.genesis_contents` so two deployments using the
+    /// same circuit cannot collide on internal_nullifiers.
+    rln_app_id: rln::RlnAppId,
 }
 
 impl EventGraph {
@@ -425,11 +476,44 @@ impl EventGraph {
         config: EventGraphConfig,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
-        let zk_keys = ZkKeys::build_and_load(&sled_db)?;
+        let zk_keys = Arc::new(ZkKeys::build_and_load(&sled_db)?);
+        Self::with_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
+    }
+
+    /// Same as [`Self::new`] but accepts a pre-built [`ZkKeys`].
+    ///
+    /// Production always wants `Self::new`, which builds keys once
+    /// against its own sled DB. Tests use this variant to share a
+    /// single [`Arc<ZkKeys>`] across many `EventGraph` instances -
+    /// proving keys are large (hundreds of MB each) and copying
+    /// them per-test would blow out RAM and `/dev/shm`.
+    pub async fn with_zk_keys(
+        p2p: P2pPtr,
+        sled_db: sled::Db,
+        datastore: PathBuf,
+        replay_mode: bool,
+        config: EventGraphConfig,
+        zk_keys: Arc<ZkKeys>,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<EventGraphPtr> {
         let identity_state = IdentityState::new(&sled_db)?;
+        let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
         let current_genesis = generate_genesis(&config);
         let dag_store = DagStore::new(sled_db.clone(), &config).await;
         let static_dag = Self::static_new(&sled_db, &config).await?;
+        let static_dag_blobs = sled_db.open_tree("static-dag-blobs")?;
+        let dag_blobs = sled_db.open_tree("dag-blobs")?;
+
+        // Historical-roots side-tables. See the design comment on
+        // `EventGraph::apply_rln_static_event` for the full rationale.
+        // In short: every static-DAG mutation produces a new SMT root,
+        // and we need to recognize *any* historical root for sync-time
+        // signal verification, not just the most recent N. The
+        // `ordered` tree gives us canonical replay (and successor
+        // lookup for the time-window check), the `by_value` tree
+        // gives us O(log n) "is this root historical?" queries.
+        let rln_historical_roots_ordered = sled_db.open_tree("rln-historical-roots-ordered")?;
+        let rln_historical_roots_by_value = sled_db.open_tree("rln-historical-roots-by-value")?;
 
         // Check whether the current genesis event is already in the
         // store. If not, we need to prune (create a fresh slot).
@@ -444,6 +528,10 @@ impl EventGraph {
             sled_db: sled_db.clone(),
             dag_store: RwLock::new(dag_store),
             static_dag,
+            static_dag_blobs,
+            dag_blobs,
+            rln_historical_roots_ordered,
+            rln_historical_roots_by_value,
             datastore,
             replay_mode,
             broadcasted_ids: RwLock::new(HashSet::new()),
@@ -458,6 +546,7 @@ impl EventGraph {
             zk_keys,
             identity_state: RwLock::new(identity_state),
             rln_state: RwLock::new(RlnState::new()),
+            rln_app_id,
         });
 
         if need_prune {
@@ -467,6 +556,17 @@ impl EventGraph {
             );
             self_.dag_prune(current_genesis).await?;
         }
+
+        // Consistency check: if the static DAG has events but the
+        // historical-roots tables are empty, rebuild them by
+        // replaying the static DAG in canonical order. This handles
+        // the case where the operator manually deleted the
+        // historical-roots trees, or where this is the first startup
+        // after upgrading from a version that didn't track them.
+        //
+        // Without this, signal verification would fail for any root
+        // beyond the in-memory `recent_roots` window.
+        self_.rebuild_historical_roots_if_needed().await?;
 
         if config.hours_rotation > 0 {
             let task = StoppableTask::new();
@@ -487,9 +587,92 @@ impl EventGraph {
         Ok(self_)
     }
 
-    /// Sync just the DAG structure (headers) for a single DAG, no
-    /// event content.
+    /// Rebuild the historical-roots side-tables from the static DAG.
     ///
+    /// Called once at startup. No-op if the historical-roots tables
+    /// already match the static-DAG event count. Otherwise replays
+    /// every static-DAG event in canonical `(layer, event_id)` order
+    /// and re-records the post-mutation root for each one.
+    ///
+    /// **Side effect.** Resets the in-memory SMT to empty, then
+    /// rebuilds it leaf-by-leaf in canonical order, so the SMT and
+    /// the historical-roots tables come out consistent. The
+    /// `rln-identity-leaves` tree (which `IdentityState::new`
+    /// originally read) is implicitly re-derived; we don't read it
+    /// during rebuild because we want to honor any slashes in the
+    /// static DAG even if the leaves tree is stale.
+    async fn rebuild_historical_roots_if_needed(self: &Arc<Self>) -> Result<()> {
+        // Count static-DAG events (excluding the genesis, which has
+        // NULL_PARENTS and isn't a registration/slash).
+        let mut static_count: u64 = 0;
+        for item in self.static_dag.iter() {
+            let (_, val) = item?;
+            let ev: Event = deserialize_async(&val).await?;
+            if ev.header.parents != NULL_PARENTS {
+                static_count += 1;
+            }
+        }
+
+        let recorded_count = self.rln_historical_roots_ordered.len() as u64;
+
+        if recorded_count == static_count {
+            // Already consistent. Either both are zero (fresh node)
+            // or both match (warm restart).
+            return Ok(())
+        }
+
+        info!(
+            target: "event_graph::new",
+            "[EVENTGRAPH] Rebuilding historical-roots: {} static events, {} recorded roots",
+            static_count, recorded_count,
+        );
+
+        // Reset the historical-roots tables to a known-empty state.
+        self.rln_historical_roots_ordered.clear()?;
+        self.rln_historical_roots_by_value.clear()?;
+
+        // Reset the in-memory SMT and the leaves tree so the replay
+        // below builds it correctly from the canonical static-DAG
+        // sequence (including any slashes).
+        {
+            let mut state = self.identity_state.write().await;
+            state.clear_for_rebuild()?;
+        }
+
+        // Collect static-DAG events and sort canonically.
+        let mut events: Vec<Event> = vec![];
+        for item in self.static_dag.iter() {
+            let (_, val) = item?;
+            let ev: Event = deserialize_async(&val).await?;
+            if ev.header.parents != NULL_PARENTS {
+                events.push(ev);
+            }
+        }
+        events.sort_by(|a, b| {
+            a.header
+                .layer
+                .cmp(&b.header.layer)
+                .then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
+        });
+
+        // Replay each event through the canonical apply path.
+        for ev in events {
+            let rln_node: rln::RLNNode =
+                match darkfi_serial::deserialize_async_partial(ev.content()).await {
+                    Ok((v, _)) => v,
+                    Err(_) => continue,
+                };
+            let _ = self.apply_rln_static_event(&ev, &rln_node).await?;
+        }
+
+        info!(
+            target: "event_graph::new",
+            "[EVENTGRAPH] Historical-roots rebuild complete",
+        );
+
+        Ok(())
+    }
+
     /// After header sync, event content can be fetched lazily via
     /// [`fetch_page`] or peer [`RangeReq`] - the application pulls
     /// the events it actually wants to display or process, without
@@ -597,10 +780,13 @@ impl EventGraph {
             chunks.insert(i, c.iter().map(|h| h.id()).collect());
         }
         let mut remaining: BTreeSet<usize> = chunks.keys().cloned().collect();
-        let mut received: BTreeMap<usize, Vec<Event>> = BTreeMap::new();
         let mut peer_st: HashMap<Url, PeerStatus> = HashMap::new();
         let mut count = 0;
         let mut fs = FuturesUnordered::new();
+        // Each received chunk is (events, blobs) - blobs aligned
+        // index-wise with events. Empty `Vec<u8>` entries mean
+        // "this event has no blob from the serving peer".
+        let mut received: BTreeMap<usize, (Vec<Event>, Vec<Vec<u8>>)> = BTreeMap::new();
 
         while count < sorted.len() {
             let mut free = vec![];
@@ -625,9 +811,9 @@ impl EventGraph {
                 peer_st.insert(free[i].address().clone(), PeerStatus::Busy);
             }
             if let Some((evts, cid, ch)) = fs.next().await {
-                if let Ok(e) = evts {
+                if let Ok((e, blobs)) = evts {
                     count += e.len();
-                    received.insert(cid, e);
+                    received.insert(cid, (e, blobs));
                     peer_st.insert(ch.address().clone(), PeerStatus::Free);
                 } else {
                     remaining.insert(cid);
@@ -635,8 +821,12 @@ impl EventGraph {
                 }
             }
         }
-        for (_, chunk) in received {
-            self.dag_insert(&chunk, dag_name).await?;
+        for (_, (events_chunk, blobs_chunk)) in received {
+            // dag_insert_with_blobs handles RLN re-verification per
+            // event when blobs are present, and falls through to the
+            // trust-the-quorum path when they're not. See
+            // dag_insert_with_blobs's docstring for the policy.
+            self.dag_insert_with_blobs(&events_chunk, &blobs_chunk, dag_name).await?;
         }
         Ok(())
     }
@@ -666,6 +856,254 @@ impl EventGraph {
             self.dag_sync_headers(t).await?;
         }
         self.synced.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    /// Sync the static DAG from peers.
+    ///
+    /// The static DAG holds RLN identity events (registrations and
+    /// slashes). It is *persistent* across rotation windows - unlike
+    /// rotating DAGs, events are never pruned - and has no separate
+    /// `header_tree`, so it uses a different sync strategy:
+    ///
+    /// 1. Ask every peer for their `"static-dag"` tips.
+    /// 2. Take the tips that reach a 2/3 quorum.
+    /// 3. BFS-fetch the events and their ancestors directly via
+    ///    `EventReq` until the entire reachable subgraph is local.
+    ///
+    /// Peers serve static-DAG event requests even when the IDs are
+    /// not in their `broadcasted_ids` set (see the relaxation in
+    /// `handle_event_req`), because static-DAG state is public
+    /// consensus information. Registration-event proof verification,
+    /// duplicate detection, and commitment-tree updates are all done
+    /// through the normal `StaticPut` ingestion path
+    /// (`handle_static_put`) - but `static_sync` uses direct-insert
+    /// via [`Self::static_insert`] plus on-the-fly identity-state
+    /// application, because we're catching up rather than processing
+    /// broadcasts.
+    ///
+    /// Note: for security, this method ONLY applies events whose
+    /// blob/RLN verification passes. We do not trust peers blindly
+    /// on historical state - proofs are re-verified locally for
+    /// every single event before its effect is merged into the
+    /// identity tree. This is the same discipline `handle_static_put`
+    /// uses; see [`Self::rln_verify_static_event`].
+    pub async fn static_sync(&self) -> Result<()> {
+        static DAG_NAME: &str = "static-dag";
+
+        let channels = self.p2p.hosts().peers();
+        if channels.is_empty() {
+            return Err(Error::DagSyncFailed)
+        }
+        let timeout = self.p2p.settings().read().await.outbound_connect_timeout_max();
+
+        // Step 1: gather tips from every peer in parallel.
+        let mut tip_futs = FuturesUnordered::new();
+        for ch in channels.iter() {
+            tip_futs.push(request_tips(ch, DAG_NAME.to_string(), timeout));
+        }
+
+        let mut tip_counts: HashMap<blake3::Hash, usize> = HashMap::new();
+        let mut responded = 0usize;
+        while let Some(res) = tip_futs.next().await {
+            if let Ok(peer_tips) = res {
+                responded += 1;
+                for hashes in peer_tips.values() {
+                    for h in hashes {
+                        *tip_counts.entry(*h).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
+        // If no peer answered we have nothing to do. An empty
+        // network-side static DAG is a valid state (brand new app
+        // deployment), so we return Ok rather than error.
+        if responded == 0 {
+            return Ok(())
+        }
+
+        // Step 2: take tips at 2/3 quorum. This matches the
+        // threshold used in `sync_impl`.
+        let threshold = (responded * 2).div_ceil(3);
+        let tip_ids: HashSet<blake3::Hash> = tip_counts
+            .into_iter()
+            .filter(|(h, n)| *h != NULL_ID && *n >= threshold)
+            .map(|(h, _)| h)
+            .collect();
+
+        // What's already local?
+        let mut known: HashSet<blake3::Hash> = HashSet::new();
+        for item in self.static_dag.iter() {
+            let (k, _) = item?;
+            if let Ok(bytes) = <[u8; 32]>::try_from(&k as &[u8]) {
+                known.insert(blake3::Hash::from_bytes(bytes));
+            }
+        }
+
+        // Step 3: BFS from the quorum tips, fetching events we
+        // don't have. Any event we pull in may reference ancestors
+        // we ALSO don't have; enqueue them and keep going until the
+        // frontier is empty.
+        //
+        // Bounded at SYNC_MAX_STATIC_EVENTS (defined at module level)
+        // to defend against a malicious peer who serves a fabricated
+        // deep-ancestry chain. In practice static DAGs are small (one
+        // event per registration / slash), so this bound is
+        // comfortably above any real deployment's size.
+
+        let mut want: HashSet<blake3::Hash> = tip_ids.difference(&known).copied().collect();
+        // Events fetched during BFS, paired with their blobs (empty
+        // Vec if the peer didn't have the blob - see EventRep
+        // docstring). Index alignment is preserved through the
+        // entire pipeline up to the apply loop.
+        let mut fetched: Vec<(Event, Vec<u8>)> = vec![];
+
+        while !want.is_empty() {
+            if fetched.len() >= SYNC_MAX_STATIC_EVENTS {
+                error!(
+                    target: "event_graph::static_sync",
+                    "[STATIC_SYNC] reached {} event cap; aborting",
+                    SYNC_MAX_STATIC_EVENTS,
+                );
+                return Err(Error::DagSyncFailed)
+            }
+
+            let batch: Vec<blake3::Hash> = want.iter().copied().collect();
+            want.clear();
+
+            // Race the batch against all peers; first to respond
+            // with valid events wins. A peer that returns events we
+            // didn't ask for is striked via its protocol handler,
+            // not here -- this is a best-effort pull.
+            let mut req_futs = FuturesUnordered::new();
+            for (i, ch) in channels.iter().enumerate() {
+                req_futs.push(request_event(ch.clone(), batch.clone(), i, timeout));
+            }
+
+            let mut got_any = false;
+            while let Some((res, _, _)) = req_futs.next().await {
+                let Ok((evs, blobs)) = res else { continue };
+                if evs.is_empty() {
+                    continue
+                }
+                got_any = true;
+                for (i, ev) in evs.into_iter().enumerate() {
+                    let eid = ev.id();
+                    if !batch.contains(&eid) {
+                        // Peer sent something we didn't ask for;
+                        // ignore the rest of this reply.
+                        break
+                    }
+                    if known.insert(eid) {
+                        // New parents to chase next round.
+                        for p in ev.header.parents.iter() {
+                            if *p != NULL_ID && !known.contains(p) {
+                                want.insert(*p);
+                            }
+                        }
+                        // Pair the event with its blob (or empty if
+                        // the peer didn't supply one - that's not an
+                        // error, see EventRep doc and the fall-through
+                        // in the apply loop below).
+                        let blob = blobs.get(i).cloned().unwrap_or_default();
+                        fetched.push((ev, blob));
+                    }
+                }
+                break
+            }
+
+            if !got_any {
+                // Nobody responded usefully. Give up so we don't
+                // loop forever on an unreachable ancestor.
+                error!(
+                    target: "event_graph::static_sync",
+                    "[STATIC_SYNC] no peer served requested events; aborting",
+                );
+                return Err(Error::DagSyncFailed)
+            }
+        }
+
+        // Step 4: canonical-order the fetched events so all nodes
+        // produce the same intermediate SMT roots. Primary key:
+        // layer (matches DAG topology). Secondary key: event_id
+        // (32-byte hash, lexicographic byte order is total). Without
+        // the tie-breaker, two events at the same layer could be
+        // applied in different orders on different nodes, producing
+        // different intermediate roots and breaking sync-time signal
+        // verification. See the design comment on
+        // `apply_rln_static_event` for the full rationale.
+        fetched.sort_by(|(a, _), (b, _)| {
+            a.header
+                .layer
+                .cmp(&b.header.layer)
+                .then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
+        });
+
+        for (ev, blob) in fetched {
+            // Skip if someone else inserted it concurrently.
+            if self.static_dag.contains_key(ev.id().as_bytes())? {
+                continue
+            }
+
+            // Structural validation always runs.
+            if !ev.validate_new() {
+                continue
+            }
+            let rln_node: rln::RLNNode =
+                match darkfi_serial::deserialize_async_partial(ev.content()).await {
+                    Ok((v, _)) => v,
+                    Err(_) => continue,
+                };
+
+            // RLN verification is mandatory. A non-genesis static
+            // event without a blob during sync is treated as
+            // misbehavior: either the serving peer is buggy or
+            // adversarial, or the originator never persisted the blob
+            // (which itself is a protocol violation). Skip with a
+            // loud log - we don't strike here because static_sync
+            // doesn't have a single peer to attribute the failure
+            // to (the quorum collected blobs from multiple peers).
+            if blob.is_empty() {
+                error!(
+                    target: "event_graph::static_sync",
+                    "[STATIC_SYNC] no blob available for static event {}; skipping. \
+                     Every static-DAG event must carry an RLN blob.",
+                    ev.id(),
+                );
+                continue
+            }
+
+            let outcome = self.rln_verify_static_event(&rln_node, &blob, ev.header.timestamp).await;
+            match outcome {
+                rln::StaticEventCheck::AcceptedRegistration(_) |
+                rln::StaticEventCheck::AcceptedSlash(_) => {
+                    // apply_rln_static_event handles both Registration
+                    // and Slashing branches and also records the
+                    // post-mutation root in the historical-roots
+                    // side-tables.
+                    let _ = self.apply_rln_static_event(&ev, &rln_node).await;
+                    self.static_blob_store(&ev.id(), &blob)?;
+                    self.static_insert(&ev).await?;
+                }
+                rln::StaticEventCheck::Rejected | rln::StaticEventCheck::Malicious => {
+                    // A historical event whose blob fails
+                    // re-verification despite being held by the 2/3
+                    // quorum is a serious finding -- either the blob
+                    // was tampered with, the quorum was compromised,
+                    // or our verifying keys diverged. Log loudly and
+                    // skip.
+                    error!(
+                        target: "event_graph::static_sync",
+                        "[STATIC_SYNC] historical blob FAILED re-verification for event {}: {:?}; \
+                         skipping event despite quorum inclusion",
+                        ev.id(),
+                        outcome,
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -704,6 +1142,28 @@ impl EventGraph {
     async fn dag_prune(&self, genesis: Event) -> Result<()> {
         let mut bcast = self.broadcasted_ids.write().await;
         let mut cur = self.current_genesis.write().await;
+
+        // Before the DAG store evicts the oldest DAG (which would
+        // drop its main_tree), enumerate the about-to-be-dropped
+        // event IDs so we can remove their blobs from `dag_blobs`.
+        // Without this, blob entries would orphan and accumulate
+        // forever - the side-table is not bounded by the rotation
+        // window on its own.
+        if let Some(limit) = self.config.max_dags {
+            let store = self.dag_store.read().await;
+            if store.dags.len() >= limit {
+                if let Some((_, oldest)) = store.dags.iter().next() {
+                    for item in oldest.main_tree.iter() {
+                        let (eid, _) = match item {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        let _ = self.dag_blobs.remove(&eid);
+                    }
+                }
+            }
+        }
+
         self.dag_store.write().await.add_dag(&genesis, self.config.max_dags).await;
         *cur = genesis;
         *bcast = HashSet::new();
@@ -726,20 +1186,156 @@ impl EventGraph {
         }
     }
 
+    /// Insert events into a rotating DAG **without RLN verification**.
+    ///
+    /// This is the post-verification entry point for callers that
+    /// have already verified the proof separately. Two legitimate
+    /// callers in production:
+    ///
+    /// * `handle_event_put` - already ran `rln_verify_signal` and
+    ///   recorded the share. Calling `dag_insert_with_blobs` would
+    ///   trigger the duplicate-share rejection.
+    /// * The IRC client's own outbound flow - same shape.
     pub async fn dag_insert(&self, events: &[Event], dag_name: &str) -> Result<Vec<blake3::Hash>> {
+        // Implementation just runs the structural-insert path;
+        // dag_insert_with_blobs reaches the same shared inner code
+        // when called with a `skip_verify=true` shortcut, which is
+        // what an empty `blobs` slice now means after the strictness
+        // tightening below -- but only via this private wrapper.
+        self.dag_insert_inner(events, &[], /* require_blobs */ false, dag_name).await
+    }
+
+    /// Insert events into a rotating DAG, with mandatory RLN
+    /// verification.
+    ///
+    /// `blobs` is index-aligned with `events`. Every non-genesis
+    /// event MUST have a non-empty `blobs[i]`; events that don't
+    /// (whether `blobs` is empty, shorter, or has an empty entry
+    /// at position `i`) are rejected with a loud log. This is the
+    /// strict policy required for sync paths - a peer that serves
+    /// an event without its blob is buggy or adversarial.
+    ///
+    /// On `Slashable`, this method does NOT broadcast a slash -
+    /// that's the protocol layer's job (see
+    /// `proto::handle_event_put::verify_rln_signal`). Sync-time
+    /// detection of a slashable conflict simply skips the event.
+    /// We don't want a node coming online to flood the network
+    /// with stale slash broadcasts.
+    pub async fn dag_insert_with_blobs(
+        &self,
+        events: &[Event],
+        blobs: &[Vec<u8>],
+        dag_name: &str,
+    ) -> Result<Vec<blake3::Hash>> {
+        self.dag_insert_inner(events, blobs, /* require_blobs */ true, dag_name).await
+    }
+
+    /// Inner implementation shared by both insert paths. The
+    /// `require_blobs` flag selects strict (sync) vs. lenient
+    /// (post-verified) semantics.
+    async fn dag_insert_inner(
+        &self,
+        events: &[Event],
+        blobs: &[Vec<u8>],
+        require_blobs: bool,
+        dag_name: &str,
+    ) -> Result<Vec<blake3::Hash>> {
         if events.is_empty() {
             return Ok(vec![])
         }
 
+        // Pre-flight RLN verification. Done BEFORE acquiring the
+        // DAG-store write lock so a slow proof verification doesn't
+        // hold up other inserts.
+        //
+        // Events we already have are skipped without verification.
+        // This matters because `rln_verify_signal` records the share
+        // on `Accepted`, and re-running it for an already-seen event
+        // would trip its duplicate-share check (returning `Rejected`)
+        // - which would be incorrect: the event is legitimate, we
+        // just already know about it.
         let dag_ts = u64::from_str(dag_name)?;
+        let already_have: Vec<bool> = {
+            let store = self.dag_store.read().await;
+            let slot = store.get_slot(&dag_ts);
+            events
+                .iter()
+                .map(|ev| match slot {
+                    Some(s) => s.main_tree.contains_key(ev.id().as_bytes()).unwrap_or(false),
+                    None => false,
+                })
+                .collect()
+        };
+
+        let mut accepted: Vec<usize> = Vec::with_capacity(events.len());
+        for (i, ev) in events.iter().enumerate() {
+            // Already-known events go through structurally (the
+            // downstream `contains_key` check will skip them) but
+            // skip the RLN verifier to avoid double-recording the
+            // share for the same (epoch, internal_nullifier, x, y)
+            // tuple.
+            if already_have[i] {
+                accepted.push(i);
+                continue
+            }
+            // Genesis-shaped events have no blob and no proof -
+            // they're consensus inputs, not user signals.
+            if ev.header.parents == NULL_PARENTS {
+                accepted.push(i);
+                continue
+            }
+            let blob = blobs.get(i).cloned().unwrap_or_default();
+            if blob.is_empty() {
+                if require_blobs {
+                    error!(
+                        target: "event_graph::dag_insert",
+                        "[DAG_INSERT] sync event {} arrived without an RLN blob; rejecting. \
+                         Every non-genesis rotating-DAG event must carry a blob.",
+                        ev.id(),
+                    );
+                    continue
+                }
+                // Lenient path: caller pre-verified. Accept the
+                // event structurally without running the RLN
+                // verifier on it.
+                accepted.push(i);
+                continue
+            }
+            match self.rln_verify_signal(ev, &blob).await {
+                rln::SignalCheck::Accepted => accepted.push(i),
+                rln::SignalCheck::Rejected => {
+                    error!(
+                        target: "event_graph::dag_insert",
+                        "[DAG_INSERT] sync event {} failed RLN re-verification; skipping",
+                        ev.id(),
+                    );
+                }
+                rln::SignalCheck::Slashable(_) => {
+                    // The conflicting share is recorded inside
+                    // `rln_verify_signal` ONLY on `Accepted`. On
+                    // `Slashable` it returns the conflicting shares
+                    // *without* mutating metadata, so we don't
+                    // double-record. We don't broadcast a slash
+                    // here - that's the live broadcast handler's
+                    // job. We just skip the event.
+                    error!(
+                        target: "event_graph::dag_insert",
+                        "[DAG_INSERT] sync event {} is slashable (slot reuse); skipping",
+                        ev.id(),
+                    );
+                }
+            }
+        }
+
         let mut bcast = self.broadcasted_ids.write().await;
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
 
-        let mut ids = Vec::with_capacity(events.len());
+        let mut ids = Vec::with_capacity(accepted.len());
         let mut overlay = SledTreeOverlay::new(&slot.main_tree);
 
-        for ev in events {
+        for &i in &accepted {
+            let ev = &events[i];
             let eid = ev.id();
             if ev.header.parents == NULL_PARENTS {
                 continue
@@ -758,6 +1354,15 @@ impl EventGraph {
             if self.replay_mode {
                 replayer_log(&self.datastore, "insert".into(), se)?;
             }
+
+            // Persist the blob alongside the event for future
+            // sync-time re-verification by other late-joiners.
+            if let Some(blob) = blobs.get(i) {
+                if !blob.is_empty() {
+                    let _ = self.dag_blob_store(&eid, blob);
+                }
+            }
+
             ids.push(eid);
         }
 
@@ -767,7 +1372,8 @@ impl EventGraph {
             return Ok(vec![])
         }
 
-        for ev in events {
+        for &i in &accepted {
+            let ev = &events[i];
             let eid = ev.id();
             if ev.header.parents == NULL_PARENTS {
                 continue
@@ -824,6 +1430,15 @@ impl EventGraph {
             if let Some(b) = slot.main_tree.get(eid.as_bytes())? {
                 return Ok(Some(deserialize_async(&b).await?))
             }
+        }
+
+        // Also check the static DAG. Static events (RLN registrations
+        // and slashes) are public consensus state, so they're served
+        // alongside rotating-DAG events through the same EventReq
+        // path. This is what lets a fresh peer's `static_sync` walk
+        // ancestry through EventReq after discovering tips.
+        if let Some(b) = self.static_dag.get(eid.as_bytes())? {
+            return Ok(Some(deserialize_async(&b).await?))
         }
 
         Ok(None)
@@ -958,6 +1573,308 @@ impl EventGraph {
         compute_unreferenced_tips(&self.static_dag).await
     }
 
+    /// Persist the original RLN blob for a static-DAG event. The
+    /// blob is the wire payload from the originating `StaticPut` -
+    /// Persist the original RLN blob for a static-DAG event. The
+    /// blob is the wire payload from the originating `StaticPut` -
+    /// proof + public inputs + attestation - needed to re-verify
+    /// the proof at sync time by late-joining peers.
+    ///
+    /// Writing the same `(eid, blob)` repeatedly is safe.
+    pub fn static_blob_store(&self, eid: &blake3::Hash, blob: &[u8]) -> Result<()> {
+        self.static_dag_blobs.insert(eid.as_bytes(), blob)?;
+        Ok(())
+    }
+
+    /// Look up the original RLN blob for a static-DAG event.
+    ///
+    /// Returns `Ok(None)` only for legitimate "not stored" cases -
+    /// a peer that's never seen the event, or an event that pre-dates
+    /// the side-table. The verification path in `static_sync` treats
+    /// missing blobs on non-genesis events as a sync failure, not as
+    /// a fall-through.
+    pub fn static_blob_fetch(&self, eid: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        Ok(self.static_dag_blobs.get(eid.as_bytes())?.map(|ivec| ivec.to_vec()))
+    }
+
+    /// Persist the original RLN signal blob for a rotating-DAG event.
+    ///
+    /// Mirror of [`Self::static_blob_store`] but for rotating-DAG
+    /// events. Idempotent. Called after successful RLN verification
+    /// in `handle_event_put`, and during sync by
+    /// `dag_insert_with_blobs` when the peer included a blob in
+    /// `EventRep`.
+    pub fn dag_blob_store(&self, eid: &blake3::Hash, blob: &[u8]) -> Result<()> {
+        self.dag_blobs.insert(eid.as_bytes(), blob)?;
+        Ok(())
+    }
+
+    /// Look up the original RLN signal blob for a rotating-DAG
+    /// event. Returns `Ok(None)` if not stored - see
+    /// [`Self::static_blob_fetch`] for the exhaustive list of
+    /// reasons a blob may legitimately be missing.
+    ///
+    /// Note: rotating-DAG blobs are pruned alongside their DAGs
+    /// (see `dag_blobs_prune`). Older-than-window events therefore
+    /// don't accumulate blobs in this side-table.
+    pub fn dag_blob_fetch(&self, eid: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        Ok(self.dag_blobs.get(eid.as_bytes())?.map(|ivec| ivec.to_vec()))
+    }
+
+    /// Apply a static-DAG event (registration or slash) to the
+    /// identity-state SMT, and record the resulting root in the
+    /// historical-roots side-tables.
+    ///
+    /// **This is the single canonical entry point** for SMT
+    /// mutation. All callers - live broadcast (`handle_static_put`),
+    /// originator (`nickserv.rs::handle_register`), and sync
+    /// (`static_sync` apply loop) - go through here. Bypassing it
+    /// will desynchronize the SMT from the historical-roots tables,
+    /// which silently breaks signal verification.
+    ///
+    /// **Canonical order requirement.** Two nodes processing the
+    /// same set of static events must produce the same sequence of
+    /// intermediate roots. SMTs are commutative under set-of-leaves
+    /// (final root is order-independent) but the *intermediate*
+    /// roots produced during application are order-dependent. We
+    /// pin the order with `(layer, event_id)`: layer is the primary
+    /// key (defined by the event's parent links and consensus-agreed),
+    /// event_id is the tie-breaker within a layer (32-byte hash,
+    /// total-ordered lexicographically).
+    ///
+    /// In live broadcast and originator paths, events arrive one at
+    /// a time; the canonical-order requirement is automatically
+    /// satisfied because each event's layer is greater than its
+    /// parents'. In sync, the caller must sort by `(layer, event_id)`
+    /// before invoking this method (see `static_sync`).
+    ///
+    /// **Returns** the post-mutation SMT root, or an error if the
+    /// SMT mutation itself fails. A duplicate-registration or
+    /// slash-of-nonexistent are both treated as soft no-ops at the
+    /// SMT layer, but we still record the root (which equals the
+    /// pre-call root in that case) -- this preserves the invariant
+    /// that "every static-DAG event has a corresponding entry in
+    /// rln-historical-roots-ordered" without complicating the
+    /// caller's logic.
+    pub async fn apply_rln_static_event(
+        &self,
+        ev: &Event,
+        node: &rln::RLNNode,
+    ) -> Result<pallas::Base> {
+        let mut state = self.identity_state.write().await;
+
+        match node {
+            rln::RLNNode::Registration(commitment) => {
+                // Soft-fail on duplicate (race with another peer).
+                let _ = state.register(*commitment);
+            }
+            rln::RLNNode::Slashing(commitment) => {
+                // Idempotent - slashing a non-present identity is
+                // a no-op.
+                let _ = state.slash(*commitment);
+            }
+        }
+
+        let new_root = state.root();
+        drop(state);
+
+        // Record the root in both side-tables. We do this even if
+        // the SMT mutation was a no-op (duplicate register, slash of
+        // missing) so the historical-roots table has one entry per
+        // static-DAG event. This makes canonical-order replay simple:
+        // every event has exactly one entry, no conditional skips.
+        let key = encode_historical_root_key(ev.header.layer, &ev.id());
+        let value = encode_historical_root_value(&new_root, ev.header.timestamp);
+        self.rln_historical_roots_ordered.insert(key, value.as_slice())?;
+        self.rln_historical_roots_by_value.insert(new_root.to_repr(), key.as_slice())?;
+
+        Ok(new_root)
+    }
+
+    /// Check whether `root` is a valid SMT root for a signal whose
+    /// `signal_timestamp` is given (in millis-since-epoch).
+    ///
+    /// A root is valid if it was the live root at any time in the
+    /// drift window `[signal_timestamp - DRIFT, signal_timestamp +
+    /// DRIFT]`. The drift symmetry handles two distinct concerns:
+    ///
+    /// * **Forward drift** (signal sees a slightly stale root): the
+    ///   originator built a proof against root `R_n`, then someone
+    ///   else registered, producing `R_{n+1}`, before the signal
+    ///   reached the verifier. The signal's claimed `R_n` is older
+    ///   than the verifier's current root by an amount up to the
+    ///   propagation delay. Accept if R_n was current within DRIFT
+    ///   of the signal's timestamp.
+    ///
+    /// * **Backward drift** (signal arrives before its root): rare
+    ///   but possible if the static-DAG broadcast is racing the
+    ///   rotating-DAG broadcast. The originator's machine knew about
+    ///   a registration that hadn't fully propagated yet. We tolerate
+    ///   up to DRIFT of backward skew.
+    ///
+    /// The check uses `rln_historical_roots_by_value` to find the
+    /// canonical position of `root`, then `rln_historical_roots_ordered`
+    /// to bracket the time interval during which `root` was live.
+    /// The interval starts at the timestamp of the event that
+    /// produced `root` and ends just before the next event's
+    /// timestamp (or `u64::MAX` if `root` is currently live).
+    ///
+    /// This subsumes the old `recent_roots` window as a special case
+    /// (live verification = signal_timestamp ~= now). The in-memory
+    /// `recent_roots` cache in `IdentityState` remains as a fast
+    /// path for the live-broadcast hot loop; this method is consulted
+    /// when the cache misses.
+    pub fn is_root_valid_at(&self, root: &pallas::Base, signal_timestamp: u64) -> Result<bool> {
+        // Reverse lookup: where in the canonical sequence is `root`?
+        let Some(key_bytes) = self.rln_historical_roots_by_value.get(root.to_repr())? else {
+            return Ok(false)
+        };
+
+        // Read the entry that produced this root.
+        let Some(value_bytes) = self.rln_historical_roots_ordered.get(&key_bytes)? else {
+            // Inconsistency between the two tables (shouldn't happen
+            // under normal operation; might happen if a write was
+            // partially applied during a crash). Treat as not-found.
+            return Ok(false)
+        };
+        let (recorded_root, root_timestamp) = decode_historical_root_value(&value_bytes)?;
+        if &recorded_root != root {
+            // Same key collision - should be impossible because the
+            // by_value index is keyed on the root itself, but defend
+            // against future code changes.
+            return Ok(false)
+        }
+
+        // The interval during which `root` was live ends at the
+        // timestamp of the next event in canonical order, or
+        // u64::MAX if `root` is the current live root.
+        //
+        // We need the strictly-greater key. sled's range-from-exclusive
+        // pattern is range((Excluded(key), Unbounded)).next().
+        let next_timestamp: u64 = {
+            use std::ops::Bound::{Excluded, Unbounded};
+            match self
+                .rln_historical_roots_ordered
+                .range::<&[u8], _>((Excluded(key_bytes.as_ref()), Unbounded))
+                .next()
+            {
+                Some(Ok((_, val))) => decode_historical_root_value(&val)?.1,
+                Some(Err(_)) | None => u64::MAX,
+            }
+        };
+
+        // Drift window. Reuse EVENT_TIME_DRIFT for consistency with
+        // event-graph timestamp validation.
+        let drift = EVENT_TIME_DRIFT;
+        let lo = signal_timestamp.saturating_sub(drift);
+        let hi = signal_timestamp.saturating_add(drift);
+
+        // `root` was live during [root_timestamp, next_timestamp).
+        // Acceptable iff this interval intersects [lo, hi].
+        Ok(root_timestamp <= hi && next_timestamp > lo)
+    }
+}
+
+fn encode_historical_root_key(layer: u64, event_id: &blake3::Hash) -> [u8; 40] {
+    let mut buf = [0u8; 40];
+    buf[..8].copy_from_slice(&layer.to_be_bytes());
+    buf[8..].copy_from_slice(event_id.as_bytes());
+    buf
+}
+
+fn encode_historical_root_value(root: &pallas::Base, timestamp: u64) -> [u8; 40] {
+    let mut buf = [0u8; 40];
+    buf[..32].copy_from_slice(&root.to_repr());
+    buf[32..].copy_from_slice(&timestamp.to_be_bytes());
+    buf
+}
+
+fn decode_historical_root_value(bytes: &[u8]) -> Result<(pallas::Base, u64)> {
+    if bytes.len() != 40 {
+        return Err(Error::Custom(format!(
+            "historical-root value must be 40 bytes, got {}",
+            bytes.len()
+        )))
+    }
+    let mut root_repr = [0u8; 32];
+    root_repr.copy_from_slice(&bytes[..32]);
+    let root: pallas::Base = match pallas::Base::from_repr(root_repr).into() {
+        Some(r) => r,
+        None => return Err(Error::Custom("invalid root encoding".into())),
+    };
+    let mut ts_bytes = [0u8; 8];
+    ts_bytes.copy_from_slice(&bytes[32..]);
+    Ok((root, u64::from_be_bytes(ts_bytes)))
+}
+
+impl EventGraph {
+    /// Return a JSON-RPC response representing the current state of
+    /// the event graph.
+    ///
+    /// Shape (matches [`util::recreate_from_replayer_log`] so clients
+    /// can reuse their parsers):
+    ///
+    /// ```json
+    /// {
+    ///   "eventgraph_info": {
+    ///     "dag": {
+    ///       "<event-id-hex>": <event>,
+    ///       ...
+    ///     }
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// Walks every event currently held in every rotating DAG *and*
+    /// every event in the static DAG. Genesis events are included.
+    #[cfg(feature = "rpc")]
+    pub async fn eventgraph_info(
+        &self,
+        id: u16,
+        _params: crate::rpc::util::JsonValue,
+    ) -> crate::rpc::jsonrpc::JsonResult {
+        use crate::rpc::{
+            jsonrpc::{JsonResponse, JsonResult},
+            util::{json_map, JsonValue},
+        };
+
+        let mut dag = HashMap::new();
+
+        // Walk every rotating DAG.
+        for (_, slot) in self.dag_store.read().await.dags.iter() {
+            for item in slot.main_tree.iter() {
+                let (eid, val) = match item {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let Ok(ev) = deserialize_async::<Event>(&val).await else { continue };
+                let key = blake3::Hash::from_bytes(match (&eid as &[u8]).try_into() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                });
+                dag.insert(key.to_string(), JsonValue::from(ev));
+            }
+        }
+
+        // And the static DAG.
+        for item in self.static_dag.iter() {
+            let (eid, val) = match item {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let Ok(ev) = deserialize_async::<Event>(&val).await else { continue };
+            let key = blake3::Hash::from_bytes(match (&eid as &[u8]).try_into() {
+                Ok(b) => b,
+                Err(_) => continue,
+            });
+            dag.insert(key.to_string(), JsonValue::from(ev));
+        }
+
+        let values = json_map([("dag", JsonValue::Object(dag))]);
+        let result = JsonValue::Object(HashMap::from([("eventgraph_info".into(), values)]));
+        JsonResult::Response(JsonResponse::new(result, id))
+    }
+
     pub fn deg_enable(&self) {
         self.deg_enabled.store(true, Ordering::Release);
     }
@@ -980,6 +1897,321 @@ impl EventGraph {
 
     pub async fn deg_notify(&self, ev: DegEvent) {
         self.deg_publisher.notify(ev).await;
+    }
+
+    /// Subscribe to rotating-DAG event insertions.
+    ///
+    /// Each subscriber receives a clone of every [`Event`] that
+    /// passes validation and is committed via `dag_insert`. The
+    /// publisher fires *after* state mutation, so subscribers can
+    /// rely on the event being durably present in the DAG by the
+    /// time they observe it.
+    ///
+    /// Used to build live JSON-RPC subscription endpoints (e.g.
+    /// the Gource-feeding endpoint in DarkIRC). Bridge a
+    /// [`Subscription`] to a `JsonSubscriber` in the application
+    /// layer; this method itself contains no JSON-RPC logic.
+    pub async fn event_subscribe(&self) -> Subscription<Event> {
+        self.event_pub.clone().subscribe().await
+    }
+
+    /// Subscribe to static-DAG event insertions (RLN registrations
+    /// and slashes). Mirrors [`Self::event_subscribe`] but for the
+    /// static DAG. See that method for semantics.
+    pub async fn static_subscribe(&self) -> Subscription<Event> {
+        self.static_pub.clone().subscribe().await
+    }
+
+    /// The app identifier mixed into RLN external nullifiers.
+    /// Exposed so the proto layer (and clients constructing signal
+    /// proofs) can use the same value the verifier uses.
+    pub fn rln_app_id(&self) -> rln::RlnAppId {
+        self.rln_app_id
+    }
+
+    /// Build a membership proof for an identity commitment, plus the
+    /// current root.
+    ///
+    /// This is the *only* sanctioned path for clients to produce a
+    /// signal proof - they should not be holding their own copy of
+    /// the SMT (the previous `event_graph.rln_identity_tree`
+    /// pattern). Centralising this keeps client and verifier in
+    /// agreement on the root they're proving against.
+    pub async fn rln_membership_path(
+        &self,
+        commitment: &darkfi_sdk::pasta::pallas::Base,
+    ) -> (darkfi_sdk::pasta::pallas::Base, darkfi_sdk::crypto::smt::PathFp) {
+        let s = self.identity_state.read().await;
+        (s.root(), s.prove_membership(commitment))
+    }
+
+    /// True if the given identity commitment is registered.
+    pub async fn rln_contains(&self, commitment: &darkfi_sdk::pasta::pallas::Base) -> bool {
+        self.identity_state.read().await.contains(commitment)
+    }
+
+    /// Verify an RLN signal blob against this event graph's state.
+    ///
+    /// The returned variant tells the caller what to do:
+    /// * `Accepted` - proof valid, no conflict, share recorded.
+    /// * `Rejected` - drop silently (bad proof, bad bounds, bad
+    ///   root, exact duplicate).
+    /// * `Slashable(shares)` - different `(x, y)` for the same
+    ///   internal nullifier; the caller (protocol layer) should
+    ///   build and broadcast a slash from these shares.
+    ///
+    /// Critical invariant: `Rejected` and `Slashable` outcomes never
+    /// mutate `metadata`. `Accepted` is the only mutating outcome.
+    /// This is what prevents share-poisoning by an adversary who
+    /// observes an honest internal_nullifier and tries to forge a
+    /// share against it.
+    pub async fn rln_verify_signal(&self, event: &Event, blob: &[u8]) -> rln::SignalCheck {
+        use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
+        use darkfi_serial::deserialize_async_partial;
+        use rln::{epoch_of, hash_event, Blob, SignalCheck, MAX_MSG_LIMIT};
+
+        let rcvd: Blob = match deserialize_async_partial(blob).await {
+            Ok((v, _)) => v,
+            Err(_) => return SignalCheck::Rejected,
+        };
+
+        // Defensive bounds. The proof PI binds these too, but
+        // checking up front lets us skip an expensive verify() call
+        // for trivially malformed blobs.
+        if rcvd.user_msg_limit == 0 || rcvd.user_msg_limit > MAX_MSG_LIMIT {
+            return SignalCheck::Rejected
+        }
+
+        let epoch_n = epoch_of(event.header.timestamp);
+        let epoch_field = pallas::Base::from(epoch_n);
+        let app_id = self.rln_app_id();
+        let ext_null = poseidon_hash([epoch_field, app_id.as_field()]);
+        let x = hash_event(event);
+
+        // 1) The merkle root must be valid for a signal at this
+        //    timestamp. We accept any root that was the live SMT
+        //    root at any time within EVENT_TIME_DRIFT of the signal's
+        //    timestamp. This subsumes the old "recent_roots window"
+        //    behaviour as a special case (live verification, signal
+        //    timestamp ~= now) AND supports sync of historical signals
+        //    (signal timestamp = signing time, root corresponds to
+        //    that historical state).
+        //
+        //    Hot-path optimization: check the in-memory recent_roots
+        //    cache first. For live broadcasts (the overwhelming
+        //    majority of verifications) the root will be in the
+        //    cache and we skip the sled lookup.
+        {
+            let id_state = self.identity_state.read().await;
+            if !id_state.is_known_root(&rcvd.merkle_root) {
+                drop(id_state);
+                match self.is_root_valid_at(&rcvd.merkle_root, event.header.timestamp) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        // Useful diagnostic: this rejection path
+                        // catches both "garbage root" (attacker
+                        // submitted a forged root) and "slashed-user
+                        // replay" (slashed identity claiming a
+                        // pre-slash root after the propagation
+                        // window expired). The two are
+                        // indistinguishable from the verifier's
+                        // perspective by design - RLN-V2 privacy
+                        // guarantees prevent identifying the
+                        // signer. But observed in aggregate, a
+                        // burst of these from a single peer is a
+                        // strong signal of replay-after-slash
+                        // misbehavior, useful for operators
+                        // debugging "why are my messages being
+                        // rejected" or investigating peer abuse.
+                        warn!(
+                            target: "event_graph::rln_verify_signal",
+                            "[RLN] Signal rejected: merkle_root not valid at signal \
+                             timestamp {}. Possible causes: (1) forged or out-of-sync \
+                             root, (2) slashed identity replaying against a pre-slash \
+                             root after the propagation window expired. event_id={}, \
+                             root={:?}",
+                            event.header.timestamp,
+                            event.id(),
+                            rcvd.merkle_root,
+                        );
+                        return SignalCheck::Rejected
+                    }
+                    Err(e) => {
+                        error!(
+                            target: "event_graph::rln_verify_signal",
+                            "[RLN] is_root_valid_at lookup failed for event {}: {e}",
+                            event.id(),
+                        );
+                        return SignalCheck::Rejected
+                    }
+                }
+            }
+        }
+
+        // 2) Verify the ZK proof. PI order MUST match
+        //    constrain_instance() in rlnv2-diff-signal.zk:
+        //      root, external_nullifier, user_message_limit, x, y, internal_nullifier
+        let pi = vec![
+            rcvd.merkle_root,
+            ext_null,
+            pallas::Base::from(rcvd.user_msg_limit),
+            x,
+            rcvd.y,
+            rcvd.internal_nullifier,
+        ];
+        if rcvd.proof.verify(&self.zk_keys.signal_vk, &pi).is_err() {
+            return SignalCheck::Rejected
+        }
+
+        // 3) Now consult the metadata table. Any share we look at
+        //    here is guaranteed to be from a valid proof.
+        let mut state = self.rln_state.write().await;
+
+        // Prune metadata relative to THIS signal's epoch, not
+        // wall-clock. The retention window is conceptually
+        // "epochs near the signal we're processing", and the only
+        // entries that matter for reuse detection are siblings
+        // within `METADATA_RETAIN_EPOCHS` of `epoch_n`.
+        //
+        // In production, signals carry roughly-current wall-clock
+        // timestamps, so `epoch_n ~= current_epoch()` and this is
+        // equivalent to the previous `current_epoch()`-based prune.
+        // The change matters in three places:
+        //
+        //  * Sync of historical signals: a late-arriving signal
+        //    keeps its epoch's metadata visible long enough for
+        //    the verifier to detect reuse. With wall-clock prune,
+        //    a signal old enough to be outside the retention
+        //    window would always silently lose its sibling shares
+        //    before they could be matched.
+        //
+        //  * Tests with deterministic event timestamps: the
+        //    verifier and the metadata stay consistent regardless
+        //    of when the test runs.
+        //
+        //  * Minor DoS surface: a peer with a far-future system
+        //    clock no longer causes mass-wipe of real metadata
+        //    before consultation.
+        state.metadata.prune_old(epoch_n);
+
+        if state.metadata.is_duplicate(epoch_n, &rcvd.internal_nullifier, &x, &rcvd.y) {
+            return SignalCheck::Rejected
+        }
+
+        if state.metadata.is_reused(epoch_n, &rcvd.internal_nullifier) {
+            let mut shares = state.metadata.get_shares(epoch_n, &rcvd.internal_nullifier);
+            shares.push((x, rcvd.y));
+            return SignalCheck::Slashable(shares)
+        }
+
+        state.metadata.add_share(epoch_n, rcvd.internal_nullifier, x, rcvd.y);
+        SignalCheck::Accepted
+    }
+
+    /// Verify a static-DAG event (RLN registration or slashing)
+    /// against this event graph's state.
+    ///
+    /// This is the testable core of the protocol-layer
+    /// `handle_static_put`. It performs all checks that the
+    /// protocol layer does - bounds, attestation, proof, root
+    /// recency -- and returns a [`rln::StaticEventCheck`] outcome
+    /// telling the caller what to do next.
+    ///
+    /// **This method does NOT mutate state.** The caller is
+    /// responsible for invoking `IdentityState::register` /
+    /// `slash` on `Accepted*` outcomes, and for striking the peer
+    /// on `Malicious`. Separating decision from action makes the
+    /// behaviour fully testable and lets the protocol layer keep
+    /// its mutation under a single locked critical section.
+    pub async fn rln_verify_static_event(
+        &self,
+        rln_node: &rln::RLNNode,
+        blob: &[u8],
+        event_timestamp: u64,
+    ) -> rln::StaticEventCheck {
+        use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
+        use darkfi_serial::deserialize_async_partial;
+        use rln::{RLNNode, RegistrationBlob, SlashBlob, StaticEventCheck, MAX_MSG_LIMIT};
+
+        match rln_node {
+            RLNNode::Registration(commitment) => {
+                let reg: RegistrationBlob = match deserialize_async_partial(blob).await {
+                    Ok((v, _)) => v,
+                    Err(_) => return StaticEventCheck::Rejected,
+                };
+
+                // Bounds. Out-of-range limits are unambiguous misbehavior.
+                if reg.user_message_limit == 0 ||
+                    reg.user_message_limit > MAX_MSG_LIMIT ||
+                    reg.max_message_limit != MAX_MSG_LIMIT
+                {
+                    return StaticEventCheck::Malicious
+                }
+
+                // Attestation must permit the claimed limit.
+                // (Free-tier cap; `Staked` rejected until the stake
+                // contract is online.)
+                if !reg.attestation.permits(reg.user_message_limit) {
+                    return StaticEventCheck::Malicious
+                }
+
+                // Duplicate registration is a soft Reject (we may
+                // have raced a peer), checked here so we don't
+                // pay the proof-verification cost for known leaves.
+                if self.identity_state.read().await.contains(commitment) {
+                    return StaticEventCheck::Rejected
+                }
+
+                // Proof.
+                let pi = vec![
+                    *commitment,
+                    pallas::Base::from(reg.user_message_limit),
+                    pallas::Base::from(reg.max_message_limit),
+                ];
+                if reg.proof.verify(&self.zk_keys.register_vk, &pi).is_err() {
+                    return StaticEventCheck::Rejected
+                }
+
+                StaticEventCheck::AcceptedRegistration(*commitment)
+            }
+            RLNNode::Slashing(commitment) => {
+                let sl: SlashBlob = match deserialize_async_partial(blob).await {
+                    Ok((v, _)) => v,
+                    Err(_) => return StaticEventCheck::Rejected,
+                };
+
+                let pi = vec![sl.identity_secret_hash, sl.merkle_root];
+                if sl.proof.verify(&self.zk_keys.slash_vk, &pi).is_err() {
+                    return StaticEventCheck::Rejected
+                }
+
+                // Slash event names a specific commitment; verify
+                // that the recovered identity_secret_hash actually
+                // maps to it. Mismatch is unambiguous misbehavior.
+                let rebuilt = poseidon_hash([sl.identity_secret_hash]);
+                if *commitment != rebuilt {
+                    return StaticEventCheck::Malicious
+                }
+
+                // The proof's root must be a valid SMT root at the
+                // slash event's timestamp. Same logic as signal
+                // verification: use the time-window check, which
+                // accepts any root that was live within DRIFT of the
+                // slash timestamp.
+                {
+                    let id_state = self.identity_state.read().await;
+                    if !id_state.is_known_root(&sl.merkle_root) {
+                        drop(id_state);
+                        match self.is_root_valid_at(&sl.merkle_root, event_timestamp) {
+                            Ok(true) => {}
+                            Ok(false) | Err(_) => return StaticEventCheck::Rejected,
+                        }
+                    }
+                }
+
+                StaticEventCheck::AcceptedSlash(rebuilt)
+            }
+        }
     }
 }
 
@@ -1019,7 +2251,7 @@ async fn request_event(
     ids: Vec<blake3::Hash>,
     cid: usize,
     timeout: u64,
-) -> (Result<Vec<Event>>, usize, Arc<Channel>) {
+) -> (Result<(Vec<Event>, Vec<Vec<u8>>)>, usize, Arc<Channel>) {
     let sub = match peer.subscribe_msg::<EventRep>().await {
         Ok(s) => s,
         Err(e) => return (Err(e), cid, peer),
@@ -1032,7 +2264,7 @@ async fn request_event(
     match sub.receive_with_timeout(timeout).await {
         Ok(r) => {
             sub.unsubscribe().await;
-            (Ok(r.0.clone()), cid, peer)
+            (Ok((r.0.clone(), r.1.clone())), cid, peer)
         }
         Err(_) => (Err(Error::EventNotFound("ev timeout".into())), cid, peer),
     }
