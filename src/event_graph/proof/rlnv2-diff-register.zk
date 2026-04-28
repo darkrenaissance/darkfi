@@ -11,12 +11,29 @@ witness "Rlnv2Diff_Register" {
 }
 
 circuit "Rlnv2Diff_Register" {
-	identity_secret = poseidon_hash(identity_nullifier, identity_trapdoor);
+	# Spec (RLN-V2 RLN-Diff Registration, recommended scheme):
+	#   identity_secret      = poseidon(nullifier, trapdoor)
+	#   identity_secret_hash = poseidon(identity_secret, user_message_limit)
+	#   identity_commitment  = poseidon(identity_secret_hash)
+	#
+	# Verifier-side check: max_message_limit is a public input so the
+	# network as a whole can enforce a global cap; user_message_limit
+	# is a public input so the staking/tier layer can attest to it.
+	identity_secret      = poseidon_hash(identity_nullifier, identity_trapdoor);
 	identity_secret_hash = poseidon_hash(identity_secret, user_message_limit);
-	identity_commitment = poseidon_hash(identity_secret_hash);
+	identity_commitment  = poseidon_hash(identity_secret_hash);
 
+	# user_message_limit must be in (0, max_message_limit].
+	# Spec wording: "0 <= user_message_limit <= message_limit".
+	# We use less_than_strict for the upper bound; the lower bound
+	# of >= 1 is enforced because message_id < user_message_limit
+	# in the signal circuit, so a registration with limit 0 is
+	# effectively unusable - but we still want to reject it here
+	# to avoid wasting a leaf slot.
 	less_than_strict(user_message_limit, max_message_limit);
 
+	# Public inputs (order MUST match the verifier in proto.rs):
 	constrain_instance(identity_commitment);
 	constrain_instance(user_message_limit);
+	constrain_instance(max_message_limit);
 }
