@@ -19,20 +19,22 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use darkfi::{
-    event_graph::util::recreate_from_replayer_log,
+    event_graph::{util::recreate_from_replayer_log, Event},
     net::P2pPtr,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         p2p_method::HandlerP2p,
         server::RequestHandler,
-        util::JsonValue,
+        util::{json_map, JsonValue},
     },
     system::StoppableTaskPtr,
 };
+use darkfi_serial::deserialize_async_partial;
 use smol::lock::MutexGuard;
 use tracing::debug;
 
 use super::DarkIrc;
+use crate::irc::Privmsg;
 
 #[async_trait]
 impl RequestHandler<()> for DarkIrc {
@@ -49,6 +51,8 @@ impl RequestHandler<()> for DarkIrc {
             "deg.subscribe_events" => self.deg_subscribe_events(req.id, req.params).await,
             "eventgraph.get_info" => self.eg_get_info(req.id, req.params).await,
             "eventgraph.replay" => self.eg_rep_info(req.id, req.params).await,
+
+            "gource.subscribe_events" => self.gource_subscribe_events(req.id, req.params).await,
 
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
@@ -123,6 +127,33 @@ impl DarkIrc {
     }
 
     // RPCAPI:
+    // Initializes a subscription to the Gource visualization feed.
+    // Once a subscription is established, every rotating-DAG event
+    // that successfully decodes as a Privmsg is projected to a
+    // Gource-shaped record and forwarded to the subscriber.
+    //
+    // To feed Gource directly, reformat to the pipe-delimited custom
+    // log format and pipe it in:
+    // ```
+    //   ... | jq -r '.params[0]
+    //              | "\(.timestamp)|\(.user)|\(.action)|\(.path)"' \
+    //       | gource --log-format custom -
+    // ```
+    //
+    // --> {"jsonrpc": "2.0", "method": "gource.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "gource.subscribe_events", "params": [`event`]}
+    pub async fn gource_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.gource_sub.clone().into()
+    }
+
+    // RPCAPI:
     // Activate or deactivate deg in the EVENTGRAPH.
     // By sending `true`, deg will be activated, and by sending `false` deg
     // will be deactivated. Returns `true` on success.
@@ -140,9 +171,9 @@ impl DarkIrc {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.event_graph.deg_enable().await;
+            self.event_graph.deg_enable();
         } else {
-            self.event_graph.deg_disable().await;
+            self.event_graph.deg_disable();
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
@@ -185,4 +216,40 @@ impl HandlerP2p for DarkIrc {
     fn p2p(&self) -> P2pPtr {
         self.p2p.clone()
     }
+}
+
+/// Project a single rotating-DAG event to a Gource-shaped record.
+///
+/// Returns `None` if the event content isn't a [`Privmsg`] or the
+/// privmsg's channel field is empty (in which case there's nothing
+/// useful to visualize).
+pub(crate) async fn privmsg_event_to_gource(event: &Event) -> Option<JsonValue> {
+    let privmsg: Privmsg = match deserialize_async_partial(event.content()).await {
+        Ok((v, _)) => v,
+        Err(_) => return None,
+    };
+
+    if privmsg.channel.is_empty() {
+        return None
+    }
+
+    let path = if let Some(name) = privmsg.channel.strip_prefix('#') {
+        format!("channels/{name}")
+    } else {
+        format!("dms/{}", privmsg.channel)
+    };
+
+    // Gource's custom log expects Unix seconds, not millis.
+    let unix_secs = event.header.timestamp / 1_000;
+
+    Some(json_map([
+        ("timestamp", JsonValue::String(unix_secs.to_string())),
+        ("user", JsonValue::String(privmsg.nick.clone())),
+        // "M" = modify. We always emit "M" because tracking
+        // first-touch (which would justify "A") would need
+        // cross-event state and gource creates the file on first
+        // reference automatically anyway.
+        ("action", JsonValue::String("M".into())),
+        ("path", JsonValue::String(path)),
+    ]))
 }
